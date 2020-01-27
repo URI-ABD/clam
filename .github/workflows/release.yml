@@ -1,0 +1,25 @@
+name: Stable Release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Test
+        run: cargo test
+      - name: Build
+        run: docker build -t release .
+      - name: Publish
+        # To make this actually run, add -w yes
+        run: > 
+          docker run 
+          --env GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          --env CARGO_TOKEN="${{ secrets.CARGO_TOKEN }}" 
+          --env GIT_COMMITTER_NAME="URI ABD"
+          --env GIT_COMMITTER_EMAIL="info@uri-abd.org" 
+          release /bin/bash -c "cargo install semantic-rs && semantic-rs"
