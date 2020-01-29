@@ -1,0 +1,22 @@
+name: Coverage
+
+on: [push]
+
+jobs:
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin
+      
+      - name: Generate coverage
+        run: cargo tarpaulin -o Lcov
+      
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v1.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: ./lcov.info

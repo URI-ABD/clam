@@ -1,0 +1,15 @@
+name: Benchmarks
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: run
+        run: cargo bench
