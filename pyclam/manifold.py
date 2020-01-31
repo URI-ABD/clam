@@ -603,7 +603,7 @@ class Manifold:
     def depth(self) -> int:
         return len(self.graphs) - 1
 
-    def distance(self, /, x1: Union[List[int], Data], x2: Union[List[int], Data]) -> np.ndarray:
+    def distance(self, x1: Union[List[int], Data], x2: Union[List[int], Data]) -> np.ndarray:
         """ Calculates the pairwise distances between all points in x1 and x2.
 
         This DOES NOT do any batching.
