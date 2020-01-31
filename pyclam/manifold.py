@@ -1,13 +1,13 @@
-""" Clustered Hierarchical Entropy-scaling Manifold Mapping.
+""" Clustered Learning of Approximate Manifolds.
 
 # TODO: https://docs.python.org/3/whatsnew/3.8.html#f-strings-support-for-self-documenting-expressions-and-debugging
 """
+import concurrent.futures
 import logging
 import pickle
 import random
 from collections import deque
 from operator import itemgetter
-from queue import Queue
 from threading import Thread
 from typing import Set, Dict, Iterable, BinaryIO, List, Union
 
@@ -59,8 +59,10 @@ class Cluster:
         # This is used during Cluster.from_json().
         if not argpoints and self.children:
             self.argpoints = [p for child in self.children for p in child.argpoints]
-        elif not argpoints:
-            raise ValueError(f"Cluster {name} needs argpoints.")
+        elif (type(argpoints) is list and len(argpoints) == 0) or (type(argpoints) is float and argpoints == 0.):
+            # TODO: Sometimes getting empty list for argpoints
+            logging.debug(f"Cluster {name} needs argpoints: {argpoints}. using parent center instead")
+            self.argpoints = [self.manifold.select(self.name[:-1]).argmedoid]
         return
 
     def __eq__(self, other: 'Cluster') -> bool:
@@ -414,11 +416,24 @@ class Graph:
         centers = np.asarray([c.medoid for c in clusters], dtype=np.float64)
         radii = np.asarray([c.radius for c in clusters], dtype=np.float64)
 
-        distances = cdist(centers, centers, self.metric)
-        differences = (distances.T - radii).T - radii
-        left, right = tuple(map(list, np.where(differences <= 0.)))
+        if len(clusters) <= BATCH_SIZE:
+            distances = cdist(centers, centers, self.metric)
+            differences = (distances.T - radii).T - radii
+            left, right = tuple(map(list, np.where(differences <= 0.)))
 
-        [clusters[l_].neighbors.update({clusters[r_]: distances[l_, r_]}) for l_, r_ in zip(left, right) if l_ != r_]
+            [clusters[l_].neighbors.update({clusters[r_]: distances[l_, r_]}) for l_, r_ in zip(left, right) if l_ != r_]
+        else:
+            for i in range(0, len(clusters), BATCH_SIZE):
+                batch_clusters = clusters[i: i + BATCH_SIZE]
+                batch_centers = np.asarray([c.medoid for c in batch_clusters], dtype=np.float64)
+                batch_radii = np.asarray([c.radius for c in batch_clusters], dtype=np.float64)
+
+                batch_distances = cdist(batch_centers, centers, self.metric)
+                batch_differences = ((batch_distances - radii).T - batch_radii).T
+
+                batch_left, batch_right = tuple(map(list, np.where(batch_differences <= 0.)))
+                [clusters[l_ + i].neighbors.update({clusters[r_]: batch_distances[l_, r_]}) for l_, r_ in zip(batch_left, batch_right) if (l_ + i) != r_]
+
         return
 
     def build_edges(self) -> None:
@@ -532,6 +547,7 @@ class Manifold:
     It does this by providing the ability to reset the build the Cluster-tree, and from them the Graph-stack.
     With this Cluster-tree and Graph-stack, Manifold provides utilities for rho-nearest neighbors search, k-nearest neighbors search.
     """
+
     # TODO: Bring in anomaly detection from experiments.
 
     def __init__(self, data: Data, metric: Metric, argpoints: Union[Vector, float] = None, **kwargs):
@@ -624,7 +640,7 @@ class Manifold:
     def build_tree(self, *criterion) -> 'Manifold':
         """ Builds the Cluster-tree. """
         while True:
-            logging.info(f'current depth: {len(self.graphs) - 1}')
+            logging.info(f'current depth: {len(self.graphs) - 1}, {len(self.graphs[-1].clusters.keys())} clusters')
             clusters = self._partition_threaded(criterion)
             if len(self.graphs[-1]) < len(clusters):
                 g = Graph(*clusters)
@@ -660,19 +676,11 @@ class Manifold:
         return [child for cluster in self.graphs[-1] for child in cluster.partition(*criterion)]
 
     def _partition_threaded(self, criterion):
-        queue = Queue()
-        threads = [
-            Thread(
-                target=lambda cluster: [queue.put(c) for c in cluster.partition(*criterion)],
-                args=(c,),
-                name=c.name
-            )
-            for c in self.graphs[-1]]
-        [t.start() for t in threads]
-        [t.join() for t in threads]
-        clusters = []
-        while not queue.empty():
-            clusters.append(queue.get())
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_cluster = [executor.submit(c.partition, *criterion) for c in self.graphs[-1]]
+            clusters = []
+            [clusters.extend(v.result()) for v in concurrent.futures.as_completed(future_to_cluster)]
+
         return clusters
 
     def select(self, name: str) -> Cluster:
