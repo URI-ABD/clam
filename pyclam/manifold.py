@@ -12,7 +12,7 @@ from threading import Thread
 from typing import Set, Dict, Iterable, BinaryIO, List, Union
 
 import numpy as np
-from scipy.spatial.distance import pdist, cdist
+from scipy.spatial.distance import cdist
 
 from pyclam.types import Data, Radius, Vector, Metric
 
@@ -49,6 +49,8 @@ class Cluster:
         self.manifold: 'Manifold' = manifold
         self.argpoints: Vector = argpoints
         self.name: str = name
+
+        self.distance = self.manifold.distance
 
         # TODO: Consider relying on Graph.edges instead of having neighbors be a member of Cluster.
         self.neighbors: Dict['Cluster', float] = dict()  # key is neighbor, value is distance to neighbor
@@ -133,13 +135,15 @@ class Cluster:
             else:
                 n = int(np.sqrt(len(self)))
                 indices = list(np.random.choice(self.argpoints, n, replace=False))
+                indices = [int(i) for i in indices]
 
             # Handle Duplicates.
-            if pdist(self.manifold.data[indices], self.metric).max(initial=0.) == 0.:
+            if self.distance(x1=indices, x2=indices).max(initial=0.) == 0.:
                 indices = np.unique(self.manifold.data[self.argpoints], return_index=True, axis=0)[1]
                 indices = [self.argpoints[i] for i in indices][:n]
 
             # Cache it.
+            indices = [int(i) for i in indices]
             self.__dict__['_argsamples'] = indices
         return self.__dict__['_argsamples']
 
@@ -163,7 +167,7 @@ class Cluster:
         """ The index used to retrieve the medoid. """
         if '_argmedoid' not in self.__dict__:
             logging.debug(f"building cache for {self}")
-            _argmedoid = np.argmin(cdist(self.samples, self.samples, self.metric).sum(axis=1))
+            _argmedoid = np.argmin(self.distance(x1=self.argsamples, x2=self.argsamples).sum(axis=1))
             self.__dict__['_argmedoid'] = self.argsamples[int(_argmedoid)]
         return self.__dict__['_argmedoid']
 
@@ -188,7 +192,7 @@ class Cluster:
             logging.debug(f'building cache for {self}')
 
             def argmax_max(b):
-                distances = self.distance(self.manifold.data[b])
+                distances = self.distance(x1=self.argmedoid, x2=b)[0]
                 argmax = int(np.argmax(distances))
                 return b[argmax], distances[argmax]
 
@@ -207,7 +211,7 @@ class Cluster:
                 return 0.
             count = [d <= (self.radius / 2)
                      for batch in self
-                     for d in self.distance(self.manifold.data[batch])]
+                     for d in self.distance(x1=self.argmedoid, x2=batch)[0]]
             count = np.sum(count)
             self.__dict__['_local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
         return self.__dict__['_local_fractal_dimension']
@@ -231,14 +235,14 @@ class Cluster:
 
         results: Dict['Cluster', Radius] = dict()
         if self.depth == depth:
-            results = {self: self.distance(np.asarray([point]))[0]}  # TODO: Cover
+            results = {self: self.distance(x1=self.argmedoid, x2=None, p2=point)[0]}  # TODO: Cover
         elif self.overlaps(point, radius):
             results = self._tree_search(point, radius, depth)
 
         return results
 
     def _tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
-        distance = self.distance(np.asarray([point]))[0]
+        distance = self.distance(x1=self.argmedoid, x2=None, p2=point)[0]
         assert distance <= radius + self.radius, f'_tree_search was started with no overlap.'
         assert self.depth < depth, f'_tree_search needs to have depth ({depth}) > self.depth ({self.depth}). '
 
@@ -258,8 +262,8 @@ class Cluster:
                 break
 
             # filter out clusters that are too far away to possibly contain any hits.
-            centers = np.asarray([c.medoid for c in children])
-            distances = cdist(np.expand_dims(point, 0), centers, self.metric)[0]
+            argcenters = [c.argmedoid for c in children]
+            distances = self.distance(x1=None, p1=point, x2=argcenters)[0]
             radii = [radius + c.radius for c in children]
             candidates = {c: d for c, d, r in zip(children, distances, radii) if d <= r}
             if len(candidates) == 0:
@@ -298,20 +302,12 @@ class Cluster:
             }
             return self.children
 
-        farthest = self.argsamples[int(np.argmax(cdist(
-            np.expand_dims(self.manifold.data[self.argradius], 0),
-            self.samples,
-            self.metric,
-        )[0]))]
-        poles = np.stack([
-            self.manifold.data[self.argradius],
-            self.manifold.data[farthest],
-        ])
+        farthest = self.argsamples[int(np.argmax(self.distance(x1=self.argradius, x2=self.argsamples)[0]))]
 
         p1_idx, p2_idx = [self.argradius], [farthest]
         [(p1_idx if p1 < p2 else p2_idx).append(i)
          for batch in iter(self)
-         for i, p1, p2 in zip(batch, *cdist(poles, self.manifold.data[batch], self.metric))]
+         for i, p1, p2 in zip(batch, *self.distance(x1=[self.argradius, farthest], x2=batch))]
 
         # TODO: Neither of these should be possible
         if farthest in p1_idx:
@@ -333,13 +329,9 @@ class Cluster:
 
         return self.children
 
-    def distance(self, points: Data) -> List[Radius]:
-        """ Returns the distance from self.medoid to every point in points. """
-        return cdist(np.expand_dims(self.medoid, 0), points, self.metric)[0]
-
     def overlaps(self, point: Data, radius: Radius) -> bool:
         """ Checks if point is within radius + self.radius of cluster. """
-        return self.distance(np.expand_dims(point, axis=0))[0] <= (self.radius + radius)
+        return self.distance(x1=self.argmedoid, x2=None, p2=point)[0][0] <= (self.radius + radius)
 
     def json(self):
         data = {
@@ -374,6 +366,7 @@ class Graph:
 
     def __init__(self, *clusters):
         logging.debug(f'Graph(clusters={[str(c) for c in clusters]})')
+        # assert len(clusters) > 0, f'no clusters'
         assert all(isinstance(c, Cluster) for c in clusters)
         assert all([c.depth == clusters[0].depth for c in clusters[1:]])
 
@@ -405,6 +398,9 @@ class Graph:
     def __contains__(self, cluster: 'Cluster') -> bool:
         return cluster in self.clusters.keys()
 
+    def distance(self, *, x1: Union[int, List[int], None], x2: Union[int, List[int], None], p1: Data = None, p2: Data = None) -> np.ndarray:
+        return self.manifold.distance(x1=x1, x2=x2, p1=p1, p2=p2)
+
     @property
     def manifold(self) -> 'Manifold':
         return next(iter(self.clusters.keys())).manifold
@@ -419,14 +415,15 @@ class Graph:
 
     def _build_edges_matrix(self) -> None:
         """ Calculates overlap for clusters in self in the naive way. """
+        logging.info(f'current depth: {self.depth}, {len(self.clusters)} clusters')
         # TODO: Calculate memory cost of the distance matrix here.
         clusters: List[Cluster] = list(self.clusters.keys())
 
-        centers = np.asarray([c.medoid for c in clusters], dtype=np.float64)
+        argcenters = [c.argmedoid for c in clusters]
         radii = np.asarray([c.radius for c in clusters], dtype=np.float64)
 
         if len(clusters) <= BATCH_SIZE:
-            distances = cdist(centers, centers, self.metric)
+            distances = self.distance(x1=argcenters, x2=argcenters)
             differences = (distances.T - radii).T - radii
             left, right = tuple(map(list, np.where(differences <= 0.)))
 
@@ -434,10 +431,10 @@ class Graph:
         else:
             for i in range(0, len(clusters), BATCH_SIZE):
                 batch_clusters = clusters[i: i + BATCH_SIZE]
-                batch_centers = np.asarray([c.medoid for c in batch_clusters], dtype=np.float64)
+                batch_argcenters = [c.argmedoid for c in batch_clusters]
                 batch_radii = np.asarray([c.radius for c in batch_clusters], dtype=np.float64)
 
-                batch_distances = cdist(batch_centers, centers, self.metric)
+                batch_distances = self.distance(x1=batch_argcenters, x2=argcenters)
                 batch_differences = ((batch_distances - radii).T - batch_radii).T
 
                 batch_left, batch_right = tuple(map(list, np.where(batch_differences <= 0.)))
@@ -608,6 +605,48 @@ class Manifold:
     def depth(self) -> int:
         return len(self.graphs) - 1
 
+    def distance(self, *, x1: Union[int, List[int], None], x2: Union[int, List[int], None], p1: Data = None, p2: Data = None) -> np.ndarray:
+        """ Calculates the pairwise distances between all points in x1 and x2.
+
+        This DOES NOT do any batching.
+
+        The metric given to Manifold should have the following properties:
+            * dist(p1, p2) = 0 if and only if p1 = p2.
+            * dist(p1, p2) = dist(p2, p1)
+
+        :param x1: index of point or list of indexes of points in self.data.
+        :param x2: index of point or list of indexes of points in self.data.
+        :param p1: (optional) point(s) given directly to override x1. Useful when the point is not in self.data
+        :param p2: (optional) point(s) given directly to override x2. Useful when the point is not in self.data
+        :return: matrix of pairwise distances.
+        """
+
+        def parse_points(x: Union[int, List[int], None], p: Union[Data, None]):
+            x_points: Data
+            if x is None:
+                if len(p.shape) == 1:
+                    x_points = np.expand_dims(p, 0)
+                else:
+                    x_points = p
+            elif type(x) is int:
+                x_points = self.data[[x]]
+            elif (type(x) is list) and (len(x) > 0) and (type(x[0]) is int):
+                x_points = self.data[x]
+            else:
+                raise ValueError(f'x1/x2 must of of type None, int or list(int). Got {x, type(x), type(x[0])} instead')
+            return x_points
+
+        x1_points = parse_points(x1, p1)
+        x2_points = parse_points(x2, p2)
+
+        if len(x1_points.shape) != 2:
+            print('hello')
+        if len(x2_points.shape) != 2:
+            print('hello')
+
+        distances = cdist(x1_points, x2_points, metric=self.metric)
+        return distances
+
     def find_points(self, point: Data, radius: Radius) -> Dict[int, Radius]:
         """ Returns all indices of points that are within radius of point. """
         # TODO: Need a default depth argument?
@@ -617,7 +656,7 @@ class Manifold:
         point = np.expand_dims(point, axis=0)
         for i in range(0, len(candidates), BATCH_SIZE):
             batch = candidates[i:i + BATCH_SIZE]
-            distances = cdist(point, self.data[batch], self.metric)[0]
+            distances = self.distance(x1=None, x2=batch, p1=point)[0]
             results.update({p: d for p, d in zip(batch, distances) if d <= radius})
         return results
 
