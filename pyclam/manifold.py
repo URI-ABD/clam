@@ -59,10 +59,8 @@ class Cluster:
         # This is used during Cluster.from_json().
         if not argpoints and self.children:
             self.argpoints = [p for child in self.children for p in child.argpoints]
-        elif (type(argpoints) is list and len(argpoints) == 0) or (type(argpoints) is float and argpoints == 0.):
-            # TODO: Sometimes getting empty list for argpoints
-            logging.debug(f"Cluster {name} needs argpoints: {argpoints}. using parent center instead")
-            self.argpoints = [self.manifold.select(self.name[:-1]).argmedoid]
+        elif not argpoints:
+            raise ValueError(f'Cluster {name} needs argpoints: {argpoints}')
         return
 
     def __eq__(self, other: 'Cluster') -> bool:
@@ -310,10 +308,20 @@ class Cluster:
             self.manifold.data[farthest],
         ])
 
-        p1_idx, p2_idx = list(), list()
+        p1_idx, p2_idx = [self.argradius], [farthest]
         [(p1_idx if p1 < p2 else p2_idx).append(i)
          for batch in iter(self)
          for i, p1, p2 in zip(batch, *cdist(poles, self.manifold.data[batch], self.metric))]
+
+        # TODO: Neither of these should be possible
+        if farthest in p1_idx:
+            logging.debug(f'child contained others pole')
+            p1_idx.remove(farthest)
+            p2_idx.append(farthest)
+        if self.argradius in p2_idx:
+            logging.debug(f'child contained others pole')
+            p2_idx.remove(self.argradius)
+            p1_idx.append(self.argradius)
 
         # Ensure that p1 contains fewer points than p2
         p1_idx, p2_idx = (p1_idx, p2_idx) if len(p1_idx) < len(p2_idx) else (p2_idx, p1_idx)
@@ -322,6 +330,7 @@ class Cluster:
             Cluster(self.manifold, p2_idx, self.name + '2'),
         }
         logging.debug(f'{self} was partitioned.')
+
         return self.children
 
     def distance(self, points: Data) -> List[Radius]:
