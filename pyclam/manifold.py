@@ -134,7 +134,7 @@ class Cluster:
                 indices = self.argpoints
             else:
                 n = int(np.sqrt(len(self)))
-                indices = [int(i) for i in np.random.choice(self.argpoints, n, replace=False))]
+                indices = [int(i) for i in np.random.choice(self.argpoints, n, replace=False)]
 
             # Handle Duplicates.
             if self.distance(indices, indices).max(initial=0.) == 0.:
