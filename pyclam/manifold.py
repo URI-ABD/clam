@@ -329,7 +329,7 @@ class Cluster:
 
     def overlaps(self, point: Data, radius: Radius) -> bool:
         """ Checks if point is within radius + self.radius of cluster. """
-        return self.distance(self.argmedoid, point)[0][0] <= (self.radius + radius)
+        return self.distance(self.argmedoid, [point])[0][0] <= (self.radius + radius)
 
     def json(self):
         data = {
@@ -421,7 +421,11 @@ class Graph:
         radii = np.asarray([c.radius for c in clusters], dtype=np.float64)
 
         if len(clusters) <= BATCH_SIZE:
-            distances = self.distance(argcenters, argcenters)
+            # TODO: Put this back, seeing weird errors.
+            distances = self.distance(
+                argcenters, 
+                argcenters,
+            )
             differences = (distances.T - radii).T - radii
             left, right = tuple(map(list, np.where(differences <= 0.)))
 
