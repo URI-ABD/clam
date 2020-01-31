@@ -134,8 +134,7 @@ class Cluster:
                 indices = self.argpoints
             else:
                 n = int(np.sqrt(len(self)))
-                indices = list(np.random.choice(self.argpoints, n, replace=False))
-                indices = [int(i) for i in indices]
+                indices = [int(i) for i in np.random.choice(self.argpoints, n, replace=False))]
 
             # Handle Duplicates.
             if self.distance(indices, indices).max(initial=0.) == 0.:
@@ -143,7 +142,6 @@ class Cluster:
                 indices = [self.argpoints[i] for i in indices][:n]
 
             # Cache it.
-            indices = [int(i) for i in indices]
             self.__dict__['_argsamples'] = indices
         return self.__dict__['_argsamples']
 
