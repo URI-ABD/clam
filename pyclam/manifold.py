@@ -620,11 +620,11 @@ class Manifold:
         x1, x2 = np.asarray(x1), np.asarray(x2)
         
         # Fetch data if given indices.
-        if len(x1.shape) == 1:
-            x1 = self.data[x1]
+        if len(x1.shape) < 2:
+            x1 = self.data[x1 if x1.ndim == 1 else np.expand_dims(x1, 0)]
         
-        if len(x2.shape) == 1:
-            x2 = self.data[x2]
+        if len(x2.shape) < 2:
+            x2 = self.data[x2 if x2.ndim == 1 else np.expand_dims(x2, 0)]
 
         return cdist(x1, x2, metric=self.metric)
 
