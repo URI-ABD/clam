@@ -656,7 +656,7 @@ class Manifold:
         point = np.expand_dims(point, axis=0)
         for i in range(0, len(candidates), BATCH_SIZE):
             batch = candidates[i:i + BATCH_SIZE]
-            distances = self.distance(x1=None, x2=batch, p1=point)[0]
+            distances = self.distance(x1=None, p1=point, x2=batch)[0]
             results.update({p: d for p, d in zip(batch, distances) if d <= radius})
         return results
 
