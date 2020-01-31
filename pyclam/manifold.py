@@ -60,7 +60,7 @@ class Cluster:
         if not argpoints and self.children:
             self.argpoints = [p for child in self.children for p in child.argpoints]
         elif not argpoints:
-            raise ValueError(f'Cluster {name} needs argpoints: {argpoints}')
+            raise ValueError(f'Cluster {name} needs argpoints')
         return
 
     def __eq__(self, other: 'Cluster') -> bool:
@@ -649,7 +649,7 @@ class Manifold:
     def build_tree(self, *criterion) -> 'Manifold':
         """ Builds the Cluster-tree. """
         while True:
-            logging.info(f'current depth: {len(self.graphs) - 1}, {len(self.graphs[-1].clusters.keys())} clusters')
+            logging.info(f'current depth: {len(self.graphs) - 1}, {len(self.graphs[-1].clusters)} clusters')
             clusters = self._partition_threaded(criterion)
             if len(self.graphs[-1]) < len(clusters):
                 g = Graph(*clusters)
