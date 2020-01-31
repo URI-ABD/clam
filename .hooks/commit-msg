@@ -20,7 +20,7 @@ TYPES = {
     'test': 'changes to the test suite.',
 }
 
-PATTERN = re.compile(r'^(?P<type>fix)(\([a-z ]+\))?: \w+.*$'.format('|'.join(TYPES.keys())), re.M)
+PATTERN = re.compile(r'^(?P<type>{})(\([a-z ]+\))?: \w+.*$'.format('|'.join(TYPES.keys())), re.M)
 
 EXCEPTION_MSG = """Non-conventional commit.
 
