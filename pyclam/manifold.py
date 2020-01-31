@@ -605,7 +605,7 @@ class Manifold:
     def depth(self) -> int:
         return len(self.graphs) - 1
 
-    def distance(self, *, x1: Union[int, List[int], None], x2: Union[int, List[int], None], p1: Data = None, p2: Data = None) -> np.ndarray:
+    def distance(self, /, x1: Union[int, List[int], None], x2: Union[int, List[int], None]) -> np.ndarray:
         """ Calculates the pairwise distances between all points in x1 and x2.
 
         This DOES NOT do any batching.
@@ -614,38 +614,21 @@ class Manifold:
             * dist(p1, p2) = 0 if and only if p1 = p2.
             * dist(p1, p2) = dist(p2, p1)
 
-        :param x1: index of point or list of indexes of points in self.data.
-        :param x2: index of point or list of indexes of points in self.data.
-        :param p1: (optional) point(s) given directly to override x1. Useful when the point is not in self.data
-        :param p2: (optional) point(s) given directly to override x2. Useful when the point is not in self.data
+        :param x1: a list of indices, or a 2D matrix of data points
+        :param x2: a list of indices, or a 2D matrix of data points
         :return: matrix of pairwise distances.
         """
 
-        def parse_points(x: Union[int, List[int], None], p: Union[Data, None]):
-            x_points: Data
-            if x is None:
-                if len(p.shape) == 1:
-                    x_points = np.expand_dims(p, 0)
-                else:
-                    x_points = p
-            elif type(x) is int:
-                x_points = self.data[[x]]
-            elif (type(x) is list) and (len(x) > 0) and (type(x[0]) is int):
-                x_points = self.data[x]
-            else:
-                raise ValueError(f'x1/x2 must of of type None, int or list(int). Got {x, type(x), type(x[0])} instead')
-            return x_points
+        x1, x2 = np.asarray(x1), np.asarray(x2)
+        
+        # Fetch data if given indices.
+        if len(x1.shape) == 1:
+            x1 = self.data[x1]
+        
+        if len(x2.shape) == 1:
+            x2 = self.data[x2]
 
-        x1_points = parse_points(x1, p1)
-        x2_points = parse_points(x2, p2)
-
-        if len(x1_points.shape) != 2:
-            print('hello')
-        if len(x2_points.shape) != 2:
-            print('hello')
-
-        distances = cdist(x1_points, x2_points, metric=self.metric)
-        return distances
+        return cdist(x1, x2, metric=self.metric)
 
     def find_points(self, point: Data, radius: Radius) -> Dict[int, Radius]:
         """ Returns all indices of points that are within radius of point. """
