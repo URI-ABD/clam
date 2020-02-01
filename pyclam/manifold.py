@@ -166,7 +166,7 @@ class Cluster:
         """ The index used to retrieve the medoid. """
         if '_argmedoid' not in self.__dict__:
             logging.debug(f"building cache for {self}")
-            _argmedoid = np.argmin(self.distance(self.argsamples, self.argsamples))
+            _argmedoid = np.argmin(self.distance(self.argsamples, self.argsamples).sum(axis=1)) if len(self.argsamples) > 1 else 0
             self.__dict__['_argmedoid'] = self.argsamples[int(_argmedoid)]
         return self.__dict__['_argmedoid']
 
@@ -303,7 +303,7 @@ class Cluster:
 
         farthest = self.argsamples[int(np.argmax(self.distance(self.argradius, self.argsamples)))]
 
-        p1_idx, p2_idx = [self.argradius], [farthest]
+        p1_idx, p2_idx = list(), list()
         [(p1_idx if p1 < p2 else p2_idx).append(i)
          for batch in iter(self)
          for i, p1, p2 in zip(batch, *self.distance([self.argradius, farthest], batch))]
