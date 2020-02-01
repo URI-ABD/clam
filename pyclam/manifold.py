@@ -547,6 +547,101 @@ class Graph:
         return visited
 
 
+class Distance:
+    """ Wrapper around distance calls that also does caching.
+
+    This DOES NOT do any batching.
+
+    The metric given should have the following properties:
+        * dist(p1, p2) = 0 if and only if p1 = p2.
+        * dist(p1, p2) = dist(p2, p1)
+    """
+
+    def __init__(self, data: Data, metric: Metric):
+        self.data: Data = data
+        self.metric: Metric = metric
+        self.history: Dict[int, np.float64] = {0: np.float64(0)}
+        return
+
+    def __call__(self, x1: Union[int, List[int], np.ndarray], x2: Union[int, List[int], np.ndarray]) -> np.ndarray:
+        """ Returns the pairwise distances between all points in x1 and x2.
+
+        :param x1: if x1 is an int or list of ints, the points are loaded from self.data
+                   if x1 is a numpy array, it is treated as raw data.
+        :param x2: if x2 is an int or list of ints, the points are loaded from self.data
+                   if x2 is a numpy array, it is treated as raw data.
+        :return: matrix of pairwise distances.
+        """
+        def check_types(x):
+            if type(x) is np.ndarray:
+                if len(x.shape) == 1:
+                    x = np.expand_dims(x, 0)
+            else:
+                if not ((type(x) is int) or ((type(x) is list) and (len(x) > 0) and (type(x[0]) is int))):
+                    raise AssertionError(f'arguments must be single integers or non-empty lists of integers. got {type(x), x}')
+            return x
+
+        x1 = check_types(x1)
+        x2 = check_types(x2)
+
+        if type(x1) is not np.ndarray and type(x2) is not np.ndarray:
+            return self._from_history(x1, x2)
+        else:
+            if type(x1) is np.ndarray:
+                x2 = self._load(x2)
+            else:
+                x1 = self._load(x1)
+            return np.squeeze(cdist(x1, x2, self.metric))
+
+    @property
+    def _num_points(self) -> int:
+        return int(self.data.shape[0])
+
+    def _load(self, i: Union[int, List[int]]) -> np.ndarray:
+        return [self.data[i]] if (type(i) is int) else self.data[i]
+
+    def _get_key(self, i: int, j: int):
+        if (i >= self._num_points) or (j >= self._num_points):
+            raise IndexError(f'index out of bounds: {i if i >= self._num_points else j}')
+
+        if i == j:
+            return 0
+        else:
+            # deal with negative indexes
+            i = i % self._num_points if i < 0 else i
+            j = j % self._num_points if j < 0 else j
+
+            # require i > j. We only consider the lower triangle of the full pairwise distance matrix of points in data
+            i, j = (j, i) if i < j else (i, j)
+            return ((i - 1) * i // 2) + j + 1
+
+    def _from_history(self, i: Union[int, List[int]], j: Union[int, List[int]]) -> np.ndarray:
+        """ Recalls cached results from past distance calculations. If a distance calculation was not found, it is computed and cached.
+
+        The signature variations are as follows:
+            * [i: int, j: int] -> np.float64
+            * [i: int, j: List[int]] -> np.array of np.float64 with shape (len(j), )
+            * [i: List[int], j: int] -> np.array of np.float64 with shape (len(i), )
+            * [i: List[int], j: List[int]] -> np.array of np.float64 with shape (len(i), len(j))
+
+        :param i: index or list of indexes of point(s) in data.
+        :param j: index or list of indexes of point(s) in data.
+        :return: matrix of pairwise distances between points in i and j
+        """
+        i = [i] if type(i) is int else i
+        j = [j] if type(j) is int else j
+        distances = np.zeros(shape=(len(i), len(j)))
+
+        for i_, xi in enumerate(i):
+            for j_, xj in enumerate(j):
+                key = self._get_key(xi, xj)
+                if key not in self.history:
+                    self.history[key] = cdist(self._load(xi), self._load(xj), self.metric)[0][0]
+                distances[i_, j_] = self.history[key]
+
+        return np.squeeze(distances)
+
+
 class Manifold:
     """ Manifold of varying resolution.
 
@@ -567,6 +662,7 @@ class Manifold:
         logging.debug(f'Manifold(data={data.shape}, metric={metric}, argpoints={argpoints})')
         self.data: Data = data
         self.metric: Metric = metric
+        self.distance = Distance(self.data, self.metric)
 
         if argpoints is None:
             self.argpoints = list(range(self.data.shape[0]))
@@ -605,31 +701,6 @@ class Manifold:
     @property
     def depth(self) -> int:
         return len(self.graphs) - 1
-
-    def distance(self, x1: Union[List[int], Data], x2: Union[List[int], Data]) -> np.ndarray:
-        """ Calculates the pairwise distances between all points in x1 and x2.
-
-        This DOES NOT do any batching.
-
-        The metric given to Manifold should have the following properties:
-            * dist(p1, p2) = 0 if and only if p1 = p2.
-            * dist(p1, p2) = dist(p2, p1)
-
-        :param x1: a list of indices, or a 2D matrix of data points
-        :param x2: a list of indices, or a 2D matrix of data points
-        :return: matrix of pairwise distances.
-        """
-
-        x1, x2 = np.asarray(x1), np.asarray(x2)
-        
-        # Fetch data if given indices.
-        if len(x1.shape) < 2:
-            x1 = self.data[x1 if x1.ndim == 1 else np.expand_dims(x1, 0)]
-        
-        if len(x2.shape) < 2:
-            x2 = self.data[x2 if x2.ndim == 1 else np.expand_dims(x2, 0)]
-
-        return cdist(x1, x2, metric=self.metric)
 
     def find_points(self, point: Data, radius: Radius) -> Dict[int, Radius]:
         """ Returns all indices of points that are within radius of point. """
