@@ -191,9 +191,12 @@ class Cluster:
             logging.debug(f'building cache for {self}')
 
             def argmax_max(b):
-                distances = self.distance(self.argmedoid, b)
-                argmax = int(np.argmax(distances))
-                return b[argmax], distances[argmax]
+                if len(b) == 1:
+                    return b[0], 0.
+                else:
+                    distances = self.distance(self.argmedoid, b)
+                    argmax = int(np.argmax(distances))
+                    return b[argmax], distances[argmax]
 
             argradii_radii = [argmax_max(batch) for batch in iter(self)]
             _argradius, _radius = max(argradii_radii, key=itemgetter(1))
