@@ -559,7 +559,11 @@ class Distance:
     def __init__(self, data: Data, metric: Metric):
         self.data: Data = data
         self.metric: Metric = metric
-        self.history: Dict[int, np.float64] = {0: np.float64(0)}
+
+        # TODO: Turn history into memmap?
+        self.history: np.ndarray = np.empty(shape=((self.data.shape[0] - 1) * (self.data.shape[0]) // 2, ), dtype=np.float64)
+        self.history[:] = np.nan
+        self.history[0] = 0
         return
 
     def __call__(self, x1: Union[int, List[int], np.ndarray], x2: Union[int, List[int], np.ndarray]) -> np.ndarray:
@@ -629,14 +633,27 @@ class Distance:
         """
         i = [i] if type(i) is int else i
         j = [j] if type(j) is int else j
-        distances = np.zeros(shape=(len(i), len(j)))
 
-        for i_, xi in enumerate(i):
-            for j_, xj in enumerate(j):
-                key = self._get_key(xi, xj)
-                if key not in self.history:
-                    self.history[key] = cdist(self._load(xi), self._load(xj), self.metric)[0][0]
-                distances[i_, j_] = self.history[key]
+        arg_keys = [[frozenset((i_, j_)) for j_ in j if j_ != i_] for i_ in i]
+        # [print(ak) for ak in arg_keys]
+        new_keys = {(i_, j_): self._get_key(i_, j_) for j_ in j for i_ in i if j_ != i_}
+        # print(new_keys)
+        new_keys = [(v, list(k)) for k, v in new_keys.items()]
+        # print(new_keys)
+
+        new_pairs = [self._load(k) for _, k in new_keys]
+        new_distances = [cdist([p[0]], [p[1]], metric=self.metric)[0][0] for p in new_pairs]
+
+        # print(self.history)
+        self.history[[k for k, _ in new_keys]] = new_distances
+        # print(self.history)
+
+        arg_distances = [self._get_key(i_, j_) for j_ in j for i_ in i]
+        # print(f'arg_distances: {arg_distances}')
+        distances = np.take(self.history, arg_distances)
+        # print(f'distances: {distances}')
+        distances = np.reshape(distances, newshape=(len(i), len(j)))
+        # print(f'distances: {distances}')
 
         return np.squeeze(distances)
 
