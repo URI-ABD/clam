@@ -308,7 +308,7 @@ class Cluster:
             self.manifold.data[farthest],
         ])
 
-        p1_idx, p2_idx = [self.argradius], [farthest]
+        p1_idx, p2_idx = list(), list()
         [(p1_idx if p1 < p2 else p2_idx).append(i)
          for batch in iter(self)
          for i, p1, p2 in zip(batch, *cdist(poles, self.manifold.data[batch], self.metric))]
