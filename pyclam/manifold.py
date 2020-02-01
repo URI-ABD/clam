@@ -634,28 +634,15 @@ class Distance:
         i = [i] if type(i) is int else i
         j = [j] if type(j) is int else j
 
-        arg_keys = {frozenset((i_, j_)) for j_ in j for i_ in i if j_ != i_}
-        arg_keys = list(map(tuple, arg_keys))
-        print(arg_keys)
-        new_keys = {k: self._get_key(*k) for k in arg_keys}
-        print(new_keys)
-        new_keys = [(list(k), v) for k, v in new_keys.items()]
-        print(new_keys)
+        arg_keys = list(map(list, {frozenset((i_, j_)) for j_ in j for i_ in i if j_ != i_}))
+        new_keys = {self._get_key(*k): k for k in arg_keys}
 
-        new_pairs = [self._load(list(k)) for k, _ in new_keys]
-        new_distances = [cdist([p[0]], [p[1]], metric=self.metric)[0][0] for p in new_pairs]
-
-        print(self.history)
-        self.history[[k for _, k in new_keys]] = new_distances
-        print(self.history)
+        new_pairs = list(map(self._load, new_keys.values()))
+        self.history[[k for k in new_keys.keys()]] = [cdist([p[0]], [p[1]], metric=self.metric)[0][0] for p in new_pairs]
 
         arg_distances = [self._get_key(i_, j_) for j_ in j for i_ in i]
-        print(f'arg_distances: {arg_distances}')
         distances = np.take(self.history, arg_distances)
-        print(f'distances: {distances}')
         distances = np.reshape(distances, newshape=(len(i), len(j)))
-        print(f'distances: {distances}')
-
 
         return np.squeeze(distances)
 
