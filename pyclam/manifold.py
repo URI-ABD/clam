@@ -3,6 +3,7 @@
 # TODO: https://docs.python.org/3/whatsnew/3.8.html#f-strings-support-for-self-documenting-expressions-and-debugging
 """
 import concurrent.futures
+import itertools
 import logging
 import pickle
 import random
@@ -561,9 +562,10 @@ class Distance:
         self.metric: Metric = metric
 
         # TODO: Turn history into memmap?
-        self.history: np.ndarray = np.empty(shape=((self.data.shape[0] - 1) * (self.data.shape[0]) // 2, ), dtype=np.float64)
-        self.history[:] = np.nan
-        self.history[0] = 0
+        # self.history: np.ndarray = np.empty(shape=((self.data.shape[0] - 1) * (self.data.shape[0]) // 2, ), dtype=np.float64)
+        # self.history[:] = np.nan
+        # self.history[0] = 0
+        self.history: Dict[int, np.float64] = {0: np.float64(0)}
         return
 
     def __call__(self, x1: Union[int, List[int], np.ndarray], x2: Union[int, List[int], np.ndarray]) -> np.ndarray:
@@ -636,12 +638,13 @@ class Distance:
 
         arg_keys = list(map(list, {frozenset((i_, j_)) for j_ in j for i_ in i if j_ != i_}))
         new_keys = {self._get_key(*k): k for k in arg_keys}
+        new_keys = {k: v for k, v in new_keys.items() if k not in self.history}
 
         new_pairs = list(map(self._load, new_keys.values()))
-        self.history[[k for k in new_keys.keys()]] = [cdist([p[0]], [p[1]], metric=self.metric)[0][0] for p in new_pairs]
+        self.history.update({k: cdist([v[0]], [v[1]], metric=self.metric)[0][0] for k, v in zip(new_keys.keys(), new_pairs)})
 
         arg_distances = [self._get_key(i_, j_) for j_ in j for i_ in i]
-        distances = np.take(self.history, arg_distances)
+        distances = np.asarray([self.history[k] for k in arg_distances])
         distances = np.reshape(distances, newshape=(len(i), len(j)))
 
         return np.squeeze(distances)
