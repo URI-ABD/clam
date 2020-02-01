@@ -29,5 +29,3 @@ class TestDistance(unittest.TestCase):
         expected = np.asarray([10, 8], dtype=np.float64)
         self.assertAlmostEqual((expected - self.distance(i, j)).sum(), 0., places=10)
         self.assertAlmostEqual((expected - self.distance(j, i)).sum(), 0., places=10)
-
-        print(self.distance.history)
