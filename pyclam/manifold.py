@@ -3,7 +3,6 @@
 # TODO: https://docs.python.org/3/whatsnew/3.8.html#f-strings-support-for-self-documenting-expressions-and-debugging
 """
 import concurrent.futures
-import itertools
 import logging
 import pickle
 import random
@@ -237,7 +236,7 @@ class Cluster:
 
         results: Dict['Cluster', Radius] = dict()
         if self.depth == depth:
-            results = {self: self.distance(self.argmedoid, point)}  # TODO: Cover
+            results = {self: float(self.distance(self.argmedoid, point))}  # TODO: Cover
         elif self.overlaps(point, radius):
             results = self._tree_search(point, radius, depth)
 
@@ -250,7 +249,7 @@ class Cluster:
 
         # results and candidates ONLY contain clusters that have overlap with point
         results: Dict['Cluster', Radius] = dict()
-        candidates: Dict['Cluster', Radius] = {self: distance}
+        candidates: Dict['Cluster', Radius] = {self: float(distance)}
         for d_ in range(self.depth, depth):
             # if cluster was not partitioned any further, add it to results.
             results.update({c: d for c, d in candidates.items() if len(c.children) < 2})
@@ -559,12 +558,13 @@ class Distance:
         * dist(p1, p2) = 0 if and only if p1 = p2.
         * dist(p1, p2) = dist(p2, p1)
     """
+    # TODO: Think if anything needs to change to make this into a distributed cache among clusters rather than a central cache in manifold.
 
     def __init__(self, data: Data, metric: Metric):
         self.data: Data = data
         self.metric: Metric = metric
 
-        # TODO: Turn history into memmap?
+        # TODO: Turn history into memmap? or some other more efficient form? We need O(1) indexing and O(1) check to see if the already value exists
         # self.history: np.ndarray = np.empty(shape=((self.data.shape[0] - 1) * (self.data.shape[0]) // 2, ), dtype=np.float64)
         # self.history[:] = np.nan
         # self.history[0] = 0
@@ -644,6 +644,8 @@ class Distance:
         new_keys = {k: v for k, v in new_keys.items() if k not in self.history}
 
         new_pairs = list(map(self._load, new_keys.values()))
+        # TODO: call cdist on rows of the matrix
+        # noinspection PyTypeChecker
         self.history.update({k: cdist([v[0]], [v[1]], metric=self.metric)[0][0] for k, v in zip(new_keys.keys(), new_pairs)})
 
         arg_distances = [self._get_key(i_, j_) for j_ in j for i_ in i]
