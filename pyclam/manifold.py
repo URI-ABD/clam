@@ -364,7 +364,6 @@ class Graph:
 
     def __init__(self, *clusters):
         logging.debug(f'Graph(clusters={[str(c) for c in clusters]})')
-        # assert len(clusters) > 0, f'no clusters'
         assert all(isinstance(c, Cluster) for c in clusters)
         assert all([c.depth == clusters[0].depth for c in clusters[1:]])
 
@@ -396,8 +395,8 @@ class Graph:
     def __contains__(self, cluster: 'Cluster') -> bool:
         return cluster in self.clusters.keys()
 
-    def distance(self, *, x1: Union[int, List[int], None], x2: Union[int, List[int], None], p1: Data = None, p2: Data = None) -> np.ndarray:
-        return self.manifold.distance(x1=x1, x2=x2, p1=p1, p2=p2)
+    def distance(self, x1: Union[List[int], Data], x2: Union[List[int], Data]) -> np.ndarray:
+        return self.manifold.distance(x1, x2)
 
     @property
     def manifold(self) -> 'Manifold':
