@@ -46,9 +46,9 @@ class TestManifoldFunctional(unittest.TestCase):
 
     def test_two_points_with_dups(self):
         # Here we have two distinct clusters.
-        data = np.concatenate([np.ones((500, 2)) * -2, np.ones((500, 2)) * 2])
+        data = np.concatenate([np.ones((100, 2)) * -2, np.ones((100, 2)) * 2])
         m = Manifold(data, 'euclidean')
         # We expect building to stop with two clusters.
-        m.build()
+        m.build(MinPoints(5))
         self.assertEqual(2, len(m.graphs[-1]), f'Expected 2 clusters, got {len(m.graphs[-1])}')
         return

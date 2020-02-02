@@ -308,7 +308,7 @@ class Cluster:
         p1_idx, p2_idx = list(), list()
         [(p1_idx if p1 < p2 else p2_idx).append(i)
          for batch in iter(self)
-         for i, p1, p2 in zip(batch, *self.distance([self.argradius, farthest], batch))]
+         for i, (p1, p2) in zip(batch, self.distance(batch, [self.argradius, farthest]))]
 
         # TODO: Neither of these should be possible
         if farthest in p1_idx:
@@ -415,7 +415,6 @@ class Graph:
 
     def _build_edges_matrix(self) -> None:
         """ Calculates overlap for clusters in self in the naive way. """
-        logging.info(f'current depth: {self.depth}, {len(self.clusters)} clusters')
         # TODO: Calculate memory cost of the distance matrix here.
         clusters: List[Cluster] = list(self.clusters.keys())
 
@@ -425,8 +424,8 @@ class Graph:
         if len(clusters) <= BATCH_SIZE:
             # TODO: Put this back, seeing weird errors.
             distances = self.distance(argcenters,  argcenters)
-            if len(argcenters) == 1:
-                distances = np.asarray([[distances]], dtype=np.float64)
+            # if len(argcenters) == 1:
+            #     distances = np.asarray([distances], dtype=np.float64)
             differences = (distances.T - radii).T - radii
             left, right = tuple(map(list, np.where(differences <= 0.)))
 
@@ -642,17 +641,17 @@ class Distance:
         arg_keys = list(map(list, {frozenset((i_, j_)) for j_ in j for i_ in i if j_ != i_}))
         new_keys = {self._get_key(*k): k for k in arg_keys}
         new_keys = {k: v for k, v in new_keys.items() if k not in self.history}
+        new_keys = [(k, v) for k, v in new_keys.items()]
 
-        new_pairs = list(map(self._load, new_keys.values()))
+        new_pairs = [self._load(v) for _, v in new_keys]
         # TODO: call cdist on rows of the matrix
         # noinspection PyTypeChecker
-        self.history.update({k: cdist([v[0]], [v[1]], metric=self.metric)[0][0] for k, v in zip(new_keys.keys(), new_pairs)})
+        self.history.update({k: cdist([v0], [v1], metric=self.metric)[0][0] for (k, _), (v0, v1) in zip(new_keys, new_pairs)})
 
         arg_distances = [self._get_key(i_, j_) for j_ in j for i_ in i]
         distances = np.asarray([self.history[k] for k in arg_distances])
         distances = np.reshape(distances, newshape=(len(i), len(j)))
-
-        return np.squeeze(distances)
+        return distances[0] if (len(i) == 1 or len(j) == 1) else distances
 
 
 class Manifold:
@@ -725,6 +724,8 @@ class Manifold:
         for i in range(0, len(candidates), BATCH_SIZE):
             batch = candidates[i:i + BATCH_SIZE]
             distances = self.distance(point, batch)
+            if len(batch) == 1:
+                distances = [distances]
             results.update({p: d for p, d in zip(batch, distances) if d <= radius})
         return results
 
@@ -757,7 +758,7 @@ class Manifold:
         """ Builds the Cluster-tree. """
         while True:
             logging.info(f'current depth: {len(self.graphs) - 1}, {len(self.graphs[-1].clusters)} clusters')
-            clusters = self._partition_threaded(criterion)
+            clusters = self._partition_single(criterion)
             if len(self.graphs[-1]) < len(clusters):
                 g = Graph(*clusters)
                 self.graphs.append(g)
@@ -768,11 +769,14 @@ class Manifold:
 
     def build_graphs(self) -> 'Manifold':
         """ Builds the Graph-stack. """
-        [g.build_edges() for g in self.graphs]
+        for g in self.graphs[1:]:
+            logging.info(f'current depth: {g.depth}, {len(g.clusters)} clusters')
+            g.build_edges()
         return self
 
     def build_graph(self, depth: int) -> 'Manifold':
         """ Builds the graph at a given depth. """
+        logging.info(f'current depth: {depth}, {len(self.graphs[depth].clusters)} clusters')
         if depth > self.depth:
             raise ValueError(f'depth must not be greater than {self.depth}. Got {depth}.')
         self.graphs[depth].build_edges()

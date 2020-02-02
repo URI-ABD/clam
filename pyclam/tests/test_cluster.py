@@ -145,7 +145,7 @@ class TestCluster(unittest.TestCase):
                         self.assertIn(parent, parent.tree_search(cluster.medoid, cluster.radius, parent.depth))
         # Attempting to find points that *may* be in the data
         c: Cluster = next(iter(m.graphs[0]))
-        results = c.tree_search(np.asarray([0, 1]), 0., -1)
+        results = c.tree_search(np.asarray([0, 100]), 0., -1)
         self.assertEqual(0, len(results))
         with self.assertRaises(ValueError):
             _ = c.tree_search(np.asarray([0, 1]), 0., -5)

@@ -22,7 +22,7 @@ from pyclam.criterion import (
 class TestCriterion(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data = d.bullseye(n=500)[0]
+        cls.data = d.bullseye(n=100)[0]
         return
 
     def setUp(self) -> None:
@@ -38,7 +38,7 @@ class TestCriterion(unittest.TestCase):
 
     def test_leaves_subgraph(self):
         self.assertEqual(1, len(self.manifold.graphs[-1].subgraphs))
-        self.manifold.build(LeavesSubgraph(self.manifold), MaxDepth(8))
+        self.manifold.build(LeavesSubgraph(self.manifold))
         self.assertGreater(len(self.manifold.graphs[-1].subgraphs), 1)
         return
 
