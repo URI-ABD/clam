@@ -415,6 +415,7 @@ class Graph:
 
     def _build_edges_matrix(self) -> None:
         """ Calculates overlap for clusters in self in the naive way. """
+        logging.info(f'current depth: {self.depth}, {len(self.clusters)} clusters')
         # TODO: Calculate memory cost of the distance matrix here.
         clusters: List[Cluster] = list(self.clusters.keys())
 
@@ -713,6 +714,31 @@ class Manifold:
     @property
     def depth(self) -> int:
         return len(self.graphs) - 1
+
+    def distance(self, x1: Union[List[int], Data], x2: Union[List[int], Data]) -> np.ndarray:
+        """ Calculates the pairwise distances between all points in x1 and x2.
+
+        This DOES NOT do any batching.
+
+        The metric given to Manifold should have the following properties:
+            * dist(p1, p2) = 0 if and only if p1 = p2.
+            * dist(p1, p2) = dist(p2, p1)
+
+        :param x1: a list of indices, or a 2D matrix of data points
+        :param x2: a list of indices, or a 2D matrix of data points
+        :return: matrix of pairwise distances.
+        """
+
+        x1, x2 = np.asarray(x1), np.asarray(x2)
+        
+        # Fetch data if given indices.
+        if len(x1.shape) < 2:
+            x1 = self.data[x1 if x1.ndim == 1 else np.expand_dims(x1, 0)]
+        
+        if len(x2.shape) < 2:
+            x2 = self.data[x2 if x2.ndim == 1 else np.expand_dims(x2, 0)]
+
+        return cdist(x1, x2, metric=self.metric)
 
     def find_points(self, point: Data, radius: Radius) -> Dict[int, Radius]:
         """ Returns all indices of points that are within radius of point. """
