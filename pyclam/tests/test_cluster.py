@@ -168,7 +168,7 @@ class TestCluster(unittest.TestCase):
                         continue
                     else:
                         argcenters = [c.argmedoid for c in potential_neighbors]
-                    distances = list(cluster.distance(x1=cluster.argmedoid, x2=argcenters)[0])
+                    distances = list(cluster.distance(cluster.argmedoid, argcenters)[0])
                     radii = [cluster.radius + c.radius for c in potential_neighbors]
                     potential_neighbors = {c for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
                     if (potential_neighbors - set(cluster.neighbors.keys())) or (set(cluster.neighbors.keys()) - potential_neighbors):
@@ -180,7 +180,7 @@ class TestCluster(unittest.TestCase):
         return
 
     def test_distance(self):
-        self.assertGreater(self.children[0].distance(x1=self.children[0].argmedoid, x2=self.children[1].argmedoid), 0)
+        self.assertGreater(self.children[0].distance(self.children[0].argmedoid, self.children[1].argmedoid), 0)
         return
 
     def test_overlaps(self):
