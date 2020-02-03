@@ -166,11 +166,9 @@ class TestCluster(unittest.TestCase):
                     potential_neighbors = [c for c in graph if c.name != cluster.name]
                     if len(potential_neighbors) == 0:
                         continue
-                    elif len(potential_neighbors) == 1:
-                        centers = np.expand_dims(potential_neighbors[0].medoid, axis=0)
                     else:
-                        centers = np.stack([c.medoid for c in potential_neighbors])
-                    distances = list(cluster.distance(centers))
+                        argcenters = [c.argmedoid for c in potential_neighbors]
+                    distances = list(cluster.distance(x1=cluster.argmedoid, x2=argcenters)[0])
                     radii = [cluster.radius + c.radius for c in potential_neighbors]
                     potential_neighbors = {c for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
                     if (potential_neighbors - set(cluster.neighbors.keys())) or (set(cluster.neighbors.keys()) - potential_neighbors):
@@ -182,7 +180,7 @@ class TestCluster(unittest.TestCase):
         return
 
     def test_distance(self):
-        self.assertGreater(self.children[0].distance(np.expand_dims(self.children[1].medoid, 0)), 0)
+        self.assertGreater(self.children[0].distance(x1=self.children[0].argmedoid, x2=self.children[1].argmedoid), 0)
         return
 
     def test_overlaps(self):
