@@ -108,6 +108,11 @@ class Cluster:
         return len(self.name)
 
     @property
+    def parent(self) -> 'Cluster':
+        """ Returns the parent of self """
+        return self.manifold.select(self.name[:-1])
+
+    @property
     def points(self) -> Data:
         """ An iterator, in batches, over the points in the Clusters. """
         for i in range(0, len(self), BATCH_SIZE):
@@ -190,7 +195,7 @@ class Cluster:
             logging.debug(f'building cache for {self}')
 
             def argmax_max(b):
-                distances = self.distance(self.argmedoid, b)[0]
+                distances = self.distance([self.argmedoid], b)[0]
                 argmax = int(np.argmax(distances))
                 return b[argmax], distances[argmax]
 
@@ -208,8 +213,8 @@ class Cluster:
             if self.nsamples == 1:
                 return 0.
             count = [d <= (self.radius / 2)
-                     for batch in self
-                     for d in self.distance(self.argmedoid, batch)[0]]
+                     for batch in iter(self)
+                     for d in self.distance([self.argmedoid], batch)[0]]
             count = np.sum(count)
             self.__dict__['_local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
         return self.__dict__['_local_fractal_dimension']
@@ -233,14 +238,14 @@ class Cluster:
 
         results: Dict['Cluster', Radius] = dict()
         if self.depth == depth:
-            results = {self: self.distance(self.argmedoid, [point])[0]}  # TODO: Cover
+            results = {self: self.distance([self.argmedoid], np.asarray([point]))[0]}  # TODO: Cover
         elif self.overlaps(point, radius):
             results = self._tree_search(point, radius, depth)
 
         return results
 
     def _tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
-        distance = self.distance(self.argmedoid, [point])[0]
+        distance = self.distance([self.argmedoid], np.asarray([point]))[0]
         assert distance <= radius + self.radius, f'_tree_search was started with no overlap.'
         assert self.depth < depth, f'_tree_search needs to have depth ({depth}) > self.depth ({self.depth}). '
 
@@ -261,7 +266,7 @@ class Cluster:
 
             # filter out clusters that are too far away to possibly contain any hits.
             argcenters = [c.argmedoid for c in children]
-            distances = self.distance([point], argcenters)[0]
+            distances = self.distance(np.asarray([point]), argcenters)[0]
             radii = [radius + c.radius for c in children]
             candidates = {c: d for c, d, r in zip(children, distances, radii) if d <= r}
             if len(candidates) == 0:
@@ -300,7 +305,7 @@ class Cluster:
             }
             return self.children
 
-        farthest = self.argsamples[int(np.argmax(self.distance(self.argradius, self.argsamples)[0]))]
+        farthest = self.argsamples[int(np.argmax(self.distance([self.argradius], self.argsamples)[0]))]
 
         p1_idx, p2_idx = list(), list()
         [(p1_idx if p1 < p2 else p2_idx).append(i)
@@ -329,7 +334,7 @@ class Cluster:
 
     def overlaps(self, point: Data, radius: Radius) -> bool:
         """ Checks if point is within radius + self.radius of cluster. """
-        return self.distance(self.argmedoid, [point])[0][0] <= (self.radius + radius)
+        return self.distance([self.argmedoid], np.asarray([point]))[0][0] <= (self.radius + radius)
 
     def json(self):
         data = {
@@ -412,7 +417,6 @@ class Graph:
 
     def _build_edges_matrix(self) -> None:
         """ Calculates overlap for clusters in self in the naive way. """
-        logging.info(f'current depth: {self.depth}, {len(self.clusters)} clusters')
         # TODO: Calculate memory cost of the distance matrix here.
         clusters: List[Cluster] = list(self.clusters.keys())
 
@@ -422,7 +426,7 @@ class Graph:
         if len(clusters) <= BATCH_SIZE:
             # TODO: Put this back, seeing weird errors.
             distances = self.distance(
-                argcenters, 
+                argcenters,
                 argcenters,
             )
             differences = (distances.T - radii).T - radii
@@ -440,12 +444,40 @@ class Graph:
 
                 batch_left, batch_right = tuple(map(list, np.where(batch_differences <= 0.)))
                 [clusters[l_ + i].neighbors.update({clusters[r_]: batch_distances[l_, r_]}) for l_, r_ in zip(batch_left, batch_right) if (l_ + i) != r_]
+        return
+
+    def _build_edges_pruned(self) -> None:
+        """ Calculates edges for self by relying on tree-search. """
+        clusters: List[Cluster] = list(self.clusters.keys())
+        root = self.manifold.select('')
+
+        for cluster in clusters:
+            ancestor, radius = cluster, cluster.radius
+            while radius <= 0.:
+                ancestor, radius = ancestor.parent, ancestor.parent.radius
+
+            potential_neighbors: Dict['Cluster', Radius] = root.tree_search(
+                point=cluster.medoid,
+                radius=radius * 2 * np.sqrt(2),
+                depth=cluster.depth
+            )
+            leaves = [(n, d) for n, d in potential_neighbors.items() if n.depth < cluster.depth]
+            for leaf, d in leaves:
+                del potential_neighbors[leaf]
+                child = self.manifold.select(leaf.name + '0' * (cluster.depth - leaf.depth))
+                potential_neighbors[child] = d
+
+            if cluster in potential_neighbors:
+                del potential_neighbors[cluster]
+
+            neighbors = {n: d for n, d in potential_neighbors.items() if d <= (cluster.radius + n.radius)}
+            cluster.neighbors.update(neighbors)
 
         return
 
     def build_edges(self) -> None:
         """ Calculates edges for the Graph. """
-        return self._build_edges_matrix()
+        return self._build_edges_pruned()
 
     @property
     def edges(self) -> Dict[Set['Cluster'], float]:
@@ -621,11 +653,11 @@ class Manifold:
         """
 
         x1, x2 = np.asarray(x1), np.asarray(x2)
-        
+
         # Fetch data if given indices.
         if len(x1.shape) < 2:
             x1 = self.data[x1 if x1.ndim == 1 else np.expand_dims(x1, 0)]
-        
+
         if len(x2.shape) < 2:
             x2 = self.data[x2 if x2.ndim == 1 else np.expand_dims(x2, 0)]
 
@@ -684,7 +716,9 @@ class Manifold:
 
     def build_graphs(self) -> 'Manifold':
         """ Builds the Graph-stack. """
-        [g.build_edges() for g in self.graphs]
+        for g in self.graphs[1:]:
+            g.build_edges()
+            logging.info(f'current depth: {g.depth}, {len(g.clusters)} clusters, {len(g.subgraphs)} components')
         return self
 
     def build_graph(self, depth: int) -> 'Manifold':
@@ -692,6 +726,7 @@ class Manifold:
         if depth > self.depth:
             raise ValueError(f'depth must not be greater than {self.depth}. Got {depth}.')
         self.graphs[depth].build_edges()
+        logging.info(f'current depth: {depth}, {len(self.graphs[depth].clusters)} clusters, {len(self.graphs[depth].subgraphs)} components')
         return self
 
     def subgraph(self, cluster: Union[str, Cluster]) -> Graph:
@@ -715,22 +750,24 @@ class Manifold:
 
         return clusters
 
-    def select(self, name: str) -> Cluster:
-        """ Returns the cluster with the given name. """
+    def ancestry(self, name: str) -> List[Cluster]:
         if len(name) > self.depth:
             raise ValueError(f'depth of requested cluster must not be greater than depth of cluster-tree. Got {name}, max-depth: {self.depth}')
 
         # TODO: Consider how to change this for forests.
-        cluster: Cluster = next(iter(self.graphs[0]))
+        root: Cluster = next(iter(self.graphs[0]))
+        lineage = [root]
         for depth in range(len(name) + 1):
-            partial_name = name[:depth]
-            for child in cluster.children:
-                if child.name == partial_name:
-                    cluster = child
+            for child in lineage[-1].children:
+                if child.name == name[:depth]:
+                    lineage.append(child)
                     break
+        assert name == lineage[-1].name, f'wanted {name} but got {lineage[-1].name}.'
+        return lineage
 
-        assert name == cluster.name, f'wanted {name} but got {cluster.name}.'
-        return cluster
+    def select(self, name: str) -> Cluster:
+        """ Returns the cluster with the given name. """
+        return self.ancestry(name)[-1]
 
     def dump(self, fp: BinaryIO) -> None:  # TODO: Cover
         # TODO: Consider hoe to remove argpoints from this and just rebuild from leaves.
