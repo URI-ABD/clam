@@ -37,10 +37,10 @@ class MinPoints:
     """
 
     def __init__(self, points):
-        self.points = points
+        self.min_points = points
 
     def __call__(self, cluster: _Cluster):
-        return len(cluster) > self.points
+        return cluster.cardinality > self.min_points
 
 
 class MinRadius:
@@ -81,8 +81,8 @@ class MinCardinality:
     def __call__(self, cluster: _Cluster):
         return any((
             # If there are fewer points than needed, we don't check cardinality.
-            len(cluster.manifold.graphs[cluster.depth]) <= self.cardinality,
-            len(cluster.manifold.graphs[cluster.depth].subgraph(cluster)) >= self.cardinality
+            cluster.manifold.graphs[cluster.depth].cardinality <= self.cardinality,
+            cluster.manifold.graphs[cluster.depth].subgraph(cluster).cardinality >= self.cardinality
         ))
 
 

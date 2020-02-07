@@ -30,7 +30,7 @@ def ring_data(n: int, radius: float, noise: float) -> np.ndarray:
     return np.asarray(ring, dtype=np.float64)
 
 
-def bullseye(n: int = 1_000, num_rings: int = 3, noise: float = 0.05) -> Tuple[np.ndarray, List[int]]:
+def bullseye(n: int = 2_000, num_rings: int = 3, noise: float = 0.05) -> Tuple[np.ndarray, List[int]]:
     data: np.ndarray = np.ndarray(shape=(0, 2))
     labels: List[int] = list()
     for r in range(1, 2 * num_rings, 2):
@@ -40,7 +40,7 @@ def bullseye(n: int = 1_000, num_rings: int = 3, noise: float = 0.05) -> Tuple[n
     return np.asarray(data, dtype=np.float64), labels
 
 
-def line(n: int = 1_000, m: float = 1, c: float = 0., noise: float = 0.05) -> Tuple[np.ndarray, List[int]]:
+def line(n: int = 5_000, m: float = 1, c: float = 0., noise: float = 0.05) -> Tuple[np.ndarray, List[int]]:
     x = np.random.rand(n)
     y = m * x + c
     data = np.asarray((x, y)).T
@@ -49,13 +49,13 @@ def line(n: int = 1_000, m: float = 1, c: float = 0., noise: float = 0.05) -> Tu
     return np.asarray(data, dtype=np.float64), list(labels)
 
 
-def xor(n: int = 1_000) -> Tuple[np.ndarray, List[int]]:
+def xor(n: int = 5_000) -> Tuple[np.ndarray, List[int]]:
     data = np.random.rand(n, 2)
     labels = [int((x > 0.5) != (y > 0.5)) for x, y, in data]
     return np.asarray(data, dtype=np.float64), labels
 
 
-def spiral_2d(n: int = 2_000, noise: float = 0.1) -> Tuple[np.ndarray, List[int]]:
+def spiral_2d(n: int = 5_000, noise: float = 0.1) -> Tuple[np.ndarray, List[int]]:
     theta = np.sqrt(np.random.rand(n)) * 2 * np.pi
 
     r_a = 2 * theta + np.pi
@@ -81,7 +81,7 @@ def generate_torus(n: int, r_torus: float, noise: float) -> Tuple[np.ndarray, np
     return x, y, z
 
 
-def tori(n: int = 7_500, noise: float = 0.015, r_torus: float = 1.) -> Tuple[np.ndarray, List[int]]:
+def tori(n: int = 10_000, noise: float = 0.015, r_torus: float = 1.) -> Tuple[np.ndarray, List[int]]:
     x, y, z = generate_torus(n=n // 2, r_torus=r_torus, noise=noise)
     torus_1 = np.stack([x - r_torus, y, z], axis=1)
     labels = [0 for _ in x]

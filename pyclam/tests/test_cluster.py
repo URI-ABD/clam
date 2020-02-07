@@ -30,6 +30,9 @@ class TestCluster(unittest.TestCase):
         self.assertNotEqual(self.children[0], self.children[1])
         return
 
+    def test_bool(self):
+        self.assertTrue(self.cluster)
+
     def test_hash(self):
         self.assertIsInstance(hash(self.cluster), int)
         return
@@ -152,12 +155,14 @@ class TestCluster(unittest.TestCase):
         return
 
     def test_partition(self):
-        children = list(self.cluster.partition())
+        manifold = Manifold(datasets.xor()[0], 'euclidean')
+        cluster = manifold.select('')
+        children = list(cluster.partition())
         self.assertGreater(len(children), 1)
         return
 
     def test_neighbors(self):
-        for dataset in [datasets.bullseye, datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.random, datasets.line, datasets.xor]:
+        for dataset in [datasets.bullseye, datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
             data, labels = dataset()
             manifold = Manifold(data, 'euclidean')
             manifold.build(criterion.MaxDepth(8))
@@ -172,22 +177,13 @@ class TestCluster(unittest.TestCase):
                     radii = [cluster.radius + c.radius for c in potential_neighbors]
                     all_neighbors = [(c, d) for c, d, r in zip(potential_neighbors, distances, radii) if d <= r]
                     potential_neighbors = {c for c, _ in all_neighbors}
-                    # all_neighbors = {c: d for c, d in all_neighbors}
-                    # if (potential_neighbors - set(cluster.neighbors.keys())) or (set(cluster.neighbors.keys()) - potential_neighbors):
-                    #     print(depth, cluster.name, cluster.radius, cluster.parent.radius,
-                    #           'truth:', [(n.name, n.radius + cluster.radius, all_neighbors[n], n.radius / cluster.radius)
-                    #                      for n in potential_neighbors])
-                    #     print(depth, cluster.name, cluster.radius, cluster.parent.radius,
-                    #           'got:', [(n.name, n.radius + cluster.radius, all_neighbors[n], n.radius / cluster.radius)
-                    #                    for n in cluster.neighbors.keys()])
-                    #     print(depth, cluster.name, cluster.radius, cluster.parent.radius,
-                    #           'missed:', [(n.name, n.radius + cluster.radius, all_neighbors[n], n.radius / cluster.radius)
-                    #                       for n in (potential_neighbors - set(cluster.neighbors.keys()))])
-                    #     print(depth, cluster.name, cluster.radius, cluster.parent.radius,
-                    #           'extra:', [(n.name, n.radius + cluster.radius, all_neighbors[n], n.radius / cluster.radius)
-                    #                      for n in (set(cluster.neighbors.keys()) - potential_neighbors)])
-                    # self.assertFalse(potential_neighbors - cluster.neighbors.keys())
-                    self.assertFalse(cluster.neighbors.keys() - potential_neighbors)
+
+                    missed = potential_neighbors - cluster.neighbors.keys()
+                    self.assertFalse(len(missed) > 0, msg=f'\nmissed {len(missed)} neighbor(s) {[(n.name, n.radius) for n in missed]}\n'
+                                                          f'for cluster {cluster.name} of radius {cluster.radius} at depth {cluster.depth}')
+                    extra = cluster.neighbors.keys() - potential_neighbors
+                    self.assertFalse(len(extra) > 0, msg=f'\nextra {len(extra)} neighbor(s)  {[(n.name, n.radius) for n in extra]}\n'
+                                                         f'for cluster {cluster.name} of radius {cluster.radius} at depth {cluster.depth}')
         return
 
     def test_distance(self):
