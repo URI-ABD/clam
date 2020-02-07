@@ -16,7 +16,7 @@ class TestManifold(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.data, cls.labels = datasets.random(n=1000, dimensions=3)
-        cls.manifold = Manifold(cls.data, 'euclidean').build(criterion.MaxDepth(12))
+        cls.manifold = Manifold(cls.data, 'euclidean').build(criterion.MaxDepth(8))
         return
 
     def test_init(self):
@@ -41,11 +41,12 @@ class TestManifold(unittest.TestCase):
 
     def test_eq(self):
         self.assertEqual(self.manifold, self.manifold)
-        other = Manifold(self.data, 'euclidean', argpoints=0.2)
-        self.assertNotEqual(self.manifold, other)
-        other.build()
+        other = Manifold(self.data, 'euclidean', argpoints=0.2).build(criterion.MaxDepth(10))
         self.assertNotEqual(self.manifold, other)
         self.assertEqual(other, other)
+
+        other = Manifold(self.data, 'cosine')
+        self.assertNotEqual(self.manifold, other)
         return
 
     def test_getitem(self):
@@ -88,9 +89,9 @@ class TestManifold(unittest.TestCase):
         distances = [(p, d) for p, d in zip(range(self.data.shape[0]), cdist(np.asarray([point]), self.data, self.manifold.metric)[0])]
 
         for radius in [0.25, 0.5, 1.0, 2.0, 5.0]:
-            naive_results = {p: d for p, d in distances if d <= radius}
+            naive_results = {(p, d) for p, d in distances if d <= radius}
             results = self.manifold.find_points(point, radius)
-            self.assertDictEqual(naive_results, results)
+            self.assertSetEqual(naive_results, set(results))
 
         return
 
@@ -105,7 +106,7 @@ class TestManifold(unittest.TestCase):
         m.build(criterion.MaxDepth(2))
         self.assertEqual(3, len(m.graphs))
         m.build()
-        self.assertEqual(len(self.data), len(m.graphs[-1]))
+        self.assertEqual(len(self.data), m.graphs[-1].cardinality)
         return
 
     def test_build_tree(self):
@@ -120,7 +121,15 @@ class TestManifold(unittest.TestCase):
         self.assertEqual(3, len(m.graphs))
 
         m.build_tree()
-        self.assertEqual(len(self.data), len(m.graphs[-1]))
+        self.assertEqual(len(self.data), m.graphs[-1].cardinality)
+        return
+
+    def test_ancestry(self):
+        name = '11'
+        lineage = self.manifold.ancestry(name)
+        [self.assertEqual(name[:i], l.name) for i, l in enumerate(lineage)]
+        lineage = self.manifold.ancestry(lineage[-1])
+        [self.assertEqual(name[:i], l.name) for i, l in enumerate(lineage)]
         return
 
     def test_select(self):
@@ -130,6 +139,8 @@ class TestManifold(unittest.TestCase):
         else:
             with self.assertRaises(ValueError):
                 self.manifold.select(cluster.name + '1')
+            with self.assertRaises(ValueError):
+                self.manifold.select(cluster.name + '111111111111111111111111111')
         return
 
     def test_dump(self):
@@ -138,7 +149,7 @@ class TestManifold(unittest.TestCase):
         return
 
     def test_load(self):
-        original = Manifold(self.data, 'euclidean').build(criterion.MinPoints(10))
+        original = self.manifold
         with TemporaryFile() as fp:
             original.dump(fp)
             fp.seek(0)
@@ -173,7 +184,7 @@ class TestManifold(unittest.TestCase):
         ks = list(range(100))
         ks.extend(range(100, data.shape[0], 100))
         for k in ks:
-            naive_results = {p: d for d, p in points[:k]}
+            naive_results = {p for d, p in points[:k]}
             results = m.find_knn(point, k)
-            self.assertEqual(k, len(results.keys()))
-            self.assertSetEqual(set(naive_results.keys()), set(results.keys()))
+            self.assertEqual(k, len(results))
+            self.assertSetEqual(naive_results, {p for p, _ in results})

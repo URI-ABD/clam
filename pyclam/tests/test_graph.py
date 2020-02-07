@@ -35,14 +35,21 @@ class TestGraph(unittest.TestCase):
         self.assertIn(clusters[0], self.manifold.select('').children)
         return
 
+    def test_metric(self):
+        self.assertEqual(self.manifold.metric, self.manifold.graphs[0].metric)
+
     def test_len(self):
         clusters = list(self.manifold.graphs[-1])
         g = Graph(*clusters)
-        self.assertEqual(len(clusters), len(g))
+        self.assertEqual(len(clusters), g.cardinality)
+        return
+
+    def test_population(self):
+        self.assertEqual(len(self.manifold.argpoints), self.manifold.graphs[-1].population)
         return
 
     def test_str(self):
-        self.assertEqual(len(self.manifold.graphs[-1]), len(str(self.manifold.graphs[-1]).split(';')))
+        self.assertEqual(self.manifold.graphs[-1].cardinality, len(str(self.manifold.graphs[-1]).split(';')))
         return
 
     def test_repr(self):
@@ -79,13 +86,13 @@ class TestGraph(unittest.TestCase):
         v = self.manifold.graphs[-1]
         e = self.manifold.graphs[-1].edges
         self.assertGreaterEqual(len(e), 0)
-        self.assertLessEqual(len(e), len(v) * (len(v) - 1) / 2)
+        self.assertLessEqual(len(e), v.cardinality * (v.cardinality - 1) / 2)
         return
 
     def test_subgraphs(self):
-        sgs = self.manifold.graphs[-1].subgraphs
-        [self.assertIsInstance(g, Graph) for g in sgs]
-        self.assertEqual(sum(len(g) for g in sgs), len(self.manifold.graphs[-1]))
+        subgraphs = self.manifold.graphs[-1].subgraphs
+        [self.assertIsInstance(g, Graph) for g in subgraphs]
+        self.assertEqual(sum(g.cardinality for g in subgraphs), self.manifold.graphs[-1].cardinality)
         return
 
     def test_subgraph(self):
@@ -106,22 +113,28 @@ class TestGraph(unittest.TestCase):
     def test_bft(self):
         g = self.manifold.graphs[-1].bft(next(iter(self.manifold.graphs[-1])))
         self.assertGreater(len(g), 0)
-        self.assertLessEqual(len(g), len(self.manifold.graphs[-1]))
+        self.assertLessEqual(len(g), self.manifold.graphs[-1].cardinality)
 
         # TODO: Should this work?
         g = self.manifold.graphs[-1].bft(next(iter(self.manifold.graphs[-2])))
         self.assertGreater(len(g), 0)
-        self.assertLessEqual(len(g), len(self.manifold.graphs[-1]))
+        self.assertLessEqual(len(g), self.manifold.graphs[-1].cardinality)
         return
 
     def test_dft(self):
         g = self.manifold.graphs[-1].dft(next(iter(self.manifold.graphs[-1])))
         self.assertGreater(len(g), 0)
-        self.assertLessEqual(len(g), len(self.manifold.graphs[-1]))
+        self.assertLessEqual(len(g), self.manifold.graphs[-1].cardinality)
         return
 
     def test_random_walk(self):
-        g = self.manifold.graphs[-1]
+        manifold = self.manifold.build(MaxDepth(5))
+        g = manifold.graphs[-1]
+        results = g.random_walk()
+        self.assertGreater(len(results), 0)
+        [self.assertGreaterEqual(v, 0) for k, v in results.items()]
+        manifold.build_tree(MaxDepth(6))
+        g = manifold.graphs[-1]
         results = g.random_walk()
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
