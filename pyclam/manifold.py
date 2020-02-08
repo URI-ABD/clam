@@ -3,10 +3,8 @@
 import concurrent.futures
 import logging
 import pickle
-import random
 from collections import deque
 from operator import itemgetter
-from threading import Thread
 from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple
 
 import numpy as np
@@ -486,32 +484,40 @@ class Graph:
         self.clusters = {c: None for c in self.clusters.keys()}
         return
 
-    def random_walk(self, steps: int = 5, walks: int = 1) -> Dict[Cluster, int]:
-        """ Performs a random walk, returning a modified graph instance.
+    def _random_walks(self, clusters: List[Cluster], steps: int) -> Dict[Cluster, int]:
+        results = {c: list() for c in self.clusters}
 
-        :param int steps: number of steps per walk
-        :param int walks: number of walks to perform
-        :returns a Dict of cluster names to visit counts
-        """
-        clusters = list(self.clusters.keys())
-        results = {c: list() for c in clusters}
-
-        def walk(cluster):
+        def _walk(cluster):
             for _ in range(steps):
                 results[cluster].append(1)
                 if not cluster.neighbors:
                     break
-                cluster = random.sample(cluster.neighbors.keys(), 1)[0]
+                neighbors = [(n, d) for n, d in cluster.neighbors.items()]
+                probabilities = [d for _, d in neighbors]
+                neighbors, probabilities = [n for n, _ in neighbors], [d / sum(probabilities) for d in probabilities]
+                cluster = np.random.choice(neighbors, p=probabilities)
 
-        # Perform random walks in parallel.
-        starts = random.sample(clusters, min(walks, len(clusters)))
-        threads = [Thread(target=walk, args=(s,)) for s in starts]
-        [t.start() for t in threads]
-        [t.join() for t in threads]
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_cluster = [executor.submit(_walk, c) for c in clusters]
+            [v.result() for v in concurrent.futures.as_completed(future_to_cluster)]
 
         # Gather the results.
         results = {k: len(v) for k, v in results.items()}
         return results
+
+    def random_walks(self, clusters: Union[str, List[str], Cluster, List[Cluster]], steps: int) -> Dict[Cluster, int]:
+        """ Performs random walks, counting visitations of each cluster
+
+        :param int clusters: Clusters at which to start the random walks
+        :param int steps: number of steps to take per walk
+        :returns a Dict of Clusters to Visit counts
+        """
+        if type(clusters) is Cluster:
+            clusters = [clusters]
+        if type(clusters) is list and type(clusters[0]) is str:
+            clusters = list(map(self.manifold.select, clusters))
+
+        return self._random_walks(clusters, steps)
 
     @staticmethod
     def traverse(start: Cluster) -> Set[Cluster]:

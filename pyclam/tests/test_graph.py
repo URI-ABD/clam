@@ -127,15 +127,15 @@ class TestGraph(unittest.TestCase):
         self.assertLessEqual(len(g), self.manifold.graphs[-1].cardinality)
         return
 
-    def test_random_walk(self):
+    def test_random_walks(self):
         manifold = self.manifold.build(MaxDepth(5))
         g = manifold.graphs[-1]
-        results = g.random_walk()
+        results = g.random_walks(list(g.clusters), 100)
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
         manifold.build_tree(MaxDepth(6))
         g = manifold.graphs[-1]
-        results = g.random_walk()
+        results = g.random_walks(list(g.clusters), 100)
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
         return
