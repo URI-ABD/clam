@@ -414,7 +414,6 @@ class Graph:
                 distances = []
             else:
                 cluster.neighbors.update({c: d for c, d in zip(potential_candidates, distances) if d <= c.radius + cluster.radius})
-                [n.neighbors.update({cluster: d}) for n, d in cluster.neighbors.items()]
 
             # next_candidates are to cluster.children as candidates are to cluster.
             next_candidates = set()
@@ -435,7 +434,11 @@ class Graph:
         # this seeds the initial arguments to _find_neighbors
         layer: Dict[Cluster, Tuple[List[Cluster], float]] = {cluster: (list(root.children), root.radius) for cluster in root.children}
         for depth in range(1, self.depth + 1):
-            layer = {cluster: _find_neighbors(cluster, candidates, radius) for cluster, (candidates, radius) in layer.items()}
+            clusters = list(layer.keys())
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future_to_cluster = [executor.submit(_find_neighbors, c, *layer[c]) for c in clusters]
+                layer = {c: v.result() for c, v in zip(clusters, concurrent.futures.as_completed(future_to_cluster))}
+
             logging.info(f'depth {depth}, {len(layer)} clusters, {len(self.manifold.graphs[depth].subgraphs)} components')
             layer = {child: v for c, v in layer.items() for child in c.children}
         return
@@ -484,27 +487,6 @@ class Graph:
         self.clusters = {c: None for c in self.clusters.keys()}
         return
 
-    def _random_walks(self, clusters: List[Cluster], steps: int) -> Dict[Cluster, int]:
-        results = {c: list() for c in self.clusters}
-
-        def _walk(cluster):
-            for _ in range(steps):
-                results[cluster].append(1)
-                if not cluster.neighbors:
-                    break
-                neighbors = [(n, d) for n, d in cluster.neighbors.items()]
-                probabilities = [d for _, d in neighbors]
-                neighbors, probabilities = [n for n, _ in neighbors], [d / sum(probabilities) for d in probabilities]
-                cluster = np.random.choice(neighbors, p=probabilities)
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_cluster = [executor.submit(_walk, c) for c in clusters]
-            [v.result() for v in concurrent.futures.as_completed(future_to_cluster)]
-
-        # Gather the results.
-        results = {k: len(v) for k, v in results.items()}
-        return results
-
     def random_walks(self, clusters: Union[str, List[str], Cluster, List[Cluster]], steps: int) -> Dict[Cluster, int]:
         """ Performs random walks, counting visitations of each cluster
 
@@ -517,7 +499,28 @@ class Graph:
         if type(clusters) is list and type(clusters[0]) is str:
             clusters = list(map(self.manifold.select, clusters))
 
-        return self._random_walks(clusters, steps)
+        results = {c: list() for c in self.clusters}
+        probabilities: Dict[Cluster, Dict[Cluster, float]] = {c: None for c in self.clusters}
+
+        def _walk(cluster):
+            for _ in range(steps):
+                results[cluster].append(1)
+                if not cluster.neighbors:
+                    break
+                if probabilities[cluster] is None:
+                    transition_probabilities = [1. / d for d in cluster.neighbors.values()]
+                    temp = sum(transition_probabilities)
+                    transition_probabilities = [p / temp for p in transition_probabilities]
+                    probabilities[cluster] = {n: p for n, p in zip(cluster.neighbors.keys(), transition_probabilities)}
+
+                neighbors = list(cluster.neighbors.keys())
+                cluster = np.random.choice(neighbors, p=[probabilities[cluster][n] for n in neighbors])
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_cluster = [executor.submit(_walk, c) for c in clusters]
+            [v.result() for v in concurrent.futures.as_completed(future_to_cluster)]
+
+        return {k: len(v) for k, v in results.items()}
 
     @staticmethod
     def traverse(start: Cluster) -> Set[Cluster]:
@@ -741,7 +744,7 @@ class Manifold:
         pickle.dump({
             'metric': self.metric,
             'root': [c.json() for c in self.graphs[0]],
-        }, fp)
+        }, fp, protocol=pickle.HIGHEST_PROTOCOL)
         return
 
     @staticmethod
