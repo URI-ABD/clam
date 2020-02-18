@@ -3,6 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
+from pyclam import datasets
 from pyclam.criterion import MaxDepth
 from pyclam.manifold import Manifold, Graph
 
@@ -10,7 +11,8 @@ from pyclam.manifold import Manifold, Graph
 class TestGraph(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data = np.random.randn(1000, 10)
+        np.random.seed(42)
+        cls.data, _ = datasets.bullseye()
         cls.manifold = Manifold(cls.data, 'euclidean')
         cls.manifold.build(MaxDepth(10))
         return
@@ -134,6 +136,7 @@ class TestGraph(unittest.TestCase):
         print(sum(results.values()))
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
+        self.manifold.build(MaxDepth(5))
         self.manifold.build_tree(MaxDepth(6))
         g = self.manifold.graphs[-1]
         results = g.random_walks(list(g.clusters), 100)
