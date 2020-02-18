@@ -145,7 +145,9 @@ class TestCluster(unittest.TestCase):
                 for d in range(depth, 0, -1):
                     parents = set([m.select(cluster.name[:-1]) for cluster in linear])
                     for parent in parents:
-                        self.assertIn(parent, parent.tree_search(cluster.medoid, cluster.radius, parent.depth))
+                        results = parent.tree_search(cluster.medoid, cluster.radius, parent.depth)
+                        self.assertIn(parent, results, msg=f'\n{parent.name} not in {[c.name for c in results]}. '
+                                                           f'got {len(results)} hits.')
         # Attempting to find points that *may* be in the data
         c: Cluster = next(iter(m.graphs[0]))
         results = c.tree_search(np.asarray([0, 1]), 0., -1)

@@ -212,10 +212,22 @@ class Cluster:
             self.__dict__['_local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
         return self.__dict__['_local_fractal_dimension']
 
+    @property
+    def transition_probabilities(self) -> Tuple[List['Cluster'], List[float]]:
+        if '_transition_probabilities' not in self.__dict__:
+            logging.debug(f'calculating transition probabilities for {self}')
+            destinations: List['Cluster'] = list(self.neighbors.keys())
+            probabilities: List[float] = [1. / d for d in self.neighbors.values()]
+            temp = sum(probabilities)
+            probabilities = [p / temp for p in probabilities]
+            self.__dict__['_transition_probabilities'] = (destinations, probabilities)
+        return self.__dict__['_transition_probabilities']
+
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
         logging.debug(f'clearing cache for {self}')
-        for prop in ['_argsamples', '_argmedoid', '_argradius', '_radius', '_local_fractal_dimension']:
+        for prop in ['_argsamples', '_argmedoid', '_argradius', '_radius', '_local_fractal_dimension',
+                     '_transition_probabilities']:
             try:
                 del self.__dict__[prop]
             except KeyError:
@@ -247,10 +259,10 @@ class Cluster:
         candidates: Dict['Cluster', Radius] = {self: distance}
         for d_ in range(self.depth, depth):
             # if cluster was not partitioned any further, add it to results.
-            results.update({c: d for c, d in candidates.items() if len(c.children) < 2})
+            results.update({c: d for c, d in candidates.items() if len(c.children) < 1})
 
             # filter out only those candidates that were partitioned.
-            candidates = {c: d for c, d in candidates.items() if len(c.children) > 1}
+            candidates = {c: d for c, d in candidates.items() if len(c.children) > 0}
 
             # proceed down th tree
             children: List[Cluster] = [c for candidate in candidates.keys() for c in candidate.children]
@@ -270,6 +282,7 @@ class Cluster:
 
         # put all potential clusters in one dictionary.
         results.update(candidates)
+        # results = {c: d for c, d in results.items() if c.depth == depth}
         return results
 
     def partition(self, *criterion) -> Iterable['Cluster']:
@@ -514,21 +527,11 @@ class Graph:
 
         counts = {c: 0 for c in self.clusters}
         counts.update({c: 1 for c in clusters})
-        probabilities: Dict[Cluster, Dict[Cluster, float]] = dict()
-        for c in self.clusters:
-            transition_probabilities = [1. / d for d in c.neighbors.values()]
-            temp = sum(transition_probabilities)
-            transition_probabilities = [p / temp for p in transition_probabilities]
-            probabilities[c] = {n: p for n, p in zip(c.neighbors, transition_probabilities)}
 
         walks = [c for c in clusters if c.neighbors]
         for _ in range(steps):
-            walks = [
-                np.random.choice(
-                    list(c.neighbors.keys()),
-                    p=[probabilities[c][n] for n in c.neighbors])
-                for c in walks if c.neighbors
-            ]
+            walks = [np.random.choice(a=c.transition_probabilities[0], p=c.transition_probabilities[1])
+                     for c in walks if c.neighbors]
             for c in walks:
                 counts[c] += 1
 

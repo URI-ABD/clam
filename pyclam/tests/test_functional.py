@@ -39,7 +39,7 @@ class TestManifoldFunctional(unittest.TestCase):
         m.build_tree()
         # Even after explicit deepen calls.
         self.assertEqual(1, len(m.graphs))
-        self.assertEqual(1, len(m.find_clusters(data[0], 0.0, -1)))
+        self.assertEqual(1, len(m.find_clusters(np.asarray([1, 1, 1]), 0.0, -1)))
         # And, we should get all 1000 points back for any of the data.
         self.assertEqual(1000, len(m.find_points(data[0], 0.0)))
         return

@@ -176,13 +176,14 @@ class TestManifold(unittest.TestCase):
     def test_find_knn(self):
         data = datasets.bullseye()[0]
         point = data[0]
-        points = sorted([(d, p) for p, d in zip(range(data.shape[0]), cdist(np.asarray([point]), data, 'euclidean')[0])])
+        points = sorted([(d, p) for p, d in zip(range(data.shape[0]),
+                                                cdist(np.asarray([point]), data, 'euclidean')[0])])
 
         m = Manifold(data, 'euclidean')
         m.build_tree(criterion.MinPoints(10), criterion.MaxDepth(10))
 
-        ks = list(range(100))
-        ks.extend(range(100, data.shape[0], 100))
+        ks = list(range(10))
+        ks.extend(range(10, data.shape[0], 100))
         for k in ks:
             naive_results = {p for d, p in points[:k]}
             results = m.find_knn(point, k)

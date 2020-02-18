@@ -1,19 +1,15 @@
 import unittest
-from inspect import stack
-from itertools import cycle
-
-from matplotlib import pyplot as plt
 
 import pyclam.datasets as d
 import pyclam.manifold as m
 from pyclam.criterion import (
-    MinPoints, 
-    MinRadius, 
-    MaxDepth, 
-    LeavesSubgraph, 
-    MinNeighborhood, 
-    NewSubgraph, 
-    MinCardinality, 
+    MinPoints,
+    MinRadius,
+    MaxDepth,
+    LeavesSubgraph,
+    MinNeighborhood,
+    NewSubgraph,
+    MinCardinality,
     MedoidNearCentroid,
     UniformDistribution,
 )
@@ -78,28 +74,32 @@ class TestCriterion(unittest.TestCase):
         # self.plot()
         return
 
-    def plot(self):
-        colors = cycle('bgrcmy')
-        shapes = cycle('.ov^<>1234spP*+xXD|')
-        for graph in self.manifold.graphs:
-            fig, ax = plt.subplots()
-            for cluster in graph:
-                marker = next(colors) + next(shapes)
-
-                # The points themselves.
-                [plt.plot(batch[:, 0], batch[:, 1], marker, alpha=0.7) for batch in cluster.points]
-
-                # Cluster attributes
-                ax.add_artist(
-                    plt.Circle(
-                        tuple(cluster.medoid),
-                        cluster.radius,
-                        fill=False,
-                        color='k',
-                        zorder=10
-                    )
-                )
-                plt.plot(*cluster.centroid, '.k')
-                plt.plot(*cluster.medoid, '*k')
-            plt.title(f'{graph.depth} - {stack()[1].function}')
-            plt.show()
+    # def plot(self):
+    #     from inspect import stack
+    #     from itertools import cycle
+    #
+    #     from matplotlib import pyplot as plt
+    #     colors = cycle('bgrcmy')
+    #     shapes = cycle('.ov^<>1234spP*+xXD|')
+    #     for graph in self.manifold.graphs:
+    #         fig, ax = plt.subplots()
+    #         for cluster in graph:
+    #             marker = next(colors) + next(shapes)
+    #
+    #             # The points themselves.
+    #             [plt.plot(batch[:, 0], batch[:, 1], marker, alpha=0.7) for batch in cluster.points]
+    #
+    #             # Cluster attributes
+    #             ax.add_artist(
+    #                 plt.Circle(
+    #                     tuple(cluster.medoid),
+    #                     cluster.radius,
+    #                     fill=False,
+    #                     color='k',
+    #                     zorder=10
+    #                 )
+    #             )
+    #             plt.plot(*cluster.centroid, '.k')
+    #             plt.plot(*cluster.medoid, '*k')
+    #         plt.title(f'{graph.depth} - {stack()[1].function}')
+    #         plt.show()
