@@ -128,14 +128,16 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_random_walks(self):
-        manifold = self.manifold.build(MaxDepth(5))
-        g = manifold.graphs[-1]
-        results = g.random_walks(list(g.clusters), 100)
+        # manifold = self.manifold.build(MaxDepth(10))
+        g = self.manifold.graphs[-1]
+        results = g.random_walks(list(g.clusters), 250)
+        print(sum(results.values()))
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
-        manifold.build_tree(MaxDepth(6))
-        g = manifold.graphs[-1]
+        self.manifold.build_tree(MaxDepth(6))
+        g = self.manifold.graphs[-1]
         results = g.random_walks(list(g.clusters), 100)
+        print(sum(results.values()))
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
         return

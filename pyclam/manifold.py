@@ -504,33 +504,35 @@ class Graph:
         :param int steps: number of steps to take per walk
         :returns a Dict of Clusters to Visit counts
         """
+        if self.cardinality < 2:
+            return {c: 1 for c in self.clusters}
+
         if type(clusters) is Cluster:
             clusters = [clusters]
         if type(clusters) is list and type(clusters[0]) is str:
             clusters = list(map(self.manifold.select, clusters))
 
-        results = {c: list() for c in self.clusters}
-        probabilities: Dict[Cluster, Dict[Cluster, float]] = {c: None for c in self.clusters}
+        counts = {c: 0 for c in self.clusters}
+        counts.update({c: 1 for c in clusters})
+        probabilities: Dict[Cluster, Dict[Cluster, float]] = dict()
+        for c in self.clusters:
+            transition_probabilities = [1. / d for d in c.neighbors.values()]
+            temp = sum(transition_probabilities)
+            transition_probabilities = [p / temp for p in transition_probabilities]
+            probabilities[c] = {n: p for n, p in zip(c.neighbors, transition_probabilities)}
 
-        def _walk(cluster):
-            for _ in range(steps):
-                results[cluster].append(1)
-                if not cluster.neighbors:
-                    break
-                if probabilities[cluster] is None:
-                    transition_probabilities = [1. / d for d in cluster.neighbors.values()]
-                    temp = sum(transition_probabilities)
-                    transition_probabilities = [p / temp for p in transition_probabilities]
-                    probabilities[cluster] = {n: p for n, p in zip(cluster.neighbors.keys(), transition_probabilities)}
+        walks = [c for c in clusters if c.neighbors]
+        for _ in range(steps):
+            walks = [
+                np.random.choice(
+                    list(c.neighbors.keys()),
+                    p=[probabilities[c][n] for n in c.neighbors])
+                for c in walks if c.neighbors
+            ]
+            for c in walks:
+                counts[c] += 1
 
-                neighbors = list(cluster.neighbors.keys())
-                cluster = np.random.choice(neighbors, p=[probabilities[cluster][n] for n in neighbors])
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_cluster = [executor.submit(_walk, c) for c in clusters]
-            [v.result() for v in concurrent.futures.as_completed(future_to_cluster)]
-
-        return {k: len(v) for k, v in results.items()}
+        return counts
 
     @staticmethod
     def traverse(start: Cluster) -> Set[Cluster]:
