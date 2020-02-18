@@ -109,7 +109,13 @@ def line_3d(n: int, height: float, noise: float) -> np.ndarray:
     return np.stack([x, y, z], axis=1)
 
 
-def skewer(n: int = 10_000, radius: float = 3., height: float = 6., num_turns: int = 2, noise: float = 0.05) -> Tuple[np.ndarray, List[int]]:
+def skewer(
+        n: int = 10_000,
+        radius: float = 3.,
+        height: float = 6.,
+        num_turns: int = 2,
+        noise: float = 0.05
+) -> Tuple[np.ndarray, List[int]]:
     spiral_points, line_points = 5 * n // 6, n // 6
     spiral_data = spiral_3d(spiral_points, radius, height, num_turns, noise)
     labels = [0 for _ in range(spiral_data.shape[0])]

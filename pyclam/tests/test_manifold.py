@@ -86,7 +86,10 @@ class TestManifold(unittest.TestCase):
         self.assertLessEqual(1, len(self.manifold.find_points(self.data[0], radius=1.0)))
 
         point = self.data[0]
-        distances = [(p, d) for p, d in zip(range(self.data.shape[0]), cdist(np.asarray([point]), self.data, self.manifold.metric)[0])]
+        distances = [(p, d) for p, d in zip(
+            range(self.data.shape[0]),
+            cdist(np.asarray([point]), self.data, self.manifold.metric)[0],
+        )]
 
         for radius in [0.25, 0.5, 1.0, 2.0, 5.0]:
             naive_results = {(p, d) for p, d in distances if d <= radius}

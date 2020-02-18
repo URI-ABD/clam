@@ -181,11 +181,15 @@ class TestCluster(unittest.TestCase):
                     potential_neighbors = {c for c, _ in all_neighbors}
 
                     missed = potential_neighbors - cluster.neighbors.keys()
-                    self.assertFalse(len(missed) > 5, msg=f'\nmissed {len(missed)} neighbor(s) {[(n.name, n.radius) for n in missed]}\n'
-                                                          f'for cluster {cluster.name} of radius {cluster.radius} at depth {cluster.depth}')
+                    self.assertFalse(len(missed) > 5,
+                                     msg=f'\nmissed {len(missed)} neighbor(s) {[(n.name, n.radius) for n in missed]}\n'
+                                         f'for cluster {cluster.name} of radius {cluster.radius} '
+                                         f'at depth {cluster.depth}')
                     extra = cluster.neighbors.keys() - potential_neighbors
-                    self.assertFalse(len(extra) > 0, msg=f'\nextra {len(extra)} neighbor(s)  {[(n.name, n.radius) for n in extra]}\n'
-                                                         f'for cluster {cluster.name} of radius {cluster.radius} at depth {cluster.depth}')
+                    self.assertFalse(len(extra) > 0,
+                                     msg=f'\nextra {len(extra)} neighbor(s)  {[(n.name, n.radius) for n in extra]}\n'
+                                         f'for cluster {cluster.name} of radius {cluster.radius} '
+                                         f'at depth {cluster.depth}')
         return
 
     def test_distance(self):
