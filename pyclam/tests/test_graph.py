@@ -27,8 +27,8 @@ class TestGraph(unittest.TestCase):
 
     def test_eq(self):
         self.assertEqual(self.manifold.graphs[0], self.manifold.graphs[0])
-        for l, r in combinations(self.manifold.graphs, 2):
-            self.assertNotEqual(l, r)
+        for left, right in combinations(self.manifold.graphs, 2):
+            self.assertNotEqual(left, right)
         return
 
     def test_iter(self):

@@ -654,8 +654,7 @@ class Manifold:
 
     def find_points(self, point: Data, radius: Radius) -> List[Tuple[int, Radius]]:
         """ Returns all indices of points that are within radius of point. """
-        candidates: List[int] = [p
-                                 for c in self.find_clusters(point, radius, len(self.graphs))
+        candidates: List[int] = [p for c in self.find_clusters(point, radius, len(self.graphs))
                                  for p in c.argpoints]
         results: Dict[int, Radius] = dict()
         point = np.expand_dims(point, axis=0)
