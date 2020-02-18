@@ -357,7 +357,8 @@ class Graph:
         assert all(isinstance(c, Cluster) for c in clusters)
         assert all([c.depth == clusters[0].depth for c in clusters[1:]])
 
-        # self.clusters is a dictionary of the clusters in the graph and the connected component subgraph that the cluster belongs to.
+        # self.clusters is a dictionary of the clusters in the graph
+        # and the connected component subgraph that the cluster belongs to.
         self.clusters: Dict[Cluster: 'Graph'] = {c: None for c in clusters}
         return
 
@@ -413,7 +414,8 @@ class Graph:
             except IndexError:
                 distances = []
             else:
-                cluster.neighbors.update({c: d for c, d in zip(potential_candidates, distances) if d <= c.radius + cluster.radius})
+                cluster.neighbors.update({c: d for c, d in zip(potential_candidates, distances)
+                                          if d <= c.radius + cluster.radius})
 
             # next_candidates are to cluster.children as candidates are to cluster.
             next_candidates = set()
@@ -432,14 +434,16 @@ class Graph:
 
         root = self.manifold.select('')
         # this seeds the initial arguments to _find_neighbors
-        layer: Dict[Cluster, Tuple[List[Cluster], float]] = {cluster: (list(root.children), root.radius) for cluster in root.children}
+        layer: Dict[Cluster, Tuple[List[Cluster], float]] = {cluster: (list(root.children), root.radius)
+                                                             for cluster in root.children}
         for depth in range(1, self.depth + 1):
             clusters = list(layer.keys())
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future_to_cluster = [executor.submit(_find_neighbors, c, *layer[c]) for c in clusters]
                 layer = {c: v.result() for c, v in zip(clusters, concurrent.futures.as_completed(future_to_cluster))}
 
-            logging.info(f'depth {depth}, {len(layer)} clusters, {len(self.manifold.graphs[depth].subgraphs)} components')
+            logging.info(f'depth {depth}, {len(layer)} clusters, '
+                         f'{len(self.manifold.graphs[depth].subgraphs)} components')
             layer = {child: v for c, v in layer.items() for child in c.children}
         return
 
@@ -448,7 +452,9 @@ class Graph:
         """ Returns all edges within the graph. """
         if '_edges' not in self.__dict__:
             logging.debug(f'building cache for {self}')
-            self.__dict__['_edges'] = {frozenset([c, n]): d for c in self.clusters.keys() for n, d in c.neighbors.items()}
+            self.__dict__['_edges'] = {frozenset([c, n]): d
+                                       for c in self.clusters.keys()
+                                       for n, d in c.neighbors.items()}
         return self.__dict__['_edges']
 
     @property
@@ -487,7 +493,11 @@ class Graph:
         self.clusters = {c: None for c in self.clusters.keys()}
         return
 
-    def random_walks(self, clusters: Union[str, List[str], Cluster, List[Cluster]], steps: int) -> Dict[Cluster, int]:
+    def random_walks(
+            self,
+            clusters: Union[str, List[str], Cluster, List[Cluster]],
+            steps: int
+    ) -> Dict[Cluster, int]:
         """ Performs random walks, counting visitations of each cluster
 
         :param int clusters: Clusters at which to start the random walks
@@ -564,14 +574,16 @@ class Manifold:
 
     The Manifold class' main job is to organize the underlying Clusters ang Graphs.
     It does this by providing the ability to reset the build the Cluster-tree, and from them the Graph-stack.
-    With this Cluster-tree and Graph-stack, Manifold provides utilities for rho-nearest neighbors search, k-nearest neighbors search.
+    With this Cluster-tree and Graph-stack, Manifold provides utilities for
+     rho-nearest neighbors search and k-nearest neighbors search.
     """
 
     def __init__(self, data: Data, metric: Metric, argpoints: Union[Vector, float] = None, **kwargs):
         """ A Manifold needs the data to learn the manifold for, and a distance metric to use while doing so.
 
         :param data: The data to learn. This could be a numpy.ndarray or a numpy.memmap.
-        :param metric: The distance metric to use for the data. Any metric allowed by scipy.spatial.distance is allowed here.
+        :param metric: The distance metric to use for the data.
+                       Any metric allowed by scipy.spatial.distance is allowed here.
         :param argpoints: Optional. List of indexes or portion of data to which to restrict Manifold.
         """
         logging.debug(f'Manifold(data={data.shape}, metric={metric}, argpoints={argpoints})')
@@ -637,7 +649,9 @@ class Manifold:
 
     def find_points(self, point: Data, radius: Radius) -> List[Tuple[int, Radius]]:
         """ Returns all indices of points that are within radius of point. """
-        candidates: List[int] = [p for c in self.find_clusters(point, radius, len(self.graphs)).keys() for p in c.argpoints]
+        candidates: List[int] = [p
+                                 for c in self.find_clusters(point, radius, len(self.graphs))
+                                 for p in c.argpoints]
         results: Dict[int, Radius] = dict()
         point = np.expand_dims(point, axis=0)
         for i in range(0, len(candidates), BATCH_SIZE):
@@ -724,7 +738,8 @@ class Manifold:
             cluster = cluster.name
 
         if len(cluster) > self.depth:
-            raise ValueError(f'depth of requested cluster must not be greater than depth of cluster-tree. Got {cluster}, max-depth: {self.depth}')
+            raise ValueError(f'depth of requested cluster must not be greater than depth of cluster-tree. '
+                             f'Got {cluster}, max-depth: {self.depth}')
 
         root: Cluster = next(iter(self.graphs[0]))
         lineage = [root]
