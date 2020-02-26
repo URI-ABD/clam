@@ -1,3 +1,4 @@
+import logging
 import unittest
 from itertools import combinations
 
@@ -6,6 +7,13 @@ import numpy as np
 from pyclam import datasets
 from pyclam.criterion import MaxDepth
 from pyclam.manifold import Manifold, Graph
+
+LOG_LEVEL = logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
+)
 
 
 class TestGraph(unittest.TestCase):

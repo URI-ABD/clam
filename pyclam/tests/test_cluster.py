@@ -1,9 +1,17 @@
+import logging
 import unittest
 
 import numpy as np
 
 from pyclam import criterion, datasets
 from pyclam.manifold import Manifold, Cluster, BATCH_SIZE
+
+LOG_LEVEL = logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
+)
 
 
 class TestCluster(unittest.TestCase):

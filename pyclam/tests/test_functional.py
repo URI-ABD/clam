@@ -1,3 +1,4 @@
+import logging
 import unittest
 
 import numpy as np
@@ -5,6 +6,13 @@ import numpy as np
 from pyclam import Manifold
 from pyclam.criterion import MinPoints
 from pyclam.tests.utils import linear_search
+
+LOG_LEVEL = logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
+)
 
 
 class TestManifoldFunctional(unittest.TestCase):

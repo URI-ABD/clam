@@ -14,18 +14,12 @@ from pyclam.types import Data, Radius, Vector, Metric
 
 SUBSAMPLE_LIMIT = 100
 BATCH_SIZE = 10_000
-LOG_LEVEL = logging.INFO
-
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
-)
 
 
 class Cluster:
     """ A cluster of points.
 
-    Clusters maintain references to their their children, the manifold to which they belong,
+    Clusters maintain references to their children, the manifold to which they belong,
     the indices of the points they are responsible for, and neighbors (clusters with which they overlap).
 
     You can compare clusters, hash them, partition them, perform tree search, prune them, and more.
@@ -114,7 +108,7 @@ class Cluster:
 
     @property
     def samples(self) -> Data:
-        """ Returns the samples from the cluster. Samples are used in computing approximate centers and poles.
+        """ Returns the samples from the cluster. We use samples to compute approximate centers.
         """
         return self.manifold.data[self.argsamples]
 
@@ -123,7 +117,7 @@ class Cluster:
         """ Indices used to retrieve samples.
 
         Ensures that there are at least 2 different points in samples,
-        otherwise returns a single sample that represents the entire cluster.
+        otherwise returns a single sample which represents the entire cluster.
         i.e., if len(argsamples) == 1, the cluster contains only duplicates.
         """
         if '_argsamples' not in self.__dict__:
@@ -251,7 +245,7 @@ class Cluster:
 
     def _tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
         distance = self.distance_from(np.asarray([point]))[0]
-        assert distance <= radius + self.radius, f'_tree_search was started with no overlap.'
+        assert distance <= radius + self.radius, f'_tree_search started with no overlap.'
         assert self.depth < depth, f'_tree_search needs to have depth ({depth}) > self.depth ({self.depth}). '
 
         # results and candidates ONLY contain clusters that have overlap with point
@@ -359,7 +353,7 @@ class Cluster:
 
 
 class Graph:
-    """ A Graph is comprised of clusters. All constituent clusters must be at the same depth in the tree.
+    """ A Graph is composed of clusters. All constituent clusters must be at the same depth in the tree.
 
     Nodes in the Graph are Clusters. .Two clusters have an edge if they have overlapping volumes.
     The Graph class is responsible for handling operations that occur solely within a layer of Manifold.graphs.
@@ -370,8 +364,8 @@ class Graph:
         assert all(isinstance(c, Cluster) for c in clusters)
         assert all([c.depth == clusters[0].depth for c in clusters[1:]])
 
-        # self.clusters is a dictionary of the clusters in the graph
-        # and the connected component subgraph that the cluster belongs to.
+        # self.clusters is a dictionary of the clusters in the graph and
+        # the connected component subgraph that the cluster belongs to.
         self.clusters: Dict[Cluster: 'Graph'] = {c: None for c in clusters}
         return
 
@@ -419,7 +413,7 @@ class Graph:
         return next(iter(self.clusters.keys())).metric
 
     def build_edges(self) -> None:
-        """ Calculates edges for self by relying on tree-search. """
+        """ Calculate edges in self by relying on tree-search. """
         def _find_neighbors(cluster: Cluster, candidates: List[Cluster], radius: float) -> Tuple[List[Cluster], float]:
             potential_candidates = [c for c in candidates if (c not in cluster.neighbors) and (c.name != cluster.name)]
             try:

@@ -1,3 +1,4 @@
+import logging
 import unittest
 
 import pyclam.datasets as d
@@ -12,6 +13,13 @@ from pyclam.criterion import (
     MinCardinality,
     MedoidNearCentroid,
     UniformDistribution,
+)
+
+LOG_LEVEL = logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
 )
 
 

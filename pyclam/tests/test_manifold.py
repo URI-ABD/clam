@@ -1,3 +1,4 @@
+import logging
 import random
 import unittest
 from tempfile import TemporaryFile
@@ -10,6 +11,13 @@ from pyclam.manifold import Manifold, Cluster
 
 np.random.seed(42)
 random.seed(42)
+
+LOG_LEVEL = logging.INFO
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
+)
 
 
 class TestManifold(unittest.TestCase):
