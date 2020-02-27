@@ -16,24 +16,18 @@ impl Manifold {
     pub fn new(data: Box<Data>, metric: Metric, criteria: Vec<impl Criterion>) -> Manifold {
         let d = Dataset { data, metric };
         let d = Rc::new(d);
-        let mut m = Manifold {
+        Manifold {
             data: Rc::clone(&d),
-            root: None,
-        };
-        m.root = Some(Cluster::new(Rc::clone(&d), (0..1).collect()).partition(&criteria));
-        m
+            root: Some(Cluster::new(Rc::clone(&d), (0..d.data.len()).collect()).partition(&criteria)),
+        }
     }
 
     pub fn cluster_count(&self) -> u32 {
-        let n = self.root.as_ref().unwrap().n();
-        n
+        self.root.as_ref().unwrap().cluster_count()
     }
 
     pub fn distance(self, left: &Indices, right: &Indices) -> Vec<f64> {
-        if left == right {
-            return vec![0.0];
-        }
-        vec![1.0]
+        if left == right { vec![0.0] } else { vec![1.0] }
     }
 }
 
@@ -45,8 +39,8 @@ mod tests {
     fn new() {
         let data = vec![1, 2, 3];
         let metric = String::from("euclidean");
-        let m = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
-        assert_eq!(m.cluster_count(), 1);
-        assert_ne!(m.root, None);
+        let manifold = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
+        assert_eq!(manifold.cluster_count(), 1);
+        assert_ne!(manifold.root, None);
     }
 }

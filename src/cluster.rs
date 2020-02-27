@@ -26,17 +26,16 @@ impl Cluster {
         }
     }
 
-    pub fn n(&self) -> u32 {
-        let sum: u32 = match self.children.as_ref() {
-            Some(c) => c.iter().map(|c| c.n()).sum(),
-            None => 0,
-        };
-        sum + 1
+    pub fn cluster_count(&self) -> u32 {
+        match self.children.as_ref() {
+            Some(c) => c.iter().map(|c| c.cluster_count()).sum::<u32>() + 1,
+            None => 1,
+        }
     }
 
     pub fn partition(self, criteria: &Vec<impl Criterion>) -> Cluster {
-        for criteria in criteria.iter() {
-            if criteria.check(&self) == false {
+        for criterion in criteria.iter() {
+            if criterion.check(&self) == false {
                 return self;
             }
         }
