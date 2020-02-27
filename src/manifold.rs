@@ -17,22 +17,12 @@ impl Manifold {
         let d = Rc::new(d);
         Manifold {
             data: Rc::clone(&d),
-            root: Some(
-                Cluster::new(Rc::clone(&d), (0..d.data.len()).collect()).partition(&criteria),
-            ),
+            root: Some(Cluster::new(Rc::clone(&d), (0..d.len()).collect()).partition(&criteria)),
         }
     }
 
     pub fn cluster_count(&self) -> u32 {
         self.root.as_ref().unwrap().cluster_count()
-    }
-
-    pub fn distance(self, left: &Indices, right: &Indices) -> Vec<f64> {
-        if left == right {
-            vec![0.0]
-        } else {
-            vec![1.0]
-        }
     }
 }
 

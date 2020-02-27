@@ -4,3 +4,4 @@ pub type Index = usize;
 pub type Indices = Vec<Index>;
 pub type Metric = String;
 pub type Radius = f64;
+pub type Radii = Vec<Radius>;
