@@ -39,8 +39,8 @@ mod tests {
     fn new() {
         let data = vec![1, 2, 3];
         let metric = String::from("euclidean");
-        let manifold = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
-        assert_eq!(manifold.cluster_count(), 1);
-        assert_ne!(manifold.root, None);
+        let m = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
+        assert_eq!(m.cluster_count(), 3);
+        assert_ne!(m.root, None);
     }
 }
