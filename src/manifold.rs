@@ -1,7 +1,6 @@
 use super::cluster::Cluster;
 use super::criteria::*;
 use super::dataset::Dataset;
-/// CLAM: Manifold
 use super::types::*;
 
 use std::rc::Rc;
@@ -18,7 +17,9 @@ impl Manifold {
         let d = Rc::new(d);
         Manifold {
             data: Rc::clone(&d),
-            root: Some(Cluster::new(Rc::clone(&d), (0..d.data.len()).collect()).partition(&criteria)),
+            root: Some(
+                Cluster::new(Rc::clone(&d), (0..d.data.len()).collect()).partition(&criteria),
+            ),
         }
     }
 
@@ -27,7 +28,11 @@ impl Manifold {
     }
 
     pub fn distance(self, left: &Indices, right: &Indices) -> Vec<f64> {
-        if left == right { vec![0.0] } else { vec![1.0] }
+        if left == right {
+            vec![0.0]
+        } else {
+            vec![1.0]
+        }
     }
 }
 
