@@ -1,5 +1,7 @@
 [package]
 name = "distances"
+description = "a crate focusing on distance computations"
+licence = "MIT"
 version = "0.1.0"
 authors = ["Noah Daniels <ndaniels@mac.com>"]
 edition = "2018"
