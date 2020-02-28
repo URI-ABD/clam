@@ -26,5 +26,6 @@ jobs:
         #   release /bin/bash -c "cargo install semantic-rs && semantic-rs"
       - name: Publish
         run: |
+          cargo login ${{ secrets.CARGO_TOKEN }}
           cargo install cargo-release
-          cargo release --no-confirm --token ${{ secrets.CARGO_TOKEN }}
+          cargo release --no-confirm
