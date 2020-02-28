@@ -29,10 +29,11 @@ impl Manifold {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ndarray::array;
 
     #[test]
     fn new() {
-        let data = vec![1, 2, 3];
+        let data = Data::from(array![[0, 0], [0, 1]]);
         let metric = String::from("euclidean");
         let m = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
         assert_eq!(m.cluster_count(), 3);
