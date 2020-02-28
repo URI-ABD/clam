@@ -1,6 +1,6 @@
 use std::time::Instant;
-extern crate distance;
-use distance::cosine;
+extern crate distances;
+use distances::cosine;
 
 	
 fn main() {
