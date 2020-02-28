@@ -14,12 +14,17 @@ jobs:
         run: cargo test
       - name: Build
         run: docker build -t release .
-      - name: Publish
+      # - name: Publish
+        # semantic-rs doesn't really support < 1.0 releases, manual for now
         # To make this actually run, add -w yes
-        run: > 
-          docker run 
-          --env GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          --env CARGO_TOKEN="${{ secrets.CARGO_TOKEN }}" 
-          --env GIT_COMMITTER_NAME="URI ABD"
-          --env GIT_COMMITTER_EMAIL="info@uri-abd.org" 
-          release /bin/bash -c "cargo install semantic-rs && semantic-rs"
+        # run: > 
+        #   docker run 
+        #   --env GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+        #   --env CARGO_TOKEN="${{ secrets.CARGO_TOKEN }}" 
+        #   --env GIT_COMMITTER_NAME="URI ABD"
+        #   --env GIT_COMMITTER_EMAIL="info@uri-abd.org" 
+        #   release /bin/bash -c "cargo install semantic-rs && semantic-rs"
+      - name: Publish
+        run: >
+          cargo install cargo-release
+          cargo release --no-confirm --token ${{ secrets.CARGO_TOKEN }}
