@@ -8,14 +8,10 @@ pub struct Dataset {
 
 impl Dataset {
     pub fn len(&self) -> Index {
-        self.data.len()
+        self.data.len() as u64
     }
-    pub fn distance(&self, left: Indices, right: Indices) -> Radii {
-        let d = &*self.data;
-        let l: Vec<&Datum> = d.iter().enumerate().filter(|(i, _)| left.contains(i)).map(|(_, e)| e).collect();
-        let r: Vec<&Datum> = d.iter().enumerate().filter(|(i, _)| right.contains(i)).map(|(_, e)| e).collect();
-        let s: Radii = l.iter().zip(r.iter()).fold(0.0, |sum, (&a, &b)| sum + a + b);
-        vec![0.0]
+    pub fn distance(&self, left: Indices, right: Indices) -> Radius {
+        left.iter().zip(&right).fold(0, |sum, (a, b)| sum + a + b) as f64
     }
 }
 
