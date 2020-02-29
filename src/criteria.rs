@@ -1,7 +1,7 @@
 use super::cluster::Cluster;
 
-pub trait Criterion {
-    fn check(&self, cluster: &Cluster) -> bool;
+pub trait Criterion<T> {
+    fn check(&self, cluster: &Cluster<T>) -> bool;
 }
 
 #[derive(Debug)]
@@ -15,8 +15,8 @@ impl MinPoints {
     }
 }
 
-impl Criterion for MinPoints {
-    fn check(&self, cluster: &Cluster) -> bool {
+impl<T> Criterion<T> for MinPoints {
+    fn check(&self, cluster: &Cluster<T>) -> bool {
         cluster.indices.len() > self.points
     }
 }

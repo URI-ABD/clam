@@ -6,39 +6,41 @@ use std::rc::Rc;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-type Children = Option<Vec<Rc<Cluster>>>;
+type Children<T> = Option<Vec<Rc<Cluster<T>>>>;
 
 const K: u8 = 2;
 
-#[derive(Debug, Eq)]
-pub struct Cluster {
-    pub dataset: Rc<Dataset>,
+#[derive(Debug)]
+pub struct Cluster<T> {
+    pub dataset: Rc<Dataset<T>>,
     pub indices: Indices,
     pub name: String,
-    pub children: Children,
+    pub children: Children<T>,
 }
 
-impl PartialEq for Cluster {
+impl<T> PartialEq for Cluster<T> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.indices == other.indices
     }
 }
 
-impl Hash for Cluster {
+impl<T> Eq for Cluster<T> {}
+
+impl<T> Hash for Cluster<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
 }
 
-impl fmt::Display for Cluster {
+impl<T> fmt::Display for Cluster<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
 
-impl Cluster {
-    pub fn new(dataset: Rc<Dataset>, indices: Indices) -> Cluster {
-        Cluster {
+impl<T> Cluster<T> {
+    pub fn new(dataset: Rc<Dataset<T>>, indices: Indices) -> Cluster<T> {
+        Cluster::<T> {
             dataset,
             indices,
             name: String::from(""),
@@ -61,7 +63,7 @@ impl Cluster {
         }
     }
 
-    pub fn partition(self, criteria: &Vec<impl Criterion>) -> Cluster {
+    pub fn partition(self, criteria: &Vec<impl Criterion<T>>) -> Cluster<T> {
         for criterion in criteria.iter() {
             if criterion.check(&self) == false {
                 return self;
@@ -69,7 +71,7 @@ impl Cluster {
         }
         let mut children = Vec::new();
         for i in 0..K {
-            let c = Cluster {
+            let c = Cluster::<T> {
                 dataset: Rc::clone(&self.dataset),
                 indices: vec![0],
                 name: format!("{}{}", self.name, i),
@@ -78,7 +80,7 @@ impl Cluster {
             children.push(Rc::new(c));
         }
 
-        Cluster {
+        Cluster::<T> {
             dataset: self.dataset,
             indices: self.indices,
             name: self.name,
@@ -86,7 +88,7 @@ impl Cluster {
         }
     }
 
-    pub fn leaves(&self, depth: usize) -> Vec<&Cluster> {
+    pub fn leaves(&self, depth: usize) -> Vec<&Cluster<T>> {
         if self.depth() == depth {
             vec![self]
         } else {
@@ -103,9 +105,9 @@ mod tests {
     use super::*;
     use std::collections::hash_map::DefaultHasher;
 
-    fn dataset() -> Rc<Dataset> {
+    fn dataset() -> Rc<Dataset<u64>> {
         Rc::new(Dataset {
-            data: Box::new(Data::zeros((2, 2))),
+            data: Box::new(Data::<u64>::zeros((2, 2))),
             metric: String::from("euclidean")
         })
     }
@@ -143,7 +145,7 @@ mod tests {
     fn depth() {
         let c = Cluster::new(dataset(), vec![0, 1]);
         assert_eq!(c.depth(), 0);
-        let c = Cluster {
+        let c = Cluster::<u64> {
             dataset: dataset(),
             indices: vec![0, 1],
             name: String::from("010"),

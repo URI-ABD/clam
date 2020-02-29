@@ -1,12 +1,12 @@
 use super::types::*;
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Dataset {
-    pub data: Box<Data>,
+#[derive(Debug)]
+pub struct Dataset<T> {
+    pub data: Box<Data<T>>,
     pub metric: String,
 }
 
-impl Dataset {
+impl<T> Dataset<T> {
     pub fn len(&self) -> Index {
         self.data.len() as u64
     }
