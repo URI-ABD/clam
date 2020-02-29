@@ -8,3 +8,4 @@ edition = "2018"
 [dependencies]
 ndarray = "^0.12.0"
 petgraph = "^0.5.0"
+distances = { git = "https://github.com/URI-ABD/distance" }
