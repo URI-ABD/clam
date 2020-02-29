@@ -41,6 +41,10 @@ impl Cluster {
         }
     }
 
+    pub fn cardinality(&self) -> usize {
+        self.indices.len()
+    }
+
     pub fn cluster_count(&self) -> u32 {
         match self.children.as_ref() {
             Some(c) => c.iter().map(|c| c.cluster_count()).sum::<u32>() + 1,
@@ -98,5 +102,13 @@ mod tests {
         let b = Cluster::new(dataset(), vec![0, 1]);
         assert_eq!(a, b);
         assert_eq!(hash(&a), hash(&b));
+    }
+
+    #[test]
+    fn cardinality() {
+        let c = Cluster::new(dataset(), vec![0, 1]);
+        assert_eq!(c.cardinality(), 2);
+        let c = Cluster::new(dataset(), vec![0]);
+        assert_eq!(c.cardinality(), 1);
     }
 }
