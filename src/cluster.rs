@@ -3,6 +3,7 @@ use super::dataset::Dataset;
 use super::types::*;
 
 use std::rc::Rc;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 
 type Children = Option<Vec<Rc<Cluster>>>;
@@ -28,6 +29,12 @@ impl Eq for Cluster {}
 impl Hash for Cluster {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
+    }
+}
+
+impl fmt::Display for Cluster {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 
@@ -110,5 +117,12 @@ mod tests {
         assert_eq!(c.cardinality(), 2);
         let c = Cluster::new(dataset(), vec![0]);
         assert_eq!(c.cardinality(), 1);
+    }
+
+    #[test]
+    fn display() {
+        let c = Cluster::new(dataset(), vec![0, 1]);
+        let s = format!("{}", c);
+        assert_eq!(s, String::from(""));
     }
 }
