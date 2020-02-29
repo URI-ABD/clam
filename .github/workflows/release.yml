@@ -27,5 +27,6 @@ jobs:
       - name: Publish
         run: |
           cargo login ${{ secrets.CARGO_TOKEN }}
+          cargo publish
           cargo install cargo-release
           cargo release --no-confirm
