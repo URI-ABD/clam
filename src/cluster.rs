@@ -52,6 +52,10 @@ impl Cluster {
         self.indices.len()
     }
 
+    pub fn depth(&self) -> usize {
+        self.name.len()
+    }
+
     pub fn cluster_count(&self) -> u32 {
         match self.children.as_ref() {
             Some(c) => c.iter().map(|c| c.cluster_count()).sum::<u32>() + 1,
@@ -124,5 +128,18 @@ mod tests {
         let c = Cluster::new(dataset(), vec![0, 1]);
         let s = format!("{}", c);
         assert_eq!(s, String::from(""));
+    }
+
+    #[test]
+    fn depth() {
+        let c = Cluster::new(dataset(), vec![0, 1]);
+        assert_eq!(c.depth(), 0);
+        let c = Cluster {
+            dataset: dataset(),
+            indices: vec![0, 1],
+            name: String::from("010"),
+            children: None,
+        };
+        assert_eq!(c.depth(), 3);
     }
 }
