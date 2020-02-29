@@ -86,10 +86,14 @@ impl Cluster {
         }
     }
 
-    pub fn leaves(&self) -> Vec<&Cluster> {
-        match self.children.as_ref() {
-            Some(c) => c.iter().flat_map(|c| c.leaves()).collect(),
-            None => vec![self]
+    pub fn leaves(&self, depth: usize) -> Vec<&Cluster> {
+        if self.depth() == depth {
+            vec![self]
+        } else {
+            match self.children.as_ref() {
+                Some(c) => c.iter().flat_map(|c| c.leaves(depth)).collect(),
+                None => vec![self]
+            }
         }
     }
 }

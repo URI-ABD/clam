@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::usize;
 
 use petgraph::graph::UnGraph;
 
@@ -11,12 +12,12 @@ use super::types::*;
 #[derive(Debug, Eq)]
 pub struct Manifold {
     pub dataset: Rc<Dataset>,
-    pub root: Option<Cluster>,
+    pub root: Cluster,
 }
 
 impl PartialEq for Manifold {
     fn eq(&self, other: &Self) -> bool {
-        self.dataset == other.dataset && self.leaves() == other.leaves()
+        self.dataset == other.dataset && self.leaves(None) == other.leaves(None)
     }
 }
 
@@ -26,26 +27,25 @@ impl Manifold {
         let d = Rc::new(d);
         Manifold {
             dataset: Rc::clone(&d),
-            root: Some(Cluster::new(Rc::clone(&d), (0..d.len()).collect()).partition(&criteria)),
+            root: Cluster::new(Rc::clone(&d), (0..d.len()).collect()).partition(&criteria),
         }
     }
 
     pub fn cluster_count(&self) -> u32 {
-        self.root.as_ref().unwrap().cluster_count()
+        self.root.cluster_count()
     }
 
     pub fn graph(&self, _depth: u8) -> UnGraph<Cluster, Radius> {
         panic!()
     }
 
-    pub fn leaves(&self) -> Vec<&Cluster> {
-        match self.root.as_ref() {
-            Some(r) => r.leaves(),
-            None => vec![]
+    pub fn leaves(&self, depth: Option<usize>) -> Vec<&Cluster> {
+        match depth {
+            Some(d) => self.root.leaves(d),
+            None => self.root.leaves(usize::MAX),
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,13 +65,14 @@ mod tests {
         let metric = String::from("euclidean");
         let m = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
         assert_eq!(m.cluster_count(), 3);
-        assert_ne!(m.root, None);
     }
 
     #[test]
     fn leaves() {
         let m = Manifold::new(data(), metric(), vec![MinPoints::new(2)]);
-        let l = m.leaves();
+        let l = m.leaves(Some(0));
+        assert_eq!(l.len(), 1);
+        let l = m.leaves(Some(1));
         assert_eq!(l.len(), 2);
     }
 
