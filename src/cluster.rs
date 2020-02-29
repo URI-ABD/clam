@@ -10,7 +10,7 @@ type Children = Option<Vec<Rc<Cluster>>>;
 
 const K: u8 = 2;
 
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct Cluster {
     pub dataset: Rc<Dataset>,
     pub indices: Indices,
@@ -23,8 +23,6 @@ impl PartialEq for Cluster {
         self.name == other.name && self.indices == other.indices
     }
 }
-
-impl Eq for Cluster {}
 
 impl Hash for Cluster {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -85,6 +83,13 @@ impl Cluster {
             indices: self.indices,
             name: self.name,
             children: Some(children),
+        }
+    }
+
+    pub fn leaves(&self) -> Vec<&Cluster> {
+        match self.children.as_ref() {
+            Some(c) => c.iter().flat_map(|c| c.leaves()).collect(),
+            None => vec![self]
         }
     }
 }
