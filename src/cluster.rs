@@ -3,17 +3,32 @@ use super::dataset::Dataset;
 use super::types::*;
 
 use std::rc::Rc;
+use std::hash::{Hash, Hasher};
 
 type Children = Option<Vec<Rc<Cluster>>>;
 
 const K: u8 = 2;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct Cluster {
     pub dataset: Rc<Dataset>,
     pub indices: Indices,
     pub name: String,
     pub children: Children,
+}
+
+impl PartialEq for Cluster {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.indices == other.indices
+    }
+}
+
+impl Eq for Cluster {}
+
+impl Hash for Cluster {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
 }
 
 impl Cluster {
@@ -56,5 +71,32 @@ impl Cluster {
             name: self.name,
             children: Some(children),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::hash_map::DefaultHasher;
+
+    fn dataset() -> Rc<Dataset> {
+        Rc::new(Dataset {
+            data: Box::new(Data::zeros((2, 2))),
+            metric: String::from("euclidean")
+        })
+    }
+
+    fn hash<T: Hash>(t: &T) -> u64 {
+        let mut h = DefaultHasher::new();
+        t.hash(&mut h);
+        h.finish()
+    }
+
+    #[test]
+    fn hash_eq() {
+        let a = Cluster::new(dataset(), vec![0, 1]);
+        let b = Cluster::new(dataset(), vec![0, 1]);
+        assert_eq!(a, b);
+        assert_eq!(hash(&a), hash(&b));
     }
 }

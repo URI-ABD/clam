@@ -1,9 +1,12 @@
+use std::rc::Rc;
+
+use petgraph::graph::UnGraph;
+
 use super::cluster::Cluster;
 use super::criteria::*;
 use super::dataset::Dataset;
 use super::types::*;
 
-use std::rc::Rc;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Manifold {
@@ -23,6 +26,10 @@ impl Manifold {
 
     pub fn cluster_count(&self) -> u32 {
         self.root.as_ref().unwrap().cluster_count()
+    }
+
+    pub fn graph(&self, _depth: u8) -> UnGraph<Cluster, Radius> {
+        panic!()
     }
 }
 
