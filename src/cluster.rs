@@ -1,10 +1,10 @@
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
+
 use super::criteria::Criterion;
 use super::dataset::Dataset;
 use super::types::*;
-
-use std::rc::Rc;
-use std::fmt;
-use std::hash::{Hash, Hasher};
 
 type Children<T> = Option<Vec<Rc<Cluster<T>>>>;
 
@@ -94,7 +94,7 @@ impl<T> Cluster<T> {
         } else {
             match self.children.as_ref() {
                 Some(c) => c.iter().flat_map(|c| c.leaves(depth)).collect(),
-                None => vec![self]
+                None => vec![self],
             }
         }
     }
@@ -108,7 +108,7 @@ mod tests {
     fn dataset() -> Rc<Dataset<u64>> {
         Rc::new(Dataset {
             data: Box::new(Data::<u64>::zeros((2, 2))),
-            metric: String::from("euclidean")
+            metric: String::from("euclidean"),
         })
     }
 

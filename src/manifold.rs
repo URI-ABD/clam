@@ -8,7 +8,6 @@ use super::criteria::*;
 use super::dataset::Dataset;
 use super::types::*;
 
-
 #[derive(Debug)]
 pub struct Manifold<T> {
     pub dataset: Rc<Dataset<T>>,
@@ -24,7 +23,11 @@ impl<T> PartialEq for Manifold<T> {
 impl<T> Eq for Manifold<T> {}
 
 impl<T> Manifold<T> {
-    pub fn new(data: Box<Data<T>>, metric: Metric, criteria: Vec<impl Criterion<T>>) -> Manifold<T> {
+    pub fn new(
+        data: Box<Data<T>>,
+        metric: Metric,
+        criteria: Vec<impl Criterion<T>>,
+    ) -> Manifold<T> {
         let d = Dataset { data, metric };
         let d = Rc::new(d);
         Manifold::<T> {
@@ -41,7 +44,7 @@ impl<T> Manifold<T> {
         panic!()
     }
 
-    pub fn leaves(&self, depth: Option<usize>) -> Vec<&Cluster::<T>> {
+    pub fn leaves(&self, depth: Option<usize>) -> Vec<&Cluster<T>> {
         match depth {
             Some(d) => self.root.leaves(d),
             None => self.root.leaves(usize::MAX),

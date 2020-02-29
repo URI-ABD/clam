@@ -22,6 +22,9 @@ mod tests {
     #[test]
     fn new() {
         let data = Data::from_elem((2, 2), 1);
-        let _d = Dataset { data: Box::new(data), metric: String::from("euclidean") };
+        let _d = Dataset {
+            data: Box::new(data),
+            metric: String::from("euclidean"),
+        };
     }
 }
