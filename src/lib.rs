@@ -16,7 +16,7 @@ mod tests {
 
     type Arr = Array2<f32>;
 
-    fn line(n: usize, m: f32, b: f32) -> Arr {
+    fn line(n: usize, m: f32, c: f32) -> Arr {
         let mut arr = Arr::zeros((n, 2));
         // Build Xs
         let mut _pointer = arr.column_mut(0);
@@ -24,7 +24,7 @@ mod tests {
         _pointer = xs.view_mut(); 
         // Build Yx 
         let mut _pointer = arr.column_mut(1);
-        let mut ys = m * xs + b;
+        let mut ys = m * xs + c;
         _pointer = ys.view_mut();
 
         arr

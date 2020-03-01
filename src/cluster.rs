@@ -1,6 +1,10 @@
+extern crate rand;
+
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use rand::seq;
+use rand::seq::SliceRandom;
 
 use super::criteria::Criterion;
 use super::dataset::Dataset;
@@ -9,6 +13,7 @@ use super::types::*;
 type Children<T> = Option<Vec<Rc<Cluster<T>>>>;
 
 const K: u8 = 2;
+const SUBSAMPLE: usize = 100;
 
 #[derive(Debug)]
 pub struct Cluster<T> {
@@ -63,17 +68,32 @@ impl<T> Cluster<T> {
         }
     }
 
+    pub fn argsamples(&self) -> Indices {
+        if self.cardinality() <= SUBSAMPLE {
+            self.indices.clone()
+        } else {
+            let n = (self.cardinality() as f64).sqrt() as usize;
+            let mut rng = &mut rand::thread_rng();
+            self.indices.choose_multiple(&mut rng, n).cloned().collect()
+        }
+    }
+
     pub fn partition(self, criteria: &Vec<impl Criterion<T>>) -> Cluster<T> {
         for criterion in criteria.iter() {
             if criterion.check(&self) == false {
                 return self;
             }
         }
+        // Get two poles
+        let farthest = self.argsamples()[0];
+
+        // Group points
+        // Sort groups by cardinality
         let mut children = Vec::new();
         for i in 0..K {
             let c = Cluster::<T> {
                 dataset: Rc::clone(&self.dataset),
-                indices: vec![0],
+                indices: vec![0], // TODO
                 name: format!("{}{}", self.name, i),
                 children: None,
             };
