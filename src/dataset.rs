@@ -1,5 +1,7 @@
-use super::types::*;
+use super::types::{Data, Index, Indices, Radius, Radii};
+use ndarray::*;
 use std::collections::{HashMap};
+use distances::Builder;
 
 #[derive(Debug)]
 pub struct Dataset<T> {
@@ -22,9 +24,21 @@ impl<T> Dataset<T> {
     pub fn len(&self) -> Index {
         self.data.len() as Index
     }
-    // pub fn distance(&self, left: Indices, right: Indices) -> Radius {
-    //     left.iter().zip(&right).fold(0, |sum, (a, b)| sum + a + b) as f64
-    // }
+
+    pub fn distance(&self, left: Indices, right: Indices) -> Radii {
+        let dist = Builder::numeric::<Radius>(self.metric);
+        let mut results = Array2::<Radius>::zeros((left.len(), right.len()));
+
+        for &l in left.iter() {
+            println!("{}", l);
+            for &r in right.iter() {
+                println!("{}", r);
+                let result = dist(self.data.as_ref().slice(s![l, ..]), self.data.as_ref().slice(s![r, ..]));
+                results[[l, r]] = 0.;
+            }
+        }
+        results
+    }
 
     // fn key(&self, i: Index, j: Index) -> Index {
     //     if i == j { 0 }

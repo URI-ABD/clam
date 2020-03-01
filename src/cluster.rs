@@ -84,8 +84,11 @@ impl<T> Cluster<T> {
                 return self;
             }
         }
+
+        let mut argmax: Index = self.argsamples()[0];
+        let mut max: f64 = 0.;
         // Get two poles
-        let farthest = self.argsamples()[0];
+        let farthest = argmax;
 
         // Group points
         // Sort groups by cardinality
