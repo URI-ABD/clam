@@ -56,9 +56,9 @@ impl<T> Cluster<T> {
         self.name.len()
     }
 
-    pub fn cluster_count(&self) -> u32 {
+    pub fn cluster_count(&self) -> usize {
         match self.children.as_ref() {
-            Some(c) => c.iter().map(|c| c.cluster_count()).sum::<u32>() + 1,
+            Some(c) => c.iter().map(|c| c.cluster_count()).sum::<usize>() + 1,
             None => 1,
         }
     }
@@ -106,10 +106,8 @@ mod tests {
     use std::collections::hash_map::DefaultHasher;
 
     fn dataset() -> Rc<Dataset<u64>> {
-        Rc::new(Dataset {
-            data: Box::new(Data::<u64>::zeros((2, 2))),
-            metric: String::from("euclidean"),
-        })
+        let data = Data::<u64>::zeros((2, 2));
+        Rc::new(Dataset::new(data, "euclidean"))
     }
 
     fn hash<T: Hash>(t: &T) -> u64 {
@@ -119,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn hash_eq() {
+    fn test_hash_eq() {
         let a = Cluster::new(dataset(), vec![0, 1]);
         let b = Cluster::new(dataset(), vec![0, 1]);
         assert_eq!(a, b);
@@ -127,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn cardinality() {
+    fn test_cardinality() {
         let c = Cluster::new(dataset(), vec![0, 1]);
         assert_eq!(c.cardinality(), 2);
         let c = Cluster::new(dataset(), vec![0]);
@@ -135,14 +133,14 @@ mod tests {
     }
 
     #[test]
-    fn display() {
+    fn test_display() {
         let c = Cluster::new(dataset(), vec![0, 1]);
         let s = format!("{}", c);
         assert_eq!(s, String::from(""));
     }
 
     #[test]
-    fn depth() {
+    fn test_depth() {
         let c = Cluster::new(dataset(), vec![0, 1]);
         assert_eq!(c.depth(), 0);
         let c = Cluster::<u64> {

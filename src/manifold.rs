@@ -24,19 +24,17 @@ impl<T> Eq for Manifold<T> {}
 
 impl<T> Manifold<T> {
     pub fn new(
-        data: Box<Data<T>>,
-        metric: Metric,
+        dataset: Dataset<T>,
         criteria: Vec<impl Criterion<T>>,
     ) -> Manifold<T> {
-        let d = Dataset { data, metric };
-        let d = Rc::new(d);
+        let d = Rc::new(dataset);
         Manifold::<T> {
             dataset: Rc::clone(&d),
             root: Cluster::new(Rc::clone(&d), (0..d.len()).collect()).partition(&criteria),
         }
     }
 
-    pub fn cluster_count(&self) -> u32 {
+    pub fn cluster_count(&self) -> usize {
         self.root.cluster_count()
     }
 
@@ -56,35 +54,31 @@ mod tests {
     use super::*;
     use ndarray::array;
 
-    fn data() -> Box<Data<u8>> {
-        Box::new(Data::from(array![[0, 0], [0, 1]]))
-    }
-
-    fn metric() -> String {
-        String::from("euclidean")
-    }
-
-    #[test]
-    fn new() {
+    fn new() -> Manifold<u64> {
         let data = Data::from(array![[0, 0], [0, 1]]);
-        let metric = String::from("euclidean");
-        let m = Manifold::new(Box::new(data), metric, vec![MinPoints::new(2)]);
-        assert_eq!(m.cluster_count(), 3);
+        let metric = "euclidean";
+        let dataset = Dataset::new(data, metric);
+        let criteria = vec![MinPoints::new(2)];
+        Manifold::new(dataset, criteria)
     }
 
     #[test]
-    fn leaves() {
-        let m = Manifold::new(data(), metric(), vec![MinPoints::new(2)]);
-        let l = m.leaves(Some(0));
-        assert_eq!(l.len(), 1);
-        let l = m.leaves(Some(1));
-        assert_eq!(l.len(), 2);
+    fn test_new() {
+        let manifold = tests::new();
+        assert!(manifold.cluster_count() > 0);
     }
 
     #[test]
-    fn eq() {
-        let a = Manifold::new(data(), metric(), vec![MinPoints::new(2)]);
-        let b = Manifold::new(data(), metric(), vec![MinPoints::new(2)]);
+    fn test_leaves() {
+        let manifold = tests::new();
+        assert_eq!(manifold.leaves(Some(0)).len(), 1);
+        assert_eq!(manifold.leaves(Some(1)).len(), 2);
+    }
+
+    #[test]
+    fn test_eq() {
+        let a = tests::new();
+        let b = tests::new();
         assert_eq!(a, b);
     }
 }
