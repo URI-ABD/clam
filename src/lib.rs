@@ -1,28 +1,38 @@
-// use lazy_static::lazy_static;
-// use std::collections::HashMap;
-
 pub mod categorical;
 pub mod numeric;
 pub mod string;
 
-// lazy_static! {
-//     static ref FUNCS: HashMap<&'static str, u8> = {
-//         let mut funcs = HashMap::new();
-//         funcs.insert("euclidean", 1);
-//         funcs.insert("euclideansq", 1);
-//         funcs.insert("cosine", 1);
-//         funcs.insert("manhattan", 1);
-//         funcs.insert("hamming", 1);
-//         funcs.insert("levenshtein", 1);
-//         funcs
-//     };
-// }
+pub struct Builder;
+
+impl Builder {
+    pub fn numeric<I: numeric::Numeric>(metric: &'static str) -> fn(&[I], &[I]) -> I {
+        match metric {
+            "euclidean" => numeric::euclidean,
+            "euclideansq" => numeric::euclideansq,
+            _ => panic!("{} is not a numeric distance function!", metric),
+        }
+    }
+
+    pub fn categorical<I: categorical::Categorical>(metric: &'static str) -> fn(&[I], &[I]) -> I {
+        match metric {
+            "hamming" => categorical::hamming,
+            _ => panic!("{} is not a categorical distance function!", metric),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use float_cmp::approx_eq;
 
     use super::*;
+
+    #[test]
+    fn test_build_numeric() {
+        let x = [1., 2., 3.];
+        let metric = Builder::numeric("euclidean");
+        assert_eq!(metric(&x, &x), 0.);
+    }
 
     #[test]
     fn test_hamming() {

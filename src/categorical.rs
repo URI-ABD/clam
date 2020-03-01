@@ -1,8 +1,19 @@
 use rayon::prelude::*;
+use std::iter::Sum;
+use num::FromPrimitive;
 
-pub fn hamming<T: PartialEq + Sync + Send>(x: &[T], y: &[T]) -> u64 {
-    x.par_iter()
-        .zip(y.par_iter())
-        .map(|(a, b)| if a == b { 0 } else { 1 })
-        .sum()
+pub trait Categorical: PartialEq + Sync + Send + Sum + FromPrimitive {}
+impl Categorical for i128 {}
+impl Categorical for i64 {}
+impl Categorical for i32 {}
+impl Categorical for i16 {}
+impl Categorical for i8 {}
+
+pub fn hamming<T: Categorical>(x: &[T], y: &[T]) -> T {
+    FromPrimitive::from_usize(
+        x.par_iter()
+            .zip(y.par_iter())
+            .filter(|(a, b)| a != b)
+            .count()
+    ).unwrap()
 }
