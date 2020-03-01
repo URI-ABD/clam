@@ -19,13 +19,13 @@ mod tests {
     fn line(n: usize, m: f32, b: f32) -> Arr {
         let mut arr = Arr::zeros((n, 2));
         // Build Xs
-        let mut pointer = arr.column_mut(0);
+        let mut _pointer = arr.column_mut(0);
         let mut xs = Array::range(0., n as f32, 1.);
-        pointer = xs.view_mut(); 
+        _pointer = xs.view_mut(); 
         // Build Yx 
-        let mut pointer = arr.column_mut(1);
+        let mut _pointer = arr.column_mut(1);
         let mut ys = m * xs + b;
-        pointer = ys.view_mut();
+        _pointer = ys.view_mut();
 
         arr
     }
@@ -43,10 +43,11 @@ mod tests {
 
     #[test]
     fn test_working() {
-        let data = Data::from(array![[0, 0], [0, 1]]);
+        let data = Data::from(line(2, 0., 0.));
         let metric = "euclidean";
         let dataset = Dataset::new(data, metric);
         let criteria = vec![criteria::MinPoints::new(2)];
         let manifold = Manifold::new(dataset, criteria);
+        assert_eq!(manifold.leaves(None).len(), 2);
     }
 }
