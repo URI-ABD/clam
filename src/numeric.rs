@@ -18,24 +18,7 @@ mod linalg {
     pub fn dot<T: Numeric>(x: &[T], y: &[T]) -> T {
         x.par_iter().zip(y.par_iter()).map(|(&a, &b)| a * b).sum()
     }
-
-    // pub fn sub<T: Numeric>(x: &[T], y: &[T]) -> Vec<T> {
-    //     x.par_iter()
-    //         .zip(y.par_iter())
-    //         .map(|(&a, &b)| a - b)
-    //         .collect()
-    // }
-    // pub fn mul<T: Numeric>(x: &[T], y: &[T]) -> Vec<T> {
-    //     x.par_iter()
-    //         .zip(y.par_iter())
-    //         .map(|(&a, &b)| a * b)
-    //         .collect()
-    // }
 }
-
-// pub fn dist(x: &[f64], y: &[f64], f: &dyn Fn(&[f64], &[f64]) -> f64) -> f64 {
-//     f(x, y)
-// }
 
 pub fn euclidean<T: Numeric>(x: &[T], y: &[T]) -> T {
     euclideansq(x, y).sqrt()

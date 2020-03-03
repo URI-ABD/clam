@@ -7,8 +7,8 @@ authors = ["Noah Daniels <ndaniels@mac.com>"]
 edition = "2018"
 
 [dependencies]
-"rayon" = "^1.3.0"
+rayon = "^1.3.0"
 num = "^0.2.1"
 float-cmp = "^0.6.0"
-"time" = "^0.2.7"
+time = "^0.2.7"
 lazy_static = "^1.4.0"
