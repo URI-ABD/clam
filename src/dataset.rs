@@ -3,19 +3,28 @@ use ndarray::*;
 use std::collections::{HashMap};
 use distances::Builder;
 
-#[derive(Debug)]
 pub struct Dataset<T> {
     pub data: Box<Data<T>>,
     pub metric: &'static str,
+    pub func: fn(&[T], &[T]) -> Radii,
     pub history: HashMap<Index, f64>,
+}
+
+use std::fmt;
+impl<T> fmt::Debug for Dataset<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.metric)
+    }
 }
 
 impl<T> Dataset<T> {
     pub fn new(data: Data<T>, metric: &'static str) -> Dataset<T> {
         let data = Box::new(data);
         let history: HashMap<Index, f64> = [(0, 0.)].iter().cloned().collect();
+        let func = Builder::numeric::<T>(metric);
         Dataset {
             data,
+            func,
             metric,
             history,
         }
