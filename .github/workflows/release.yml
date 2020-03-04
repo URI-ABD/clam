@@ -24,8 +24,9 @@ jobs:
         #   --env GIT_COMMITTER_NAME="URI ABD"
         #   --env GIT_COMMITTER_EMAIL="info@uri-abd.org" 
         #   release /bin/bash -c "cargo install semantic-rs && semantic-rs"
+          # cargo install cargo-release
+          # cargo release --no-confirm --token ${{ secrets.CARGO_SECRET }}
       - name: Publish
         run: |
           cargo login ${{ secrets.CARGO_SECRET }}
-          cargo install cargo-release
-          cargo release --no-confirm --token ${{ secrets.CARGO_SECRET }}
+          cargo publish
