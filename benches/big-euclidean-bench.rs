@@ -1,26 +1,21 @@
-#![feature(test)]
-
-extern crate test;
-use test::Bencher;
+use criterion::{criterion_group, criterion_main, Criterion};
 extern crate distances;
 use distances::numeric::euclidean;
 use distances::string::levenshtein;
 
-#[bench]
-fn big_euclidean(b: &mut Bencher) {
-    b.iter(|| {
+fn big_euclidean(c: &mut Criterion) {
         let n = 1_000_000;
         let x: Vec<f64> = vec![0.2; n];
         let y: Vec<f64> = vec![0.3; n];
-        euclidean(&x, &y);
-    });
+        c.bench_function("Big Euclidean", |b| b.iter(|| euclidean(&x, &y)));
 }
 
-#[bench]
-fn big_levenshtein(b: &mut Bencher) {
-    b.iter(|| {
+fn big_levenshtein(c: &mut Criterion) {
         let x = "abracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabraabracadabra";
         let y = "abracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrbabracadabraabracadabraabracadabrb";
-        levenshtein(&x,&y);
-    });
+        c.bench_function("Big Levenshtein", |b| b.iter(|| levenshtein(&x,&y)));
 }
+
+
+criterion_group!(benches, big_euclidean, big_levenshtein);
+criterion_main!(benches);
