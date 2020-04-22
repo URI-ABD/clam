@@ -3,7 +3,7 @@ name = "distances"
 description = "a crate focusing on distance computations"
 repository = "https://github.com/URI-ABD/distance"
 license = "MIT"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Noah Daniels <ndaniels@mac.com>"]
 edition = "2018"
 
