@@ -6,10 +6,6 @@ from pyclam.criterion import (
     MinPoints,
     MinRadius,
     MaxDepth,
-    LeavesSubgraph,
-    MinNeighborhood,
-    NewSubgraph,
-    MinCardinality,
     MedoidNearCentroid,
     UniformDistribution,
 )
@@ -32,28 +28,22 @@ class TestCriterion(unittest.TestCase):
         [self.assertLessEqual(len(c.children), 1) for g in self.manifold for c in g if c.radius <= min_radius]
         return
 
-    def test_leaves_subgraph(self):
-        self.assertEqual(1, len(self.manifold.graphs[-1].subgraphs))
-        self.manifold.build(LeavesSubgraph(self.manifold), MaxDepth(8))
-        self.assertGreater(len(self.manifold.graphs[-1].subgraphs), 1)
-        return
+    # def test_min_cardinality(self):
+    #     data = d.random()[0]
+    #     self.manifold = m.Manifold(data, 'euclidean')
+    #     self.assertEqual(1, len(self.manifold.layers[-1].subgraphs))
+    #     self.manifold.build(MinCardinality(1))
+    #     self.assertGreater(len(self.manifold.layers[-1].subgraphs), 1)
+    #     self.assertTrue(all((len(c.neighbors) == 0) for c in self.manifold.layers[-1]))
+    #     return
 
-    def test_min_cardinality(self):
-        data = d.random()[0]
-        self.manifold = m.Manifold(data, 'euclidean')
-        self.assertEqual(1, len(self.manifold.graphs[-1].subgraphs))
-        self.manifold.build(MinCardinality(1))
-        self.assertGreater(len(self.manifold.graphs[-1].subgraphs), 1)
-        self.assertTrue(all((len(c.neighbors) == 0) for c in self.manifold.graphs[-1]))
-        return
+    # def test_min_neighborhood(self):
+    #     self.manifold.build(MinNeighborhood(5, 1), MaxDepth(8))
+    #     return
 
-    def test_min_neighborhood(self):
-        self.manifold.build(MinNeighborhood(5, 1), MaxDepth(8))
-        return
-
-    def test_new_subgraph(self):
-        self.manifold.build(NewSubgraph(self.manifold))
-        return
+    # def test_new_subgraph(self):
+    #     self.manifold.build(NewSubgraph(self.manifold))
+    #     return
 
     def test_combinations(self):
         min_radius, min_points, max_depth = 0.15, 10, 8

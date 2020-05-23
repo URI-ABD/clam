@@ -163,37 +163,8 @@ class TestCluster(unittest.TestCase):
         self.assertGreater(len(children), 1)
         return
 
-    def test_neighbors(self):
-        for dataset in [datasets.bullseye, datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
-            data, labels = dataset()
-            manifold = Manifold(data, 'euclidean')
-            manifold.build(criterion.MaxDepth(5))
-            for depth, graph in enumerate(manifold.graphs):
-                for cluster in graph:
-                    potential_neighbors = [c for c in graph if c.name != cluster.name]
-                    if len(potential_neighbors) == 0:
-                        continue
-                    else:
-                        argcenters = [c.argmedoid for c in potential_neighbors]
-                    distances = list(cluster.distance(cluster.argmedoid, argcenters)[0])
-                    radii = [cluster.radius + c.radius for c in potential_neighbors]
-                    all_neighbors = [(c, d) for c, d, r in zip(potential_neighbors, distances, radii) if d <= r]
-                    potential_neighbors = {c for c, _ in all_neighbors}
-
-                    missed = potential_neighbors - cluster.neighbors.keys()
-                    self.assertFalse(len(missed) > 5,
-                                     msg=f'\nmissed {len(missed)} neighbor(s) {[(n.name, n.radius) for n in missed]}\n'
-                                         f'for cluster {cluster.name} of radius {cluster.radius} '
-                                         f'at depth {cluster.depth}')
-                    extra = cluster.neighbors.keys() - potential_neighbors
-                    self.assertFalse(len(extra) > 0,
-                                     msg=f'\nextra {len(extra)} neighbor(s)  {[(n.name, n.radius) for n in extra]}\n'
-                                         f'for cluster {cluster.name} of radius {cluster.radius} '
-                                         f'at depth {cluster.depth}')
-        return
-
     def test_distance(self):
-        self.assertGreater(self.children[0].distance(self.children[0].argmedoid, self.children[1].argmedoid), 0)
+        self.assertGreater(self.children[0].distance_from([self.children[1].argmedoid]), 0)
         return
 
     def test_overlaps(self):

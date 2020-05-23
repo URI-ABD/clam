@@ -5,12 +5,12 @@ import logging
 import pickle
 from collections import deque
 from operator import itemgetter
-from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple
+from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO
 
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam.types import Data, Radius, Vector, Metric
+from pyclam.types import Data, Radius, Vector, Metric, Edge
 
 SUBSAMPLE_LIMIT = 100
 BATCH_SIZE = 10_000
@@ -25,17 +25,19 @@ logging.basicConfig(
 class Cluster:
     """ A cluster of points.
 
-    Clusters maintain references to their their children, the manifold to which they belong,
-    the indices of the points they are responsible for, and neighbors (clusters with which they overlap).
+    Clusters maintain:
+        references to their their children,
+        the manifold to which they belong,
+        and the indices of the points they are responsible for.
 
     You can compare clusters, hash them, partition them, perform tree search, prune them, and more.
-    In general, they implement methods that create and utilize the underlying tree structure used by Manifold.
+    Cluster implements methods that create and utilize the underlying tree structure used by Manifold.
     """
 
     def __init__(self, manifold: 'Manifold', argpoints: Vector, name: str, **kwargs):
         """
         A Cluster needs to know the manifold it belongs to and the indexes of the points it contains.
-        The name of a Cluster indicated its position in the tree.
+        The name of a Cluster indicates its position in the tree.
 
         :param manifold: The manifold to which the cluster belongs.
         :param argpoints: A list of indexes of the points that belong to the cluster.
@@ -45,15 +47,19 @@ class Cluster:
         self.manifold: 'Manifold' = manifold
         self.argpoints: Vector = argpoints
         self.name: str = name
-
-        self.distance = self.manifold.distance
-
-        self.neighbors: Dict['Cluster', float] = dict()  # key is neighbor, value is distance to neighbor
         self.children: Set['Cluster'] = set()
 
+        # Reference to the distance function for easier usage
+        self.distance = self.manifold.distance
+
+        # list of candidate neighbors.
+        # This helps with a highly efficient neighbor search for clusters in the tree.
+        self.candidates: Union[List[Cluster], None] = None
+
+        self.__dict__['_optimal'] = False  # whether cluster depth is optimal
         self.__dict__.update(**kwargs)
 
-        # This is used during Cluster.from_json().
+        # This is used while reading clusters from file during Cluster.from_json().
         if not argpoints and self.children:
             self.argpoints = [p for child in self.children for p in child.argpoints]
         elif not argpoints:
@@ -71,14 +77,14 @@ class Cluster:
         return self.cardinality > 0
 
     def __hash__(self):
-        """ Be careful to use this only with other clusters. """
+        """ Be careful to use this only with other clusters in the same tree. """
         return hash(self.name)
 
     def __str__(self) -> str:
         return self.name or 'root'
 
     def __repr__(self) -> str:
-        return ','.join([self.name, ';'.join(map(str, self.argpoints))])
+        return '-'.join([self.name, ', '.join(map(str, self.argpoints))])
 
     def __iter__(self) -> Vector:
         # Iterates in batches, instead of by element.
@@ -104,6 +110,7 @@ class Cluster:
         return len(self.name)
 
     def distance_from(self, x1: Union[List[int], Data]) -> np.ndarray:
+        """ Helper to ease calculation of distance from the cluster center. """
         return self.distance([self.argmedoid], x1)[0]
 
     @property
@@ -120,7 +127,7 @@ class Cluster:
 
     @property
     def argsamples(self) -> Vector:
-        """ Indices used to retrieve samples.
+        """ Indices of samples chosen for finding poles.
 
         Ensures that there are at least 2 different points in samples,
         otherwise returns a single sample that represents the entire cluster.
@@ -184,7 +191,7 @@ class Cluster:
 
     @property
     def argradius(self) -> int:
-        """ The index used to retrieve the point which is farthest from the medoid. """
+        """ The index of the point which is farthest from the medoid. """
         if ('_argradius' not in self.__dict__) or ('_radius' not in self.__dict__):
             logging.debug(f'building cache for {self}')
 
@@ -213,21 +220,13 @@ class Cluster:
         return self.__dict__['_local_fractal_dimension']
 
     @property
-    def transition_probabilities(self) -> Tuple[List['Cluster'], List[float]]:
-        if '_transition_probabilities' not in self.__dict__:
-            logging.debug(f'calculating transition probabilities for {self}')
-            destinations: List['Cluster'] = list(self.neighbors.keys())
-            probabilities: List[float] = [1. / d for d in self.neighbors.values()]
-            temp = sum(probabilities)
-            probabilities = [p / temp for p in probabilities]
-            self.__dict__['_transition_probabilities'] = (destinations, probabilities)
-        return self.__dict__['_transition_probabilities']
+    def optimal(self) -> bool:
+        return self.__dict__['_optimal']
 
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
         logging.debug(f'clearing cache for {self}')
-        for prop in ['_argsamples', '_argmedoid', '_argradius', '_radius', '_local_fractal_dimension',
-                     '_transition_probabilities']:
+        for prop in ['_argsamples', '_argmedoid', '_argradius', '_radius', '_local_fractal_dimension', '_optimal']:
             try:
                 del self.__dict__[prop]
             except KeyError:
@@ -235,6 +234,7 @@ class Cluster:
 
     def tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
         """ Searches down the tree for clusters that overlap point with radius at depth. """
+        # TODO: Rethink with optimal depths
         logging.debug(f'tree_search(point={point}, radius={radius}, depth={depth}')
         if depth == -1:
             depth = len(self.manifold.graphs)
@@ -250,6 +250,7 @@ class Cluster:
         return results
 
     def _tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
+        # TODO: rewrite
         distance = self.distance_from(np.asarray([point]))[0]
         assert distance <= radius + self.radius, f'_tree_search was started with no overlap.'
         assert self.depth < depth, f'_tree_search needs to have depth ({depth}) > self.depth ({self.depth}). '
@@ -286,6 +287,7 @@ class Cluster:
         return results
 
     def partition(self, *criterion) -> Iterable['Cluster']:
+        # TODO: rewrite
         """ Partitions the cluster into 1 or 2 children.
 
         2 children are produced if the cluster can be split, otherwise 1 child is produced.
@@ -295,7 +297,7 @@ class Cluster:
                 len(self.argpoints) > 1,
                 len(self.argsamples) > 1,
                 *(c(self) for c in criterion),
-        )):
+        )):  # Cluster not partitionable
             logging.debug(f'{self} did not partition.')
             self.children = {
                 Cluster(
@@ -311,14 +313,16 @@ class Cluster:
             }
             return self.children
 
+        # Find the farthest point from argradius
         farthest = self.argsamples[int(np.argmax(self.distance([self.argradius], self.argsamples)[0]))]
 
+        # get lists of argpoints for each child
         p1_idx, p2_idx = list(), list()
         [(p1_idx if p1 < p2 else p2_idx).append(i)
          for batch in iter(self)
          for i, p1, p2 in zip(batch, *self.distance([self.argradius, farthest], batch))]
 
-        # Ensure that p1 contains fewer points than p2
+        # Ensure left child is that one that contains the fewer points.
         p1_idx, p2_idx = (p1_idx, p2_idx) if len(p1_idx) < len(p2_idx) else (p2_idx, p1_idx)
         self.children = {
             Cluster(self.manifold, p1_idx, self.name + '1'),
@@ -334,17 +338,34 @@ class Cluster:
         """ Checks if point is within radius + self.radius of cluster. """
         return self.distance_from(np.asarray([point]))[0] <= (self.radius + radius)
 
+    def mark(self, max_lfd: float, min_lfd: float, active: bool = False):
+        """ Mark optimal Clusters via a modified depth-first traversal of the tree. """
+        if active is False:
+            if self.local_fractal_dimension > max_lfd:  # Mark branch as active if above given threshold
+                active = True
+        elif self.local_fractal_dimension < min_lfd:
+            self.__dict__['_optimal'] = True  # Active branches that fall under given threshold is marked optimal
+            return  # only one cluster per branch of the tree is marked optimal
+
+        if len(self.children) > 1:  # If there are multiple children, recurse on all children.
+            [child.mark(max_lfd, min_lfd, active) for child in self.children]
+        else:
+            self.__dict__['_optimal'] = True  # The first childless cluster in a branch is optimal.
+        return
+
     def json(self):
+        """ This is used for writing the manifold to disk. """
         data = {
             'name': self.name,
             'argpoints': None,  # Do not save argpoints until at leaves.
             'children': [],
-            'neighbors': {c.name: d for c, d in self.neighbors.items()},
             '_radius': self.radius,
             '_argradius': self.argradius,
             '_argsamples': self.argsamples,
             '_argmedoid': self.argmedoid,
             '_local_fractal_dimension': self.local_fractal_dimension,
+            '_candidates': None if self.candidates is None else [c.name for c in self.candidates],
+            '_optimal': self.optimal,
         }
         if self.children:
             data['children'] = [c.json() for c in self.children]
@@ -359,27 +380,29 @@ class Cluster:
 
 
 class Graph:
-    """ A Graph is comprised of clusters. All constituent clusters must be at the same depth in the tree.
-
-    Nodes in the Graph are Clusters. .Two clusters have an edge if they have overlapping volumes.
-    The Graph class is responsible for handling operations that occur solely within a layer of Manifold.graphs.
+    # TODO: Consider writing dump/load methods for Graph.
+    """
+    Nodes in the Graph are Clusters.
+    Two clusters have an edge if they have overlapping volumes.
     """
 
     def __init__(self, *clusters):
         logging.debug(f'Graph(clusters={[str(c) for c in clusters]})')
         assert all(isinstance(c, Cluster) for c in clusters)
-        assert all([c.depth == clusters[0].depth for c in clusters[1:]])
 
-        # self.clusters is a dictionary of the clusters in the graph
-        # and the connected component subgraph that the cluster belongs to.
-        self.clusters: Dict[Cluster: 'Graph'] = {c: None for c in clusters}
+        # self.clusters is a dictionary of the clusters in the graph and the list of edges from that cluster.
+        # An Edge is a named tuple of Neighbor, Distance, and Transition Probability.
+        # Neighbor is is the neighboring cluster.
+        # Distance is the distance to that neighbor.
+        # Transition Probability is the probability that the edge gets picked during a random walk.
+        self.clusters: Dict[Cluster, Set[Edge]] = {c: None for c in clusters}
         return
 
-    def __eq__(self, other: 'Graph') -> bool:
+    def __eq__(self, other: 'Graph') -> bool:  # TODO: Cover, Consider comparing edges as well.
         """ Two graphs are identical if they are composed of the same clusters. """
         return set(self.clusters.keys()) == set(other.clusters.keys())
 
-    def __bool__(self) -> bool:
+    def __bool__(self) -> bool:  # TODO: Cover
         return self.cardinality > 0
 
     def __iter__(self) -> Iterable[Cluster]:
@@ -387,10 +410,14 @@ class Graph:
         yield from self.clusters.keys()
 
     def __str__(self) -> str:
-        return ';'.join(sorted([str(c) for c in self.clusters.keys()]))
+        if '_str' not in self.__dict__:  # Cashing value because sort can be expensive on many clusters.
+            self.__dict__['_str'] = ', '.join(sorted([str(c) for c in self.clusters.keys()]))
+        return self.__dict__['_str']
 
     def __repr__(self) -> str:
-        return '\t'.join(sorted([repr(c) for c in self.clusters.keys()]))
+        if '_repr' not in self.__dict__:  # Cashing value because sort can be expensive on many clusters.
+            self.__dict__['_repr'] = '\n'.join(sorted([repr(c) for c in self.clusters.keys()]))
+        return self.__dict__['_repr']
 
     def __hash__(self):
         return hash(str(self))
@@ -400,7 +427,7 @@ class Graph:
 
     @property
     def cardinality(self) -> int:
-        return len(self.clusters)
+        return len(self.clusters.keys())
 
     @property
     def population(self) -> int:
@@ -411,184 +438,222 @@ class Graph:
         return next(iter(self.clusters.keys())).manifold
 
     @property
-    def depth(self) -> int:
-        return next(iter(self.clusters.keys())).depth
-
-    @property
     def metric(self) -> Metric:
         return next(iter(self.clusters.keys())).metric
 
-    def build_edges(self) -> None:
-        """ Calculates edges for self by relying on tree-search. """
-        def _find_neighbors(cluster: Cluster, candidates: List[Cluster], radius: float) -> Tuple[List[Cluster], float]:
-            potential_candidates = [c for c in candidates if (c not in cluster.neighbors) and (c.name != cluster.name)]
-            try:
-                distances = [float(d) for d in cluster.distance_from([c.argmedoid for c in potential_candidates])]
-            except IndexError:
-                distances = []
+    def _find_neighbors(self, cluster: Cluster):
+        # TODO: Currently only works for optimal graph. Rethink for all graphs.
+
+        # Dict of candidate neighbors and distances to neighbors.
+        candidates: Dict[Cluster, float] = dict()
+        radius: float = cluster.manifold.root.radius
+
+        ancestry: List[Cluster] = self.manifold.ancestry(cluster)
+        for depth in range(cluster.depth + 1):
+            if ancestry[depth].optimal:
+                self.clusters[cluster] = {Edge(c, d, 0.) for c, d in candidates.items()
+                                          if (d <= ancestry[depth].radius + c.radius) and c.optimal}
             else:
-                cluster.neighbors.update({c: d for c, d in zip(potential_candidates, distances)
-                                          if d <= c.radius + cluster.radius})
+                if ancestry[depth + 1].radius > 0:
+                    radius = ancestry[depth + 1].radius
 
-            # next_candidates are to cluster.children as candidates are to cluster.
-            next_candidates = set()
-            if cluster.depth < self.depth:
-                # include any child of potential_candidates as potential neighbors of cluster.children
-                next_candidates.update([child for c, d in zip(potential_candidates, distances)
-                                        for child in c.children
-                                        if d <= c.radius + radius * 4])  # why 4? read the paper!
-                # include cluster.children as potential neighbors of cluster.children
-                next_candidates.update(cluster.children)
-                # include children of neighbors as potential neighbors of cluster.children
-                next_candidates.update([c for n in cluster.neighbors for c in n.children])
-            # this return statement seeds the call to _find_neighbors on each of cluster.children
-            # if cluster is a singleton, preserve a non-zero radius because singletons can still have neighbors.
-            return list(next_candidates), cluster.radius if cluster.radius > 0. else radius
+                # This ensures that candidates are calculated once per cluster
+                if ancestry[depth + 1].candidates is None:
+                    # Keep optimal clusters as candidate neighbors
+                    candidates = {c: 0. for c in ancestry[depth].candidates if c.optimal}
 
-        root = self.manifold.select('')
-        # this seeds the initial arguments to _find_neighbors
-        layer: Dict[Cluster, Tuple[List[Cluster], float]] = {cluster: (list(root.children), root.radius)
-                                                             for cluster in root.children}
-        for depth in range(1, self.depth + 1):
-            clusters = list(layer.keys())
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future_to_cluster = [executor.submit(_find_neighbors, c, *layer[c]) for c in clusters]
-                layer = {c: v.result() for c, v in zip(clusters, concurrent.futures.as_completed(future_to_cluster))}
+                    # Get all children of optimal clusters at the same depth.
+                    candidates.update({child: 0. for c in ancestry[depth].candidates
+                                       for child in c.children if c.optimal and c.depth == depth})
 
-            logging.info(f'depth {depth}, {len(layer)} clusters, '
-                         f'{len(self.manifold.graphs[depth].subgraphs)} components')
-            layer = {child: v for c, v in layer.items() for child in c.children}
+                    # Get children of non-optimal clusters.
+                    candidates.update({child: 0. for c in ancestry[depth].candidates
+                                       for child in c.children if not c.optimal})
+
+                    distances = ancestry[depth + 1].distance_from([c.argmedoid for c in candidates])
+                    candidates = {c: d for c, d in zip(candidates.keys(), distances) if d <= c.radius + radius * 4}
+
+                    ancestry[depth + 1].candidates = list(candidates.keys())
+        return
+
+    def build_edges(self) -> None:
+        """ Calculates edges for the graph. """
+        # TODO: Currently only works for optimal graph. Rethink for all graphs.
+        logging.info(f'building edges for {len(self.clusters.keys())} clusters')
+        self.manifold.root.candidates = [self.manifold.root]
+
+        [self._find_neighbors(c) for c in self.clusters]  # build edges
+
+        for cluster in self.clusters:  # handshake between all neighbors
+            for (neighbor, distance, transition_probability) in self.clusters[cluster]:
+                self.clusters[neighbor].add(Edge(cluster, distance, transition_probability))
+
+        for cluster in self.clusters:
+            if (cluster, 0., 0.) in self.clusters[cluster]:  # Remove edges to self
+                self.clusters[cluster].remove(Edge(cluster, 0., 0.))
+
+            if len(self.clusters[cluster]) > 0:  # Compute transition probabilities, only after handshakes.
+                _sum = sum([1 / edge.distance for edge in self.clusters[cluster]])
+                self.clusters[cluster] = {Edge(edge.neighbor, edge.distance, 1 / (edge.distance * _sum)) for edge in self.clusters[cluster]}
+
+                _sum = sum([edge.transition_probability for edge in self.clusters[cluster]])
+                assert abs(_sum - 1.) <= 1e-6, f'transition probabilities did not sum to 1 for cluster {cluster.name}. Got {_sum:.8f} instead.'
         return
 
     @property
-    def edges(self) -> Dict[Set['Cluster'], float]:
+    def edges(self) -> Set[Edge]:
+        # TODO: Change return type to indicate source cluster for each edge.
         """ Returns all edges within the graph. """
         if '_edges' not in self.__dict__:
-            logging.debug(f'building cache for {self}')
-            self.__dict__['_edges'] = {frozenset([c, n]): d
-                                       for c in self.clusters.keys()
-                                       for n, d in c.neighbors.items()}
+            logging.debug(f'building _edges cache for {self}')
+            if any((edges is None for edges in self.clusters.values())):
+                self.build_edges()
+
+            edges: Set[Edge] = set()
+            [edges.update(e) for e in self.clusters.values()]
+            self.__dict__['_edges'] = edges
+
         return self.__dict__['_edges']
 
     @property
     def subgraphs(self) -> Set['Graph']:
         """ Returns all subgraphs within the graph. """
-        if any((s is None for s in self.clusters.values())):
-            unvisited = {c for c, s in self.clusters.items() if s is None}
+        if '_subgraphs' not in self.__dict__:
+            self.__dict__['_subgraphs'] = set()
+            if any((edges is None for edges in self.clusters.values())):
+                self.build_edges()
+
+            unvisited = {c for c in self.clusters}
             while unvisited:
                 component = self.traverse(unvisited.pop())
                 unvisited -= component
-                subgraph = Graph(*component)
-                self.clusters.update({c: subgraph for c in subgraph})
-        return set(self.clusters.values())
+                self.__dict__['_subgraphs'].add(Graph(*component))
 
-    def subgraph(self, cluster: 'Cluster') -> 'Graph':
+        return self.__dict__['_subgraphs']
+
+    def subgraph(self, cluster: 'Cluster') -> 'Graph':  # TODO: Cover
         """ Returns the subgraph to which the cluster belongs. """
-        if cluster not in self.clusters.keys():
-            raise ValueError(f'Cluster {cluster} not a member of {self}')
-
-        if self.clusters[cluster] is None:
-            component = self.traverse(cluster)
-            subgraph = Graph(*component)
-            self.clusters.update({c: subgraph for c in subgraph})
-
-        return self.clusters[cluster]
+        for subgraph in self.subgraphs:
+            if cluster in subgraph.clusters:
+                return subgraph
+        else:
+            raise ValueError(f'cluster {cluster.name} not found in and subgraph.')
 
     def clear_cache(self) -> None:
         """ Clears the cache of the graph. """
-        for prop in ['_edges']:
+        for prop in ['_edges', '_str', '_repr', '_subgraphs']:
             logging.debug(str(self.clusters))
             try:
                 del self.__dict__[prop]
             except KeyError:
                 pass
-        # Clear all cached subgraphs.
+        # Clear all cached edges.
         self.clusters = {c: None for c in self.clusters.keys()}
         return
+
+    def neighbors(self, cluster: Cluster) -> List[Cluster]:
+        """ return all neighbors of a given cluster. """
+        if self.clusters[cluster] is None:
+            self.build_edges()
+        return [edge.neighbor for edge in self.clusters[cluster]]
+
+    def distances(self, cluster: Cluster) -> List[float]:
+        """ return distances to each neighbor of a given cluster. """
+        if self.clusters[cluster] is None:
+            self.build_edges()
+        return [edge.distance for edge in self.clusters[cluster]]
+
+    def transition_probabilities(self, cluster: Cluster) -> List[float]:
+        """ return transition probabilities to each neighbor of a given cluster. """
+        if self.clusters[cluster] is None:
+            self.build_edges()
+        return [edge.transition_probability for edge in self.clusters[cluster]]
 
     def random_walks(
             self,
             clusters: Union[str, List[str], Cluster, List[Cluster]],
             steps: int
     ) -> Dict[Cluster, int]:
-        """ Performs random walks, counting visitations of each cluster
+        """ Performs random walks, counting visitations of each cluster.
 
-        :param int clusters: Clusters at which to start the random walks
-        :param int steps: number of steps to take per walk
-        :returns a Dict of Clusters to Visit counts
+        :param clusters: Clusters at which to start the random walks.
+        :param steps: number of steps to take per walk.
+        :returns a dictionary of cluster to visit count.
         """
         if self.cardinality < 2:
-            return {c: 1 for c in self.clusters}
+            return {c: 1 for c in self.clusters}  # TODO: Cover
 
-        if type(clusters) is Cluster:
-            clusters = [clusters]
+        if type(clusters) in {Cluster, str}:
+            clusters = [clusters]  # TODO: Cover
         if type(clusters) is list and type(clusters[0]) is str:
-            clusters = list(map(self.manifold.select, clusters))
+            clusters = [self.manifold.select(cluster) for cluster in clusters]  # TODO: Cover
+
+        if any((edges is None for edges in self.clusters.values())):
+            self.build_edges()
 
         counts = {c: 0 for c in self.clusters}
         counts.update({c: 1 for c in clusters})
 
-        walks = [c for c in clusters if c.neighbors]
+        # initialize walk locations.
+        walks = [cluster for cluster in clusters if len(self.clusters[cluster]) > 0]
         for _ in range(steps):
-            walks = [np.random.choice(a=c.transition_probabilities[0], p=c.transition_probabilities[1])
-                     for c in walks if c.neighbors]
-            for c in walks:
+            # update walk locations
+            walks = [np.random.choice(a=self.neighbors(cluster), p=self.transition_probabilities(cluster))
+                     for cluster in walks if len(self.clusters[cluster]) > 0]
+            for c in walks:  # increment visit count for each location
                 counts[c] += 1
-
         return counts
 
-    @staticmethod
-    def traverse(start: Cluster) -> Set[Cluster]:
-        """ Traversal starting at start. """
+    def traverse(self, start: Cluster) -> Set[Cluster]:
+        """ Graph traversal starting at start. """
         logging.debug(f'starting traversal from {start}')
-        visited, frontier = set(), {start}
+        visited: Set[Cluster] = set()
+        frontier: Set[Cluster] = {start}
         while frontier:
             visited.update(frontier)
-            frontier = {n for c in frontier for n in c.neighbors.keys() if n not in visited}
+            frontier = {neighbor for cluster in frontier for neighbor in (set(self.neighbors(cluster)) - visited)}
         return visited
 
-    @staticmethod
-    def bft(start: Cluster) -> Set[Cluster]:
+    def bft(self, start: Cluster) -> Set[Cluster]:
         """ Breadth-First Traversal starting at start. """
         logging.debug(f'starting breadth-first-traversal from {start}')
         visited = set()
         queue = deque([start])
         while queue:
-            c = queue.popleft()
-            if c not in visited:
-                visited.add(c)
-                [queue.append(neighbor) for neighbor in c.neighbors.keys()]
+            cluster = queue.popleft()
+            if cluster not in visited:
+                visited.add(cluster)
+                [queue.append(neighbor) for neighbor in self.neighbors(cluster)]
         return visited
 
-    @staticmethod
-    def dft(start: Cluster) -> Set[Cluster]:
+    def dft(self, start: Cluster) -> Set[Cluster]:
         """ Depth-First Traversal starting at start. """
         logging.debug(f'starting depth-first-traversal from {start}')
         visited = set()
         stack: List[Cluster] = [start]
         while stack:
-            c = stack.pop()
-            if c not in visited:
-                visited.add(c)
-                stack.extend(c.neighbors.keys())
+            cluster = stack.pop()
+            if cluster not in visited:
+                visited.add(cluster)
+                stack.extend(self.neighbors(cluster))
         return visited
 
 
 class Manifold:
-    """ Manifold of varying resolution.
-
-    The Manifold class' main job is to organize the underlying Clusters ang Graphs.
-    It does this by providing the ability to reset the build the Cluster-tree, and from them the Graph-stack.
-    With this Cluster-tree and Graph-stack, Manifold provides utilities for
-     rho-nearest neighbors search and k-nearest neighbors search.
+    """
+    The Manifold's main job is to organize the underlying Clusters and Graphs.
+    It does this by providing the ability to reset the build the Cluster-tree, the Graph-stack, and the optimal Graph.
+    With the tree and the graphs, Manifold provides utilities for:
+        rho-nearest neighbors search,
+        k-nearest neighbors search,
     """
 
     def __init__(self, data: Data, metric: Metric, argpoints: Union[Vector, float] = None, **kwargs):
-        """ A Manifold needs the data to learn the manifold for, and a distance metric to use while doing so.
+        """ A Manifold needs the data from which to learn the manifold, and a distance function to use while doing so.
 
-        :param data: The data to learn. This could be a numpy.ndarray or a numpy.memmap.
-        :param metric: The distance metric to use for the data.
-                       Any metric allowed by scipy.spatial.distance is allowed here.
+        :param data: The data to learn. This should be a numpy.ndarray or a numpy.memmap.
+        :param metric: The distance function to use for the data.
+                       Any distance function allowed by scipy.spatial.distance is allowed here.
         :param argpoints: Optional. List of indexes or portion of data to which to restrict Manifold.
         """
         logging.debug(f'Manifold(data={data.shape}, metric={metric}, argpoints={argpoints})')
@@ -600,31 +665,37 @@ class Manifold:
         elif type(argpoints) is list:
             self.argpoints = list(map(int, argpoints))
         elif type(argpoints) is float:
-            self.argpoints = np.random.choice(self.data.shape[0], int(self.data.shape[0] * argpoints), replace=False)
+            self.argpoints = np.random.choice(
+                self.data.shape[0],
+                int(self.data.shape[0] * argpoints),
+                replace=False
+            )
             self.argpoints = list(map(int, self.argpoints))
         else:
             raise ValueError(f"Invalid argument to argpoints. {argpoints}")
 
-        self.graphs: List['Graph'] = [Graph(Cluster(self, self.argpoints, ''))]
+        self.root: Cluster = Cluster(self, self.argpoints, '')
+        self.graphs: List[Graph] = [Graph(self.root)]
+        self.optimal_graph: Graph = Graph(self.root)
 
         self.__dict__.update(**kwargs)
         return
 
     def __eq__(self, other: 'Manifold') -> bool:
         """ Two manifolds are identical if they have the same metric and the same leaf-clusters. """
-        return self.metric == other.metric and self.graphs[-1] == other.graphs[-1]
-
-    def __getitem__(self, depth: int) -> 'Graph':
-        return self.graphs[depth]
+        return self.metric == other.metric and set(self.graphs[-1]) == set(other.graphs[-1])
 
     def __iter__(self) -> Iterable[Graph]:
         yield from self.graphs
 
+    def __getitem__(self, depth: int) -> Graph:
+        return self.graphs[depth]
+
     def __str__(self) -> str:
-        return '\t'.join([self.metric, str(self.graphs[-1])])
+        return f'{self.metric}-{", ".join((str(p) for p in self.argpoints))}'
 
     def __repr__(self) -> str:
-        return '\n'.join([self.metric, repr(self.graphs[-1])])
+        return f'{str(self)}\n\n' + '\n\n'.join((repr(graph) for graph in self.graphs))
 
     @property
     def depth(self) -> int:
@@ -652,74 +723,60 @@ class Manifold:
 
         return cdist(x1, x2, metric=self.metric)
 
-    def find_points(self, point: Data, radius: Radius) -> List[Tuple[int, Radius]]:
-        """ Returns all indices of points that are within radius of point. """
-        candidates: List[int] = [p for c in self.find_clusters(point, radius, len(self.graphs))
-                                 for p in c.argpoints]
-        results: Dict[int, Radius] = dict()
-        point = np.expand_dims(point, axis=0)
-        for i in range(0, len(candidates), BATCH_SIZE):
-            batch = candidates[i:i + BATCH_SIZE]
-            distances = self.distance(point, batch)[0]
-            results.update({p: d for p, d in zip(batch, distances) if d <= radius})
-        return sorted([(p, d) for p, d in results.items()], key=itemgetter(1))
-
-    def find_clusters(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
-        """ Returns all clusters that contain points within radius of point at depth. """
-        return {r: d for c in self.graphs[0] for r, d in c.tree_search(point, radius, depth).items()}
-
-    def find_knn(self, point: Data, k: int) -> List[Tuple[int, Radius]]:
-        """ Finds and returns the k-nearest neighbors of point. """
-        radius: Radius = np.float64(np.mean([c.radius for c in self.graphs[-1].clusters]))
-        radius = np.float64(max(radius, 1e-16))
-        results = self.find_points(point, radius)
-        while len(results) < k:
-            radius *= 2
-            results = self.find_points(point, radius)
-
-        return sorted(results, key=itemgetter(1))[:k]
+    def lfd_range(self, percentiles: Tuple[float, float] = (90, 10)) -> Tuple[float, float]:
+        """ Computes the lfd range used for marking optimal clusters. """
+        lfd_range = [], []
+        for layer in self.graphs:
+            clusters: List[Cluster] = [cluster for cluster in layer if cluster.cardinality > 2]
+            if len(clusters) > 0:
+                lfds = np.percentile(
+                    a=[c.local_fractal_dimension for c in clusters],
+                    q=percentiles,
+                )
+                lfd_range[0].append(lfds[0]), lfd_range[1].append(lfds[1])
+        return float(np.median(lfd_range[0])), float(np.median(lfd_range[1]))
 
     def build(self, *criterion) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
-        self.graphs = [Graph(Cluster(self, self.argpoints, ''))]
+        self.graphs = [Graph(self.root)]
         self.build_tree(*criterion)
-        self.build_graphs()
+
+        max_lfd, min_lfd = self.lfd_range(percentiles=(90, 10))
+        self.root.mark(max_lfd, min_lfd)
+
+        self.build_graph()
         return self
 
     def build_tree(self, *criterion) -> 'Manifold':
         """ Builds the Cluster-tree. """
         while True:
-            logging.info(f'depth: {len(self.graphs) - 1}, {len(self.graphs[-1].clusters)} clusters')
+            logging.info(f'depth: {self.depth}, {self.graphs[-1].cardinality} clusters')
             clusters = self._partition_threaded(criterion)
             if self.graphs[-1].cardinality < len(clusters):
-                g = Graph(*clusters)
-                self.graphs.append(g)
+                self.graphs.append(Graph(*clusters))
             else:
+                # TODO: Figure out how to avoid this extra partition
                 [c.children.clear() for c in self.graphs[-1]]
                 break
         return self
 
-    def build_graphs(self) -> 'Manifold':
-        """ Builds the Graph-stack. """
-        self.graphs[-1].build_edges()
-        return self
+    def build_graph(self):
+        """ Builds the graph at the optimal depth. """
+        clusters: List[Cluster] = [self.root]
+        while True:
+            new_clusters: List[Cluster] = [c for c in clusters if c.optimal]
+            if len(new_clusters) == len(clusters):
+                break
+            else:
+                for c in clusters:
+                    if not c.optimal:
+                        new_clusters.extend(c.children)
+                clusters = new_clusters
 
-    def build_graph(self, depth: int) -> 'Manifold':
-        """ Builds the graph at a given depth. """
-        if depth > self.depth:
-            raise ValueError(f'depth must not be greater than {self.depth}. Got {depth}.')
-        self.graphs[depth].build_edges()
-        return self
-
-    def subgraph(self, cluster: Union[str, Cluster]) -> Graph:
-        """ Returns the subgraph to which cluster belongs. """
-        cluster = self.select(cluster) if type(cluster) is str else cluster
-        return self.graphs[cluster.depth].subgraph(cluster)
-
-    def graph(self, cluster: Union[str, Cluster]) -> Graph:
-        """ Returns the graph to which cluster belongs. """
-        cluster = self.select(cluster) if type(cluster) is str else cluster
-        return self.graphs[cluster.depth]
+        logging.info(f'depths: ({min([c.depth for c in clusters])}, {max([c.depth for c in clusters])}), clusters: {len(clusters)}')
+        self.optimal_graph = Graph(*clusters)
+        self.optimal_graph.build_edges()
+        return
 
     def _partition_single(self, criterion):
         return [child for cluster in self.graphs[-1] for child in cluster.partition(*criterion)]
@@ -745,8 +802,7 @@ class Manifold:
             raise ValueError(f'depth of requested cluster must not be greater than depth of cluster-tree. '
                              f'Got {cluster}, max-depth: {self.depth}')
 
-        root: Cluster = next(iter(self.graphs[0]))
-        lineage = [root]
+        lineage: List[Cluster] = [self.root]
         for depth in range(len(cluster) + 1):
             for child in lineage[-1].children:
                 if child.name == cluster[:depth]:
@@ -759,27 +815,61 @@ class Manifold:
         """ Returns the cluster with the given name. """
         return self.ancestry(name)[-1]
 
-    def dump(self, fp: BinaryIO) -> None:
+    def find_points(self, point: Data, radius: Radius) -> List[Tuple[int, Radius]]:
+        """ Returns all indices of points that are within radius of point. """
+        candidates: List[int] = [p for c in self.find_clusters(point, radius, len(self.graphs))
+                                 for p in c.argpoints]
+        results: Dict[int, Radius] = dict()
+        point = np.expand_dims(point, axis=0)
+        for i in range(0, len(candidates), BATCH_SIZE):
+            batch = candidates[i:i + BATCH_SIZE]
+            distances = self.distance(point, batch)[0]
+            results.update({p: d for p, d in zip(batch, distances) if d <= radius})
+        return sorted([(p, d) for p, d in results.items()], key=itemgetter(1))
+
+    def find_clusters(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
+        """ Returns all clusters that contain points within radius of point at depth. """
+        return {r: d for c in self.graphs[0] for r, d in c.tree_search(point, radius, depth).items()}
+
+    def find_knn(self, point: Data, k: int) -> List[Tuple[int, Radius]]:
+        """ Finds and returns the k-nearest neighbors of point. """
+        radius: Radius = np.float64(np.mean([c.radius for c in self.graphs[-1]]))
+        radius = np.float64(max(radius, 1e-16))
+        results = self.find_points(point, radius)
+        while len(results) < k:
+            radius *= 2
+            results = self.find_points(point, radius)
+
+        return sorted(results, key=itemgetter(1))[:k]
+
+    def dump(self, fp: Union[BinaryIO, IO[bytes]]) -> None:
         pickle.dump({
             'metric': self.metric,
-            'root': [c.json() for c in self.graphs[0]],
+            'root': self.root.json(),
         }, fp, protocol=pickle.HIGHEST_PROTOCOL)
         return
 
     @staticmethod
-    def load(fp: BinaryIO, data: Data) -> 'Manifold':
+    def load(fp: Union[BinaryIO, IO[bytes]], data: Data) -> 'Manifold':
         d = pickle.load(fp)
         manifold = Manifold(data, metric=d['metric'])
-        graphs = [Graph(*[Cluster.from_json(manifold, r) for r in d['root']])]
-        while True:
-            layer = Graph(*(child for cluster in graphs[-1] for child in cluster.children))
-            if not layer:
-                break
-            else:
-                graphs.append(layer)
 
-        manifold.graphs = graphs
-        for graph in graphs:
-            for cluster in graph.clusters.keys():
-                cluster.neighbors = {manifold.select(n): d for n, d in cluster.__dict__['neighbors'].items()}
+        manifold.root = Cluster.from_json(manifold, d['root'])
+        manifold.graphs = [Graph(manifold.root)]
+        while True:
+            for cluster in manifold.graphs[-1]:
+                if cluster.__dict__['_candidates'] is None:
+                    cluster.candidates = None
+                else:
+                    cluster.candidates = [manifold.select(c) for c in cluster.__dict__['_candidates']]
+
+            graph = [child for cluster in manifold.graphs[-1] for child in cluster.children]
+            if graph:
+                manifold.graphs.append(Graph(*[c for c in graph]))
+            else:
+                break
+
+        manifold.optimal_graph = Graph(*[cluster for graph in manifold.graphs for cluster in graph if cluster.optimal])
+        manifold.optimal_graph.build_edges()
+
         return manifold
