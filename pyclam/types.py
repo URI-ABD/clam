@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Union, List, Callable
 
 import numpy as np
@@ -7,3 +8,5 @@ Radius = Union[float, int, np.float64]
 Vector = List[int]
 DistanceFunc = Callable[[Data, Data], Radius]
 Metric = Union[str, DistanceFunc]
+Edge = namedtuple('Edge', 'neighbor distance transition_probability')
+

@@ -14,7 +14,7 @@ class TestManifoldFunctional(unittest.TestCase):
         m = Manifold(data, 'euclidean')
         m.build()
         # With no constraints, clusters should be singletons.
-        self.assertEqual(data.shape[0], m.graphs[-1].cardinality)
+        self.assertEqual(data.shape[0], m.optimal_graph.population)
         self.assertEqual(1, len(m.find_clusters(data[0], 0., -1)))
         self.assertEqual(1, len(m.find_points(data[0], 0.)))
         return
@@ -50,5 +50,5 @@ class TestManifoldFunctional(unittest.TestCase):
         m = Manifold(data, 'euclidean')
         # We expect building to stop with two clusters.
         m.build()
-        self.assertEqual(2, m.graphs[-1].cardinality, f'Expected 2 clusters, got {m.graphs[-1].cardinality}')
+        self.assertEqual(2, m.optimal_graph.cardinality, f'Expected 2 clusters, got {m.optimal_graph.cardinality}')
         return

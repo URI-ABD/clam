@@ -49,26 +49,6 @@ class TestManifold(unittest.TestCase):
         self.assertNotEqual(self.manifold, other)
         return
 
-    def test_getitem(self):
-        self.assertEqual(self.manifold.graphs[0], self.manifold[0])
-        with self.assertRaises(IndexError):
-            _ = self.manifold[100]
-        return
-
-    def test_subgraph(self):
-        g = self.manifold.graphs[-1]
-        c = next(iter(g))
-        self.assertIn(self.manifold.subgraph(c), g.subgraphs)
-        self.assertIn(self.manifold.subgraph(c.name), g.subgraphs)
-        return
-
-    def test_graph(self):
-        g = self.manifold.graphs[-1]
-        c = next(iter(g))
-        self.assertEqual(g, self.manifold.graph(c))
-        self.assertEqual(g, self.manifold.graph(c.name))
-        return
-
     def test_iter(self):
         self.assertListEqual(self.manifold.graphs, list(iter(self.manifold)))
         return
@@ -109,7 +89,7 @@ class TestManifold(unittest.TestCase):
         m.build(criterion.MaxDepth(2))
         self.assertEqual(3, len(m.graphs))
         m.build()
-        self.assertEqual(len(self.data), m.graphs[-1].cardinality)
+        self.assertEqual(len(self.data), m.optimal_graph.population)
         return
 
     def test_build_tree(self):
@@ -146,6 +126,34 @@ class TestManifold(unittest.TestCase):
                 self.manifold.select(cluster.name + '111111111111111111111111111')
         return
 
+    def test_optimal_in_graph(self):
+        data, labels = datasets.bullseye()
+        manifold = Manifold(data, 'euclidean').build(criterion.MaxDepth(12))
+        for cluster in manifold.optimal_graph:
+            self.assertTrue(cluster.optimal)
+
+    def test_neighbors(self):
+        for dataset in [datasets.bullseye, datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
+            data, labels = dataset()
+            manifold = Manifold(data, 'euclidean')
+            manifold.build(criterion.MaxDepth(12))
+
+            clusters = manifold.optimal_graph.clusters
+            for cluster in clusters:
+                potential_neighbors = [c for c in manifold.optimal_graph if c.name != cluster.name]
+                argcenters = [c.argmedoid for c in potential_neighbors]
+                distances = list(cluster.distance_from(argcenters))
+                radii = [cluster.radius + c.radius for c in potential_neighbors]
+                true_neighbors = {c: d for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
+                neighbors = {edge.neighbor: edge.distance for edge in clusters[cluster]}
+
+                extras = set(neighbors.keys()) - set(true_neighbors.keys())
+                self.assertEqual(0, len(extras), msg=f'missed some neighbors: {[(c.name, neighbors[c], cluster.radius + c.radius) for c in extras]}')
+
+                missed = set(true_neighbors.keys()) - set(neighbors.keys())
+                self.assertEqual(0, len(missed), msg=f'missed some neighbors: {[(c.name, neighbors[c], cluster.radius + c.radius) for c in missed]}')
+            return
+
     def test_dump(self):
         with TemporaryFile() as fp:
             self.manifold.dump(fp)
@@ -158,14 +166,16 @@ class TestManifold(unittest.TestCase):
             fp.seek(0)
             loaded = Manifold.load(fp, self.data)
         self.assertEqual(original, loaded)
-        self.assertEqual(original[0], loaded[0])
+        self.assertEqual(set(original.graphs[-1]), set(loaded.graphs[-1]))
+        self.assertEqual(original.optimal_graph, loaded.optimal_graph)
 
-        for graph in loaded.graphs:
-            for cluster in graph.clusters:
+        for layer in loaded.graphs:
+            for cluster in layer:
                 self.assertIn('_radius', cluster.__dict__)
                 self.assertIn('_argradius', cluster.__dict__)
                 self.assertIn('_argsamples', cluster.__dict__)
                 self.assertIn('_argmedoid', cluster.__dict__)
+                self.assertIn('_optimal', cluster.__dict__)
                 self.assertIn('_local_fractal_dimension', cluster.__dict__)
         return
 
@@ -186,7 +196,7 @@ class TestManifold(unittest.TestCase):
         m.build_tree(criterion.MinPoints(10), criterion.MaxDepth(10))
 
         ks = list(range(10))
-        ks.extend(range(10, data.shape[0], 100))
+        ks.extend(range(10, data.shape[0], 1000))
         for k in ks:
             naive_results = {p for d, p in points[:k]}
             results = m.find_knn(point, k)
