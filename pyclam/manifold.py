@@ -380,11 +380,11 @@ class Cluster:
 
 
 class Graph:
-    # TODO: Consider writing dump/load methods for Graph.
     """
     Nodes in the Graph are Clusters.
     Two clusters have an edge if they have overlapping volumes.
     """
+    # TODO: Consider writing dump/load methods for Graph.
 
     def __init__(self, *clusters):
         logging.debug(f'Graph(clusters={[str(c) for c in clusters]})')
@@ -442,8 +442,6 @@ class Graph:
         return next(iter(self.clusters.keys())).metric
 
     def _find_neighbors(self, cluster: Cluster):
-        # TODO: Currently only works for optimal graph. Rethink for all graphs.
-
         # Dict of candidate neighbors and distances to neighbors.
         candidates: Dict[Cluster, float] = dict()
         radius: float = cluster.manifold.root.radius
@@ -478,7 +476,6 @@ class Graph:
 
     def build_edges(self) -> None:
         """ Calculates edges for the graph. """
-        # TODO: Currently only works for optimal graph. Rethink for all graphs.
         logging.info(f'building edges for {len(self.clusters.keys())} clusters')
         self.manifold.root.candidates = [self.manifold.root]
 
@@ -598,8 +595,7 @@ class Graph:
         walks = [cluster for cluster in clusters if len(self.clusters[cluster]) > 0]
         for _ in range(steps):
             # update walk locations
-            walks = [np.random.choice(a=self.neighbors(cluster), p=self.transition_probabilities(cluster))
-                     for cluster in walks if len(self.clusters[cluster]) > 0]
+            walks = [np.random.choice(a=self.neighbors(cluster), p=self.transition_probabilities(cluster)) for cluster in walks]
             for c in walks:  # increment visit count for each location
                 counts[c] += 1
         return counts
@@ -726,8 +722,8 @@ class Manifold:
     def lfd_range(self, percentiles: Tuple[float, float] = (90, 10)) -> Tuple[float, float]:
         """ Computes the lfd range used for marking optimal clusters. """
         lfd_range = [], []
-        for layer in self.graphs:
-            clusters: List[Cluster] = [cluster for cluster in layer if cluster.cardinality > 2]
+        for graph in self.graphs:
+            clusters: List[Cluster] = [cluster for cluster in graph if cluster.cardinality > 2]
             if len(clusters) > 0:
                 lfds = np.percentile(
                     a=[c.local_fractal_dimension for c in clusters],
@@ -762,16 +758,8 @@ class Manifold:
 
     def build_graph(self):
         """ Builds the graph at the optimal depth. """
-        clusters: List[Cluster] = [self.root]
-        while True:
-            new_clusters: List[Cluster] = [c for c in clusters if c.optimal]
-            if len(new_clusters) == len(clusters):
-                break
-            else:
-                for c in clusters:
-                    if not c.optimal:
-                        new_clusters.extend(c.children)
-                clusters = new_clusters
+        clusters: List[Cluster] = []
+        [clusters.extend([c for c in graph if c.optimal]) for graph in self.graphs]
 
         logging.info(f'depths: ({min([c.depth for c in clusters])}, {max([c.depth for c in clusters])}), clusters: {len(clusters)}')
         self.optimal_graph = Graph(*clusters)
