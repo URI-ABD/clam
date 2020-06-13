@@ -49,7 +49,7 @@ class TestCriterion(unittest.TestCase):
         min_radius, min_points, max_depth = 0.15, 10, 8
         self.manifold.build(MinRadius(min_radius), MinPoints(min_points), MaxDepth(max_depth))
         self.assertTrue(all((c.radius >= min_radius for g in self.manifold for c in g)))
-        [self.assertLessEqual(len(c.children), 1) for g in self.manifold.graphs for c in g
+        [self.assertLessEqual(len(c.children), 1) for g in self.manifold.layers for c in g
          if c.radius <= min_radius or len(c.argpoints) <= min_points or c.depth >= max_depth]
         # self.plot()
         return
