@@ -1,13 +1,31 @@
 import logging
+from abc import ABC, abstractmethod
 
 import numpy as np
 from scipy.spatial.distance import cdist
 
-import pyclam
-from pyclam.manifold import Cluster
+from pyclam.manifold import Cluster, Graph
 
 
-class MaxDepth:
+class Criterion(ABC):
+    pass
+
+
+class GraphCriterion(Criterion):
+
+    @abstractmethod
+    def __call__(self, graph: Graph):
+        pass
+
+
+class ClusterCriterion(Criterion):
+
+    @abstractmethod
+    def __call__(self, cluster: Cluster):
+        pass
+
+
+class MaxDepth(ClusterCriterion):
     """ Allows clustering up until the given depth.
     """
 
@@ -18,7 +36,7 @@ class MaxDepth:
         return cluster.depth < self.depth
 
 
-class AddLevels:
+class AddLevels(ClusterCriterion):
     """ Allows clustering up until current.depth + depth.
     """
 
@@ -32,7 +50,7 @@ class AddLevels:
         return cluster.depth < (self.start + self.depth)
 
 
-class MinPoints:
+class MinPoints(ClusterCriterion):
     """ Allows clustering up until there are fewer than points.
     """
 
@@ -43,22 +61,22 @@ class MinPoints:
         return cluster.cardinality > self.min_points
 
 
-class MinRadius:
-    """ Allows clustering until cluster.radius is less than radius.
-    """
+# class MinRadius(ClusterCriterion):
+#     """ Allows clustering until cluster.radius is less than radius.
+#     """
+#
+#     def __init__(self, radius):
+#         self.radius = radius
+#         MIN_RADIUS = radius
+#
+#     def __call__(self, cluster: Cluster):
+#         if cluster.radius <= self.radius:
+#             cluster.__dict__['_min_radius'] = self.radius
+#             return False
+#         return True
 
-    def __init__(self, radius):
-        self.radius = radius
-        pyclam.manifold.MIN_RADIUS = radius
 
-    def __call__(self, cluster: Cluster):
-        if cluster.radius <= self.radius:
-            cluster.__dict__['_min_radius'] = self.radius
-            return False
-        return True
-
-
-# class LeavesSubgraph:
+# class LeavesSubgraph(ClusterCriterion):
 #     """ Allows clustering until the cluster has left the subgraph of the parent.
 #     """
 #
@@ -71,7 +89,7 @@ class MinRadius:
 #         return any((c.overlaps(cluster.medoid, cluster.radius) for c in parent_subgraph))
 
 
-# class MinCardinality:
+# class MinCardinality(ClusterCriterion):
 #     """ Allows clustering until cardinality of cluster's subgraph is less than given.
 #     """
 #
@@ -86,7 +104,7 @@ class MinRadius:
 #         ))
 
 
-# class MinNeighborhood:
+# class MinNeighborhood(ClusterCriterion):
 #     """ Allows clustering until the size of the neighborhood drops below threshold.
 #     """
 #
@@ -99,7 +117,7 @@ class MinRadius:
 #         return cluster.depth < self.starting_depth or len(cluster.neighbors) >= self.threshold
 
 
-# class NewSubgraph:
+# class NewSubgraph(ClusterCriterion):
 #     """ Cluster until a new subgraph is created. """
 #
 #     def __init__(self, manifold: _Manifold):
@@ -111,7 +129,7 @@ class MinRadius:
 #         return len(self.manifold.layers[-1].subgraphs) == self.starting
 
 
-class MedoidNearCentroid:
+class MedoidNearCentroid(ClusterCriterion):
     def __init__(self):
         return
 
@@ -124,7 +142,7 @@ class MedoidNearCentroid:
         ))
 
 
-class UniformDistribution:
+class UniformDistribution(ClusterCriterion):
     def __init__(self):
         return
 

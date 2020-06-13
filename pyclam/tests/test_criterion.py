@@ -4,7 +4,6 @@ import pyclam.datasets as d
 import pyclam.manifold as m
 from pyclam.criterion import (
     MinPoints,
-    MinRadius,
     MaxDepth,
     MedoidNearCentroid,
     UniformDistribution,
@@ -21,12 +20,12 @@ class TestCriterion(unittest.TestCase):
         self.manifold = m.Manifold(self.data, 'euclidean')
         return
 
-    def test_min_radius(self):
-        min_radius = 0.1
-        self.manifold.build(MinRadius(min_radius), MaxDepth(8))
-        self.assertTrue(all((c.radius >= min_radius for g in self.manifold for c in g)))
-        [self.assertLessEqual(len(c.children), 1) for g in self.manifold for c in g if c.radius <= min_radius]
-        return
+    # def test_min_radius(self):
+    #     min_radius = 0.1
+    #     self.manifold.build(MinRadius(min_radius), MaxDepth(8))
+    #     self.assertTrue(all((c.radius >= min_radius for g in self.manifold for c in g)))
+    #     [self.assertLessEqual(len(c.children), 1) for g in self.manifold for c in g if c.radius <= min_radius]
+    #     return
 
     # def test_min_cardinality(self):
     #     data = d.random()[0]
@@ -46,11 +45,10 @@ class TestCriterion(unittest.TestCase):
     #     return
 
     def test_combinations(self):
-        min_radius, min_points, max_depth = 0.15, 10, 8
-        self.manifold.build(MinRadius(min_radius), MinPoints(min_points), MaxDepth(max_depth))
-        self.assertTrue(all((c.radius >= min_radius for g in self.manifold for c in g)))
+        min_points, max_depth = 10, 8
+        self.manifold.build(MinPoints(min_points), MaxDepth(max_depth))
         [self.assertLessEqual(len(c.children), 1) for g in self.manifold.graphs for c in g
-         if c.radius <= min_radius or len(c.argpoints) <= min_points or c.depth >= max_depth]
+         if len(c.argpoints) <= min_points or c.depth >= max_depth]
         # self.plot()
         return
 

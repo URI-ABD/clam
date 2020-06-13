@@ -735,12 +735,14 @@ class Manifold:
     def build(self, *criterion) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
         self.graphs = [Graph(self.root)]
-        self.build_tree(*criterion)
+        from pyclam.criterion import ClusterCriterion
+        self.build_tree(*(c for c in criterion if isinstance(c, ClusterCriterion)))
 
         max_lfd, min_lfd = self.lfd_range(percentiles=(90, 10))
         self.root.mark(max_lfd, min_lfd)
 
-        self.build_graph()
+        from pyclam.criterion import GraphCriterion
+        self.build_graph(*(c for c in criterion if isinstance(c, GraphCriterion)))
         return self
 
     def build_tree(self, *criterion) -> 'Manifold':
@@ -756,7 +758,7 @@ class Manifold:
                 break
         return self
 
-    def build_graph(self):
+    def build_graph(self, *criterion):
         """ Builds the graph at the optimal depth. """
         clusters: List[Cluster] = []
         [clusters.extend([c for c in graph if c.optimal]) for graph in self.graphs]
