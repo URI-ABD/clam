@@ -173,12 +173,12 @@ class TestManifold(unittest.TestCase):
 
         for layer in loaded.layers:
             for cluster in layer:
-                self.assertIn('_radius', cluster.__dict__)
-                self.assertIn('_argradius', cluster.__dict__)
-                self.assertIn('_argsamples', cluster.__dict__)
-                self.assertIn('_argmedoid', cluster.__dict__)
-                self.assertIn('_optimal', cluster.__dict__)
-                self.assertIn('_local_fractal_dimension', cluster.__dict__)
+                self.assertIn('radius', cluster.cache)
+                self.assertIn('argradius', cluster.cache)
+                self.assertIn('argsamples', cluster.cache)
+                self.assertIn('argmedoid', cluster.cache)
+                self.assertIn('optimal', cluster.cache)
+                self.assertIn('local_fractal_dimension', cluster.cache)
         return
 
     def test_partition_backends(self):

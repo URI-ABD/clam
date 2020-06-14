@@ -73,9 +73,9 @@ class TestGraph(unittest.TestCase):
     def test_clear_cache(self):
         self.manifold.graph.clear_cache()
         _ = self.manifold.graph.edges
-        self.assertIn('_edges', self.manifold.graph.__dict__)
+        self.assertIn('edges', self.manifold.graph.cache)
         self.manifold.graph.clear_cache()
-        self.assertNotIn('_edges', self.manifold.graph.__dict__)
+        self.assertNotIn('edges', self.manifold.graph.cache)
         return
 
     def test_bft(self):

@@ -5,7 +5,7 @@ import logging
 import pickle
 from collections import deque
 from operator import itemgetter
-from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO
+from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -56,15 +56,16 @@ class Cluster:
         # This helps with a highly efficient neighbor search for clusters in the tree.
         self.candidates: Union[Dict['Cluster', float], None] = None
 
-        self.__dict__['_optimal'] = False  # whether cluster depth is optimal
-        self.__dict__.update(**kwargs)
-        self.absorbable: bool = False
+        self.cache: Dict[str, Any] = {'optimal': False, 'absorbable': False}
+        self.cache.update(**kwargs)
 
         # This is used while reading clusters from file during Cluster.from_json().
-        if not argpoints and self.children:
-            self.argpoints = [p for child in self.children for p in child.argpoints]
-        elif not argpoints:
-            raise ValueError(f'Cluster {name} needs argpoints')
+        if not argpoints:
+            if 'children' in self.cache:
+                self.children = {child for child in self.cache['children']}
+                self.argpoints = [p for child in self.children for p in child.argpoints]
+            else:
+                raise ValueError(f'Cluster {name} needs argpoints of children when reading from file')
         return
 
     def __eq__(self, other: 'Cluster') -> bool:
@@ -85,7 +86,9 @@ class Cluster:
         return self.name or 'root'
 
     def __repr__(self) -> str:
-        return '-'.join([self.name, ', '.join(map(str, self.argpoints))])
+        if 'repr' not in self.cache:
+            self.cache['repr'] = '-'.join([self.name, ', '.join(map(str, self.argpoints))])
+        return self.cache['repr']
 
     def __iter__(self) -> Vector:
         # Iterates in batches, instead of by element.
@@ -134,7 +137,7 @@ class Cluster:
         otherwise returns a single sample that represents the entire cluster.
         i.e., if len(argsamples) == 1, the cluster contains only duplicates.
         """
-        if '_argsamples' not in self.__dict__:
+        if 'argsamples' not in self.cache:
             logging.debug(f"building cache for {self}")
             if self.cardinality <= SUBSAMPLE_LIMIT:
                 n = len(self.argpoints)
@@ -149,8 +152,8 @@ class Cluster:
                 indices = [self.argpoints[i] for i in indices][:n]
 
             # Cache it.
-            self.__dict__['_argsamples'] = indices
-        return self.__dict__['_argsamples']
+            self.cache['argsamples'] = indices
+        return self.cache['argsamples']
 
     @property
     def nsamples(self) -> int:
@@ -170,11 +173,11 @@ class Cluster:
     @property
     def argmedoid(self) -> int:
         """ The index used to retrieve the medoid. """
-        if '_argmedoid' not in self.__dict__:
+        if 'argmedoid' not in self.cache:
             logging.debug(f"building cache for {self}")
             _argmedoid = np.argmin(self.distance(self.argsamples, self.argsamples).sum(axis=1))
-            self.__dict__['_argmedoid'] = self.argsamples[int(_argmedoid)]
-        return self.__dict__['_argmedoid']
+            self.cache['argmedoid'] = self.argsamples[int(_argmedoid)]
+        return self.cache['argmedoid']
 
     @property
     def radius(self) -> Radius:
@@ -182,18 +185,15 @@ class Cluster:
 
         Computed as distance from medoid to the farthest point in the cluster.
         """
-        if '_min_radius' in self.__dict__:
-            logging.debug(f'taking min_radius from {self}')
-            return self.__dict__['_min_radius']
-        elif '_radius' not in self.__dict__:
+        if 'radius' not in self.cache:
             logging.debug(f'building cache for {self}')
             _ = self.argradius
-        return self.__dict__['_radius']
+        return self.cache['radius']
 
     @property
     def argradius(self) -> int:
         """ The index of the point which is farthest from the medoid. """
-        if ('_argradius' not in self.__dict__) or ('_radius' not in self.__dict__):
+        if ('argradius' not in self.cache) or ('radius' not in self.cache):
             logging.debug(f'building cache for {self}')
 
             def argmax_max(b):
@@ -202,14 +202,14 @@ class Cluster:
                 return b[argmax], distances[argmax]
 
             argradii_radii = [argmax_max(batch) for batch in iter(self)]
-            _argradius, _radius = max(argradii_radii, key=itemgetter(1))
-            self.__dict__['_argradius'], self.__dict__['_radius'] = int(_argradius), float(_radius)
-        return self.__dict__['_argradius']
+            argradius, radius = max(argradii_radii, key=itemgetter(1))
+            self.cache['argradius'], self.cache['radius'] = int(argradius), float(radius)
+        return self.cache['argradius']
 
     @property
     def local_fractal_dimension(self) -> float:
         """ The local fractal dimension of the cluster. """
-        if '_local_fractal_dimension' not in self.__dict__:
+        if 'local_fractal_dimension' not in self.cache:
             logging.debug(f'building cache for {self}')
             if self.nsamples == 1:
                 return 0.
@@ -217,21 +217,22 @@ class Cluster:
                      for batch in iter(self)
                      for d in self.distance_from(batch)]
             count = np.sum(count)
-            self.__dict__['_local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
-        return self.__dict__['_local_fractal_dimension']
+            self.cache['local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
+        return self.cache['local_fractal_dimension']
 
     @property
     def optimal(self) -> bool:
-        return self.__dict__['_optimal']
+        return self.cache['optimal']
+
+    @property
+    def absorbable(self) -> bool:
+        return self.cache['absorbable']
 
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
         logging.debug(f'clearing cache for {self}')
-        for prop in ['_argsamples', '_argmedoid', '_argradius', '_radius', '_local_fractal_dimension', '_optimal']:
-            try:
-                del self.__dict__[prop]
-            except KeyError:
-                pass
+        self.cache = {'optimal': False, 'absorbable': False}
+        return
 
     def tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
         """ Searches down the tree for clusters that overlap point with radius at depth. """
@@ -305,11 +306,11 @@ class Cluster:
                     self.manifold,
                     self.argpoints,
                     self.name + '0',
-                    _argsamples=self.argsamples,
-                    _argmedoid=self.argmedoid,
-                    _argradius=self.argradius,
-                    _radius=self.radius,
-                    _local_fractal_dimension=self.local_fractal_dimension,
+                    argsamples=self.argsamples,
+                    argmedoid=self.argmedoid,
+                    argradius=self.argradius,
+                    radius=self.radius,
+                    local_fractal_dimension=self.local_fractal_dimension,
                 )
             }
             return self.children
@@ -345,13 +346,13 @@ class Cluster:
             if self.local_fractal_dimension > max_lfd:  # Mark branch as active if above given threshold
                 active = True
         elif self.local_fractal_dimension < min_lfd:
-            self.__dict__['_optimal'] = True  # Active branches that fall under given threshold is marked optimal
+            self.cache['optimal'] = True  # Active branches that fall under given threshold is marked optimal
             return  # only one cluster per branch of the tree is marked optimal
 
         if len(self.children) > 1:  # If there are multiple children, recurse on all children.
             [child.mark(max_lfd, min_lfd, active) for child in self.children]
         else:
-            self.__dict__['_optimal'] = True  # The first childless cluster in a branch is optimal.
+            self.cache['optimal'] = True  # The first childless cluster in a branch is optimal.
         return
 
     def json(self):
@@ -360,13 +361,13 @@ class Cluster:
             'name': self.name,
             'argpoints': None,  # Do not save argpoints until at leaves.
             'children': [],
-            '_radius': self.radius,
-            '_argradius': self.argradius,
-            '_argsamples': self.argsamples,
-            '_argmedoid': self.argmedoid,
-            '_local_fractal_dimension': self.local_fractal_dimension,
-            '_candidates': None if self.candidates is None else {c.name: d for c, d in self.candidates.items()},
-            '_optimal': self.optimal,
+            'radius': self.radius,
+            'argradius': self.argradius,
+            'argsamples': self.argsamples,
+            'argmedoid': self.argmedoid,
+            'local_fractal_dimension': self.local_fractal_dimension,
+            'candidates': None if self.candidates is None else {c.name: d for c, d in self.candidates.items()},
+            'optimal': self.optimal,
         }
         if self.children:
             data['children'] = [c.json() for c in self.children]
@@ -397,7 +398,7 @@ class Graph:
         # Distance is the distance to that neighbor.
         # Transition Probability is the probability that the edge gets picked during a random walk.
         self.clusters: Dict[Cluster, Set[Edge]] = {c: None for c in clusters}
-        self.__dict__['_optimal'] = False
+        self.cache: Dict[str, Any] = {'optimal': False}
         return
 
     def __eq__(self, other: 'Graph') -> bool:  # TODO: Cover, Consider comparing edges as well.
@@ -412,14 +413,14 @@ class Graph:
         yield from self.clusters.keys()
 
     def __str__(self) -> str:
-        if '_str' not in self.__dict__:  # Cashing value because sort can be expensive on many clusters.
-            self.__dict__['_str'] = ', '.join(sorted([str(c) for c in self.clusters.keys()]))
-        return self.__dict__['_str']
+        if 'str' not in self.cache:  # Cashing value because sort can be expensive on many clusters.
+            self.cache['str'] = ', '.join(sorted([str(c) for c in self.clusters.keys()]))
+        return self.cache['str']
 
     def __repr__(self) -> str:
-        if '_repr' not in self.__dict__:  # Cashing value because sort can be expensive on many clusters.
-            self.__dict__['_repr'] = '\n'.join(sorted([repr(c) for c in self.clusters.keys()]))
-        return self.__dict__['_repr']
+        if 'repr' not in self.cache:  # Cashing value because sort can be expensive on many clusters.
+            self.cache['repr'] = '\n'.join(sorted([repr(c) for c in self.clusters.keys()]))
+        return self.cache['repr']
 
     def __hash__(self):
         return hash(str(self))
@@ -445,7 +446,7 @@ class Graph:
 
     @property
     def optimal(self) -> bool:
-        return self.__dict__['_optimal']
+        return self.cache['optimal']
 
     def _find_neighbors(self, cluster: Cluster):
         # Dict of candidate neighbors and distances to neighbors.
@@ -497,22 +498,22 @@ class Graph:
     def edges(self) -> Set[Edge]:
         # TODO: Change return type to indicate source cluster for each edge.
         """ Returns all edges within the graph. """
-        if '_edges' not in self.__dict__:
+        if 'edges' not in self.cache:
             logging.debug(f'building _edges cache for {self}')
             if any((edges is None for edges in self.clusters.values())):
                 self.build_edges()
 
             edges: Set[Edge] = set()
             [edges.update(e) for e in self.clusters.values()]
-            self.__dict__['_edges'] = edges
+            self.cache['edges'] = edges
 
-        return self.__dict__['_edges']
+        return self.cache['edges']
 
     @property
     def subgraphs(self) -> Set['Graph']:
         """ Returns all subgraphs within the graph. """
-        if '_subgraphs' not in self.__dict__:
-            self.__dict__['_subgraphs'] = set()
+        if 'subgraphs' not in self.cache:
+            self.cache['subgraphs'] = set()
             if any((edges is None for edges in self.clusters.values())):
                 self.build_edges()
 
@@ -520,9 +521,9 @@ class Graph:
             while unvisited:
                 component = self.traverse(unvisited.pop())
                 unvisited -= component
-                self.__dict__['_subgraphs'].add(Graph(*component))
+                self.cache['subgraphs'].add(Graph(*component))
 
-        return self.__dict__['_subgraphs']
+        return self.cache['subgraphs']
 
     def subgraph(self, cluster: 'Cluster') -> 'Graph':  # TODO: Cover
         """ Returns the subgraph to which the cluster belongs. """
@@ -534,12 +535,7 @@ class Graph:
 
     def clear_cache(self) -> None:
         """ Clears the cache of the graph. """
-        for prop in ['_edges', '_str', '_repr', '_subgraphs']:
-            logging.debug(str(self.clusters))
-            try:
-                del self.__dict__[prop]
-            except KeyError:
-                pass
+        self.cache = {'optimal': self.cache['optimal']}
         # Clear all cached edges.
         self.clusters = {c: None for c in self.clusters.keys()}
         return
@@ -669,9 +665,10 @@ class Manifold:
         self.root: Cluster = Cluster(self, self.argpoints, '')
         self.layers: List[Graph] = [Graph(self.root)]
         self.graph: Graph = Graph(self.root)
-        self.graph.__dict__['_optimal'] = True
+        self.graph.cache['optimal'] = True
 
-        self.__dict__.update(**kwargs)
+        self.cache: Dict[str, Any] = dict()
+        self.cache.update(**kwargs)
         return
 
     def __eq__(self, other: 'Manifold') -> bool:
@@ -685,10 +682,18 @@ class Manifold:
         return self.layers[depth]
 
     def __str__(self) -> str:
-        return f'{self.metric}-{", ".join((str(p) for p in self.argpoints))}'
+        if 'str' not in self.cache:
+            self.cache['str'] = f'{self.metric}-{", ".join((str(p) for p in self.argpoints))}'
+        return self.cache['str']
 
     def __repr__(self) -> str:
-        return f'{str(self)}\n\n' + '\n\n'.join((repr(graph) for graph in self.layers))
+        if 'repr' not in self.cache:
+            self.cache['repr'] = f'{str(self)}\n\n' + '\n\n'.join((repr(graph) for graph in self.layers))
+        return self.cache['repr']
+
+    def clear_cache(self):
+        self.cache = dict()
+        return
 
     @property
     def depth(self) -> int:
@@ -763,7 +768,7 @@ class Manifold:
                 break
         else:
             for cluster in self.layers[-1]:
-                cluster.__dict__['_optimal'] = True
+                cluster.cache['optimal'] = True
 
         for depth, layer in enumerate(self.layers):
             logging.info(f'depth: {depth}, clusters: {layer.cardinality}')
@@ -775,7 +780,7 @@ class Manifold:
         depths = [c.depth for c in clusters]
         logging.info(f'depths: ({min(depths)}, {max(depths)}), clusters: {len(clusters)}')
         self.graph = Graph(*clusters)
-        self.graph.__dict__['_optimal'] = True
+        self.graph.cache['optimal'] = True
         self.graph.build_edges()
         [c(self.graph) for c in criterion]
         return
@@ -860,10 +865,10 @@ class Manifold:
         manifold.layers = [Graph(manifold.root)]
         while True:
             for cluster in manifold.layers[-1]:
-                if cluster.__dict__['_candidates'] is None:
+                if cluster.cache['candidates'] is None:
                     cluster.candidates = None
                 else:
-                    cluster.candidates = {manifold.select(c): d for c, d in cluster.__dict__['_candidates'].items()}
+                    cluster.candidates = {manifold.select(c): d for c, d in cluster.cache['candidates'].items()}
 
             graph = [child for cluster in manifold.layers[-1] for child in cluster.children]
             if graph:
@@ -872,7 +877,7 @@ class Manifold:
                 break
 
         manifold.graph = Graph(*[cluster for layer in manifold.layers for cluster in layer if cluster.optimal])
-        manifold.graph.__dict__['_optimal'] = True
+        manifold.graph.cache['optimal'] = True
         manifold.graph.build_edges()
 
         return manifold
