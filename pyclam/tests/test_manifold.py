@@ -108,11 +108,11 @@ class TestManifold(unittest.TestCase):
         return
 
     def test_ancestry(self):
-        name = '11'
+        name = '0101'
         lineage = self.manifold.ancestry(name)
-        [self.assertEqual(name[:i], l.name) for i, l in enumerate(lineage)]
+        [self.assertEqual(name[:len(l.name)], l.name) for i, l in enumerate(lineage)]
         lineage = self.manifold.ancestry(lineage[-1])
-        [self.assertEqual(name[:i], l.name) for i, l in enumerate(lineage)]
+        [self.assertEqual(name[:len(l.name)], l.name) for i, l in enumerate(lineage)]
         return
 
     def test_select(self):
@@ -121,9 +121,9 @@ class TestManifold(unittest.TestCase):
             self.assertIsInstance(self.manifold.select(cluster.name), Cluster)
         else:
             with self.assertRaises(ValueError):
-                self.manifold.select(cluster.name + '1')
+                self.manifold.select(cluster.name + '01')
             with self.assertRaises(ValueError):
-                self.manifold.select(cluster.name + '111111111111111111111111111')
+                self.manifold.select(cluster.name + '01110110')
         return
 
     def test_optimal_in_graph(self):
