@@ -137,10 +137,10 @@ class TestCluster(unittest.TestCase):
         m = Manifold(data, 'euclidean')
         m.build_tree(criterion.MinPoints(10), criterion.MaxDepth(5))
         # Finding points that are in data.
-        for depth, graph in enumerate(m.graphs):
+        for depth, graph in enumerate(m.layers):
             for cluster in graph:
                 linear = set([c for c in graph if c.overlaps(cluster.medoid, cluster.radius)])
-                tree = set(next(iter(m.graphs[0])).tree_search(cluster.medoid, cluster.radius, cluster.depth).keys())
+                tree = set(next(iter(m.layers[0])).tree_search(cluster.medoid, cluster.radius, cluster.depth).keys())
                 self.assertSetEqual(set(), tree - linear)
                 for d in range(depth, 0, -1):
                     parents = set([m.select(cluster.name[:-1]) for cluster in linear])
@@ -149,7 +149,7 @@ class TestCluster(unittest.TestCase):
                         self.assertIn(parent, results, msg=f'\n{parent.name} not in {[c.name for c in results]}. '
                                                            f'got {len(results)} hits.')
         # Attempting to find points that *may* be in the data
-        c: Cluster = next(iter(m.graphs[0]))
+        c: Cluster = next(iter(m.layers[0]))
         results = c.tree_search(np.asarray([0, 1]), 0., -1)
         self.assertEqual(0, len(results))
         with self.assertRaises(ValueError):

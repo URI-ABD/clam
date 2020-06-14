@@ -21,7 +21,7 @@ class TestManifold(unittest.TestCase):
 
     def test_init(self):
         m = Manifold(self.data, 'euclidean')
-        self.assertEqual(1, len(m.graphs))
+        self.assertEqual(1, len(m.layers))
 
         m = Manifold(self.data, 'euclidean', [1, 2, 3])
         self.assertListEqual([1, 2, 3], m.argpoints)
@@ -50,7 +50,7 @@ class TestManifold(unittest.TestCase):
         return
 
     def test_iter(self):
-        self.assertListEqual(self.manifold.graphs, list(iter(self.manifold)))
+        self.assertListEqual(self.manifold.layers, list(iter(self.manifold)))
         return
 
     def test_str(self):
@@ -85,26 +85,26 @@ class TestManifold(unittest.TestCase):
 
     def test_build(self):
         m = Manifold(self.data, 'euclidean').build(criterion.MaxDepth(1))
-        self.assertEqual(2, len(m.graphs))
+        self.assertEqual(2, len(m.layers))
         m.build(criterion.MaxDepth(2))
-        self.assertEqual(3, len(m.graphs))
+        self.assertEqual(3, len(m.layers))
         m.build()
-        self.assertEqual(len(self.data), m.optimal_graph.population)
+        self.assertEqual(len(self.data), m.graph.population)
         return
 
     def test_build_tree(self):
         m = Manifold(self.data, 'euclidean')
-        self.assertEqual(1, len(m.graphs))
+        self.assertEqual(1, len(m.layers))
 
         m.build_tree(criterion.AddLevels(2))
-        self.assertEqual(3, len(m.graphs))
+        self.assertEqual(3, len(m.layers))
 
         # MaxDepth shouldn't do anything in build_tree if we're beyond that depth already.
         m.build_tree(criterion.MaxDepth(1))
-        self.assertEqual(3, len(m.graphs))
+        self.assertEqual(3, len(m.layers))
 
         m.build_tree()
-        self.assertEqual(len(self.data), m.graphs[-1].cardinality)
+        self.assertEqual(len(self.data), m.layers[-1].cardinality)
         return
 
     def test_ancestry(self):
@@ -117,7 +117,7 @@ class TestManifold(unittest.TestCase):
 
     def test_select(self):
         cluster = None
-        for cluster in self.manifold.graphs[-1]:
+        for cluster in self.manifold.layers[-1]:
             self.assertIsInstance(self.manifold.select(cluster.name), Cluster)
         else:
             with self.assertRaises(ValueError):
@@ -129,29 +129,31 @@ class TestManifold(unittest.TestCase):
     def test_optimal_in_graph(self):
         data, labels = datasets.bullseye()
         manifold = Manifold(data, 'euclidean').build(criterion.MaxDepth(12))
-        for cluster in manifold.optimal_graph:
+        for cluster in manifold.graph:
             self.assertTrue(cluster.optimal)
 
+    # noinspection DuplicatedCode
     def test_neighbors(self):
-        for dataset in [datasets.bullseye, datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
+        for dataset in [datasets.bullseye, ]:  # datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
             data, labels = dataset()
             manifold = Manifold(data, 'euclidean')
             manifold.build(criterion.MaxDepth(12))
 
-            clusters = manifold.optimal_graph.clusters
-            for cluster in clusters:
-                potential_neighbors = [c for c in manifold.optimal_graph if c.name != cluster.name]
+            for cluster in manifold.graph.clusters:
+                potential_neighbors = [c for c in manifold.graph.clusters if c.name != cluster.name]
                 argcenters = [c.argmedoid for c in potential_neighbors]
                 distances = list(cluster.distance_from(argcenters))
                 radii = [cluster.radius + c.radius for c in potential_neighbors]
                 true_neighbors = {c: d for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
-                neighbors = {edge.neighbor: edge.distance for edge in clusters[cluster]}
+                neighbors = {edge.neighbor: edge.distance for edge in manifold.graph.clusters[cluster]}
 
                 extras = set(neighbors.keys()) - set(true_neighbors.keys())
-                self.assertEqual(0, len(extras), msg=f'missed some neighbors: {[(c.name, neighbors[c], cluster.radius + c.radius) for c in extras]}')
+                self.assertEqual(0, len(extras), msg=f'got extra neighbors: optimal, true {len(true_neighbors)}, actual {len(neighbors)}\n'
+                                                     + "\n".join([f"{c.name}, {cluster.radius + c.radius:.6f}" for c in extras]))
 
                 missed = set(true_neighbors.keys()) - set(neighbors.keys())
-                self.assertEqual(0, len(missed), msg=f'missed some neighbors: {[(c.name, neighbors[c], cluster.radius + c.radius) for c in missed]}')
+                self.assertEqual(0, len(missed), msg=f'missed some neighbors: optimal, true {len(true_neighbors)}, actual {len(neighbors)}\n'
+                                                     + '\n'.join([f'{c.name}, {cluster.radius + c.radius:.6f}' for c in missed]))
             return
 
     def test_dump(self):
@@ -166,10 +168,10 @@ class TestManifold(unittest.TestCase):
             fp.seek(0)
             loaded = Manifold.load(fp, self.data)
         self.assertEqual(original, loaded)
-        self.assertEqual(set(original.graphs[-1]), set(loaded.graphs[-1]))
-        self.assertEqual(original.optimal_graph, loaded.optimal_graph)
+        self.assertEqual(set(original.layers[-1]), set(loaded.layers[-1]))
+        self.assertEqual(original.graph, loaded.graph)
 
-        for layer in loaded.graphs:
+        for layer in loaded.layers:
             for cluster in layer:
                 self.assertIn('_radius', cluster.__dict__)
                 self.assertIn('_argradius', cluster.__dict__)

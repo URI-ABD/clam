@@ -14,7 +14,7 @@ class TestManifoldFunctional(unittest.TestCase):
         m = Manifold(data, 'euclidean')
         m.build()
         # With no constraints, clusters should be singletons.
-        self.assertEqual(data.shape[0], m.optimal_graph.population)
+        self.assertEqual(data.shape[0], m.graph.population)
         self.assertEqual(1, len(m.find_clusters(data[0], 0., -1)))
         self.assertEqual(1, len(m.find_points(data[0], 0.)))
         return
@@ -35,10 +35,10 @@ class TestManifoldFunctional(unittest.TestCase):
         m = Manifold(data, 'euclidean')
         m.build()
         # There should only ever be one cluster here.
-        self.assertEqual(1, len(m.graphs))
+        self.assertEqual(1, len(m.layers))
         m.build_tree()
         # Even after explicit deepen calls.
-        self.assertEqual(1, len(m.graphs))
+        self.assertEqual(1, len(m.layers))
         self.assertEqual(1, len(m.find_clusters(np.asarray([1, 1, 1]), 0.0, -1)))
         # And, we should get all 1000 points back for any of the data.
         self.assertEqual(1000, len(m.find_points(data[0], 0.0)))
@@ -50,5 +50,5 @@ class TestManifoldFunctional(unittest.TestCase):
         m = Manifold(data, 'euclidean')
         # We expect building to stop with two clusters.
         m.build()
-        self.assertEqual(2, m.optimal_graph.cardinality, f'Expected 2 clusters, got {m.optimal_graph.cardinality}')
+        self.assertEqual(2, m.graph.cardinality, f'Expected 2 clusters, got {m.graph.cardinality}')
         return

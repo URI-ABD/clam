@@ -47,7 +47,7 @@ class TestCriterion(unittest.TestCase):
     def test_combinations(self):
         min_points, max_depth = 10, 8
         self.manifold.build(MinPoints(min_points), MaxDepth(max_depth))
-        [self.assertLessEqual(len(c.children), 1) for g in self.manifold.graphs for c in g
+        [self.assertLessEqual(len(c.children), 1) for g in self.manifold.layers for c in g
          if len(c.argpoints) <= min_points or c.depth >= max_depth]
         # self.plot()
         return
