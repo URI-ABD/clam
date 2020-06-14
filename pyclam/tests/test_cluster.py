@@ -39,7 +39,7 @@ class TestCluster(unittest.TestCase):
 
     def test_str(self):
         self.assertEqual('root', str(self.cluster))
-        self.assertSetEqual({'1', '2'}, set([str(c) for c in self.children]))
+        self.assertListEqual(['0', '01'], [str(c) for c in self.children])
         return
 
     def test_repr(self):
@@ -134,26 +134,25 @@ class TestCluster(unittest.TestCase):
     def test_tree_search(self):
         np.random.seed(42)
         data, labels = datasets.line()
-        m = Manifold(data, 'euclidean')
-        m.build_tree(criterion.MinPoints(10), criterion.MaxDepth(5))
+        manifold = Manifold(data, 'euclidean')
+        manifold.build_tree(criterion.MinPoints(10), criterion.MaxDepth(5))
         # Finding points that are in data.
-        for depth, graph in enumerate(m.layers):
-            for cluster in graph:
-                linear = set([c for c in graph if c.overlaps(cluster.medoid, cluster.radius)])
-                tree = set(next(iter(m.layers[0])).tree_search(cluster.medoid, cluster.radius, cluster.depth).keys())
+        for depth, layer in enumerate(manifold.layers):
+            for cluster in layer.clusters:
+                linear = set([c for c in layer if c.overlaps(cluster.medoid, cluster.radius)])
+                tree = set(next(iter(manifold.layers[0])).tree_search(cluster.medoid, cluster.radius, cluster.depth).keys())
                 self.assertSetEqual(set(), tree - linear)
                 for d in range(depth, 0, -1):
-                    parents = set([m.select(cluster.name[:-1]) for cluster in linear])
+                    parents = set([manifold.select(cluster.name[:-1]) for cluster in linear])
                     for parent in parents:
                         results = parent.tree_search(cluster.medoid, cluster.radius, parent.depth)
                         self.assertIn(parent, results, msg=f'\n{parent.name} not in {[c.name for c in results]}. '
                                                            f'got {len(results)} hits.')
         # Attempting to find points that *may* be in the data
-        c: Cluster = next(iter(m.layers[0]))
-        results = c.tree_search(np.asarray([0, 1]), 0., -1)
+        results = manifold.root.tree_search(point=np.asarray([0, 1]), radius=0., depth=-1)
         self.assertEqual(0, len(results))
         with self.assertRaises(ValueError):
-            _ = c.tree_search(np.asarray([0, 1]), 0., -5)
+            _ = manifold.root.tree_search(point=np.asarray([0, 1]), radius=0., depth=-5)
         return
 
     def test_partition(self):

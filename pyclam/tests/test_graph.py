@@ -66,8 +66,8 @@ class TestGraph(unittest.TestCase):
 
     def test_subgraphs(self):
         subgraphs = self.manifold.graph.subgraphs
-        [self.assertIsInstance(g, Graph) for g in subgraphs]
-        self.assertEqual(sum(g.cardinality for g in subgraphs), self.manifold.graph.cardinality)
+        [self.assertIsInstance(subgraph, Graph) for subgraph in subgraphs]
+        self.assertEqual(sum(subgraph.cardinality for subgraph in subgraphs), self.manifold.graph.cardinality)
         return
 
     def test_clear_cache(self):
@@ -79,22 +79,20 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_bft(self):
-        g = self.manifold.graph.bft(next(iter(self.manifold.graph)))
-        self.assertGreater(len(g), 0)
-        self.assertLessEqual(len(g), self.manifold.graph.cardinality)
+        visited = self.manifold.graph.bft(next(iter(self.manifold.graph)))
+        self.assertGreater(len(visited), 0)
+        self.assertLessEqual(len(visited), self.manifold.graph.cardinality)
         return
 
     def test_dft(self):
-        g = self.manifold.graph.dft(next(iter(self.manifold.graph)))
-        self.assertGreater(len(g), 0)
-        self.assertLessEqual(len(g), self.manifold.graph.cardinality)
+        visited = self.manifold.graph.dft(next(iter(self.manifold.graph)))
+        self.assertGreater(len(visited), 0)
+        self.assertLessEqual(len(visited), self.manifold.graph.cardinality)
         return
 
     def test_random_walks(self):
-        # manifold = self.manifold.build(MaxDepth(10))
-        g = self.manifold.graph
-        results = g.random_walks(list(g.clusters), 250)
-        print(sum(results.values()))
+        graph = self.manifold.graph
+        results = graph.random_walks(list(graph.clusters), 100)
         self.assertGreater(len(results), 0)
         [self.assertGreaterEqual(v, 0) for k, v in results.items()]
         return
