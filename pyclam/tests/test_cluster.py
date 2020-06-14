@@ -128,7 +128,7 @@ class TestCluster(unittest.TestCase):
 
     def test_clear_cache(self):
         self.cluster.clear_cache()
-        self.assertNotIn('_argsamples', self.cluster.__dict__)
+        self.assertNotIn('argsamples', self.cluster.cache)
         return
 
     def test_tree_search(self):
