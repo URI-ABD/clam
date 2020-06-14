@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "pyclam"
-version = "0.2.2"
-description = ""
-authors = ["Tom <info@tomhoward.codes>"]
+version = "0.2.3"
+description = "Clustered Learning of Approximate Manifolds"
+authors = ["Tom <info@tomhoward.codes>", "Najib <najib_ishaq@zoho.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
