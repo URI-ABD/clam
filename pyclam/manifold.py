@@ -652,7 +652,7 @@ class Graph:
     def subgraph(self, cluster: 'Cluster') -> 'Graph':
         """ Returns the subgraph to which the cluster belongs. """
         for subgraph in self.subgraphs:
-            if cluster in subgraph.clusters:
+            if cluster in subgraph.edges:
                 return subgraph
         else:
             raise ValueError(f'cluster {cluster.name} not found in and subgraph.')
