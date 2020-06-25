@@ -12,7 +12,7 @@ class TestGraph(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         np.random.seed(42)
-        cls.data, _ = datasets.bullseye()
+        cls.data, _ = datasets.bullseye(n=1000, num_rings=2)
         cls.manifold = Manifold(cls.data, 'euclidean')
         cls.manifold.build(MaxDepth(10))
         return
@@ -45,7 +45,7 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_str(self):
-        self.assertEqual(self.manifold.graph.cardinality, len(str(self.manifold.graph).split(', ')))
+        self.assertEqual(self.manifold.graph.cardinality, len(str(self.manifold.graph).split(',')))
         return
 
     def test_repr(self):
@@ -57,42 +57,45 @@ class TestGraph(unittest.TestCase):
         self.assertNotIn(root, self.manifold.graph)
         return
 
-    def test_edges(self):
-        v = self.manifold.graph
-        e = self.manifold.graph.edges
-        self.assertGreaterEqual(len(e), 0)
-        self.assertLessEqual(len(e), v.cardinality * (v.cardinality - 1) / 2)
+    def test_cached_edges(self):
+        self.assertGreaterEqual(len(self.manifold.graph.cached_edges), 0)
+        self.assertLessEqual(len(self.manifold.graph.cached_edges), self.manifold.graph.cardinality * (self.manifold.graph.cardinality - 1) / 2)
+        self.assertEqual(
+            sum(len(self.manifold.graph.edges[cluster]) for cluster in self.manifold.graph.clusters),
+            len(self.manifold.graph.cached_edges),
+        )
         return
 
     def test_subgraphs(self):
-        subgraphs = self.manifold.graph.subgraphs
-        [self.assertIsInstance(subgraph, Graph) for subgraph in subgraphs]
-        self.assertEqual(sum(subgraph.cardinality for subgraph in subgraphs), self.manifold.graph.cardinality)
+        [self.assertIsInstance(subgraph, Graph) for subgraph in self.manifold.graph.subgraphs]
+        self.assertEqual(self.manifold.graph.cardinality, sum(subgraph.cardinality for subgraph in self.manifold.graph.subgraphs))
         return
 
     def test_clear_cache(self):
         self.manifold.graph.clear_cache()
-        _ = self.manifold.graph.edges
+        _ = self.manifold.graph.cached_edges
         self.assertIn('edges', self.manifold.graph.cache)
         self.manifold.graph.clear_cache()
         self.assertNotIn('edges', self.manifold.graph.cache)
         return
 
     def test_bft(self):
-        visited = self.manifold.graph.bft(next(iter(self.manifold.graph)))
+        visited = self.manifold.graph.bft(next(iter(self.manifold.graph.transition_clusters)))
         self.assertGreater(len(visited), 0)
         self.assertLessEqual(len(visited), self.manifold.graph.cardinality)
         return
 
     def test_dft(self):
-        visited = self.manifold.graph.dft(next(iter(self.manifold.graph)))
+        visited = self.manifold.graph.dft(next(iter(self.manifold.graph.transition_edges)))
         self.assertGreater(len(visited), 0)
         self.assertLessEqual(len(visited), self.manifold.graph.cardinality)
         return
 
     def test_random_walks(self):
-        graph = self.manifold.graph
-        results = graph.random_walks(list(graph.clusters), 100)
+        results = self.manifold.graph.random_walks(
+            starts=list(self.manifold.graph.transition_clusters),
+            steps=100,
+        )
         self.assertGreater(len(results), 0)
-        [self.assertGreaterEqual(v, 0) for k, v in results.items()]
+        [self.assertGreater(v, 0) for k, v in results.items()]
         return

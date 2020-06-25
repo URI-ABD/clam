@@ -10,7 +10,7 @@ from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam.types import Data, Radius, Vector, Metric, Edge
+from pyclam.types import Data, Radius, Vector, Metric, Edge, CacheEdge
 
 SUBSAMPLE_LIMIT = 100
 BATCH_SIZE = 10_000
@@ -54,9 +54,12 @@ class Cluster:
 
         # list of candidate neighbors.
         # This helps with a highly efficient neighbor search for clusters in the tree.
+        # Candidates have the following properties:
+        #     candidate.depth <= self.depth
+        #     self.distance_from([candidate.argmedoid]) <= candidate.radius + self.radius * 4
         self.candidates: Union[Dict['Cluster', float], None] = None
 
-        self.cache: Dict[str, Any] = {'optimal': False, 'absorbable': False}
+        self.cache: Dict[str, Any] = {'optimal': False}
         self.cache.update(**kwargs)
 
         # This is used while reading clusters from file during Cluster.from_json().
@@ -87,7 +90,7 @@ class Cluster:
 
     def __repr__(self) -> str:
         if 'repr' not in self.cache:
-            self.cache['repr'] = '-'.join([self.name, ', '.join(map(str, sorted(self.argpoints)))])
+            self.cache['repr'] = ': '.join([self.name, ', '.join(map(str, sorted(self.argpoints)))])
         return self.cache['repr']
 
     def __iter__(self) -> Vector:
@@ -226,14 +229,10 @@ class Cluster:
     def optimal(self) -> bool:
         return self.cache['optimal']
 
-    @property
-    def absorbable(self) -> bool:
-        return self.cache['absorbable']
-
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
         logging.debug(f'clearing cache for {self}')
-        self.cache = {'optimal': False, 'absorbable': False}
+        self.cache = {'optimal': False}
         return
 
     def overlaps(self, point: Data, radius: Radius) -> bool:
@@ -383,75 +382,119 @@ class Graph:
     Nodes in the Graph are Clusters.
     Two clusters have an edge if they have overlapping volumes.
     """
-    # TODO: Consider writing dump/load methods for Graph.
-
+    # TODO: Write dump/load methods for Graph.
     def __init__(self, *clusters):
         logging.debug(f'Graph(clusters={[str(c) for c in clusters]})')
         assert all(isinstance(c, Cluster) for c in clusters)
 
-        # self.clusters is a dictionary of the clusters in the graph and the list of edges from that cluster.
-        # An Edge is a named tuple of Neighbor, Distance, and Transition Probability.
-        # Neighbor is is the neighboring cluster.
-        # Distance is the distance to that neighbor.
-        # Transition Probability is the probability that the edge gets picked during a random walk.
-        self.clusters: Dict[Cluster, Set[Edge]] = {c: None for c in clusters}
+        # self.edges is a dictionary of:
+        #       the clusters in the graph, and
+        #       the set of edges from that cluster.
+        # An Edge is a named tuple of Neighbor, Distance, and Probability.
+        # Edge.neighbor is is the neighboring cluster.
+        # Edge.distance is the distance to that neighbor.
+        # Edge.probability is sued to pick an edge during a random walk.
+        self.edges: Dict[Cluster, Set[Edge]] = {cluster: None
+                                                for cluster in clusters}
+
         self.cache: Dict[str, Any] = {'optimal': False}
         return
 
-    def __eq__(self, other: 'Graph') -> bool:  # TODO: Cover, Consider comparing edges as well.
-        """ Two graphs are identical if they are composed of the same clusters. """
-        return set(self.clusters.keys()) == set(other.clusters.keys())
+    def __eq__(self, other: 'Graph') -> bool:
+        """ Two graphs are identical if they have the same clusters and edges.
+        """
+        return (set(self.clusters) == set(other.clusters)
+                and all((
+                    set(self.edges[cluster]) == set(other.edges[cluster])
+                    for cluster in self.clusters
+                )))
 
-    def __bool__(self) -> bool:  # TODO: Cover
+    def __bool__(self) -> bool:
         return self.cardinality > 0
 
     def __iter__(self) -> Iterable[Cluster]:
         """ An iterator over the clusters in the graph. """
-        yield from self.clusters.keys()
+        yield from self.edges
 
     def __str__(self) -> str:
-        if 'str' not in self.cache:  # Cashing value because sort can be expensive on many clusters.
-            self.cache['str'] = ', '.join(sorted([str(c) for c in self.clusters.keys()]))
+        # Cashing value because sort can be expensive on many clusters.
+        if 'str' not in self.cache:
+            self.cache['str'] = ','.join(sorted(list(map(str, self.clusters))))
         return self.cache['str']
 
     def __repr__(self) -> str:
-        if 'repr' not in self.cache:  # Cashing value because sort can be expensive on many clusters.
-            self.cache['repr'] = '\n'.join(sorted([repr(c) for c in self.clusters.keys()]))
+        # Cashing value because sort can be expensive on many clusters.
+        if 'repr' not in self.cache:
+            self.cache['repr'] = '\n'.join(sorted(list(map(repr, self.clusters))))
         return self.cache['repr']
 
     def __hash__(self):
         return hash(str(self))
 
     def __contains__(self, cluster: 'Cluster') -> bool:
-        return cluster in self.clusters.keys()
+        return cluster in self.clusters
 
     @property
     def cardinality(self) -> int:
-        return len(self.clusters.keys())
+        return len(self.edges)
 
     @property
     def population(self) -> int:
-        return sum((c.cardinality for c in self.clusters))
+        return sum((cluster.cardinality for cluster in self.clusters))
 
     @property
     def manifold(self) -> 'Manifold':
-        return next(iter(self.clusters.keys())).manifold
+        return next(iter(self.edges)).manifold
 
     @property
     def metric(self) -> Metric:
-        return next(iter(self.clusters.keys())).metric
+        return next(iter(self.edges)).metric
 
     @property
     def depth(self) -> int:
         if 'depth' not in self.cache:
-            self.cache['depth'] = max((c.depth for c in self.clusters.keys()))
+            self.cache['depth'] = max((cluster.depth for cluster in self.clusters))
         return self.cache['depth']
 
     @property
     def optimal(self) -> bool:
         return self.cache['optimal']
 
+    @property
+    def clusters(self) -> Iterable[Cluster]:
+        return self.edges.keys()
+
+    @property
+    def subsumed_clusters(self) -> Set[Cluster]:
+        """ Set of Clusters subsumed by other clusters. """
+        if 'subsumed_clusters' not in self.cache:
+            self.build_edges()
+        return self.cache['subsumed_clusters']
+
+    @property
+    def transition_clusters(self) -> Set[Cluster]:
+        """ Set of Clusters not subsumed by other clusters. """
+        if 'transition_clusters' not in self.cache:
+            self.build_edges()
+        return self.cache['transition_clusters']
+
+    @property
+    def subsumed_edges(self) -> Dict[Cluster, Set[Edge]]:
+        """ Dict of all Clusters to set of edges to every subsumed cluster. """
+        if 'subsumed_edges' not in self.cache:
+            self.build_edges()
+        return self.cache['subsumed_edges']
+
+    @property
+    def transition_edges(self) -> Dict[Cluster, Set[Edge]]:
+        """ Transition Clusters are those not subsumed by any other Cluster. """
+        if 'transition_edges' not in self.cache:
+            self.build_edges()
+        return self.cache['transition_edges']
+
     def _find_neighbors(self, cluster: Cluster):
+        logging.debug(f'building edges for cluster {cluster.name}')
+
         # Dict of candidate neighbors and distances to neighbors.
         radius: float = cluster.manifold.root.radius
 
@@ -462,73 +505,151 @@ class Graph:
 
             # This ensures that candidates are calculated once per cluster
             if ancestry[depth + 1].candidates is None:
-                # Keep optimal clusters as candidate neighbors
-                candidates: Dict[Cluster, float] = {c: 0. for c in ancestry[depth].candidates if c.optimal}
+                # Keep candidates from parent
+                candidates: Dict[Cluster, float] = {
+                    c: 0.
+                    for c in ancestry[depth].candidates
+                }
 
                 # Get all children of candidates at the same depth.
-                candidates.update({child: 0. for c in ancestry[depth].candidates for child in c.children if c.depth == depth})
+                candidates.update({
+                    child: 0.
+                    for c in ancestry[depth].candidates
+                    for child in c.children
+                    if c.depth == depth
+                })
 
                 if len(candidates) > 0:
-                    distances = ancestry[depth + 1].distance_from([c.argmedoid for c in candidates])
-                    ancestry[depth + 1].candidates = {c: d for c, d in zip(candidates.keys(), distances) if d <= c.radius + radius * 4}
+                    distances = ancestry[depth + 1].distance_from(
+                        x1=[c.argmedoid for c in candidates],
+                    )
+                    ancestry[depth + 1].candidates = {
+                        c: float(d)
+                        for c, d in zip(candidates, distances)
+                        if d <= c.radius + radius * 4
+                    }
                 else:
                     ancestry[depth + 1].candidates = dict()
 
-        candidates = {c: d for c, d in cluster.candidates.items() if c in self.clusters}
-        self.clusters[cluster] = {Edge(c, d, 0.) for c, d in candidates.items() if d <= cluster.radius + c.radius}
+        candidates = {
+            c: d for c, d in cluster.candidates.items()
+            if c in self.clusters
+        }
+        self.edges[cluster] = {
+            Edge(c, d, None)
+            for c, d in candidates.items()
+            if d <= cluster.radius + c.radius
+        }
+        return
+
+    def _mark_subsumed_clusters(self):
+        logging.debug(f'marking subsumed clusters for graph: '
+                      f'depth {self.depth}, clusters : {self.cardinality}')
+        # Find the set of Subsumed Clusters.
+        self.cache['subsumed_clusters'] = {
+            cluster for cluster in self.clusters
+            for edge in self.edges[cluster]
+            if edge.distance <= edge.neighbor.radius - cluster.radius
+        }
+
+        self.cache['transition_clusters'] = set(self.clusters) - self.cache['subsumed_clusters']
+
+        self.cache['subsumed_edges'] = {
+            cluster: {
+                edge for edge in self.edges[cluster]
+                if edge.neighbor in self.cache['subsumed_clusters']
+            } for cluster in self.clusters
+        }
+
+        # Populate the set of Transition Clusters.
+        self.cache['transition_edges'] = {
+            cluster: {
+                edge for edge in self.edges[cluster]
+                if edge.neighbor not in self.cache['subsumed_clusters']
+            } for cluster in self.clusters
+            if cluster not in self.cache['subsumed_clusters']
+        }
+        return
+
+    def _compute_transition_probabilities(self):
+        logging.debug(f'computing transition probabilities for graph: '
+                      f'depth {self.depth}, clusters : {self.cardinality}')
+        for cluster in self.cache['transition_edges']:
+            # Compute transition probabilities.
+            # These only exist among Transition Clusters.
+            if len(self.cache['transition_edges'][cluster]) > 0:
+                factor = sum((
+                    1. / distance
+                    for (_, distance, _) in self.cache['transition_edges'][cluster]
+                ))
+                self.cache['transition_edges'][cluster] = {
+                    Edge(neighbor, distance, 1 / (distance * factor))
+                    for (neighbor, distance, _) in self.cache['transition_edges'][cluster]
+                }
+
+                factor = sum((probability for (_, _, probability) in self.cache['transition_edges'][cluster]))
+                assert abs(factor - 1.) <= 1e-6, f'transition probabilities did not sum to 1 for cluster {cluster.name}. Got {factor:.8f} instead.'
         return
 
     def build_edges(self) -> None:
         """ Calculates edges for the graph. """
-        [self._find_neighbors(c) for c in self.clusters]  # build edges
-        for cluster in self.clusters:  # handshake between all neighbors
-            for (neighbor, distance, transition_probability) in self.clusters[cluster]:
-                self.clusters[neighbor].add(Edge(cluster, distance, transition_probability))
+        # build edges
+        [self._find_neighbors(cluster) for cluster in self.clusters]
 
-        for cluster in self.clusters:
-            if (cluster, 0., 0.) in self.clusters[cluster]:  # Remove edges to self
-                self.clusters[cluster].remove(Edge(cluster, 0., 0.))
+        # handshake between all neighbors
+        [self.edges[neighbor].add(Edge(cluster, distance, None))
+         for cluster, edges in self.edges.items()
+         for (neighbor, distance, _) in edges]
 
-            if len(self.clusters[cluster]) > 0:  # Compute transition probabilities, only after handshakes.
-                _sum = sum([1 / edge.distance for edge in self.clusters[cluster]])
-                self.clusters[cluster] = {Edge(edge.neighbor, edge.distance, 1 / (edge.distance * _sum)) for edge in self.clusters[cluster]}
+        # Remove edges to self
+        [self.edges[cluster].remove(Edge(cluster, 0., None))
+         for cluster, edges in self.edges.items()
+         if (cluster, 0., None) in edges]
 
-                _sum = sum([edge.transition_probability for edge in self.clusters[cluster]])
-                assert abs(_sum - 1.) <= 1e-6, f'transition probabilities did not sum to 1 for cluster {cluster.name}. Got {_sum:.8f} instead.'
+        self._mark_subsumed_clusters()
+        self._compute_transition_probabilities()
         return
 
     @property
-    def edges(self) -> Set[Edge]:
-        # TODO: Change return type to indicate source cluster for each edge.
+    def cached_edges(self) -> Set[CacheEdge]:
         """ Returns all edges within the graph. """
         if 'edges' not in self.cache:
-            logging.debug(f'building _edges cache for {self}')
-            if any((edges is None for edges in self.clusters.values())):
+            logging.debug(f'building edges cache for {self}')
+            if any((edges is None for edges in self.edges.values())):
                 self.build_edges()
 
-            edges: Set[Edge] = set()
-            [edges.update(e) for e in self.clusters.values()]
-            self.cache['edges'] = edges
+            self.cache['edges'] = {
+                CacheEdge(cluster, *edge)
+                for cluster, edges in self.edges.items()
+                for edge in edges
+            }
 
         return self.cache['edges']
 
     @property
     def subgraphs(self) -> Set['Graph']:
         """ Returns all subgraphs within the graph. """
+        if any((edges is None for edges in self.edges.values())):
+            self.build_edges()
+
         if 'subgraphs' not in self.cache:
             self.cache['subgraphs'] = set()
-            if any((edges is None for edges in self.clusters.values())):
-                self.build_edges()
 
-            unvisited = {c for c in self.clusters}
+            unvisited: Set[Cluster] = {
+                cluster for cluster in self.transition_clusters
+            }
             while unvisited:
                 component = self.traverse(unvisited.pop())
-                unvisited -= component
+                unvisited = {
+                    cluster for cluster in unvisited
+                    if cluster not in component
+                }
+
                 self.cache['subgraphs'].add(Graph(*component))
 
         return self.cache['subgraphs']
 
-    def subgraph(self, cluster: 'Cluster') -> 'Graph':  # TODO: Cover
+    def subgraph(self, cluster: 'Cluster') -> 'Graph':
         """ Returns the subgraph to which the cluster belongs. """
         for subgraph in self.subgraphs:
             if cluster in subgraph.clusters:
@@ -538,75 +659,181 @@ class Graph:
 
     def clear_cache(self) -> None:
         """ Clears the cache of the graph. """
+        # Clear all cached values and edges.
         self.cache = {'optimal': self.cache['optimal']}
-        # Clear all cached edges.
-        self.clusters = {c: None for c in self.clusters.keys()}
+        self.edges = {cluster: None for cluster in self.edges}
         return
 
-    def neighbors(self, cluster: Cluster) -> Dict[Cluster, float]:
-        """ return all neighbors of a given cluster. """
-        if self.clusters[cluster] is None:
-            self.build_edges()
-        return {edge.neighbor: edge.distance for edge in self.clusters[cluster]}
+    # noinspection DuplicatedCode
+    def neighbors(
+            self,
+            cluster: Cluster,
+            *,
+            choice: str = 'all',
+    ) -> List[Cluster]:
+        """ return neighbors of a given cluster.
 
-    def distances(self, cluster: Cluster) -> List[float]:
+        :param cluster: source cluster
+        :param choice: 'all' for all neighbors,
+                       'transition' for only those that are not subsumed,
+                       'subsumed' for only those that are subsumed.
+        :return:
+        """
+        if self.edges[cluster] is None:
+            self.build_edges()
+
+        if choice == 'all':
+            return [edge.neighbor for edge in self.edges[cluster]]
+        elif choice == 'transition':
+            return [edge.neighbor for edge in self.transition_edges[cluster]]
+        elif choice == 'subsumed':
+            return [edge.neighbor for edge in self.subsumed_edges[cluster]]
+        else:
+            raise ValueError(f'choice must be one of: '
+                             f'\'all\', '
+                             f'\'transition\', or '
+                             f'\'subsumed\'. '
+                             f'Got: {choice}')
+
+    # noinspection DuplicatedCode
+    def distances(
+            self,
+            cluster: Cluster,
+            *,
+            choice: str = 'all',
+    ) -> List[float]:
         """ return distances to each neighbor of a given cluster. """
-        if self.clusters[cluster] is None:
+        if self.edges[cluster] is None:
             self.build_edges()
-        return [edge.distance for edge in self.clusters[cluster]]
 
-    def transition_probabilities(self, cluster: Cluster) -> List[float]:
-        """ return transition probabilities to each neighbor of a given cluster. """
-        if self.clusters[cluster] is None:
+        if choice == 'all':
+            return [edge.distance for edge in self.edges[cluster]]
+        elif choice == 'transition':
+            return [edge.distance for edge in self.transition_edges[cluster]]
+        elif choice == 'subsumed':
+            return [edge.distance for edge in self.subsumed_edges[cluster]]
+        else:
+            raise ValueError(f'choice must be one of: '
+                             f'\'all\', '
+                             f'\'transition\', or '
+                             f'\'subsumed\'. '
+                             f'Got: {choice}')
+
+    # noinspection DuplicatedCode
+    def probabilities(
+            self,
+            cluster: Cluster,
+            *,
+            choice: str = 'all',
+    ) -> List[float]:
+        """ return transition probabilities to each neighbor of a given cluster.
+        """
+        if self.edges[cluster] is None:
             self.build_edges()
-        return [edge.transition_probability for edge in self.clusters[cluster]]
+
+        if choice == 'all':
+            return [edge.probability for edge in self.edges[cluster]]
+        elif choice == 'transition':
+            return [edge.probability for edge in self.transition_edges[cluster]]
+        elif choice == 'subsumed':
+            return [edge.probability for edge in self.subsumed_edges[cluster]]
+        else:
+            raise ValueError(f'choice must be one of: '
+                             f'\'all\', '
+                             f'\'transition\', or '
+                             f'\'subsumed\'. '
+                             f'Got: {choice}')
 
     def random_walks(
             self,
-            clusters: Union[str, List[str], Cluster, List[Cluster]],
-            steps: int
+            starts: Union[str, List[str], Cluster, List[Cluster]],
+            steps: int,
     ) -> Dict[Cluster, int]:
         """ Performs random walks, counting visitations of each cluster.
 
-        :param clusters: Clusters at which to start the random walks.
+        :param starts: Clusters at which to start the random walks.
         :param steps: number of steps to take per walk.
         :returns a dictionary of cluster to visit count.
         """
         if self.cardinality < 2:
-            return {c: 1 for c in self.clusters}  # TODO: Cover
+            return {cluster: 1 for cluster in self.clusters}
 
-        if type(clusters) in {Cluster, str}:
-            clusters = [clusters]  # TODO: Cover
-        if type(clusters) is list and type(clusters[0]) is str:
-            clusters = [self.manifold.select(cluster) for cluster in clusters]  # TODO: Cover
+        if type(starts) in {Cluster, str}:
+            starts = [starts]
+        if type(starts) is list and type(starts[0]) is str:
+            starts = [self.manifold.select(cluster) for cluster in starts]
 
-        if any((edges is None for edges in self.clusters.values())):
+        if any((edges is None for edges in self.edges.values())):
             self.build_edges()
 
-        counts = {c: 0 for c in self.clusters}
-        counts.update({c: 1 for c in clusters})
+        if any((cluster not in self.transition_clusters for cluster in starts)):
+            raise ValueError(f'random walks may only be started at clusters '
+                             f'that are not subsumed by other clusters.')
+
+        counts = {
+            cluster: 1 if cluster in starts else 0
+            for cluster in self.clusters
+        }
 
         # initialize walk locations.
-        walks = [cluster for cluster in clusters if len(self.clusters[cluster]) > 0]
+        walks = [
+            cluster for cluster in starts
+            if len(self.transition_edges[cluster]) > 0
+        ]
         for _ in range(steps):
             # update walk locations
-            walks = [np.random.choice(a=list(self.neighbors(cluster).keys()), p=self.transition_probabilities(cluster)) for cluster in walks]
-            for c in walks:  # increment visit count for each location
-                counts[c] += 1
+            walks = [
+                np.random.choice(
+                    a=list(self.neighbors(cluster, choice='transition')),
+                    p=list(self.probabilities(cluster, choice='transition')),
+                ) for cluster in walks
+            ]
+            # increment visit counts
+            for cluster in walks:
+                counts[cluster] += 1
+
+        for cluster in self.transition_clusters:
+            counts.update({
+                neighbor: counts[cluster] + counts[neighbor]
+                for (neighbor, _, _) in self.subsumed_edges[cluster]
+            })
         return counts
 
     def traverse(self, start: Cluster) -> Set[Cluster]:
         """ Graph traversal starting at start. """
+        if any((edges is None for edges in self.edges.values())):
+            self.build_edges()
+
+        if start in self.subsumed_clusters:
+            raise ValueError(f'traversal may not start from subsumed clusters.')
+
         logging.debug(f'starting traversal from {start}')
         visited: Set[Cluster] = set()
         frontier: Set[Cluster] = {start}
+        # visit all reachable transition clusters
         while frontier:
             visited.update(frontier)
-            frontier = {neighbor for cluster in frontier for neighbor in (set(self.neighbors(cluster).keys()) - visited)}
+            frontier = {
+                neighbor for cluster in frontier
+                for neighbor in self.neighbors(cluster, choice='transition')
+                if neighbor not in visited
+            }
+
+        # include the clusters subsumed by visited transition clusters
+        visited.update({
+            edge.neighbor for cluster in visited
+            for edge in self.subsumed_edges[cluster]
+        })
         return visited
 
     def bft(self, start: Cluster) -> Set[Cluster]:
         """ Breadth-First Traversal starting at start. """
+        if any((edges is None for edges in self.edges.values())):
+            self.build_edges()
+
+        if start not in self.transition_clusters:
+            raise ValueError(f'traversal must not start from a subsumed cluster.')
+
         logging.debug(f'starting breadth-first-traversal from {start}')
         visited = set()
         queue = deque([start])
@@ -614,11 +841,27 @@ class Graph:
             cluster = queue.popleft()
             if cluster not in visited:
                 visited.add(cluster)
-                [queue.append(neighbor) for neighbor in self.neighbors(cluster)]
+                queue.extend((
+                    neighbor
+                    for neighbor in self.neighbors(cluster, choice='transition')
+                    if neighbor not in visited
+                ))
+
+        subsumed_visits = {
+            neighbor for cluster in visited
+            for neighbor in self.neighbors(cluster, choice='subsumed')
+        }
+        visited.update(subsumed_visits)
         return visited
 
     def dft(self, start: Cluster) -> Set[Cluster]:
         """ Depth-First Traversal starting at start. """
+        if any((edges is None for edges in self.edges.values())):
+            self.build_edges()
+
+        if start not in self.transition_clusters:
+            raise ValueError(f'traversal must not start from a subsumed cluster.')
+
         logging.debug(f'starting depth-first-traversal from {start}')
         visited = set()
         stack: List[Cluster] = [start]
@@ -626,7 +869,17 @@ class Graph:
             cluster = stack.pop()
             if cluster not in visited:
                 visited.add(cluster)
-                stack.extend(self.neighbors(cluster).keys())
+                stack.extend((
+                    neighbor
+                    for neighbor in self.neighbors(cluster, choice='transition')
+                    if neighbor not in visited
+                ))
+
+        subsumed_visits = {
+            neighbor for cluster in visited
+            for neighbor in self.neighbors(cluster, choice='subsumed')
+        }
+        visited.update(subsumed_visits)
         return visited
 
 
@@ -724,7 +977,7 @@ class Manifold:
 
         return cdist(x1, x2, metric=self.metric)
 
-    def lfd_range(self, percentiles: Tuple[float, float] = (90, 10)) -> Tuple[float, float]:
+    def lfd_range(self, percentiles: Tuple[float, float] = (90, 10)) -> Tuple[float, float, int]:
         """ Computes the lfd range used for marking optimal clusters. """
         lfd_range = [], []
         for depth in range(1, len(self.layers) - 1):
@@ -736,7 +989,14 @@ class Manifold:
                         q=percentiles,
                     )
                     lfd_range[0].append(lfds[0]), lfd_range[1].append(lfds[1])
-        return float(np.median(lfd_range[0])), float(np.median(lfd_range[1]))
+        if len(lfd_range[0]) > 0:
+            return float(np.median(lfd_range[0])), float(np.median(lfd_range[1])), self.depth - len(lfd_range[0])
+        else:
+            lfds = np.percentile(
+                a=[cluster.local_fractal_dimension for cluster in self.layers[-1]],
+                q=percentiles,
+            )
+            return float(lfds[0]), float(lfds[1]), self.depth
 
     def build(self, *criterion) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
@@ -762,7 +1022,8 @@ class Manifold:
         """ Builds the graph at the optimal depth, while also building each layer. """
         self.root.candidates = {self.root: 0.}
 
-        max_lfd, min_lfd = self.lfd_range(percentiles=(90, 10))
+        # TODO: replace lfd_range and mark methods with SelectionCriteria
+        max_lfd, min_lfd, grace_depth = self.lfd_range(percentiles=(90, 10))
         for depth in range(1, len(self.layers) - 1):
             if self.layers[depth + 1].cardinality < 2 ** (depth + 1):
                 [cluster.mark(max_lfd, min_lfd) for cluster in self.layers[depth].clusters]
@@ -775,8 +1036,11 @@ class Manifold:
             logging.info(f'depth: {depth}, clusters: {layer.cardinality}')
             layer.build_edges()
 
-        clusters: List[Cluster] = []
-        [clusters.extend([c for c in layer if c.optimal]) for layer in self.layers]
+        clusters: List[Cluster] = [
+            cluster for layer in self.layers
+            for cluster in layer.clusters
+            if cluster.optimal and cluster.depth == layer.depth
+        ]
 
         depths = [c.depth for c in clusters]
         logging.info(f'depths: ({min(depths)}, {max(depths)}), clusters: {len(clusters)}')
