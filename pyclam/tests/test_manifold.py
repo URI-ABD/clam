@@ -88,7 +88,6 @@ class TestManifold(unittest.TestCase):
         self.assertEqual(2, len(m.layers))
         m.build(criterion.MaxDepth(2))
         self.assertEqual(3, len(m.layers))
-        m.build()
         self.assertEqual(len(self.data), m.graph.population)
         return
 
@@ -132,7 +131,6 @@ class TestManifold(unittest.TestCase):
         for cluster in manifold.graph:
             self.assertTrue(cluster.optimal)
 
-    # noinspection DuplicatedCode
     def test_neighbors(self):
         for dataset in [datasets.bullseye, ]:  # datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
             data, labels = dataset()
@@ -145,7 +143,7 @@ class TestManifold(unittest.TestCase):
                 distances = list(cluster.distance_from(argcenters))
                 radii = [cluster.radius + c.radius for c in potential_neighbors]
                 true_neighbors = {c: d for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
-                neighbors = {edge.neighbor: edge.distance for edge in manifold.graph.clusters[cluster]}
+                neighbors = {edge.neighbor: edge.distance for edge in manifold.graph.edges[cluster]}
 
                 extras = set(neighbors.keys()) - set(true_neighbors.keys())
                 self.assertEqual(0, len(extras), msg=f'got extra neighbors: optimal, true {len(true_neighbors)}, actual {len(neighbors)}\n'
