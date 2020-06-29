@@ -1,66 +1,61 @@
 import unittest
 
-import pyclam.datasets as d
-import pyclam.manifold as m
-from pyclam.criterion import (
-    MinPoints,
-    MaxDepth,
-    MedoidNearCentroid,
-    UniformDistribution,
-)
+from pyclam import Manifold, datasets, criterion
 
 
+# noinspection SpellCheckingInspection
 class TestCriterion(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data = d.bullseye(n=500)[0]
+        cls.data = datasets.bullseye(n=500)[0]
         return
 
     def setUp(self) -> None:
-        self.manifold = m.Manifold(self.data, 'euclidean')
+        self.manifold = Manifold(self.data, 'euclidean')
         return
 
-    # def test_min_radius(self):
-    #     min_radius = 0.1
-    #     self.manifold.build(MinRadius(min_radius), MaxDepth(8))
-    #     self.assertTrue(all((c.radius >= min_radius for g in self.manifold for c in g)))
-    #     [self.assertLessEqual(len(c.children), 1) for g in self.manifold for c in g if c.radius <= min_radius]
-    #     return
-
-    # def test_min_cardinality(self):
-    #     data = d.random()[0]
-    #     self.manifold = m.Manifold(data, 'euclidean')
-    #     self.assertEqual(1, len(self.manifold.layers[-1].subgraphs))
-    #     self.manifold.build(MinCardinality(1))
-    #     self.assertGreater(len(self.manifold.layers[-1].subgraphs), 1)
-    #     self.assertTrue(all((len(c.neighbors) == 0) for c in self.manifold.layers[-1]))
-    #     return
-
-    # def test_min_neighborhood(self):
-    #     self.manifold.build(MinNeighborhood(5, 1), MaxDepth(8))
-    #     return
-
-    # def test_new_subgraph(self):
-    #     self.manifold.build(NewSubgraph(self.manifold))
-    #     return
+    def test_min_radius(self):
+        min_radius = 0.1
+        self.manifold.build(criterion.MinRadius(min_radius), criterion.MaxDepth(12))
+        self.assertTrue(all((
+            cluster.radius > min_radius
+            for layer in self.manifold.layers
+            for cluster in layer
+            if cluster.children
+        )))
+        self.assertTrue(all((
+            cluster.radius <= min_radius
+            for layer in self.manifold.layers
+            for cluster in layer
+            if not cluster.children
+        )))
+        return
 
     def test_combinations(self):
         min_points, max_depth = 10, 8
-        self.manifold.build(MinPoints(min_points), MaxDepth(max_depth))
+        self.manifold.build(criterion.MinPoints(min_points), criterion.MaxDepth(max_depth))
         [self.assertLessEqual(len(c.children), 1) for g in self.manifold.layers for c in g
          if len(c.argpoints) <= min_points or c.depth >= max_depth]
         # self.plot()
         return
 
     def test_medoid_near_centroid(self):
-        self.manifold.build(MedoidNearCentroid(), MaxDepth(8))
+        self.manifold.build(criterion.MedoidNearCentroid(), criterion.MaxDepth(8))
         # self.plot()
         return
 
     def test_uniform_distribution(self):
-        self.manifold.build(UniformDistribution(), MaxDepth(8))
+        self.manifold.build(criterion.UniformDistribution(), criterion.MaxDepth(8))
         # self.plot()
         return
+
+    def test_lfd_range(self):
+        self.manifold.build(criterion.MaxDepth(12), criterion.LFDRange(60, 50))
+
+        for leaf in self.manifold.layers[-1].clusters:
+            ancestry = self.manifold.ancestry(leaf)
+            included = sum((1 if ancestor in self.manifold.graph.clusters else 0 for ancestor in ancestry))
+            self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
 
     # def plot(self):
     #     from inspect import stack
