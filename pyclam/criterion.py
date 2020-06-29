@@ -188,3 +188,18 @@ class LFDRange(SelectionCriterion):
             inactive = {child for cluster in inactive for child in cluster.children}
 
         return selected
+
+
+class MinimizeSubsumed(GraphCriterion):
+    """
+    Minimize fraction of subsumed clusters in the graph.
+    Terminate early if fraction subsumed falls under the given threshold.
+    """
+    def __init__(self, fraction: float = 0.2):
+        if not (0. <= fraction <= 1.):
+            raise ValueError(f'fraction must be between 0 and 1. Got {fraction:.2f}')
+
+        self.fraction: float = fraction
+
+    def __call__(self, graph: Graph) -> Graph:
+        raise NotImplementedError
