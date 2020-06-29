@@ -16,7 +16,11 @@ class TestManifold(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.data, cls.labels = datasets.random(n=1000, dimensions=3)
-        cls.manifold = Manifold(cls.data, 'euclidean').build(criterion.MaxDepth(8))
+        cls.manifold = Manifold(cls.data, 'euclidean')
+        cls.manifold.build(
+            criterion.MaxDepth(8),
+            criterion.LFDRange(60, 50),
+        )
         return
 
     def test_init(self):
@@ -41,7 +45,10 @@ class TestManifold(unittest.TestCase):
 
     def test_eq(self):
         self.assertEqual(self.manifold, self.manifold)
-        other = Manifold(self.data, 'euclidean', argpoints=0.2).build(criterion.MaxDepth(10))
+        other = Manifold(self.data, 'euclidean', argpoints=0.2).build(
+            criterion.MaxDepth(10),
+            criterion.LFDRange(60, 50),
+        )
         self.assertNotEqual(self.manifold, other)
         self.assertEqual(other, other)
 
@@ -125,17 +132,14 @@ class TestManifold(unittest.TestCase):
                 self.manifold.select(cluster.name + '01110110')
         return
 
-    def test_optimal_in_graph(self):
-        data, labels = datasets.bullseye()
-        manifold = Manifold(data, 'euclidean').build(criterion.MaxDepth(12))
-        for cluster in manifold.graph:
-            self.assertTrue(cluster.optimal)
-
     def test_neighbors(self):
         for dataset in [datasets.bullseye, ]:  # datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
             data, labels = dataset()
             manifold = Manifold(data, 'euclidean')
-            manifold.build(criterion.MaxDepth(12))
+            manifold.build(
+                criterion.MaxDepth(12),
+                criterion.LFDRange(60, 50),
+            )
 
             for cluster in manifold.graph.clusters:
                 potential_neighbors = [c for c in manifold.graph.clusters if c.name != cluster.name]
@@ -152,7 +156,7 @@ class TestManifold(unittest.TestCase):
                 missed = set(true_neighbors.keys()) - set(neighbors.keys())
                 self.assertEqual(0, len(missed), msg=f'missed some neighbors: optimal, true {len(true_neighbors)}, actual {len(neighbors)}\n'
                                                      + '\n'.join([f'{c.name}, {cluster.radius + c.radius:.6f}' for c in missed]))
-            return
+        return
 
     def test_dump(self):
         with TemporaryFile() as fp:
@@ -175,7 +179,6 @@ class TestManifold(unittest.TestCase):
                 self.assertIn('argradius', cluster.cache)
                 self.assertIn('argsamples', cluster.cache)
                 self.assertIn('argmedoid', cluster.cache)
-                self.assertIn('optimal', cluster.cache)
                 self.assertIn('local_fractal_dimension', cluster.cache)
         return
 

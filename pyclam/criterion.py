@@ -112,19 +112,13 @@ class UniformDistribution(ClusterCriterion):
 
 class LFDRange(SelectionCriterion):
 
-    def __init__(self, percentiles: Tuple[float, float]):
-        if len(percentiles) != 2:
-            raise ValueError(f'LFDRange criterion expected two percentile values. '
-                             f'Got: {len(percentiles)}')
-        elif percentiles[0] < 0. or percentiles[0] > 100.:
-            raise ValueError(f'LFDRange criterion expected upper percentile to be between 0 and 100. '
-                             f'Got: {percentiles[0]}')
-        elif percentiles[1] < 0. or percentiles[1] > 100.:
-            raise ValueError(f'LFDRange criterion expected lower percentile to be between 0 and 100. '
-                             f'Got: {percentiles[1]}')
+    def __init__(self, upper: float, lower: float):
+        if not (0. < lower <= upper < 100.):
+            raise ValueError(f'LFDRange expected 0 < lower <= upper < 100 for upper and lower thresholds.'
+                             f'Got: lower: {lower:.2f}, and upper: {upper:.2f}')
 
-        self.upper: float = float(percentiles[0])
-        self.lower: float = float(percentiles[1])
+        self.upper: float = float(upper)
+        self.lower: float = float(lower)
 
     def __call__(self, root: Cluster) -> Set[Cluster]:
         upper, lower, grace_depth = self._range(root)
@@ -157,28 +151,37 @@ class LFDRange(SelectionCriterion):
 
     @staticmethod
     def _select(root: Cluster, upper: float, lower: float, grace_depth: int) -> Set[Cluster]:
-        selected: Set[Cluster] = set()
+        # childless clusters at or before grace depth are automatically selected
+        selected: Set[Cluster] = {
+            cluster
+            for cluster in root.manifold.layers[grace_depth].clusters
+            if not cluster.children
+        }
+        inactive: Set[Cluster] = {
+            cluster
+            for cluster in root.manifold.layers[grace_depth].clusters
+            if cluster.children
+        }
         active: Set[Cluster] = set()
-        inactive: Set[Cluster] = {cluster for cluster in root.manifold.layers[grace_depth].edges}
 
         while active or inactive:
-            # Select childless clusters
-            # TODO: This should only be needed for clusters in inactive set. Check to make sure.
+            # Select childless clusters from inactive set
             childless: Set[Cluster] = {cluster for cluster in inactive if len(cluster.children) == 0}
+            # Select childless clusters from active set
             childless.update({cluster for cluster in active if len(cluster.children) == 0})
+            selected.update(childless)
             inactive -= childless
             active -= childless
-            selected += childless
 
-            # Select clusters that fall below the lower threshold
+            # Select active clusters that fall below the lower threshold
             selections: Set[Cluster] = {cluster for cluster in active if cluster.local_fractal_dimension <= lower}
+            selected.update(selections)
             active -= selections
-            selected += selections
 
             # activate branches that rise above the upper threshold
             activations: Set[Cluster] = {cluster for cluster in inactive if cluster.local_fractal_dimension >= upper}
+            active.update(activations)
             inactive -= activations
-            active += activations
 
             # replace active and inactive sets with child clusters
             active = {child for cluster in active for child in cluster.children}

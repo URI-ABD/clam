@@ -59,7 +59,7 @@ class Cluster:
         #     self.distance_from([candidate.argmedoid]) <= candidate.radius + self.radius * 4
         self.candidates: Union[Dict['Cluster', float], None] = None
 
-        self.cache: Dict[str, Any] = {'optimal': False}
+        self.cache: Dict[str, Any] = dict()
         self.cache.update(**kwargs)
 
         # This is used while reading clusters from file during Cluster.from_json().
@@ -225,14 +225,10 @@ class Cluster:
             self.cache['local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
         return self.cache['local_fractal_dimension']
 
-    @property
-    def optimal(self) -> bool:
-        return self.cache['optimal']
-
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
         logging.debug(f'clearing cache for {self}')
-        self.cache = {'optimal': False}
+        self.cache.clear()
         return
 
     def overlaps(self, point: Data, radius: Radius) -> bool:
@@ -336,21 +332,6 @@ class Cluster:
 
         return results
 
-    def mark(self, max_lfd: float, min_lfd: float, active: bool = False):
-        """ Mark optimal Clusters via a modified depth-first traversal of the tree. """
-        if active is False:
-            if self.local_fractal_dimension > max_lfd:  # Mark branch as active if above given threshold
-                active = True
-        elif self.local_fractal_dimension < min_lfd:
-            self.cache['optimal'] = True  # Active branches that fall under given threshold is marked optimal
-            return  # only one cluster per branch of the tree is marked optimal
-
-        if len(self.children) > 1:  # If there are multiple children, recurse on all children.
-            [child.mark(max_lfd, min_lfd, active) for child in self.children]
-        else:
-            self.cache['optimal'] = True  # The first childless cluster in a branch is optimal.
-        return
-
     def json(self):
         """ This is used for writing the manifold to disk. """
         data = {
@@ -363,7 +344,6 @@ class Cluster:
             'argmedoid': self.argmedoid,
             'local_fractal_dimension': self.local_fractal_dimension,
             'candidates': None if self.candidates is None else {c.name: d for c, d in self.candidates.items()},
-            'optimal': self.optimal,
         }
         if self.children:
             data['children'] = [c.json() for c in self.children]
@@ -397,17 +377,21 @@ class Graph:
         self.edges: Dict[Cluster, Set[Edge]] = {cluster: None
                                                 for cluster in clusters}
 
-        self.cache: Dict[str, Any] = {'optimal': False}
+        self.cache: Dict[str, Any] = dict()
         return
 
     def __eq__(self, other: 'Graph') -> bool:
         """ Two graphs are identical if they have the same clusters and edges.
         """
-        return (set(self.clusters) == set(other.clusters)
-                and all((
-                    set(self.edges[cluster]) == set(other.edges[cluster])
-                    for cluster in self.clusters
-                )))
+        cluster_equality = set(self.clusters) == set(other.clusters)
+        if any((edges is None for edges in self.edges.values())):
+            return cluster_equality
+        else:
+            edges_equality = all((
+                set(self.edges[cluster]) == set(other.edges[cluster])
+                for cluster in self.clusters
+            ))
+        return cluster_equality and edges_equality
 
     def __bool__(self) -> bool:
         return self.cardinality > 0
@@ -455,10 +439,6 @@ class Graph:
         if 'depth' not in self.cache:
             self.cache['depth'] = max((cluster.depth for cluster in self.clusters))
         return self.cache['depth']
-
-    @property
-    def optimal(self) -> bool:
-        return self.cache['optimal']
 
     @property
     def clusters(self) -> Iterable[Cluster]:
@@ -660,7 +640,7 @@ class Graph:
     def clear_cache(self) -> None:
         """ Clears the cache of the graph. """
         # Clear all cached values and edges.
-        self.cache = {'optimal': self.cache['optimal']}
+        self.cache.clear()
         self.edges = {cluster: None for cluster in self.edges}
         return
 
@@ -921,7 +901,6 @@ class Manifold:
         self.root: Cluster = Cluster(self, self.argpoints, '')
         self.layers: List[Graph] = [Graph(self.root)]
         self.graph: Graph = Graph(self.root)
-        self.graph.cache['optimal'] = True
 
         self.cache: Dict[str, Any] = dict()
         self.cache.update(**kwargs)
@@ -977,34 +956,25 @@ class Manifold:
 
         return cdist(x1, x2, metric=self.metric)
 
-    def lfd_range(self, percentiles: Tuple[float, float] = (90, 10)) -> Tuple[float, float, int]:
-        """ Computes the lfd range used for marking optimal clusters. """
-        lfd_range = [], []
-        for depth in range(1, len(self.layers) - 1):
-            if self.layers[depth + 1].cardinality < 2 ** (depth + 1):
-                clusters: List[Cluster] = [cluster for cluster in self.layers[depth] if cluster.cardinality > 2]
-                if len(clusters) > 0:
-                    lfds = np.percentile(
-                        a=[c.local_fractal_dimension for c in clusters],
-                        q=percentiles,
-                    )
-                    lfd_range[0].append(lfds[0]), lfd_range[1].append(lfds[1])
-        if len(lfd_range[0]) > 0:
-            return float(np.median(lfd_range[0])), float(np.median(lfd_range[1])), self.depth - len(lfd_range[0])
-        else:
-            lfds = np.percentile(
-                a=[cluster.local_fractal_dimension for cluster in self.layers[-1]],
-                q=percentiles,
-            )
-            return float(lfds[0]), float(lfds[1]), self.depth
-
-    def build(self, *criterion) -> 'Manifold':
+    def build(self, *criteria) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
-        from pyclam.criterion import ClusterCriterion, GraphCriterion
+        from pyclam.criterion import ClusterCriterion, SelectionCriterion, GraphCriterion
 
         self.layers = [Graph(self.root)]
-        self.build_tree(*(c for c in criterion if isinstance(c, ClusterCriterion)))
-        self.build_graph(*(c for c in criterion if isinstance(c, GraphCriterion)))
+
+        cluster_criteria: List[ClusterCriterion] = [criterion for criterion in criteria if isinstance(criterion, ClusterCriterion)]
+        self.build_tree(*cluster_criteria)
+
+        selection_criteria: List[SelectionCriterion] = [criterion for criterion in criteria if isinstance(criterion, SelectionCriterion)]
+        assert len(selection_criteria) < 2, f"Cannot have more than one selection criteria. Got {len(selection_criteria)}"
+        if selection_criteria:
+            graph = selection_criteria[0](self.root)
+        else:
+            graph = [cluster for cluster in self.layers[-1]]
+        self.graph = Graph(*graph)
+
+        graph_criteria: List[GraphCriterion] = [criterion for criterion in criteria if isinstance(criterion, GraphCriterion)]
+        self.build_graph(*graph_criteria)
         return self
 
     def build_tree(self, *criterion) -> 'Manifold':
@@ -1018,36 +988,14 @@ class Manifold:
                 break
         return self
 
-    def build_graph(self, *criterion):
-        """ Builds the graph at the optimal depth, while also building each layer. """
+    def build_graph(self, *criteria):
+        """ Builds the graph. """
+        depths = [cluster.depth for cluster in self.graph]
+        logging.info(f'depths: ({min(depths)}, {max(depths)}), clusters: {self.graph.cardinality}')
+
         self.root.candidates = {self.root: 0.}
-
-        # TODO: replace lfd_range and mark methods with SelectionCriteria
-        max_lfd, min_lfd, grace_depth = self.lfd_range(percentiles=(90, 10))
-        for depth in range(1, len(self.layers) - 1):
-            if self.layers[depth + 1].cardinality < 2 ** (depth + 1):
-                [cluster.mark(max_lfd, min_lfd) for cluster in self.layers[depth].clusters]
-                break
-        else:
-            for cluster in self.layers[-1]:
-                cluster.cache['optimal'] = True
-
-        for depth, layer in enumerate(self.layers):
-            logging.info(f'depth: {depth}, clusters: {layer.cardinality}')
-            layer.build_edges()
-
-        clusters: List[Cluster] = [
-            cluster for layer in self.layers
-            for cluster in layer.clusters
-            if cluster.optimal and cluster.depth == layer.depth
-        ]
-
-        depths = [c.depth for c in clusters]
-        logging.info(f'depths: ({min(depths)}, {max(depths)}), clusters: {len(clusters)}')
-        self.graph = Graph(*clusters)
-        self.graph.cache['optimal'] = True
         self.graph.build_edges()
-        [c(self.graph) for c in criterion]
+        [criterion(self.graph) for criterion in criteria]
         return
 
     def _partition_single(self, criterion):
@@ -1141,6 +1089,7 @@ class Manifold:
         pickle.dump({
             'metric': self.metric,
             'root': self.root.json(),
+            'graph': [cluster.name for cluster in self.graph.clusters]
         }, fp, protocol=pickle.HIGHEST_PROTOCOL)
         return
 
@@ -1166,8 +1115,7 @@ class Manifold:
             else:
                 break
 
-        manifold.graph = Graph(*[cluster for layer in manifold.layers for cluster in layer if cluster.optimal])
-        manifold.graph.cache['optimal'] = True
+        manifold.graph = Graph(*[manifold.select(cluster) for cluster in d['graph']])
         manifold.graph.build_edges()
 
         return manifold

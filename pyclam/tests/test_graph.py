@@ -3,8 +3,7 @@ from itertools import combinations
 
 import numpy as np
 
-from pyclam import datasets
-from pyclam.criterion import MaxDepth
+from pyclam import datasets, criterion
 from pyclam.manifold import Manifold, Graph
 
 
@@ -14,7 +13,10 @@ class TestGraph(unittest.TestCase):
         np.random.seed(42)
         cls.data, _ = datasets.bullseye(n=1000, num_rings=2)
         cls.manifold = Manifold(cls.data, 'euclidean')
-        cls.manifold.build(MaxDepth(10))
+        cls.manifold.build(
+            criterion.MaxDepth(10),
+            criterion.LFDRange(60, 50),
+        )
         return
 
     def test_init(self):

@@ -2,8 +2,7 @@ import unittest
 
 import numpy as np
 
-from pyclam import Manifold
-from pyclam.criterion import MinPoints
+from pyclam import Manifold, criterion
 from pyclam.tests.utils import linear_search
 
 
@@ -21,7 +20,10 @@ class TestManifoldFunctional(unittest.TestCase):
 
     def test_random_large(self):
         data = np.random.randn(1000, 3)
-        manifold = Manifold(data, 'euclidean').build(MinPoints(10))
+        manifold = Manifold(data, 'euclidean').build(
+            criterion.MaxDepth(10),
+            criterion.LFDRange(60, 50),
+        )
         for _ in range(10):
             point = int(np.random.choice(3))
             linear_results = linear_search(data[point], 0.5, data, manifold.metric)
