@@ -110,6 +110,14 @@ class UniformDistribution(ClusterCriterion):
         return distance > 0.25
 
 
+class Leaves(SelectionCriterion):
+    def __init__(self):
+        return
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        return {cluster for cluster in root.manifold.layers[-1].clusters}
+
+
 class LFDRange(SelectionCriterion):
 
     def __init__(self, upper: float, lower: float):
