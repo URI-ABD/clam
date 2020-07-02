@@ -78,6 +78,13 @@ class Cluster:
             set(self.argpoints) == set(other.argpoints),
         ))
 
+    def __lt__(self, other: 'Cluster') -> bool:
+        """ For sorting clusters in Graphs. Sorts by depth, breaking ties by name. """
+        if self.depth == other.depth:
+            return self.name < other.name
+        else:
+            return self.depth < other.depth
+
     def __bool__(self) -> bool:
         return self.cardinality > 0
 
@@ -101,6 +108,13 @@ class Cluster:
     def __contains__(self, point: Data) -> bool:
         """ Check weather the given point could be inside this cluster. """
         return self.overlaps(point=point, radius=0.)
+
+    @property
+    def parent(self) -> 'Cluster':
+        if self.depth > 0:
+            return self.manifold.ancestry(self)[-2]
+        else:
+            raise ValueError(f"root cluster has no parent")
 
     @property
     def cardinality(self) -> int:
@@ -572,7 +586,7 @@ class Graph:
                 assert abs(factor - 1.) <= 1e-6, f'transition probabilities did not sum to 1 for cluster {cluster.name}. Got {factor:.8f} instead.'
         return
 
-    def build_edges(self) -> None:
+    def build_edges(self) -> 'Graph':
         """ Calculates edges for the graph. """
         # build edges
         [self._find_neighbors(cluster) for cluster in self.clusters]
@@ -589,7 +603,7 @@ class Graph:
 
         self._mark_subsumed_clusters()
         self._compute_transition_probabilities()
-        return
+        return self
 
     def _demote_to_subsumed_cluster(self, cluster: Cluster):
         self.cache['transition_clusters'].remove(cluster)
@@ -1024,22 +1038,31 @@ class Manifold:
     def build(self, *criteria) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
         from pyclam.criterion import ClusterCriterion, SelectionCriterion, GraphCriterion
+        cluster_criteria: List[ClusterCriterion] = [
+            criterion for criterion in criteria
+            if isinstance(criterion, ClusterCriterion)
+        ]
+
+        selection_criteria: List[SelectionCriterion] = [
+            criterion for criterion in criteria
+            if isinstance(criterion, SelectionCriterion)
+        ]
+        assert len(selection_criteria) < 2, f"Cannot have more than one selection criteria. Got {len(selection_criteria)}"
+
+        graph_criteria: List[GraphCriterion] = [
+            criterion for criterion in criteria
+            if isinstance(criterion, GraphCriterion)
+        ]
 
         self.layers = [Graph(self.root)]
-
-        cluster_criteria: List[ClusterCriterion] = [criterion for criterion in criteria if isinstance(criterion, ClusterCriterion)]
         self.build_tree(*cluster_criteria)
-
-        selection_criteria: List[SelectionCriterion] = [criterion for criterion in criteria if isinstance(criterion, SelectionCriterion)]
-        assert len(selection_criteria) < 2, f"Cannot have more than one selection criteria. Got {len(selection_criteria)}"
         if selection_criteria:
             graph = selection_criteria[0](self.root)
         else:
             graph = [cluster for cluster in self.layers[-1]]
         self.graph = Graph(*graph)
-
-        graph_criteria: List[GraphCriterion] = [criterion for criterion in criteria if isinstance(criterion, GraphCriterion)]
         self.build_graph(*graph_criteria)
+
         return self
 
     def build_tree(self, *criterion) -> 'Manifold':
@@ -1180,7 +1203,6 @@ class Manifold:
             else:
                 break
 
-        manifold.graph = Graph(*[manifold.select(cluster) for cluster in d['graph']])
-        manifold.graph.build_edges()
+        manifold.graph = Graph(*[manifold.select(cluster) for cluster in d['graph']]).build_edges()
 
         return manifold
