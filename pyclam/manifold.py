@@ -591,6 +591,70 @@ class Graph:
         self._compute_transition_probabilities()
         return
 
+    def _demote_to_subsumed_cluster(self, cluster: Cluster):
+        self.cache['transition_clusters'].remove(cluster)
+        self.cache['subsumed_clusters'].add(cluster)
+        raise NotImplementedError
+
+    def _promote_to_transition_cluster(self, cluster: Cluster):
+        raise NotImplementedError
+
+    def _add_to_subsumed_edges(self, cluster: Cluster):
+        raise NotImplementedError
+
+    def _add_to_transition_edges(self, cluster: Cluster):
+        raise NotImplementedError
+
+    def _add(self, cluster: Cluster):
+        self._find_neighbors(cluster)
+
+        # Handshake with neighbors
+        [self.edges[neighbor].add(Edge(cluster, distance, None))
+         for edges in self.edges[cluster]
+         for (neighbor, distance, _) in edges]
+
+        # Remove edge to cluster
+        if Edge(cluster, 0., None) in self.edges[cluster]:
+            self.edges[cluster].remove(Edge(cluster, 0., None))
+
+        # check if cluster subsumes any neighbor or if any neighbor subsumes cluster
+        subsumed = False
+        for (neighbor, distance, _) in self.edges[cluster]:
+            if cluster.radius >= distance + neighbor.radius:
+                # cluster subsumes neighbor
+                if neighbor in self.cache['transition_clusters']:
+                    self._demote_to_subsumed_cluster(neighbor)
+                self._add_to_subsumed_edges(neighbor)
+            elif neighbor.radius >= distance + cluster.radius:
+                # neighbor subsumes cluster
+                subsumed = True
+                self._add_to_subsumed_edges(cluster)
+            else:
+                continue
+        if not subsumed:
+            self._add_to_transition_edges(cluster)
+        return
+
+    def _remove(self, cluster: Cluster):
+        raise NotImplementedError
+
+    def replace_clusters(self, removals: Set[Cluster], additions: Set[Cluster]):
+        """
+        Replaces clusters in 'removals' by those in 'additions'.
+        The set of points of clusters being removed must be identical to the set of points of clusters being added.
+
+        :param removals: set of clusters to remove from the graph
+        :param additions: set of clusters to add to the graph
+        :return:
+        """
+        points_removed = set(set(cluster.argpoints) for cluster in removals)
+        points_added = set(set(cluster.argpoints) for cluster in additions)
+        if points_removed != points_added:
+            raise ValueError(f"clusters being removed had different points compared to those being added")
+        [self._remove(cluster) for cluster in removals]
+        [self._add(cluster) for cluster in additions]
+        return
+
     @property
     def cached_edges(self) -> Set[CacheEdge]:
         """ Returns all edges within the graph. """
