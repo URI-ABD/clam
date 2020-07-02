@@ -56,6 +56,22 @@ class TestCriterion(unittest.TestCase):
             ancestry = self.manifold.ancestry(leaf)
             included = sum((1 if ancestor in self.manifold.graph.clusters else 0 for ancestor in ancestry))
             self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
+        return
+
+    def test_minimize_subsumed(self):
+        fraction: float = 0.01
+
+        self.manifold.build(
+            criterion.MaxDepth(12),
+            criterion.LFDRange(80, 20),
+            criterion.MinimizeSubsumed(fraction),
+        )
+
+        for leaf in self.manifold.layers[-1].clusters:
+            ancestry = self.manifold.ancestry(leaf)
+            included = sum((1 if ancestor in self.manifold.graph.clusters else 0 for ancestor in ancestry))
+            self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
+        return
 
     # def plot(self):
     #     from inspect import stack
