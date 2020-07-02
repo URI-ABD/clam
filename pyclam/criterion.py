@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from collections import Counter
 from typing import Set, Tuple, List
 
 import numpy as np
@@ -122,8 +123,8 @@ class Leaves(SelectionCriterion):
 class LFDRange(SelectionCriterion):
 
     def __init__(self, upper: float, lower: float):
-        if not (0. < lower <= upper < 100.):
-            raise ValueError(f'LFDRange expected 0 < lower <= upper < 100 for upper and lower thresholds.'
+        if not (0. < lower <= upper <= 100.):
+            raise ValueError(f'LFDRange expected 0 < lower <= upper <= 100 for upper and lower thresholds.'
                              f'Got: lower: {lower:.2f}, and upper: {upper:.2f}')
 
         self.upper: float = float(upper)
@@ -199,6 +200,57 @@ class LFDRange(SelectionCriterion):
         return selected
 
 
+def _replace_sibling_pairs(graph: Graph) -> Set[Cluster]:
+    # get sorted list of clusters
+    # guarantees that any siblings will be next to each other.
+    clusters: List[Cluster] = list(sorted(graph.clusters))
+    # find all sibling pairs
+    sibling_pairs: List[Tuple[Cluster, Cluster]] = [
+        (left, right) for left, right in zip(clusters[:-1], clusters[1:])
+        if (left.depth == right.depth
+            and left.name == right.name[:len(left.name)]
+            and {left, right}.issubset(graph.transition_clusters))
+    ]
+
+    # get set of parents to add and set of clusters to keep
+    sibling_set: Set[Cluster] = set()
+    [sibling_set.update(pair) for pair in sibling_pairs]
+    remainder: Set[Cluster] = {cluster for cluster in graph.clusters if cluster not in sibling_set}
+    parents: Set[Cluster] = {left.parent for left, _ in sibling_pairs}
+
+    # Check if parent also does not subsume any cluster in remainder
+    # remove parent and restore children if so
+    removals: Set[Cluster] = {
+        parent for parent in parents
+        if any((
+            parent.radius >= d + c.radius
+            for c, d in parent.candidates.items()
+            if c in remainder
+        ))
+    }
+    parents -= removals
+    [remainder.update(cluster.children) for cluster in removals]
+
+    return remainder.union(parents)
+
+
+def _replace_by_children(graph: Graph) -> Set[Cluster]:
+    # replace by children any cluster that:
+    #       subsumes an other cluster, and
+    #       is itself not subsumed by any other cluster.
+    removals: Set[Cluster] = {
+        cluster for cluster in graph.clusters
+        if (cluster.children
+            and cluster in graph.transition_clusters
+            and graph.subsumed_edges[cluster])
+    }
+    remainder: Set[Cluster] = {cluster for cluster in graph.clusters if cluster not in removals}
+    additions: Set[Cluster] = set()
+    [additions.update(cluster.children) for cluster in removals]
+
+    return remainder.union(additions)
+
+
 class MinimizeSubsumed(GraphCriterion):
     """
     Minimize fraction of subsumed clusters in the graph.
@@ -211,13 +263,42 @@ class MinimizeSubsumed(GraphCriterion):
         self.fraction: float = fraction
 
     def __call__(self, manifold: Manifold) -> Manifold:
-        while len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality > self.fraction:
-            manifold.graph = self._replace_sibling_pairs(manifold.graph)
-            manifold.graph = self._replace_by_children(manifold.graph)
+        fractions: List[float] = [len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality]
+
+        def _steady(fraction: float):
+            # fraction of subsumed clusters has held steady for some iterations
+            return len(fractions) > 5 and ((max(fractions[-5:]) - min(fractions[-5:])) < (fraction / 10))
+
+        def minimized_subsumed_log(_clusters: Set[Cluster]):
+            depths = {cluster.depth for cluster in _clusters}
+            logging.info(f"depths: ({min(depths)}, {max(depths)}), "
+                         f"clusters: {manifold.graph.cardinality}, "
+                         f"fraction_subsumed: {fractions[-1]:.4f}")
+
+        while fractions[-1] > self.fraction:
+            if _steady(self.fraction):
+                break
+            clusters: Set[Cluster] = _replace_sibling_pairs(manifold.graph)
+            minimized_subsumed_log(clusters)
+            if len(clusters) == manifold.graph.cardinality:
+                break  # if any siblings were replaced by parent, there would be fewer clusters.
+            else:
+                manifold.graph = Graph(*clusters).build_edges()
+                fractions.append(len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality)
+
+        fractions: List[float] = [len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality]
+        while fractions[-1] > self.fraction:
+            if _steady(self.fraction):
+                break
+
+            clusters: Set[Cluster] = _replace_by_children(manifold.graph)
+            minimized_subsumed_log(clusters)
+            fractions.append(len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality)
+            if len(clusters) == manifold.graph.cardinality:
+                # if any cluster were replaced by children, there would be more clusters.
+                break
+            else:
+                manifold.graph = Graph(*clusters).build_edges()
+                fractions.append(len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality)
+
         return manifold
-
-    def _replace_sibling_pairs(self, graph: Graph) -> Graph:
-        raise NotImplementedError
-
-    def _replace_by_children(self, graph: Graph) -> Graph:
-        raise NotImplementedError

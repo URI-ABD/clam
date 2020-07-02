@@ -1083,7 +1083,7 @@ class Manifold:
 
         self.root.candidates = {self.root: 0.}
         self.graph.build_edges()
-        [criterion(self.graph) for criterion in criteria]
+        [criterion(self) for criterion in criteria]
         return
 
     def _partition_single(self, criterion):
