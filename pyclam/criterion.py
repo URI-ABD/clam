@@ -5,7 +5,8 @@ from typing import Set, Tuple, List
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam.manifold import Cluster, Graph
+from pyclam.manifold import Cluster, Graph, Manifold
+
 
 # TODO: class ChildTooSmall which checks % of parent owned by child, relative populations of child parent and root.
 # TODO: RE above, Sparseness which looks at % owned / radius or similar
@@ -32,7 +33,7 @@ class SelectionCriterion(Criterion):
 class GraphCriterion(Criterion):
 
     @abstractmethod
-    def __call__(self, graph: Graph) -> Graph:
+    def __call__(self, manifold: Manifold):
         pass
 
 
@@ -209,5 +210,14 @@ class MinimizeSubsumed(GraphCriterion):
 
         self.fraction: float = fraction
 
-    def __call__(self, graph: Graph) -> Graph:
+    def __call__(self, manifold: Manifold) -> Manifold:
+        while len(manifold.graph.subsumed_clusters) / manifold.graph.cardinality > self.fraction:
+            manifold.graph = self._replace_sibling_pairs(manifold.graph)
+            manifold.graph = self._replace_by_children(manifold.graph)
+        return manifold
+
+    def _replace_sibling_pairs(self, graph: Graph) -> Graph:
+        raise NotImplementedError
+
+    def _replace_by_children(self, graph: Graph) -> Graph:
         raise NotImplementedError
