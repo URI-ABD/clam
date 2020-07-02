@@ -472,9 +472,7 @@ class Graph:
             self.build_edges()
         return self.cache['transition_edges']
 
-    def _find_neighbors(self, cluster: Cluster):
-        logging.debug(f'building edges for cluster {cluster.name}')
-
+    def _find_candidates(self, cluster: Cluster):
         # Dict of candidate neighbors and distances to neighbors.
         radius: float = cluster.manifold.root.radius
 
@@ -510,15 +508,18 @@ class Graph:
                     }
                 else:
                     ancestry[depth + 1].candidates = dict()
+        return
 
-        candidates = {
-            c: d for c, d in cluster.candidates.items()
-            if c in self.clusters
-        }
+    def _find_neighbors(self, cluster: Cluster):
+        logging.debug(f'building edges for cluster {cluster.name}')
+
+        if cluster.candidates is None:
+            self._find_candidates(cluster)
+
         self.edges[cluster] = {
             Edge(c, d, None)
-            for c, d in candidates.items()
-            if d <= cluster.radius + c.radius
+            for c, d in cluster.candidates.items()
+            if c in self.clusters and d <= cluster.radius + c.radius
         }
         return
 
@@ -528,8 +529,8 @@ class Graph:
         # Find the set of Subsumed Clusters.
         self.cache['subsumed_clusters'] = {
             cluster for cluster in self.clusters
-            for edge in self.edges[cluster]
-            if edge.distance <= edge.neighbor.radius - cluster.radius
+            for (neighbor, distance, _) in self.edges[cluster]
+            if distance <= neighbor.radius - cluster.radius
         }
 
         self.cache['transition_clusters'] = set(self.clusters) - self.cache['subsumed_clusters']
