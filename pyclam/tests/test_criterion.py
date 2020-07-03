@@ -18,7 +18,6 @@ class TestCriterion(unittest.TestCase):
         min_radius = 0.1
         self.manifold.build(
             criterion.MinRadius(min_radius),
-            criterion.MaxDepth(12),
         )
         self.assertTrue(all((
             cluster.radius > min_radius

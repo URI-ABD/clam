@@ -39,7 +39,7 @@ class TestCluster(unittest.TestCase):
 
     def test_str(self):
         self.assertEqual('root', str(self.cluster))
-        self.assertListEqual(['0', '01'], [str(c) for c in self.children])
+        self.assertSetEqual({'0', '01'}, {str(c) for c in self.children})
         return
 
     def test_repr(self):
