@@ -634,15 +634,34 @@ class Graph:
 
         return
 
+    def _promote_to_transition_cluster(self, cluster: Cluster):
+        # move cluster from subsumed set to transition set
+        self.cache['subsumed_clusters'].remove(cluster)
+        self.cache['transition_clusters'].add(cluster)
+
+        # remove incoming subsumed edges to cluster
+        [self.cache['subsumed_edges'][neighbor].difference_update({Edge(cluster, distance, None)})
+         for (neighbor, distance, _) in self.edges[cluster]]
+
+        # reset outgoing subsumed edges from cluster
         self.cache['subsumed_edges'][cluster] = {
             Edge(neighbor, distance, None)
             for (neighbor, distance, _) in self.edges[cluster]
             if cluster.radius >= distance + neighbor.radius
         }
-        return
 
-    def _promote_to_transition_cluster(self, cluster: Cluster):
-        raise NotImplementedError
+        # add outgoing transition edges from cluster
+        self.cache['transition_edges'][cluster] = {
+            Edge(neighbor, distance, None)
+            for (neighbor, distance, _) in self.edges[cluster]
+            if neighbor in self.cache['transition_clusters']
+        }
+
+        # reset incoming transition edges from neighbors
+        [self.cache['transition_edges'][neighbor].add(Edge(neighbor, distance, None))
+         for (neighbor, distance, _) in self.cache['transition_edges'][cluster]]
+
+        return
 
     def _add_to_subsumed_edges(self, cluster: Cluster):
         raise NotImplementedError
