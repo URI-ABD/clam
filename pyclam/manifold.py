@@ -705,16 +705,18 @@ class Graph:
             if cluster.radius >= distance + neighbor.radius:
                 # cluster subsumes neighbor
                 if neighbor in self.cache['transition_clusters']:
+                    # this deals with all possible demotions
                     self._demote_to_subsumed_cluster(neighbor)
             elif neighbor.radius >= distance + cluster.radius:
                 # neighbor subsumes cluster
                 subsumed = True
-                self._add_to_subsumed_edges(cluster)
             else:
                 continue
-        if not subsumed:
+
+        if subsumed:
+            self._add_to_subsumed_edges(cluster)
+        else:
             self._add_to_transition_edges(cluster)
-            # TODO: will this cause demotions
         return
 
     def _remove(self, cluster: Cluster):
