@@ -385,9 +385,9 @@ class Graph:
         #       the clusters in the graph, and
         #       the set of edges from that cluster.
         # An Edge is a named tuple of Neighbor, Distance, and Probability.
-        # Edge.neighbor is is the neighboring cluster.
+        # Edge.neighbor is the neighboring cluster.
         # Edge.distance is the distance to that neighbor.
-        # Edge.probability is sued to pick an edge during a random walk.
+        # Edge.probability is used to pick an edge during a random walk.
         self.edges: Dict[Cluster, Set[Edge]] = {cluster: None for cluster in clusters}
 
         self.cache: Dict[str, Any] = dict()
@@ -465,11 +465,11 @@ class Graph:
         return self.cache['subsumed_clusters']
 
     @property
-    def transition_clusters(self) -> Set[Cluster]:
+    def walkable_clusters(self) -> Set[Cluster]:
         """ Set of Clusters not subsumed by other clusters. """
-        if 'transition_clusters' not in self.cache:
+        if 'walkable_clusters' not in self.cache:
             self.build_edges()
-        return self.cache['transition_clusters']
+        return self.cache['walkable_clusters']
 
     @property
     def subsumed_edges(self) -> Dict[Cluster, Set[Edge]]:
@@ -479,11 +479,14 @@ class Graph:
         return self.cache['subsumed_edges']
 
     @property
-    def transition_edges(self) -> Dict[Cluster, Set[Edge]]:
-        """ Transition Clusters are those not subsumed by any other Cluster. """
-        if 'transition_edges' not in self.cache:
+    def walkable_edges(self) -> Dict[Cluster, Set[Edge]]:
+        """
+        Walkable Clusters are those not subsumed by any other Cluster.
+        These are used in graph traversals and random walks.
+        """
+        if 'walkable_edges' not in self.cache:
             self.build_edges()
-        return self.cache['transition_edges']
+        return self.cache['walkable_edges']
 
     def _find_candidates(self, cluster: Cluster):
         # Dict of candidate neighbors and distances to neighbors.
@@ -497,10 +500,7 @@ class Graph:
             # This ensures that candidates are calculated once per cluster
             if ancestry[depth + 1].candidates is None:
                 # Keep candidates from parent
-                candidates: Dict[Cluster, float] = {
-                    c: 0.
-                    for c in ancestry[depth].candidates
-                }
+                candidates: Dict[Cluster, float] = {c: 0. for c in ancestry[depth].candidates}
 
                 # Get all children of candidates at the same depth.
                 candidates.update({
@@ -511,9 +511,7 @@ class Graph:
                 })
 
                 if len(candidates) > 0:
-                    distances = ancestry[depth + 1].distance_from(
-                        x1=[c.argmedoid for c in candidates],
-                    )
+                    distances = ancestry[depth + 1].distance_from([c.argmedoid for c in candidates])
                     ancestry[depth + 1].candidates = {
                         c: float(d)
                         for c, d in zip(candidates, distances)
@@ -536,7 +534,7 @@ class Graph:
         }
         return
 
-    def _mark_subsumed_clusters(self):
+    def split_walkable_vs_subsumed(self):
         logging.debug(f'marking subsumed clusters for graph: '
                       f'depth {self.depth}, clusters : {self.cardinality}')
         # Find the set of Subsumed Clusters.
@@ -544,11 +542,10 @@ class Graph:
             cluster for cluster in self.clusters
             for (neighbor, distance, _) in self.edges[cluster]
             if neighbor.radius >= distance + cluster.radius
-            # i.e. if cluster is subsumed by neighbor
         }
 
-        # transition clusters are those that are not subsumed clusters.
-        self.cache['transition_clusters'] = set(self.clusters) - self.cache['subsumed_clusters']
+        # walkable clusters are those that are not subsumed clusters.
+        self.cache['walkable_clusters'] = set(self.clusters) - self.cache['subsumed_clusters']
 
         # build outgoing edges from each cluster to every neighbor subsumed by that cluster
         self.cache['subsumed_edges'] = {
@@ -559,8 +556,8 @@ class Graph:
             } for cluster in self.clusters
         }
 
-        # build outgoing edges among transition clusters
-        self.cache['transition_edges'] = {
+        # build outgoing edges among walkable clusters
+        self.cache['walkable_edges'] = {
             cluster: {
                 Edge(edge.neighbor, edge.distance, None)
                 for edge in self.edges[cluster]
@@ -570,23 +567,23 @@ class Graph:
         }
         return
 
-    def _compute_transition_probabilities(self):
+    def recompute_transition_probabilities(self):
         logging.debug(f'computing transition probabilities for graph: '
                       f'depth {self.depth}, clusters : {self.cardinality}')
-        for cluster in self.cache['transition_edges']:
+        for cluster in self.cache['walkable_edges']:
             # Compute transition probabilities.
-            # These only exist among Transition Clusters.
-            if len(self.cache['transition_edges'][cluster]) > 0:
+            # These only exist among walkable Clusters.
+            if len(self.cache['walkable_edges'][cluster]) > 0:
                 factor = sum((
                     1. / distance
-                    for (_, distance, _) in self.cache['transition_edges'][cluster]
+                    for (_, distance, _) in self.cache['walkable_edges'][cluster]
                 ))
-                self.cache['transition_edges'][cluster] = {
+                self.cache['walkable_edges'][cluster] = {
                     Edge(neighbor, distance, 1 / (distance * factor))
-                    for (neighbor, distance, _) in self.cache['transition_edges'][cluster]
+                    for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]
                 }
 
-                factor = sum((probability for (_, _, probability) in self.cache['transition_edges'][cluster]))
+                factor = sum((probability for (_, _, probability) in self.cache['walkable_edges'][cluster]))
                 assert abs(factor - 1.) <= 1e-6, f'transition probabilities did not sum to 1 for cluster {cluster.name}. Got {factor:.8f} instead.'
         return
 
@@ -605,32 +602,32 @@ class Graph:
          for cluster, edges in self.edges.items()
          if (cluster, 0., None) in edges]
 
-        self._mark_subsumed_clusters()
-        self._compute_transition_probabilities()
+        self.split_walkable_vs_subsumed()
+        self.recompute_transition_probabilities()
         return self
 
     def _demote_to_subsumed_cluster(self, cluster: Cluster):
-        # move cluster from transition set to subsumed set
-        self.cache['transition_clusters'].remove(cluster)
+        # move cluster from walkable set to subsumed set
+        self.cache['walkable_clusters'].remove(cluster)
         self.cache['subsumed_clusters'].add(cluster)
 
-        # remove from transition edges
-        for (neighbor, distance, _) in self.cache['transition_edges'][cluster]:
-            # reset outgoing edges from transition neighbors
-            self.cache['transition_edges'][neighbor] = {
+        # remove from walkable edges
+        for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
+            # reset outgoing edges from walkable neighbors
+            self.cache['walkable_edges'][neighbor] = {
                 Edge(edge.neighbor, edge.distance, None)
-                for edge in self.cache['transition_edges'][neighbor]
+                for edge in self.cache['walkable_edges'][neighbor]
             }
             # remove incoming edge to cluster
-            self.cache['transition_edges'][neighbor].remove(Edge(cluster, distance, None))
+            self.cache['walkable_edges'][neighbor].remove(Edge(cluster, distance, None))
 
         self._add_to_subsumed_edges(cluster)
         return
 
-    def _promote_to_transition_cluster(self, cluster: Cluster):
-        # move cluster from subsumed set to transition set
+    def _promote_to_walkable_cluster(self, cluster: Cluster):
+        # move cluster from subsumed set to walkable set
         self.cache['subsumed_clusters'].remove(cluster)
-        self.cache['transition_clusters'].add(cluster)
+        self.cache['walkable_clusters'].add(cluster)
 
         # remove incoming subsumed edges to cluster
         [self.cache['subsumed_edges'][neighbor].difference_update({Edge(cluster, distance, None)})
@@ -643,16 +640,16 @@ class Graph:
             if cluster.radius >= distance + neighbor.radius
         }
 
-        # add outgoing transition edges from cluster
-        self.cache['transition_edges'][cluster] = {
+        # add outgoing walkable edges from cluster
+        self.cache['walkable_edges'][cluster] = {
             Edge(neighbor, distance, None)
             for (neighbor, distance, _) in self.edges[cluster]
-            if neighbor in self.cache['transition_clusters']
+            if neighbor in self.cache['walkable_clusters']
         }
 
-        # reset incoming transition edges from transition neighbors
-        [self.cache['transition_edges'][neighbor].add(Edge(neighbor, distance, None))
-         for (neighbor, distance, _) in self.cache['transition_edges'][cluster]]
+        # reset incoming walkable edges from walkable neighbors
+        [self.cache['walkable_edges'][neighbor].add(Edge(neighbor, distance, None))
+         for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]]
 
         return
 
@@ -674,20 +671,20 @@ class Graph:
 
         return
 
-    def _add_to_transition_edges(self, cluster: Cluster):
-        # add to set of transition clusters
-        self.cache['transition_clusters'].add(cluster)
+    def _add_to_walkable_edges(self, cluster: Cluster):
+        # add to set of walkable clusters
+        self.cache['walkable_clusters'].add(cluster)
 
-        # build outgoing transition edges from cluster
-        self.cache['transition_edges'][cluster] = {
+        # build outgoing walkable edges from cluster
+        self.cache['walkable_edges'][cluster] = {
             Edge(neighbor, distance, None)
             for (neighbor, distance, _) in self.edges[cluster]
-            if neighbor in self.cache['transition_clusters']
+            if neighbor in self.cache['walkable_clusters']
         }
 
-        # add incoming transition edges from transition neighbors
-        [self.cache['transition_clusters'][neighbor].add(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.cache['transition_edges'][cluster]]
+        # add incoming walkable edges from walkable neighbors
+        [self.cache['walkable_clusters'][neighbor].add(Edge(cluster, distance, None))
+         for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]]
 
         return
 
@@ -708,7 +705,7 @@ class Graph:
         for (neighbor, distance, _) in self.edges[cluster]:
             if cluster.radius >= distance + neighbor.radius:
                 # cluster subsumes neighbor
-                if neighbor in self.cache['transition_clusters']:
+                if neighbor in self.cache['walkable_clusters']:
                     # this deals with all possible demotions
                     self._demote_to_subsumed_cluster(neighbor)
             elif neighbor.radius >= distance + cluster.radius:
@@ -720,23 +717,23 @@ class Graph:
         if subsumed:
             self._add_to_subsumed_edges(cluster)
         else:
-            self._add_to_transition_edges(cluster)
+            self._add_to_walkable_edges(cluster)
         return
 
     def _remove(self, cluster: Cluster):
-        if cluster in self.cache['transition_clusters']:
-            self.cache['transition_clusters'].remove(cluster)
+        if cluster in self.cache['walkable_clusters']:
+            self.cache['walkable_clusters'].remove(cluster)
 
-            # reset incoming edges from transition neighbors
-            for (neighbor, distance, _) in self.cache['transition_edges'][cluster]:
-                self.cache['transition_edges'][neighbor] = {
+            # reset incoming edges from walkable neighbors
+            for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
+                self.cache['walkable_edges'][neighbor] = {
                     Edge(edge.neighbor, edge.distance, None)
-                    for edge in self.cache['transition_edges'][neighbor]
+                    for edge in self.cache['walkable_edges'][neighbor]
                 }
-                self.cache['transition_edges'][neighbor].remove(Edge(cluster, distance, None))
+                self.cache['walkable_edges'][neighbor].remove(Edge(cluster, distance, None))
 
-            # remove outgoing transition edges from cluster
-            del self.cache['transition_edges'][cluster]
+            # remove outgoing walkable edges from cluster
+            del self.cache['walkable_edges'][cluster]
 
         else:
             self.cache['subsumed_clusters'].remove(cluster)
@@ -757,14 +754,19 @@ class Graph:
 
         return
 
-    def replace_clusters(self, removals: Set[Cluster], additions: Set[Cluster]):
+    def replace_clusters(
+            self,
+            removals: Set[Cluster],
+            additions: Set[Cluster],
+            recompute_probabilities: bool = False,
+    ):
         """
         Replaces clusters in 'removals' by those in 'additions'.
         The set of points of clusters being removed must be identical to the set of points of clusters being added.
-        TODO: This may invalidate transition_probabilities. Refactor logic for computing transition probabilities.
 
         :param removals: set of clusters to remove from the graph
         :param additions: set of clusters to add to the graph
+        :param recompute_probabilities: whether to recompute transition probabilities
         :return:
         """
         points_removed = set(set(cluster.argpoints) for cluster in removals)
@@ -773,6 +775,10 @@ class Graph:
             raise ValueError(f"clusters being removed had different points compared to those being added")
         [self._remove(cluster) for cluster in removals]
         [self._add(cluster) for cluster in additions]
+
+        if recompute_probabilities:
+            self.recompute_transition_probabilities()
+
         return
 
     @property
@@ -801,7 +807,7 @@ class Graph:
             self.cache['subgraphs'] = set()
 
             unvisited: Set[Cluster] = {
-                cluster for cluster in self.transition_clusters
+                cluster for cluster in self.walkable_clusters
             }
             while unvisited:
                 component = self.traverse(unvisited.pop())
@@ -840,23 +846,23 @@ class Graph:
 
         :param cluster: source cluster
         :param choice: 'all' for all neighbors,
-                       'transition' for only those that are not subsumed,
+                       'walkable' for only those that are not subsumed,
                        'subsumed' for only those that are subsumed.
-        :return:
+        :return: list of relevant neighbors
         """
         if self.edges[cluster] is None:
             self.build_edges()
 
         if choice == 'all':
             return [edge.neighbor for edge in self.edges[cluster]]
-        elif choice == 'transition':
-            return [edge.neighbor for edge in self.transition_edges[cluster]]
+        elif choice == 'walkable':
+            return [edge.neighbor for edge in self.walkable_edges[cluster]]
         elif choice == 'subsumed':
             return [edge.neighbor for edge in self.subsumed_edges[cluster]]
         else:
             raise ValueError(f'choice must be one of: '
                              f'\'all\', '
-                             f'\'transition\', or '
+                             f'\'walkable\', or '
                              f'\'subsumed\'. '
                              f'Got: {choice}')
 
@@ -867,20 +873,27 @@ class Graph:
             *,
             choice: str = 'all',
     ) -> List[float]:
-        """ return distances to each neighbor of a given cluster. """
+        """ return distances to neighbors of a given cluster.
+
+        :param cluster: source cluster
+        :param choice: 'all' for all neighbors,
+                       'walkable' for only those that are not subsumed,
+                       'subsumed' for only those that are subsumed.
+        :return: list of relevant distances to neighbors
+        """
         if self.edges[cluster] is None:
             self.build_edges()
 
         if choice == 'all':
             return [edge.distance for edge in self.edges[cluster]]
-        elif choice == 'transition':
-            return [edge.distance for edge in self.transition_edges[cluster]]
+        elif choice == 'walkable':
+            return [edge.distance for edge in self.walkable_edges[cluster]]
         elif choice == 'subsumed':
             return [edge.distance for edge in self.subsumed_edges[cluster]]
         else:
             raise ValueError(f'choice must be one of: '
                              f'\'all\', '
-                             f'\'transition\', or '
+                             f'\'walkable\', or '
                              f'\'subsumed\'. '
                              f'Got: {choice}')
 
@@ -888,26 +901,24 @@ class Graph:
     def probabilities(
             self,
             cluster: Cluster,
-            *,
-            choice: str = 'all',
     ) -> List[float]:
-        """ return transition probabilities to each neighbor of a given cluster.
+        """ return transition probabilities to neighbors of a given cluster.
+        These are only valid among walkable clusters
+
+        :param cluster: source cluster
+        :return: list of relevant distances to neighbors
         """
         if self.edges[cluster] is None:
             self.build_edges()
 
-        if choice == 'all':
-            return [edge.probability for edge in self.edges[cluster]]
-        elif choice == 'transition':
-            return [edge.probability for edge in self.transition_edges[cluster]]
-        elif choice == 'subsumed':
-            return [edge.probability for edge in self.subsumed_edges[cluster]]
-        else:
-            raise ValueError(f'choice must be one of: '
-                             f'\'all\', '
-                             f'\'transition\', or '
-                             f'\'subsumed\'. '
-                             f'Got: {choice}')
+        if cluster in self.subsumed_clusters:
+            raise ValueError(f"cannot have transition probabilities for subsumed clusters")
+
+        probabilities = [edge.probability for edge in self.walkable_edges[cluster]]
+        if any((p is None for p in probabilities)):
+            self.recompute_transition_probabilities()
+            probabilities = [edge.probability for edge in self.walkable_edges[cluster]]
+        return probabilities
 
     def random_walks(
             self,
@@ -918,7 +929,7 @@ class Graph:
 
         :param starts: Clusters at which to start the random walks.
         :param steps: number of steps to take per walk.
-        :returns a dictionary of cluster to visit count.
+        :return: a dictionary of cluster to visit count.
         """
         if self.cardinality < 2:
             return {cluster: 1 for cluster in self.clusters}
@@ -931,36 +942,32 @@ class Graph:
         if any((edges is None for edges in self.edges.values())):
             self.build_edges()
 
-        if any((cluster not in self.transition_clusters for cluster in starts)):
+        if any((cluster not in self.walkable_clusters for cluster in starts)):
             raise ValueError(f'random walks may only be started at clusters '
                              f'that are not subsumed by other clusters.')
 
-        counts = {
-            cluster: 1 if cluster in starts else 0
-            for cluster in self.clusters
-        }
+        counts = {cluster: 0 for cluster in self.clusters}
+        counts.update({cluster: 1 for cluster in starts})
 
         # initialize walk locations.
-        walks = [
-            cluster for cluster in starts
-            if len(self.transition_edges[cluster]) > 0
-        ]
+        # only walk from clusters that have some walkable neighbors
+        walks = [cluster for cluster in starts if len(self.walkable_edges[cluster]) > 0]
         for _ in range(steps):
             # update walk locations
             walks = [
                 np.random.choice(
-                    a=list(self.neighbors(cluster, choice='transition')),
-                    p=list(self.probabilities(cluster, choice='transition')),
+                    a=self.neighbors(cluster, choice='walkable'),
+                    p=self.probabilities(cluster),
                 ) for cluster in walks
             ]
             # increment visit counts
             for cluster in walks:
                 counts[cluster] += 1
 
-        for cluster in self.transition_clusters:
+        for cluster in self.walkable_clusters:
             counts.update({
                 neighbor: counts[cluster] + counts[neighbor]
-                for (neighbor, _, _) in self.subsumed_edges[cluster]
+                for neighbor in self.neighbors(cluster, choice='subsumed')
             })
         return counts
 
@@ -975,16 +982,16 @@ class Graph:
         logging.debug(f'starting traversal from {start}')
         visited: Set[Cluster] = set()
         frontier: Set[Cluster] = {start}
-        # visit all reachable transition clusters
+        # visit all reachable walkable clusters
         while frontier:
             visited.update(frontier)
             frontier = {
                 neighbor for cluster in frontier
-                for neighbor in self.neighbors(cluster, choice='transition')
+                for neighbor in self.neighbors(cluster, choice='walkable')
                 if neighbor not in visited
             }
 
-        # include the clusters subsumed by visited transition clusters
+        # include the clusters subsumed by visited walkable clusters
         visited.update({
             edge.neighbor for cluster in visited
             for edge in self.subsumed_edges[cluster]
@@ -996,8 +1003,8 @@ class Graph:
         if any((edges is None for edges in self.edges.values())):
             self.build_edges()
 
-        if start not in self.transition_clusters:
-            raise ValueError(f'traversal must not start from a subsumed cluster.')
+        if start in self.subsumed_clusters:
+            raise ValueError(f'traversal may not start from a subsumed cluster.')
 
         logging.debug(f'starting breadth-first-traversal from {start}')
         visited = set()
@@ -1008,7 +1015,7 @@ class Graph:
                 visited.add(cluster)
                 queue.extend((
                     neighbor
-                    for neighbor in self.neighbors(cluster, choice='transition')
+                    for neighbor in self.neighbors(cluster, choice='walkable')
                     if neighbor not in visited
                 ))
 
@@ -1024,8 +1031,8 @@ class Graph:
         if any((edges is None for edges in self.edges.values())):
             self.build_edges()
 
-        if start not in self.transition_clusters:
-            raise ValueError(f'traversal must not start from a subsumed cluster.')
+        if start in self.subsumed_clusters:
+            raise ValueError(f'traversal may not start from a subsumed cluster.')
 
         logging.debug(f'starting depth-first-traversal from {start}')
         visited = set()
@@ -1036,7 +1043,7 @@ class Graph:
                 visited.add(cluster)
                 stack.extend((
                     neighbor
-                    for neighbor in self.neighbors(cluster, choice='transition')
+                    for neighbor in self.neighbors(cluster, choice='walkable')
                     if neighbor not in visited
                 ))
 
