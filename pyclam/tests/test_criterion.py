@@ -16,7 +16,10 @@ class TestCriterion(unittest.TestCase):
 
     def test_min_radius(self):
         min_radius = 0.1
-        self.manifold.build(criterion.MinRadius(min_radius), criterion.MaxDepth(12))
+        self.manifold.build(
+            criterion.MinRadius(min_radius),
+            criterion.MaxDepth(12),
+        )
         self.assertTrue(all((
             cluster.radius > min_radius
             for layer in self.manifold.layers
@@ -59,7 +62,7 @@ class TestCriterion(unittest.TestCase):
         return
 
     def test_minimize_subsumed(self):
-        fraction: float = 0.01
+        fraction: float = 0.2
 
         self.manifold.build(
             criterion.MaxDepth(12),

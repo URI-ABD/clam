@@ -82,20 +82,20 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_bft(self):
-        visited = self.manifold.graph.bft(next(iter(self.manifold.graph.transition_clusters)))
+        visited = self.manifold.graph.bft(next(iter(self.manifold.graph.walkable_clusters)))
         self.assertGreater(len(visited), 0)
         self.assertLessEqual(len(visited), self.manifold.graph.cardinality)
         return
 
     def test_dft(self):
-        visited = self.manifold.graph.dft(next(iter(self.manifold.graph.transition_edges)))
+        visited = self.manifold.graph.dft(next(iter(self.manifold.graph.walkable_edges)))
         self.assertGreater(len(visited), 0)
         self.assertLessEqual(len(visited), self.manifold.graph.cardinality)
         return
 
     def test_random_walks(self):
         results = self.manifold.graph.random_walks(
-            starts=list(self.manifold.graph.transition_clusters),
+            starts=list(self.manifold.graph.walkable_clusters),
             steps=100,
         )
         self.assertGreater(len(results), 0)
