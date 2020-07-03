@@ -65,8 +65,8 @@ class Cluster:
         # This is used while reading clusters from file during Cluster.from_json().
         if not argpoints:
             if 'children' in self.cache:
-                self.children = {child for child in self.cache['children']}
-                self.argpoints = [p for child in self.children for p in child.argpoints]
+                self.children: Set[Cluster] = {child for child in self.cache['children']}
+                self.argpoints: List[int] = [p for child in self.children for p in child.argpoints]
             else:
                 raise ValueError(f'Cluster {name} needs argpoints of children when reading from file')
         return
@@ -265,7 +265,7 @@ class Cluster:
         assert len(set(poles)) == len(poles), f'poles cannot contain duplicate points.'
         return poles
 
-    def partition(self, *criterion) -> List['Cluster']:
+    def partition(self, *criterion) -> Set['Cluster']:
         """ Partition cluster into children.
 
         If the cluster can be partitioned, partition it and return list of children.
@@ -291,7 +291,10 @@ class Cluster:
                     [child_argpoints[int(np.argmin(row))].append(p) for p, row in zip(argpoints, distances)]
 
             child_argpoints.sort(key=len)
-            self.children = [Cluster(self.manifold, argpoints, self.name + '0' + '1' * i) for i, argpoints in enumerate(child_argpoints)]
+            self.children = {
+                Cluster(self.manifold, argpoints, self.name + '0' + '1' * i)
+                for i, argpoints in enumerate(child_argpoints)
+            }
             logging.debug(f'{self} was partitioned into {len(self.children)} child clusters.')
 
         return self.children
@@ -320,7 +323,11 @@ class Cluster:
             argcenters = [child.argmedoid for child in children]
             distances = self.distance(np.asarray([point]), argcenters)[0]
             radii = [radius + child.radius for child in children]
-            candidates = {cluster: distance for cluster, distance, radius in zip(children, distances, radii) if distance <= radius}
+            candidates = {
+                cluster: distance
+                for cluster, distance, radius in zip(children, distances, radii)
+                if distance <= radius
+            }
 
             if len(candidates) == 0:
                 break
@@ -1199,7 +1206,8 @@ class Manifold:
         [criterion(self) for criterion in criteria]
         return
 
-    def _partition_single(self, criterion):
+    def _partition_single(self, criterion) -> List[Cluster]:
+        # TODO: Consider removing and only keeping multi-threaded version
         # filter out clusters not previously partitioned
         new_layer: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth < len(self.layers) - 1]
 
@@ -1211,7 +1219,7 @@ class Manifold:
         [new_layer.extend(cluster.children) if cluster.children else new_layer.append(cluster) for cluster in partitionable]
         return new_layer
 
-    def _partition_threaded(self, criterion):
+    def _partition_threaded(self, criterion) -> List[Cluster]:
         new_layer: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth < len(self.layers) - 1]
         partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == len(self.layers) - 1]
 
@@ -1312,7 +1320,7 @@ class Manifold:
             with_child = [cluster for cluster in manifold.layers[-1] if cluster.children]
             if with_child:
                 graph = childless + [child for cluster in with_child for child in cluster.children]
-                manifold.layers.append(Graph(*[c for c in graph]))
+                manifold.layers.append(Graph(*graph))
             else:
                 break
 
