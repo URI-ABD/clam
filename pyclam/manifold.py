@@ -646,7 +646,7 @@ class Graph:
             if neighbor in self.cache['transition_clusters']
         }
 
-        # reset incoming transition edges from neighbors
+        # reset incoming transition edges from transition neighbors
         [self.cache['transition_edges'][neighbor].add(Edge(neighbor, distance, None))
          for (neighbor, distance, _) in self.cache['transition_edges'][cluster]]
 
@@ -671,7 +671,21 @@ class Graph:
         return
 
     def _add_to_transition_edges(self, cluster: Cluster):
-        raise NotImplementedError
+        # add to set of transition clusters
+        self.cache['transition_clusters'].add(cluster)
+
+        # build outgoing transition edges from cluster
+        self.cache['transition_edges'][cluster] = {
+            Edge(neighbor, distance, None)
+            for (neighbor, distance, _) in self.edges[cluster]
+            if neighbor in self.cache['transition_clusters']
+        }
+
+        # add incoming transition edges from transition neighbors
+        [self.cache['transition_clusters'][neighbor].add(Edge(cluster, distance, None))
+         for (neighbor, distance, _) in self.cache['transition_edges'][cluster]]
+
+        return
 
     def _add(self, cluster: Cluster):
         self._find_neighbors(cluster)
@@ -710,6 +724,7 @@ class Graph:
         """
         Replaces clusters in 'removals' by those in 'additions'.
         The set of points of clusters being removed must be identical to the set of points of clusters being added.
+        TODO: This may invalidate transition_probabilities. Refactor logic for computing transition probabilities.
 
         :param removals: set of clusters to remove from the graph
         :param additions: set of clusters to add to the graph
