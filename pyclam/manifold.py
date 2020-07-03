@@ -388,8 +388,7 @@ class Graph:
         # Edge.neighbor is is the neighboring cluster.
         # Edge.distance is the distance to that neighbor.
         # Edge.probability is sued to pick an edge during a random walk.
-        self.edges: Dict[Cluster, Set[Edge]] = {cluster: None
-                                                for cluster in clusters}
+        self.edges: Dict[Cluster, Set[Edge]] = {cluster: None for cluster in clusters}
 
         self.cache: Dict[str, Any] = dict()
         return
@@ -544,22 +543,27 @@ class Graph:
         self.cache['subsumed_clusters'] = {
             cluster for cluster in self.clusters
             for (neighbor, distance, _) in self.edges[cluster]
-            if distance <= neighbor.radius - cluster.radius
+            if neighbor.radius >= distance + cluster.radius
+            # i.e. if cluster is subsumed by neighbor
         }
 
+        # transition clusters are those that are not subsumed clusters.
         self.cache['transition_clusters'] = set(self.clusters) - self.cache['subsumed_clusters']
 
+        # build outgoing edges from each cluster to every neighbor subsumed by that cluster
         self.cache['subsumed_edges'] = {
             cluster: {
-                edge for edge in self.edges[cluster]
+                Edge(edge.neighbor, edge.distance, None)
+                for edge in self.edges[cluster]
                 if edge.neighbor in self.cache['subsumed_clusters']
             } for cluster in self.clusters
         }
 
-        # Populate the set of Transition Clusters.
+        # build outgoing edges among transition clusters
         self.cache['transition_edges'] = {
             cluster: {
-                edge for edge in self.edges[cluster]
+                Edge(edge.neighbor, edge.distance, None)
+                for edge in self.edges[cluster]
                 if edge.neighbor not in self.cache['subsumed_clusters']
             } for cluster in self.clusters
             if cluster not in self.cache['subsumed_clusters']
@@ -612,7 +616,7 @@ class Graph:
 
         # remove from transition edges
         for (neighbor, distance, _) in self.cache['transition_edges'][cluster]:
-            # reset neighbor's outgoing edges
+            # reset outgoing edges from transition neighbors
             self.cache['transition_edges'][neighbor] = {
                 Edge(edge.neighbor, edge.distance, None)
                 for edge in self.cache['transition_edges'][neighbor]
@@ -720,7 +724,38 @@ class Graph:
         return
 
     def _remove(self, cluster: Cluster):
-        raise NotImplementedError
+        if cluster in self.cache['transition_clusters']:
+            self.cache['transition_clusters'].remove(cluster)
+
+            # reset incoming edges from transition neighbors
+            for (neighbor, distance, _) in self.cache['transition_edges'][cluster]:
+                self.cache['transition_edges'][neighbor] = {
+                    Edge(edge.neighbor, edge.distance, None)
+                    for edge in self.cache['transition_edges'][neighbor]
+                }
+                self.cache['transition_edges'][neighbor].remove(Edge(cluster, distance, None))
+
+            # remove outgoing transition edges from cluster
+            del self.cache['transition_edges'][cluster]
+
+        else:
+            self.cache['subsumed_clusters'].remove(cluster)
+
+        # remove all incoming subsumed edges to cluster
+        [self.cache['subsumed_edges'][neighbor].difference_update({Edge(cluster, distance, None)})
+         for (neighbor, distance, _) in self.edges[cluster]]
+
+        # remove all outgoing subsumed edges from cluster
+        del self.cache['subsumed_edges'][cluster]
+
+        # remove all incoming edges to cluster
+        [self.edges[neighbor].remove(Edge(cluster, distance, None))
+         for (neighbor, distance, _) in self.edges[cluster]]
+
+        # remove all outgoing edges from cluster
+        del self.edges[cluster]
+
+        return
 
     def replace_clusters(self, removals: Set[Cluster], additions: Set[Cluster]):
         """
