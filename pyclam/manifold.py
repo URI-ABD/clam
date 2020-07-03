@@ -606,9 +606,40 @@ class Graph:
         return self
 
     def _demote_to_subsumed_cluster(self, cluster: Cluster):
+        # move cluster from transition set to subsumed set
         self.cache['transition_clusters'].remove(cluster)
         self.cache['subsumed_clusters'].add(cluster)
-        raise NotImplementedError
+
+        # remove from transition edges
+        for (neighbor, distance, _) in self.cache['transition_edges'][cluster]:
+            # reset neighbor's outgoing edges
+            self.cache['transition_edges'][neighbor] = {
+                Edge(edge.neighbor, edge.distance, None)
+                for edge in self.cache['transition_edges'][neighbor]
+            }
+            # remove incoming edge to cluster
+            self.cache['transition_edges'][neighbor].remove(Edge(cluster, distance, None))
+
+        # build outgoing subsumed edges from cluster
+        self.cache['subsumed_edges'][cluster] = {
+            Edge(neighbor, distance, None)
+            for (neighbor, distance, _) in self.edges[cluster]
+            if cluster.radius >= distance + neighbor.radius
+        }
+
+        # add to incoming subsumed edges from neighbors that subsume cluster
+        [self.cache['subsumed_edges'][neighbor].add(Edge(cluster, distance, None))
+         for (neighbor, distance, _) in self.edges[cluster]
+         if neighbor.radius >= distance + cluster.radius]
+
+        return
+
+        self.cache['subsumed_edges'][cluster] = {
+            Edge(neighbor, distance, None)
+            for (neighbor, distance, _) in self.edges[cluster]
+            if cluster.radius >= distance + neighbor.radius
+        }
+        return
 
     def _promote_to_transition_cluster(self, cluster: Cluster):
         raise NotImplementedError
