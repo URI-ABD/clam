@@ -613,58 +613,21 @@ class Graph:
         self.recompute_transition_probabilities()
         return self
 
-    def _demote_to_subsumed_cluster(self, cluster: Cluster):
-        # move cluster from walkable set to subsumed set
-        self.cache['walkable_clusters'].remove(cluster)
-        self.cache['subsumed_clusters'].add(cluster)
-
-        # remove from walkable edges
-        for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
-            # reset outgoing edges from walkable neighbors
-            self.cache['walkable_edges'][neighbor] = {
-                Edge(edge.neighbor, edge.distance, None)
-                for edge in self.cache['walkable_edges'][neighbor]
-            }
-            # remove incoming edge to cluster
-            self.cache['walkable_edges'][neighbor].remove(Edge(cluster, distance, None))
-
-        self._add_to_subsumed_edges(cluster)
+    def _demote_to_subsumed(self, cluster: Cluster):
+        self._remove_walkable(cluster)
+        self._add_subsumed(cluster)
         return
 
-    def _promote_to_walkable_cluster(self, cluster: Cluster):
-        # move cluster from subsumed set to walkable set
-        self.cache['subsumed_clusters'].remove(cluster)
-        self.cache['walkable_clusters'].add(cluster)
-
-        # remove incoming subsumed edges to cluster
-        [self.cache['subsumed_edges'][neighbor].difference_update({Edge(cluster, distance, None)})
-         for (neighbor, distance, _) in self.edges[cluster]]
-
-        # reset outgoing subsumed edges from cluster
-        self.cache['subsumed_edges'][cluster] = {
-            Edge(neighbor, distance, None)
-            for (neighbor, distance, _) in self.edges[cluster]
-            if cluster.radius >= distance + neighbor.radius
-        }
-
-        # add outgoing walkable edges from cluster
-        self.cache['walkable_edges'][cluster] = {
-            Edge(neighbor, distance, None)
-            for (neighbor, distance, _) in self.edges[cluster]
-            if neighbor in self.cache['walkable_clusters']
-        }
-
-        # reset incoming walkable edges from walkable neighbors
-        [self.cache['walkable_edges'][neighbor].add(Edge(neighbor, distance, None))
-         for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]]
-
+    def _promote_to_walkable(self, cluster: Cluster):
+        self._remove_subsumed(cluster)
+        self._add_walkable(cluster)
         return
 
-    def _add_to_subsumed_edges(self, cluster: Cluster):
+    def _add_subsumed(self, cluster: Cluster):
         # add to set of subsumed clusters
         self.cache['subsumed_clusters'].add(cluster)
 
-        # build outgoing subsumed edges from cluster
+        # add outgoing subsumed edges from cluster
         self.cache['subsumed_edges'][cluster] = {
             Edge(neighbor, distance, None)
             for (neighbor, distance, _) in self.edges[cluster]
@@ -678,11 +641,28 @@ class Graph:
 
         return
 
-    def _add_to_walkable_edges(self, cluster: Cluster):
+    def _remove_subsumed(self, cluster: Cluster):
+        # remove incoming subsumed edges to cluster
+        [self.cache['subsumed_edges'][neighbor].remove(Edge(cluster, distance, None))
+         for (neighbor, distance, _) in self.edges[cluster]
+         if neighbor.radius >= distance + cluster.radius]
+
+        # reset outgoing subsumed edges from cluster
+        self.cache['subsumed_edges'][cluster] = {
+            Edge(neighbor, distance, None)
+            for (neighbor, distance, _) in self.edges[cluster]
+            if neighbor in self.cache['subsumed_clusters']
+        }
+
+        # remove from set of subsumed clusters
+        self.cache['subsumed_clusters'].remove(cluster)
+        return
+
+    def _add_walkable(self, cluster: Cluster):
         # add to set of walkable clusters
         self.cache['walkable_clusters'].add(cluster)
 
-        # build outgoing walkable edges from cluster
+        # add outgoing walkable edges from cluster
         self.cache['walkable_edges'][cluster] = {
             Edge(neighbor, distance, None)
             for (neighbor, distance, _) in self.edges[cluster]
@@ -690,9 +670,31 @@ class Graph:
         }
 
         # add incoming walkable edges from walkable neighbors
-        [self.cache['walkable_clusters'][neighbor].add(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]]
+        [self.cache['walkable_edges'][neighbor].add(Edge(cluster, distance, None))
+         for (neighbor, distance, _) in self.edges[cluster]
+         if neighbor in self.cache['walkable_clusters']]
 
+        # reset transition probabilities for all walkable neighbors
+        for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
+            self.cache['walkable_edges'][neighbor] = {
+                Edge(edge.neighbor, edge.distance, None)
+                for edge in self.cache['walkable_edges'][neighbor]
+            }
+        return
+
+    def _remove_walkable(self, cluster: Cluster):
+        # remove from walkable edges
+        for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
+            # reset outgoing edges from walkable neighbors
+            self.cache['walkable_edges'][neighbor] = {
+                Edge(edge.neighbor, edge.distance, None)
+                for edge in self.cache['walkable_edges'][neighbor]
+            }
+            # remove incoming edge to cluster
+            self.cache['walkable_edges'][neighbor].remove(Edge(cluster, distance, None))
+
+        self.cache['walkable_clusters'].remove(cluster)
+        del self.cache['walkable_edges'][cluster]
         return
 
     def _add(self, cluster: Cluster):
@@ -700,8 +702,7 @@ class Graph:
 
         # Handshake with neighbors
         [self.edges[neighbor].add(Edge(cluster, distance, None))
-         for edges in self.edges[cluster]
-         for (neighbor, distance, _) in edges]
+         for (neighbor, distance, _) in self.edges[cluster]]
 
         # Remove edge to cluster
         if Edge(cluster, 0., None) in self.edges[cluster]:
@@ -711,52 +712,31 @@ class Graph:
         subsumed = False
         for (neighbor, distance, _) in self.edges[cluster]:
             if cluster.radius >= distance + neighbor.radius:
-                # cluster subsumes neighbor
+                # cluster subsumes neighbor, deal with possible demotions
                 if neighbor in self.cache['walkable_clusters']:
-                    # this deals with all possible demotions
-                    self._demote_to_subsumed_cluster(neighbor)
+                    self._demote_to_subsumed(neighbor)
             elif neighbor.radius >= distance + cluster.radius:
                 # neighbor subsumes cluster
                 subsumed = True
-            else:
-                continue
 
         if subsumed:
-            self._add_to_subsumed_edges(cluster)
+            self._add_subsumed(cluster)
         else:
-            self._add_to_walkable_edges(cluster)
+            self._add_walkable(cluster)
         return
 
     def _remove(self, cluster: Cluster):
         if cluster in self.cache['walkable_clusters']:
-            self.cache['walkable_clusters'].remove(cluster)
-
-            # reset incoming edges from walkable neighbors
-            for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
-                self.cache['walkable_edges'][neighbor] = {
-                    Edge(edge.neighbor, edge.distance, None)
-                    for edge in self.cache['walkable_edges'][neighbor]
-                }
-                self.cache['walkable_edges'][neighbor].remove(Edge(cluster, distance, None))
-
-            # remove outgoing walkable edges from cluster
-            del self.cache['walkable_edges'][cluster]
-
+            self._remove_walkable(cluster)
         else:
-            self.cache['subsumed_clusters'].remove(cluster)
-
-        # remove all incoming subsumed edges to cluster
-        [self.cache['subsumed_edges'][neighbor].difference_update({Edge(cluster, distance, None)})
-         for (neighbor, distance, _) in self.edges[cluster]]
-
-        # remove all outgoing subsumed edges from cluster
-        del self.cache['subsumed_edges'][cluster]
+            self._remove_subsumed(cluster)
+            del self.cache['subsumed_edges'][cluster]
 
         # remove all incoming edges to cluster
         [self.edges[neighbor].remove(Edge(cluster, distance, None))
          for (neighbor, distance, _) in self.edges[cluster]]
 
-        # remove all outgoing edges from cluster
+        # remove cluster and outgoing edges from graph
         del self.edges[cluster]
 
         return
@@ -765,7 +745,7 @@ class Graph:
             self,
             removals: Set[Cluster],
             additions: Set[Cluster],
-            recompute_probabilities: bool = False,
+            recompute_probabilities: bool = True,
     ):
         """
         Replaces clusters in 'removals' by those in 'additions'.
@@ -776,10 +756,17 @@ class Graph:
         :param recompute_probabilities: whether to recompute transition probabilities
         :return:
         """
-        points_removed = set(set(cluster.argpoints) for cluster in removals)
-        points_added = set(set(cluster.argpoints) for cluster in additions)
+        if not removals.issubset(set(self.clusters)):
+            raise ValueError(f"Cannot remove a cluster that is not present in the graph")
+
+        if any((cluster in self.clusters for cluster in additions)):
+            raise ValueError(f"Cannot add a cluster that is already present in the graph.")
+
+        points_removed = {p for cluster in removals for p in cluster.argpoints}
+        points_added = {p for cluster in additions for p in cluster.argpoints}
         if points_removed != points_added:
             raise ValueError(f"clusters being removed had different points compared to those being added")
+
         [self._remove(cluster) for cluster in removals]
         [self._add(cluster) for cluster in additions]
 
