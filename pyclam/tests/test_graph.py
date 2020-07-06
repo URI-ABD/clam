@@ -1,10 +1,12 @@
 import unittest
 from itertools import combinations
+from typing import Set, Dict, List
 
 import numpy as np
 
 from pyclam import datasets, criterion
-from pyclam.manifold import Manifold, Graph
+from pyclam.manifold import Manifold, Graph, Cluster
+from pyclam.types import Edge
 
 
 class TestGraph(unittest.TestCase):
@@ -100,4 +102,45 @@ class TestGraph(unittest.TestCase):
         )
         self.assertGreater(len(results), 0)
         [self.assertGreater(v, 0) for k, v in results.items()]
+        return
+
+    @unittest.skip
+    def test_replace(self):
+        self.manifold.build(
+            criterion.MaxDepth(12),
+            criterion.LFDRange(80, 20),
+        )
+        self.manifold.layers[-1].build_edges()
+
+        for i in range(100):
+            clusters: Dict[int, Cluster] = {c: cluster for c, cluster in zip(range(self.manifold.graph.cardinality), self.manifold.graph.clusters)}
+            if len(clusters) < 10:
+                break
+            sample_size = len(clusters) // 10
+            samples: List[int] = list(map(int, np.random.choice(self.manifold.graph.cardinality, size=sample_size, replace=False)))
+            removals: Set[Cluster] = {clusters[c] for c in samples if clusters[c].children}
+            additions: Set[Cluster] = set()
+            [additions.update(cluster.children) for cluster in removals]
+
+            self.manifold.graph.replace_clusters(
+                removals=removals,
+                additions=additions,
+                recompute_probabilities=True,
+            )
+
+            clusters: Set[Cluster] = set(self.manifold.graph.clusters)
+
+            subsumed_clusters: Set[Cluster] = self.manifold.graph.cache['subsumed_clusters']
+            subsumed_edges: Dict[Cluster, Set[Edge]] = self.manifold.graph.cache['subsumed_edges']
+
+            walkable_clusters: Set[Cluster] = self.manifold.graph.cache['walkable_clusters']
+            walkable_edges: Dict[Cluster, Set[Edge]] = self.manifold.graph.cache['walkable_edges']
+
+            self.assertTrue(subsumed_clusters.issubset(clusters), f"\n1. subsumed clusters were not subset of clusters. iter: {i}")
+            self.assertTrue(walkable_clusters.issubset(clusters), f"\n2. walkable clusters were not subset of clusters. iter: {i}")
+            self.assertTrue(walkable_clusters.isdisjoint(subsumed_clusters), f"\n3. walkable clusters and subsumed clusters were not disjoint sets. iter: {i}")
+            self.assertSetEqual(clusters, subsumed_clusters.union(walkable_clusters),
+                                f"\n4. union of subsumed and walkable clusters was not the same as all clusters. iter: {i}")
+            self.assertSetEqual(clusters, set(subsumed_edges.keys()), f"\n5. keys in subsumed edges were not the same as clusters. iter: {i}")
+            self.assertSetEqual(walkable_clusters, set(walkable_edges.keys()), f"\n6. keys in walkable edges were not the same as walkable clusters. iter: {i}")
         return

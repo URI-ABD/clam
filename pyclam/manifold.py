@@ -3,6 +3,7 @@
 import concurrent.futures
 import logging
 import pickle
+import warnings
 from collections import deque
 from operator import itemgetter
 from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any
@@ -395,7 +396,7 @@ class Graph:
         # Edge.neighbor is the neighboring cluster.
         # Edge.distance is the distance to that neighbor.
         # Edge.probability is used to pick an edge during a random walk.
-        self.edges: Dict[Cluster, Set[Edge]] = {cluster: None for cluster in clusters}
+        self.edges: Dict[Cluster, Union[Set[Edge], None]] = {cluster: None for cluster in clusters}
 
         self.cache: Dict[str, Any] = dict()
         return
@@ -634,7 +635,7 @@ class Graph:
             if cluster.radius >= distance + neighbor.radius
         }
 
-        # add incoming subsumed edges from neighbors that subsumed cluster
+        # add incoming subsumed edges from neighbors that subsume cluster
         [self.cache['subsumed_edges'][neighbor].add(Edge(cluster, distance, None))
          for (neighbor, distance, _) in self.edges[cluster]
          if neighbor.radius >= distance + cluster.radius]
@@ -644,18 +645,11 @@ class Graph:
     def _remove_subsumed(self, cluster: Cluster):
         # remove incoming subsumed edges to cluster
         [self.cache['subsumed_edges'][neighbor].remove(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.edges[cluster]
+         for (neighbor, distance, _) in self.cache['subsumed_edges'][cluster]
          if neighbor.radius >= distance + cluster.radius]
 
-        # reset outgoing subsumed edges from cluster
-        self.cache['subsumed_edges'][cluster] = {
-            Edge(neighbor, distance, None)
-            for (neighbor, distance, _) in self.edges[cluster]
-            if neighbor in self.cache['subsumed_clusters']
-        }
-
-        # remove from set of subsumed clusters
         self.cache['subsumed_clusters'].remove(cluster)
+        del self.cache['subsumed_edges'][cluster]
         return
 
     def _add_walkable(self, cluster: Cluster):
@@ -698,6 +692,7 @@ class Graph:
         return
 
     def _add(self, cluster: Cluster):
+        self.edges[cluster] = None
         self._find_neighbors(cluster)
 
         # Handshake with neighbors
@@ -730,11 +725,13 @@ class Graph:
             self._remove_walkable(cluster)
         else:
             self._remove_subsumed(cluster)
-            del self.cache['subsumed_edges'][cluster]
 
         # remove all incoming edges to cluster
-        [self.edges[neighbor].remove(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.edges[cluster]]
+        for (neighbor, _, _) in self.edges[cluster]:
+            self.edges[neighbor] = {
+                edge for edge in self.edges[neighbor]
+                if edge.neighbor != cluster
+            }
 
         # remove cluster and outgoing edges from graph
         del self.edges[cluster]
@@ -767,11 +764,20 @@ class Graph:
         if points_removed != points_added:
             raise ValueError(f"clusters being removed had different points compared to those being added")
 
-        [self._remove(cluster) for cluster in removals]
-        [self._add(cluster) for cluster in additions]
+        # [self._remove(cluster) for cluster in removals]
+        # [self._add(cluster) for cluster in additions]
+        #
+        # if recompute_probabilities:
+        #     self.recompute_transition_probabilities()
+        clusters: Set[Cluster] = set(self.clusters)
+        clusters.difference_update(removals)
+        clusters.update(additions)
+
+        self.cache.clear()
+        self.edges = {cluster: None for cluster in clusters}
 
         if recompute_probabilities:
-            self.recompute_transition_probabilities()
+            self.build_edges()
 
         return
 
@@ -891,16 +897,15 @@ class Graph:
                              f'\'subsumed\'. '
                              f'Got: {choice}')
 
-    # noinspection DuplicatedCode
     def probabilities(
             self,
             cluster: Cluster,
     ) -> List[float]:
         """ return transition probabilities to neighbors of a given cluster.
-        These are only valid among walkable clusters
+        These are only valid among walkable clusters.
 
-        :param cluster: source cluster
-        :return: list of relevant distances to neighbors
+        :param cluster: source cluster.
+        :return: list of transition probabilities to walkable neighbors.
         """
         if self.edges[cluster] is None:
             self.build_edges()
@@ -1166,6 +1171,7 @@ class Manifold:
         if selection_criteria:
             graph = selection_criteria[0](self.root)
         else:
+            warnings.warn(message="No Selection Criterion was provided. Using leaves for building graph...")
             graph = [cluster for cluster in self.layers[-1]]
         self.graph = Graph(*graph)
         self.build_graph(*graph_criteria)
