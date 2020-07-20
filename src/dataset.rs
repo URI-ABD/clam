@@ -3,11 +3,12 @@ use ndarray::*;
 use std::collections::{HashMap};
 use distances::Builder;
 
-pub struct Dataset<T> {
+pub struct Dataset<T, D> {
     pub data: Box<Data<T>>,
     pub metric: &'static str,
     pub func: fn(&[T], &[T]) -> Radii,
     pub history: HashMap<Index, f64>,
+    pub dist: D,
 }
 
 use std::fmt;

@@ -15,9 +15,11 @@ type Children<T> = Option<Vec<Rc<Cluster<T>>>>;
 const K: u8 = 2;
 const SUBSAMPLE: usize = 100;
 
+let cl: Cluster<(f64, f64), impl FnMut((f64, f64), (f64, f64)) -> f64> = Cluster::new(...);
+
 #[derive(Debug)]
-pub struct Cluster<T> {
-    pub dataset: Rc<Dataset<T>>,
+pub struct Cluster<T, D> {
+    pub dataset: Rc<Dataset<T, D>>,
     pub indices: Indices,
     pub name: String,
     pub children: Children<T>,
@@ -78,7 +80,32 @@ impl<T> Cluster<T> {
         }
     }
 
-    pub fn partition(self, criteria: &Vec<impl Criterion<T>>) -> Cluster<T> {
+    let dist_name = "euclidean"; // really read from CLI
+    let cluster = match dist_name {
+        "euclidean" => {
+            partition(criteria, euclidean)
+        }
+        "hamming" => {
+            partition(criteria, hamming)
+        }
+    };
+
+    fn euclidean<N: Numeric>(p1: N, p2: N) -> f64 { ... }
+
+    |p1, p2| -> f64 { ... }
+
+    struct Euclidean;
+
+    impl<P> FnMut(P, P) for Eucliean {
+        fn call(...) {
+        }
+    }
+
+    pub fn partition<P>(
+        self,
+        criteria: &Vec<impl Criterion<T>>,
+        dist: impl FnMut(P, P) -> f64,
+    ) -> Cluster<T> {
         for criterion in criteria.iter() {
             if criterion.check(&self) == false {
                 return self;
