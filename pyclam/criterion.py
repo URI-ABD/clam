@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Set, Tuple, List
+from typing import Set, Tuple, List, Iterable
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -111,6 +111,28 @@ class UniformDistribution(ClusterCriterion):
         return distance > 0.25
 
 
+class Clause(ClusterCriterion):
+    def __init__(
+            self,
+            lfd_ratio: Tuple[float, float] = (0, np.inf),
+            cardinality_ratio: Tuple[float, float] = (0, np.inf),
+            radius_ratio: Tuple[float, float] = (0, np.inf),
+    ):
+        self.min_lfd, self.max_lfd = float(lfd_ratio[0]), float(lfd_ratio[1])
+        self.min_cardinality, self.max_cardinality = float(cardinality_ratio[0]), float(cardinality_ratio[1])
+        self.min_radius, self.max_radius = float(radius_ratio[0]), float(radius_ratio[1])
+
+    def __call__(self, cluster: Cluster) -> bool:
+        lfd_ratio = cluster.local_fractal_dimension / cluster.parent.local_fractal_dimension
+        cardinality_ratio = cluster.cardinality / cluster.parent.cardinality
+        radius_ratio = max(cluster.radius, 1e-16) / max(cluster.parent.radius, 1e-16)
+        return all((
+                self.min_lfd <= lfd_ratio <= self.max_lfd,
+                self.min_cardinality <= cardinality_ratio <= self.max_cardinality,
+                self.min_radius <= radius_ratio <= self.max_radius,
+        ))
+
+
 class Leaves(SelectionCriterion):
     def __init__(self):
         return
@@ -133,16 +155,11 @@ class Layer(SelectionCriterion):
             return [cluster for cluster in manifold.layers[self.depth].clusters]
 
 
-class SelectionClause(SelectionCriterion):
-    def __init__(
-            self,
-            lfd_ratio: Tuple[float, float] = (0, np.inf),
-            cardinality_ratio: Tuple[float, float] = (0, np.inf),
-            radius_ratio: Tuple[float, float] = (0, np.inf),
-    ):
-        self.min_lfd, self.max_lfd = float(lfd_ratio[0]), float(lfd_ratio[1])
-        self.min_cardinality, self.max_cardinality = float(cardinality_ratio[0]), float(cardinality_ratio[1])
-        self.min_radius, self.max_radius = float(radius_ratio[0]), float(radius_ratio[1])
+class SelectionClauses(SelectionCriterion):
+    def __init__(self, clauses: Iterable[Clause]):
+        if any((not isinstance(c, Clause) for c in clauses)):
+            raise TypeError(f'selection clauses mut all be of type Clause.')
+        self.clauses: List[Clause] = list(clauses)
 
     def __call__(self, root: Cluster) -> Set[Cluster]:
         logging.info(f'selecting clusters for optimal graph...')
@@ -154,15 +171,10 @@ class SelectionClause(SelectionCriterion):
             new_clusters: Set[Cluster] = set()
             for cluster in clusters:
                 if cluster.children:
-                    lfd_ratio = cluster.local_fractal_dimension / cluster.parent.local_fractal_dimension
-                    cardinality_ratio = cluster.cardinality / cluster.parent.cardinality
-                    radius_ratio = max(cluster.radius, 1e-16) / max(cluster.parent.radius, 1e-16)
-                    if all((
-                        self.min_lfd <= lfd_ratio <= self.max_lfd,
-                        self.min_cardinality <= cardinality_ratio <= self.max_cardinality,
-                        self.min_radius <= radius_ratio <= self.max_radius,
-                    )):
-                        selected.add(cluster)
+                    for clause in self.clauses:
+                        if clause(cluster):
+                            selected.add(cluster)
+                            break
                     else:
                         new_clusters.update(cluster.children)
                 else:

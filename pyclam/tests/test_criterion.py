@@ -66,9 +66,11 @@ class TestCriterion(unittest.TestCase):
         lfd_range = (0.87, np.inf)
         cardinality_range = (0.229, 0.372)
         radius_range = (0, np.inf)
+        clause = criterion.Clause(lfd_range, cardinality_range, radius_range)
+
         self.manifold.build(
             criterion.MaxDepth(20),
-            criterion.SelectionClause(lfd_range, cardinality_range, radius_range),
+            criterion.SelectionClauses([clause]),
         )
 
         for leaf in self.manifold.layers[-1].clusters:
