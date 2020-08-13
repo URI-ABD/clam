@@ -1207,6 +1207,8 @@ class Manifold:
         self.root.candidates = {self.root: 0.}
         self.graph.build_edges()
         [criterion(self) for criterion in criteria]
+        logging.info(f'built graph with {self.graph.cardinality} clusters, '
+                     f'with {len(self.graph.subsumed_clusters) / self.graph.cardinality:.4f} subsumed ratio.')
         return
 
     def _partition_single(self, criterion) -> List[Cluster]:

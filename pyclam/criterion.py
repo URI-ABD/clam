@@ -145,6 +145,7 @@ class SelectionClause(SelectionCriterion):
         self.min_radius, self.max_radius = float(radius_ratio[0]), float(radius_ratio[1])
 
     def __call__(self, root: Cluster) -> Set[Cluster]:
+        logging.info(f'selecting clusters for optimal graph...')
         manifold = root.manifold
         clusters: Set[Cluster] = {cluster for cluster in manifold.layers[1].clusters}
         selected: Set[Cluster] = set()
@@ -168,7 +169,8 @@ class SelectionClause(SelectionCriterion):
                     selected.add(cluster)
             clusters = new_clusters
 
-        return clusters
+        logging.info(f'selected {len(selected)} clusters for optimal graph')
+        return selected
 
 
 class LFDRange(SelectionCriterion):
