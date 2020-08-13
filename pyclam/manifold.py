@@ -81,10 +81,7 @@ class Cluster:
 
     def __lt__(self, other: 'Cluster') -> bool:
         """ For sorting clusters in Graphs. Sorts by depth, breaking ties by name. """
-        if self.depth == other.depth:
-            return self.name < other.name
-        else:
-            return self.depth < other.depth
+        return (self.name < other.name) if self.depth == other.depth else (self.depth < other.depth)
 
     def __bool__(self) -> bool:
         return self.cardinality > 0
@@ -112,10 +109,12 @@ class Cluster:
 
     @property
     def parent(self) -> 'Cluster':
-        if self.depth > 0:
-            return self.manifold.ancestry(self)[-2]
-        else:
-            raise ValueError(f"root cluster has no parent")
+        if 'parent' not in self.cache:
+            if self.depth > 0:
+                self.cache['parent'] = self.manifold.ancestry(self)[-2]
+            else:
+                raise ValueError(f"root cluster has no parent")
+        return self.cache['parent']
 
     @property
     def cardinality(self) -> int:
@@ -224,6 +223,9 @@ class Cluster:
         if 'radius' not in self.cache:
             logging.debug(f'building cache for {self}')
             _ = self.argradius
+            if self.cache['radius'] < 0:
+                raise ValueError(f'got cluster {self.name} with negative radius. '
+                                 f'Make sure that the distance function used always returns non-negative values.')
         return self.cache['radius']
 
     @property
@@ -232,12 +234,14 @@ class Cluster:
         if 'local_fractal_dimension' not in self.cache:
             logging.debug(f'building cache for {self}')
             if self.nsamples == 1:
-                return 0.
-            count = [d <= (self.radius / 2)
-                     for batch in iter(self)
-                     for d in self.distance_from(batch)]
-            count = np.sum(count)
-            self.cache['local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
+                self.cache['local_fractal_dimension'] = 1.
+            else:
+                count = sum([
+                    1 if distance <= (self.radius / 2) else 0
+                    for batch in iter(self)
+                    for distance in self.distance_from(batch)
+                ])
+                self.cache['local_fractal_dimension'] = 1. if count == 0 else np.log2(self.cardinality / count)
         return self.cache['local_fractal_dimension']
 
     def clear_cache(self) -> None:
@@ -412,7 +416,7 @@ class Graph:
                 set(self.edges[cluster]) == set(other.edges[cluster])
                 for cluster in self.clusters
             ))
-        return cluster_equality and edges_equality
+            return cluster_equality and edges_equality
 
     def __bool__(self) -> bool:
         return self.cardinality > 0
@@ -424,7 +428,7 @@ class Graph:
     def __str__(self) -> str:
         # Cashing value because sort can be expensive on many clusters.
         if 'str' not in self.cache:
-            self.cache['str'] = ','.join(sorted(list(map(str, self.clusters))))
+            self.cache['str'] = ', '.join(sorted(list(map(str, self.clusters))))
         return self.cache['str']
 
     def __repr__(self) -> str:
@@ -1063,7 +1067,13 @@ class Manifold:
         k-nearest neighbors search,
     """
 
-    def __init__(self, data: Data, metric: Metric, argpoints: Union[Vector, float] = None, **kwargs):
+    def __init__(
+            self,
+            data: Data,
+            metric: Metric,
+            argpoints: Union[Vector, float] = None,
+            **kwargs
+    ):
         """ A Manifold needs the data from which to learn the manifold, and a distance function to use while doing so.
 
         :param data: The data to learn. This should be a numpy.ndarray or a numpy.memmap.

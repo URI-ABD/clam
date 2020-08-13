@@ -119,6 +119,58 @@ class Leaves(SelectionCriterion):
         return {cluster for cluster in root.manifold.layers[-1].clusters}
 
 
+class Layer(SelectionCriterion):
+    def __init__(self, depth: int):
+        if depth <= 0:
+            raise ValueError(f'expected a positive depth. got: {depth}')
+        self.depth = depth
+
+    def __call__(self, root: Cluster):
+        manifold: Manifold = root.manifold
+        if manifold.depth <= self.depth:
+            return [cluster for cluster in manifold.layers[-1].clusters]
+        else:
+            return [cluster for cluster in manifold.layers[self.depth].clusters]
+
+
+class SelectionClause(SelectionCriterion):
+    def __init__(
+            self,
+            lfd_ratio: Tuple[float, float] = (0, np.inf),
+            cardinality_ratio: Tuple[float, float] = (0, np.inf),
+            radius_ratio: Tuple[float, float] = (0, np.inf),
+    ):
+        self.min_lfd, self.max_lfd = float(lfd_ratio[0]), float(lfd_ratio[1])
+        self.min_cardinality, self.max_cardinality = float(cardinality_ratio[0]), float(cardinality_ratio[1])
+        self.min_radius, self.max_radius = float(radius_ratio[0]), float(radius_ratio[1])
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        manifold = root.manifold
+        clusters: Set[Cluster] = {cluster for cluster in manifold.layers[1].clusters}
+        selected: Set[Cluster] = set()
+
+        while clusters:
+            new_clusters: Set[Cluster] = set()
+            for cluster in clusters:
+                if cluster.children:
+                    lfd_ratio = cluster.local_fractal_dimension / cluster.parent.local_fractal_dimension
+                    cardinality_ratio = cluster.cardinality / cluster.parent.cardinality
+                    radius_ratio = max(cluster.radius, 1e-16) / max(cluster.parent.radius, 1e-16)
+                    if all((
+                        self.min_lfd <= lfd_ratio <= self.max_lfd,
+                        self.min_cardinality <= cardinality_ratio <= self.max_cardinality,
+                        self.min_radius <= radius_ratio <= self.max_radius,
+                    )):
+                        selected.add(cluster)
+                    else:
+                        new_clusters.update(cluster.children)
+                else:
+                    selected.add(cluster)
+            clusters = new_clusters
+
+        return clusters
+
+
 class LFDRange(SelectionCriterion):
 
     def __init__(self, upper: float, lower: float):
