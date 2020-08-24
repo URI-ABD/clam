@@ -244,6 +244,42 @@ class Cluster:
                 self.cache['local_fractal_dimension'] = 1. if count == 0 else np.log2(self.cardinality / count)
         return self.cache['local_fractal_dimension']
 
+    @property
+    def ancestors(self) -> List['Cluster']:
+        """ Ancestry of self, excluding self.
+        """
+        return self.manifold.ancestry(self)[:-1]
+
+    @property
+    def descendents(self) -> List['Cluster']:
+        """ All clusters in the subtree starting at self, excluding self.
+        """
+        return [cluster for layer in self.manifold.layers[self.depth + 1:]
+                for cluster in layer.clusters
+                if self.name == cluster.name[:len(self.name)]]
+
+    @property
+    def ratios(self) -> List[float]:
+        if 'ratios' not in self.cache:
+            self.cache['ratios'] = [  # Child/Parent Ratios
+                self.local_fractal_dimension / self.parent.local_fractal_dimension,  # local fractal dimension
+                self.cardinality / self.parent.cardinality,  # cardinality
+                max(self.radius, 1e-16) / max(self.parent.radius, 1e-16)  # radius
+            ] if self.depth > 0 else [1., 1., 1.]
+        return self.cache['ratios']
+
+    @property
+    def ema_ratios(self) -> List[float]:
+        if 'ema_ratios' not in self.cache:
+            if self.depth > 0:
+                smoothing, period = 2, 10
+                alpha = smoothing / (1 + period)
+                current, previous = np.asarray(self.ratios), np.asarray(self.parent.ratios)
+                self.cache['ema_ratios'] = alpha * current + (1 - alpha) * previous
+            else:
+                self.cache['ema_ratios'] = [1., 1., 1.]
+        return self.cache['ema_ratios']
+
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
         logging.debug(f'clearing cache for {self}')
