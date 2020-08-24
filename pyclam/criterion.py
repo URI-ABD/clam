@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Set, Tuple, List, Iterable
+from typing import Set, Tuple, List, Iterable, Union, Dict
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -183,6 +183,46 @@ class SelectionClauses(SelectionCriterion):
 
         logging.info(f'selected {len(selected)} clusters for optimal graph')
         return selected
+
+
+class RegressionConstants(SelectionCriterion):
+    def __init__(self, constants: Union[np.array, List[float]]):
+        constants = np.asarray(constants, dtype=float)
+        if constants.shape != (6,):
+            raise ValueError(f'expected a vector of 6 elements. Got {constants.shape} instead.')
+        self.constants: np.array = constants
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        manifold = root.manifold
+        graph: Set[Cluster] = set()
+        predicted_auc: Dict[Cluster, float] = self._predict_auc(root.manifold)
+
+        clusters: List[Cluster] = [child for child in manifold.root.children]
+        while clusters:
+            new_clusters: List[Cluster] = list()
+            for cluster in clusters:
+                if cluster.children:
+                    subtree_auc = [predicted_auc[c] for c in cluster.descendents]
+                    if predicted_auc[cluster] >= np.percentile(subtree_auc, q=75):
+                        graph.add(cluster)
+                    else:
+                        new_clusters.extend(cluster.children)
+                else:
+                    graph.add(cluster)
+            clusters = new_clusters
+        return graph
+
+    def _predict_auc(self, manifold: Manifold) -> Dict[Cluster, float]:
+        predicted_auc: Dict[Cluster, float] = {
+            cluster: float(np.dot(self.constants, np.concatenate([
+                np.asarray(cluster.ratios, dtype=float),
+                np.asarray(cluster.ema_ratios, dtype=float)
+            ])))
+            for layer in manifold.layers
+            for cluster in layer.clusters
+            if cluster.depth == layer.depth
+        }
+        return predicted_auc
 
 
 class LFDRange(SelectionCriterion):
