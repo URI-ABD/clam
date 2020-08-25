@@ -185,7 +185,7 @@ class SelectionClauses(SelectionCriterion):
         return selected
 
 
-class RegressionConstants(SelectionCriterion):
+class LinearRegressionConstants(SelectionCriterion):
     def __init__(self, constants: Union[np.array, List[float]]):
         constants = np.asarray(constants, dtype=float)
         if constants.shape != (6,):
