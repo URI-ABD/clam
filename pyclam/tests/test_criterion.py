@@ -1,7 +1,5 @@
 import unittest
 
-import numpy as np
-
 from pyclam import Manifold, datasets, criterion, Graph
 
 
@@ -67,20 +65,6 @@ class TestCriterion(unittest.TestCase):
             ancestry = manifold.ancestry(leaf)
             included = sum((1 if ancestor in graph.clusters else 0 for ancestor in ancestry))
             self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
-        return
-
-    def test_clause_selection(self):
-        lfd_range = (0.87, np.inf)
-        cardinality_range = (0.229, 0.372)
-        radius_range = (0, np.inf)
-        clause = criterion.Clause(lfd_range, cardinality_range, radius_range)
-
-        self.manifold.build(
-            criterion.MaxDepth(20),
-            criterion.SelectionClauses([clause]),
-        )
-
-        self._graph_invariant(self.manifold, self.manifold.graph)
         return
 
     def test_linear_regression(self):

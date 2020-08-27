@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Set, Tuple, List, Iterable, Union, Dict
+from typing import Set, Tuple, List, Union, Dict
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -111,29 +111,9 @@ class UniformDistribution(ClusterCriterion):
         return distance > 0.25
 
 
-class Clause(ClusterCriterion):
-    def __init__(
-            self,
-            lfd_ratio: Tuple[float, float] = (0, np.inf),
-            cardinality_ratio: Tuple[float, float] = (0, np.inf),
-            radius_ratio: Tuple[float, float] = (0, np.inf),
-    ):
-        self.min_lfd, self.max_lfd = float(lfd_ratio[0]), float(lfd_ratio[1])
-        self.min_cardinality, self.max_cardinality = float(cardinality_ratio[0]), float(cardinality_ratio[1])
-        self.min_radius, self.max_radius = float(radius_ratio[0]), float(radius_ratio[1])
-
-    def __call__(self, cluster: Cluster) -> bool:
-        lfd_ratio = cluster.local_fractal_dimension / cluster.parent.local_fractal_dimension
-        cardinality_ratio = cluster.cardinality / cluster.parent.cardinality
-        radius_ratio = max(cluster.radius, 1e-16) / max(cluster.parent.radius, 1e-16)
-        return all((
-                self.min_lfd <= lfd_ratio <= self.max_lfd,
-                self.min_cardinality <= cardinality_ratio <= self.max_cardinality,
-                self.min_radius <= radius_ratio <= self.max_radius,
-        ))
-
-
 class Leaves(SelectionCriterion):
+    """ Selects the leaves for building the graph.
+    """
     def __init__(self):
         return
 
@@ -142,54 +122,32 @@ class Leaves(SelectionCriterion):
 
 
 class Layer(SelectionCriterion):
+    """ Selects the layer at the specified depth.
+    """
     def __init__(self, depth: int):
         if depth <= 0:
             raise ValueError(f'expected a positive depth. got: {depth}')
         self.depth = depth
 
-    def __call__(self, root: Cluster):
+    def __call__(self, root: Cluster) -> Set[Cluster]:
         manifold: Manifold = root.manifold
         if manifold.depth <= self.depth:
-            return [cluster for cluster in manifold.layers[-1].clusters]
+            return {cluster for cluster in manifold.layers[-1].clusters}
         else:
-            return [cluster for cluster in manifold.layers[self.depth].clusters]
-
-
-class SelectionClauses(SelectionCriterion):
-    def __init__(self, clauses: Iterable[Clause]):
-        if any((not isinstance(c, Clause) for c in clauses)):
-            raise TypeError(f'selection clauses mut all be of type Clause.')
-        self.clauses: List[Clause] = list(clauses)
-
-    def __call__(self, root: Cluster) -> Set[Cluster]:
-        logging.info(f'selecting clusters for optimal graph...')
-        manifold = root.manifold
-        clusters: Set[Cluster] = {cluster for cluster in manifold.layers[1].clusters}
-        selected: Set[Cluster] = set()
-
-        while clusters:
-            new_clusters: Set[Cluster] = set()
-            for cluster in clusters:
-                if cluster.children:
-                    for clause in self.clauses:
-                        if clause(cluster):
-                            selected.add(cluster)
-                            break
-                    else:
-                        new_clusters.update(cluster.children)
-                else:
-                    selected.add(cluster)
-            clusters = new_clusters
-
-        logging.info(f'selected {len(selected)} clusters for optimal graph')
-        return selected
+            return {cluster for cluster in manifold.layers[self.depth].clusters}
 
 
 class LinearRegressionConstants(SelectionCriterion):
+    """ Uses constants from a meta-ml model using linear regression.
+    There are 6 constants, one for each of the ratios and ema_ratios in Cluster.
+    """
+
     def __init__(self, constants: Union[np.array, List[float]]):
+        num_constants = 6
+
         constants = np.asarray(constants, dtype=float)
-        if constants.shape != (6,):
-            raise ValueError(f'expected a vector of 6 elements. Got {constants.shape} instead.')
+        if constants.shape != (num_constants,):
+            raise ValueError(f'expected a vector of {num_constants} elements. Got {constants.shape} instead.')
         self.constants: np.array = constants
 
     def __call__(self, root: Cluster) -> Set[Cluster]:
@@ -226,7 +184,9 @@ class LinearRegressionConstants(SelectionCriterion):
 
 
 class LFDRange(SelectionCriterion):
-
+    """ Selects clusters based on when their ancestry crosses certain thresholds of LFD values.
+    This works a bit like a two-state machine.
+    """
     def __init__(self, upper: float, lower: float):
         if not (0. < lower <= upper <= 100.):
             raise ValueError(f'LFDRange expected 0 < lower <= upper <= 100 for upper and lower thresholds.'
@@ -357,10 +317,10 @@ def _find_parents_to_remove(graph: Graph) -> Set[Cluster]:
 
 
 class MinimizeSubsumed(GraphCriterion):
-    """
-    Minimize fraction of subsumed clusters in the graph.
+    """ Minimize fraction of subsumed clusters in the graph.
     Terminate early if fraction subsumed falls under the given threshold.
     """
+    # TODO: Redo after fixing Graph.add and Graph.remove
     def __init__(self, fraction: float):
         if not (0. < fraction < 1.):
             raise ValueError(f'fraction must be between 0 and 1. Got {fraction:.2f}')

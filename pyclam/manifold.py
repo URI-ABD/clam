@@ -211,6 +211,10 @@ class Cluster:
 
             argradii_radii = [argmax_max(batch) for batch in iter(self)]
             argradius, radius = max(argradii_radii, key=itemgetter(1))
+            if radius < 0:
+                raise ValueError(f'got cluster {self.name} with negative radius. '
+                                 f'Make sure that the distance function used always returns non-negative values.')
+
             self.cache['argradius'], self.cache['radius'] = int(argradius), float(radius)
         return self.cache['argradius']
 
@@ -223,9 +227,6 @@ class Cluster:
         if 'radius' not in self.cache:
             logging.debug(f'building cache for {self}')
             _ = self.argradius
-            if self.cache['radius'] < 0:
-                raise ValueError(f'got cluster {self.name} with negative radius. '
-                                 f'Make sure that the distance function used always returns non-negative values.')
         return self.cache['radius']
 
     @property
@@ -332,10 +333,12 @@ class Cluster:
                     [child_argpoints[int(np.argmin(row))].append(p) for p, row in zip(argpoints, distances)]
 
             child_argpoints.sort(key=len)
-            self.children = {
+            self.children: Set['Cluster'] = {
                 Cluster(self.manifold, argpoints, self.name + '0' + '1' * i)
                 for i, argpoints in enumerate(child_argpoints)
             }
+            [child.cache.update({'parent': self}) for child in self.children]
+
             logging.debug(f'{self} was partitioned into {len(self.children)} child clusters.')
 
         return self.children
