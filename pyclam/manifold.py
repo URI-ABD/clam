@@ -3,7 +3,6 @@
 import concurrent.futures
 import logging
 import pickle
-import warnings
 from collections import deque
 from operator import itemgetter
 from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any
@@ -645,6 +644,9 @@ class Graph:
 
     def build_edges(self) -> 'Graph':
         """ Calculates edges for the graph. """
+        depths = [cluster.depth for cluster in self.clusters]
+        logging.info(f'building edges for graph: depths [{min(depths)}, {max(depths)}], {self.cardinality} clusters.')
+
         # build edges
         [self._find_neighbors(cluster) for cluster in self.clusters]
 
@@ -1145,7 +1147,7 @@ class Manifold:
 
         self.root: Cluster = Cluster(self, self.argpoints, '')
         self.layers: List[Graph] = [Graph(self.root)]
-        self.graph: Graph = Graph(self.root)
+        self.graphs: List[Graph] = [Graph(self.root)]
 
         self.cache: Dict[str, Any] = dict()
         self.cache.update(**kwargs)
@@ -1203,7 +1205,8 @@ class Manifold:
 
     def build(self, *criteria) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
-        from pyclam.criterion import ClusterCriterion, SelectionCriterion, GraphCriterion
+        from pyclam.criterion import ClusterCriterion, SelectionCriterion
+
         cluster_criteria: List[ClusterCriterion] = [
             criterion for criterion in criteria
             if isinstance(criterion, ClusterCriterion)
@@ -1213,22 +1216,17 @@ class Manifold:
             criterion for criterion in criteria
             if isinstance(criterion, SelectionCriterion)
         ]
-        assert len(selection_criteria) < 2, f"Cannot have more than one selection criteria. Got {len(selection_criteria)}"
-
-        graph_criteria: List[GraphCriterion] = [
-            criterion for criterion in criteria
-            if isinstance(criterion, GraphCriterion)
-        ]
 
         self.layers = [Graph(self.root)]
         self.build_tree(*cluster_criteria)
-        if selection_criteria:
-            graph = selection_criteria[0](self.root)
+        self.root.candidates = {self.root: 0.}
+
+        if len(selection_criteria) > 0:
+            logging.info(f'building graphs with {len(selection_criteria)} Selection Criteria.')
+            self.graphs = [Graph(*select(self.root)).build_edges() for select in selection_criteria]
         else:
-            warnings.warn(message="No Selection Criterion was provided. Using leaves for building graph...")
-            graph = [cluster for cluster in self.layers[-1]]
-        self.graph = Graph(*graph)
-        self.build_graph(*graph_criteria)
+            logging.info('No Selection Criterion was provided. Using leaves for building graph.')
+            self.graphs = [Graph(*[cluster for cluster in self.layers[-1].clusters]).build_edges()]
 
         return self
 
@@ -1242,18 +1240,6 @@ class Manifold:
             else:
                 break
         return self
-
-    def build_graph(self, *criteria):
-        """ Builds the graph. """
-        depths = [cluster.depth for cluster in self.graph]
-        logging.info(f'depths: ({min(depths)}, {max(depths)}), clusters: {self.graph.cardinality}')
-
-        self.root.candidates = {self.root: 0.}
-        self.graph.build_edges()
-        [criterion(self) for criterion in criteria]
-        logging.info(f'built graph with {self.graph.cardinality} clusters, '
-                     f'with {len(self.graph.subsumed_clusters) / self.graph.cardinality:.4f} subsumed ratio.')
-        return
 
     def _partition_single(self, criterion) -> List[Cluster]:
         # TODO: Consider removing and only keeping multi-threaded version
@@ -1347,7 +1333,7 @@ class Manifold:
         pickle.dump({
             'metric': self.metric,
             'root': self.root.json(),
-            'graph': [cluster.name for cluster in self.graph.clusters]
+            'graphs': [{cluster.name for cluster in graph.clusters} for graph in self.graphs]
         }, fp, protocol=pickle.HIGHEST_PROTOCOL)
         return
 
@@ -1373,6 +1359,5 @@ class Manifold:
             else:
                 break
 
-        manifold.graph = Graph(*[manifold.select(cluster) for cluster in d['graph']]).build_edges()
-
+        manifold.graphs = [Graph(*[manifold.select(cluster) for cluster in graph]).build_edges() for graph in d['graphs']]
         return manifold

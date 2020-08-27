@@ -95,7 +95,7 @@ class TestManifold(unittest.TestCase):
         self.assertEqual(2, len(m.layers))
         m.build(criterion.MaxDepth(2))
         self.assertEqual(3, len(m.layers))
-        self.assertEqual(len(self.data), m.graph.population)
+        self.assertEqual(len(self.data), m.graphs[0].population)
         return
 
     def test_build_tree(self):
@@ -141,13 +141,13 @@ class TestManifold(unittest.TestCase):
                 criterion.LFDRange(60, 50),
             )
 
-            for cluster in manifold.graph.clusters:
-                potential_neighbors = [c for c in manifold.graph.clusters if c.name != cluster.name]
+            for cluster in manifold.graphs[0].clusters:
+                potential_neighbors = [c for c in manifold.graphs[0].clusters if c.name != cluster.name]
                 argcenters = [c.argmedoid for c in potential_neighbors]
                 distances = list(cluster.distance_from(argcenters))
                 radii = [cluster.radius + c.radius for c in potential_neighbors]
                 true_neighbors = {c: d for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
-                neighbors = {edge.neighbor: edge.distance for edge in manifold.graph.edges[cluster]}
+                neighbors = {edge.neighbor: edge.distance for edge in manifold.graphs[0].edges[cluster]}
 
                 extras = set(neighbors.keys()) - set(true_neighbors.keys())
                 self.assertEqual(0, len(extras), msg=f'got extra neighbors: optimal, true {len(true_neighbors)}, actual {len(neighbors)}\n'
@@ -171,7 +171,7 @@ class TestManifold(unittest.TestCase):
             loaded = Manifold.load(fp, self.data)
         self.assertEqual(original, loaded)
         self.assertEqual(set(original.layers[-1]), set(loaded.layers[-1]))
-        self.assertEqual(original.graph, loaded.graph)
+        self.assertEqual(original.graphs[0], loaded.graphs[0])
 
         for layer in loaded.layers:
             for cluster in layer:
@@ -192,8 +192,7 @@ class TestManifold(unittest.TestCase):
     def test_find_knn(self):
         data = datasets.bullseye()[0]
         point = data[0]
-        points = sorted([(d, p) for p, d in zip(range(data.shape[0]),
-                                                cdist(np.asarray([point]), data, 'euclidean')[0])])
+        points = sorted([(d, p) for p, d in zip(range(data.shape[0]), cdist(np.asarray([point]), data, 'euclidean')[0])])
 
         m = Manifold(data, 'euclidean')
         m.build_tree(criterion.MinPoints(10), criterion.MaxDepth(10))

@@ -54,10 +54,8 @@ class TestCriterion(unittest.TestCase):
     def test_lfd_range(self):
         self.manifold.build(criterion.MaxDepth(12), criterion.LFDRange(60, 50))
 
-        for leaf in self.manifold.layers[-1].clusters:
-            ancestry = self.manifold.ancestry(leaf)
-            included = sum((1 if ancestor in self.manifold.graph.clusters else 0 for ancestor in ancestry))
-            self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
+        self.assertEqual(1, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
+        self._graph_invariant(self.manifold, self.manifold.graphs[0])
         return
 
     def _graph_invariant(self, manifold: Manifold, graph: Graph):
@@ -71,26 +69,25 @@ class TestCriterion(unittest.TestCase):
         constants = [-0.00000074, 0.33298534, 0.06788443, -0.00021080, -0.43125318, -0.12271546]
 
         self.manifold.build(
-            criterion.MaxDepth(50),
+            criterion.MaxDepth(12),
             criterion.LinearRegressionConstants(constants),
         )
 
-        self._graph_invariant(self.manifold, self.manifold.graph)
+        self.assertEqual(1, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
+        self._graph_invariant(self.manifold, self.manifold.graphs[0])
         return
 
-    def test_minimize_subsumed(self):
-        fraction: float = 0.2
-
+    def test_multiple_selection_clauses(self):
         self.manifold.build(
             criterion.MaxDepth(12),
-            criterion.LFDRange(80, 20),
-            criterion.MinimizeSubsumed(fraction),
+            criterion.LinearRegressionConstants([1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]),  # CC, gmean, 0.044
+            criterion.LinearRegressionConstants([0.09493048, 0.62547724, -0.16254063, -0.00043795, 0.13036630, -0.35289447]),  # PC, gmean, 0.036
+            criterion.LinearRegressionConstants([-0.36966981, 0.22567179, -0.08289614, 0.00006676, 0.55057955, -0.86832389]),  # KN, gmean, 0.031
+            criterion.LinearRegressionConstants([-0.23789545, 0.08811996, -0.02485702, 0.00003283, 0.29501756, -0.49954759]),  # SC, gmean, 0.030
         )
 
-        for leaf in self.manifold.layers[-1].clusters:
-            ancestry = self.manifold.ancestry(leaf)
-            included = sum((1 if ancestor in self.manifold.graph.clusters else 0 for ancestor in ancestry))
-            self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
+        self.assertEqual(4, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
+        [self._graph_invariant(self.manifold, graph) for graph in self.manifold.graphs]
         return
 
     # def plot(self):

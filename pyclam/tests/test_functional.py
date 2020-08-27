@@ -12,7 +12,8 @@ class TestManifoldFunctional(unittest.TestCase):
         data = np.random.randn(100, 3)
         manifold = Manifold(data, 'euclidean').build()
         # With no constraints, clusters should be singletons.
-        self.assertEqual(data.shape[0], manifold.graph.population)
+        for graph in manifold.graphs:
+            self.assertEqual(data.shape[0], graph.population, f'expected {data.shape[0]} points in the graph. Got {graph.cardinality} instead.')
         self.assertEqual(1, len(manifold.find_clusters(data[0], 0., -1)))
         self.assertEqual(1, len(manifold.find_points(data[0], 0.)))
         self.assertEqual(data.shape[0], manifold.layers[-1].cardinality)
@@ -49,5 +50,5 @@ class TestManifoldFunctional(unittest.TestCase):
         data = np.concatenate([np.ones((500, 2)) * -2, np.ones((500, 2)) * 2])
         manifold = Manifold(data, 'euclidean').build()
         # We expect building to stop with two clusters.
-        self.assertEqual(2, manifold.graph.cardinality, f'Expected 2 clusters, got {manifold.graph.cardinality}')
+        self.assertEqual(2, manifold.graphs[0].cardinality, f'Expected 2 clusters, got {manifold.graphs[0].cardinality}')
         return
