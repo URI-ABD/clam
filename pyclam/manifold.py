@@ -81,10 +81,7 @@ class Cluster:
 
     def __lt__(self, other: 'Cluster') -> bool:
         """ For sorting clusters in Graphs. Sorts by depth, breaking ties by name. """
-        if self.depth == other.depth:
-            return self.name < other.name
-        else:
-            return self.depth < other.depth
+        return (self.name < other.name) if self.depth == other.depth else (self.depth < other.depth)
 
     def __bool__(self) -> bool:
         return self.cardinality > 0
@@ -112,10 +109,12 @@ class Cluster:
 
     @property
     def parent(self) -> 'Cluster':
-        if self.depth > 0:
-            return self.manifold.ancestry(self)[-2]
-        else:
-            raise ValueError(f"root cluster has no parent")
+        if 'parent' not in self.cache:
+            if self.depth > 0:
+                self.cache['parent'] = self.manifold.ancestry(self)[-2]
+            else:
+                raise ValueError(f"root cluster has no parent")
+        return self.cache['parent']
 
     @property
     def cardinality(self) -> int:
@@ -212,6 +211,10 @@ class Cluster:
 
             argradii_radii = [argmax_max(batch) for batch in iter(self)]
             argradius, radius = max(argradii_radii, key=itemgetter(1))
+            if radius < 0:
+                raise ValueError(f'got cluster {self.name} with negative radius. '
+                                 f'Make sure that the distance function used always returns non-negative values.')
+
             self.cache['argradius'], self.cache['radius'] = int(argradius), float(radius)
         return self.cache['argradius']
 
@@ -232,13 +235,51 @@ class Cluster:
         if 'local_fractal_dimension' not in self.cache:
             logging.debug(f'building cache for {self}')
             if self.nsamples == 1:
-                return 0.
-            count = [d <= (self.radius / 2)
-                     for batch in iter(self)
-                     for d in self.distance_from(batch)]
-            count = np.sum(count)
-            self.cache['local_fractal_dimension'] = count if count == 0. else np.log2(len(self.argpoints) / count)
+                self.cache['local_fractal_dimension'] = 1.
+            else:
+                count = sum([
+                    1 if distance <= (self.radius / 2) else 0
+                    for batch in iter(self)
+                    for distance in self.distance_from(batch)
+                ])
+                self.cache['local_fractal_dimension'] = 1. if count == 0 else np.log2(self.cardinality / count)
         return self.cache['local_fractal_dimension']
+
+    @property
+    def ancestors(self) -> List['Cluster']:
+        """ Ancestry of self, excluding self.
+        """
+        return self.manifold.ancestry(self)[:-1]
+
+    @property
+    def descendents(self) -> List['Cluster']:
+        """ All clusters in the subtree starting at self, excluding self.
+        """
+        return [cluster for layer in self.manifold.layers[self.depth + 1:]
+                for cluster in layer.clusters
+                if self.name == cluster.name[:len(self.name)]]
+
+    @property
+    def ratios(self) -> List[float]:
+        if 'ratios' not in self.cache:
+            self.cache['ratios'] = [  # Child/Parent Ratios
+                self.local_fractal_dimension / self.parent.local_fractal_dimension,  # local fractal dimension
+                self.cardinality / self.parent.cardinality,  # cardinality
+                max(self.radius, 1e-16) / max(self.parent.radius, 1e-16)  # radius
+            ] if self.depth > 0 else [1., 1., 1.]
+        return self.cache['ratios']
+
+    @property
+    def ema_ratios(self) -> List[float]:
+        if 'ema_ratios' not in self.cache:
+            if self.depth > 0:
+                smoothing, period = 2, 10
+                alpha = smoothing / (1 + period)
+                current, previous = np.asarray(self.ratios), np.asarray(self.parent.ratios)
+                self.cache['ema_ratios'] = alpha * current + (1 - alpha) * previous
+            else:
+                self.cache['ema_ratios'] = [1., 1., 1.]
+        return self.cache['ema_ratios']
 
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
@@ -292,10 +333,12 @@ class Cluster:
                     [child_argpoints[int(np.argmin(row))].append(p) for p, row in zip(argpoints, distances)]
 
             child_argpoints.sort(key=len)
-            self.children = {
+            self.children: Set['Cluster'] = {
                 Cluster(self.manifold, argpoints, self.name + '0' + '1' * i)
                 for i, argpoints in enumerate(child_argpoints)
             }
+            [child.cache.update({'parent': self}) for child in self.children]
+
             logging.debug(f'{self} was partitioned into {len(self.children)} child clusters.')
 
         return self.children
@@ -412,7 +455,7 @@ class Graph:
                 set(self.edges[cluster]) == set(other.edges[cluster])
                 for cluster in self.clusters
             ))
-        return cluster_equality and edges_equality
+            return cluster_equality and edges_equality
 
     def __bool__(self) -> bool:
         return self.cardinality > 0
@@ -424,7 +467,7 @@ class Graph:
     def __str__(self) -> str:
         # Cashing value because sort can be expensive on many clusters.
         if 'str' not in self.cache:
-            self.cache['str'] = ','.join(sorted(list(map(str, self.clusters))))
+            self.cache['str'] = ', '.join(sorted(list(map(str, self.clusters))))
         return self.cache['str']
 
     def __repr__(self) -> str:
@@ -1063,7 +1106,13 @@ class Manifold:
         k-nearest neighbors search,
     """
 
-    def __init__(self, data: Data, metric: Metric, argpoints: Union[Vector, float] = None, **kwargs):
+    def __init__(
+            self,
+            data: Data,
+            metric: Metric,
+            argpoints: Union[Vector, float] = None,
+            **kwargs
+    ):
         """ A Manifold needs the data from which to learn the manifold, and a distance function to use while doing so.
 
         :param data: The data to learn. This should be a numpy.ndarray or a numpy.memmap.
@@ -1197,6 +1246,8 @@ class Manifold:
         self.root.candidates = {self.root: 0.}
         self.graph.build_edges()
         [criterion(self) for criterion in criteria]
+        logging.info(f'built graph with {self.graph.cardinality} clusters, '
+                     f'with {len(self.graph.subsumed_clusters) / self.graph.cardinality:.4f} subsumed ratio.')
         return
 
     def _partition_single(self, criterion) -> List[Cluster]:

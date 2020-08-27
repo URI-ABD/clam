@@ -1,6 +1,6 @@
 import unittest
 
-from pyclam import Manifold, datasets, criterion
+from pyclam import Manifold, datasets, criterion, Graph
 
 
 # noinspection SpellCheckingInspection
@@ -58,6 +58,24 @@ class TestCriterion(unittest.TestCase):
             ancestry = self.manifold.ancestry(leaf)
             included = sum((1 if ancestor in self.manifold.graph.clusters else 0 for ancestor in ancestry))
             self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
+        return
+
+    def _graph_invariant(self, manifold: Manifold, graph: Graph):
+        for leaf in manifold.layers[-1].clusters:
+            ancestry = manifold.ancestry(leaf)
+            included = sum((1 if ancestor in graph.clusters else 0 for ancestor in ancestry))
+            self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
+        return
+
+    def test_linear_regression(self):
+        constants = [-0.00000074, 0.33298534, 0.06788443, -0.00021080, -0.43125318, -0.12271546]
+
+        self.manifold.build(
+            criterion.MaxDepth(50),
+            criterion.LinearRegressionConstants(constants),
+        )
+
+        self._graph_invariant(self.manifold, self.manifold.graph)
         return
 
     def test_minimize_subsumed(self):

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Set, Tuple, List
+from typing import Set, Tuple, List, Union, Dict
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -112,6 +112,8 @@ class UniformDistribution(ClusterCriterion):
 
 
 class Leaves(SelectionCriterion):
+    """ Selects the leaves for building the graph.
+    """
     def __init__(self):
         return
 
@@ -119,8 +121,72 @@ class Leaves(SelectionCriterion):
         return {cluster for cluster in root.manifold.layers[-1].clusters}
 
 
-class LFDRange(SelectionCriterion):
+class Layer(SelectionCriterion):
+    """ Selects the layer at the specified depth.
+    """
+    def __init__(self, depth: int):
+        if depth <= 0:
+            raise ValueError(f'expected a positive depth. got: {depth}')
+        self.depth = depth
 
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        manifold: Manifold = root.manifold
+        if manifold.depth <= self.depth:
+            return {cluster for cluster in manifold.layers[-1].clusters}
+        else:
+            return {cluster for cluster in manifold.layers[self.depth].clusters}
+
+
+class LinearRegressionConstants(SelectionCriterion):
+    """ Uses constants from a meta-ml model using linear regression.
+    There are 6 constants, one for each of the ratios and ema_ratios in Cluster.
+    """
+
+    def __init__(self, constants: Union[np.array, List[float]]):
+        num_constants = 6
+
+        constants = np.asarray(constants, dtype=float)
+        if constants.shape != (num_constants,):
+            raise ValueError(f'expected a vector of {num_constants} elements. Got {constants.shape} instead.')
+        self.constants: np.array = constants
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        manifold = root.manifold
+        graph: Set[Cluster] = set()
+        predicted_auc: Dict[Cluster, float] = self._predict_auc(root.manifold)
+
+        clusters: List[Cluster] = [child for child in manifold.root.children]
+        while clusters:
+            new_clusters: List[Cluster] = list()
+            for cluster in clusters:
+                if cluster.children:
+                    subtree_auc = [predicted_auc[c] for c in cluster.descendents]
+                    if predicted_auc[cluster] >= np.percentile(subtree_auc, q=75):
+                        graph.add(cluster)
+                    else:
+                        new_clusters.extend(cluster.children)
+                else:
+                    graph.add(cluster)
+            clusters = new_clusters
+        return graph
+
+    def _predict_auc(self, manifold: Manifold) -> Dict[Cluster, float]:
+        predicted_auc: Dict[Cluster, float] = {
+            cluster: float(np.dot(self.constants, np.concatenate([
+                np.asarray(cluster.ratios, dtype=float),
+                np.asarray(cluster.ema_ratios, dtype=float)
+            ])))
+            for layer in manifold.layers
+            for cluster in layer.clusters
+            if cluster.depth == layer.depth
+        }
+        return predicted_auc
+
+
+class LFDRange(SelectionCriterion):
+    """ Selects clusters based on when their ancestry crosses certain thresholds of LFD values.
+    This works a bit like a two-state machine.
+    """
     def __init__(self, upper: float, lower: float):
         if not (0. < lower <= upper <= 100.):
             raise ValueError(f'LFDRange expected 0 < lower <= upper <= 100 for upper and lower thresholds.'
@@ -251,10 +317,10 @@ def _find_parents_to_remove(graph: Graph) -> Set[Cluster]:
 
 
 class MinimizeSubsumed(GraphCriterion):
-    """
-    Minimize fraction of subsumed clusters in the graph.
+    """ Minimize fraction of subsumed clusters in the graph.
     Terminate early if fraction subsumed falls under the given threshold.
     """
+    # TODO: Redo after fixing Graph.add and Graph.remove
     def __init__(self, fraction: float):
         if not (0. < fraction < 1.):
             raise ValueError(f'fraction must be between 0 and 1. Got {fraction:.2f}')
