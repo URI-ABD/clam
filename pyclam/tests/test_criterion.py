@@ -66,15 +66,17 @@ class TestCriterion(unittest.TestCase):
         return
 
     def test_linear_regression(self):
-        constants = [-0.00000074, 0.33298534, 0.06788443, -0.00021080, -0.43125318, -0.12271546]
+        constants = [1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]
 
         self.manifold.build(
             criterion.MaxDepth(12),
-            criterion.LinearRegressionConstants(constants),
+            criterion.LinearRegressionConstants(constants, mode='ranked'),
+            criterion.LinearRegressionConstants(constants, mode='percentile'),
         )
 
-        self.assertEqual(1, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
+        self.assertEqual(2, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
         self._graph_invariant(self.manifold, self.manifold.graphs[0])
+        self._graph_invariant(self.manifold, self.manifold.graphs[1])
         return
 
     def test_multiple_selection_clauses(self):
