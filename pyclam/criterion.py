@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Set, Tuple, List, Union, Dict
+from typing import Set, Tuple, List, Union, Dict, Callable
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -130,38 +130,103 @@ class Layer(SelectionCriterion):
             return {cluster for cluster in manifold.layers[self.depth].clusters}
 
 
+def _percentile_selection(manifold: Manifold, predicted_auc: Dict[Cluster, float]) -> Set[Cluster]:
+    """ Selects clusters for graph when their predicted auc is greater than the p-th percentile of the predicted auc of their descendents.
+    """
+    graph: Set[Cluster] = set()
+    clusters: List[Cluster] = [child for child in manifold.root.children]
+    while clusters:
+        new_clusters: List[Cluster] = list()
+        for cluster in clusters:
+            if cluster.children:
+                subtree_auc = [predicted_auc[c] for c in cluster.descendents]
+                if predicted_auc[cluster] >= np.percentile(subtree_auc, q=75):
+                    graph.add(cluster)
+                else:
+                    new_clusters.extend(cluster.children)
+            else:
+                graph.add(cluster)
+        clusters = new_clusters
+    return graph
+
+
+def _ranked_selection(manifold: Manifold, predicted_auc: Dict[Cluster, float]) -> Set[Cluster]:
+    """ Rank-orders clusters by predicted_auc and peel off the top to build the graph.
+    """
+    rankings: Dict[Cluster, float] = {cluster: 0 for cluster in predicted_auc.keys()}
+    for leaf in manifold.layers[-1].clusters:
+        # sort ancestors by predicted auc in non-increasing order, break ties by smaller depth
+        ancestors = list(sorted(manifold.ancestry(leaf), key=lambda c: (predicted_auc[c], c), reverse=True))
+        # add index of cluster in sorted list of ancestors to rankings
+        for i, cluster in enumerate(ancestors):
+            rankings[cluster] += (i * cluster.cardinality)
+    rankings.pop(manifold.select(''))  # remove root from rankings because ratios are undefined
+
+    # TODO: misses some points/clusters. breaks graph invariant
+    # sort clusters by mean ranking in non-decreasing order
+    potentials: List[Cluster] = list(sorted(list(rankings.keys()), key=lambda c: (rankings[c] / c.cardinality, c)))
+    selected: Set[Cluster] = set()
+    excluded: Set[Cluster] = set()
+    # select best clusters for graph
+    for cluster in potentials:
+        if cluster in excluded:
+            continue
+        else:
+            selected.add(cluster)
+            excluded.add(cluster)
+            excluded.update(cluster.ancestors)
+            excluded.update(cluster.descendents)
+
+    # TODO: remove this after fixing the missed clusters in the initial pass
+    missed: Set[int] = set(manifold.root.argpoints) - {p for c in selected for p in c.argpoints}
+    for layer in manifold.layers[1:]:
+        for cluster in layer.clusters:
+            if all((p in missed for p in cluster.argpoints)):
+                selected.add(cluster)
+                missed.difference_update(cluster.argpoints)
+
+    return selected
+
+
+SELECTION_MODES = {
+    'percentile': _percentile_selection,
+    'ranked': _ranked_selection,
+}
+
+
 class LinearRegressionConstants(SelectionCriterion):
     """ Uses constants from a meta-ml model using linear regression.
     There are 6 constants, one for each of the ratios and ema_ratios in Cluster.
     """
+    # TODO: Change this to use a parsed function, just like Regression Tree Criterion.
 
-    def __init__(self, constants: Union[np.array, List[float]]):
+    def __init__(self, constants: Union[np.array, List[float]], *, mode: str = 'ranked'):
+        """ A Linear Regression based Meta-ML model to select Clusters for a Graph.
+
+        The constants correspond to:
+            * child/parent lfd ratio
+            * child/parent cardinality ratio
+            * child/parent radii ratio
+            * lfd-ratio exponential-moving-average (ema)
+            * cardinality-ratio ema
+            * radii-ratio ema
+
+        :param constants: 6 constants from the LR model.
+        :param mode: which selection method to use. Must be one of 'ranked' or 'percentile'.
+        """
+        if mode not in SELECTION_MODES.keys():
+            raise ValueError(f'mode must be one of {list(SELECTION_MODES.keys())}. Gor {mode} instead.')
+        self.mode = SELECTION_MODES[mode]
+
         num_constants = 6
-
         constants = np.asarray(constants, dtype=float)
         if constants.shape != (num_constants,):
             raise ValueError(f'expected a vector of {num_constants} elements. Got {constants.shape} instead.')
         self.constants: np.array = constants
 
     def __call__(self, root: Cluster) -> Set[Cluster]:
-        manifold = root.manifold
-        graph: Set[Cluster] = set()
         predicted_auc: Dict[Cluster, float] = self._predict_auc(root.manifold)
-
-        clusters: List[Cluster] = [child for child in manifold.root.children]
-        while clusters:
-            new_clusters: List[Cluster] = list()
-            for cluster in clusters:
-                if cluster.children:
-                    subtree_auc = [predicted_auc[c] for c in cluster.descendents]
-                    if predicted_auc[cluster] >= np.percentile(subtree_auc, q=75):
-                        graph.add(cluster)
-                    else:
-                        new_clusters.extend(cluster.children)
-                else:
-                    graph.add(cluster)
-            clusters = new_clusters
-        return graph
+        return self.mode(root.manifold, predicted_auc)
 
     def _predict_auc(self, manifold: Manifold) -> Dict[Cluster, float]:
         predicted_auc: Dict[Cluster, float] = {
@@ -174,6 +239,30 @@ class LinearRegressionConstants(SelectionCriterion):
             if cluster.depth == layer.depth
         }
         return predicted_auc
+
+
+class RegressionTreePaths(SelectionCriterion):
+    """ Uses the decision paths of the Regression Tree meta-ml models to select best clusters for graph.
+    """
+    def __init__(self, predict_auc: Callable[[Cluster], float], *, mode: str = 'ranked'):
+        """ A Regression Tree based Meta-ML model to select Clusters for a Graph.
+
+        :param predict_auc: A function, parsed from a decision tree output, to assign auc prediction to each cluster
+        :param mode: which selection method to use. Must be one of 'ranked' or 'percentile'.
+        """
+        if mode not in ['ranked', 'percentile']:
+            raise ValueError(f'mode must be either \'ranked\' or \'percentile\'. Got {mode} instead.')
+        self.mode = SELECTION_MODES[mode]
+        self.predict_auc: Callable[[Cluster], float] = predict_auc
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        predicted_auc: Dict[Cluster, float] = {
+            cluster: self.predict_auc(cluster)
+            for layer in root.manifold.layers
+            for cluster in layer.clusters
+            if cluster.depth == layer.depth
+        }
+        return self.mode(root.manifold, predicted_auc)
 
 
 class LFDRange(SelectionCriterion):

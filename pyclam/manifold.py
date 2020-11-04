@@ -179,6 +179,14 @@ class Cluster:
         return len(self.argsamples)
 
     @property
+    def argcenter(self) -> int:
+        return self.argmedoid
+
+    @property
+    def center(self) -> Data:
+        return self.medoid
+
+    @property
     def argmedoid(self) -> int:
         """ The index used to retrieve the medoid. """
         if 'argmedoid' not in self.cache:
