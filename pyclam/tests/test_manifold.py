@@ -1,6 +1,7 @@
 import random
 import unittest
 from tempfile import TemporaryFile
+from typing import List
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -135,19 +136,18 @@ class TestManifold(unittest.TestCase):
     def test_neighbors(self):
         for dataset in [datasets.bullseye, ]:  # datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
             data, labels = dataset()
-            manifold = Manifold(data, 'euclidean')
-            manifold.build(
+            manifold = Manifold(data, 'euclidean').build(
                 criterion.MaxDepth(12),
-                criterion.LFDRange(60, 50),
+                criterion.Layer(8),
             )
 
             for cluster in manifold.graphs[0].clusters:
-                potential_neighbors = [c for c in manifold.graphs[0].clusters if c.name != cluster.name]
-                argcenters = [c.argmedoid for c in potential_neighbors]
-                distances = list(cluster.distance_from(argcenters))
-                radii = [cluster.radius + c.radius for c in potential_neighbors]
+                potential_neighbors: List[Cluster] = [c for c in manifold.graphs[0].clusters if c.name != cluster.name]
+                argcenters: List[int] = [c.argmedoid for c in potential_neighbors]
+                distances: List[float] = list(cluster.distance_from(argcenters))
+                radii: List[float] = [cluster.radius + c.radius for c in potential_neighbors]
                 true_neighbors = {c: d for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
-                neighbors = {edge.neighbor: edge.distance for edge in manifold.graphs[0].edges[cluster]}
+                neighbors = {edge.neighbor(cluster): edge.distance for edge in manifold.graphs[0].edges_from(cluster)}
 
                 extras = set(neighbors.keys()) - set(true_neighbors.keys())
                 self.assertEqual(0, len(extras), msg=f'got extra neighbors: optimal, true {len(true_neighbors)}, actual {len(neighbors)}\n'

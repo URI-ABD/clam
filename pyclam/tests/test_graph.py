@@ -5,8 +5,7 @@ from typing import Set, Dict, List
 import numpy as np
 
 from pyclam import datasets, criterion
-from pyclam.manifold import Manifold, Graph, Cluster
-from pyclam.types import Edge
+from pyclam.manifold import Manifold, Graph, Cluster, Edge
 
 
 class TestGraph(unittest.TestCase):
@@ -14,16 +13,16 @@ class TestGraph(unittest.TestCase):
     def setUpClass(cls) -> None:
         np.random.seed(42)
         cls.data, _ = datasets.bullseye(n=1000, num_rings=2)
-        cls.manifold = Manifold(cls.data, 'euclidean')
+        cls.manifold: Manifold = Manifold(cls.data, 'euclidean')
         cls.manifold.build(
             criterion.MaxDepth(10),
             criterion.Layer(5),
         )
-        cls.graph = cls.manifold.graphs[0]
+        cls.graph: Graph = cls.manifold.layers[5].build_edges()
         return
 
     def test_init(self):
-        Graph(*[c for c in self.graph])
+        Graph(*[cluster for cluster in self.graph.clusters])
         with self.assertRaises(AssertionError):
             Graph('1')
         with self.assertRaises(AssertionError):
@@ -37,7 +36,7 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_iter(self):
-        clusters = list(self.manifold.layers[1])
+        clusters = list(self.manifold.layers[1].clusters)
         self.assertEqual(2, len(clusters))
         self.assertIn(clusters[0], self.manifold.select('').children)
         return
@@ -50,7 +49,7 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_str(self):
-        self.assertEqual(self.graph.cardinality, len(str(self.graph).split(',')))
+        self.assertEqual(self.graph.cardinality, len(str(self.graph).split(', ')))
         return
 
     def test_repr(self):
@@ -62,86 +61,62 @@ class TestGraph(unittest.TestCase):
         self.assertNotIn(root, self.graph)
         return
 
-    def test_cached_edges(self):
-        self.assertGreaterEqual(len(self.graph.cached_edges), 0)
-        self.assertLessEqual(len(self.graph.cached_edges), self.graph.cardinality * (self.graph.cardinality - 1) / 2)
-        self.assertEqual(
-            sum(len(self.graph.edges[cluster]) for cluster in self.graph.clusters),
-            len(self.graph.cached_edges),
-        )
-        return
-
     def test_subgraphs(self):
-        [self.assertIsInstance(subgraph, Graph) for subgraph in self.graph.subgraphs]
-        self.assertEqual(self.graph.cardinality, sum(subgraph.cardinality for subgraph in self.graph.subgraphs))
+        subgraphs: Set[Graph] = self.graph.subgraphs
+        [self.assertIsInstance(subgraph, Graph) for subgraph in subgraphs]
+        self.assertEqual(self.graph.cardinality, sum(subgraph.cardinality for subgraph in subgraphs))
         return
 
     def test_clear_cache(self):
         self.graph.clear_cache()
-        _ = self.graph.cached_edges
-        self.assertIn('edges', self.graph.cache)
+        _ = self.graph.depth
+        self.assertIn('depth', self.graph.cache)
         self.graph.clear_cache()
-        self.assertNotIn('edges', self.graph.cache)
+        self.assertNotIn('depth', self.graph.cache)
+        self.assertEqual(0, len(self.graph.cache))
         return
 
     def test_bft(self):
-        visited = self.graph.bft(next(iter(self.graph.walkable_clusters)))
+        visited = self.graph.bft(next(iter(self.graph.clusters)))
         self.assertGreater(len(visited), 0)
         self.assertLessEqual(len(visited), self.graph.cardinality)
         return
 
     def test_dft(self):
-        visited = self.graph.dft(next(iter(self.graph.walkable_edges)))
+        visited = self.graph.dft(next(iter(self.graph.clusters)))
         self.assertGreater(len(visited), 0)
         self.assertLessEqual(len(visited), self.graph.cardinality)
         return
 
-    def test_random_walks(self):
-        results = self.graph.random_walks(
-            starts=list(self.graph.walkable_clusters),
-            steps=100,
-        )
-        self.assertGreater(len(results), 0)
-        [self.assertGreater(v, 0) for k, v in results.items()]
-        return
-
-    @unittest.skip
     def test_replace(self):
-        self.manifold.build(
+        manifold = Manifold(self.data, 'euclidean').build(
             criterion.MaxDepth(12),
             criterion.LFDRange(80, 20),
         )
-        self.manifold.layers[-1].build_edges()
+        graph = manifold.layers[-1].build_edges()
 
-        for i in range(100):
-            clusters: Dict[int, Cluster] = {c: cluster for c, cluster in zip(range(self.graph.cardinality), self.graph.clusters)}
+        for i in range(10):
+            clusters: Dict[int, Cluster] = {c: cluster for c, cluster in zip(range(graph.cardinality), graph.clusters)}
             if len(clusters) < 10:
                 break
             sample_size = len(clusters) // 10
-            samples: List[int] = list(map(int, np.random.choice(self.graph.cardinality, size=sample_size, replace=False)))
+            samples: List[int] = list(map(int, np.random.choice(graph.cardinality, size=sample_size, replace=False)))
             removals: Set[Cluster] = {clusters[c] for c in samples if clusters[c].children}
             additions: Set[Cluster] = set()
             [additions.update(cluster.children) for cluster in removals]
 
-            self.graph.replace_clusters(
+            graph.replace_clusters(
                 removals=removals,
                 additions=additions,
-                recompute_probabilities=True,
             )
 
-            clusters: Set[Cluster] = set(self.graph.clusters)
+            clusters: Set[Cluster] = set(graph.clusters)
 
-            subsumed_clusters: Set[Cluster] = self.graph.cache['subsumed_clusters']
-            subsumed_edges: Dict[Cluster, Set[Edge]] = self.graph.cache['subsumed_edges']
+            self.assertEqual(0, len(removals.intersection(clusters)), f'\n1. Some removals clusters were still in the graph. iter {i}')
+            self.assertTrue(additions.issubset(clusters), f'\n2. Some additions clusters were not in the graph. iter {i}')
 
-            walkable_clusters: Set[Cluster] = self.graph.cache['walkable_clusters']
-            walkable_edges: Dict[Cluster, Set[Edge]] = self.graph.cache['walkable_edges']
+            removal_edges: Set[Edge] = {edge for cluster in removals for edge in graph.edges if cluster in edge}
+            self.assertEqual(0, len(removal_edges), f'\n3. Some removals clusters were still found among edges. iter {i}')
 
-            self.assertTrue(subsumed_clusters.issubset(clusters), f"\n1. subsumed clusters were not subset of clusters. iter: {i}")
-            self.assertTrue(walkable_clusters.issubset(clusters), f"\n2. walkable clusters were not subset of clusters. iter: {i}")
-            self.assertTrue(walkable_clusters.isdisjoint(subsumed_clusters), f"\n3. walkable clusters and subsumed clusters were not disjoint sets. iter: {i}")
-            self.assertSetEqual(clusters, subsumed_clusters.union(walkable_clusters),
-                                f"\n4. union of subsumed and walkable clusters was not the same as all clusters. iter: {i}")
-            self.assertSetEqual(clusters, set(subsumed_edges.keys()), f"\n5. keys in subsumed edges were not the same as clusters. iter: {i}")
-            self.assertSetEqual(walkable_clusters, set(walkable_edges.keys()), f"\n6. keys in walkable edges were not the same as walkable clusters. iter: {i}")
+            self.assertEqual(0, len(graph.cache), f'\n4. Graph cache had some elements. {[k for k in graph.cache.keys()]}. iter {i}')
         return
