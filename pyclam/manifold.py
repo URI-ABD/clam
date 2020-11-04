@@ -10,7 +10,7 @@ from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam.types import Data, Radius, Vector, Metric, Edge, CacheEdge
+from pyclam.types import Data, Radius, Vector, Metric
 
 SUBSAMPLE_LIMIT = 100
 BATCH_SIZE = 10_000
@@ -434,69 +434,120 @@ class Cluster:
         return Cluster(manifold, children=children, **data)
 
 
+class Edge:
+    """ An Edge is a connection between two clusters.
+    """
+    def __init__(self, clusters: Tuple[Cluster, Cluster], distance: float):
+        left, right = clusters
+        if right < left:
+            left, right = right, left
+        else:
+            pass
+
+        self._left: Cluster = left
+        self._right: Cluster = right
+        self._distance: float = distance
+
+    def __eq__(self, other: 'Edge') -> bool:
+        return self.clusters == other.clusters
+
+    def __str__(self) -> str:
+        return f'{str(self.left)} -- {str(self.right)}'
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+    def __contains__(self, cluster: Cluster) -> bool:
+        return cluster in self.clusters
+
+    @property
+    def clusters(self) -> Tuple[Cluster, Cluster]:
+        return self._left, self._right
+
+    @property
+    def left(self) -> Cluster:
+        return self._left
+
+    @property
+    def right(self) -> Cluster:
+        return self._right
+
+    @property
+    def distance(self) -> float:
+        return self._distance
+
+    @property
+    def to_self(self) -> bool:
+        return self.left.name == self.right.name
+
+    def neighbor(self, cluster: Cluster) -> Cluster:
+        if cluster in self:
+            return self.left if cluster.name == self.right.name else self.right
+        else:
+            raise ValueError(f'Cluster {cluster.name} is not in this edge.')
+
+
 class Graph:
+    """ An induced graph from clusters in the tree.
+
+    Clusters form the nodes, and two clusters with overlapping volumes have an edge connecting them.
+
+    The Graph Invariant:
+        * Every data point used to build the Manifold is also present in a Graph.
+        * Each point is present in exactly one Cluster.
+
+    This invariant only holds for full graphs, and not subgraph components.
+
     """
-    Nodes in the Graph are Clusters.
-    Two clusters have an edge if they have overlapping volumes.
-    """
-    # TODO: Write dump/load methods for Graph.
+    # TODO: Implement dump/load
+
     def __init__(self, *clusters):
-        logging.debug(f'Graph(clusters={[str(c) for c in clusters]})')
-        assert all(isinstance(c, Cluster) for c in clusters)
+        logging.debug(f'Graph(clusters={list(map(str, clusters))})')
+        assert all(isinstance(c, Cluster) for c in clusters), 'all inputs to the Graph must be clusters.'
 
-        # self.edges is a dictionary of:
-        #       the clusters in the graph, and
-        #       the set of edges from that cluster.
-        # An Edge is a named tuple of Neighbor, Distance, and Probability.
-        # Edge.neighbor is the neighboring cluster.
-        # Edge.distance is the distance to that neighbor.
-        # Edge.probability is used to pick an edge during a random walk.
-        self.edges: Dict[Cluster, Union[Set[Edge], None]] = {cluster: None for cluster in clusters}
-
+        self.clusters: Set[Cluster] = {cluster for cluster in clusters}
+        self.edges: Set[Edge] = set()
+        self.is_built: bool = False  # this flag is set to True at the end of build_edges.
         self.cache: Dict[str, Any] = dict()
-        return
 
     def __eq__(self, other: 'Graph') -> bool:
-        """ Two graphs are identical if they have the same clusters and edges.
-        """
-        cluster_equality = set(self.clusters) == set(other.clusters)
-        if any((edges is None for edges in self.edges.values())):
-            return cluster_equality
-        else:
-            edges_equality = all((
-                set(self.edges[cluster]) == set(other.edges[cluster])
-                for cluster in self.clusters
-            ))
-            return cluster_equality and edges_equality
+        """ Two Graphs are identical if they have the same sets of clusters and edges. """
+        return (self.clusters == other.clusters) and (self.edges == other.edges)
 
     def __bool__(self) -> bool:
         return self.cardinality > 0
 
     def __iter__(self) -> Iterable[Cluster]:
-        """ An iterator over the clusters in the graph. """
-        yield from self.edges
+        yield from self.clusters
 
     def __str__(self) -> str:
-        # Cashing value because sort can be expensive on many clusters.
         if 'str' not in self.cache:
             self.cache['str'] = ', '.join(sorted(list(map(str, self.clusters))))
         return self.cache['str']
 
     def __repr__(self) -> str:
-        # Cashing value because sort can be expensive on many clusters.
         if 'repr' not in self.cache:
             self.cache['repr'] = '\n'.join(sorted(list(map(repr, self.clusters))))
         return self.cache['repr']
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(str(self))
 
-    def __contains__(self, cluster: 'Cluster') -> bool:
+    def __contains__(self, cluster: Cluster) -> bool:
         return cluster in self.clusters
 
     @property
+    def edges_dict(self) -> Dict[Cluster, Set[Edge]]:
+        if 'edges_dict' not in self.cache:
+            self.cache['edges_dict'] = {
+                cluster: {edge for edge in self.edges if cluster in edge}
+                for cluster in self.clusters
+            }
+        return self.cache['edges_dict']
+
+    @property
     def cardinality(self) -> int:
-        return len(self.edges)
+        return len(self.clusters)
 
     @property
     def population(self) -> int:
@@ -504,11 +555,11 @@ class Graph:
 
     @property
     def manifold(self) -> 'Manifold':
-        return next(iter(self.edges)).manifold
+        return next(iter(self.clusters)).manifold
 
     @property
     def metric(self) -> Metric:
-        return next(iter(self.edges)).metric
+        return next(iter(self.clusters)).metric
 
     @property
     def depth(self) -> int:
@@ -517,599 +568,225 @@ class Graph:
         return self.cache['depth']
 
     @property
-    def clusters(self) -> Iterable[Cluster]:
-        return self.edges.keys()
+    def min_depth(self) -> int:
+        if 'min_depth' not in self.cache:
+            self.cache['min_depth'] = min((cluster.depth for cluster in self.clusters))
+        return self.cache['min_depth']
 
     @property
-    def subsumed_clusters(self) -> Set[Cluster]:
-        """ Set of Clusters subsumed by other clusters. """
-        if 'subsumed_clusters' not in self.cache:
-            self.build_edges()
-        return self.cache['subsumed_clusters']
+    def depth_range(self) -> Tuple[int, int]:
+        return self.min_depth, self.depth
 
     @property
-    def walkable_clusters(self) -> Set[Cluster]:
-        """ Set of Clusters not subsumed by other clusters. """
-        if 'walkable_clusters' not in self.cache:
+    def subgraphs(self) -> Set['Graph']:
+        """ Returns the set of all connected component subgraphs in the Graph. """
+        if not self.is_built:
             self.build_edges()
-        return self.cache['walkable_clusters']
 
-    @property
-    def subsumed_edges(self) -> Dict[Cluster, Set[Edge]]:
-        """ Dict of all Clusters to set of edges to every subsumed cluster. """
-        if 'subsumed_edges' not in self.cache:
-            self.build_edges()
-        return self.cache['subsumed_edges']
+        if 'subgraphs' not in self.cache:
+            subgraphs: Set['Graph'] = set()
+            unvisited: Set[Cluster] = {cluster for cluster in self.clusters}
+            while unvisited:
+                component = self.traverse(unvisited.pop())
+                unvisited -= component
+                graph: Graph = Graph(*component)
+                graph.edges = {edge for edge in self.edges if set(edge.clusters).issubset(component)} if len(component) > 1 else set()
+                graph.is_built = True
+                subgraphs.add(graph)
 
-    @property
-    def walkable_edges(self) -> Dict[Cluster, Set[Edge]]:
-        """
-        Walkable Clusters are those not subsumed by any other Cluster.
-        These are used in graph traversals and random walks.
-        """
-        if 'walkable_edges' not in self.cache:
-            self.build_edges()
-        return self.cache['walkable_edges']
+            self.cache['subgraphs'] = subgraphs
 
-    def _find_candidates(self, cluster: Cluster):
-        # Dict of candidate neighbors and distances to neighbors.
+        return self.cache['subgraphs']
+
+    def subgraph(self, cluster: Cluster) -> 'Graph':
+        """ returns the connected component subgraph to which cluster belongs. """
+        for subgraph in self.subgraphs:
+            if cluster in subgraph:
+                return subgraph
+        else:
+            raise ValueError(f'cluster {str(cluster)} not found in any subgraph.')
+
+    def clear_cache(self) -> None:
+        self.cache.clear()
+        return
+
+    @staticmethod
+    def _find_candidates(cluster: Cluster) -> None:
+        """ Update the cluster.candidates dictionary. """
         radius: float = cluster.manifold.root.radius
+        ancestry: List[Cluster] = cluster.manifold.ancestry(cluster)
 
-        ancestry: List[Cluster] = self.manifold.ancestry(cluster)
-        for depth in range(cluster.depth):
-            if ancestry[depth + 1].radius > 0:
-                radius = ancestry[depth + 1].radius
+        # iterate over non-root clusters in ancestry
+        for depth in range(1, cluster.depth + 1):
+            if ancestry[depth].radius > 0:
+                radius = ancestry[depth].radius
 
             # This ensures that candidates are calculated once per cluster
-            if ancestry[depth + 1].candidates is None:
+            if ancestry[depth].candidates is None:
                 # Keep candidates from parent
-                candidates: Dict[Cluster, float] = {c: 0. for c in ancestry[depth].candidates}
+                candidates: Dict[Cluster, float] = {c: 0. for c in ancestry[depth - 1].candidates}
 
                 # Get all children of candidates at the same depth.
                 candidates.update({
                     child: 0.
-                    for c in ancestry[depth].candidates
+                    for c in ancestry[depth - 1].candidates
                     for child in c.children
-                    if c.depth == depth
+                    if c.depth == (depth - 1)
                 })
 
                 if len(candidates) > 0:
-                    distances = ancestry[depth + 1].distance_from([c.argmedoid for c in candidates])
-                    ancestry[depth + 1].candidates = {
+                    distances = ancestry[depth].distance_from([c.argmedoid for c in candidates])
+                    ancestry[depth].candidates = {
                         c: float(d)
                         for c, d in zip(candidates, distances)
                         if d <= c.radius + radius * 4
                     }
+                    # The factor of 4 is a safe bet for now.
+                    # The factor might change after an in-depth analysis of radii trends.
                 else:
-                    ancestry[depth + 1].candidates = dict()
+                    ancestry[depth].candidates = dict()
         return
 
-    def _find_neighbors(self, cluster: Cluster):
-        logging.debug(f'building edges for cluster {cluster.name}')
-
+    def _find_neighbors(self, cluster: Cluster) -> None:
+        """ Find all neighbors of cluster and update the set of edges. """
         if cluster.candidates is None:
             self._find_candidates(cluster)
 
-        self.edges[cluster] = {
-            Edge(c, d, None)
-            for c, d in cluster.candidates.items()
-            if c in self.clusters and d <= cluster.radius + c.radius
-        }
-        return
-
-    def split_walkable_vs_subsumed(self):
-        logging.debug(f'marking subsumed clusters for graph: '
-                      f'depth {self.depth}, clusters : {self.cardinality}')
-        # Find the set of Subsumed Clusters.
-        self.cache['subsumed_clusters'] = {
-            cluster for cluster in self.clusters
-            for (neighbor, distance, _) in self.edges[cluster]
-            if neighbor.radius >= distance + cluster.radius
-        }
-
-        # walkable clusters are those that are not subsumed clusters.
-        self.cache['walkable_clusters'] = set(self.clusters) - self.cache['subsumed_clusters']
-
-        # build outgoing edges from each cluster to every neighbor subsumed by that cluster
-        self.cache['subsumed_edges'] = {
-            cluster: {
-                Edge(edge.neighbor, edge.distance, None)
-                for edge in self.edges[cluster]
-                if edge.neighbor in self.cache['subsumed_clusters']
-            } for cluster in self.clusters
-        }
-
-        # build outgoing edges among walkable clusters
-        self.cache['walkable_edges'] = {
-            cluster: {
-                Edge(edge.neighbor, edge.distance, None)
-                for edge in self.edges[cluster]
-                if edge.neighbor not in self.cache['subsumed_clusters']
-            } for cluster in self.clusters
-            if cluster not in self.cache['subsumed_clusters']
-        }
-        return
-
-    def recompute_transition_probabilities(self):
-        logging.debug(f'computing transition probabilities for graph: '
-                      f'depth {self.depth}, clusters : {self.cardinality}')
-        for cluster in self.cache['walkable_edges']:
-            # Compute transition probabilities.
-            # These only exist among walkable Clusters.
-            if len(self.cache['walkable_edges'][cluster]) > 0:
-                factor = sum((
-                    1. / distance
-                    for (_, distance, _) in self.cache['walkable_edges'][cluster]
-                ))
-                self.cache['walkable_edges'][cluster] = {
-                    Edge(neighbor, distance, 1 / (distance * factor))
-                    for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]
-                }
-
-                factor = sum((probability for (_, _, probability) in self.cache['walkable_edges'][cluster]))
-                assert abs(factor - 1.) <= 1e-6, f'transition probabilities did not sum to 1 for cluster {cluster.name}. Got {factor:.8f} instead.'
+        self.edges.update({
+            Edge((cluster, candidate), distance)
+            for candidate, distance in cluster.candidates.items()
+            if candidate in self.clusters and distance <= cluster.radius + candidate.radius
+        })
         return
 
     def build_edges(self) -> 'Graph':
-        """ Calculates edges for the graph. """
-        depths = [cluster.depth for cluster in self.clusters]
-        logging.info(f'building edges for graph: depths [{min(depths)}, {max(depths)}], {self.cardinality} clusters.')
+        """ Calculates all edges for the Graph.
+
+        We define two clusters to share an edge when those two clusters have overlapping volumes.
+        """
+        logging.info(f'building edges for graph with {self.cardinality} clusters in {list(self.depth_range)} depth range.')
 
         # build edges
         [self._find_neighbors(cluster) for cluster in self.clusters]
 
-        # handshake between all neighbors
-        [self.edges[neighbor].add(Edge(cluster, distance, None))
-         for cluster, edges in self.edges.items()
-         for (neighbor, distance, _) in edges]
+        # remove edges from a cluster to itself
+        self_edges = {edge for edge in self.edges if edge.to_self}
+        self.edges -= self_edges
 
-        # Remove edges to self
-        [self.edges[cluster].remove(Edge(cluster, 0., None))
-         for cluster, edges in self.edges.items()
-         if (cluster, 0., None) in edges]
-
-        self.split_walkable_vs_subsumed()
-        self.recompute_transition_probabilities()
+        self.is_built = True
         return self
 
-    def _demote_to_subsumed(self, cluster: Cluster):
-        self._remove_walkable(cluster)
-        self._add_subsumed(cluster)
-        return
+    def edges_from(self, cluster: Cluster) -> List[Edge]:
+        """ returns all edges that connect to cluster. """
+        return list(self.edges_dict[cluster])
 
-    def _promote_to_walkable(self, cluster: Cluster):
-        self._remove_subsumed(cluster)
-        self._add_walkable(cluster)
-        return
+    def neighbors(self, cluster: Cluster) -> List[Cluster]:
+        """ returns all neighbors of cluster. """
+        return [edge.neighbor(cluster) for edge in self.edges_from(cluster)]
 
-    def _add_subsumed(self, cluster: Cluster):
-        # add to set of subsumed clusters
-        self.cache['subsumed_clusters'].add(cluster)
-
-        # add outgoing subsumed edges from cluster
-        self.cache['subsumed_edges'][cluster] = {
-            Edge(neighbor, distance, None)
-            for (neighbor, distance, _) in self.edges[cluster]
-            if cluster.radius >= distance + neighbor.radius
-        }
-
-        # add incoming subsumed edges from neighbors that subsume cluster
-        [self.cache['subsumed_edges'][neighbor].add(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.edges[cluster]
-         if neighbor.radius >= distance + cluster.radius]
-
-        return
-
-    def _remove_subsumed(self, cluster: Cluster):
-        # remove incoming subsumed edges to cluster
-        [self.cache['subsumed_edges'][neighbor].remove(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.cache['subsumed_edges'][cluster]
-         if neighbor.radius >= distance + cluster.radius]
-
-        self.cache['subsumed_clusters'].remove(cluster)
-        del self.cache['subsumed_edges'][cluster]
-        return
-
-    def _add_walkable(self, cluster: Cluster):
-        # add to set of walkable clusters
-        self.cache['walkable_clusters'].add(cluster)
-
-        # add outgoing walkable edges from cluster
-        self.cache['walkable_edges'][cluster] = {
-            Edge(neighbor, distance, None)
-            for (neighbor, distance, _) in self.edges[cluster]
-            if neighbor in self.cache['walkable_clusters']
-        }
-
-        # add incoming walkable edges from walkable neighbors
-        [self.cache['walkable_edges'][neighbor].add(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.edges[cluster]
-         if neighbor in self.cache['walkable_clusters']]
-
-        # reset transition probabilities for all walkable neighbors
-        for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
-            self.cache['walkable_edges'][neighbor] = {
-                Edge(edge.neighbor, edge.distance, None)
-                for edge in self.cache['walkable_edges'][neighbor]
-            }
-        return
-
-    def _remove_walkable(self, cluster: Cluster):
-        # remove from walkable edges
-        for (neighbor, distance, _) in self.cache['walkable_edges'][cluster]:
-            # reset outgoing edges from walkable neighbors
-            self.cache['walkable_edges'][neighbor] = {
-                Edge(edge.neighbor, edge.distance, None)
-                for edge in self.cache['walkable_edges'][neighbor]
-            }
-            # remove incoming edge to cluster
-            self.cache['walkable_edges'][neighbor].remove(Edge(cluster, distance, None))
-
-        self.cache['walkable_clusters'].remove(cluster)
-        del self.cache['walkable_edges'][cluster]
-        return
-
-    def _add(self, cluster: Cluster):
-        self.edges[cluster] = None
-        self._find_neighbors(cluster)
-
-        # Handshake with neighbors
-        [self.edges[neighbor].add(Edge(cluster, distance, None))
-         for (neighbor, distance, _) in self.edges[cluster]]
-
-        # Remove edge to cluster
-        if Edge(cluster, 0., None) in self.edges[cluster]:
-            self.edges[cluster].remove(Edge(cluster, 0., None))
-
-        # check if cluster subsumes any neighbor or if any neighbor subsumes cluster
-        subsumed = False
-        for (neighbor, distance, _) in self.edges[cluster]:
-            if cluster.radius >= distance + neighbor.radius:
-                # cluster subsumes neighbor, deal with possible demotions
-                if neighbor in self.cache['walkable_clusters']:
-                    self._demote_to_subsumed(neighbor)
-            elif neighbor.radius >= distance + cluster.radius:
-                # neighbor subsumes cluster
-                subsumed = True
-
-        if subsumed:
-            self._add_subsumed(cluster)
-        else:
-            self._add_walkable(cluster)
-        return
-
-    def _remove(self, cluster: Cluster):
-        if cluster in self.cache['walkable_clusters']:
-            self._remove_walkable(cluster)
-        else:
-            self._remove_subsumed(cluster)
-
-        # remove all incoming edges to cluster
-        for (neighbor, _, _) in self.edges[cluster]:
-            self.edges[neighbor] = {
-                edge for edge in self.edges[neighbor]
-                if edge.neighbor != cluster
-            }
-
-        # remove cluster and outgoing edges from graph
-        del self.edges[cluster]
-
-        return
-
-    def replace_clusters(
-            self,
-            removals: Set[Cluster],
-            additions: Set[Cluster],
-            recompute_probabilities: bool = True,
-    ):
-        """
-        Replaces clusters in 'removals' by those in 'additions'.
-        The set of points of clusters being removed must be identical to the set of points of clusters being added.
-
-        :param removals: set of clusters to remove from the graph
-        :param additions: set of clusters to add to the graph
-        :param recompute_probabilities: whether to recompute transition probabilities
-        :return:
-        """
-        if not removals.issubset(set(self.clusters)):
-            raise ValueError(f"Cannot remove a cluster that is not present in the graph")
-
-        if any((cluster in self.clusters for cluster in additions)):
-            raise ValueError(f"Cannot add a cluster that is already present in the graph.")
-
-        points_removed = {p for cluster in removals for p in cluster.argpoints}
-        points_added = {p for cluster in additions for p in cluster.argpoints}
-        if points_removed != points_added:
-            raise ValueError(f"clusters being removed had different points compared to those being added")
-
-        # [self._remove(cluster) for cluster in removals]
-        # [self._add(cluster) for cluster in additions]
-        #
-        # if recompute_probabilities:
-        #     self.recompute_transition_probabilities()
-        clusters: Set[Cluster] = set(self.clusters)
-        clusters.difference_update(removals)
-        clusters.update(additions)
-
-        self.cache.clear()
-        self.edges = {cluster: None for cluster in clusters}
-
-        if recompute_probabilities:
-            self.build_edges()
-
-        return
-
-    @property
-    def cached_edges(self) -> Set[CacheEdge]:
-        """ Returns all edges within the graph. """
-        if 'edges' not in self.cache:
-            logging.debug(f'building edges cache for {self}')
-            if any((edges is None for edges in self.edges.values())):
-                self.build_edges()
-
-            self.cache['edges'] = {
-                CacheEdge(cluster, *edge)
-                for cluster, edges in self.edges.items()
-                for edge in edges
-            }
-
-        return self.cache['edges']
-
-    @property
-    def subgraphs(self) -> Set['Graph']:
-        """ Returns all subgraphs within the graph. """
-        if any((edges is None for edges in self.edges.values())):
-            self.build_edges()
-
-        if 'subgraphs' not in self.cache:
-            self.cache['subgraphs'] = set()
-
-            unvisited: Set[Cluster] = {
-                cluster for cluster in self.walkable_clusters
-            }
-            while unvisited:
-                component = self.traverse(unvisited.pop())
-                unvisited = {
-                    cluster for cluster in unvisited
-                    if cluster not in component
-                }
-
-                self.cache['subgraphs'].add(Graph(*component))
-
-        return self.cache['subgraphs']
-
-    def subgraph(self, cluster: 'Cluster') -> 'Graph':
-        """ Returns the subgraph to which the cluster belongs. """
-        for subgraph in self.subgraphs:
-            if cluster in subgraph.edges:
-                return subgraph
-        else:
-            raise ValueError(f'cluster {cluster.name} not found in and subgraph.')
-
-    def clear_cache(self) -> None:
-        """ Clears the cache of the graph. """
-        # Clear all cached values and edges.
-        self.cache.clear()
-        self.edges = {cluster: None for cluster in self.edges}
-        return
-
-    # noinspection DuplicatedCode
-    def neighbors(
-            self,
-            cluster: Cluster,
-            *,
-            choice: str = 'all',
-    ) -> List[Cluster]:
-        """ return neighbors of a given cluster.
-
-        :param cluster: source cluster
-        :param choice: 'all' for all neighbors,
-                       'walkable' for only those that are not subsumed,
-                       'subsumed' for only those that are subsumed.
-        :return: list of relevant neighbors
-        """
-        if self.edges[cluster] is None:
-            self.build_edges()
-
-        if choice == 'all':
-            return [edge.neighbor for edge in self.edges[cluster]]
-        elif choice == 'walkable':
-            return [edge.neighbor for edge in self.walkable_edges[cluster]]
-        elif choice == 'subsumed':
-            return [edge.neighbor for edge in self.subsumed_edges[cluster]]
-        else:
-            raise ValueError(f'choice must be one of: '
-                             f'\'all\', '
-                             f'\'walkable\', or '
-                             f'\'subsumed\'. '
-                             f'Got: {choice}')
-
-    # noinspection DuplicatedCode
-    def distances(
-            self,
-            cluster: Cluster,
-            *,
-            choice: str = 'all',
-    ) -> List[float]:
-        """ return distances to neighbors of a given cluster.
-
-        :param cluster: source cluster
-        :param choice: 'all' for all neighbors,
-                       'walkable' for only those that are not subsumed,
-                       'subsumed' for only those that are subsumed.
-        :return: list of relevant distances to neighbors
-        """
-        if self.edges[cluster] is None:
-            self.build_edges()
-
-        if choice == 'all':
-            return [edge.distance for edge in self.edges[cluster]]
-        elif choice == 'walkable':
-            return [edge.distance for edge in self.walkable_edges[cluster]]
-        elif choice == 'subsumed':
-            return [edge.distance for edge in self.subsumed_edges[cluster]]
-        else:
-            raise ValueError(f'choice must be one of: '
-                             f'\'all\', '
-                             f'\'walkable\', or '
-                             f'\'subsumed\'. '
-                             f'Got: {choice}')
-
-    def probabilities(
-            self,
-            cluster: Cluster,
-    ) -> List[float]:
-        """ return transition probabilities to neighbors of a given cluster.
-        These are only valid among walkable clusters.
-
-        :param cluster: source cluster.
-        :return: list of transition probabilities to walkable neighbors.
-        """
-        if self.edges[cluster] is None:
-            self.build_edges()
-
-        if cluster in self.subsumed_clusters:
-            raise ValueError(f"cannot have transition probabilities for subsumed clusters")
-
-        probabilities = [edge.probability for edge in self.walkable_edges[cluster]]
-        if any((p is None for p in probabilities)):
-            self.recompute_transition_probabilities()
-            probabilities = [edge.probability for edge in self.walkable_edges[cluster]]
-        return probabilities
-
-    def random_walks(
-            self,
-            starts: Union[str, List[str], Cluster, List[Cluster]],
-            steps: int,
-    ) -> Dict[Cluster, int]:
-        """ Performs random walks, counting visitations of each cluster.
-
-        :param starts: Clusters at which to start the random walks.
-        :param steps: number of steps to take per walk.
-        :return: a dictionary of cluster to visit count.
-        """
-        if self.cardinality < 2:
-            return {cluster: 1 for cluster in self.clusters}
-
-        if type(starts) in {Cluster, str}:
-            starts = [starts]
-        if type(starts) is list and type(starts[0]) is str:
-            starts = [self.manifold.select(cluster) for cluster in starts]
-
-        if any((edges is None for edges in self.edges.values())):
-            self.build_edges()
-
-        if any((cluster not in self.walkable_clusters for cluster in starts)):
-            raise ValueError(f'random walks may only be started at clusters '
-                             f'that are not subsumed by other clusters.')
-
-        counts = {cluster: 0 for cluster in self.clusters}
-        counts.update({cluster: 1 for cluster in starts})
-
-        # initialize walk locations.
-        # only walk from clusters that have some walkable neighbors
-        walks = [cluster for cluster in starts if len(self.walkable_edges[cluster]) > 0]
-        for _ in range(steps):
-            # update walk locations
-            walks = [
-                np.random.choice(
-                    a=self.neighbors(cluster, choice='walkable'),
-                    p=self.probabilities(cluster),
-                ) for cluster in walks
-            ]
-            # increment visit counts
-            for cluster in walks:
-                counts[cluster] += 1
-
-        for cluster in self.walkable_clusters:
-            counts.update({
-                neighbor: counts[cluster] + counts[neighbor]
-                for neighbor in self.neighbors(cluster, choice='subsumed')
-            })
-        return counts
+    def distances(self, cluster: Cluster) -> List[float]:
+        """ returns distances to each neighbor oc cluster. """
+        return [edge.distance for edge in self.edges_from(cluster)]
 
     def traverse(self, start: Cluster) -> Set[Cluster]:
         """ Graph traversal starting at start. """
-        if any((edges is None for edges in self.edges.values())):
+        if not self.is_built:
             self.build_edges()
-
-        if start in self.subsumed_clusters:
-            raise ValueError(f'traversal may not start from subsumed clusters.')
 
         logging.debug(f'starting traversal from {start}')
         visited: Set[Cluster] = set()
         frontier: Set[Cluster] = {start}
-        # visit all reachable walkable clusters
+
         while frontier:
             visited.update(frontier)
-            frontier = {
-                neighbor for cluster in frontier
-                for neighbor in self.neighbors(cluster, choice='walkable')
-                if neighbor not in visited
-            }
+            frontier = {neighbor for cluster in frontier for neighbor in self.neighbors(cluster) if neighbor not in visited}
 
-        # include the clusters subsumed by visited walkable clusters
-        visited.update({
-            edge.neighbor for cluster in visited
-            for edge in self.subsumed_edges[cluster]
-        })
         return visited
 
     def bft(self, start: Cluster) -> Set[Cluster]:
-        """ Breadth-First Traversal starting at start. """
-        if any((edges is None for edges in self.edges.values())):
+        """ Breadth-First traversal starting at start. """
+        if not self.is_built:
             self.build_edges()
 
-        if start in self.subsumed_clusters:
-            raise ValueError(f'traversal may not start from a subsumed cluster.')
-
-        logging.debug(f'starting breadth-first-traversal from {start}')
-        visited = set()
+        logging.debug(f'starting traversal from {start}')
+        visited: Set[Cluster] = set()
         queue = deque([start])
+
         while queue:
             cluster = queue.popleft()
             if cluster not in visited:
                 visited.add(cluster)
-                queue.extend((
-                    neighbor
-                    for neighbor in self.neighbors(cluster, choice='walkable')
-                    if neighbor not in visited
-                ))
+                queue.extend([neighbor for neighbor in self.neighbors(cluster) if neighbor not in visited])
+            else:
+                continue
 
-        subsumed_visits = {
-            neighbor for cluster in visited
-            for neighbor in self.neighbors(cluster, choice='subsumed')
-        }
-        visited.update(subsumed_visits)
         return visited
 
     def dft(self, start: Cluster) -> Set[Cluster]:
-        """ Depth-First Traversal starting at start. """
-        if any((edges is None for edges in self.edges.values())):
+        """ Depth-First traversal starting at start. """
+        if not self.is_built:
             self.build_edges()
+        else:
+            pass
 
-        if start in self.subsumed_clusters:
-            raise ValueError(f'traversal may not start from a subsumed cluster.')
-
-        logging.debug(f'starting depth-first-traversal from {start}')
-        visited = set()
+        logging.debug(f'starting traversal from {start}')
+        visited: Set[Cluster] = set()
         stack: List[Cluster] = [start]
+
         while stack:
             cluster = stack.pop()
             if cluster not in visited:
                 visited.add(cluster)
-                stack.extend((
-                    neighbor
-                    for neighbor in self.neighbors(cluster, choice='walkable')
-                    if neighbor not in visited
-                ))
+                stack.extend([neighbor for neighbor in self.neighbors(cluster) if neighbor not in visited])
 
-        subsumed_visits = {
-            neighbor for cluster in visited
-            for neighbor in self.neighbors(cluster, choice='subsumed')
-        }
-        visited.update(subsumed_visits)
         return visited
+
+    def _add(self, cluster: Cluster) -> None:
+        """ Adds the cluster and all associated edges to the graph.
+
+        Assumes that the cluster is not already in the graph.
+        Caller need to invalidate cache.
+        """
+        self._find_neighbors(cluster)
+        self_edges = {edge for edge in self.edges if edge.to_self}
+        self.edges -= self_edges
+        return
+
+    def _remove(self, cluster: Cluster) -> None:
+        """ Removes the cluster and all associated edges from the graph.
+
+        Assumes that the cluster is in the graph.
+        Caller need to invalidate cache.
+        """
+        removed_edges = {edge for edge in self.edges if cluster in edge}
+        self.edges -= removed_edges
+        self.clusters.remove(cluster)
+        return
+
+    def replace_clusters(self, removals: Set[Cluster], additions: Set[Cluster]) -> 'Graph':
+        """ Replace the Clusters in removals by the clusters in additions.
+
+        The set of points in the to-be-removed clusters must be the same as the set of points in the to-be-added clusters.
+
+        :param removals: a set of Clusters to be removed from the graph.
+        :param additions: a set of Clusters to be added to the graph.
+        :return: the updated graph.
+        """
+        if not removals.issubset(self.clusters):
+            raise ValueError(f'cannot remove clusters that are not in the graph.')
+        elif len(additions.intersection(self.clusters)) > 0:
+            raise ValueError(f'Cannot add clusters that are already in the graph.')
+        else:
+            added_points: Set[int] = {point for cluster in additions for point in cluster.argpoints}
+            removed_points: Set[int] = {point for cluster in removals for point in cluster.argpoints}
+            if added_points != removed_points:
+                raise ValueError(f'Mismatch between points being replaced. '
+                                 f'Clusters being added must have the same set of points as those being removed')
+
+        [self._remove(cluster) for cluster in removals]
+        [self._add(cluster) for cluster in additions]
+        self.clear_cache()
+        return self
 
 
 class Manifold:
@@ -1154,8 +831,8 @@ class Manifold:
             raise ValueError(f"Invalid argument to argpoints. {argpoints}")
 
         self.root: Cluster = Cluster(self, self.argpoints, '')
-        self.layers: List[Graph] = [Graph(self.root)]
-        self.graphs: List[Graph] = [Graph(self.root)]
+        self.layers: List[Graph] = [Graph(self.root)]  # layer-graphs by depth in the tree
+        self.graphs: List[Graph] = list()  # optimal-graphs build from selection criteria
 
         self.cache: Dict[str, Any] = dict()
         self.cache.update(**kwargs)
@@ -1233,7 +910,7 @@ class Manifold:
             logging.info(f'building graphs with {len(selection_criteria)} Selection Criteria.')
             self.graphs = [Graph(*select(self.root)).build_edges() for select in selection_criteria]
         else:
-            logging.info('No Selection Criterion was provided. Using leaves for building graph.')
+            logging.warning('No Selection Criterion was provided. Using leaves for building graph.')
             self.graphs = [Graph(*[cluster for cluster in self.layers[-1].clusters]).build_edges()]
 
         return self
