@@ -119,3 +119,8 @@ class TestGraph(unittest.TestCase):
 
             self.assertEqual(0, len(graph.cache), f'\n4. Graph cache had some elements. {[k for k in graph.cache.keys()]}. iter {i}')
         return
+
+    @unittest.skip
+    def test_dot_file(self):
+        # TODO
+        pass
