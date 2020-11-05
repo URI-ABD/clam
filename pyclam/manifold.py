@@ -496,7 +496,7 @@ class Graph:
         * Every data point used to build the Manifold is also present in a Graph.
         * Each point is present in exactly one Cluster.
 
-    This invariant only holds for full graphs, and not subgraph components.
+    This invariant only holds for full graphs, and not for subgraphs or components.
 
     """
     # TODO: Implement dump/load
@@ -578,33 +578,40 @@ class Graph:
         return self.min_depth, self.depth
 
     @property
-    def subgraphs(self) -> Set['Graph']:
-        """ Returns the set of all connected component subgraphs in the Graph. """
+    def components(self) -> Set['Graph']:
+        """ Returns the set of all connected components in the Graph. """
         if not self.is_built:
             self.build_edges()
 
-        if 'subgraphs' not in self.cache:
-            subgraphs: Set['Graph'] = set()
+        if 'components' not in self.cache:
+            components: Set['Graph'] = set()
             unvisited: Set[Cluster] = {cluster for cluster in self.clusters}
             while unvisited:
-                component = self.traverse(unvisited.pop())
+                component: Set[Cluster] = self.traverse(unvisited.pop())
                 unvisited -= component
-                graph: Graph = Graph(*component)
-                graph.edges = {edge for edge in self.edges if set(edge.clusters).issubset(component)} if len(component) > 1 else set()
-                graph.is_built = True
-                subgraphs.add(graph)
+                components.add(self.subgraph(component))
 
-            self.cache['subgraphs'] = subgraphs
+            self.cache['components'] = components
 
-        return self.cache['subgraphs']
+        return self.cache['components']
 
-    def subgraph(self, cluster: Cluster) -> 'Graph':
-        """ returns the connected component subgraph to which cluster belongs. """
-        for subgraph in self.subgraphs:
-            if cluster in subgraph:
-                return subgraph
+    def component_containing(self, cluster: Cluster) -> 'Graph':
+        """ returns the connected component to which cluster belongs. """
+        for component in self.components:
+            if cluster in component:
+                return component
         else:
-            raise ValueError(f'cluster {str(cluster)} not found in any subgraph.')
+            raise ValueError(f'cluster {str(cluster)} not found in any component.')
+
+    def subgraph(self, clusters: Set[Cluster]) -> 'Graph':
+        """ returns the subgraph containing only the given clusters. """
+        if not clusters.issubset(self.clusters):
+            raise ValueError(f'Some clusters were not found in the graph.')
+
+        graph: Graph = Graph(*clusters)
+        graph.edges = {edge for edge in self.edges if set(edge.clusters).issubset(clusters)}
+        graph.is_built = True
+        return graph
 
     def clear_cache(self) -> None:
         self.cache.clear()
@@ -639,10 +646,10 @@ class Graph:
                     ancestry[depth].candidates = {
                         c: float(d)
                         for c, d in zip(candidates, distances)
+                        # The factor of 4 is a safe bet for now.
+                        # The factor might change after an in-depth analysis of radii trends.
                         if d <= c.radius + radius * 4
                     }
-                    # The factor of 4 is a safe bet for now.
-                    # The factor might change after an in-depth analysis of radii trends.
                 else:
                     ancestry[depth].candidates = dict()
         return
@@ -655,7 +662,11 @@ class Graph:
         self.edges.update({
             Edge((cluster, candidate), distance)
             for candidate, distance in cluster.candidates.items()
-            if candidate in self.clusters and distance <= cluster.radius + candidate.radius
+            if all((
+                cluster != candidate,  # prevent self-edges
+                candidate in self.clusters,  # only make edges to other clusters in the graph
+                distance <= cluster.radius + candidate.radius,  # make sure of volume overlap
+            ))
         })
         return
 
@@ -668,11 +679,6 @@ class Graph:
 
         # build edges
         [self._find_neighbors(cluster) for cluster in self.clusters]
-
-        # remove edges from a cluster to itself
-        self_edges = {edge for edge in self.edges if edge.to_self}
-        self.edges -= self_edges
-
         self.is_built = True
         return self
 
@@ -685,7 +691,7 @@ class Graph:
         return [edge.neighbor(cluster) for edge in self.edges_from(cluster)]
 
     def distances(self, cluster: Cluster) -> List[float]:
-        """ returns distances to each neighbor oc cluster. """
+        """ returns distances to each neighbor of cluster. """
         return [edge.distance for edge in self.edges_from(cluster)]
 
     def traverse(self, start: Cluster) -> Set[Cluster]:
@@ -699,7 +705,11 @@ class Graph:
 
         while frontier:
             visited.update(frontier)
-            frontier = {neighbor for cluster in frontier for neighbor in self.neighbors(cluster) if neighbor not in visited}
+            frontier = {
+                neighbor for cluster in frontier
+                for neighbor in self.neighbors(cluster)
+                if neighbor not in visited
+            }
 
         return visited
 
@@ -747,9 +757,8 @@ class Graph:
         Assumes that the cluster is not already in the graph.
         Caller need to invalidate cache.
         """
+        self.clusters.add(cluster)
         self._find_neighbors(cluster)
-        self_edges = {edge for edge in self.edges if edge.to_self}
-        self.edges -= self_edges
         return
 
     def _remove(self, cluster: Cluster) -> None:
@@ -758,8 +767,7 @@ class Graph:
         Assumes that the cluster is in the graph.
         Caller need to invalidate cache.
         """
-        removed_edges = {edge for edge in self.edges if cluster in edge}
-        self.edges -= removed_edges
+        self.edges -= set(self.edges_from(cluster))
         self.clusters.remove(cluster)
         return
 

@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from pyclam import Manifold, criterion
+from pyclam import criterion, Manifold
 from pyclam.tests.utils import linear_search
 
 

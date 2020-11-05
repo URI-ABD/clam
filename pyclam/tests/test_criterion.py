@@ -1,6 +1,6 @@
 import unittest
 
-from pyclam import Manifold, datasets, criterion, Graph
+from pyclam import datasets, criterion, Manifold, Graph
 
 
 # noinspection SpellCheckingInspection
