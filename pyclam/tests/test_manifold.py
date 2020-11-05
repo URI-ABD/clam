@@ -6,8 +6,7 @@ from typing import List
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam import datasets, criterion
-from pyclam.manifold import Manifold, Cluster
+from pyclam import datasets, criterion, Manifold, Cluster
 
 np.random.seed(42)
 random.seed(42)

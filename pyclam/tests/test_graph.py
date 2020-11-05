@@ -4,8 +4,7 @@ from typing import Set, Dict, List
 
 import numpy as np
 
-from pyclam import datasets, criterion
-from pyclam.manifold import Manifold, Graph, Cluster, Edge
+from pyclam import datasets, criterion, Manifold, Graph, Cluster, Edge
 
 
 class TestGraph(unittest.TestCase):
@@ -61,10 +60,10 @@ class TestGraph(unittest.TestCase):
         self.assertNotIn(root, self.graph)
         return
 
-    def test_subgraphs(self):
-        subgraphs: Set[Graph] = self.graph.subgraphs
-        [self.assertIsInstance(subgraph, Graph) for subgraph in subgraphs]
-        self.assertEqual(self.graph.cardinality, sum(subgraph.cardinality for subgraph in subgraphs))
+    def test_components(self):
+        components: Set[Graph] = self.graph.components
+        [self.assertIsInstance(component, Graph) for component in components]
+        self.assertEqual(self.graph.cardinality, sum(component.cardinality for component in components))
         return
 
     def test_clear_cache(self):
