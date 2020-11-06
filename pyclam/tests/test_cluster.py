@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from pyclam import criterion, datasets, Manifold, Cluster
+from pyclam import datasets, Manifold, Cluster
 from pyclam.manifold import BATCH_SIZE
 
 
@@ -129,30 +129,6 @@ class TestCluster(unittest.TestCase):
     def test_clear_cache(self):
         self.cluster.clear_cache()
         self.assertNotIn('argsamples', self.cluster.cache)
-        return
-
-    def test_tree_search(self):
-        np.random.seed(42)
-        data, labels = datasets.line()
-        manifold = Manifold(data, 'euclidean')
-        manifold.build_tree(criterion.MinPoints(10), criterion.MaxDepth(5))
-        # Finding points that are in data.
-        for depth, layer in enumerate(manifold.layers):
-            for cluster in layer.clusters:
-                linear = set([c for c in layer if c.overlaps(cluster.medoid, cluster.radius)])
-                tree = set(next(iter(manifold.layers[0])).tree_search(cluster.medoid, cluster.radius, cluster.depth).keys())
-                self.assertSetEqual(set(), tree - linear)
-                for d in range(depth, 0, -1):
-                    parents = set([manifold.select(cluster.name[:-1]) for cluster in linear])
-                    for parent in parents:
-                        results = parent.tree_search(cluster.medoid, cluster.radius, parent.depth)
-                        self.assertIn(parent, results, msg=f'\n{parent.name} not in {[c.name for c in results]}. '
-                                                           f'got {len(results)} hits.')
-        # Attempting to find points that *may* be in the data
-        results = manifold.root.tree_search(point=np.asarray([0, 1]), radius=0., depth=-1)
-        self.assertEqual(0, len(results))
-        with self.assertRaises(ValueError):
-            _ = manifold.root.tree_search(point=np.asarray([0, 1]), radius=0., depth=-5)
         return
 
     def test_partition(self):

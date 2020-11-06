@@ -1,5 +1,7 @@
 """ Utilities for Testing.
 """
+from typing import Dict
+
 import numpy as np
 from scipy.spatial.distance import cdist
 
@@ -7,17 +9,17 @@ from pyclam.manifold import BATCH_SIZE, Cluster
 from pyclam.types import Data, Radius
 
 
-def linear_search(point: Data, radius: Radius, data: Data, metric: str):
+def linear_search(point: Data, radius: Radius, data: Data, metric: str) -> Dict[int, float]:
     point = np.expand_dims(point, 0)
-    results = []
+    results: Dict[int, float] = dict()
     for i in range(0, len(data), BATCH_SIZE):
         batch = data[i: i + BATCH_SIZE]
         distances = cdist(point, batch, metric)[0]
-        results.extend([p for p, d in zip(batch, distances) if d <= radius])
+        results.update({p: d for p, d in zip(batch, distances) if d <= radius})
     return results
 
 
-def trace_lineage(cluster: Cluster, other: Cluster):  # TODO: Cover
+def trace_lineage(cluster: Cluster, other: Cluster):
     assert cluster.depth == other.depth
     assert cluster.overlaps(other.medoid, other.radius)
     lineage = [other.name[:i] for i in range(other.depth) if cluster.name[:i] != other.name[:i]]

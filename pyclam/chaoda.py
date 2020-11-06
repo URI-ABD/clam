@@ -6,7 +6,7 @@ from typing import List, Dict, Set
 import numpy as np
 from scipy.special import erf
 
-from pyclam import Graph, Cluster, Edge
+from pyclam.manifold import Graph, Cluster, Edge
 
 
 def _catch_normalization_mode(mode: str) -> None:

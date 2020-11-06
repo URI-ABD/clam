@@ -5,7 +5,7 @@ import logging
 import pickle
 from collections import deque
 from operator import itemgetter
-from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any
+from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any, Optional
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -47,7 +47,7 @@ class Cluster:
         self.manifold: 'Manifold' = manifold
         self.argpoints: Vector = argpoints
         self.name: str = name
-        self.children: Union[None, List['Cluster']] = None
+        self.children: Optional[List['Cluster']] = None
 
         # Reference to the distance function for easier usage
         self.distance = self.manifold.distance
@@ -57,7 +57,7 @@ class Cluster:
         # Candidates have the following properties:
         #     candidate.depth <= self.depth
         #     self.distance_from([candidate.argmedoid]) <= candidate.radius + self.radius * 4
-        self.candidates: Union[Dict['Cluster', float], None] = None
+        self.candidates: Optional[Dict['Cluster', float]] = None
 
         self.cache: Dict[str, Any] = dict()
         self.cache.update(**kwargs)
@@ -244,12 +244,13 @@ class Cluster:
             if self.nsamples == 1:
                 self.cache['local_fractal_dimension'] = 1.
             else:
-                count = sum([
-                    1 if distance <= (self.radius / 2) else 0
+                half_count = len([
+                    distance
                     for batch in iter(self)
                     for distance in self.distance_from(batch)
+                    if distance <= self.radius / 2
                 ])
-                self.cache['local_fractal_dimension'] = 1. if count == 0 else np.log2(self.cardinality / count)
+                self.cache['local_fractal_dimension'] = 1. if half_count == 0 else np.log2(self.cardinality / half_count)
         return self.cache['local_fractal_dimension']
 
     @property
@@ -329,7 +330,7 @@ class Cluster:
         :return: List of children.
         """
         if not all((
-            len(self.argsamples) > 1,
+            self.nsamples > 1,
             *(c(self) for c in criterion),
         )):  # cluster cannot be partitioned
             logging.debug(f'{self} cannot be partitioned.')
@@ -354,60 +355,6 @@ class Cluster:
             logging.debug(f'{self} was partitioned into {len(self.children)} child clusters.')
 
         return self.children
-
-    def _tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
-        distance = self.distance_from(np.asarray([point]))[0]
-        assert distance <= radius + self.radius, f'_tree_search was started with no overlap.'
-        assert self.depth < depth, f'_tree_search needs to have depth ({depth}) > self.depth ({self.depth}). '
-
-        # results and candidates ONLY contain clusters that have overlap with point
-        results: Dict['Cluster', Radius] = dict()
-        candidates: Dict['Cluster', Radius] = {self: distance}
-        for _ in range(self.depth, depth):
-            # if cluster was not partitioned any further, add it to results.
-            results.update({cluster: distance for cluster, distance in candidates.items() if not cluster.children})
-
-            # filter out only those candidates that were partitioned.
-            candidates = {cluster: distance for cluster, distance in candidates.items() if cluster.children}
-
-            # proceed down the tree
-            children: List[Cluster] = [child for candidate in candidates.keys() for child in candidate.children]
-            if len(children) == 0:
-                break
-
-            # filter out clusters that are too far away to possibly contain any hits.
-            argcenters = [child.argmedoid for child in children]
-            distances = self.distance(np.asarray([point]), argcenters)[0]
-            radii = [radius + child.radius for child in children]
-            candidates = {
-                cluster: distance
-                for cluster, distance, radius in zip(children, distances, radii)
-                if distance <= radius
-            }
-
-            if len(candidates) == 0:
-                break
-
-        # put all potential clusters in one dictionary.
-        results.update(candidates)
-        assert all((depth >= cluster.depth for cluster in results.keys()))
-        return results
-
-    def tree_search(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
-        """ Searches down the tree for clusters that overlap point with radius at depth. """
-        logging.debug(f'tree_search(point={point}, radius={radius}, depth={depth}')
-        if depth == -1:
-            depth = len(self.manifold.layers)
-        if depth < self.depth:
-            raise ValueError('depth must not be less than cluster.depth')
-
-        results: Dict['Cluster', Radius] = dict()
-        if self.depth == depth:
-            results = {self: self.distance_from(np.asarray([point]))[0]}
-        elif self.overlaps(point, radius):
-            results = self._tree_search(point, radius, depth)
-
-        return results
 
     def json(self):
         """ This is used for writing the manifold to disk. """
@@ -936,24 +883,26 @@ class Manifold:
 
     def _partition_single(self, criterion) -> List[Cluster]:
         # TODO: Consider removing and only keeping multi-threaded version
-        # filter out clusters not previously partitioned
-        new_layer: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth < len(self.layers) - 1]
+        # start new layer with all non-partitionable clusters
+        new_layer: List[Cluster] = [cluster for cluster in self.layers[-1].clusters if cluster.depth < self.depth]
 
-        # get the deepest clusters. These can potentially be partitioned
-        partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == len(self.layers) - 1]
+        # filter clusters that might get partitioned
+        partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == self.depth]
+
+        # partition all partitionable clusters
         [cluster.partition(*criterion) for cluster in partitionable]
 
-        # extend new_layer to contain all the new clusters
+        # update new_layer with all the new clusters
         [new_layer.extend(cluster.children) if cluster.children else new_layer.append(cluster) for cluster in partitionable]
         return new_layer
 
     def _partition_threaded(self, criterion) -> List[Cluster]:
-        new_layer: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth < len(self.layers) - 1]
-        partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == len(self.layers) - 1]
+        new_layer: List[Cluster] = [cluster for cluster in self.layers[-1].clusters if cluster.depth < self.depth]
+        partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == self.depth]
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_cluster = [executor.submit(c.partition, *criterion) for c in partitionable]
-            [v.result() for v in concurrent.futures.as_completed(future_to_cluster)]
+            future_to_cluster = [executor.submit(cluster.partition, *criterion) for cluster in partitionable]
+            [value.result() for value in concurrent.futures.as_completed(future_to_cluster)]
 
         [new_layer.extend(cluster.children) if cluster.children else new_layer.append(cluster) for cluster in partitionable]
         return new_layer
@@ -994,33 +943,6 @@ class Manifold:
     def select(self, name: str) -> Cluster:
         """ Returns the cluster with the given name. """
         return self.ancestry(name)[-1]
-
-    def find_points(self, point: Data, radius: Radius) -> List[Tuple[int, Radius]]:
-        """ Returns all indices of points that are within radius of point. """
-        candidates: List[int] = [p for c in self.find_clusters(point, radius, len(self.layers))
-                                 for p in c.argpoints]
-        results: Dict[int, Radius] = dict()
-        point = np.expand_dims(point, axis=0)
-        for i in range(0, len(candidates), BATCH_SIZE):
-            batch = candidates[i:i + BATCH_SIZE]
-            distances = self.distance(point, batch)[0]
-            results.update({p: d for p, d in zip(batch, distances) if d <= radius})
-        return sorted([(p, d) for p, d in results.items()], key=itemgetter(1))
-
-    def find_clusters(self, point: Data, radius: Radius, depth: int) -> Dict['Cluster', Radius]:
-        """ Returns all clusters that contain points within radius of point at depth. """
-        return {r: d for c in self.layers[0] for r, d in c.tree_search(point, radius, depth).items()}
-
-    def find_knn(self, point: Data, k: int) -> List[Tuple[int, Radius]]:
-        """ Finds and returns the k-nearest neighbors of point. """
-        radius: Radius = np.float64(np.mean([c.radius for c in self.layers[-1]]))
-        radius = np.float64(max(radius, 1e-16))
-        results = self.find_points(point, radius)
-        while len(results) < k:
-            radius *= 2
-            results = self.find_points(point, radius)
-
-        return sorted(results, key=itemgetter(1))[:k]
 
     def dump(self, fp: Union[BinaryIO, IO[bytes]]) -> None:
         pickle.dump({
