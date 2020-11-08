@@ -93,14 +93,14 @@ def graph_neighborhood(graph: Graph, normalize: str = 'gaussian') -> np.array:
         visited: Set[Cluster] = set()
         frontier: Set[Cluster] = {start}
         while frontier:
-            visited += frontier
+            visited.update(frontier)
             path_length.append(len(visited))
             frontier = {neighbor for cluster in frontier for neighbor in graph.neighbors(cluster)}
             frontier -= visited
         return path_length
 
     path_lengths: Dict[Cluster, List[int]] = {cluster: _bft(cluster) for cluster in graph.clusters}
-    scores: Dict[Cluster, int] = {cluster: path_length[len(path_lengths) // 4] if len(path_lengths) > 0 else 0 for cluster, path_length in path_lengths.items()}
+    scores: Dict[Cluster, int] = {cluster: path_length[len(path_length) // 4] if len(path_length) > 0 else 0 for cluster, path_length in path_lengths.items()}
     scores: Dict[int, int] = {point: -score for cluster, score in scores.items() for point in cluster.argpoints}
     return _normalize(np.asarray([scores[i] for i in range(len(scores))], dtype=float), normalize)
 
@@ -152,14 +152,15 @@ def _perform_random_walks(
         visit_counts: Dict[Cluster, int] = {cluster: 1 if cluster in starts else 0 for cluster in component.clusters}
         locations: List[Cluster] = list(starts)
         for _ in range(component.cardinality * steps_multiplier):
-            locations = [np.random.choice(  # randomly choose a neighbor to move to from each location
+            edges = [np.random.choice(  # randomly choose a neighbor to move to from each location
                 a=list(transition_probabilities[cluster].keys()),
                 p=list(transition_probabilities[cluster].values()),
             ) for cluster in locations]
+            locations = [edge.neighbor(cluster) for edge, cluster in zip(edges, locations)]
             visit_counts.update({cluster: visit_counts[cluster] + 1 for cluster in locations})
         return visit_counts
     else:
-        return {next(iter(component.clusters)): 1}
+        return {next(iter(component.clusters)): steps_multiplier}
 
 
 def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
@@ -187,7 +188,7 @@ def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
 
     # compute transition probabilities
     transition_probabilities: Dict[Cluster, Dict[Edge, float]] = {
-        cluster: _compute_transition_probabilities(graph, cluster)
+        cluster: _compute_transition_probabilities(walkable_graph, cluster)
         for cluster in walkable_clusters
     }
 
@@ -198,19 +199,10 @@ def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
         visit_counts.update(_perform_random_walks(component, starts, 10, transition_probabilities))
 
     # create dict of walkable cluster -> set of subsumed clusters
-    subsumed_neighbors: Dict[Cluster, Set[Cluster]] = {cluster: set() for cluster in walkable_clusters}
-    for edge in graph.edges:
-        if set(edge.clusters).issubset(walkable_clusters):  # both clusters are walkable
-            continue
-        elif edge.left in walkable_clusters:  # only left is walkable
-            if edge.right not in walkable_clusters:  # right is subsumed
-                subsumed_neighbors[edge.left].add(edge.right)
-        elif edge.right in walkable_clusters:  # only right is walkable
-            if edge.left not in walkable_clusters:  # left is subsumed
-                subsumed_neighbors[edge.right].add(edge.left)
-        else:  # neither is walkable
-            # if both are subsumed, it gets accounted for with a different edge
-            continue
+    subsumed_neighbors: Dict[Cluster, Set[Cluster]] = {
+        cluster: {neighbor for neighbor in graph.neighbors(cluster) if neighbor not in walkable_graph}
+        for cluster in walkable_clusters
+    }
 
     # update visit-counts for subsumed clusters
     for master, subsumed in subsumed_neighbors.items():
@@ -222,7 +214,7 @@ def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
 
     # normalize counts
     scores: Dict[int, int] = {point: -count for cluster, count in visit_counts.items() for point in cluster.argpoints}
-    return _normalize(np.array([scores[i] for i in range(graph.cardinality)], dtype=int), mode=normalize)
+    return _normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalize)
 
 
 # TODO: Add ensemble

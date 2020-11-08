@@ -17,7 +17,7 @@ class TestGraph(unittest.TestCase):
             criterion.MaxDepth(10),
             criterion.Layer(5),
         )
-        cls.graph: Graph = cls.manifold.layers[5].build_edges()
+        cls.graph: Graph = cls.manifold.graphs[0]
         return
 
     def test_init(self):
