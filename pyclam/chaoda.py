@@ -88,19 +88,19 @@ def graph_neighborhood(graph: Graph, normalize: str = 'gaussian') -> np.array:
     """
     _catch_normalization_mode(normalize)
 
-    def _bft(start: Cluster) -> List[int]:
-        path_length: List[int] = list()
+    def _neighborhood_size(start: Cluster, steps: int) -> int:
+        """ Returns the number of clusters within 'steps' of 'start'. """
         visited: Set[Cluster] = set()
         frontier: Set[Cluster] = {start}
-        while frontier:
-            visited.update(frontier)
-            path_length.append(len(visited))
-            frontier = {neighbor for cluster in frontier for neighbor in graph.neighbors(cluster)}
-            frontier -= visited
-        return path_length
+        for _ in range(steps):
+            if frontier:
+                visited.update(frontier)
+                frontier = {neighbor for cluster in frontier for neighbor in graph.neighbors(cluster) if neighbor not in visited}
+            else:
+                break
+        return len(visited)
 
-    path_lengths: Dict[Cluster, List[int]] = {cluster: _bft(cluster) for cluster in graph.clusters}
-    scores: Dict[Cluster, int] = {cluster: path_length[len(path_length) // 4] if len(path_length) > 0 else 0 for cluster, path_length in path_lengths.items()}
+    scores: Dict[Cluster, int] = {cluster: _neighborhood_size(cluster, graph.eccentricity(cluster) // 4) for cluster in graph.clusters}
     scores: Dict[int, int] = {point: -score for cluster, score in scores.items() for point in cluster.argpoints}
     return _normalize(np.asarray([scores[i] for i in range(len(scores))], dtype=float), normalize)
 
@@ -214,6 +214,36 @@ def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
 
     # normalize counts
     scores: Dict[int, int] = {point: -count for cluster, count in visit_counts.items() for point in cluster.argpoints}
+    return _normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalize)
+
+
+def stationary_probabilities(graph: Graph, normalize: str = 'gaussian') -> np.array:
+    """ Compute the Outlier scores based on the convergence of a random walk on each component of the Graph.
+
+    For each component on the graph, compute the convergent transition matrix for that graph.
+    Clusters with low values in that matrix are the outliers.
+
+    :param graph: The graph on which to compute outlier scores.
+    :param normalize: Which normalization mode to use to get scores in a [0, 1] range.
+                      Must be one of 'linear', 'gaussian', or 'sigmoid'.
+    :return: A numpy array of outlier scores for all points in the graph.
+    """
+    _catch_normalization_mode(normalize)
+    scores: Dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
+
+    for component in graph.components:
+        if component.cardinality > 1:
+            clusters, matrix = component.as_matrix
+            for i in range(len(clusters)):
+                matrix[i] /= sum(matrix[i])
+            steady = np.copy(matrix)
+            for _ in range(100):
+                steady = np.matmul(steady, matrix)
+            scores.update({cluster: score for cluster, score in zip(clusters, np.sum(steady, axis=0))})
+        else:
+            scores.update({cluster: 0 for cluster in component.clusters})
+
+    scores: Dict[int, float] = {point: -score for cluster, score in scores.items() for point in cluster.argpoints}
     return _normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalize)
 
 

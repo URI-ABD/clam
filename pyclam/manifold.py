@@ -577,6 +577,39 @@ class Graph:
     def depth_range(self) -> Tuple[int, int]:
         return self.min_depth, self.depth
 
+    def eccentricity(self, start: Cluster) -> int:
+        """ The greatest path length from the start cluster to any other cluster in the same component. """
+        visited: Set[Cluster] = set()
+        frontier: Set[Cluster] = {start}
+        eccentricity: int = 0
+        while frontier:
+            eccentricity += 1
+            visited.update(frontier)
+            frontier = {neighbor for cluster in frontier for neighbor in self.neighbors(cluster) if neighbor not in visited}
+        return eccentricity
+
+    @property
+    def diameter(self) -> int:
+        """ The greatest eccentricity of any cluster in the graph. """
+        if 'diameter' not in self.cache:
+            self.cache['diameter'] = max([self.eccentricity(cluster) for cluster in self.clusters])
+        return self.cache['diameter']
+
+    @property
+    def as_matrix(self) -> Tuple[List[Cluster], np.array]:
+        """ The Graph as a square matrix where the entries are the corresponding edge lengths.
+
+        :returns: The clusters in a list, and the matrix with columns corresponding to that ordering
+        """
+        clusters: List[Cluster] = list(self.clusters)
+        indices: Dict[Cluster, int] = {cluster: i for i, cluster in enumerate(clusters)}
+        matrix: np.array = np.zeros(shape=(len(clusters), len(clusters)), dtype=float)
+        for edge in self.edges:
+            i, j = indices[edge.left], indices[edge.right]
+            matrix[i][j] = edge.distance
+            matrix[j][i] = edge.distance
+        return clusters, matrix
+
     @property
     def components(self) -> Set['Graph']:
         """ Returns the set of all connected components in the Graph. """
