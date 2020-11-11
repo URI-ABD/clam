@@ -11,9 +11,8 @@ import numpy as np
 from scipy.spatial.distance import cdist
 
 from pyclam.types import Data, Radius, Vector, Metric
+from pyclam.utils import BATCH_SIZE, SUBSAMPLE_LIMIT
 
-SUBSAMPLE_LIMIT = 100
-BATCH_SIZE = 10_000
 LOG_LEVEL = logging.INFO
 
 logging.basicConfig(
