@@ -948,12 +948,10 @@ class Manifold:
         self.root.candidates = {self.root: 0.}
 
         if len(selection_criteria) > 0:
-            logging.info(f'building graphs with {len(selection_criteria)} Selection Criteria.')
-            self.graphs = [Graph(*select(self.root)).build_edges() for select in selection_criteria]
+            self.add_graphs(*selection_criteria)
         else:
             logging.warning('No Selection Criterion was provided. Using leaves for building graph.')
             self.graphs = [Graph(*[cluster for cluster in self.layers[-1].clusters]).build_edges()]
-
         return self
 
     def build_tree(self, *criterion) -> 'Manifold':
@@ -966,6 +964,27 @@ class Manifold:
             else:
                 break
         return self
+
+    def add_graphs(self, *criterion) -> 'Manifold':
+        """ Uses the given selection criteria to add more graphs to the Manifold. """
+        from pyclam.criterion import SelectionCriterion
+
+        if not all((isinstance(c, SelectionCriterion) for c in criterion)):
+            raise ValueError(f'Only Selection Criteria are allowed for building graphs.')
+
+        logging.info(f'building graphs with {len(criterion)} Selection Criteria.')
+        self.graphs.extend([Graph(*select(self.root)).build_edges() for select in criterion])
+        return self
+
+    def replace_graphs(self, *criterion) -> 'Manifold':
+        """ Uses the given selection criteria to replace the graphs in the Manifold. """
+        from pyclam.criterion import SelectionCriterion
+
+        if not all((isinstance(c, SelectionCriterion) for c in criterion)):
+            raise ValueError(f'Only Selection Criteria are allowed for building graphs.')
+
+        self.graphs = list()
+        return self.add_graphs(*criterion)
 
     def _partition_single(self, criterion) -> List[Cluster]:
         # TODO: Consider removing and only keeping multi-threaded version
