@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyclam"
-version = "0.2.12"
+version = "0.2.13"
 description = "Clustered Learning of Approximate Manifolds"
 authors = ["Tom Howard <info@tomhoward.codes>", "Najib Ishaq <najib_ishaq@zoho.com>", "Noah Daniels <noah_daniels@uri.edu>"]
 license = "MIT"

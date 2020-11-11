@@ -4,66 +4,40 @@
 from typing import List, Dict, Set
 
 import numpy as np
-from scipy.special import erf
 
 from pyclam import Graph, Cluster, Edge
+from pyclam.utils import catch_normalization_mode, normalize
 
 
-def _catch_normalization_mode(mode: str) -> None:
-    modes: List[str] = ['linear', 'gaussian', 'sigmoid']
-    if mode not in modes:
-        raise ValueError(f'Normalization method {mode} is undefined. Must by one of {modes}.')
-    else:
-        return
-
-
-def _normalize(scores: np.array, mode: str) -> np.array:
-    if mode == 'linear':
-        min_v, max_v, = float(np.min(scores)), float(np.max(scores))
-        if min_v == max_v:
-            max_v += 1.
-        scores = (scores - min_v) / (max_v - min_v)
-    else:
-        mu: float = float(np.mean(scores))
-        sigma: float = max(float(np.std(scores)), 1e-3)
-
-        if mode == 'gaussian':
-            scores = erf((scores - mu) / (sigma * np.sqrt(2)))
-        else:
-            scores = 1 / (1 + np.exp(-(scores - mu) / sigma))
-
-    return scores.ravel().clip(0, 1)
-
-
-def cluster_cardinality(graph: Graph, normalize: str = 'gaussian') -> np.array:
+def cluster_cardinality(graph: Graph, normalization_mode: str = 'gaussian') -> np.array:
     """ Determines outlier scores for points by considering the relative cardinalities of the clusters in the graph.
 
     Points in clusters with relatively low cardinalities are the outliers.
 
     :param graph: Graph on which to calculate outlier scores.
-    :param normalize: which normalization mode to use to get scores in a [0, 1] range.
+    :param normalization_mode: which normalization mode to use to get scores in a [0, 1] range.
                       Must be one of 'linear', 'gaussian', or 'sigmoid'.
     :return: A numpy array of outlier scores for each point in the manifold that the graph belongs to.
     """
-    _catch_normalization_mode(normalize)
+    catch_normalization_mode(normalization_mode)
 
     scores: Dict[int, int] = {p: -cluster.cardinality for cluster in graph.clusters for p in cluster.argpoints}
     scores: List[int] = [scores[i] for i in range(len(scores))]
-    return _normalize(np.asarray(scores, dtype=float), normalize)
+    return normalize(np.asarray(scores, dtype=float), normalization_mode)
 
 
-def parent_child(graph: Graph, normalize: str = 'gaussian') -> np.array:
+def parent_child(graph: Graph, normalization_mode: str = 'gaussian') -> np.array:
     """ Determines outlier scores for points by considering ratios of cardinalities of parent-child clusters.
 
     The ratios are weighted by the child's depth in the tree, and are then accumulated for each point in each cluster in the graph.
     Points with relatively low accumulated ration are the outliers.
 
     :param graph: Graph on which to calculate outlier scores.
-    :param normalize: which normalization mode to use to get scores in a [0, 1] range.
+    :param normalization_mode: which normalization mode to use to get scores in a [0, 1] range.
                       Must be one of 'linear', 'gaussian', or 'sigmoid'.
     :return: A numpy array of outlier scores for each point in the manifold that the graph belongs to.
     """
-    _catch_normalization_mode(normalize)
+    catch_normalization_mode(normalization_mode)
 
     results: np.array = np.zeros(shape=graph.manifold.data.shape[0], dtype=float)
     for cluster in graph:
@@ -72,21 +46,21 @@ def parent_child(graph: Graph, normalize: str = 'gaussian') -> np.array:
             score = float(ancestry[i-1].cardinality) / (ancestry[i].cardinality * np.sqrt(i))
             for p in cluster.argpoints:
                 results[p] += score
-    return _normalize(results, normalize)
+    return normalize(results, normalization_mode)
 
 
-def graph_neighborhood(graph: Graph, normalize: str = 'gaussian') -> np.array:
+def graph_neighborhood(graph: Graph, normalization_mode: str = 'gaussian') -> np.array:
     """ Determines outlier scores by the considering the relative graph-neighborhood of clusters.
 
     Points in clusters with relatively small neighborhoods are the outliers.
 
     :param graph: Graph on which to calculate outlier scores.
-    :param normalize: which normalization mode to use to get scores in a [0, 1] range.
+    :param normalization_mode: which normalization mode to use to get scores in a [0, 1] range.
                Must be one of 'linear', 'gaussian', or 'sigmoid'.
 
     :return: A numpy array of outlier scores for each point in the manifold that the graph belongs to.
     """
-    _catch_normalization_mode(normalize)
+    catch_normalization_mode(normalization_mode)
 
     def _neighborhood_size(start: Cluster, steps: int) -> int:
         """ Returns the number of clusters within 'steps' of 'start'. """
@@ -102,20 +76,20 @@ def graph_neighborhood(graph: Graph, normalize: str = 'gaussian') -> np.array:
 
     scores: Dict[Cluster, int] = {cluster: _neighborhood_size(cluster, graph.eccentricity(cluster) // 4) for cluster in graph.clusters}
     scores: Dict[int, int] = {point: -score for cluster, score in scores.items() for point in cluster.argpoints}
-    return _normalize(np.asarray([scores[i] for i in range(len(scores))], dtype=float), normalize)
+    return normalize(np.asarray([scores[i] for i in range(len(scores))], dtype=float), normalization_mode)
 
 
-def component_cardinality(graph: Graph, normalize: str = 'gaussian') -> np.array:
+def component_cardinality(graph: Graph, normalization_mode: str = 'gaussian') -> np.array:
     """ Determines outlier scores by considering the relative cardinalities of the connected components of the graph.
 
     Points in components of relatively low cardinalities are the outliers
 
     :param graph: Graph on which to calculate outlier scores.
-    :param normalize: which normalization mode to use to get scores in a [0, 1] range.
+    :param normalization_mode: which normalization mode to use to get scores in a [0, 1] range.
                       Must be one of 'linear', 'gaussian', or 'sigmoid'.
     :return: A numpy array of outlier scores for each point in the manifold that the graph belongs to.
     """
-    _catch_normalization_mode(normalize)
+    catch_normalization_mode(normalization_mode)
 
     scores: Dict[int, int] = {
         p: -component.cardinality
@@ -123,7 +97,7 @@ def component_cardinality(graph: Graph, normalize: str = 'gaussian') -> np.array
         for cluster in component.clusters
         for p in cluster.argpoints
     }
-    return _normalize(np.asarray([scores[i] for i in range(len(scores))], dtype=float), normalize)
+    return normalize(np.asarray([scores[i] for i in range(len(scores))], dtype=float), normalization_mode)
 
 
 def _compute_transition_probabilities(graph: Graph, cluster: Cluster) -> Dict[Edge, float]:
@@ -163,17 +137,17 @@ def _perform_random_walks(
         return {next(iter(component.clusters)): steps_multiplier}
 
 
-def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
+def random_walk(graph: Graph, normalization_mode: str = 'gaussian') -> np.array:
     """ Determines outlier scores by performing random walks on the graph.
 
     Points that are visited less often, relatively, are the outliers.
 
     :param graph: Graph on which to calculate outlier scores.
-    :param normalize: which normalization mode to use to get scores in a [0, 1] range.
+    :param normalization_mode: which normalization mode to use to get scores in a [0, 1] range.
                        Must be one of 'linear', 'gaussian', or 'sigmoid'.
     :return: A numpy array of outlier scores for each point in the manifold that the graph belongs to.
     """
-    _catch_normalization_mode(normalize)
+    catch_normalization_mode(normalization_mode)
 
     # determine subsumed and walkable clusters
     subsumed_clusters: Set[Cluster] = set()
@@ -214,21 +188,21 @@ def random_walk(graph: Graph, normalize: str = 'gaussian') -> np.array:
 
     # normalize counts
     scores: Dict[int, int] = {point: -count for cluster, count in visit_counts.items() for point in cluster.argpoints}
-    return _normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalize)
+    return normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalization_mode)
 
 
-def stationary_probabilities(graph: Graph, normalize: str = 'gaussian') -> np.array:
+def stationary_probabilities(graph: Graph, normalization_mode: str = 'gaussian') -> np.array:
     """ Compute the Outlier scores based on the convergence of a random walk on each component of the Graph.
 
     For each component on the graph, compute the convergent transition matrix for that graph.
     Clusters with low values in that matrix are the outliers.
 
     :param graph: The graph on which to compute outlier scores.
-    :param normalize: Which normalization mode to use to get scores in a [0, 1] range.
+    :param normalization_mode: Which normalization mode to use to get scores in a [0, 1] range.
                       Must be one of 'linear', 'gaussian', or 'sigmoid'.
     :return: A numpy array of outlier scores for all points in the graph.
     """
-    _catch_normalization_mode(normalize)
+    catch_normalization_mode(normalization_mode)
     scores: Dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
 
     for component in graph.components:
@@ -244,7 +218,7 @@ def stationary_probabilities(graph: Graph, normalize: str = 'gaussian') -> np.ar
             scores.update({cluster: 0 for cluster in component.clusters})
 
     scores: Dict[int, float] = {point: -score for cluster, score in scores.items() for point in cluster.argpoints}
-    return _normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalize)
+    return normalize(np.array([scores[i] for i in range(graph.population)], dtype=int), mode=normalization_mode)
 
 
 # TODO: Add ensemble
