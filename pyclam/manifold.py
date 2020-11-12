@@ -5,7 +5,7 @@ import logging
 import pickle
 from collections import deque
 from operator import itemgetter
-from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any, Optional
+from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any, Optional, Callable
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -354,8 +354,7 @@ class Cluster:
 
 
 class Edge:
-    """ An Edge is a connection between two clusters.
-    """
+    """ An Edge is a connection between two clusters. """
     def __init__(self, clusters: Tuple[Cluster, Cluster], distance: float):
         left, right = clusters
         if right < left:
@@ -416,7 +415,6 @@ class Graph:
         * Each point is present in exactly one Cluster.
 
     This invariant only holds for full graphs, and not for subgraphs or components.
-
     """
     # TODO: Implement dump/load
 
@@ -568,6 +566,96 @@ class Graph:
     def clear_cache(self) -> None:
         self.cache.clear()
         return
+
+    def as_dot_string(
+            self,
+            graph_name: str,
+            edge_constants: Optional[Tuple[str, int, int]] = None,
+            cluster_label: Optional[Callable[[Cluster], str]] = None,
+            edge_label: Optional[Callable[[Cluster, Edge], str]] = None,
+    ):
+        """ Returns the graph as a dot-file string.
+
+        Each cluster and its label form a line.
+        Each edge and its label form a line.
+
+        The string produced can be used by GraphViz to visualize the Graph.
+
+        :param graph_name: the name of the graph in the dot file.
+        :param edge_constants: a 3-tuple of (style, penwidth, label_distance) common to all edges.
+        :param cluster_label: a function that takes a cluster and produces a label for that cluster.
+        :param edge_label: a function that takes an edge and produces a label for that edge.
+        :return: the dot-file as a string.
+        """
+        cache: bool = False
+        if (edge_constants is None) and (cluster_label is None) and (edge_label is None):
+            # if these arguments are the default then add the dot-string to cache
+            cache = True
+            if 'dot_string' in self.cache:
+                return self.cache['dot_string']
+
+        # use default values if not explicitly given
+        style, penwidth, label_distance = 'solid', 5, 10 if edge_constants is None else edge_constants
+
+        if cluster_label is None:
+            # normalize lfd values so that 0.5 is equal parts red and blue, 1 is all red, and 0 is all blue
+            normalized_lfds: np.array = normalize(
+                values=np.asarray([cluster.local_fractal_dimension for cluster in self.clusters], dtype=float),
+                mode='gaussian',
+            )
+            colors: Dict[Cluster, str] = {  # dict of cluster -> hexadecimal string of rgb color
+                cluster: f'#{int(255 * lfd):02X}00{int(255 * (1 - lfd)):02X}'
+                for cluster, lfd in zip(self.clusters, normalized_lfds)
+            }
+
+            def cluster_label(cluster: Cluster) -> str:
+                """ The default cluster label to use for dotfiles.
+
+                :param cluster: cluster for which to create a label
+                :return: a string label for the cluster
+                """
+                labels = '\\n'.join([f'cardinality {cluster.cardinality}', f'radius {cluster.radius:.8e}', f'lfd {cluster.local_fractal_dimension:.8e}'])
+                return f'label="{str(cluster)}\\n{labels}", color="{colors[cluster]}", style="filled"'
+
+        if edge_label is None:
+            def edge_label(edge: Edge) -> str:
+                """ The default edge label to use for dotfiles. """
+                return f'label="{edge.distance:.8e}"'
+
+        dot_file_lines: List[str] = [  # start the lines in the dot-file
+            f'graph {graph_name} ' + '{',  # graph type and name
+            f'    edge[style={style}, penwidth="{penwidth}", labeldistance="{label_distance}"]'  # edge constants
+        ]
+        dot_file_lines.extend([  # add a line for each cluster
+            f'    {str(cluster)} [{cluster_label(cluster)}]'
+            for cluster in self.clusters
+        ])
+        dot_file_lines.extend([  # add a line for each edge
+            f'    {str(edge)} [{edge_label(edge)}]'
+            for edge in self.edges
+        ])
+        dot_file_lines.append('}')  # closing bracket
+
+        dot_string: str = '\n'.join(dot_file_lines)
+        if cache:  # add to cache, as explained above
+            self.cache['dot_string'] = dot_string
+
+        return dot_string
+
+    def from_dot_string(self, dot_string: str) -> 'Graph':
+        """ Parses a dot-string, builds the graph, and returns it. """
+        self.clear_cache()
+        cluster_lines, edge_lines = set(), set()
+        [(edge_lines if line.strip().split(' ')[1] == '--' else cluster_lines).add(line.strip())
+         for line in dot_string.split('\n')[2:-1]]  # throw away the first two lines and the last line, which contain metadata.
+        self.clusters = {self.manifold.select(line.split(' ')[0]) for line in cluster_lines}
+        self.edges = set()
+        for line in edge_lines:
+            parts = line.split(' ')
+            left, right = self.manifold.select(parts[0]), self.manifold.select(parts[2])
+            distance = float(parts[3].split('"')[1])
+            self.edges.add(Edge(clusters=(left, right), distance=distance))
+        return self
 
     @staticmethod
     def _find_candidates(cluster: Cluster) -> None:
