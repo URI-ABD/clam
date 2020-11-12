@@ -4,7 +4,6 @@ from tempfile import TemporaryFile
 from typing import List
 
 import numpy as np
-from scipy.spatial.distance import cdist
 
 from pyclam import datasets, criterion, Manifold, Cluster
 
@@ -66,28 +65,6 @@ class TestManifold(unittest.TestCase):
 
     def test_repr(self):
         self.assertIsInstance(repr(self.manifold), str)
-        return
-
-    def test_find_points(self):
-        self.assertEqual(1, len(self.manifold.find_points(self.data[0], radius=0.0)))
-        self.assertLessEqual(1, len(self.manifold.find_points(self.data[0], radius=1.0)))
-
-        point = self.data[0]
-        distances = [(p, d) for p, d in zip(
-            range(self.data.shape[0]),
-            cdist(np.asarray([point]), self.data, self.manifold.metric)[0],
-        )]
-
-        for radius in [0.25, 0.5, 1.0, 2.0, 5.0]:
-            naive_results = {(p, d) for p, d in distances if d <= radius}
-            results = self.manifold.find_points(point, radius)
-            self.assertSetEqual(naive_results, set(results))
-
-        return
-
-    def test_find_clusters(self):
-        self.manifold.build_tree()
-        self.assertEqual(1, len(self.manifold.find_clusters(self.data[0], radius=0.0, depth=-1)))
         return
 
     def test_build(self):
@@ -187,19 +164,3 @@ class TestManifold(unittest.TestCase):
         m_thread = Manifold(data, 'euclidean')._partition_threaded([criterion.MaxDepth(5)])
         self.assertEqual(m_single, m_thread)
         return
-
-    def test_find_knn(self):
-        data = datasets.bullseye()[0]
-        point = data[0]
-        points = sorted([(d, p) for p, d in zip(range(data.shape[0]), cdist(np.asarray([point]), data, 'euclidean')[0])])
-
-        m = Manifold(data, 'euclidean')
-        m.build_tree(criterion.MinPoints(10), criterion.MaxDepth(10))
-
-        ks = list(range(10))
-        ks.extend(range(10, data.shape[0], 1000))
-        for k in ks:
-            naive_results = {p for d, p in points[:k]}
-            results = m.find_knn(point, k)
-            self.assertEqual(k, len(results))
-            self.assertSetEqual(naive_results, {p for p, _ in results})
