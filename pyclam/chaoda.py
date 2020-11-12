@@ -5,7 +5,7 @@ from typing import List, Dict, Set
 
 import numpy as np
 
-from pyclam import Graph, Cluster, Edge
+from pyclam.manifold import Graph, Cluster, Edge
 from pyclam.utils import catch_normalization_mode, normalize
 
 

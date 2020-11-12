@@ -118,13 +118,13 @@ class Layer(SelectionCriterion):
     """ Selects the layer at the specified depth.
     """
     def __init__(self, depth: int):
-        if depth <= 0:
-            raise ValueError(f'expected a positive depth. got: {depth}')
+        if depth < -1:
+            raise ValueError(f'expected a \'-1\' or a non-negative depth. got: {depth}')
         self.depth = depth
 
     def __call__(self, root: Cluster) -> Set[Cluster]:
         manifold: Manifold = root.manifold
-        if manifold.depth <= self.depth:
+        if (self.depth == -1) or (manifold.depth <= self.depth):
             return {cluster for cluster in manifold.layers[-1].clusters}
         else:
             return {cluster for cluster in manifold.layers[self.depth].clusters}
