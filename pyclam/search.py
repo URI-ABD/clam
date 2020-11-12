@@ -3,7 +3,7 @@ from typing import Dict, Optional, List, Set, Tuple
 import numpy as np
 
 import pyclam.criterion as criterion
-from pyclam.manifold import Manifold, Cluster
+from pyclam.manifold import Manifold, Cluster, EPSILON
 from pyclam.types import Data, Metric, Datum
 
 ClusterResults = Dict[Cluster, float]
@@ -83,7 +83,7 @@ class Search:
                 lfd = 1 if half_count == 0 else np.log2(len(hits) / half_count)
 
             # increase radius as guided by lfd
-            factor = (k / len(hits)) ** (1 / lfd)
+            factor = (k / len(hits)) ** (1 / (lfd + EPSILON))
             assert factor > 1, f'expected factor to be greater than 1. Got {factor:.2e} instead.'
             radius *= factor
 

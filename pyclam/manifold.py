@@ -11,7 +11,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 
 from pyclam.types import Data, Radius, Vector, Metric
-from pyclam.utils import BATCH_SIZE, SUBSAMPLE_LIMIT
+from pyclam.utils import BATCH_SIZE, SUBSAMPLE_LIMIT, EPSILON, normalize
 
 LOG_LEVEL = logging.INFO
 
@@ -265,33 +265,6 @@ class Cluster:
         return [cluster for layer in self.manifold.layers[self.depth + 1:]
                 for cluster in layer.clusters
                 if self.name == cluster.name[:len(self.name)]]
-
-    @property
-    def ratios(self) -> List[float]:
-        if 'ratios' not in self.cache:
-            if self.depth > 0:
-                lfd_ratio = self.local_fractal_dimension / self.parent.local_fractal_dimension
-                self.cache['ratios'] = [  # Child/Parent Ratios
-                    1 / (1 + np.exp(-lfd_ratio)),  # local fractal dimension
-                    self.cardinality / self.parent.cardinality,  # cardinality
-                    max(self.radius, 1e-16) / max(self.parent.radius, 1e-16)  # radius
-                ]
-            else:
-                self.cache['ratios'] = [1., 1., 1.]
-        return self.cache['ratios']
-
-    @property
-    def ema_ratios(self) -> List[float]:
-        if 'ema_ratios' not in self.cache:
-            if self.depth > 0:
-                smoothing, period = 2, 10
-                alpha = smoothing / (1 + period)
-                current, previous = np.asarray(self.ratios), np.asarray(self.parent.ratios)
-                self.cache['ema_ratios'] = alpha * current + (1 - alpha) * previous
-                self.cache['ema_ratios'][0] = 1 / (1 + np.exp(-self.cache['ema_ratios'][0]))
-            else:
-                self.cache['ema_ratios'] = [1., 1., 1.]
-        return self.cache['ema_ratios']
 
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
@@ -848,6 +821,59 @@ class Manifold:
     def clear_cache(self):
         self.cache = dict()
         return
+
+    @property
+    def ordered_clusters(self) -> List[Cluster]:
+        """ Returns all clusters in the manifold in a standardized order. """
+        if 'ordered_clusters' not in self.cache:
+            self.cache['ordered_clusters'] = [
+                cluster for layer in self.layers
+                for cluster in layer.clusters
+                if cluster.depth == layer.depth
+            ]
+        return self.cache['ordered_clusters']
+
+    @property
+    def ratios(self) -> Dict[Cluster, np.array]:
+        """ Calculates and normalizes the parent-child ratios of several cluster properties.
+
+        The ratios, in order, are:
+            * child-parent cardinality ratio.
+            * child-parent radius ratio.
+            * child-parent lfd ratio.
+            * EMA of cardinality ratio.
+            * EMA of radius ratio.
+            * EMA of lfd ratio.
+        """
+        if 'ratios' not in self.cache:
+            smoothing, period = 2, 10
+            alpha = smoothing / (1 + period)
+            cluster_indices: Dict[Cluster, int] = {cluster: i for i, cluster in enumerate(self.ordered_clusters)}
+            cluster_ratios: np.array = np.ones(shape=(len(self.ordered_clusters), 6), dtype=float)
+            for layer in self.layers[1:]:
+                for cluster in layer.clusters:
+                    current = np.asarray([
+                        cluster.cardinality / cluster.parent.cardinality,
+                        cluster.radius / (cluster.parent.radius + EPSILON),
+                        cluster.local_fractal_dimension / cluster.parent.local_fractal_dimension,
+                    ], dtype=float)
+                    previous = cluster_ratios[cluster_indices[cluster.parent]][3:]
+                    new = alpha * current + (1 - alpha) * previous
+                    cluster_ratios[cluster_indices[cluster]] = np.concatenate([current, new])
+
+            # TODO: Consider adding toggle for making normalization optional.
+            for i in range(cluster_ratios.shape[1]):
+                cluster_ratios[:, i] = normalize(cluster_ratios[:, i], 'gaussian')
+
+            self.cache['ratios'] = {
+                cluster: cluster_ratios[cluster_indices[cluster]]
+                for cluster in self.ordered_clusters
+            }
+        return self.cache['ratios']
+
+    def cluster_ratios(self, cluster: Cluster) -> np.array:
+        """ Returns the normalized ratios for the given cluster. """
+        return self.ratios[cluster]
 
     @property
     def depth(self) -> int:

@@ -7,6 +7,7 @@ from scipy.special import erf
 
 SUBSAMPLE_LIMIT = 100
 BATCH_SIZE = 10_000
+EPSILON = 1e-8
 
 
 def catch_normalization_mode(mode: str) -> None:
@@ -18,20 +19,25 @@ def catch_normalization_mode(mode: str) -> None:
         return
 
 
-def normalize(scores: np.array, mode: str) -> np.array:
-    """ Normalize a 1-d array of values into a [0, 1] range. """
+def normalize(values: np.array, mode: str) -> np.array:
+    """ Normalizes values into a [0, 1] range.
+
+    :param values: 1-d array of values to normalize.
+    :param mode: Normalization mode to use. Must be one of 'linear', 'gaussian', or 'sigmoid'.
+    :return: 1-d array of normalized values.
+    """
     if mode == 'linear':
-        min_v, max_v, = float(np.min(scores)), float(np.max(scores))
+        min_v, max_v, = float(np.min(values)), float(np.max(values))
         if min_v == max_v:
             max_v += 1.
-        scores = (scores - min_v) / (max_v - min_v)
+        values = (values - min_v) / (max_v - min_v)
     else:
-        mu: float = float(np.mean(scores))
-        sigma: float = max(float(np.std(scores)), 1e-3)
+        mu: float = float(np.mean(values))
+        sigma: float = max(float(np.std(values)), 1e-3)
 
         if mode == 'gaussian':
-            scores = erf((scores - mu) / (sigma * np.sqrt(2)))
+            values = erf((values - mu) / (sigma * np.sqrt(2)))
         else:
-            scores = 1 / (1 + np.exp(-(scores - mu) / sigma))
+            values = 1 / (1 + np.exp(-(values - mu) / sigma))
 
-    return scores.ravel().clip(0, 1)
+    return values.ravel().clip(0, 1)

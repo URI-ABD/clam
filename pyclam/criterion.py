@@ -229,16 +229,10 @@ class LinearRegressionConstants(SelectionCriterion):
         return self.mode(root.manifold, predicted_auc)
 
     def _predict_auc(self, manifold: Manifold) -> Dict[Cluster, float]:
-        predicted_auc: Dict[Cluster, float] = {
-            cluster: float(np.dot(self.constants, np.concatenate([
-                np.asarray(cluster.ratios, dtype=float),
-                np.asarray(cluster.ema_ratios, dtype=float)
-            ])))
-            for layer in manifold.layers
-            for cluster in layer.clusters
-            if cluster.depth == layer.depth
+        return {
+            cluster: float(np.dot(self.constants, manifold.cluster_ratios(cluster)))
+            for cluster in manifold.ordered_clusters
         }
-        return predicted_auc
 
 
 class RegressionTreePaths(SelectionCriterion):
@@ -258,9 +252,7 @@ class RegressionTreePaths(SelectionCriterion):
     def __call__(self, root: Cluster) -> Set[Cluster]:
         predicted_auc: Dict[Cluster, float] = {
             cluster: self.predict_auc(cluster)
-            for layer in root.manifold.layers
-            for cluster in layer.clusters
-            if cluster.depth == layer.depth
+            for cluster in root.manifold.ordered_clusters
         }
         return self.mode(root.manifold, predicted_auc)
 
