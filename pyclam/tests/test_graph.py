@@ -119,3 +119,19 @@ class TestGraph(unittest.TestCase):
 
             self.assertEqual(0, len(graph.cache), f'\n4. Graph cache had some elements. {[k for k in graph.cache.keys()]}. iter {i}')
         return
+
+    def test_dot_file(self):
+        manifold: Manifold = Manifold(self.data, 'euclidean').build(criterion.MinRadius(0.2), criterion.Layer(7))
+        graph: Graph = manifold.graphs[0]
+        old_clusters: Set[Cluster] = {cluster for cluster in graph.clusters}
+        old_edges: Set[Edge] = {edge for edge in graph.edges}
+
+        dot_string = manifold.graphs[0].as_dot_string('bullseye_d7')
+
+        graph = graph.from_dot_string(dot_string)
+        new_clusters: Set[Cluster] = {cluster for cluster in graph.clusters}
+        new_edges: Set[Edge] = {edge for edge in graph.edges}
+
+        self.assertEqual(old_clusters, new_clusters, f'Found mismatch between old and new clusters.')
+        self.assertEqual(old_edges, new_edges, f'Found mismatch between old and new edges.')
+        return
