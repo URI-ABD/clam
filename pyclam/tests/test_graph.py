@@ -135,3 +135,21 @@ class TestGraph(unittest.TestCase):
         self.assertEqual(old_clusters, new_clusters, f'Found mismatch between old and new clusters.')
         self.assertEqual(old_edges, new_edges, f'Found mismatch between old and new edges.')
         return
+
+    def test_jaccard(self):
+        manifold: Manifold = Manifold(self.data, 'euclidean').build(criterion.MaxDepth(5))
+
+        for i, left in enumerate(manifold.layers):
+            self.assertEqual(1, left.jaccard(left), 'identical graphs should have a jaccard index of 1.')
+            for j, right in enumerate(manifold.layers):
+                if i != j:
+                    self.assertEqual(1, left.jaccard(right), f'different layers should have a jaccard index of 1.')
+
+        while len(manifold.layers[-1].components) < 2:
+            manifold.build(criterion.MaxDepth(manifold.depth + 1))
+
+        for i, left in enumerate(manifold.layers[-1].components):
+            self.assertEqual(1, left.jaccard(left), 'identical components should have a jaccard index of 1.')
+            for j, right in enumerate(manifold.layers[-1].components):
+                if i != j:
+                    self.assertEqual(0, left.jaccard(right), f'different components should have a jaccard index of 0.')
