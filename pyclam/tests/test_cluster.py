@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from pyclam import datasets, Manifold, Cluster
+from pyclam import datasets, Manifold, Cluster, criterion
 from pyclam.manifold import BATCH_SIZE
 
 
@@ -160,3 +160,17 @@ class TestCluster(unittest.TestCase):
         c = Cluster.from_json(self.manifold, self.cluster.json())
         self.assertEqual(self.cluster, c)
         return
+
+    def test_jaccard(self):
+        manifold: Manifold = Manifold(self.data, 'euclidean').build(criterion.MaxDepth(4))
+
+        for i, left in enumerate(manifold.layers[-1].clusters):
+            self.assertEqual(1, left.jaccard(left), 'identical clusters should have a jaccard index of 1.')
+            for j, right in enumerate(manifold.layers[-1].clusters):
+                if i != j:
+                    self.assertEqual(0, left.jaccard(right), f'different clusters should have a jaccard index of 0.')
+            self.assertEqual(
+                left.cardinality / left.parent.cardinality,
+                left.jaccard(left.parent),
+                f'jaccard index with parent should be equal to child/parent cardinality ratio.',
+            )

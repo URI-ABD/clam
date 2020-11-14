@@ -105,6 +105,12 @@ class Cluster:
         """ Check weather the given point could be inside this cluster. """
         return self.overlaps(point=point, radius=0.)
 
+    def jaccard(self, other: 'Cluster') -> float:
+        """ The Jaccard Index between two Clusters. """
+        intersection: int = len(set(self.argpoints).intersection(set(other.argpoints)))
+        union: int = len(set(self.argpoints).union(set(other.argpoints)))
+        return intersection / union
+
     @property
     def parent(self) -> 'Cluster':
         if 'parent' not in self.cache:
@@ -452,6 +458,17 @@ class Graph:
 
     def __contains__(self, cluster: Cluster) -> bool:
         return cluster in self.clusters
+
+    @property
+    def argpoints(self) -> Set[int]:
+        """ Returns the set of indices of all points in the Graph. """
+        return {point for cluster in self.clusters for point in cluster.argpoints}
+
+    def jaccard(self, other: 'Graph') -> float:
+        """ The Jaccard Index between two Graphs. """
+        intersection: int = len(set(self.argpoints).intersection(set(other.argpoints)))
+        union: int = len(set(self.argpoints).union(set(other.argpoints)))
+        return intersection / union
 
     @property
     def edges_dict(self) -> Dict[Cluster, Set[Edge]]:
