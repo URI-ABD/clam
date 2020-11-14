@@ -92,6 +92,19 @@ class TestCriterion(unittest.TestCase):
         [self._graph_invariant(self.manifold, graph) for graph in self.manifold.graphs]
         return
 
+    def test_property_selector(self):
+        data, _ = datasets.bullseye()
+        manifold: Manifold = Manifold(data, 'euclidean').build(
+            criterion.MaxDepth(12),
+            criterion.PropertyThreshold('cardinality', 50, 'below'),
+            criterion.PropertyThreshold('radius', 50, 'below'),
+            criterion.PropertyThreshold('lfd', 10, 'below'),
+        )
+
+        for graph in manifold.graphs:
+            self.assertLessEqual(graph.cardinality, manifold.layers[-1].cardinality, f'selected only leaves')
+        return
+
     # def plot(self):
     #     from inspect import stack
     #     from itertools import cycle
