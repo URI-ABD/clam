@@ -8,10 +8,6 @@ from scipy.spatial.distance import cdist
 from pyclam.manifold import Cluster, Manifold
 
 
-# TODO: class ChildTooSmall which checks % of parent owned by child, relative populations of child parent and root.
-# TODO: RE above, Sparseness which looks at % owned / radius or similar
-
-
 class Criterion(ABC):
     pass
 
@@ -336,4 +332,63 @@ class LFDRange(SelectionCriterion):
             active = {child for cluster in active for child in cluster.children}
             inactive = {child for cluster in inactive for child in cluster.children}
 
+        return selected
+
+
+class PropertyThreshold(SelectionCriterion):
+    """ Selects clusters when the given property crosses the given percentile.
+
+    If mode is 'above', the cluster qualifies if the property goes above the percentile,
+    If mode is 'below', the cluster qualifies if the property goes below the percentile.
+
+    During a BFT of the tree, keep track of the given cluster property.
+    Select a cluster only if:
+        * it is a leaf, or
+        * it qualifies by 'mode' as above, or
+        * all children qualify by 'mode'.
+
+    :param value: The cluster property to keep track of. Must be one of 'cardinality', 'radius', or 'lfd'.
+    :param percentile: the percentile, in the (0, 100) range, to be crossed.
+    :param mode: select when 'above' or 'below' the percentile.
+    """
+    def __init__(self, value: str, percentile: float, mode: str):
+        # TODO: Use Literal for value and mode.
+        if value == 'cardinality':
+            self.value = lambda c: c.cardinality
+        elif value == 'radius':
+            self.value = lambda c: c.radius
+        elif value == 'lfd':
+            self.value = lambda c: c.local_fractal_dimension
+        else:
+            raise ValueError(f'value must be one of \'cardinality\', \'radius\', or \'lfd\'. Got {value} instead.')
+
+        if 0 < percentile < 100:
+            self.percentile: float = percentile
+        else:
+            raise ValueError(f'percentile must be in the (0, 100) range. Gor {percentile:.2f} instead.')
+
+        if mode == 'above':
+            self.mode = lambda c, v: self.value(c) > v
+        elif mode == 'below':
+            self.mode = lambda c, v: self.value(c) < v
+        else:
+            raise ValueError(f'mode must be \'above\' or \'below\'. Got {mode} instead.')
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        threshold = float(np.percentile(
+            [self.value(cluster) for cluster in root.descendents if cluster.cardinality > 1],
+            self.percentile,
+        ))
+        selected: Set[Cluster] = set()
+        frontier: Set[Cluster] = {root}
+        while frontier:
+            cluster = frontier.pop()
+            if (
+                    (cluster.children is None)  # select the leaves
+                    or self.mode(cluster, threshold)  # if cluster qualifies
+                    or all((map(lambda c: self.mode(c, threshold), cluster.children)))  # if both children qualify
+            ):
+                selected.add(cluster)
+            else:  # add children to frontier
+                frontier.update(cluster.children)
         return selected
