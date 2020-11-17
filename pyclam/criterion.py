@@ -1,11 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Set, Tuple, List, Union, Dict, Callable
+from typing import Set, Tuple, List, Union, Dict, Callable, Any
 
 import numpy as np
 from scipy.spatial.distance import cdist
 
 from pyclam.manifold import Cluster, Manifold
+from collections import Counter
 
 
 class Criterion(ABC):
@@ -391,4 +392,49 @@ class PropertyThreshold(SelectionCriterion):
                 selected.add(cluster)
             else:  # add children to frontier
                 frontier.update(cluster.children)
+        return selected
+
+
+class Labels(SelectionCriterion):
+    """ Uses a given dictionary of index -> label to select optimal clusters.
+
+    During a BFT of the tree, when a cluster has an overwhelming majority of points with the same label,
+    that cluster is selected.
+    If some data points are unlabelled, then when a cluster contains no labelled points, it too is selected.
+
+    Let 'f' be the fraction of labels in the smallest class in the data,
+    and let 't' be a given threshold in the (0, 1] range.
+    Then the 'overwhelming majority' is defined as (1 - f * t).
+    """
+    def __init__(self, labels: Dict[int, Any], threshold: float = 0.1):
+        """ Instantiates the Labels Selector.
+
+        :param labels: A dictionary of index -> label for som or all of the points in the data.
+        :param threshold: A threshold, in the (0, 1] range for determining the size of the 'overwhelming majority.'
+
+        """
+        if not (0 < threshold <= 1):
+            ValueError(f'threshold must be in the (0, 1] range.')
+        self.labels: Dict[int, Any] = labels
+        self.min_fraction: float = min(dict(Counter(labels.values())).values()) / len(labels)
+        self.threshold: float = 1 - self.min_fraction * threshold
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
+        selected: Set[Cluster] = set()
+        frontier: Set[Cluster] = {root}
+        while frontier:
+            cluster = frontier.pop()
+            if cluster.children is None:
+                selected.add(cluster)
+            else:
+                labels: List[Any] = [self.labels[p] for p in cluster.argpoints if p in self.labels]
+                if len(labels) > 0:
+                    max_fraction = max(dict(Counter(labels)).values()) / cluster.cardinality
+                    if max_fraction > self.threshold:
+                        selected.add(cluster)
+                    else:
+                        frontier.update(cluster.children)
+                else:
+                    # TODO: Should we revert to some other selection criterion here?
+                    selected.add(cluster)
         return selected
