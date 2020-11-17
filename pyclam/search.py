@@ -128,6 +128,10 @@ class Search:
         :param max_depth: optional maximum search depth starting at Cluster.
         :return: dictionary of cluster -> distance between query and cluster center
         """
+        return self.tree_search_history(query, radius, start, max_depth=max_depth)[1]
+
+    def tree_search_history(self, query: Datum, radius: float, start: Cluster, *, max_depth: Optional[int] = None) -> Tuple[ClusterResults, ClusterResults]:
+        """ Same as tree-search, except that it also returns the history of candidate clusters at each depth. """
         if max_depth is None:
             max_depth = self.manifold.depth
         elif max_depth < 0:
@@ -137,6 +141,7 @@ class Search:
 
         query = self._parse_query(query)
         candidates: ClusterResults = {start: -1}
+        history: ClusterResults = dict()
         hits: ClusterResults = dict()
         for depth in range(start.depth, max_depth + 1):
             if len(candidates) == 0:
@@ -160,6 +165,9 @@ class Search:
                 for cluster, distance in candidates.items()
                 if (cluster in subsumed) or (len(cluster.children) == 0)
             })
+
+            history.update(candidates)  # add candidates from this depth to history
+
             candidates = {  # expand search to children
                 child: -1
                 for cluster in candidates.keys()
@@ -167,7 +175,7 @@ class Search:
                 if cluster not in hits
             }
 
-        return hits
+        return history, hits
 
     def leaf_search(self, query: Datum, radius: float, clusters: ClusterResults) -> Results:
         """ Performs leaf search for query on given clusters.
