@@ -1,4 +1,8 @@
 import unittest
+from collections import Counter
+from typing import Dict
+
+import numpy as np
 
 from pyclam import datasets, criterion, Manifold, Graph
 
@@ -104,6 +108,31 @@ class TestCriterion(unittest.TestCase):
         for graph in manifold.graphs:
             self.assertLessEqual(graph.cardinality, manifold.layers[-1].cardinality, f'selected only leaves')
         return
+
+    def test_labels(self):
+        data, labels = datasets.bullseye()
+
+        anomalies = np.random.random(size=(data.shape[0] // 50, 2)) * (np.max(data, axis=0) - np.min(data, axis=0)) + np.min(data, axis=0)
+        data = np.concatenate([data, anomalies])
+        labels.extend([0 for _ in range(anomalies.shape[0])])
+        labels_dict: Dict[int, int] = {i: l for i, l in enumerate(labels)}
+        half_labels_dict = {i: l for i, l in labels_dict.items() if np.random.random() < 0.5}
+
+        manifold: Manifold = Manifold(data, 'euclidean').build(
+            criterion.MaxDepth(10),
+            criterion.Labels(labels_dict),
+            criterion.Labels(half_labels_dict),
+        )
+        for cluster in manifold.graphs[0]:
+            _labels = [labels_dict[p] for p in cluster.argpoints]
+            max_fraction = max(dict(Counter(_labels)).values()) / cluster.cardinality
+            self.assertLessEqual(1 - max_fraction, 0.002, f'bat cluster selected: {str(cluster)}')
+
+        for cluster in manifold.graphs[1]:
+            _half_labels = [half_labels_dict[p] for p in cluster.argpoints if p in half_labels_dict]
+            if len(_half_labels) > 0:
+                max_fraction = max(dict(Counter(_half_labels)).values()) / cluster.cardinality
+                self.assertLessEqual(1 - max_fraction, 0.002, f'bat cluster selected: {str(cluster)}')
 
     # def plot(self):
     #     from inspect import stack
