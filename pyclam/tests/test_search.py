@@ -1,11 +1,11 @@
 import random
 import unittest
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam import datasets, Search
+from pyclam import datasets, Search, Cluster
 
 np.random.seed(42), random.seed(42)
 
@@ -73,5 +73,22 @@ class TestSearch(unittest.TestCase):
             self.assertEqual(naive_points.shape, knn_points.shape, f'found mismatch between shapes of points returned')
             for left, right in zip(naive_points, knn_points):
                 self.assertEqual(list(left), list(right), f'found mismatch between arrays of points returned')
-
         return
+
+    def test_tree_search_history(self):
+        search = Search(self.data, self.metric).build(max_depth=10)
+        start: Cluster = search.root
+        radius: float = start.radius / 10
+        history, hits = search.tree_search_history(self.query, radius, start)
+
+        for hit in hits:
+            self.assertTrue(hit in history, f'The hit {str(hit)} was not found in history.')
+        self.assertLessEqual(len(hits), len(history), f'history should have at least a many members as hits.')
+
+        for cluster in history:
+            if cluster not in hits:
+                self.assertGreater(len(cluster.children), 0, f'A non-hit member of history must have had children.')
+
+        depths: Set[int] = {cluster.depth for cluster in history}
+        for d in range(len(depths)):
+            self.assertIn(d, depths, f'history should contain clusters from every depth. Did not contain: {d}')
