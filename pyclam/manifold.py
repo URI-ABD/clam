@@ -967,8 +967,7 @@ class Manifold:
                     cluster_ratios[cluster_indices[cluster]] = np.concatenate([current, new])
 
             # TODO: Consider adding toggle for making normalization optional.
-            for i in range(cluster_ratios.shape[1]):
-                cluster_ratios[:, i] = normalize(cluster_ratios[:, i], 'gaussian')
+            cluster_ratios = normalize(cluster_ratios, 'gaussian')
 
             self.cache['ratios'] = {
                 cluster: cluster_ratios[cluster_indices[cluster]]
