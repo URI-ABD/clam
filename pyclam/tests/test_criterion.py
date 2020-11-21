@@ -66,30 +66,40 @@ class TestCriterion(unittest.TestCase):
         for leaf in manifold.layers[-1].clusters:
             ancestry = manifold.ancestry(leaf)
             included = sum((1 if ancestor in graph.clusters else 0 for ancestor in ancestry))
-            self.assertEqual(1, included, f"expected exactly one ancestor to be in graph. Found {included}")
-        return
-
-    def test_linear_regression(self):
-        constants = [1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]
-
-        self.manifold.build(
-            criterion.MaxDepth(12),
-            criterion.LinearRegressionConstants(constants, mode='ranked'),
-            criterion.LinearRegressionConstants(constants, mode='percentile'),
-        )
-
-        self.assertEqual(2, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
-        self._graph_invariant(self.manifold, self.manifold.graphs[0])
-        self._graph_invariant(self.manifold, self.manifold.graphs[1])
+            self.assertEqual(1, included, f'expected exactly one ancestor to be in graph. Found {included} for {str(leaf)}')
         return
 
     def test_multiple_selection_clauses(self):
+        def from_cc_gmean(ratios: np.array) -> float:
+            return float(np.dot(
+                a=ratios,
+                b=np.asarray([1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]),
+            ))
+
+        def from_pc_gmean(ratios: np.array) -> float:
+            return float(np.dot(
+                a=ratios,
+                b=np.asarray([0.09493048, 0.62547724, -0.16254063, -0.00043795, 0.13036630, -0.35289447]),
+            ))
+
+        def from_kn_gmean(ratios: np.array) -> float:
+            return float(np.dot(
+                a=ratios,
+                b=np.asarray([-0.36966981, 0.22567179, -0.08289614, 0.00006676, 0.55057955, -0.86832389]),
+            ))
+
+        def from_sc_gmean(ratios: np.array) -> float:
+            return float(np.dot(
+                a=ratios,
+                b=np.asarray([-0.23789545, 0.08811996, -0.02485702, 0.00003283, 0.29501756, -0.49954759]),
+            ))
+
         self.manifold.build(
             criterion.MaxDepth(12),
-            criterion.LinearRegressionConstants([1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]),  # CC, gmean, 0.044
-            criterion.LinearRegressionConstants([0.09493048, 0.62547724, -0.16254063, -0.00043795, 0.13036630, -0.35289447]),  # PC, gmean, 0.036
-            criterion.LinearRegressionConstants([-0.36966981, 0.22567179, -0.08289614, 0.00006676, 0.55057955, -0.86832389]),  # KN, gmean, 0.031
-            criterion.LinearRegressionConstants([-0.23789545, 0.08811996, -0.02485702, 0.00003283, 0.29501756, -0.49954759]),  # SC, gmean, 0.030
+            criterion.MetaMLSelect(from_cc_gmean),
+            criterion.MetaMLSelect(from_pc_gmean),
+            criterion.MetaMLSelect(from_kn_gmean),
+            criterion.MetaMLSelect(from_sc_gmean),
         )
 
         self.assertEqual(4, len(self.manifold.graphs), f'expected to have only one graph. Got {len(self.manifold.graphs)} instead.')
