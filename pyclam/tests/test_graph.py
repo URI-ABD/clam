@@ -153,3 +153,13 @@ class TestGraph(unittest.TestCase):
             for j, right in enumerate(manifold.layers[-1].components):
                 if i != j:
                     self.assertEqual(0, left.jaccard(right), f'different components should have a jaccard index of 0.')
+
+    def test_pruned(self):
+        manifold: Manifold = Manifold(self.data, 'euclidean').build(criterion.MaxDepth(10), criterion.Layer(8))
+        graph = manifold.graphs[0]
+        pruned_graph, subsumed_clusters = graph.pruned_graph
+
+        self.assertLessEqual(pruned_graph.cardinality, graph.cardinality)
+        self.assertSetEqual(set(pruned_graph.clusters), set(subsumed_clusters.keys()))
+        for cluster, subsumed in subsumed_clusters.items():
+            self.assertEqual(0, len(subsumed.intersection(set(pruned_graph.clusters))))
