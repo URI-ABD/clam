@@ -562,6 +562,32 @@ class Graph:
 
         return self.cache['components']
 
+    @property
+    def pruned_graph(self) -> Tuple['Graph', Dict[Cluster, Set[Cluster]]]:
+        """ Get the pruned graph and a dict of subsumed clusters.
+
+        The pruned graph is a graph on those clusters in Graph that are not subsumed by any other cluster.
+        The dict of subsumed-neighbors is a dict from each cluster in the pruned graph
+        to the set of cluster subsumed by that cluster.
+        """
+        # determine subsumed clusters
+        subsumed_clusters: Set[Cluster] = set()
+        for edge in self.edges:
+            if edge.distance + edge.left.radius < edge.right.radius:
+                subsumed_clusters.add(edge.left)
+            elif edge.distance + edge.right.radius < edge.left.radius:
+                subsumed_clusters.add(edge.right)
+
+        # determine walkable clusters
+        pruned_graph: Set[Cluster] = {cluster for cluster in self.clusters if cluster not in subsumed_clusters}
+
+        # create dict of walkable-cluster -> set-of-subsumed-clusters
+        subsumed_neighbors: Dict[Cluster, Set[Cluster]] = {
+            cluster: {neighbor for neighbor in self.neighbors(cluster) if neighbor not in pruned_graph}
+            for cluster in pruned_graph
+        }
+        return self.subgraph(pruned_graph), subsumed_neighbors
+
     def component_containing(self, cluster: Cluster) -> 'Graph':
         """ returns the connected component to which cluster belongs. """
         for component in self.components:
