@@ -31,7 +31,9 @@ pub static DATASETS: &[&str] = &[
     "wine",
 ];
 
-pub fn get_data_paths(dataset: &str) -> Result<(PathBuf, PathBuf), std::io::Error>{
+// TODO: Add subsampling and normalization
+
+fn get_data_paths(dataset: &str) -> Result<(PathBuf, PathBuf), std::io::Error>{
     let mut data_dir: PathBuf = env::current_dir()?;
     data_dir.push("data");
 

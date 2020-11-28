@@ -31,7 +31,7 @@ mod tests {
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality(), 2);
         assert_eq!(cluster.num_descendents(), 2);
-        assert!(cluster.radius() > 0.);
+        assert!(cluster.radius > 0.);
         assert!(cluster.contains(&0));
         assert!(cluster.contains(&1));
 
@@ -82,7 +82,8 @@ mod tests {
             Arc::new(dataset),
             "".to_string(),
             indices,
-        ).partition(&vec![criteria::MaxDepth::new(10)]);
-        assert!(cluster.num_descendents() > 100);
+        ).partition(&vec![criteria::MaxDepth::new(6)]);
+        println!("{:}", cluster.num_descendents());
+        assert!(cluster.num_descendents() > 50);
     }
 }

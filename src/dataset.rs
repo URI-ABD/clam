@@ -1,15 +1,17 @@
 use std::{fmt, result};
 
 use ndarray::{Array1, Array2, ArrayView1};
+use rand::prelude::*;
 
-use super::metric::Metric;
-use super::types::*;
+use crate::metric::Metric;
+use crate::types::*;
 
 // TODO: Implement caching of distance values
+//  Problem: A global mutable cache feels impossible when there are many distance calls happening in parallel.
 pub struct Dataset {
     pub data: Array2<f64>,
     pub metric: &'static str,
-    distance: fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
+    function: fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
     // pub cache: HashMap<u64, f64>,
 }
 
@@ -27,7 +29,7 @@ impl Dataset {
         Dataset {
             data,
             metric,
-            distance: Metric::on_f64(metric),
+            function: Metric::on_f64(metric),
             // cache: HashMap::new(),
         }
     }
@@ -36,11 +38,18 @@ impl Dataset {
 
     pub fn nrows(&self) -> usize { self.data.nrows() }
 
+    #[allow(clippy::ptr_arg)]
+    pub fn choose_unique(&self, indices: &Indices, n: usize) -> Indices {
+        // TODO: actually check for uniqueness among choices
+        let mut rng = &mut rand::thread_rng();
+        indices.choose_multiple(&mut rng, n).cloned().collect()
+    }
+
     pub fn row(&self, i: Index) -> ArrayView1<f64> { self.data.row(i) }
 
     pub fn distance(&self, left: Index, right: Index) -> f64 {
         // TODO: Cache
-        (self.distance)(self.data.row(left), self.data.row(right))
+        (self.function)(self.data.row(left), self.data.row(right))
     }
 
     #[allow(clippy::ptr_arg)]

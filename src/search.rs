@@ -60,7 +60,7 @@ impl Search {
 
     fn _tree_search(&self, cluster: &Arc<Cluster>, query: ArrayView1<f64>, radius: f64, results: &mut ClusterResults) {
         let distance = self.query_distance(query, cluster.center());
-        if distance <= radius + cluster.radius() {
+        if distance <= radius + cluster.radius {
             match cluster.children.borrow() {
                 Some(children) => {
                     for child in children.iter() {
