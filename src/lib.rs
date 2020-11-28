@@ -4,6 +4,7 @@ pub mod dataset;
 pub mod cluster;
 pub mod criteria;
 pub mod search;
+pub mod utils;
 
 // TODO: Use ndarray_npy crate to read large arrays for more testing
 
@@ -13,10 +14,11 @@ mod tests {
 
     use ndarray::prelude::*;
 
-    use super::cluster::Cluster;
-    use super::criteria;
-    use super::dataset::Dataset;
-    use super::search::Search;
+    use crate::cluster::Cluster;
+    use crate::criteria;
+    use crate::dataset::Dataset;
+    use crate::search::Search;
+    use crate::utils::{DATASETS, read_data};
 
     #[test]
     fn test_cluster() {
@@ -68,5 +70,19 @@ mod tests {
         assert!(results.contains_key(&1));
         assert!(!results.contains_key(&2));
         assert!(!results.contains_key(&3));
+    }
+
+    #[test]
+    fn test_large_array() {
+        let dataset = DATASETS[0];
+        let (data, _) = read_data(dataset).unwrap();
+        let dataset = Dataset::new(data, "euclidean");
+        let indices = dataset.indices();
+        let cluster = Cluster::new(
+            Arc::new(dataset),
+            "".to_string(),
+            indices,
+        ).partition(&vec![criteria::MaxDepth::new(10)]);
+        assert!(cluster.num_descendents() > 100);
     }
 }

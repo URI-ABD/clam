@@ -136,13 +136,18 @@ impl Cluster {
         let argsamples = self.argsamples();
         if argsamples.len() > 2 {
             let argradius = self.argradius();
-            let distances = self.dataset.distances_from(argradius, &argsamples);
+            let indices = self.indices
+                .iter()
+                .filter(|&&i| i != argradius)
+                .cloned()
+                .collect();
+            let distances = self.dataset.distances_from(argradius, &indices);
 
             let mut farthest = 0;
             for (i, &value) in distances.iter().enumerate() {
                 if value > distances[farthest] { farthest = i; }
             }
-            (argradius, argsamples[farthest])
+            (argradius, indices[farthest])
         } else {
             (argsamples[0], argsamples[1])
         }
@@ -160,24 +165,23 @@ impl Cluster {
             }
 
             let (left, right) = self.poles();
-            let left_distances = self.dataset.distances_from(left, &self.indices);
-            let right_distances = self.dataset.distances_from(right, &self.indices);
-            let (mut left_indices, mut right_indices) = (vec![], vec![]);
+            let indices = self.indices
+                .iter()
+                .filter(|&&i| !(i == left || i == right))
+                .cloned()
+                .collect();
+            let left_distances = self.dataset.distances_from(left, &indices);
+            let right_distances = self.dataset.distances_from(right, &indices);
+            let (mut left_indices, mut right_indices) = (vec![left], vec![right]);
 
             for (i, (&l, &r)) in left_distances
                 .iter()
                 .zip(right_distances.iter())
                 .enumerate()
             {
-                if l < r {
-                    left_indices.push(self.indices[i]);
-                } else {
-                    right_indices.push(self.indices[i]);
-                }
+                if l < r { left_indices.push(indices[i]); }
+                else { right_indices.push(indices[i]); }
             }
-
-            assert!(!left_indices.is_empty());
-            assert!(!right_indices.is_empty());
 
             let left = Cluster::new(
                 Arc::clone(&self.dataset),
