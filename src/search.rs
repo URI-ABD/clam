@@ -35,8 +35,11 @@ impl Search {
             None => vec![],
         };
         let indices = dataset.indices();
-        let root = Cluster::new(Arc::clone(&dataset), "".to_string(), indices)
-            .partition(&_criteria);
+        let root = Cluster::new(
+            Arc::clone(&dataset),
+            "".to_string(),
+            indices,
+        ).partition(&_criteria);
         let metric = &(*dataset.metric);
         Search {
             dataset,

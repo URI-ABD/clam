@@ -1,10 +1,12 @@
 pub mod types;
+pub mod utils;
 pub mod metric;
 pub mod dataset;
-pub mod cluster;
 pub mod criteria;
+pub mod cluster;
+pub mod graph;
+pub mod manifold;
 pub mod search;
-pub mod utils;
 
 // TODO: Use ndarray_npy crate to read large arrays for more testing
 
