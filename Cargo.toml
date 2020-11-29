@@ -16,6 +16,7 @@ rayon = "1.5.0"
 ndarray = "0.13.1"
 rand = "0.7.3"
 ndarray-npy = "0.6.0"
+dashmap = "3.11.10"
 
 [dev-dependencies]
 float-cmp = "0.8.0"

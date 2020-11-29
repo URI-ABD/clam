@@ -3,16 +3,18 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use dashmap::DashMap;
 use ndarray::ArrayView1;
+use rayon::prelude::*;
 
 use crate::cluster::Cluster;
 use crate::criteria;
 use crate::dataset::Dataset;
 use crate::metric::Metric;
-use crate::types::*;
+use crate::types::{Index, Indices};
 
 type ClusterResults = HashMap<Arc<Cluster>, f64>;
-type Results = HashMap<Index, f64>;
+type Results = DashMap<Index, f64>;
 
 pub struct Search {
     pub dataset: Arc<Dataset>,
@@ -30,7 +32,7 @@ impl fmt::Debug for Search {
 
 impl Search {
     pub fn new(dataset: Arc<Dataset>, max_depth: Option<usize>) -> Search {
-        let _criteria = match max_depth {
+        let criteria = match max_depth {
             Some(d) => vec![criteria::MaxDepth::new(d)],
             None => vec![],
         };
@@ -39,7 +41,7 @@ impl Search {
             Arc::clone(&dataset),
             "".to_string(),
             indices,
-        ).partition(&_criteria);
+        ).partition(&criteria);
         let metric = &(*dataset.metric);
         Search {
             dataset,
@@ -56,37 +58,51 @@ impl Search {
 
     pub fn tree_search(&self, query: ArrayView1<f64>, radius: Option<f64>) -> ClusterResults {
         let radius = radius.unwrap_or(0.);
+        self._tree_search(&self.root, query, radius)
+    }
+
+    fn _tree_search(&self, cluster: &Arc<Cluster>, query: ArrayView1<f64>, radius: f64) -> ClusterResults {
+        let distance = self.query_distance(query, cluster.center());
         let mut results: ClusterResults = HashMap::new();
-        self._tree_search(&self.root, query, radius, &mut results);
+        if distance <= radius + cluster.radius {
+            let hits = match cluster.children.borrow() {
+                Some((left, right)) => {
+                    let (mut m1, m2) = rayon::join(
+                        || self._tree_search(left, query, radius),
+                        || self._tree_search(right, query, radius),
+                    );
+                    m1.extend(m2);
+                    m1
+                },
+                None => {
+                    let mut m: ClusterResults = HashMap::new();
+                    m.insert(Arc::clone(cluster), distance);
+                    m
+                }
+            };
+            results.extend(hits);
+        }
         results
     }
 
-    fn _tree_search(&self, cluster: &Arc<Cluster>, query: ArrayView1<f64>, radius: f64, results: &mut ClusterResults) {
-        let distance = self.query_distance(query, cluster.center());
-        if distance <= radius + cluster.radius {
-            match cluster.children.borrow() {
-                Some(children) => {
-                    for child in children.iter() {
-                        self._tree_search(child, query, radius, results);
-                    }
-                },
-                None => {
-                    results.insert(Arc::clone(cluster), distance);
-                }
-            }
-        }
-    }
-
+    #[allow(clippy::suspicious_map)]
     pub fn leaf_search(&self, query: ArrayView1<f64>, radius: Option<f64>, clusters: ClusterResults) -> Results {
         let radius = radius.unwrap_or(0.);
-        let mut results: Results = HashMap::new();
-        for (cluster, _) in clusters.iter() {
-            for &i in cluster.indices.iter() {
-                let point = self.dataset.row(i);
-                let distance = self.query_distance(point, query);
-                if distance <= radius { results.insert(i, distance); }
-            }
-        }
+        let results: Results = DashMap::new();
+        clusters
+            .par_iter()
+            .map(|(cluster, _)| {
+                let distances: Vec<f64> = cluster.indices
+                    .par_iter()
+                    .map(|&i| self.query_distance(self.dataset.row(i), query))
+                    .collect();
+                cluster.indices
+                    .par_iter()
+                    .zip(distances.par_iter())
+                    .map(|(&i, &d)| if d <= radius {results.insert(i, d)} else {None})
+                    .count();
+            })
+            .count();
         results
     }
 

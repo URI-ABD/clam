@@ -1,8 +1,10 @@
 use std::env;
 use std::path::PathBuf;
 
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, ArrayView1};
 use ndarray_npy::{read_npy, ReadNpyError};
+
+use crate::types::Index;
 
 pub static DATASETS: &[&str] = &[
     "annthyroid",
@@ -48,6 +50,26 @@ pub fn read_data(dataset: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpyErro
     let data: Array2<f64> = read_npy(data_path)?;
     let labels: Array1<u8> = read_npy(labels_path)?;
     Ok((data, labels))
+}
+
+pub fn argmin(values: ArrayView1<f64>) -> (Index, f64) {
+    values
+        .iter()
+        .enumerate()
+        .fold((0, values[0]), |(i_min, v_min), (i, v)| {
+            if &v_min < v { (i_min, v_min) }
+            else { (i, *v) }
+        })
+}
+
+pub fn argmax(values: ArrayView1<f64>) -> (Index, f64) {
+    values
+        .iter()
+        .enumerate()
+        .fold((0, values[0]), |(i_max, v_max), (i, v)| {
+            if &v_max > v { (i_max, v_max) }
+            else { (i, *v) }
+        })
 }
 
 

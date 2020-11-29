@@ -1,13 +1,14 @@
 use std::{fmt, sync::Arc};
+use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 
 use ndarray::{Array1, ArrayView1, Axis};
+use rayon::prelude::*;
 
-use crate::criteria;
+use crate::criteria::ClusterCriterion;
 use crate::dataset::Dataset;
-use crate::types::*;
-
-type Children = Vec<Arc<Cluster>>;
+use crate::types::{Index, Indices};
+use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;
 
@@ -16,7 +17,7 @@ pub struct Cluster {
     pub dataset: Arc<Dataset>,
     pub name: String,
     pub indices: Indices,
-    pub children: Option<Children>,
+    pub children: Option<(Arc<Cluster>, Arc<Cluster>)>,
     argsamples: Indices,
     pub argcenter: Index,
     pub argradius: Index,
@@ -79,18 +80,14 @@ impl Cluster {
     pub fn is_singleton(&self) -> bool { self.nsamples() == 1 }
 
     fn poles(&self) -> (Index, Index) {
-        if self.argsamples.len() > 2 {
+        if self.nsamples() > 2 {
             let indices = self.indices
-                .iter()
+                .par_iter()
                 .filter(|&&i| i != self.argradius)
                 .cloned()
                 .collect();
             let distances = self.dataset.distances_from(self.argradius, &indices);
-
-            let mut farthest = 0;
-            for (i, &value) in distances.iter().enumerate() {
-                if value > distances[farthest] { farthest = i; }
-            }
+            let (farthest, _) = argmax(distances.view());
             (self.argradius, indices[farthest])
         } else {
             (self.argsamples[0], self.argsamples[1])
@@ -98,7 +95,7 @@ impl Cluster {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn partition(self, criteria: &Vec<Arc<impl criteria::ClusterCriterion>>) -> Cluster {
+    pub fn partition(self, criteria: &Vec<Arc<impl ClusterCriterion>>) -> Cluster {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
         //  Problem: parent needs ref to children, AND
@@ -111,7 +108,7 @@ impl Cluster {
 
             let (left, right) = self.poles();
             let indices = self.indices
-                .iter()
+                .par_iter()
                 .filter(|&&i| !(i == left || i == right))
                 .cloned()
                 .collect();
@@ -145,7 +142,7 @@ impl Cluster {
                 dataset: self.dataset,
                 name: self.name,
                 indices: self.indices,
-                children: Some(vec![Arc::new(left), Arc::new(right)]),
+                children: Some((Arc::new(left), Arc::new(right))),
                 argsamples: self.argsamples,
                 argcenter: self.argcenter,
                 argradius: self.argradius,
@@ -155,13 +152,9 @@ impl Cluster {
     }
 
     pub fn num_descendents(&self) -> usize {
-        match self.children.as_ref() {
-            Some(children) => {
-                children
-                    .iter()
-                    .map(|child| child.num_descendents())
-                    .sum::<usize>()
-                    + children.len()
+        match self.children.borrow() {
+            Some((left, right)) => {
+                left.num_descendents() + right.num_descendents() + 2
             }
             None => 0,
         }
@@ -178,27 +171,14 @@ impl Cluster {
     fn nsamples(&self) -> Index { self.argsamples.len() }
 
     fn argcenter(&self) -> Index {
-        let distances: Array1<f64> = self
-            .dataset
-            .distances_among(&self.argsamples, &self.argsamples)
-            .sum_axis(Axis(1));
-
-        let mut argcenter = 0;
-        for (i, &value) in distances.iter().enumerate() {
-            if value < distances[argcenter] { argcenter = i; }
-        }
+        let distances: Array1<f64> = self.dataset.pairwise_distances(&self.argsamples).sum_axis(Axis(1));
+        let (argcenter, _) = argmin(distances.view());
         self.argsamples[argcenter]
     }
 
     fn argradius(&self) -> Index {
-        let distances = self
-            .dataset
-            .distances_from(self.argcenter(), &self.argsamples);
-
-        let mut argradius = 0;
-        for (i, &value) in distances.iter().enumerate() {
-            if value > distances[argradius] { argradius = i; }
-        }
+        let distances = self.dataset.distances_from(self.argcenter(), &self.argsamples);
+        let (argradius, _) = argmax(distances.view());
         self.argsamples[argradius]
     }
 
@@ -209,7 +189,7 @@ impl Cluster {
 mod tests {
     use ndarray::{arr2, Array2};
 
-    use crate::criteria;
+    use crate::criteria::MaxDepth;
 
     use super::*;
 
@@ -227,7 +207,7 @@ mod tests {
             Arc::new(dataset),
             String::from(""),
             indices
-        ).partition(&vec![criteria::MaxDepth::new(3)]);
+        ).partition(&vec![MaxDepth::new(3)]);
 
         assert_eq!(cluster, cluster);
         assert_eq!(cluster.depth(), 0);
@@ -254,14 +234,14 @@ mod tests {
         ].join(" ");
         assert_eq!(format!("{:?}", cluster), cluster_str);
 
-        let children = cluster.children.unwrap();
-        assert_eq!(children.len(), 2);
-        for child in children.iter() {
+        let (left, right) = cluster.children.unwrap();
+        assert_eq!(format!("{:}", left), "0");
+        assert_eq!(format!("{:}", right), "1");
+
+        for child in [left, right].iter() {
             assert_eq!(child.depth(), 1);
             assert_eq!(child.cardinality(), 2);
             assert_eq!(child.num_descendents(), 2);
         }
-        assert_eq!(format!("{:}", children[0]), "0");
-        assert_eq!(format!("{:}", children[1]), "1");
     }
 }

@@ -1,7 +1,8 @@
 use std::{fmt, result};
 
-use ndarray::{Array1, Array2, ArrayView1};
+use ndarray::{Array1, Array2, ArrayView1, Dim};
 use rand::prelude::*;
+use rayon::prelude::*;
 
 use crate::metric::Metric;
 use crate::types::*;
@@ -54,24 +55,24 @@ impl Dataset {
 
     #[allow(clippy::ptr_arg)]
     pub fn distances_from(&self, left: Index, right: &Indices) -> Array1<f64> {
-        let mut distances: Array1<f64> = Array1::zeros((right.len(),));
-
-        for (i, &r) in right.iter().enumerate() {
-            distances[i] = self.distance(left, r);
-        }
-        distances
+        Array1::from(
+            right
+                .par_iter()
+                .map(|&r| self.distance(left, r))
+                .collect::<Vec<f64>>()
+        )
     }
 
     #[allow(clippy::ptr_arg)]
     pub fn distances_among(&self, left: &Indices, right: &Indices) -> Array2<f64> {
-        let mut distances: Array2<f64> = Array2::zeros((left.len(), right.len()));
+        let distances = left.par_iter().map(|&l| self.distances_from(l, right)).collect::<Vec<Array1<f64>>>();
+        let flattened: Array1<f64> = distances.into_iter().flat_map(|row| row.to_vec()).collect();
+        flattened.into_shape(Dim([left.len(), right.len()])).unwrap()
+    }
 
-        for (i, &l) in left.iter().enumerate() {
-            for (j, &r) in right.iter().enumerate() {
-                distances[[i, j]] = self.distance(l, r);
-            }
-        }
-        distances
+    #[allow(clippy::ptr_arg)]
+    pub fn pairwise_distances(&self, indices: &Indices) -> Array2<f64> {
+        self.distances_among(indices, indices)
     }
 }
 

@@ -37,8 +37,8 @@ mod tests {
         assert!(cluster.contains(&0));
         assert!(cluster.contains(&1));
 
-        let children = cluster.children.unwrap();
-        for child in children.iter() {
+        let (left, right) = cluster.children.unwrap();
+        for child in [left, right].iter() {
             assert_eq!(child.depth(), 1);
             assert_eq!(child.cardinality(), 1);
             assert_eq!(child.num_descendents(), 0);
@@ -76,6 +76,7 @@ mod tests {
 
     #[test]
     fn test_large_array() {
+        // 6 would be a much larger dataset.
         let dataset = DATASETS[0];
         let (data, _) = read_data(dataset).unwrap();
         let dataset = Dataset::new(data, "euclidean");
@@ -84,8 +85,8 @@ mod tests {
             Arc::new(dataset),
             "".to_string(),
             indices,
+            // increase depth for longer benchmark
         ).partition(&vec![criteria::MaxDepth::new(6)]);
-        println!("{:}", cluster.num_descendents());
         assert!(cluster.num_descendents() > 50);
     }
 }
