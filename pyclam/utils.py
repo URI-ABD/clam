@@ -1,18 +1,13 @@
 """ Some common functions and constants for all of CLAM.
 """
-from typing import List
-
-# noinspection PyPackageRequirements
-import numpy as np
-# noinspection PyPackageRequirements
-from scipy.special import erf
-
 SUBSAMPLE_LIMIT = 100
 BATCH_SIZE = 10_000
 EPSILON = 1e-8
 
 
 def catch_normalization_mode(mode: str) -> None:
+    from typing import List
+
     """ Make sure that the normalization mode is allowed. """
     modes: List[str] = ['linear', 'gaussian', 'sigmoid']
     if mode not in modes:
@@ -21,13 +16,15 @@ def catch_normalization_mode(mode: str) -> None:
         return
 
 
-def normalize(values: np.array, mode: str) -> np.array:
+def normalize(values, mode: str):
     """ Normalizes each column in values into a [0, 1] range.
 
     :param values: A 1-d or 2-d array of values to normalize.
     :param mode: Normalization mode to use. Must be one of 'linear', 'gaussian', or 'sigmoid'.
     :return: array of normalized values.
     """
+    import numpy as np
+
     squeeze = False
     if len(values.shape) == 1:
         squeeze = True
@@ -49,6 +46,8 @@ def normalize(values: np.array, mode: str) -> np.array:
                 values[:, i] = 0.5
             else:
                 if mode == 'gaussian':
+                    from scipy.special import erf
+
                     values[:, i] = (1 + erf((values[:, i] - mu[i]) / (sigma[i] * np.sqrt(2)))) / 2
                 else:
                     values[:, i] = 1 / (1 + np.exp(-(values[:, i] - mu[i]) / sigma[i]))
