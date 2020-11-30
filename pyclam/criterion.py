@@ -1,13 +1,20 @@
 import heapq
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 from collections import Counter
-from typing import Set, Tuple, List, Dict, Callable, Any
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import List
+from typing import Set
+from typing import Tuple
 
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam.manifold import Cluster, Manifold
+from pyclam.manifold import Cluster
+from pyclam.manifold import Manifold
 from pyclam.utils import normalize
 
 

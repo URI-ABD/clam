@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 
 from pyclam.types import Data, Radius
-from pyclam.utils import BATCH_SIZE
+from pyclam.utils import *
 
 
 def linear_search(point: Data, radius: Radius, data: Data, metric: str) -> Dict[int, float]:

@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from pyclam import datasets, Manifold, Cluster, criterion
-from pyclam.manifold import BATCH_SIZE
+from pyclam.utils import *
 
 
 class TestCluster(unittest.TestCase):

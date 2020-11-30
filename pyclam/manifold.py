@@ -5,13 +5,29 @@ import logging
 import pickle
 from collections import deque
 from operator import itemgetter
-from typing import Set, Dict, Iterable, BinaryIO, List, Union, Tuple, IO, Any, Optional, Callable
+from typing import Any
+from typing import BinaryIO
+from typing import Callable
+from typing import Dict
+from typing import IO
+from typing import Iterable
+from typing import List
+from typing import Optional
+from typing import Set
+from typing import Tuple
+from typing import Union
 
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from pyclam.types import Data, Radius, Vector, Metric
-from pyclam.utils import BATCH_SIZE, SUBSAMPLE_LIMIT, EPSILON, normalize
+from pyclam.types import Data
+from pyclam.types import Metric
+from pyclam.types import Radius
+from pyclam.types import Vector
+from pyclam.utils import BATCH_SIZE
+from pyclam.utils import EPSILON
+from pyclam.utils import SUBSAMPLE_LIMIT
+from pyclam.utils import normalize
 
 LOG_LEVEL = logging.INFO
 
@@ -881,13 +897,9 @@ class Graph:
 
 
 class Manifold:
+    """ The Manifold class organizes the underlying Clusters and Graphs.
     """
-    The Manifold's main job is to organize the underlying Clusters and Graphs.
-    It does this by providing the ability to reset the build the Cluster-tree, the Graph-stack, and the optimal Graph.
-    With the tree and the graphs, Manifold provides utilities for:
-        rho-nearest neighbors search,
-        k-nearest neighbors search,
-    """
+    # TODO: Move data, metric, and distance-method functionality out to DataLoader class.
 
     def __init__(
             self,

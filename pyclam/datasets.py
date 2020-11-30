@@ -1,4 +1,6 @@
-from typing import Union, Tuple, List
+from typing import List
+from typing import Tuple
+from typing import Union
 
 import numpy as np
 
