@@ -1,10 +1,18 @@
-from typing import Dict, Optional, List, Set, Tuple
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Set
+from typing import Tuple
 
 import numpy as np
 
 import pyclam.criterion as criterion
-from pyclam.manifold import Manifold, Cluster, EPSILON
-from pyclam.types import Data, Metric, Datum
+from pyclam.manifold import Cluster
+from pyclam.manifold import EPSILON
+from pyclam.manifold import Manifold
+from pyclam.types import Data
+from pyclam.types import Datum
+from pyclam.types import Metric
 
 ClusterResults = Dict[Cluster, float]
 Results = Dict[int, float]

@@ -4,7 +4,10 @@ from typing import Dict
 
 import numpy as np
 
-from pyclam import datasets, criterion, Manifold, Graph
+from pyclam import Graph
+from pyclam import Manifold
+from pyclam import criterion
+from pyclam import datasets
 
 
 # noinspection SpellCheckingInspection
