@@ -1,9 +1,8 @@
 use std::{fmt, result};
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use ndarray::ArrayView1;
 use rayon::prelude::*;
 
@@ -13,13 +12,13 @@ use crate::dataset::Dataset;
 use crate::metric::Metric;
 use crate::types::{Index, Indices};
 
-type ClusterResults = HashMap<Arc<Cluster>, f64>;
-type Results = DashMap<Index, f64>;
+type ClusterResults = Arc<DashSet<Arc<Cluster>>>;
+type Results = Arc<DashMap<Index, f64>>;
 
 pub struct Search {
     pub dataset: Arc<Dataset>,
     root: Arc<Cluster>,
-    distance: fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
+    function: fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
 }
 
 impl fmt::Debug for Search {
@@ -31,7 +30,8 @@ impl fmt::Debug for Search {
 }
 
 impl Search {
-    pub fn new(dataset: Arc<Dataset>, max_depth: Option<usize>) -> Search {
+    // TODO: Add save and load methods with serde.
+    pub fn build(dataset: Arc<Dataset>, max_depth: Option<usize>) -> Search {
         let criteria = match max_depth {
             Some(d) => vec![criteria::MaxDepth::new(d)],
             None => vec![],
@@ -42,13 +42,14 @@ impl Search {
             "".to_string(),
             indices,
         ).partition(&criteria);
-        let metric = &(*dataset.metric);
         Search {
-            dataset,
+            dataset: Arc::clone(&dataset),
             root: Arc::new(root),
-            distance: Metric::on_f64(metric),
+            function: Metric::on_f64(dataset.metric),
         }
     }
+
+    pub fn diameter(&self) -> f64 { 2. * self.root.radius }
 
     pub fn indices(&self) -> Indices { self.dataset.indices() }
 
@@ -58,56 +59,58 @@ impl Search {
 
     pub fn tree_search(&self, query: ArrayView1<f64>, radius: Option<f64>) -> ClusterResults {
         let radius = radius.unwrap_or(0.);
-        self._tree_search(&self.root, query, radius)
+        let results: ClusterResults = Arc::new(DashSet::new());
+        self._tree_search(&self.root, query, radius, Arc::clone(&results));
+        results
     }
 
-    fn _tree_search(&self, cluster: &Arc<Cluster>, query: ArrayView1<f64>, radius: f64) -> ClusterResults {
-        let distance = self.query_distance(query, cluster.center());
-        let mut results: ClusterResults = HashMap::new();
-        if distance <= radius + cluster.radius {
-            let hits = match cluster.children.borrow() {
-                Some((left, right)) => {
-                    let (mut m1, m2) = rayon::join(
-                        || self._tree_search(left, query, radius),
-                        || self._tree_search(right, query, radius),
-                    );
-                    m1.extend(m2);
-                    m1
-                },
-                None => {
-                    let mut m: ClusterResults = HashMap::new();
-                    m.insert(Arc::clone(cluster), distance);
-                    m
-                }
-            };
-            results.extend(hits);
-        }
-        results
+    fn _tree_search(&self, cluster: &Arc<Cluster>, query: ArrayView1<f64>, radius: f64, results: ClusterResults){
+        match cluster.children.borrow() {
+            Some((left, right)) => {
+                rayon::join(
+                    || if self.query_distance(query, left.argcenter) > (radius + left.radius) { }
+                    else { self._tree_search(&left, query, radius, Arc::clone(&results)) },
+                    || if self.query_distance(query, right.argcenter) > (radius + right.radius) { }
+                    else { self._tree_search(&right, query, radius, Arc::clone(&results)) },
+                );
+            }
+            None => { results.insert(Arc::clone(cluster)); },
+        };
     }
 
     #[allow(clippy::suspicious_map)]
     pub fn leaf_search(&self, query: ArrayView1<f64>, radius: Option<f64>, clusters: ClusterResults) -> Results {
+        let indices = clusters.iter()
+            .map(|c| c.indices.clone())
+            .into_iter()
+            .flatten()
+            .collect::<Indices>();
+        self.linear_search(query, radius, Some(indices))
+    }
+
+    #[allow(clippy::suspicious_map)]
+    pub fn linear_search(&self, query: ArrayView1<f64>, radius: Option<f64>, indices: Option<Indices>) -> Results {
         let radius = radius.unwrap_or(0.);
-        let results: Results = DashMap::new();
-        clusters
-            .par_iter()
-            .map(|(cluster, _)| {
-                let distances: Vec<f64> = cluster.indices
-                    .par_iter()
-                    .map(|&i| self.query_distance(self.dataset.row(i), query))
-                    .collect();
-                cluster.indices
-                    .par_iter()
-                    .zip(distances.par_iter())
-                    .map(|(&i, &d)| if d <= radius {results.insert(i, d)} else {None})
-                    .count();
+        let indices = indices.unwrap_or_else(|| self.dataset.indices());
+        let distances = self.query_distances_from(query, &indices);
+        let results: Results = Arc::new(DashMap::new());
+        indices.par_iter()
+            .zip(distances.par_iter())
+            .map(|(&i, &d)| {
+                if d <= radius { results.insert(i, d) }
+                else { None }
             })
             .count();
         results
     }
 
-    fn query_distance(&self, left: ArrayView1<f64>, right: ArrayView1<f64>) -> f64 {
-        (self.distance)(left, right)
+    #[allow(clippy::ptr_arg)]
+    fn query_distances_from(&self, query: ArrayView1<f64>, indices: &Indices) -> Vec<f64> {
+        indices.par_iter().map(|&i| self.query_distance(query, i)).collect()
+    }
+
+    fn query_distance(&self, query: ArrayView1<f64>, index: Index) -> f64 {
+        (self.function)(query, self.dataset.row(index))
     }
 }
 
@@ -116,25 +119,52 @@ impl Search {
 mod tests {
     use std::sync::Arc;
 
-    use ndarray::{arr2, Array2};
-
     use crate::dataset::Dataset;
+    use crate::utils::{DATASETS, read_data};
 
     use super::Search;
 
     #[test]
     fn test_search() {
-        let data: Array2<f64> = arr2(&[
-            [0., 0.],
-            [1., 1.],
-            [2., 2.],
-            [3., 3.],
-        ]);
-        let dataset = Dataset::new(data, "euclidean");
-        let search_str = ["Search { ".to_string(), format!("dataset: {:?}", dataset), " }".to_string()].join("");
-        let search = Search::new(Arc::new(dataset), Some(10));
+        let name = DATASETS[0];
+        let (data, _) = read_data(name).unwrap();
+        let dataset = Arc::new(Dataset::new(data, "euclidean", true));
 
-        assert_eq!(search.indices().len(), 4);
+        let search = Search::build(Arc::clone(&dataset), Some(25));
+
+        assert_eq!(search.indices().len(), search.dataset.nrows());
+
+        let search_str = [
+            "Search { ".to_string(),
+            format!("dataset: {:?}", dataset),
+            " }".to_string(),
+        ].join("");
         assert_eq!(format!("{:?}", search), search_str);
+
+        let radius = Some(search.diameter() / 200.);
+
+        for &q in dataset.indices()[0..30].iter() {
+            let mut missed = false;
+            let mut extra = false;
+            let query = dataset.row(q);
+
+            search.dataset.clear_cache();
+            let naive_results = search.linear_search(query, radius, None);
+            let naive_count = search.dataset.cache_size();
+
+            search.dataset.clear_cache();
+            let chess_results = search.rnn(query, radius);
+            let chess_count = search.dataset.cache_size();
+
+            for (i, _) in (*chess_results).clone() {
+                if !naive_results.contains_key(&i) { extra = true; }
+            }
+            for (i, _) in (*naive_results).clone() {
+                if !chess_results.contains_key(&i) { missed = true; }
+            }
+            assert!(!extra, "had some extras");
+            assert!(!missed, "had some misses");
+            assert!(chess_count <= naive_count, "chess should call distance function less often than naive")
+        }
     }
 }

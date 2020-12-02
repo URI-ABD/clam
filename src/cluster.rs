@@ -1,8 +1,10 @@
 use std::{fmt, sync::Arc};
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
-use ndarray::{Array1, ArrayView1, Axis};
+use dashmap::DashSet;
+use ndarray::ArrayView1;
 use rayon::prelude::*;
 
 use crate::criteria::ClusterCriterion;
@@ -63,19 +65,13 @@ impl Cluster {
         cluster
     }
 
-    pub fn cardinality(&self) -> usize {
-        self.indices.len()
-    }
+    pub fn cardinality(&self) -> usize { self.indices.len() }
 
-    pub fn depth(&self) -> usize {
-        self.name.len()
-    }
+    pub fn depth(&self) -> usize { self.name.len() }
 
-    pub fn contains(&self, i: &Index) -> bool {
-        self.indices.contains(i)
-    }
+    pub fn contains(&self, i: &Index) -> bool { self.indices.contains(i) }
 
-    pub fn center(&self) -> ArrayView1<f64> { self.dataset.row(self.argcenter()) }
+    pub fn center(&self) -> ArrayView1<f64> { self.dataset.row(self.argcenter) }
 
     pub fn is_singleton(&self) -> bool { self.nsamples() == 1 }
 
@@ -87,14 +83,14 @@ impl Cluster {
                 .cloned()
                 .collect();
             let distances = self.dataset.distances_from(self.argradius, &indices);
-            let (farthest, _) = argmax(distances.view());
+            let (farthest, _) = argmax(&distances);
             (self.argradius, indices[farthest])
         } else {
             (self.argsamples[0], self.argsamples[1])
         }
     }
 
-    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::ptr_arg, clippy::suspicious_map)]
     pub fn partition(self, criteria: &Vec<Arc<impl ClusterCriterion>>) -> Cluster {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
@@ -109,32 +105,39 @@ impl Cluster {
             let (left, right) = self.poles();
             let indices = self.indices
                 .par_iter()
-                .filter(|&&i| !(i == left || i == right))
+                .filter(|&&i| i != left && i != right)
                 .cloned()
                 .collect();
             let left_distances = self.dataset.distances_from(left, &indices);
             let right_distances = self.dataset.distances_from(right, &indices);
-            let (mut left_indices, mut right_indices) = (vec![left], vec![right]);
+            let (left_indices, right_indices) = (DashSet::new(), DashSet::new());
+            left_indices.insert(left);
+            right_indices.insert(right);
 
-            for (i, (&l, &r)) in left_distances
-                .iter()
-                .zip(right_distances.iter())
-                .enumerate()
-            {
-                if l < r { left_indices.push(indices[i]); }
-                else { right_indices.push(indices[i]); }
-            }
+            indices.par_iter()
+                .zip(left_distances.par_iter()
+                         .zip(right_distances.par_iter()))
+                .map(|(&i, (&l, r))| {
+                    match l.partial_cmp(r).unwrap() {
+                        Ordering::Less => left_indices.insert(i),
+                        _ => right_indices.insert(i),
+                    }})
+                .count();
+
+            let (left_indices, right_indices) = if right_indices.len() < left_indices.len()
+            { (right_indices, left_indices) }
+            else { (left_indices, right_indices) };
 
             let (left, right) = rayon::join(
                 || Cluster::new(
                     Arc::clone(&self.dataset),
                     format!("{}{}", self.name, 0),
-                    left_indices
+                    left_indices.into_iter().collect()
                 ).partition(criteria),
                 || Cluster::new(
                     Arc::clone(&self.dataset),
                     format!("{}{}", self.name, 1),
-                    right_indices
+                    right_indices.into_iter().collect()
                 ).partition(criteria),
             );
 
@@ -155,7 +158,7 @@ impl Cluster {
         match self.children.borrow() {
             Some((left, right)) => {
                 left.num_descendents() + right.num_descendents() + 2
-            }
+            },
             None => 0,
         }
     }
@@ -164,25 +167,28 @@ impl Cluster {
         if self.cardinality() <= SUB_SAMPLE { self.indices.clone() }
         else {
             let n = (self.cardinality() as f64).sqrt() as Index;
-            self.dataset.choose_unique(&self.indices, n)
+            self.dataset.choose_unique(self.indices.clone(), n)
         }
     }
 
     fn nsamples(&self) -> Index { self.argsamples.len() }
 
     fn argcenter(&self) -> Index {
-        let distances: Array1<f64> = self.dataset.pairwise_distances(&self.argsamples).sum_axis(Axis(1));
-        let (argcenter, _) = argmin(distances.view());
+        let distances = self.dataset.pairwise_distances(&self.argsamples)
+            .par_iter()
+            .map(|v| v.par_iter().sum())
+            .collect();
+        let (argcenter, _) = argmin(&distances);
         self.argsamples[argcenter]
     }
 
     fn argradius(&self) -> Index {
-        let distances = self.dataset.distances_from(self.argcenter(), &self.argsamples);
-        let (argradius, _) = argmax(distances.view());
-        self.argsamples[argradius]
+        let distances = self.dataset.distances_from(self.argcenter, &self.indices);
+        let (argradius, _) = argmax(&distances);
+        self.indices[argradius]
     }
 
-    fn radius(&self) -> f64 { self.dataset.distance(self.argcenter(), self.argradius()) }
+    fn radius(&self) -> f64 { self.dataset.distance(self.argcenter, self.argradius) }
 }
 
 #[cfg(test)]
@@ -201,7 +207,7 @@ mod tests {
             [2., 2., 2.],
             [3., 3., 3.],
         ]);
-        let dataset = Dataset::new(data, "euclidean");
+        let dataset = Dataset::new(data, "euclidean", false);
         let indices = dataset.indices();
         let cluster = Cluster::new(
             Arc::new(dataset),

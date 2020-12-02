@@ -25,7 +25,7 @@ mod tests {
     #[test]
     fn test_cluster() {
         let data: Array2<f64> = array![[1., 2., 3.], [3., 3., 1.]];
-        let dataset = Dataset::new(data, "euclidean");
+        let dataset = Dataset::new(data, "euclidean", false);
         let indices = dataset.indices();
         let cluster = Cluster::new(Arc::new(dataset), "".to_string(), indices)
             .partition(&vec![criteria::MaxDepth::new(3)]);
@@ -53,8 +53,8 @@ mod tests {
             [2., 2.],
             [3., 3.],
         ]);
-        let dataset = Dataset::new(data, "euclidean");
-        let search = Search::new(Arc::new(dataset), Some(10));
+        let dataset = Dataset::new(data, "euclidean", false);
+        let search = Search::build(Arc::new(dataset), None);
 
         let q = arr1(&[0., 1.]);
         let query: ArrayView1<f64> = q.view();
@@ -79,7 +79,7 @@ mod tests {
         // 6 would be a much larger dataset.
         let dataset = DATASETS[0];
         let (data, _) = read_data(dataset).unwrap();
-        let dataset = Dataset::new(data, "euclidean");
+        let dataset = Dataset::new(data, "euclidean", false);
         let indices = dataset.indices();
         let cluster = Cluster::new(
             Arc::new(dataset),
