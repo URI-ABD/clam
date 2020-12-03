@@ -20,3 +20,8 @@ ndarray-npy = "^0.6"
 
 [dev-dependencies]
 float-cmp = "^0.8"
+criterion = "^0.3"
+
+[[bench]]
+name = "search"
+harness = false

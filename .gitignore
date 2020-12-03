@@ -152,7 +152,7 @@ dmypy.json
 .pyre/
 .vscode/
 
-# local files and folders
+# local data files and folders
 data/arrhythmia*
 data/breastw*
 data/cardio*
@@ -178,3 +178,7 @@ data/wbc*
 data/wine*
 data/apogee*
 data/greengenes*
+
+# Local files
+pyclam/explorations.py
+benches/*.txt

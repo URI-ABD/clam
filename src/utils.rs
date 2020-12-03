@@ -34,11 +34,6 @@ pub static DATASETS: &[&str] = &[
     "wine",  // 23
 ];
 
-pub static LARGE_DATASETS: &[&str] = &[
-    "APOGEE",
-    "GreenGenes",
-];
-
 // TODO: Add subsampling and normalization
 
 fn get_data_paths(dataset: &str) -> Result<(PathBuf, PathBuf), std::io::Error>{
@@ -56,6 +51,18 @@ pub fn read_data(dataset: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpyErro
     let data: Array2<f64> = read_npy(data_path)?;
     let labels: Array1<u8> = read_npy(labels_path)?;
     Ok((data, labels))
+}
+
+pub fn read_apogee() -> Array2<f64> {
+    // let mut data_dir: PathBuf = env::current_dir().unwrap();
+    // data_dir.push("data");
+    let mut data_dir: PathBuf = PathBuf::new();
+    data_dir.push("/data");
+    data_dir.push("nishaq");
+    data_dir.push("APOGEE");
+    data_dir.push("apogee_full.npy");
+    // println!("{:?}", data_dir);
+    read_npy(data_dir).unwrap()
 }
 
 //noinspection DuplicatedCode

@@ -41,6 +41,8 @@ impl Dataset {
 
     pub fn nrows(&self) -> usize { self.data.nrows() }
 
+    pub fn shape(&self) -> &[usize] { self.data.shape() }
+
     pub fn clear_cache(&self) { self.cache.clear() }
 
     pub fn cache_size(&self) -> usize { self.cache.len() }
