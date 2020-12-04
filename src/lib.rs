@@ -25,9 +25,9 @@ mod tests {
     #[test]
     fn test_cluster() {
         let data: Array2<f64> = array![[1., 2., 3.], [3., 3., 1.]];
-        let dataset = Dataset::new(data, "euclidean", false);
+        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
         let indices = dataset.indices();
-        let cluster = Cluster::new(Arc::new(dataset), "".to_string(), indices)
+        let cluster = Cluster::new(Arc::clone(&dataset), "".to_string(), indices)
             .partition(&vec![criteria::MaxDepth::new(3)]);
 
         assert_eq!(cluster.depth(), 0);
@@ -53,8 +53,8 @@ mod tests {
             [2., 2.],
             [3., 3.],
         ]);
-        let dataset = Dataset::new(data, "euclidean", false);
-        let search = Search::build(Arc::new(dataset), None);
+        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
+        let search = Search::build(Arc::clone(&dataset), None);
 
         let q = arr1(&[0., 1.]);
         let query: ArrayView1<f64> = q.view();
@@ -79,12 +79,11 @@ mod tests {
         // 6 would be a much larger dataset.
         let dataset = DATASETS[0];
         let (data, _) = read_data(dataset).unwrap();
-        let dataset = Dataset::new(data, "euclidean", false);
-        let indices = dataset.indices();
+        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
         let cluster = Cluster::new(
-            Arc::new(dataset),
+            Arc::clone(&dataset),
             "".to_string(),
-            indices,
+            dataset.indices(),
             // increase depth for longer benchmark
         ).partition(&vec![criteria::MaxDepth::new(6)]);
         assert!(cluster.num_descendents() > 50);

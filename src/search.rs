@@ -36,16 +36,15 @@ impl Search {
             Some(d) => vec![criteria::MaxDepth::new(d)],
             None => vec![],
         };
-        let indices = dataset.indices();
         let root = Cluster::new(
             Arc::clone(&dataset),
             "".to_string(),
-            indices,
+            dataset.indices(),
         ).partition(&criteria);
         Search {
             dataset: Arc::clone(&dataset),
             root: Arc::new(root),
-            function: Metric::on_f64(dataset.metric),
+            function: Metric::on_float(dataset.metric).unwrap(),
         }
     }
 
@@ -128,7 +127,7 @@ mod tests {
     fn test_search() {
         let name = DATASETS[0];
         let (data, _) = read_data(name).unwrap();
-        let dataset = Arc::new(Dataset::new(data, "euclidean", true));
+        let dataset = Arc::new(Dataset::new(data, "euclidean", true).unwrap());
 
         let search = Search::build(Arc::clone(&dataset), Some(25));
 

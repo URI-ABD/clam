@@ -27,14 +27,14 @@ impl fmt::Debug for Dataset {
 }
 
 impl Dataset {
-    pub fn new(data: Array2<f64>, metric: &'static str, use_cache: bool) -> Dataset {
-        Dataset {
+    pub fn new(data: Array2<f64>, metric: &'static str, use_cache: bool) -> Result<Dataset, String> {
+        Ok(Dataset {
             data,
             metric,
             use_cache,
-            function: Metric::on_f64(metric),
+            function: Metric::on_float(metric)?,
             cache: DashMap::new(),
-        }
+        })
     }
 
     pub fn indices(&self) -> Indices { (0..self.data.shape()[0]).collect() }
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn test_dataset() {
         let data: Array2<f64> = array![[1., 2., 3.], [3., 3., 1.]];
-        let dataset = Dataset::new(data, "euclidean", false);
+        let dataset = Dataset::new(data, "euclidean", false).unwrap();
         assert_eq!(dataset.nrows(), 2);
         assert_eq!(dataset.row(0), array![1., 2., 3.]);
 

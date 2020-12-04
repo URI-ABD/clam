@@ -207,12 +207,11 @@ mod tests {
             [2., 2., 2.],
             [3., 3., 3.],
         ]);
-        let dataset = Dataset::new(data, "euclidean", false);
-        let indices = dataset.indices();
+        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
         let cluster = Cluster::new(
-            Arc::new(dataset),
+            Arc::clone(&dataset),
             String::from(""),
-            indices
+            dataset.indices().clone()
         ).partition(&vec![MaxDepth::new(3)]);
 
         assert_eq!(cluster, cluster);

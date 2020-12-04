@@ -12,7 +12,7 @@ use clam::utils::{read_apogee, DATASETS, read_data};
 fn apogee_chess(c: &mut Criterion) {
     let name = "apogee";
     let data = read_apogee();
-    let dataset = Arc::new(Dataset::new(data, "euclidean", true));
+    let dataset = Arc::new(Dataset::new(data, "euclidean", true).unwrap());
     let search = Search::build(Arc::clone(&dataset), Some(50));
 
     for &f in [2., 1., 0.1, 0.01].iter() {
@@ -42,7 +42,7 @@ fn apogee_chess(c: &mut Criterion) {
 fn chess_chaoda(c: &mut Criterion) {
     for &name in DATASETS.iter() {
         let (data, _) = read_data(name).unwrap();
-        let dataset = Arc::new(Dataset::new(data, "euclidean", true));
+        let dataset = Arc::new(Dataset::new(data, "euclidean", true).unwrap());
         let search = Search::build(Arc::clone(&dataset), Some(50));
 
         for f in 2..5 {
