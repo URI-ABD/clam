@@ -25,7 +25,7 @@ mod tests {
     #[test]
     fn test_cluster() {
         let data: Array2<f64> = array![[1., 2., 3.], [3., 3., 1.]];
-        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
+        let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
         let indices = dataset.indices();
         let cluster = Cluster::new(Arc::clone(&dataset), "".to_string(), indices)
             .partition(&vec![criteria::MaxDepth::new(3)]);
@@ -79,7 +79,7 @@ mod tests {
         // 6 would be a much larger dataset.
         let dataset = DATASETS[0];
         let (data, _) = read_data(dataset).unwrap();
-        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
+        let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
         let cluster = Cluster::new(
             Arc::clone(&dataset),
             "".to_string(),

@@ -5,18 +5,18 @@ use ndarray::{Array2, ArrayView1};
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 
-use crate::metric::Metric;
+use crate::metric::*;
 use crate::types::*;
 
-pub struct Dataset {
-    pub data: Array2<f64>,
+pub struct Dataset<T: Real, U: Real> {
+    pub data: Array2<T>,
     pub metric: &'static str,
     pub use_cache: bool,
-    function: fn(ArrayView1<f64>, ArrayView1<f64>) -> f64,
-    cache: DashMap<(Index, Index), f64>,
+    function: Metric<T, U>,
+    cache: DashMap<(Index, Index), U>,
 }
 
-impl fmt::Debug for Dataset {
+impl<T: Real, U: Real> fmt::Debug for Dataset<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("Dataset")
             .field("data-shape", &self.data.shape())
@@ -26,13 +26,13 @@ impl fmt::Debug for Dataset {
     }
 }
 
-impl Dataset {
-    pub fn new(data: Array2<f64>, metric: &'static str, use_cache: bool) -> Result<Dataset, String> {
+impl<T: Real, U: Real> Dataset<T, U> {
+    pub fn new(data: Array2<T>, metric: &'static str, use_cache: bool) -> Result<Dataset<T, U>, String> {
         Ok(Dataset {
             data,
             metric,
             use_cache,
-            function: Metric::on_float(metric)?,
+            function: metric_on_real(metric)?,
             cache: DashMap::new(),
         })
     }
@@ -53,10 +53,10 @@ impl Dataset {
         indices.into_iter().choose_multiple(&mut rand::thread_rng(), n)
     }
 
-    pub fn row(&self, i: Index) -> ArrayView1<f64> { self.data.row(i) }
+    pub fn row(&self, i: Index) -> ArrayView1<T> { self.data.row(i) }
 
-    pub fn distance(&self, left: Index, right: Index) -> f64 {
-        if left == right { 0. }
+    pub fn distance(&self, left: Index, right: Index) -> U {
+        if left == right { U::zero() }
         else {
             let key = if left < right { (left, right) } else { (right, left) };
             if !self.cache.contains_key(&key) { self.cache.insert(key, (self.function)(self.data.row(left), self.data.row(right))); }
@@ -65,20 +65,20 @@ impl Dataset {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn distances_from(&self, left: Index, right: &Indices) -> Vec<f64> {
+    pub fn distances_from(&self, left: Index, right: &Indices) -> Vec<U> {
         right
             .par_iter()
             .map(|&r| self.distance(left, r))
-            .collect::<Vec<f64>>()
+            .collect::<Vec<U>>()
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn distances_among(&self, left: &Indices, right: &Indices) -> Vec<Vec<f64>> {
-        left.par_iter().map(|&l| self.distances_from(l, right)).collect::<Vec<Vec<f64>>>()
+    pub fn distances_among(&self, left: &Indices, right: &Indices) -> Vec<Vec<U>> {
+        left.par_iter().map(|&l| self.distances_from(l, right)).collect::<Vec<Vec<U>>>()
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn pairwise_distances(&self, indices: &Indices) -> Vec<Vec<f64>> {
+    pub fn pairwise_distances(&self, indices: &Indices) -> Vec<Vec<U>> {
         self.distances_among(indices, indices)
     }
 }

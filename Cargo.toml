@@ -17,6 +17,7 @@ rand = "^0.7"
 rayon = "^1.5"
 ndarray = "^0.13"
 ndarray-npy = "^0.6"
+num-traits = "^0.2"
 
 [dev-dependencies]
 float-cmp = "^0.8"

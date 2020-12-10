@@ -2,11 +2,12 @@ use std::marker::{Send, Sync};
 use std::sync::Arc;
 
 use crate::cluster::Cluster;
+use crate::metric::Real;
 
 // TODO: Enum for criteria because you currently cannot have vec![MaxDepth, MinPoints].
 
 pub trait ClusterCriterion: Send + Sync {
-    fn check(&self, cluster: &Cluster) -> bool;
+    fn check<T: Real, U: Real>(&self, cluster: &Cluster<T, U>) -> bool;
 }
 
 #[derive(Debug)]
@@ -19,7 +20,7 @@ impl MaxDepth {
 }
 
 impl ClusterCriterion for MaxDepth {
-    fn check(&self, cluster: &Cluster) -> bool {
+    fn check<T: Real, U: Real>(&self, cluster: &Cluster<T, U>) -> bool {
         cluster.depth() < self.depth
     }
 }

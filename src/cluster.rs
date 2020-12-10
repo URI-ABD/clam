@@ -1,6 +1,5 @@
 use std::{fmt, sync::Arc};
 use std::borrow::Borrow;
-use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
 use dashmap::DashSet;
@@ -9,45 +8,47 @@ use rayon::prelude::*;
 
 use crate::criteria::ClusterCriterion;
 use crate::dataset::Dataset;
-use crate::types::{Index, Indices};
+use crate::metric::Real;
+use crate::types::*;
 use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;
+type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
 
 #[derive(Debug)]
-pub struct Cluster {
-    pub dataset: Arc<Dataset>,
+pub struct Cluster<T: Real, U: Real> {
+    pub dataset: Arc<Dataset<T, U>>,
     pub name: String,
     pub indices: Indices,
-    pub children: Option<(Arc<Cluster>, Arc<Cluster>)>,
+    pub children: Option<Children<T, U>>,
     argsamples: Indices,
     pub argcenter: Index,
     pub argradius: Index,
-    pub radius: f64,
+    pub radius: U,
 }
 
-impl PartialEq for Cluster {
+impl<T: Real, U: Real> PartialEq for Cluster<T, U> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl Eq for Cluster {}
+impl<T: Real, U: Real> Eq for Cluster<T, U> {}
 
-impl Hash for Cluster {
+impl<T: Real, U: Real> Hash for Cluster<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state)
     }
 }
 
-impl fmt::Display for Cluster {
+impl<T: Real, U: Real> fmt::Display for Cluster<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
 
-impl Cluster {
-    pub fn new(dataset: Arc<Dataset>, name: String, indices: Indices) -> Cluster {
+impl<T: Real, U: Real> Cluster<T, U> {
+    pub fn new(dataset: Arc<Dataset<T, U>>, name: String, indices: Indices) -> Cluster<T, U> {
         let mut cluster = Cluster {
             dataset,
             name,
@@ -56,7 +57,7 @@ impl Cluster {
             argsamples: vec![],
             argcenter: 0,
             argradius: 0,
-            radius: 0.,
+            radius: U::zero(),
         };
         cluster.argsamples = cluster.argsamples();
         cluster.argcenter = cluster.argcenter();
@@ -65,15 +66,25 @@ impl Cluster {
         cluster
     }
 
-    pub fn cardinality(&self) -> usize { self.indices.len() }
+    pub fn cardinality(&self) -> Index {
+        self.indices.len()
+    }
 
-    pub fn depth(&self) -> usize { self.name.len() }
+    pub fn depth(&self) -> usize {
+        self.name.len()
+    }
 
-    pub fn contains(&self, i: &Index) -> bool { self.indices.contains(i) }
+    pub fn contains(&self, i: &Index) -> bool {
+        self.indices.contains(i)
+    }
 
-    pub fn center(&self) -> ArrayView1<f64> { self.dataset.row(self.argcenter) }
+    pub fn center(&self) -> ArrayView1<T> {
+        self.dataset.row(self.argcenter)
+    }
 
-    pub fn is_singleton(&self) -> bool { self.nsamples() == 1 }
+    pub fn is_singleton(&self) -> bool {
+        self.nsamples() == 1
+    }
 
     fn poles(&self) -> (Index, Index) {
         if self.nsamples() > 2 {
@@ -91,13 +102,14 @@ impl Cluster {
     }
 
     #[allow(clippy::ptr_arg, clippy::suspicious_map)]
-    pub fn partition(self, criteria: &Vec<Arc<impl ClusterCriterion>>) -> Cluster {
+    pub fn partition(self, criteria: &Vec<Arc<impl ClusterCriterion>>) -> Cluster<T, U> {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
         //  Problem: parent needs ref to children, AND
         //           outer function to handle parallel partitions needs MUTABLE ref to children.
-        if self.is_singleton() { self }
-        else {
+        if self.is_singleton() {
+            self
+        } else {
             for criterion in criteria.iter() {
                 if !criterion.check(&self) { return self; }
             }
@@ -117,16 +129,17 @@ impl Cluster {
             indices.par_iter()
                 .zip(left_distances.par_iter()
                          .zip(right_distances.par_iter()))
-                .map(|(&i, (&l, r))| {
-                    match l.partial_cmp(r).unwrap() {
-                        Ordering::Less => left_indices.insert(i),
-                        _ => right_indices.insert(i),
-                    }})
+                .map(|(&i, (&l, &r))| {
+                    if l <= r { left_indices.insert(i) }
+                    else { right_indices.insert(i) }
+                })
                 .count();
 
-            let (left_indices, right_indices) = if right_indices.len() < left_indices.len()
-            { (right_indices, left_indices) }
-            else { (left_indices, right_indices) };
+            let (left_indices, right_indices) = if right_indices.len() < left_indices.len() {
+                (right_indices, left_indices)
+            } else {
+                (left_indices, right_indices)
+            };
 
             let (left, right) = rayon::join(
                 || Cluster::new(
@@ -171,12 +184,14 @@ impl Cluster {
         }
     }
 
-    fn nsamples(&self) -> Index { self.argsamples.len() }
+    fn nsamples(&self) -> Index {
+        self.argsamples.len()
+    }
 
     fn argcenter(&self) -> Index {
-        let distances = self.dataset.pairwise_distances(&self.argsamples)
+        let distances: Vec<U> = self.dataset.pairwise_distances(&self.argsamples)
             .par_iter()
-            .map(|v| v.par_iter().sum())
+            .map(|v| v.clone().into_par_iter().sum())  // TODO: Impl Sum<&T> and then remove the clone
             .collect();
         let (argcenter, _) = argmin(&distances);
         self.argsamples[argcenter]
@@ -188,7 +203,9 @@ impl Cluster {
         self.indices[argradius]
     }
 
-    fn radius(&self) -> f64 { self.dataset.distance(self.argcenter, self.argradius) }
+    fn radius(&self) -> U {
+        self.dataset.distance(self.argcenter, self.argradius)
+    }
 }
 
 #[cfg(test)]
@@ -207,7 +224,7 @@ mod tests {
             [2., 2., 2.],
             [3., 3., 3.],
         ]);
-        let dataset = Arc::new(Dataset::new(data, "euclidean", false).unwrap());
+        let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
         let cluster = Cluster::new(
             Arc::clone(&dataset),
             String::from(""),

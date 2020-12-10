@@ -5,7 +5,10 @@ use std::path::PathBuf;
 use ndarray::{Array1, Array2};
 use ndarray_npy::{read_npy, ReadNpyError};
 
+use crate::metric::Real;
 use crate::types::Index;
+
+// TODO: Implement function to download datasets from internet
 
 pub static DATASETS: &[&str] = &[
     "annthyroid",  // 0
@@ -67,7 +70,7 @@ pub fn read_apogee() -> Array2<f64> {
 
 //noinspection DuplicatedCode
 #[allow(clippy::ptr_arg)]
-pub fn argmin(values: &Vec<f64>) -> (Index, f64) {
+pub fn argmin<T: Real>(values: &Vec<T>) -> (Index, T) {
     values.iter()
         .enumerate()
         .fold((0, values[0]), |(i_min, v_min), (i, &v)| {
@@ -80,7 +83,7 @@ pub fn argmin(values: &Vec<f64>) -> (Index, f64) {
 
 //noinspection DuplicatedCode
 #[allow(clippy::ptr_arg)]
-pub fn argmax(values: &Vec<f64>) -> (Index, f64) {
+pub fn argmax<T: Real>(values: &Vec<T>) -> (Index, T) {
     values.iter()
         .enumerate()
         .fold((0, values[0]), |(i_max, v_max), (i, &v)| {

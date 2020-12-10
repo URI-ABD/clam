@@ -1,41 +1,44 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::cluster::Cluster;
-use crate::types::*;
-use std::collections::HashMap;
 use crate::dataset::Dataset;
+use crate::metric::Real;
+use crate::types::*;
+
+pub type EdgesDict<T, U> = HashMap<Arc<Cluster<T, U>>, Vec<Arc<Edge<T, U>>>>;
 
 #[derive(Debug)]
-pub struct Edge {
-    pub left: Arc<Cluster>,
-    pub right: Arc<Cluster>,
-    pub distance: f64,
+pub struct Edge<T: Real, U: Real> {
+    pub left: Arc<Cluster<T, U>>,
+    pub right: Arc<Cluster<T, U>>,
+    pub distance: U,
 }
 
-impl PartialEq for Edge {
+impl<T: Real, U: Real> PartialEq for Edge<T, U> {
     fn eq(&self, other: &Self) -> bool {
         (self.left == other.left) && (self.right == other.right)
     }
 }
 
-impl Eq for Edge {}
+impl<T: Real, U: Real> Eq for Edge<T, U> {}
 
-impl fmt::Display for Edge {
+impl<T: Real, U: Real> fmt::Display for Edge<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:} -- {:}, {:}", self.left.name, self.right.name, self.distance)
     }
 }
 
-impl Hash for Edge {
+impl<T: Real, U: Real> Hash for Edge<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         format!("{:}", self).hash(state)
     }
 }
 
-impl Edge {
-    pub fn new(left: Arc<Cluster>, right: Arc<Cluster>, distance: f64) -> Edge {
+impl<T: Real, U: Real> Edge<T, U> {
+    pub fn new(left: Arc<Cluster<T, U>>, right: Arc<Cluster<T, U>>, distance: U) -> Edge<T, U> {
         Edge {
             left,
             right,
@@ -47,15 +50,16 @@ impl Edge {
         self.left == self.right
     }
 
-    pub fn contains(&self, cluster: &Arc<Cluster>) -> bool {
+    pub fn contains(&self, cluster: &Arc<Cluster<T, U>>) -> bool {
         cluster == &self.left || cluster == &self.right
     }
 
-    pub fn clusters(&self) -> (&Arc<Cluster>, &Arc<Cluster>) {
+    #[allow(clippy::type_complexity)]
+    pub fn clusters(&self) -> (&Arc<Cluster<T, U>>, &Arc<Cluster<T, U>>) {
         (&self.left, &self.right)
     }
 
-    pub fn neighbor(&self, cluster: &Arc<Cluster>) -> Result<&Arc<Cluster>, String> {
+    pub fn neighbor(&self, cluster: &Arc<Cluster<T, U>>) -> Result<&Arc<Cluster<T, U>>, String> {
         if cluster == &self.left { Ok(&self.right) }
         else if cluster == &self.right { Ok(&self.left) }
         else {
@@ -66,26 +70,26 @@ impl Edge {
 }
 
 
-pub struct Graph {
-    pub dataset: Arc<Dataset>,
-    pub clusters: Vec<Arc<Cluster>>,
-    pub edges: Vec<Arc<Edge>>,
+pub struct Graph<T: Real, U: Real> {
+    pub dataset: Arc<Dataset<T, U>>,
+    pub clusters: Vec<Arc<Cluster<T, U>>>,
+    pub edges: Vec<Arc<Edge<T, U>>>,
     pub is_built: bool,
-    pub cardinality: usize,
-    pub population: usize,
+    pub cardinality: Index,
+    pub population: Index,
     pub indices: Indices,
     pub depth: usize,
     pub min_depth: usize,
-    pub edges_dict: HashMap<Arc<Cluster>, Vec<Arc<Edge>>>,
+    pub edges_dict: EdgesDict<T, U>,
 }
 
-impl PartialEq for Graph {
+impl<T: Real, U: Real> PartialEq for Graph<T, U> {
     fn eq(&self, other: &Self) -> bool {
         self.clusters == other.clusters
     }
 }
 
-impl Eq for Graph {}
+impl<T: Real, U: Real> Eq for Graph<T, U> {}
 
 // impl fmt::Display for Graph {
 //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -94,8 +98,8 @@ impl Eq for Graph {}
 //     }
 // }
 
-impl Graph {
-    pub fn new(clusters: Vec<Arc<Cluster>>) -> Graph {
+impl<T: Real, U: Real> Graph<T, U> {
+    pub fn new(clusters: Vec<Arc<Cluster<T, U>>>) -> Graph<T, U> {
         assert!(!clusters.is_empty(), "Must have at least one cluster to make a graph.");
         let mut graph = Graph {
             dataset: Arc::clone(&clusters[0].dataset),
@@ -118,13 +122,19 @@ impl Graph {
         graph
     }
 
-    fn cardinality(&self) -> usize { self.clusters.len() }
+    fn cardinality(&self) -> Index {
+        self.clusters.len()
+    }
 
-    fn population(&self) -> usize { self.clusters.iter().map(|cluster| cluster.cardinality()).sum() }
+    fn population(&self) -> Index {
+        self.clusters.iter().map(|cluster| cluster.cardinality()).sum()
+    }
 
-    fn indices(&self) -> Indices { self.clusters.iter().map(|cluster| cluster.indices.clone()).flatten().collect() }
+    fn indices(&self) -> Indices {
+        self.clusters.iter().map(|cluster| cluster.indices.clone()).flatten().collect()
+    }
 
-    fn edges_dict(&self) -> HashMap<Arc<Cluster>, Vec<Arc<Edge>>> {
+    fn edges_dict(&self) -> EdgesDict<T, U> {
         let mut edges_dict = HashMap::new();
         for cluster in self.clusters.iter() {
             edges_dict.insert(
@@ -133,17 +143,23 @@ impl Graph {
                 .iter()
                 .filter(|&edge| edge.contains(cluster))
                 .cloned()
-                .collect::<Vec<Arc<Edge>>>()
+                .collect::<Vec<Arc<Edge<T, U>>>>()
             );
         }
         edges_dict
     }
 
-    fn depth(&self) -> usize { self.clusters.iter().map(|cluster| cluster.depth()).max().unwrap() }
+    fn depth(&self) -> usize {
+        self.clusters.iter().map(|cluster| cluster.depth()).max().unwrap()
+    }
 
-    fn min_depth(&self) -> usize { self.clusters.iter().map(|cluster| cluster.depth()).min().unwrap() }
+    fn min_depth(&self) -> usize {
+        self.clusters.iter().map(|cluster| cluster.depth()).min().unwrap()
+    }
 
-    pub fn depth_range(&self) -> (usize, usize) { (self.min_depth(), self.depth()) }
+    pub fn depth_range(&self) -> (usize, usize) {
+        (self.min_depth(), self.depth())
+    }
 
     // fn find_candidates(
     //     &self,
