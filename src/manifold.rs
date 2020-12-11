@@ -30,4 +30,20 @@ impl<T: Real, U: Real> Manifold<T, U> {
             layers: vec![],
         }
     }
+
+    pub fn ancestry(&self, name: &str) -> Result<Vec<Arc<Cluster<T, U>>>, String> {
+        let mut ancestry = vec![Arc::clone(&self.root)];
+        if !name.is_empty() {
+            for depth in 1..(name.len() + 1) {
+                let child = ancestry[depth - 1].descend_towards(&name[0..depth])?;
+                ancestry.push(child);
+            }
+        }
+        Ok(ancestry)
+    }
+
+    pub fn select(&self, name: &str) -> Result<Arc<Cluster<T, U>>, String> {
+        let ancestry = self.ancestry(name)?;
+        Ok(Arc::clone(&ancestry[name.len()]))
+    }
 }

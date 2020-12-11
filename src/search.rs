@@ -77,7 +77,6 @@ impl<T: Real, U: Real> Search<T, U> {
         };
     }
 
-    #[allow(clippy::suspicious_map)]
     pub fn leaf_search(&self, query: ArrayView1<T>, radius: Option<U>, clusters: ClusterResults<T, U>) -> Results<U> {
         let indices = clusters.iter()
             .map(|c| c.indices.clone())
@@ -87,7 +86,6 @@ impl<T: Real, U: Real> Search<T, U> {
         self.linear_search(query, radius, Some(indices))
     }
 
-    #[allow(clippy::suspicious_map)]
     pub fn linear_search(&self, query: ArrayView1<T>, radius: Option<U>, indices: Option<Indices>) -> Results<U> {
         let radius = radius.unwrap_or_else(U::zero);
         let indices = indices.unwrap_or_else(|| self.dataset.indices());
@@ -95,11 +93,7 @@ impl<T: Real, U: Real> Search<T, U> {
         let results: Results<U> = Arc::new(DashMap::new());
         indices.par_iter()
             .zip(distances.par_iter())
-            .map(|(&i, &d)| {
-                if d <= radius { results.insert(i, d) }
-                else { None }
-            })
-            .count();
+            .for_each(|(&i, &d)| { if d <= radius { results.insert(i, d); } });
         results
     }
 

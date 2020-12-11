@@ -2,7 +2,7 @@ use std::{fmt, sync::Arc};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 
-use dashmap::DashSet;
+use dashmap::{DashSet, DashMap};
 use ndarray::ArrayView1;
 use rayon::prelude::*;
 
@@ -13,7 +13,8 @@ use crate::types::*;
 use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;
-type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
+pub type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
+pub type Candidates<T, U> = DashMap<Arc<Cluster<T, U>>, U>;
 
 #[derive(Debug)]
 pub struct Cluster<T: Real, U: Real> {
@@ -25,6 +26,8 @@ pub struct Cluster<T: Real, U: Real> {
     pub argcenter: Index,
     pub argradius: Index,
     pub radius: U,
+    // TODO: Try to remove candidates from CLuster. Perhaps keep a master DashMap in Manifold?
+    pub candidates: Arc<Candidates<T, U>>,
 }
 
 impl<T: Real, U: Real> PartialEq for Cluster<T, U> {
@@ -58,6 +61,7 @@ impl<T: Real, U: Real> Cluster<T, U> {
             argcenter: 0,
             argradius: 0,
             radius: U::zero(),
+            candidates: Arc::new(DashMap::new()),
         };
         cluster.argsamples = cluster.argsamples();
         cluster.argcenter = cluster.argcenter();
@@ -86,6 +90,25 @@ impl<T: Real, U: Real> Cluster<T, U> {
         self.nsamples() == 1
     }
 
+    pub fn distance_to(&self, other: &Arc<Cluster<T, U>>) -> U {
+        self.dataset.distance(self.argcenter, other.argcenter)
+    }
+
+    pub fn descend_towards(&self, cluster: &str) -> Result<Arc<Cluster<T, U>>, String> {
+        match self.children.borrow() {
+            Some((left, right)) => {
+                if left.name == cluster[0..left.depth()] {
+                    Ok(Arc::clone(left))
+                } else if right.name == cluster[0..right.depth()] {
+                    Ok(Arc::clone(right))
+                } else {
+                    Err(format!("Cluster {:} not found.", cluster))
+                }
+            }
+            None => Err(format!("Cluster {:} not found.", cluster))
+        }
+    }
+
     fn poles(&self) -> (Index, Index) {
         if self.nsamples() > 2 {
             let indices = self.indices
@@ -101,7 +124,7 @@ impl<T: Real, U: Real> Cluster<T, U> {
         }
     }
 
-    #[allow(clippy::ptr_arg, clippy::suspicious_map)]
+    #[allow(clippy::ptr_arg)]
     pub fn partition(self, criteria: &Vec<Arc<impl ClusterCriterion>>) -> Cluster<T, U> {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
@@ -129,11 +152,10 @@ impl<T: Real, U: Real> Cluster<T, U> {
             indices.par_iter()
                 .zip(left_distances.par_iter()
                          .zip(right_distances.par_iter()))
-                .map(|(&i, (&l, &r))| {
-                    if l <= r { left_indices.insert(i) }
-                    else { right_indices.insert(i) }
-                })
-                .count();
+                .for_each(|(&i, (&l, &r))| {
+                    if l <= r { left_indices.insert(i); }
+                    else { right_indices.insert(i); }
+                });
 
             let (left_indices, right_indices) = if right_indices.len() < left_indices.len() {
                 (right_indices, left_indices)
@@ -162,7 +184,8 @@ impl<T: Real, U: Real> Cluster<T, U> {
                 argsamples: self.argsamples,
                 argcenter: self.argcenter,
                 argradius: self.argradius,
-                radius: self.radius
+                radius: self.radius,
+                candidates: self.candidates,
             }
         }
     }
@@ -251,7 +274,8 @@ mod tests {
             format!("argsamples: {:?},", cluster.argsamples),
             format!("argcenter: {:?},", cluster.argcenter),
             format!("argradius: {:?},", cluster.argradius),
-            format!("radius: {:?}", cluster.radius),
+            format!("radius: {:?},", cluster.radius),
+            format!("candidates: {:?}", cluster.candidates),
             "}".to_string(),
         ].join(" ");
         assert_eq!(format!("{:?}", cluster), cluster_str);
