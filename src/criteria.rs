@@ -25,6 +25,16 @@ impl ClusterCriterion for MaxDepth {
     }
 }
 
+// TODO: Investigate returning a closure to make criteria.
+//  Problem: complains of opaque trait usage when you put different functions together
+// pub fn max_depth<T: Real, U: Real>(depth: usize) -> impl Fn(&Cluster<T, U>) -> bool {
+//     move |cluster| cluster.depth() < depth
+// }
+//
+// pub fn min_points<T: Real, U: Real>(points: usize) -> impl Fn(&Cluster<T, U>) -> bool {
+//     move |cluster| cluster.cardinality() > points
+// }
+
 // #[derive(Debug)]
 // pub struct MinPoints { points: usize }
 //
