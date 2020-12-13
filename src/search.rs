@@ -33,8 +33,8 @@ impl<T: Number, U: Number> Search<T, U> {
     // TODO: Add save and load methods with serde.
     pub fn build(dataset: Arc<Dataset<T, U>>, max_depth: Option<usize>) -> Search<T, U> {
         let criteria = match max_depth {
-            Some(d) => vec![criteria::MaxDepth::new(d)],
-            None => vec![],
+            Some(d) => Some(criteria::max_depth(d)),
+            None => None,
         };
         let root = Cluster::new(
             Arc::clone(&dataset),

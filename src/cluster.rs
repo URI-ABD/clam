@@ -6,7 +6,6 @@ use dashmap::DashSet;
 use ndarray::ArrayView1;
 use rayon::prelude::*;
 
-use crate::criteria::ClusterCriterion;
 use crate::dataset::Dataset;
 use crate::metric::Number;
 use crate::types::{Index, Indices};
@@ -122,7 +121,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn partition(self, criteria: &Vec<Box<impl ClusterCriterion>>) -> Cluster<T, U> {
+    pub fn partition(self, criterion: &Option<impl Fn(&Cluster<T, U>) -> bool>) -> Cluster<T, U> {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
         //  Problem: parent needs ref to children, AND
@@ -130,9 +129,11 @@ impl<T: Number, U: Number> Cluster<T, U> {
         if self.is_singleton() {
             self
         } else {
-            for criterion in criteria.iter() {
-                if !criterion.check(&self) { return self; }
-            }
+            match criterion {
+                Some(criterion) => if !criterion(&self) { return self; }
+                None => (),
+            };
+
 
             let (left, right) = self.poles();
             let indices = self.indices
@@ -160,18 +161,29 @@ impl<T: Number, U: Number> Cluster<T, U> {
                 (left_indices, right_indices)
             };
 
-            let (left, right) = rayon::join(
-                || Cluster::new(
+            // let (left, right) = rayon::join(
+            //     || Cluster::new(
+            //         Arc::clone(&self.dataset),
+            //         format!("{}{}", self.name, 0),
+            //         left_indices.into_iter().collect()
+            //     ).partition(criterion),
+            //     || Cluster::new(
+            //         Arc::clone(&self.dataset),
+            //         format!("{}{}", self.name, 1),
+            //         right_indices.into_iter().collect()
+            //     ).partition(criterion),
+            // );
+
+            let left = Cluster::new(
                     Arc::clone(&self.dataset),
                     format!("{}{}", self.name, 0),
                     left_indices.into_iter().collect()
-                ).partition(criteria),
-                || Cluster::new(
-                    Arc::clone(&self.dataset),
-                    format!("{}{}", self.name, 1),
-                    right_indices.into_iter().collect()
-                ).partition(criteria),
-            );
+                ).partition(criterion);
+            let right = Cluster::new(
+                Arc::clone(&self.dataset),
+                format!("{}{}", self.name, 1),
+                right_indices.into_iter().collect()
+            ).partition(criterion);
 
             Cluster {
                 dataset: self.dataset,
@@ -233,9 +245,7 @@ mod tests {
 
     use ndarray::{arr2, Array2};
 
-    use crate::cluster::Cluster;
-    use crate::criteria::MaxDepth;
-    use crate::dataset::Dataset;
+    use crate::criteria::max_depth;
 
     #[test]
     fn test_cluster() {
@@ -253,7 +263,7 @@ mod tests {
             Arc::clone(&dataset),
             String::from(""),
             dataset.indices().clone()
-        ).partition(&criteria);
+        ).partition(&Some(max_depth(3)));
 
         assert_eq!(cluster, cluster);
         assert_eq!(cluster.depth(), 0);

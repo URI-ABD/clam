@@ -13,14 +13,14 @@ pub struct Manifold<T: Number, U: Number> {
     pub graphs: Vec<Arc<Graph<T, U>>>,
 }
 
-impl<T: Number, U: Number> Manifold<T, U> {
-    pub fn new(dataset: Arc<Dataset<T, U>>, cluster_criteria: Vec<Box<impl ClusterCriterion>>) -> Manifold<T, U> {
+impl<T: Real, U: Real> Manifold<T, U> {
+    pub fn new(dataset: Arc<Dataset<T, U>>, cluster_criteria: &Option<impl Fn(&Cluster<T, U>) -> bool>) -> Manifold<T, U> {
         let indices = dataset.indices();
         let root = Cluster::new(
             Arc::clone(&dataset),
             "".to_string(),
             indices,
-        ).partition(&cluster_criteria);
+        ).partition(cluster_criteria);
         Manifold {
             dataset,
             root: Arc::new(root),

@@ -26,7 +26,7 @@ mod tests {
         let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
         let indices = dataset.indices();
         let cluster = Cluster::new(Arc::clone(&dataset), "".to_string(), indices)
-            .partition(&vec![criteria::MaxDepth::new(3)]);
+            .partition(&Some(criteria::max_depth(3)));
 
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality(), 2);
@@ -81,7 +81,7 @@ mod tests {
             "".to_string(),
             dataset.indices(),
             // increase depth for longer benchmark
-        ).partition(&vec![criteria::MaxDepth::new(6)]);
+        ).partition(&Some(criteria::max_depth(6)));
         assert!(cluster.num_descendents() > 50);
     }
 }
