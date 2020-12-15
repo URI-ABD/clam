@@ -1,7 +1,8 @@
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
 
-use ndarray::ArrayView1;
+use ndarray::{ArrayView1, Zip};
+use ndarray::parallel::prelude::*;
 use num_traits::cast::FromPrimitive;
 use num_traits::real::Real as _Real;
 
@@ -13,16 +14,23 @@ impl Real for f64 {}
 pub type Metric<T, U> = fn(ArrayView1<T>, ArrayView1<T>) -> U;
 
 pub fn metric_on_real<T: Real, U: Real>(metric: &'static str) -> Result<Metric<T, U>, String> {
-        match metric {
-            "euclidean" => Ok(euclidean),
-            "euclideansq" => Ok(euclideansq),
-            "manhattan" => Ok(manhattan),
-            _ => Err(format!("{} is not defined.", metric)),
-        }
+    match metric {
+        "euclidean" => Ok(euclidean),
+        "par_euclidean" => Ok(par_euclidean),
+        "euclideansq" => Ok(euclideansq),
+        "par_euclideansq" => Ok(par_euclideansq),
+        "manhattan" => Ok(manhattan),
+        "par_manhattan" => Ok(par_manhattan),
+        _ => Err(format!("{} is not defined.", metric)),
     }
+}
 
 fn euclidean<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
     euclideansq::<T, U>(x, y).sqrt()
+}
+
+fn par_euclidean<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
+    par_euclideansq::<T, U>(x, y).sqrt()
 }
 
 fn euclideansq<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
@@ -33,9 +41,27 @@ fn euclideansq<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
     U::from(d).unwrap()
 }
 
+fn par_euclideansq<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
+    let d: T = Zip::from(x)
+        .and(y)
+        .into_par_iter()
+        .map(|(&a, &b)| (a - b) * (a - b))
+        .sum();
+    U::from(d).unwrap()
+}
+
 fn manhattan<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
     let d: T = x.iter()
         .zip(y.iter())
+        .map(|(&a, &b)| (a - b).abs())
+        .sum();
+    U::from(d).unwrap()
+}
+
+fn par_manhattan<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
+    let d: T = Zip::from(x)
+        .and(y)
+        .into_par_iter()
         .map(|(&a, &b)| (a - b).abs())
         .sum();
     U::from(d).unwrap()

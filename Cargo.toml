@@ -15,7 +15,7 @@ publish = false
 dashmap = "3.11.10"  # change after insertion fix
 rand = "^0.7"
 rayon = "^1.5"
-ndarray = "^0.13"
+ndarray = { version = "^0.13", features = ["rayon"] }
 ndarray-npy = "^0.6"
 num-traits = "^0.2"
 

@@ -12,10 +12,10 @@ use clam::utils::{read_apogee, DATASETS, read_data_f64};
 fn apogee_chess(c: &mut Criterion) {
     let name = "apogee";
     let data = read_apogee();
-    let dataset = Arc::new(Dataset::new(data, "euclidean", true).unwrap());
+    let dataset = Arc::new(Dataset::new(data, "par_euclidean", true).unwrap());
     let search = Search::build(Arc::clone(&dataset), Some(50));
 
-    for &radius in [4000., 2000., 1000.].iter() {
+    for &radius in [4000_f32, 2000., 1000.].iter() {
         let message = [
             format!("dataset: {:?}, ", name),
             format!("shape: {:?}, ", dataset.shape()),
