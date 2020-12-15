@@ -49,14 +49,14 @@ fn get_data_paths(dataset: &str) -> Result<(PathBuf, PathBuf), std::io::Error>{
     Ok((data_path, data_dir))
 }
 
-pub fn read_data(dataset: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpyError> {
+pub fn read_data_f64(dataset: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpyError> {
     let (data_path, labels_path) = get_data_paths(dataset).unwrap();
     let data: Array2<f64> = read_npy(data_path)?;
     let labels: Array1<u8> = read_npy(labels_path)?;
     Ok((data, labels))
 }
 
-pub fn read_apogee() -> Array2<f64> {
+pub fn read_apogee() -> Array2<f32> {
     // let mut data_dir: PathBuf = env::current_dir().unwrap();
     // data_dir.push("data");
     let mut data_dir: PathBuf = PathBuf::new();
@@ -99,11 +99,11 @@ pub fn argmax<T: Real>(values: &Vec<T>) -> (Index, T) {
 mod tests {
     use ndarray_npy::ReadNpyError;
 
-    use crate::utils::{DATASETS, read_data};
+    use crate::utils::{DATASETS, read_data_f64};
 
     #[test]
     fn test_read_data() -> Result<(), ReadNpyError> {
-        read_data(DATASETS[0])?;
+        read_data_f64(DATASETS[0])?;
         Ok(())
     }
 }

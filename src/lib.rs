@@ -20,7 +20,7 @@ mod tests {
     use crate::criteria;
     use crate::dataset::Dataset;
     use crate::search::Search;
-    use crate::utils::{DATASETS, read_data};
+    use crate::utils::{DATASETS, read_data_f64};
 
     #[test]
     fn test_cluster() {
@@ -78,7 +78,7 @@ mod tests {
     fn test_large_array() {
         // 6 would be a much larger dataset.
         let dataset = DATASETS[0];
-        let (data, _) = read_data(dataset).unwrap();
+        let (data, _) = read_data_f64(dataset).unwrap();
         let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
         let cluster = Cluster::new(
             Arc::clone(&dataset),
