@@ -113,14 +113,13 @@ mod tests {
     use std::sync::Arc;
 
     use crate::dataset::Dataset;
-    use crate::utils::{DATASETS, read_data_f64};
+    use crate::utils::read_test_data;
 
     use super::Search;
 
     #[test]
     fn test_search() {
-        let name = DATASETS[0];
-        let (data, _) = read_data_f64(name).unwrap();
+        let (data, _) = read_test_data();
         let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", true).unwrap());
 
         let search = Search::build(Arc::clone(&dataset), Some(25));

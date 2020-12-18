@@ -6,19 +6,20 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 use clam::dataset::Dataset;
 use clam::search::Search;
-use clam::utils::{read_apogee, DATASETS, read_data_f64};
+use clam::utils::{CHAODA_DATASETS, read_chaoda_data, ANN_DATASETS, read_ann_data_f32};
 
 #[allow(dead_code)]
 fn apogee_chess(c: &mut Criterion) {
-    let name = "apogee";
-    let data = read_apogee();
-    let dataset = Arc::new(Dataset::new(data, "par_euclidean", true).unwrap());
-    let search = Search::build(Arc::clone(&dataset), Some(50));
+    let (name, metric) = ("apogee", "euclidean");
+    let (train, test) = read_ann_data_f32(name).unwrap();
+        let train_dataset = Arc::new(Dataset::<f32, f32>::new(train, metric, true).unwrap());
+        let test_dataset = Arc::new(Dataset::<f32, f32>::new(test, metric, true).unwrap());
+        let search = Search::build(Arc::clone(&train_dataset), Some(50));
 
     for &radius in [4000_f32, 2000., 1000.].iter() {
         let message = [
             format!("dataset: {:?}, ", name),
-            format!("shape: {:?}, ", dataset.shape()),
+            format!("shape: {:?}, ", train_dataset.shape()),
             format!("radius {:}, ", radius),
             format!("num_queries 100."),
         ].join("");
@@ -28,7 +29,7 @@ fn apogee_chess(c: &mut Criterion) {
             id,
             |b| b.iter(|| {
                 for q in 0..100 {
-                    search.rnn(search.dataset.row(q), Some(radius));
+                    search.rnn(test_dataset.row(q), Some(radius));
                 }
             }),
         );
@@ -36,9 +37,42 @@ fn apogee_chess(c: &mut Criterion) {
 }
 
 #[allow(dead_code)]
+fn ann_benchmarks(c: &mut Criterion) {
+    for (name, metric) in ANN_DATASETS.iter() {
+        if *metric == "jaccard" { continue }
+
+        let (train, test) = read_ann_data_f32(name).unwrap();
+        let train_dataset = Arc::new(Dataset::<f32, f32>::new(train, metric, true).unwrap());
+        let test_dataset = Arc::new(Dataset::<f32, f32>::new(test, metric, true).unwrap());
+        let search = Search::build(Arc::clone(&train_dataset), Some(50));
+
+        for f in 2..5 {
+            let radius = search.diameter() * (10_f32).powi(-f);
+            let message = [
+                format!("dataset: {:?}, ", name),
+                format!("shape: {:?}, ", train_dataset.shape()),
+                format!("radius fraction {:}, ", -f),
+                format!("radius {:.2e}, ", radius),
+                format!("num_queries 100."),
+            ].join("");
+            println!("{}", message);
+            let id = &format!("{}, fraction {:}", name, -f)[..];
+            c.bench_function(
+                id,
+                |b| b.iter(|| {
+                    for q in 0..100 {
+                        search.rnn(test_dataset.row(q), Some(radius));
+                    }
+                }),
+            );
+        }
+    }
+}
+
+#[allow(dead_code)]
 fn chess_chaoda(c: &mut Criterion) {
-    for &name in DATASETS.iter() {
-        let (data, _) = read_data_f64(name).unwrap();
+    for &name in CHAODA_DATASETS.iter() {
+        let (data, _) = read_chaoda_data(name).unwrap();
         let dataset = Arc::new(Dataset::new(data, "euclidean", true).unwrap());
         let search = Search::build(Arc::clone(&dataset), Some(50));
 
@@ -66,6 +100,7 @@ fn chess_chaoda(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, apogee_chess);
+// criterion_group!(benches, apogee_chess);
+criterion_group!(benches, ann_benchmarks);
 // criterion_group!(benches, chess_chaoda);
 criterion_main!(benches);

@@ -21,6 +21,7 @@ pub fn metric_on_real<T: Real, U: Real>(metric: &'static str) -> Result<Metric<T
         "par_euclideansq" => Ok(par_euclideansq),
         "manhattan" => Ok(manhattan),
         "par_manhattan" => Ok(par_manhattan),
+        "cosine" => Ok(cosine),
         _ => Err(format!("{} is not defined.", metric)),
     }
 }
@@ -65,6 +66,24 @@ fn par_manhattan<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
         .map(|(&a, &b)| (a - b).abs())
         .sum();
     U::from(d).unwrap()
+}
+
+fn dot<T: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> T {
+    x.iter().zip(y.iter()).map(|(&a, &b)| a * b).sum()
+}
+
+fn cosine<T: Real, U: Real>(x: ArrayView1<T>, y: ArrayView1<T>) -> U {
+    let xx = dot(x, x);
+    if xx == T::zero() { return U::one(); }
+
+    let yy = dot(y, y);
+    if yy == T::zero() { return U::one(); }
+
+    let xy = dot(x, y);
+    if xy <= T::zero() { return U::one() }
+
+    let similarity = U::from(xy * xy / (xx * yy)).unwrap();
+    U::one() - similarity.sqrt()
 }
 
 

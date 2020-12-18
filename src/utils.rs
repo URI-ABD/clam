@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
 
@@ -10,7 +9,7 @@ use crate::types::Index;
 
 // TODO: Implement function to download datasets from internet
 
-pub static DATASETS: &[&str] = &[
+pub static CHAODA_DATASETS: &[&str] = &[
     "annthyroid",  // 0
     "arrhythmia",  // 1
     "breastw",  // 2
@@ -37,60 +36,91 @@ pub static DATASETS: &[&str] = &[
     "wine",  // 23
 ];
 
+pub static ANN_DATASETS: &[(&str, &str)] = &[
+    ("deep-image", "cosine"), // 0
+    ("fashion-mnist", "euclidean"), // 1
+    ("gist", "euclidean"), // 2
+    ("glove-25", "cosine"), // 3
+    ("glove-50", "cosine"), // 4
+    ("glove-100", "cosine"), // 5
+    ("glove-200", "cosine"), // 6
+    ("kosarak", "jaccard"), // 7
+    ("mnist", "euclidean"), // 8
+    ("nytimes", "cosine"), // 9
+    ("sift", "euclidean"), // 10,
+    ("lastfm", "cosine"), // 11
+];
+
 // TODO: Add subsampling and normalization
 
-fn get_data_paths(dataset: &str) -> Result<(PathBuf, PathBuf), std::io::Error>{
-    let mut data_dir: PathBuf = env::current_dir()?;
+pub fn read_test_data() -> (Array2<f64>, Array1<u8>) {
+    let mut data_dir: PathBuf = env::current_dir().unwrap();
     data_dir.push("data");
 
     let mut data_path = data_dir.clone();
-    data_path.push(format!("{}.npy", dataset));
-    data_dir.push(format!("{}_labels.npy", dataset));
-    Ok((data_path, data_dir))
+    data_path.push("annthyroid.npy");
+    data_dir.push("annthyroid_labels.npy");
+
+    let data = read_npy(data_path).unwrap();
+    let labels = read_npy(data_dir).unwrap();
+
+    (data, labels)
 }
 
-pub fn read_data_f64(dataset: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpyError> {
-    let (data_path, labels_path) = get_data_paths(dataset).unwrap();
+pub fn read_chaoda_data(name: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpyError> {
+    let mut data_dir: PathBuf = PathBuf::new();
+    data_dir.push("/data");
+    data_dir.push("abd");
+    data_dir.push("chaoda_data");
+
+    let mut data_path = data_dir.clone();
+    data_path.push(format!("{:}.npy", name));
+    data_dir.push(format!("{:}_labels.npy", name));
+
     let data: Array2<f64> = read_npy(data_path)?;
-    let labels: Array1<u8> = read_npy(labels_path)?;
+    let labels: Array1<u8> = read_npy(data_dir)?;
     Ok((data, labels))
 }
 
 pub fn read_apogee() -> Array2<f32> {
-    // let mut data_dir: PathBuf = env::current_dir().unwrap();
-    // data_dir.push("data");
     let mut data_dir: PathBuf = PathBuf::new();
     data_dir.push("/data");
-    data_dir.push("nishaq");
-    data_dir.push("APOGEE");
+    data_dir.push("abd");
+    data_dir.push("ann_data");
     data_dir.push("apogee_full.npy");
-    // println!("{:?}", data_dir);
     read_npy(data_dir).unwrap()
 }
 
-//noinspection DuplicatedCode
+pub fn read_ann_data_f32(name: &str) -> Result<(Array2<f32>, Array2<f32>), ReadNpyError> {
+    let mut data_dir: PathBuf = PathBuf::new();
+    data_dir.push("/data");
+    data_dir.push("abd");
+    data_dir.push("ann_data");
+
+    let mut train_path = data_dir.clone();
+    train_path.push(format!("{:}-train.npy", name));
+    data_dir.push(format!("{:}-test.npy", name));
+
+    let train = read_npy(train_path)?;
+    let test = read_npy(data_dir)?;
+    Ok((train, test))
+}
+
 #[allow(clippy::ptr_arg)]
 pub fn argmin<T: Real>(values: &Vec<T>) -> (Index, T) {
     values.iter()
         .enumerate()
         .fold((0, values[0]), |(i_min, v_min), (i, &v)| {
-            match v_min.partial_cmp(&v).unwrap() {
-                Ordering::Less => (i_min, v_min),
-                _ => (i, v)
-            }
+            if v < v_min { (i, v) } else { (i_min, v_min) }
         })
 }
 
-//noinspection DuplicatedCode
 #[allow(clippy::ptr_arg)]
 pub fn argmax<T: Real>(values: &Vec<T>) -> (Index, T) {
     values.iter()
         .enumerate()
         .fold((0, values[0]), |(i_max, v_max), (i, &v)| {
-            match v_max.partial_cmp(&v).unwrap() {
-                Ordering::Greater => (i_max, v_max),
-                _ => (i, v)
-            }
+            if v > v_max { (i, v) } else { (i_max, v_max) }
         })
 }
 
@@ -99,11 +129,11 @@ pub fn argmax<T: Real>(values: &Vec<T>) -> (Index, T) {
 mod tests {
     use ndarray_npy::ReadNpyError;
 
-    use crate::utils::{DATASETS, read_data_f64};
+    use crate::utils::{CHAODA_DATASETS, read_chaoda_data};
 
     #[test]
     fn test_read_data() -> Result<(), ReadNpyError> {
-        read_data_f64(DATASETS[0])?;
+        read_chaoda_data(CHAODA_DATASETS[0])?;
         Ok(())
     }
 }
