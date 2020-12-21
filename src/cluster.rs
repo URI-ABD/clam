@@ -2,14 +2,14 @@ use std::{fmt, sync::Arc};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 
-use dashmap::{DashSet, DashMap};
+use dashmap::{DashMap, DashSet};
 use ndarray::ArrayView1;
 use rayon::prelude::*;
 
 use crate::criteria::ClusterCriterion;
 use crate::dataset::Dataset;
-use crate::metric::Real;
-use crate::types::*;
+use crate::metric::Number;
+use crate::types::{Index, Indices};
 use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;
@@ -17,7 +17,7 @@ pub type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
 pub type Candidates<T, U> = DashMap<Arc<Cluster<T, U>>, U>;
 
 #[derive(Debug)]
-pub struct Cluster<T: Real, U: Real> {
+pub struct Cluster<T: Number, U: Number> {
     pub dataset: Arc<Dataset<T, U>>,
     pub name: String,
     pub indices: Indices,
@@ -26,31 +26,31 @@ pub struct Cluster<T: Real, U: Real> {
     pub argcenter: Index,
     pub argradius: Index,
     pub radius: U,
-    // TODO: Try to remove candidates from CLuster. Perhaps keep a master DashMap in Manifold?
+    // TODO: Try to remove candidates from Cluster. Perhaps keep a master DashMap in Manifold?
     pub candidates: Arc<Candidates<T, U>>,
 }
 
-impl<T: Real, U: Real> PartialEq for Cluster<T, U> {
+impl<T: Number, U: Number> PartialEq for Cluster<T, U> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl<T: Real, U: Real> Eq for Cluster<T, U> {}
+impl<T: Number, U: Number> Eq for Cluster<T, U> {}
 
-impl<T: Real, U: Real> Hash for Cluster<T, U> {
+impl<T: Number, U: Number> Hash for Cluster<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state)
     }
 }
 
-impl<T: Real, U: Real> fmt::Display for Cluster<T, U> {
+impl<T: Number, U: Number> fmt::Display for Cluster<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
 
-impl<T: Real, U: Real> Cluster<T, U> {
+impl<T: Number, U: Number> Cluster<T, U> {
     pub fn new(dataset: Arc<Dataset<T, U>>, name: String, indices: Indices) -> Cluster<T, U> {
         let mut cluster = Cluster {
             dataset,
@@ -214,7 +214,7 @@ impl<T: Real, U: Real> Cluster<T, U> {
     fn argcenter(&self) -> Index {
         let distances: Vec<U> = self.dataset.pairwise_distances(&self.argsamples)
             .par_iter()
-            .map(|v| v.clone().into_par_iter().sum())  // TODO: Impl Sum<&T> and then remove the clone
+            .map(|v| v.par_iter().cloned().sum())
             .collect();
         let (argcenter, _) = argmin(&distances);
         self.argsamples[argcenter]

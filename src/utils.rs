@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use ndarray::{Array1, Array2};
 use ndarray_npy::{read_npy, ReadNpyError};
 
-use crate::metric::Real;
+use crate::metric::Number;
 use crate::types::Index;
 
 // TODO: Implement function to download datasets from internet
@@ -36,6 +36,7 @@ pub static CHAODA_DATASETS: &[&str] = &[
     "wine",  // 23
 ];
 
+// TODO: Discriminate by data type of downloaded data
 pub static ANN_DATASETS: &[(&str, &str)] = &[
     ("deep-image", "cosine"), // 0
     ("fashion-mnist", "euclidean"), // 1
@@ -107,7 +108,7 @@ pub fn read_ann_data_f32(name: &str) -> Result<(Array2<f32>, Array2<f32>), ReadN
 }
 
 #[allow(clippy::ptr_arg)]
-pub fn argmin<T: Real>(values: &Vec<T>) -> (Index, T) {
+pub fn argmin<T: Number>(values: &Vec<T>) -> (Index, T) {
     values.iter()
         .enumerate()
         .fold((0, values[0]), |(i_min, v_min), (i, &v)| {
@@ -116,24 +117,10 @@ pub fn argmin<T: Real>(values: &Vec<T>) -> (Index, T) {
 }
 
 #[allow(clippy::ptr_arg)]
-pub fn argmax<T: Real>(values: &Vec<T>) -> (Index, T) {
+pub fn argmax<T: Number>(values: &Vec<T>) -> (Index, T) {
     values.iter()
         .enumerate()
         .fold((0, values[0]), |(i_max, v_max), (i, &v)| {
             if v > v_max { (i, v) } else { (i_max, v_max) }
         })
-}
-
-
-#[cfg(test)]
-mod tests {
-    use ndarray_npy::ReadNpyError;
-
-    use crate::utils::{CHAODA_DATASETS, read_chaoda_data};
-
-    #[test]
-    fn test_read_data() -> Result<(), ReadNpyError> {
-        read_chaoda_data(CHAODA_DATASETS[0])?;
-        Ok(())
-    }
 }

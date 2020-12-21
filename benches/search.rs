@@ -6,7 +6,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 use clam::dataset::Dataset;
 use clam::search::Search;
-use clam::utils::{CHAODA_DATASETS, read_chaoda_data, ANN_DATASETS, read_ann_data_f32};
+use clam::utils::{ANN_DATASETS, CHAODA_DATASETS, read_ann_data_f32, read_chaoda_data};
 
 #[allow(dead_code)]
 fn apogee_chess(c: &mut Criterion) {
@@ -39,8 +39,6 @@ fn apogee_chess(c: &mut Criterion) {
 #[allow(dead_code)]
 fn ann_benchmarks(c: &mut Criterion) {
     for (name, metric) in ANN_DATASETS.iter() {
-        if *metric == "jaccard" { continue }
-
         let (train, test) = read_ann_data_f32(name).unwrap();
         let train_dataset = Arc::new(Dataset::<f32, f32>::new(train, metric, true).unwrap());
         let test_dataset = Arc::new(Dataset::<f32, f32>::new(test, metric, true).unwrap());
@@ -51,12 +49,12 @@ fn ann_benchmarks(c: &mut Criterion) {
             let message = [
                 format!("dataset: {:?}, ", name),
                 format!("shape: {:?}, ", train_dataset.shape()),
-                format!("radius fraction {:}, ", -f),
+                format!("radius fraction {}, ", -f),
                 format!("radius {:.2e}, ", radius),
                 format!("num_queries 100."),
             ].join("");
             println!("{}", message);
-            let id = &format!("{}, fraction {:}", name, -f)[..];
+            let id = &format!("{}, fraction {}", name, -f)[..];
             c.bench_function(
                 id,
                 |b| b.iter(|| {
@@ -82,12 +80,12 @@ fn chess_chaoda(c: &mut Criterion) {
             let message = [
                 format!("dataset: {:?}, ", name),
                 format!("shape: {:?}, ", dataset.shape()),
-                format!("radius fraction {:.0e}, ", fraction),
+                format!("radius fraction {}, ", -f),
                 format!("radius {:.2e}, ", radius),
                 format!("num_queries 100."),
             ].join("");
             println!("{}", message);
-            let id = &format!("{}, fraction {:.0e}", name, fraction)[..];
+            let id = &format!("{}, fraction {}", name, -f)[..];
             c.bench_function(
                 id,
                 |b| b.iter(|| {
@@ -97,10 +95,11 @@ fn chess_chaoda(c: &mut Criterion) {
                 }),
             );
         }
+        break
     }
 }
 
 // criterion_group!(benches, apogee_chess);
-criterion_group!(benches, ann_benchmarks);
-// criterion_group!(benches, chess_chaoda);
+// criterion_group!(benches, ann_benchmarks);
+criterion_group!(benches, chess_chaoda);
 criterion_main!(benches);

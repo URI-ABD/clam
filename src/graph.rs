@@ -7,39 +7,39 @@ use dashmap::{DashMap, DashSet};
 
 use crate::cluster::Cluster;
 use crate::dataset::Dataset;
-use crate::metric::Real;
-use crate::types::*;
+use crate::metric::Number;
+use crate::types::{Index, Indices};
 
 pub type EdgesDict<T, U> = DashMap<Arc<Cluster<T, U>>, Arc<DashSet<Arc<Edge<T, U>>>>>;
 
 #[derive(Debug)]
-pub struct Edge<T: Real, U: Real> {
+pub struct Edge<T: Number, U: Number> {
     pub left: Arc<Cluster<T, U>>,
     pub right: Arc<Cluster<T, U>>,
     pub distance: U,
 }
 
-impl<T: Real, U: Real> PartialEq for Edge<T, U> {
+impl<T: Number, U: Number> PartialEq for Edge<T, U> {
     fn eq(&self, other: &Self) -> bool {
         (self.left == other.left) && (self.right == other.right)
     }
 }
 
-impl<T: Real, U: Real> Eq for Edge<T, U> {}
+impl<T: Number, U: Number> Eq for Edge<T, U> {}
 
-impl<T: Real, U: Real> fmt::Display for Edge<T, U> {
+impl<T: Number, U: Number> fmt::Display for Edge<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:} -- {:}, {:}", self.left.name, self.right.name, self.distance)
     }
 }
 
-impl<T: Real, U: Real> Hash for Edge<T, U> {
+impl<T: Number, U: Number> Hash for Edge<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         format!("{:}", self).hash(state)
     }
 }
 
-impl<T: Real, U: Real> Edge<T, U> {
+impl<T: Number, U: Number> Edge<T, U> {
     pub fn new(left: Arc<Cluster<T, U>>, right: Arc<Cluster<T, U>>, distance: U) -> Edge<T, U> {
         Edge {
             left,
@@ -67,7 +67,7 @@ impl<T: Real, U: Real> Edge<T, U> {
 }
 
 
-pub struct Graph<T: Real, U: Real> {
+pub struct Graph<T: Number, U: Number> {
     pub dataset: Arc<Dataset<T, U>>,
     pub root: Arc<Cluster<T, U>>,
     pub clusters: DashSet<Arc<Cluster<T, U>>>,
@@ -81,7 +81,7 @@ pub struct Graph<T: Real, U: Real> {
     pub edges_dict: Arc<EdgesDict<T, U>>,
 }
 
-impl<T: Real, U: Real> PartialEq for Graph<T, U> {
+impl<T: Number, U: Number> PartialEq for Graph<T, U> {
     fn eq(&self, other: &Self) -> bool {
         let left = self.clusters
             .iter()
@@ -95,7 +95,7 @@ impl<T: Real, U: Real> PartialEq for Graph<T, U> {
     }
 }
 
-impl<T: Real, U: Real> Eq for Graph<T, U> {}
+impl<T: Number, U: Number> Eq for Graph<T, U> {}
 
 // impl fmt::Display for Graph {
 //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -104,7 +104,7 @@ impl<T: Real, U: Real> Eq for Graph<T, U> {}
 //     }
 // }
 
-impl<T: Real, U: Real> Graph<T, U> {
+impl<T: Number, U: Number> Graph<T, U> {
     pub fn new(root: Arc<Cluster<T, U>>, clusters: DashSet<Arc<Cluster<T, U>>>) -> Result<Graph<T, U>, String> {
         assert!(!clusters.is_empty(), "Must have at least one cluster to make a graph.");
         let mut graph = Graph {
@@ -203,7 +203,7 @@ impl<T: Real, U: Real> Graph<T, U> {
                     .iter()
                     .for_each(|item| {
                         let distance = ancestor.distance_to(item.key());
-                        if distance <= item.key().radius + radius * U::from_f64(4.).unwrap() {
+                        if distance <= item.key().radius + radius * U::from(4).unwrap() {
                             ancestor.candidates.insert(Arc::clone(item.key()), distance);
                         }
                     });

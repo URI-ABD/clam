@@ -4,15 +4,15 @@ use crate::cluster::Cluster;
 use crate::criteria::ClusterCriterion;
 use crate::dataset::Dataset;
 use crate::graph::Graph;
-use crate::metric::Real;
+use crate::metric::Number;
 
-pub struct Manifold<T: Real, U: Real> {
+pub struct Manifold<T: Number, U: Number> {
     pub dataset: Arc<Dataset<T, U>>,
     pub root: Arc<Cluster<T, U>>,
     pub layers: Vec<Arc<Graph<T, U>>>,
 }
 
-impl<T: Real, U: Real> Manifold<T, U> {
+impl<T: Number, U: Number> Manifold<T, U> {
     pub fn new(dataset: Arc<Dataset<T, U>>, cluster_criteria: Vec<impl ClusterCriterion>) -> Manifold<T, U> {
         let cluster_criteria = cluster_criteria
             .into_iter()

@@ -5,10 +5,10 @@ use ndarray::{Array2, ArrayView1};
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 
-use crate::metric::*;
-use crate::types::*;
+use crate::metric::{Metric, metric_new, Number};
+use crate::types::{Index, Indices};
 
-pub struct Dataset<T: Real, U: Real> {
+pub struct Dataset<T: Number, U: Number> {
     pub data: Array2<T>,
     pub metric: &'static str,
     pub use_cache: bool,
@@ -16,7 +16,7 @@ pub struct Dataset<T: Real, U: Real> {
     cache: DashMap<(Index, Index), U>,
 }
 
-impl<T: Real, U: Real> fmt::Debug for Dataset<T, U> {
+impl<T: Number, U: Number> fmt::Debug for Dataset<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("Dataset")
             .field("data-shape", &self.data.shape())
@@ -26,13 +26,13 @@ impl<T: Real, U: Real> fmt::Debug for Dataset<T, U> {
     }
 }
 
-impl<T: Real, U: Real> Dataset<T, U> {
+impl<T: Number, U: Number> Dataset<T, U> {
     pub fn new(data: Array2<T>, metric: &'static str, use_cache: bool) -> Result<Dataset<T, U>, String> {
         Ok(Dataset {
             data,
             metric,
             use_cache,
-            function: metric_on_real(metric)?,
+            function: metric_new(metric)?,
             cache: DashMap::new(),
         })
     }

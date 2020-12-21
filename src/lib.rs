@@ -8,8 +8,6 @@ pub mod graph;
 pub mod manifold;
 pub mod search;
 
-// TODO: Use ndarray_npy crate to read large arrays for more testing
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

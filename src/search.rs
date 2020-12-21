@@ -9,19 +9,19 @@ use rayon::prelude::*;
 use crate::cluster::Cluster;
 use crate::criteria;
 use crate::dataset::Dataset;
-use crate::metric::*;
-use crate::types::*;
+use crate::metric::{Metric, metric_new, Number};
+use crate::types::{Index, Indices};
 
 type ClusterResults<T, U> = Arc<DashSet<Arc<Cluster<T, U>>>>;
 type Results<T> = Arc<DashMap<Index, T>>;
 
-pub struct Search<T: Real, U: Real> {
+pub struct Search<T: Number, U: Number> {
     pub dataset: Arc<Dataset<T, U>>,
     root: Arc<Cluster<T, U>>,
     function: Metric<T, U>,
 }
 
-impl<T: Real, U: Real> fmt::Debug for Search<T, U> {
+impl<T: Number, U: Number> fmt::Debug for Search<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("Search")
             .field("dataset", &self.dataset)
@@ -29,7 +29,7 @@ impl<T: Real, U: Real> fmt::Debug for Search<T, U> {
     }
 }
 
-impl<T: Real, U: Real> Search<T, U> {
+impl<T: Number, U: Number> Search<T, U> {
     // TODO: Add save and load methods with serde.
     pub fn build(dataset: Arc<Dataset<T, U>>, max_depth: Option<usize>) -> Search<T, U> {
         let criteria = match max_depth {
@@ -44,11 +44,11 @@ impl<T: Real, U: Real> Search<T, U> {
         Search {
             dataset: Arc::clone(&dataset),
             root: Arc::new(root),
-            function: metric_on_real(dataset.metric).unwrap(),
+            function: metric_new(dataset.metric).unwrap(),
         }
     }
 
-    pub fn diameter(&self) -> U { U::from_f64(2.).unwrap() * self.root.radius }
+    pub fn diameter(&self) -> U { U::from(2).unwrap() * self.root.radius }
 
     pub fn indices(&self) -> Indices { self.dataset.indices() }
 
