@@ -1,3 +1,6 @@
+/// CLAM Dataset.
+/// 
+/// This module contains the declaration and definition of the Dataset struct.
 use std::{fmt, result};
 
 use dashmap::DashMap;
@@ -8,11 +11,24 @@ use rayon::prelude::*;
 use crate::metric::{Metric, metric_new, Number};
 use crate::types::{Index, Indices};
 
+/// Dataset.
+///  
+/// Datasets wrap an `Array2` of data, along with a `metric`, to provide interfaces 
+/// for computing distances between points contained within the dataset.
+/// 
+/// The resulting structure can make use of caching techniques to prevent repeated (potentially expensive)
+/// calls to its internal distance function.
 pub struct Dataset<T: Number, U: Number> {
+    /// 2D array of data
     pub data: Array2<T>,
+    /// Metric to use to compute distances (ex "euclidean")
     pub metric: &'static str,
+    /// Whether this dataset should use an internal cache (recommended)
     pub use_cache: bool,
+
+    // The stored function, used to compute distances.
     function: Metric<T, U>,
+    // The internal cache.
     cache: DashMap<(Index, Index), U>,
 }
 
@@ -27,6 +43,8 @@ impl<T: Number, U: Number> fmt::Debug for Dataset<T, U> {
 }
 
 impl<T: Number, U: Number> Dataset<T, U> {
+    
+    /// Create a new Dataset, using the provided data and metric, optionally use a cache.
     pub fn new(data: Array2<T>, metric: &'static str, use_cache: bool) -> Result<Dataset<T, U>, String> {
         Ok(Dataset {
             data,
@@ -37,24 +55,32 @@ impl<T: Number, U: Number> Dataset<T, U> {
         })
     }
 
+    /// Return all of the indices in the dataset.
     pub fn indices(&self) -> Indices { (0..self.data.shape()[0]).collect() }
 
+    /// Returns the number of rows in the dataset.
     pub fn nrows(&self) -> usize { self.data.nrows() }
 
+    /// Returns the shape of the dataset.
     pub fn shape(&self) -> &[usize] { self.data.shape() }
 
+    /// Clears the internal cache.
     pub fn clear_cache(&self) { self.cache.clear() }
 
+    /// Returns the size of the internal cache.
     pub fn cache_size(&self) -> usize { self.cache.len() }
 
+    /// Return a random selection of unique indices.
     #[allow(clippy::ptr_arg)]
     pub fn choose_unique(&self, indices: Indices, n: usize) -> Indices {
         // TODO: actually check for uniqueness among choices
         indices.into_iter().choose_multiple(&mut rand::thread_rng(), n)
     }
 
+    /// Return the row at the provided index.
     pub fn row(&self, i: Index) -> ArrayView1<T> { self.data.row(i) }
 
+    /// Compute the distance between `left` and `right`.
     pub fn distance(&self, left: Index, right: Index) -> U {
         if left == right { U::zero() }
         else {
@@ -64,6 +90,7 @@ impl<T: Number, U: Number> Dataset<T, U> {
         }
     }
 
+    /// Compute the distances from `left` to all points in `right`.
     #[allow(clippy::ptr_arg)]
     pub fn distances_from(&self, left: Index, right: &Indices) -> Vec<U> {
         right
@@ -72,11 +99,13 @@ impl<T: Number, U: Number> Dataset<T, U> {
             .collect::<Vec<U>>()
     }
 
+    /// Compute distances between all points in `left` and `right`.
     #[allow(clippy::ptr_arg)]
     pub fn distances_among(&self, left: &Indices, right: &Indices) -> Vec<Vec<U>> {
         left.par_iter().map(|&l| self.distances_from(l, right)).collect::<Vec<Vec<U>>>()
     }
 
+    /// Compute the pairwise distance between all points in `indices`.
     #[allow(clippy::ptr_arg)]
     pub fn pairwise_distances(&self, indices: &Indices) -> Vec<Vec<U>> {
         self.distances_among(indices, indices)
