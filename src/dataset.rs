@@ -90,7 +90,7 @@ impl<T: Number, U: Number> Dataset<T, U> {
     #[allow(clippy::ptr_arg)]
     pub fn choose_unique(&self, indices: Indices, n: usize) -> Indices {
         // TODO: actually check for uniqueness among choices
-        let mut x = indices.clone();
+        let mut x = indices;
         x.shuffle(&mut rand::thread_rng());
         x.truncate(n);
         x
