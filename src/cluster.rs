@@ -2,7 +2,7 @@ use std::{fmt, sync::Arc};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 
-use dashmap::{DashMap, DashSet};
+use dashmap::DashSet;
 use ndarray::ArrayView1;
 use rayon::prelude::*;
 
@@ -13,8 +13,7 @@ use crate::types::{Index, Indices};
 use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;
-pub type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
-pub type Candidates<T, U> = DashMap<Arc<Cluster<T, U>>, U>;
+type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
 
 #[derive(Debug)]
 pub struct Cluster<T: Number, U: Number> {
@@ -26,8 +25,6 @@ pub struct Cluster<T: Number, U: Number> {
     pub argcenter: Index,
     pub argradius: Index,
     pub radius: U,
-    // TODO: Try to remove candidates from Cluster. Perhaps keep a master DashMap in Manifold?
-    pub candidates: Arc<Candidates<T, U>>,
 }
 
 impl<T: Number, U: Number> PartialEq for Cluster<T, U> {
@@ -61,7 +58,6 @@ impl<T: Number, U: Number> Cluster<T, U> {
             argcenter: 0,
             argradius: 0,
             radius: U::zero(),
-            candidates: Arc::new(DashMap::new()),
         };
         cluster.argsamples = cluster.argsamples();
         cluster.argcenter = cluster.argcenter();
@@ -94,7 +90,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
         self.dataset.distance(self.argcenter, other.argcenter)
     }
 
-    pub fn descend_towards(&self, cluster: &str) -> Result<Arc<Cluster<T, U>>, String> {
+    pub fn descend_towards(&self, cluster: &String) -> Result<Arc<Cluster<T, U>>, String> {
         match self.children.borrow() {
             Some((left, right)) => {
                 if left.name == cluster[0..left.depth()] {
@@ -125,7 +121,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn partition(self, criteria: &Vec<Arc<impl ClusterCriterion>>) -> Cluster<T, U> {
+    pub fn partition(self, criteria: &Vec<Box<impl ClusterCriterion>>) -> Cluster<T, U> {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
         //  Problem: parent needs ref to children, AND
@@ -185,7 +181,6 @@ impl<T: Number, U: Number> Cluster<T, U> {
                 argcenter: self.argcenter,
                 argradius: self.argradius,
                 radius: self.radius,
-                candidates: self.candidates,
             }
         }
     }
@@ -233,11 +228,13 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use ndarray::{arr2, Array2};
 
+    use crate::cluster::Cluster;
     use crate::criteria::MaxDepth;
-
-    use super::*;
+    use crate::dataset::Dataset;
 
     #[test]
     fn test_cluster() {
@@ -248,11 +245,14 @@ mod tests {
             [3., 3., 3.],
         ]);
         let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
+        let mut criteria = Vec::new();
+        criteria.push(MaxDepth::new(3));
+        // criteria.push(MinPoints::new(10));
         let cluster = Cluster::new(
             Arc::clone(&dataset),
             String::from(""),
             dataset.indices().clone()
-        ).partition(&vec![MaxDepth::new(3)]);
+        ).partition(&criteria);
 
         assert_eq!(cluster, cluster);
         assert_eq!(cluster.depth(), 0);
@@ -274,8 +274,7 @@ mod tests {
             format!("argsamples: {:?},", cluster.argsamples),
             format!("argcenter: {:?},", cluster.argcenter),
             format!("argradius: {:?},", cluster.argradius),
-            format!("radius: {:?},", cluster.radius),
-            format!("candidates: {:?}", cluster.candidates),
+            format!("radius: {:?}", cluster.radius),
             "}".to_string(),
         ].join(" ");
         assert_eq!(format!("{:?}", cluster), cluster_str);
