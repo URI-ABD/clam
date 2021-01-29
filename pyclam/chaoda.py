@@ -460,7 +460,7 @@ class CHAODA:
 
         return self._normalize_scores(visit_counts, False)
 
-    def _stationary_probabilities(self, graph: Graph, steps: int = 100) -> ClusterScores:
+    def _stationary_probabilities(self, graph: Graph, steps: int = 16) -> ClusterScores:
         logging.info(f'Running method SP with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
 
         scores: Dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
@@ -471,7 +471,9 @@ class CHAODA:
                 for i in range(len(clusters)):
                     matrix[i] /= sum(matrix[i])
 
-                steady = np.linalg.matrix_power(matrix, steps)  # TODO: Go until convergence
+                for _ in range(steps):  # TODO: Go until convergence
+                    matrix = np.linalg.matrix_power(matrix, 2)
+                steady = matrix
                 scores.update({cluster: score for cluster, score in zip(clusters, np.sum(steady, axis=0))})
             else:
                 scores.update({cluster: 0 for cluster in component.clusters})
