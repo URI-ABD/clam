@@ -200,6 +200,8 @@ class CHAODA:
         :param graph: Graph on which to calculate outlier scores.
         :return: A dict of index -> outlier score
         """
+        # TODO: fix print statements to log to file.
+        print(f"Applying Cluster Cardinality method to graph with {graph.cardinality} clusters and {len(graph.edges)} edges.")
         return self._score_points(self._cluster_cardinality(graph))
 
     def component_cardinality(self, graph: Graph) -> Scores:
@@ -210,9 +212,10 @@ class CHAODA:
         :param graph: Graph on which to calculate outlier scores.
         :return: A dict of index -> outlier score
         """
+        print(f"Applying Component Cardinality method to graph with {graph.cardinality} clusters and {len(graph.edges)} edges.")
         return self._score_points(self._component_cardinality(graph))
 
-    def graph_cardinality(self, graph: Graph, eccentricity_fraction: float = 0.25) -> Scores:
+    def graph_neighborhood(self, graph: Graph, eccentricity_fraction: float = 0.25) -> Scores:
         """ Determines outlier scores by the considering the relative graph-neighborhood of clusters.
 
         Subsumed clusters are assigned the highest score of all subsuming clusters.
@@ -222,6 +225,7 @@ class CHAODA:
         :param eccentricity_fraction: The fraction, in the (0, 1] range, of a cluster's eccentricity for which to compute the size of the neighborhood.
         :return: A dict of index -> outlier score
         """
+        print(f"Applying Graph Neighborhood method to graph with {graph.cardinality} clusters and {len(graph.edges)} edges.")
         return self._score_points(self._graph_neighborhood(graph, eccentricity_fraction))
 
     def parent_cardinality(self, graph: Graph, weight: Callable[[int], float] = None) -> Scores:
@@ -236,6 +240,7 @@ class CHAODA:
                        Defaults to 1 / sqrt(depth).
         :return: A dict of index -> outlier score
         """
+        print(f"Applying Parent Cardinality method to graph with {graph.cardinality} clusters and {len(graph.edges)} edges.")
         return self._score_points(self._parent_cardinality(graph, weight))
 
     def random_walks(self, graph: Graph, subsample_limit: int = 100, steps_multiplier: int = 2) -> Scores:
@@ -248,6 +253,7 @@ class CHAODA:
         :param steps_multiplier: The length of each walk is steps_multiplier * (cardinality of the graph_component).
         :return: A dict of index -> outlier score
         """
+        print(f"Applying Random Walks method to graph with {graph.cardinality} clusters and {len(graph.edges)} edges.")
         return self._score_points(self._random_walks(graph, subsample_limit, steps_multiplier))
 
     def stationary_probabilities(self, graph: Graph, steps: int = 100) -> Scores:
@@ -260,6 +266,7 @@ class CHAODA:
         :param steps: number of steps to wait for convergence.
         :return: A dict of index -> outlier score
         """
+        print(f"Applying Stationary Probabilities method to graph with {graph.cardinality} clusters and {len(graph.edges)} edges.")
         return self._score_points(self._stationary_probabilities(graph, steps))
 
     def _ensemble(self, voting: str, renormalize: bool):
