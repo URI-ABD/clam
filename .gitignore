@@ -153,3 +153,34 @@ dmypy.json
 .vscode/
 benches
 pyclam/explorations.py
+
+# local data files and folders
+data/arrhythmia*
+data/breastw*
+data/cardio*
+data/cover*
+data/glass*
+data/http*
+data/ionosphere*
+data/lympho*
+data/mammography*
+data/mnist*
+data/musk*
+data/optdigits*
+data/pendigits*
+data/pima*
+data/satellite*
+data/satimage-2*
+data/shuttle*
+data/smtp*
+data/thyroid*
+data/vertebral*
+data/vowels*
+data/wbc*
+data/wine*
+data/apogee*
+data/greengenes*
+
+# Local files
+pyclam/explorations.py
+benches/*.txt
