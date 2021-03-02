@@ -10,7 +10,9 @@ pub trait ClusterCriterion: Send + Sync {
 }
 
 #[derive(Debug)]
-pub struct MaxDepth { depth: usize }
+pub struct MaxDepth {
+    depth: usize,
+}
 
 impl MaxDepth {
     pub fn new(depth: usize) -> Box<Self> {
@@ -25,7 +27,9 @@ impl ClusterCriterion for MaxDepth {
 }
 
 #[derive(Debug)]
-pub struct MinPoints { points: usize }
+pub struct MinPoints {
+    points: usize,
+}
 
 impl MinPoints {
     pub fn new(points: usize) -> Box<Self> {

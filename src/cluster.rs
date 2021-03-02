@@ -1,9 +1,10 @@
-use std::{fmt, sync::Arc};
 use std::borrow::Borrow;
+use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use dashmap::DashSet;
-use ndarray::ArrayView1;
+use ndarray::{ArrayView, IxDyn};
 use rayon::prelude::*;
 
 use crate::criteria::ClusterCriterion;
@@ -17,7 +18,7 @@ type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
 
 #[derive(Debug)]
 pub struct Cluster<T: Number, U: Number> {
-    pub dataset: Arc<Dataset<T, U>>,
+    pub dataset: Arc<dyn Dataset<T, U>>,
     pub name: String,
     pub indices: Indices,
     pub children: Option<Children<T, U>>,
@@ -48,7 +49,7 @@ impl<T: Number, U: Number> fmt::Display for Cluster<T, U> {
 }
 
 impl<T: Number, U: Number> Cluster<T, U> {
-    pub fn new(dataset: Arc<Dataset<T, U>>, name: String, indices: Indices) -> Cluster<T, U> {
+    pub fn new(dataset: Arc<dyn Dataset<T, U>>, name: String, indices: Indices) -> Cluster<T, U> {
         let mut cluster = Cluster {
             dataset,
             name,
@@ -78,8 +79,8 @@ impl<T: Number, U: Number> Cluster<T, U> {
         self.indices.contains(i)
     }
 
-    pub fn center(&self) -> ArrayView1<T> {
-        self.dataset.row(self.argcenter)
+    pub fn center(&self) -> Arc<ArrayView<T, IxDyn>> {
+        self.dataset.instance(self.argcenter)
     }
 
     pub fn is_singleton(&self) -> bool {
@@ -102,13 +103,14 @@ impl<T: Number, U: Number> Cluster<T, U> {
                     Err(format!("Cluster {:} not found.", cluster))
                 }
             }
-            None => Err(format!("Cluster {:} not found.", cluster))
+            None => Err(format!("Cluster {:} not found.", cluster)),
         }
     }
 
     fn poles(&self) -> (Index, Index) {
         if self.nsamples() > 2 {
-            let indices = self.indices
+            let indices = self
+                .indices
                 .par_iter()
                 .filter(|&&i| i != self.argradius)
                 .cloned()
@@ -131,11 +133,14 @@ impl<T: Number, U: Number> Cluster<T, U> {
             self
         } else {
             for criterion in criteria.iter() {
-                if !criterion.check(&self) { return self; }
+                if !criterion.check(&self) {
+                    return self;
+                }
             }
 
             let (left, right) = self.poles();
-            let indices = self.indices
+            let indices = self
+                .indices
                 .par_iter()
                 .filter(|&&i| i != left && i != right)
                 .cloned()
@@ -146,12 +151,15 @@ impl<T: Number, U: Number> Cluster<T, U> {
             left_indices.insert(left);
             right_indices.insert(right);
 
-            indices.par_iter()
-                .zip(left_distances.par_iter()
-                         .zip(right_distances.par_iter()))
+            indices
+                .par_iter()
+                .zip(left_distances.par_iter().zip(right_distances.par_iter()))
                 .for_each(|(&i, (&l, &r))| {
-                    if l <= r { left_indices.insert(i); }
-                    else { right_indices.insert(i); }
+                    if l <= r {
+                        left_indices.insert(i);
+                    } else {
+                        right_indices.insert(i);
+                    }
                 });
 
             let (left_indices, right_indices) = if right_indices.len() < left_indices.len() {
@@ -161,16 +169,22 @@ impl<T: Number, U: Number> Cluster<T, U> {
             };
 
             let (left, right) = rayon::join(
-                || Cluster::new(
-                    Arc::clone(&self.dataset),
-                    format!("{}{}", self.name, 0),
-                    left_indices.into_iter().collect()
-                ).partition(criteria),
-                || Cluster::new(
-                    Arc::clone(&self.dataset),
-                    format!("{}{}", self.name, 1),
-                    right_indices.into_iter().collect()
-                ).partition(criteria),
+                || {
+                    Cluster::new(
+                        Arc::clone(&self.dataset),
+                        format!("{}{}", self.name, 0),
+                        left_indices.into_iter().collect(),
+                    )
+                    .partition(criteria)
+                },
+                || {
+                    Cluster::new(
+                        Arc::clone(&self.dataset),
+                        format!("{}{}", self.name, 1),
+                        right_indices.into_iter().collect(),
+                    )
+                    .partition(criteria)
+                },
             );
 
             Cluster {
@@ -188,16 +202,15 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
     pub fn num_descendents(&self) -> usize {
         match self.children.borrow() {
-            Some((left, right)) => {
-                left.num_descendents() + right.num_descendents() + 2
-            },
+            Some((left, right)) => left.num_descendents() + right.num_descendents() + 2,
             None => 0,
         }
     }
 
     fn argsamples(&self) -> Indices {
-        if self.cardinality() <= SUB_SAMPLE { self.indices.clone() }
-        else {
+        if self.cardinality() <= SUB_SAMPLE {
+            self.indices.clone()
+        } else {
             let n = (self.cardinality() as f64).sqrt() as Index;
             self.dataset.choose_unique(self.indices.clone(), n)
         }
@@ -208,7 +221,9 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     fn argcenter(&self) -> Index {
-        let distances: Vec<U> = self.dataset.pairwise_distances(&self.argsamples)
+        let distances: Vec<U> = self
+            .dataset
+            .pairwise_distances(&self.argsamples)
             .par_iter()
             .map(|v| v.par_iter().cloned().sum())
             .collect();
@@ -236,24 +251,22 @@ mod tests {
     use crate::cluster::Cluster;
     use crate::criteria::MaxDepth;
     use crate::dataset::Dataset;
+    use crate::dataset::RowMajor;
 
     #[test]
     fn test_cluster() {
-        let data: Array2<f64> = arr2(&[
-            [0., 0., 0.],
-            [1., 1., 1.],
-            [2., 2., 2.],
-            [3., 3., 3.],
-        ]);
-        let dataset = Arc::new(Dataset::<f64, f64>::new(data, "euclidean", false).unwrap());
+        let data: Array2<f64> = arr2(&[[0., 0., 0.], [1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
+        let dataset: Arc<dyn Dataset<f64, f64>> =
+            Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", false).unwrap());
         let mut criteria = Vec::new();
         criteria.push(MaxDepth::new(3));
         // criteria.push(MinPoints::new(10));
         let cluster = Cluster::new(
             Arc::clone(&dataset),
             String::from(""),
-            dataset.indices().clone()
-        ).partition(&criteria);
+            dataset.indices().clone(),
+        )
+        .partition(&criteria);
 
         assert_eq!(cluster, cluster);
         assert_eq!(cluster.depth(), 0);
@@ -277,7 +290,8 @@ mod tests {
             format!("argradius: {:?},", cluster.argradius),
             format!("radius: {:?}", cluster.radius),
             "}".to_string(),
-        ].join(" ");
+        ]
+        .join(" ");
         assert_eq!(format!("{:?}", cluster), cluster_str);
 
         let (left, right) = cluster.children.unwrap();
