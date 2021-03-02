@@ -4,23 +4,34 @@ use std::iter::Sum;
 use std::sync::Arc;
 
 use ndarray::{ArrayView, IxDyn};
+use ndarray_npy::{ReadableElement, WritableElement};
 use num_traits::{Num, NumCast};
 
-pub trait Number: Num + Clone + Copy + NumCast + PartialOrd + Send + Sync + Sum + Debug + Display {}
+pub trait Number:
+    Num
+    + NumCast
+    + Sum
+    + Copy
+    + Clone
+    + PartialOrd
+    + Send
+    + Sync
+    + Debug
+    + Display
+    + ReadableElement
+    + WritableElement
+{
+}
 impl Number for f32 {}
 impl Number for f64 {}
 impl Number for u8 {}
 impl Number for u16 {}
 impl Number for u32 {}
 impl Number for u64 {}
-impl Number for u128 {}
-impl Number for usize {}
 impl Number for i8 {}
 impl Number for i16 {}
 impl Number for i32 {}
 impl Number for i64 {}
-impl Number for i128 {}
-impl Number for isize {}
 
 pub type Metric<T, U> = fn(Arc<ArrayView<T, IxDyn>>, Arc<ArrayView<T, IxDyn>>) -> U;
 
@@ -112,9 +123,10 @@ fn jaccard<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use float_cmp::approx_eq;
     use ndarray::{arr2, Array2};
-    use std::sync::Arc;
 
     use crate::metric::metric_new;
 
