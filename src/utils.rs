@@ -83,16 +83,7 @@ pub fn read_chaoda_data(name: &str) -> Result<(Array2<f64>, Array1<u8>), ReadNpy
     Ok((data, labels))
 }
 
-pub fn read_apogee() -> Array2<f32> {
-    let mut data_dir: PathBuf = PathBuf::new();
-    data_dir.push("/data");
-    data_dir.push("abd");
-    data_dir.push("ann_data");
-    data_dir.push("apogee_full.npy");
-    read_npy(data_dir).unwrap()
-}
-
-pub fn read_ann_data_f32(name: &str) -> Result<(Array2<f32>, Array2<f32>), ReadNpyError> {
+pub fn read_ann_data<T: Number, U: Number>(name: &str) -> Result<(Array2<T>, Array2<U>), ReadNpyError> {
     let mut data_dir: PathBuf = PathBuf::new();
     data_dir.push("/data");
     data_dir.push("abd");
