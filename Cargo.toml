@@ -18,6 +18,7 @@ dashmap = "3.11.10"
 ndarray = { version = "^0.13", features = ["rayon"] }
 ndarray-npy = "^0.6"
 num-traits = "^0.2"
+memmap2 = "^0.2"
 
 [dev-dependencies]
 float-cmp = "^0.8"

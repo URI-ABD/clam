@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
-use std::sync::Arc;
 
 use ndarray::{ArrayView, IxDyn};
 use ndarray_npy::{ReadableElement, WritableElement};
@@ -33,7 +32,7 @@ impl Number for i16 {}
 impl Number for i32 {}
 impl Number for i64 {}
 
-pub type Metric<T, U> = fn(Arc<ArrayView<T, IxDyn>>, Arc<ArrayView<T, IxDyn>>) -> U;
+pub type Metric<T, U> = fn(&ArrayView<T, IxDyn>, &ArrayView<T, IxDyn>) -> U;
 
 pub fn metric_new<T: Number, U: Number>(metric: &'static str) -> Result<Metric<T, U>, String> {
     match metric {
@@ -47,15 +46,12 @@ pub fn metric_new<T: Number, U: Number>(metric: &'static str) -> Result<Metric<T
     }
 }
 
-fn euclidean<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T, IxDyn>>) -> U {
+fn euclidean<T: Number, U: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> U {
     let d: f64 = NumCast::from(euclideansq::<T, U>(x, y)).unwrap();
     U::from(d.sqrt()).unwrap()
 }
 
-fn euclideansq<T: Number, U: Number>(
-    x: Arc<ArrayView<T, IxDyn>>,
-    y: Arc<ArrayView<T, IxDyn>>,
-) -> U {
+fn euclideansq<T: Number, U: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> U {
     let d: T = x
         .iter()
         .zip(y.iter())
@@ -64,7 +60,7 @@ fn euclideansq<T: Number, U: Number>(
     U::from(d).unwrap()
 }
 
-fn manhattan<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T, IxDyn>>) -> U {
+fn manhattan<T: Number, U: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> U {
     let d: T = x
         .iter()
         .zip(y.iter())
@@ -73,23 +69,23 @@ fn manhattan<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView
     U::from(d).unwrap()
 }
 
-fn dot<T: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T, IxDyn>>) -> T {
+fn dot<T: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> T {
     x.iter().zip(y.iter()).map(|(&a, &b)| a * b).sum()
 }
 
 #[allow(clippy::suspicious_operation_groupings)]
-fn cosine<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T, IxDyn>>) -> U {
-    let xx = dot(Arc::clone(&x), Arc::clone(&x));
+fn cosine<T: Number, U: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> U {
+    let xx = dot(x, x);
     if xx == T::zero() {
         return U::one();
     }
 
-    let yy = dot(Arc::clone(&y), Arc::clone(&y));
+    let yy = dot(y, y);
     if yy == T::zero() {
         return U::one();
     }
 
-    let xy = dot(Arc::clone(&x), Arc::clone(&y));
+    let xy = dot(x, y);
     if xy <= T::zero() {
         return U::one();
     }
@@ -98,12 +94,12 @@ fn cosine<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T,
     U::one() - U::from(similarity.sqrt()).unwrap()
 }
 
-fn hamming<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T, IxDyn>>) -> U {
+fn hamming<T: Number, U: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> U {
     let d = x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count();
     U::from(d).unwrap()
 }
 
-fn jaccard<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T, IxDyn>>) -> U {
+fn jaccard<T: Number, U: Number>(x: &ArrayView<T, IxDyn>, y: &ArrayView<T, IxDyn>) -> U {
     if x.is_empty() || y.is_empty() {
         return U::one();
     }
@@ -123,8 +119,6 @@ fn jaccard<T: Number, U: Number>(x: Arc<ArrayView<T, IxDyn>>, y: Arc<ArrayView<T
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use float_cmp::approx_eq;
     use ndarray::{arr2, Array2};
 
@@ -137,54 +131,36 @@ mod tests {
         let distance = metric_new("euclideansq").unwrap();
         approx_eq!(
             f64,
-            distance(
-                Arc::new(data.row(0).into_dyn()),
-                Arc::new(data.row(0).into_dyn())
-            ),
+            distance(&data.row(0).into_dyn(), &data.row(0).into_dyn(),),
             0.
         );
         approx_eq!(
             f64,
-            distance(
-                Arc::new(data.row(0).into_dyn()),
-                Arc::new(data.row(1).into_dyn())
-            ),
+            distance(&data.row(0).into_dyn(), &data.row(1).into_dyn(),),
             9.
         );
 
         let distance = metric_new("euclidean").unwrap();
         approx_eq!(
             f64,
-            distance(
-                Arc::new(data.row(0).into_dyn()),
-                Arc::new(data.row(0).into_dyn())
-            ),
+            distance(&data.row(0).into_dyn(), &data.row(0).into_dyn(),),
             0.
         );
         approx_eq!(
             f64,
-            distance(
-                Arc::new(data.row(0).into_dyn()),
-                Arc::new(data.row(1).into_dyn())
-            ),
+            distance(&data.row(0).into_dyn(), &data.row(1).into_dyn(),),
             3.
         );
 
         let distance = metric_new("manhattan").unwrap();
         approx_eq!(
             f64,
-            distance(
-                Arc::new(data.row(0).into_dyn()),
-                Arc::new(data.row(0).into_dyn())
-            ),
+            distance(&data.row(0).into_dyn(), &data.row(0).into_dyn(),),
             0.
         );
         approx_eq!(
             f64,
-            distance(
-                Arc::new(data.row(0).into_dyn()),
-                Arc::new(data.row(1).into_dyn())
-            ),
+            distance(&data.row(0).into_dyn(), &data.row(1).into_dyn(),),
             5.
         );
     }

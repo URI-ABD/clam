@@ -79,7 +79,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
         self.indices.contains(i)
     }
 
-    pub fn center(&self) -> Arc<ArrayView<T, IxDyn>> {
+    pub fn center(&self) -> ArrayView<T, IxDyn> {
         self.dataset.instance(self.argcenter)
     }
 
@@ -251,7 +251,7 @@ mod tests {
     use crate::cluster::Cluster;
     use crate::criteria::MaxDepth;
     use crate::dataset::Dataset;
-    use crate::dataset::RowMajor;
+    use crate::sample_datasets::RowMajor;
 
     #[test]
     fn test_cluster() {

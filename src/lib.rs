@@ -4,6 +4,7 @@ pub mod dataset;
 pub mod graph;
 pub mod manifold;
 pub mod metric;
+pub mod sample_datasets;
 pub mod search;
 pub mod types;
 pub mod utils;
@@ -17,18 +18,15 @@ mod tests {
     use crate::cluster::Cluster;
     use crate::criteria;
     use crate::dataset::Dataset;
-    use crate::dataset::RowMajor;
+    use crate::sample_datasets::RowMajor;
     use crate::search::Search;
     use crate::utils::read_test_data;
 
     #[test]
     fn test_cluster() {
         let data: Array2<f64> = array![[1., 2., 3.], [3., 3., 1.]];
-        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::<f64, f64>::new(
-            data,
-            "euclidean",
-            false,
-        ).unwrap());
+        let dataset: Arc<dyn Dataset<f64, f64>> =
+            Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", false).unwrap());
         let indices = dataset.indices();
         let cluster = Cluster::new(Arc::clone(&dataset), "".to_string(), indices)
             .partition(&vec![criteria::MaxDepth::new(3)]);
@@ -51,16 +49,13 @@ mod tests {
     #[test]
     fn test_search() {
         let data: Array2<f64> = arr2(&[[0., 0.], [1., 1.], [2., 2.], [3., 3.]]);
-        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::new(
-            data,
-            "euclidean",
-            false,
-        ).unwrap());
+        let dataset: Arc<dyn Dataset<f64, f64>> =
+            Arc::new(RowMajor::new(data, "euclidean", false).unwrap());
         let search = Search::build(Arc::clone(&dataset), None);
 
-        let q = arr1(&[0., 1.]);
-        let query: Arc<ArrayView<f64, IxDyn>> = Arc::new(q.view().into_dyn());
-        let results = search.rnn(Arc::clone(&query), Some(1.5));
+        let query = array!([0., 1.]);
+        let query: ArrayView<f64, IxDyn> = query.view().into_dyn();
+        let results = search.rnn(&query, Some(1.5));
         assert_eq!(results.len(), 2);
         assert!(results.contains_key(&0));
         assert!(results.contains_key(&1));
@@ -68,7 +63,7 @@ mod tests {
         assert!(!results.contains_key(&3));
 
         let query = Arc::new(search.dataset.instance(1));
-        let results = search.rnn(Arc::clone(&query), None);
+        let results = search.rnn(&query, None);
         assert_eq!(results.len(), 1);
         assert!(!results.contains_key(&0));
         assert!(results.contains_key(&1));
@@ -79,11 +74,8 @@ mod tests {
     #[test]
     fn test_large_array() {
         let (data, _) = read_test_data();
-        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::<f64, f64>::new(
-            data,
-            "euclidean",
-            false,
-        ).unwrap());
+        let dataset: Arc<dyn Dataset<f64, f64>> =
+            Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", false).unwrap());
         let cluster = Cluster::new(
             Arc::clone(&dataset),
             "".to_string(),

@@ -53,17 +53,13 @@ impl<T: Number, U: Number> Search<T, U> {
         self.dataset.indices()
     }
 
-    pub fn rnn(&self, query: Arc<ArrayView<T, IxDyn>>, radius: Option<U>) -> Results<U> {
-        self.leaf_search(
-            Arc::clone(&query),
-            radius,
-            self.tree_search(Arc::clone(&query), radius),
-        )
+    pub fn rnn(&self, query: &ArrayView<T, IxDyn>, radius: Option<U>) -> Results<U> {
+        self.leaf_search(query, radius, self.tree_search(query, radius))
     }
 
     pub fn tree_search(
         &self,
-        query: Arc<ArrayView<T, IxDyn>>,
+        query: &ArrayView<T, IxDyn>,
         radius: Option<U>,
     ) -> ClusterResults<T, U> {
         let radius = radius.unwrap_or_else(U::zero);
@@ -76,7 +72,7 @@ impl<T: Number, U: Number> Search<T, U> {
     fn _tree_search(
         &self,
         cluster: &Arc<Cluster<T, U>>,
-        query: Arc<ArrayView<T, IxDyn>>,
+        query: &ArrayView<T, IxDyn>,
         radius: U,
         results: ClusterResults<T, U>,
     ) {
@@ -84,29 +80,15 @@ impl<T: Number, U: Number> Search<T, U> {
             Some((left, right)) => {
                 rayon::join(
                     || {
-                        if self.query_distance(Arc::clone(&query), left.argcenter)
-                            > (radius + left.radius)
-                        {
+                        if self.query_distance(query, left.argcenter) > (radius + left.radius) {
                         } else {
-                            self._tree_search(
-                                &left,
-                                Arc::clone(&query),
-                                radius,
-                                Arc::clone(&results),
-                            )
+                            self._tree_search(&left, query, radius, Arc::clone(&results))
                         }
                     },
                     || {
-                        if self.query_distance(Arc::clone(&query), right.argcenter)
-                            > (radius + right.radius)
-                        {
+                        if self.query_distance(query, right.argcenter) > (radius + right.radius) {
                         } else {
-                            self._tree_search(
-                                &right,
-                                Arc::clone(&query),
-                                radius,
-                                Arc::clone(&results),
-                            )
+                            self._tree_search(&right, query, radius, Arc::clone(&results))
                         }
                     },
                 );
@@ -119,7 +101,7 @@ impl<T: Number, U: Number> Search<T, U> {
 
     pub fn leaf_search(
         &self,
-        query: Arc<ArrayView<T, IxDyn>>,
+        query: &ArrayView<T, IxDyn>,
         radius: Option<U>,
         clusters: ClusterResults<T, U>,
     ) -> Results<U> {
@@ -134,7 +116,7 @@ impl<T: Number, U: Number> Search<T, U> {
 
     pub fn linear_search(
         &self,
-        query: Arc<ArrayView<T, IxDyn>>,
+        query: &ArrayView<T, IxDyn>,
         radius: Option<U>,
         indices: Option<Indices>,
     ) -> Results<U> {
@@ -154,15 +136,15 @@ impl<T: Number, U: Number> Search<T, U> {
     }
 
     #[allow(clippy::ptr_arg)]
-    fn query_distances_from(&self, query: Arc<ArrayView<T, IxDyn>>, indices: &Indices) -> Vec<U> {
+    fn query_distances_from(&self, query: &ArrayView<T, IxDyn>, indices: &Indices) -> Vec<U> {
         indices
             .par_iter()
-            .map(|&i| self.query_distance(Arc::clone(&query), i))
+            .map(|&i| self.query_distance(query, i))
             .collect()
     }
 
-    fn query_distance(&self, query: Arc<ArrayView<T, IxDyn>>, index: Index) -> U {
-        (self.function)(query, self.dataset.instance(index))
+    fn query_distance(&self, query: &ArrayView<T, IxDyn>, index: Index) -> U {
+        (self.function)(query, &self.dataset.instance(index))
     }
 }
 
@@ -171,7 +153,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::dataset::Dataset;
-    use crate::dataset::RowMajor;
+    use crate::sample_datasets::RowMajor;
     use crate::utils::read_test_data;
 
     use super::Search;
@@ -179,11 +161,8 @@ mod tests {
     #[test]
     fn test_search() {
         let (data, _) = read_test_data();
-        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::<f64, f64>::new(
-            data,
-            "euclidean",
-            true,
-        ).unwrap());
+        let dataset: Arc<dyn Dataset<f64, f64>> =
+            Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", true).unwrap());
 
         let search = Search::build(Arc::clone(&dataset), Some(25));
 
@@ -202,14 +181,14 @@ mod tests {
         for &q in dataset.indices()[0..30].iter() {
             let mut missed = false;
             let mut extra = false;
-            let query = Arc::new(dataset.instance(q));
+            let query = dataset.instance(q);
 
             search.dataset.clear_cache();
-            let naive_results = search.linear_search(Arc::clone(&query), radius.clone(), None);
+            let naive_results = search.linear_search(&query, radius.clone(), None);
             let naive_count = search.dataset.cache_size();
 
             search.dataset.clear_cache();
-            let chess_results = search.rnn(Arc::clone(&query), radius.clone());
+            let chess_results = search.rnn(&query, radius.clone());
             let chess_count = search.dataset.cache_size();
 
             for (i, _) in (*chess_results).clone() {
