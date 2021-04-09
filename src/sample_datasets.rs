@@ -1,16 +1,14 @@
+use std::fs::File;
+use std::path::PathBuf;
 use std::{fmt, result};
 
 use dashmap::DashMap;
-use ndarray::{Array2, ArrayView, Axis, IxDyn};
+use memmap2::Mmap;
+use ndarray::prelude::*;
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 
-use crate::dataset::Dataset;
-use crate::metric::{Metric, metric_new, Number};
-use crate::types::{Index, Indices};
-use std::path::PathBuf;
-use std::fs::File;
-use memmap2::Mmap;
+use crate::prelude::*;
 
 /// RowMajor dataset represented as a 2-dimensional array where rows are instances and columns are attributes.
 ///
@@ -191,10 +189,12 @@ impl Fasta {
             Ok(f) => f,
             Err(_) => return Err("Could not open file".to_string()),
         };
-        let mmap = unsafe { match Mmap::map(&file) {
-            Ok(f) => f,
-            Err(_) => return Err("Could not turn file into memmap".to_string()),
-        } };
+        let mmap = unsafe {
+            match Mmap::map(&file) {
+                Ok(f) => f,
+                Err(_) => return Err("Could not turn file into memmap".to_string()),
+            }
+        };
 
         Ok(Fasta {
             metric,
@@ -303,10 +303,8 @@ mod tests {
     use float_cmp::approx_eq;
     use ndarray::prelude::*;
 
-    use super::Dataset;
-    use super::RowMajor;
-    use std::path::PathBuf;
-    use crate::sample_datasets::Fasta;
+    use crate::prelude::*;
+    use crate::sample_datasets::RowMajor;
 
     #[test]
     fn test_dataset() {

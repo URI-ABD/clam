@@ -1,12 +1,13 @@
+pub mod cakes;
+pub mod chaoda;
 pub mod cluster;
 pub mod criteria;
 pub mod dataset;
 pub mod graph;
 pub mod manifold;
 pub mod metric;
+pub mod prelude;
 pub mod sample_datasets;
-pub mod search;
-pub mod types;
 pub mod utils;
 
 #[cfg(test)]
@@ -15,11 +16,10 @@ mod tests {
 
     use ndarray::prelude::*;
 
-    use crate::cluster::Cluster;
+    use crate::cakes::Search;
     use crate::criteria;
-    use crate::dataset::Dataset;
+    use crate::prelude::*;
     use crate::sample_datasets::RowMajor;
-    use crate::search::Search;
     use crate::utils::read_test_data;
 
     #[test]

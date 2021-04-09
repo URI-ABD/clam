@@ -4,8 +4,7 @@ use std::path::PathBuf;
 use ndarray::{Array1, Array2};
 use ndarray_npy::{read_npy, ReadNpyError};
 
-use crate::metric::Number;
-use crate::types::Index;
+use crate::prelude::*;
 
 // TODO: Implement function to download datasets from internet
 

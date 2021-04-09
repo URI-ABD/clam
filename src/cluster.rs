@@ -8,9 +8,7 @@ use ndarray::{ArrayView, IxDyn};
 use rayon::prelude::*;
 
 use crate::criteria::ClusterCriterion;
-use crate::dataset::Dataset;
-use crate::metric::Number;
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;

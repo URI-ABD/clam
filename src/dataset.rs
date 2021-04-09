@@ -3,9 +3,9 @@
 /// This module contains the declaration and definition of the Dataset struct.
 use std::fmt::Debug;
 
-use ndarray::{ArrayView, IxDyn};
+use ndarray::prelude::*;
 
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 
 /// Dataset Trait.
 ///

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
 
-use ndarray::{ArrayView, IxDyn};
+use ndarray::prelude::*;
 use ndarray_npy::{ReadableElement, WritableElement};
 use num_traits::{Num, NumCast};
 

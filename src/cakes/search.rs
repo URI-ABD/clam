@@ -6,11 +6,8 @@ use dashmap::{DashMap, DashSet};
 use ndarray::{ArrayView, IxDyn};
 use rayon::prelude::*;
 
-use crate::cluster::Cluster;
 use crate::criteria;
-use crate::dataset::Dataset;
-use crate::metric::{Metric, metric_new, Number};
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 
 type ClusterResults<T, U> = Arc<DashSet<Arc<Cluster<T, U>>>>;
 type Results<T> = Arc<DashMap<Index, T>>;

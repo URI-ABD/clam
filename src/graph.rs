@@ -7,9 +7,7 @@ use std::sync::Arc;
 use dashmap::{DashMap, DashSet};
 use ndarray::Array2;
 
-use crate::cluster::Cluster;
-use crate::metric::Number;
-use crate::types::{CandidatesMap, EdgesDict, Index, Indices};
+use crate::prelude::*;
 
 type Subsumed<T, U> = DashMap<Arc<Cluster<T, U>>, HashSet<Cluster<T, U>>>;
 

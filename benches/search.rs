@@ -3,12 +3,12 @@ extern crate clam;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 
-use clam::dataset::Dataset;
+use clam::prelude::*;
 use clam::sample_datasets::{Fasta, RowMajor};
-use clam::search::Search;
-use clam::utils::{ANN_DATASETS, CHAODA_DATASETS, read_ann_data, read_chaoda_data};
+use clam::cakes::Search;
+use clam::utils::{read_ann_data, read_chaoda_data, ANN_DATASETS, CHAODA_DATASETS};
 
 #[allow(dead_code)]
 fn apogee_chess(c: &mut Criterion) {
@@ -42,7 +42,7 @@ fn apogee_chess(c: &mut Criterion) {
 
 #[allow(dead_code)]
 fn ann_benchmarks(c: &mut Criterion) {
-    for (name, metric) in ANN_DATASETS.iter() {
+    for (name, metric) in ANN_DATASETS[1..2].iter() {
         let (train, test) = read_ann_data(name).unwrap();
         let train_dataset: Arc<dyn Dataset<f32, f32>> =
             Arc::new(RowMajor::<f32, f32>::new(train, metric, true).unwrap());
@@ -114,48 +114,40 @@ fn silva_ssu_ref_hamming(c: &mut Criterion) {
     train_path.push("silva-SSU-Ref-train");
     train_path.set_extension("npy");
     let train_shape = &[2_214_740, 50_000];
-    let silva_train: Arc<dyn Dataset<u8, u64>> = Arc::new(Fasta::new(
-        "hamming",
-        train_path,
-        train_shape,
-        128,
-    ).unwrap());
+    let silva_train: Arc<dyn Dataset<u8, u64>> =
+        Arc::new(Fasta::new("hamming", train_path, train_shape, 128).unwrap());
 
     let mut test_path = silva_dir.clone();
     test_path.push("silva-SSU-Ref-test");
     test_path.set_extension("npy");
     let test_shape = &[10_000, 50_000];
-    let silva_test: Arc<dyn Dataset<u8, u64>> = Arc::new(Fasta::new(
-        "hamming",
-        test_path,
-        test_shape,
-        128,
-    ).unwrap());
+    let silva_test: Arc<dyn Dataset<u8, u64>> =
+        Arc::new(Fasta::new("hamming", test_path, test_shape, 128).unwrap());
 
     let search = Search::build(Arc::clone(&silva_train), Some(100));
 
     for &radius in [50, 100, 500, 1000, 2000].iter() {
         let message = [
-                "silva-SSU-Ref".to_string(),
-                format!("shape: {:?}, ", silva_train.shape()),
-                format!("radius {}, ", radius),
-                format!("num_queries 100."),
-            ]
-            .join("");
-            println!("{}", message);
-            let id = &format!("silva-SSU-Ref, radius {}", radius)[..];
-            c.bench_function(id, |b| {
-                b.iter(|| {
-                    for i in 0..100 {
-                        search.rnn(&silva_test.instance(i), Some(radius));
-                    }
-                })
-            });
+            "silva-SSU-Ref".to_string(),
+            format!("shape: {:?}, ", silva_train.shape()),
+            format!("radius {}, ", radius),
+            format!("num_queries 100."),
+        ]
+        .join("");
+        println!("{}", message);
+        let id = &format!("silva-SSU-Ref, radius {}", radius)[..];
+        c.bench_function(id, |b| {
+            b.iter(|| {
+                for i in 0..100 {
+                    search.rnn(&silva_test.instance(i), Some(radius));
+                }
+            })
+        });
     }
 }
 
 // criterion_group!(benches, apogee_chess);
-// criterion_group!(benches, ann_benchmarks);
+criterion_group!(benches, ann_benchmarks);
 // criterion_group!(benches, chess_chaoda);
-criterion_group!(benches, silva_ssu_ref_hamming);
+// criterion_group!(benches, silva_ssu_ref_hamming);
 criterion_main!(benches);
