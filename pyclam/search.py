@@ -40,7 +40,7 @@ class Search:
         :return: the modified Search object.
         """
         if max_depth is None:
-            self.manifold.build(criterion.Layer[-1])
+            self.manifold.build(criterion.Layer(-1))
         elif max_depth < 1:
             raise ValueError(f'Expected a positive integer for max_depth. Got {max_depth} instead.')
         elif max_depth > self.depth:

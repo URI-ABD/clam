@@ -144,19 +144,25 @@ class MetaMLSelect(SelectionCriterion):
 
         :param predict_auc: A function that takes a cluster's ratios and returns a predicted auc for selecting that cluster.
         """
-        self.predict_auc: Callable[[np.array], float] = predict_auc
         if min_depth < 1:
             raise ValueError(f'min-depth must be a positive integer.')
         self.min_depth = min_depth
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
-        def predict_auc(cluster):
-            # adjust predicted auc by cardinality to slightly favor clusters with high cardinalities.
-            return self.predict_auc(manifold.cluster_ratios(cluster)) * (1 + cluster.cardinality / root.cardinality / 10)
+        # TODO: Investigate discount factors to favor high-cardinality clusters
+        #  measure performance change vs runtime improvement for individual methods in CHAODA
+        # def discount_factor(cluster: Cluster):
+        #     num_points = cluster.manifold.root.cardinality
+        #     return 1 + ((cluster.cardinality / num_points) / np.sqrt(num_points))
 
+        def ratios(cluster: Cluster):
+            return cluster.manifold.cluster_ratios(cluster)
+
+        self.predict_auc: Callable[[Cluster], float] = lambda cluster: predict_auc(ratios(cluster))
+
+    def __call__(self, root: Cluster) -> Set[Cluster]:
         manifold: Manifold = root.manifold
         predicted_auc: Dict[Cluster, float] = {
-            cluster: predict_auc(cluster)
+            cluster: self.predict_auc(cluster)
             for cluster in manifold.ordered_clusters
             if cluster.depth >= self.min_depth
         }

@@ -37,19 +37,26 @@ VOTING_MODES = [
 
 
 class CHAODA:
+    method_names = [
+        'cluster_cardinality',
+        'component_cardinality',
+        'graph_neighborhood',
+        'parent_cardinality',
+        'stationary_probabilities',
+        'vertex_degree',
+    ]
     """ This class provides implementations of the CHAODA algorithms on top of the CLAM framework.
     """
     # TODO: Allow weights for each method in ensemble.
     # TODO: Allow meta-ml with users' own datasets.
     # TODO: Look at DSD (diffusion-state-distance) as a possible individual-method.
-    # TODO: Use Literal type for normalization_mode.
     # noinspection PyTypeChecker
     def __init__(
             self, *,
             metrics: Optional[List[Metric]] = None,
             max_depth: int = 25,
             min_points: int = 1,
-            meta_ml_functions: Optional[List[Tuple[str, Callable[[np.array], float]]]] = None,
+            meta_ml_functions: Optional[List[Tuple[str, str, Callable[[np.array], float]]]] = None,
             cardinality_percentile: Optional[float] = None,
             radius_percentile: Optional[float] = None,
             lfd_percentile: Optional[float] = None,
@@ -64,7 +71,7 @@ class CHAODA:
                         Any such metrics allowed by scipy are allowed here, as are user-defined functions (so long as scipy accepts them).
         :param max_depth: The max-depth of the cluster-trees in the manifolds.
         :param min_points: The minimum number of points in a cluster before it can be partitioned further.
-        :param meta_ml_functions: A list of tuples of (method-name, meta-ml-ranking-function).
+        :param meta_ml_functions: A list of tuples of (metric-name, method-name, meta-ml-ranking-function).
         :param cardinality_percentile: The percentile of cluster cardinalities immediately under which clusters wil be selected for graphs.
         :param radius_percentile: The percentile of cluster radii immediately under which clusters wil be selected for graphs.
         :param lfd_percentile: The percentile of cluster local-fractal-dimensions immediately above which clusters wil be selected for graphs.
@@ -77,16 +84,34 @@ class CHAODA:
         self.max_depth: int = max_depth
         self.min_points: int = min_points
 
-        self.meta_ml_functions: Optional[List[Tuple[str, Callable[[np.array], float]]]] = meta_ml_functions
-
         if meta_ml_functions is None:
             cardinality_percentile = 50 if cardinality_percentile is None else cardinality_percentile
             radius_percentile = 50 if radius_percentile is None else radius_percentile
             lfd_percentile = 25 if lfd_percentile is None else lfd_percentile
+            criteria = [
+                PropertyThreshold('cardinality', cardinality_percentile, 'below'),
+                PropertyThreshold('radius', radius_percentile, 'below'),
+                PropertyThreshold('lfd', lfd_percentile, 'above'),
+            ]
+            self._criteria = {
+                metric: {method: criteria for method in self.method_names}
+                for metric in self.metrics
+            }
+        else:
+            metrics = {metric for metric, _, _ in meta_ml_functions}
+            if not metrics <= set(self.metrics):
+                raise ValueError(f'some meta-ml-functions reference metrics not being used by CHAODA. {set(self.metrics) - metrics}')
+            methods = {method for _, method, _ in meta_ml_functions}
+            if not methods <= set(self.method_names):
+                raise ValueError(f'some meta-ml-functions reference methods not being used by CHAODA. {set(self.method_names) - methods}')
 
-        self.cardinality_percentile: Optional[float] = cardinality_percentile
-        self.radius_percentile: Optional[float] = radius_percentile
-        self.lfd_percentile: Optional[float] = lfd_percentile
+            self._criteria = {
+                metric: {method: list() for method in self.method_names}
+                for metric in self.metrics
+            }
+            for metric, method, function in meta_ml_functions:
+                self._criteria[metric][method].append(MetaMLSelect(function))
+
         self.speed_threshold: Optional[int] = speed_threshold
 
         if normalization_mode is not None:
@@ -99,23 +124,29 @@ class CHAODA:
             'component_cardinality': self._component_cardinality,
             'graph_neighborhood': self._graph_neighborhood,
             'parent_cardinality': self._parent_cardinality,
-            'random_walks': self._random_walks,
             'stationary_probabilities': self._stationary_probabilities,
+            'vertex_degree': self._vertex_degree,
         }
         self.slow_methods: List[str] = [
             'component_cardinality',
             'graph_neighborhood',
-            'random_walks',
             'stationary_probabilities',
         ]
 
         # Values to be set later
-        self._manifolds: Optional[List[Manifold]] = None  # list of manifolds build during the fit method.
-        self._common_graphs: Optional[List[Graph]] = None  # These graphs are used with all individual-methods.
-        self._method_graphs: Optional[List[Tuple[str, Graph]]] = None  # These graphs are used with specific individual-methods.
-        self._individual_scores: Optional[List[np.array]] = None  # A dict of all outlier-scores arrays to be voted amongst.
-        self._scores: Optional[np.array] = None  # outlier-scores for each point in the fitted data, after voting.
-        return
+
+        # list of manifolds build during the fit method.
+        self._manifolds: Optional[List[Manifold]] = None
+
+        # These graphs are used with the individual-methods.
+        #  This is a list of tuples os (method-name, graph).
+        self._graphs: Optional[List[Tuple[str, List[Graph]]]] = None
+
+        # A list of all outlier-scores arrays to be voted amongst.
+        self._individual_scores: Optional[List[np.array]] = None
+
+        # outlier-scores for each point in the fitted data, after voting.
+        self._scores: Optional[np.array] = None
 
     @property
     def manifolds(self) -> List[Manifold]:
@@ -142,52 +173,40 @@ class CHAODA:
         :return: The list of manifolds.
         """
         criteria: List[Criterion] = [MaxDepth(self.max_depth), MinPoints(self.min_points)]
-        if self.meta_ml_functions is None:
-            criteria.extend([
-                PropertyThreshold('cardinality', self.cardinality_percentile, 'below'),
-                PropertyThreshold('radius', self.radius_percentile, 'below'),
-                PropertyThreshold('lfd', self.lfd_percentile, 'above'),
-            ])
-        else:
-            criteria.extend([MetaMLSelect(ranker) for _, ranker in self.meta_ml_functions])
         self._manifolds = [Manifold(data, metric).build(*criteria) for metric in self.metrics]
         return self._manifolds
 
-    def fit(self, data: np.array, *, voting: str = 'mean', renormalize: bool = False) -> 'CHAODA':
+    def fit(self, data: np.array, *, voting: str = 'mean') -> 'CHAODA':
         """ Fits the anomaly detector to the data.
 
         :param data: numpy array of data where the rows are instances and the columns are features.
         :param voting: How to vote among scores.
-        :param renormalize: Whether to renormalize scores after voting.
         :return: the fitted CHAODA model.
         """
         self.build_manifolds(data)
-        if self.meta_ml_functions is None:
-            self._common_graphs = list()
-            [self._common_graphs.extend(manifold.graphs) for manifold in self._manifolds]
-        else:
-            self._method_graphs = [
-                (name, graph)
-                for manifold in self._manifolds
-                for (name, _), graph in zip(self.meta_ml_functions, manifold.graphs)
-            ]
-
-        self._ensemble(voting, renormalize)
+        self._graphs = list()
+        for manifold in self._manifolds:
+            for method, meta_ml_criteria in self._criteria[manifold.metric].items():
+                manifold.add_graphs(*meta_ml_criteria)
+                for graph in manifold.graphs[-len(meta_ml_criteria):]:
+                    if method in self.slow_methods and graph.cardinality > self.speed_threshold:
+                        continue
+                    self._graphs.append((method, graph))
+        self._ensemble(voting)
         return self
 
     def predict(self, *, queries: np.array) -> np.array:
-        # TODO: Handle seeing unseen data
+        # TODO: Handle seeing unseen data for live, online anomaly detection
         raise NotImplementedError
 
-    def vote(self, voting: str = 'mean', renormalize: Optional[str] = None, replace: bool = True) -> np.array:
+    def vote(self, voting: str = 'mean', replace: bool = True) -> np.array:
         """ Get ensemble scores with custom voting and normalization
 
         :param voting: voting mode to use. Must be one of VOTING_MODES.
-        :param renormalize: whether to normalize scores and what mode to use, and which mode to use.
         :param replace: whether to replace internal scores with new scores.
         :return: 1-d array of outlier scores for fitted data.
         """
-        scores = self._vote(np.stack(self._individual_scores), voting, renormalize)
+        scores = self._vote(np.stack(self._individual_scores), voting)
         if replace:
             self._scores = scores
         return scores
@@ -238,20 +257,8 @@ class CHAODA:
         """
         return self._score_points(self._parent_cardinality(graph, weight))
 
-    def random_walks(self, graph: Graph, subsample_limit: int = 100, steps_multiplier: int = 2) -> Scores:
-        """ Determines outlier scores by performing random walks on the graph.
-
-        Points that are visited less often, relatively, are the outliers.
-
-        :param graph: Graph on which to calculate outlier scores.
-        :param subsample_limit: If a graph has more than this many clusters, then randomly sample this many to start random walks.
-        :param steps_multiplier: The length of each walk is steps_multiplier * (cardinality of the graph_component).
-        :return: A dict of index -> outlier score
-        """
-        return self._score_points(self._random_walks(graph, subsample_limit, steps_multiplier))
-
-    def stationary_probabilities(self, graph: Graph, steps: int = 100) -> Scores:
-        """ Compute the Outlier scores based on the convergence of a random walk on each component of the Graph.
+    def stationary_probabilities(self, graph: Graph, steps: int = 16) -> Scores:
+        """ Compute the Outlier scores based on the convergence of a random walk with weighted edges on each component of the Graph.
 
         For each component on the graph, compute the convergent transition matrix for that graph.
         Clusters with low values in that matrix are the outliers.
@@ -262,43 +269,41 @@ class CHAODA:
         """
         return self._score_points(self._stationary_probabilities(graph, steps))
 
-    def _ensemble(self, voting: str, renormalize: bool):
+    def vertex_degree(self, graph: Graph) -> Scores:
+        """ Compute the Outlier scores based on the degree of each vertex of the Graph.
+
+        For each cluster in teh graph, its outlier score is inversely proportional to its degree in the graph.
+
+        :param graph: The graph on which to compute outlier scores.
+        :return: A dict of index -> outlier score
+        """
+        return self._score_points(self._vertex_degree(graph))
+
+    def _ensemble(self, voting: str):
         """ Ensemble of individual methods.
 
         :param voting: How to vote among scores.
-        :param renormalize: Whether to renormalize scores after voting.
         """
         argpoints = self._manifolds[0].root.argpoints
         self._individual_scores = list()
-        if self.meta_ml_functions is None:  # apply each individual method to each graph.
-            for name, method in self._names.items():
-                for graph in self._common_graphs:
-                    scores: Scores = self._score_points(method(graph))
-                    self._individual_scores.append(np.asarray([scores[i] for i in argpoints], dtype=float))
-        else:  # apply specific method to specific graph.
-            for name, graph in self._method_graphs:
-                if (self.speed_threshold is not None) and (name in self.slow_methods) and (graph.cardinality > self.speed_threshold):
-                    continue
-                scores: Scores = self._score_points(self._names[name](graph))
-                self._individual_scores.append(np.asarray([scores[i] for i in argpoints], dtype=float))
+        for name, graph in self._graphs:
+            method = self._names[name]
+            scores: Scores = self._score_points(method(graph))
+            self._individual_scores.append(np.asarray([scores[i] for i in argpoints], dtype=float))
 
         # store scores for fitted data.
-        mode = self.normalization_mode if renormalize else None
-        self._scores = self.vote(voting, mode)
+        self._scores = self.vote(voting)
         return
 
     # noinspection PyMethodMayBeStatic
-    def _vote(self, scores: np.array, mode: str, renormalize: Optional[str]):
+    def _vote(self, scores: np.array, mode: str):
         """ Vote among all individual-scores for ensemble-score.
 
         :param scores: An array of shape (num_graphs, num_points) of scores to be voted among.
         :param mode: Voting mode to use. Must be one of VOTING_MODES
-        :param renormalize: Whether to renormalize scores after voting, and which mode to use.
         """
         if mode not in VOTING_MODES:
             raise ValueError(f'voting mode {mode} is invalid. Must be one of {VOTING_MODES}.')
-        if renormalize is not None:
-            catch_normalization_mode(renormalize)
 
         if mode == 'mean':
             scores = np.mean(scores, axis=0)
@@ -318,14 +323,17 @@ class CHAODA:
             # TODO: Investigate other voting methods.
             pass
 
-        return scores if renormalize is None else normalize(scores, self.normalization_mode)
+        return scores
 
     # noinspection PyMethodMayBeStatic
     def _score_points(self, scores: ClusterScores) -> Scores:
         """ Translate scores for clusters into scores for points. """
         scores = {point: float(score) for cluster, score in scores.items() for point in cluster.argpoints}
         for i in self._manifolds[0].root.argpoints:
-            if i not in scores:  # TODO: Rip off this band-aid and investigate source of missing points
+            if i not in scores:
+                # TODO: Rip off this band-aid and investigate source of missing points
+                #  So far, this only triggers for exactly one point in exactly one dataset from our suite of datasets.
+                #  No idea why.
                 scores[i] = 0.5
         return scores
 
@@ -361,6 +369,16 @@ class CHAODA:
         }
         return self._normalize_scores(scores, False)
 
+    # noinspection PyMethodMayBeStatic
+    def _inherit_subsumed(self, subsumed_neighbors, scores):
+        for master, subsumed in subsumed_neighbors.items():
+            for cluster in subsumed:
+                if cluster in scores:
+                    scores[cluster] = max(scores[cluster], scores[master])
+                else:
+                    scores[cluster] = scores[master]
+        return scores
+
     def _graph_neighborhood(self, graph: Graph, eccentricity_fraction: float = 0.25) -> ClusterScores:
         logging.info(f'Running method GN with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
         if not (0 < eccentricity_fraction <= 1):
@@ -388,13 +406,7 @@ class CHAODA:
             cluster: _neighborhood_size(cluster, int(pruned_graph.eccentricity(cluster) * eccentricity_fraction))
             for cluster in pruned_graph.clusters
         }
-
-        for master, subsumed in subsumed_neighbors.items():
-            for cluster in subsumed:
-                if cluster in scores:
-                    scores[cluster] = max(scores[cluster], scores[master])
-                else:
-                    scores[cluster] = scores[master]
+        scores = self._inherit_subsumed(subsumed_neighbors, scores)
         return self._normalize_scores(scores, False)
 
     def _parent_cardinality(self, graph: Graph, weight: Callable[[int], float] = None) -> ClusterScores:
@@ -408,80 +420,26 @@ class CHAODA:
                 scores[cluster] += (weight(i) * ancestry[i-1].cardinality / ancestry[i].cardinality)
         return self._normalize_scores(scores, True)
 
-    # noinspection PyMethodMayBeStatic
-    def _perform_random_walks(self, graph: Graph, initial: Set[Cluster], steps_multiplier: int) -> Dict[Cluster, int]:
-        """ Performs random walks on one connected component of a graph.
-
-        :param graph: the graph component.
-        :param initial: set of clusters where to start.
-        :param steps_multiplier: the steps multiplier.
-        :return: A dict of cluster -> visit-count
-        """
-        if graph.cardinality > 1:
-            # compute transition probabilities
-            clusters, matrix = graph.as_matrix
-            for i in range(len(clusters)):
-                matrix[i] /= sum(matrix[i])
-            transition_dict = {cluster: row for cluster, row in zip(clusters, matrix)}
-
-            # initialize visit counts
-            visit_counts: Dict[Cluster, int] = {
-                cluster: 1 if cluster in initial else 0
-                for cluster in graph.clusters
-            }
-            locations: List[Cluster] = list(initial)
-            for _ in range(graph.cardinality * steps_multiplier):
-                locations = [np.random.choice(  # randomly choose a neighbor to move to from each location
-                    a=list(transition_dict.keys()),
-                    p=transition_dict[cluster],
-                ) for cluster in locations]
-                visit_counts.update({cluster: visit_counts[cluster] + 1 for cluster in locations})
-            return visit_counts
-        else:
-            return {next(iter(graph.clusters)): steps_multiplier}
-
-    def _random_walks(self, graph: Graph, subsample_limit: int = 100, steps_multiplier: int = 2) -> ClusterScores:
-        logging.info(f'Running method RW with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
-
-        # perform walks on each component of walkable graph
-        pruned_graph, subsumed_neighbors = graph.pruned_graph
-        visit_counts: Dict[Cluster, int] = dict()
-        for component in pruned_graph.components:
-            starts: Set[Cluster] = component.clusters if component.cardinality < subsample_limit else set(list(component.clusters)[:subsample_limit])
-            visit_counts.update(self._perform_random_walks(component, starts, steps_multiplier))
-
-        # update visit-counts for subsumed clusters
-        for master, subsumed in subsumed_neighbors.items():
-            for cluster in subsumed:
-                if cluster in visit_counts:
-                    visit_counts[cluster] += visit_counts[master]
-                else:
-                    visit_counts[cluster] = visit_counts[master]
-
-        return self._normalize_scores(visit_counts, False)
-
     def _stationary_probabilities(self, graph: Graph, steps: int = 16) -> ClusterScores:
         logging.info(f'Running method SP with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
-
         scores: Dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
         pruned_graph, subsumed_neighbors = graph.pruned_graph
         for component in pruned_graph.components:
             if component.cardinality > 1:
                 clusters, matrix = component.as_matrix
-                for i in range(len(clusters)):
-                    matrix[i] /= sum(matrix[i])
+                matrix = matrix / np.sum(matrix, axis=1)[:, None]
 
-                for _ in range(steps):  # TODO: Go until convergence
+                for _ in range(steps):
+                    # TODO: Go until convergence. For now, matrix ^ (2 ^ 16) ought to be enough.
                     matrix = np.linalg.matrix_power(matrix, 2)
                 steady = matrix
                 scores.update({cluster: score for cluster, score in zip(clusters, np.sum(steady, axis=0))})
             else:
                 scores.update({cluster: 0 for cluster in component.clusters})
+        scores = self._inherit_subsumed(subsumed_neighbors, scores)
+        return self._normalize_scores(scores, False)
 
-        for master, subsumed in subsumed_neighbors.items():
-            for cluster in subsumed:
-                if cluster in scores:
-                    scores[cluster] = max(scores[cluster], scores[master])
-                else:
-                    scores[cluster] = scores[master]
+    def _vertex_degree(self, graph: Graph) -> ClusterScores:
+        logging.info(f'Running method VD with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        scores: Dict[Cluster, float] = {cluster: graph.vertex_degree(cluster) for cluster in graph.clusters}
         return self._normalize_scores(scores, False)
