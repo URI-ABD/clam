@@ -6,12 +6,11 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use ndarray::{Array2, ArrayView, Axis, IxDyn};
+use ndarray::prelude::*;
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 
-use crate::metric::{Metric, metric_new, Number};
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 
 /// Dataset Trait.
 ///

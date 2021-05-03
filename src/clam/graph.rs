@@ -5,13 +5,14 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use dashmap::{DashMap, DashSet};
-use ndarray::Array2;
+use ndarray::prelude::*;
 
-use crate::cluster::Cluster;
-use crate::metric::Number;
-use crate::types::{CandidatesMap, EdgesDict, Index, Indices};
+use crate::prelude::*;
 
-type Subsumed<T, U> = DashMap<Arc<Cluster<T, U>>, HashSet<Cluster<T, U>>>;
+type Candidates<T, U> = DashMap<Arc<Cluster<T, U>>, U>;
+type CandidatesMap<T, U> = DashMap<Arc<Cluster<T, U>>, Candidates<T, U>>;
+pub type EdgesDict<T, U> = HashMap<Arc<Cluster<T, U>>, Arc<HashSet<Arc<Edge<T, U>>>>>;
+pub type Subsumed<T, U> = HashMap<Arc<Cluster<T, U>>, HashSet<Cluster<T, U>>>;
 
 #[derive(Debug)]
 pub struct Edge<T: Number, U: Number> {
@@ -120,7 +121,7 @@ impl<T: Number, U: Number> Graph<T, U> {
             indices: vec![],
             depth: 0,
             min_depth: 0,
-            edges_dict: Arc::new(DashMap::new()),
+            edges_dict: Arc::new(HashMap::new()),
         };
         graph.cardinality = graph.cardinality();
         graph.population = graph.population();
@@ -169,7 +170,7 @@ impl<T: Number, U: Number> Graph<T, U> {
         (self.min_depth(), self.depth())
     }
 
-    fn _find_candidates(
+    fn find_candidates(
         &self,
         root: &Arc<Cluster<T, U>>,
         cluster: &Arc<Cluster<T, U>>,
@@ -219,14 +220,14 @@ impl<T: Number, U: Number> Graph<T, U> {
         Ok(())
     }
 
-    fn _find_neighbors(
+    fn find_neighbors(
         &self,
         root: &Arc<Cluster<T, U>>,
         cluster: &Arc<Cluster<T, U>>,
         candidates_map: &Arc<CandidatesMap<T, U>>,
     ) -> Result<(), String> {
         if !candidates_map.contains_key(cluster) {
-            self._find_candidates(root, cluster, candidates_map)?;
+            self.find_candidates(root, cluster, candidates_map)?;
         }
         let candidates = candidates_map.get(cluster).unwrap();
 
@@ -244,9 +245,9 @@ impl<T: Number, U: Number> Graph<T, U> {
     }
 
     fn edges_dict(&self) -> EdgesDict<T, U> {
-        let edges_dict = DashMap::new();
+        let mut edges_dict = HashMap::new();
         for cluster_item in self.clusters.iter() {
-            let edges = DashSet::new();
+            let mut edges = HashSet::new();
             self.edges.iter().for_each(|edge_item| {
                 if edge_item.key().contains(cluster_item.key()) {
                     edges.insert(Arc::clone(edge_item.key()));
@@ -257,13 +258,15 @@ impl<T: Number, U: Number> Graph<T, U> {
         edges_dict
     }
 
+    // TODO: Rethink build-edges to remove reliance on root and candidates_map.
+    //  This should not need to take any arguments.
     pub fn build_edges(
         &mut self,
         root: &Arc<Cluster<T, U>>,
         candidates_map: &Arc<CandidatesMap<T, U>>,
     ) -> Result<(), String> {
         for item in self.clusters.iter() {
-            self._find_neighbors(root, item.key(), candidates_map)?;
+            self.find_neighbors(root, item.key(), candidates_map)?;
         }
         self.edges_dict = Arc::new(self.edges_dict());
         self.is_built = true;
@@ -290,10 +293,10 @@ impl<T: Number, U: Number> Graph<T, U> {
     pub fn edges_from(
         &self,
         cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<Arc<DashSet<Arc<Edge<T, U>>>>, String> {
+    ) -> Result<Arc<HashSet<Arc<Edge<T, U>>>>, String> {
         self.assert_contains(cluster)?;
         self.assert_built()?;
-        Ok(Arc::clone(self.edges_dict.get(cluster).unwrap().borrow()))
+        Ok(Arc::clone(self.edges_dict.get(cluster).unwrap()))
     }
 
     pub fn neighbors(
@@ -302,7 +305,7 @@ impl<T: Number, U: Number> Graph<T, U> {
     ) -> Result<Vec<Arc<Cluster<T, U>>>, String> {
         let mut neighbors = Vec::new();
         (self.edges_from(cluster)?).iter().for_each(|edge_item| {
-            neighbors.push(Arc::clone(edge_item.key().neighbor(cluster).unwrap()));
+            neighbors.push(Arc::clone(edge_item.neighbor(cluster).unwrap()));
         });
         Ok(neighbors)
     }
@@ -310,7 +313,7 @@ impl<T: Number, U: Number> Graph<T, U> {
     pub fn distances(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Vec<U>, String> {
         let mut distances = Vec::new();
         (self.edges_from(cluster)?).iter().for_each(|edge_item| {
-            distances.push(edge_item.key().distance);
+            distances.push(edge_item.distance);
         });
         Ok(distances)
     }

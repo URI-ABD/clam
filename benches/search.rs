@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use clam::dataset::{Dataset, RowMajor};
-use clam::search::Search;
+use clam::prelude::*;
+use clam::cakes::Search;
+use clam::dataset::RowMajor;
 use clam::utils::{ANN_DATASETS, CHAODA_DATASETS, read_ann_data, read_chaoda_data};
 
 #[allow(dead_code)]
@@ -80,13 +81,13 @@ fn chess_chaoda(c: &mut Criterion) {
             let message = [
                 format!("dataset: {:?}, ", name),
                 format!("shape: {:?}, ", dataset.shape()),
-                format!("radius fraction {}, ", -f),
+                format!("exponent {}, ", -f),
                 format!("radius {:.2e}, ", radius),
                 format!("num_queries 100."),
             ]
             .join("");
             println!("{}", message);
-            let id = &format!("{}, fraction {}", name, -f)[..];
+            let id = &format!("{}, exponent {}", name, -f)[..];
             c.bench_function(id, |b| {
                 b.iter(|| {
                     for q in 0..100 {

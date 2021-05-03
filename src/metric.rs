@@ -128,7 +128,7 @@ mod tests {
     use float_cmp::approx_eq;
     use ndarray::{arr2, Array2};
 
-    use crate::metric::metric_new;
+    use crate::prelude::*;
 
     #[test]
     fn test_on_real() {

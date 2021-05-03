@@ -3,17 +3,13 @@ use std::borrow::Borrow;
 use std::sync::Arc;
 
 use dashmap::{DashMap, DashSet};
-use ndarray::{ArrayView, IxDyn};
+use ndarray::prelude::*;
 use rayon::prelude::*;
 
-use crate::cluster::Cluster;
-use crate::criteria;
-use crate::dataset::Dataset;
-use crate::metric::{Metric, metric_new, Number};
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 
-type ClusterResults<T, U> = Arc<DashSet<Arc<Cluster<T, U>>>>;
-type Results<T> = Arc<DashMap<Index, T>>;
+pub type ClusterResults<T, U> = Arc<DashSet<Arc<Cluster<T, U>>>>;
+pub type Results<T> = Arc<DashMap<Index, T>>;
 
 pub struct Search<T: Number, U: Number> {
     pub dataset: Arc<dyn Dataset<T, U>>,
@@ -170,7 +166,7 @@ impl<T: Number, U: Number> Search<T, U> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::dataset::Dataset;
+    use crate::prelude::*;
     use crate::dataset::RowMajor;
     use crate::utils::read_test_data;
 

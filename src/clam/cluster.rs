@@ -4,13 +4,10 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use dashmap::DashSet;
-use ndarray::{ArrayView, IxDyn};
+use ndarray::prelude::*;
 use rayon::prelude::*;
 
-use crate::criteria::ClusterCriterion;
-use crate::dataset::Dataset;
-use crate::metric::Number;
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 use crate::utils::{argmax, argmin};
 
 const SUB_SAMPLE: usize = 100;
@@ -124,7 +121,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn partition(self, criteria: &Vec<Box<impl ClusterCriterion>>) -> Cluster<T, U> {
+    pub fn partition(self, criteria: &Vec<Box<impl criteria::ClusterCriterion>>) -> Cluster<T, U> {
         // TODO: Think about making this non-recursive and making returning children instead.
         //       This would let us extract layer-graph easier.
         //  Problem: parent needs ref to children, AND
@@ -248,9 +245,7 @@ mod tests {
 
     use ndarray::{arr2, Array2};
 
-    use crate::cluster::Cluster;
-    use crate::criteria::MaxDepth;
-    use crate::dataset::Dataset;
+    use crate::prelude::*;
     use crate::dataset::RowMajor;
 
     #[test]
@@ -259,7 +254,7 @@ mod tests {
         let dataset: Arc<dyn Dataset<f64, f64>> =
             Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", false).unwrap());
         let mut criteria = Vec::new();
-        criteria.push(MaxDepth::new(3));
+        criteria.push(criteria::MaxDepth::new(3));
         // criteria.push(MinPoints::new(10));
         let cluster = Cluster::new(
             Arc::clone(&dataset),

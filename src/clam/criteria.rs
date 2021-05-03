@@ -1,7 +1,6 @@
 use std::marker::{Send, Sync};
 
-use crate::cluster::Cluster;
-use crate::metric::Number;
+use crate::prelude::*;
 
 // TODO: Enum for criteria because you currently cannot have vec![MaxDepth, MinPoints].
 

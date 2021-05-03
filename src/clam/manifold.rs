@@ -1,10 +1,6 @@
 use std::sync::Arc;
 
-use crate::cluster::Cluster;
-use crate::criteria::ClusterCriterion;
-use crate::dataset::Dataset;
-use crate::graph::Graph;
-use crate::metric::Number;
+use crate::prelude::*;
 
 pub struct Manifold<T: Number, U: Number> {
     pub dataset: Arc<dyn Dataset<T, U>>,
@@ -16,7 +12,7 @@ pub struct Manifold<T: Number, U: Number> {
 impl<T: Number, U: Number> Manifold<T, U> {
     pub fn new(
         dataset: Arc<dyn Dataset<T, U>>,
-        cluster_criteria: Vec<Box<impl ClusterCriterion>>,
+        cluster_criteria: Vec<Box<impl criteria::ClusterCriterion>>,
     ) -> Manifold<T, U> {
         let indices = dataset.indices();
         let root = Cluster::new(Arc::clone(&dataset), "".to_string(), indices)
