@@ -497,11 +497,17 @@ class Graph:
     @property
     def edges_dict(self) -> Dict[Cluster, Set[Edge]]:
         if 'edges_dict' not in self.cache:
-            self.cache['edges_dict'] = {
-                cluster: {edge for edge in self.edges if cluster in edge}
-                for cluster in self.clusters
-            }
+            self.cache['edges_dict'] = {cluster: set() for cluster in self.clusters}
+            for edge in self.edges:
+                self.cache['edges_dict'][edge.left].add(edge)
+                self.cache['edges_dict'][edge.right].add(edge)
         return self.cache['edges_dict']
+
+    def vertex_degree(self, cluster: Cluster) -> int:
+        if cluster in self.clusters:
+            return len(self.edges_dict[cluster])
+        else:
+            raise ValueError(f'Cluster {cluster} not found in graph.')
 
     @property
     def cardinality(self) -> int:
@@ -564,8 +570,8 @@ class Graph:
         matrix: np.array = np.zeros(shape=(len(clusters), len(clusters)), dtype=float)
         for edge in self.edges:
             i, j = indices[edge.left], indices[edge.right]
-            matrix[i][j] = edge.distance
-            matrix[j][i] = edge.distance
+            matrix[i][j] = 1. / edge.distance
+            matrix[j][i] = 1. / edge.distance
         return clusters, matrix
 
     @property
@@ -597,9 +603,9 @@ class Graph:
         # determine subsumed clusters
         subsumed_clusters: Set[Cluster] = set()
         for edge in self.edges:
-            if edge.distance + edge.left.radius < edge.right.radius:
+            if edge.distance + edge.left.radius <= edge.right.radius:
                 subsumed_clusters.add(edge.left)
-            elif edge.distance + edge.right.radius < edge.left.radius:
+            elif edge.distance + edge.right.radius <= edge.left.radius:
                 subsumed_clusters.add(edge.right)
 
         # determine walkable clusters
