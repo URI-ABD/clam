@@ -2,20 +2,20 @@ extern crate clam;
 
 use std::sync::Arc;
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 
-use clam::prelude::*;
-use clam::cakes::Search;
 use clam::dataset::RowMajor;
-use clam::utils::{ANN_DATASETS, CHAODA_DATASETS, read_ann_data, read_chaoda_data};
+use clam::prelude::*;
+use clam::utils::{read_ann_data, read_chaoda_data, ANN_DATASETS, CHAODA_DATASETS};
+use clam::Cakes;
 
 #[allow(dead_code)]
-fn apogee_chess(c: &mut Criterion) {
+fn cakes_apogee(c: &mut Criterion) {
     let (name, metric) = ("apogee", "euclidean");
     let (train, test) = read_ann_data(name).unwrap();
     let train_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::new(train, metric, true).unwrap());
     let test_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::new(test, metric, true).unwrap());
-    let search = Search::build(Arc::clone(&train_dataset), Some(50));
+    let search = Cakes::build(Arc::clone(&train_dataset), Some(50), None);
 
     for &radius in [4000_f32, 2000., 1000.].iter() {
         let message = [
@@ -38,12 +38,13 @@ fn apogee_chess(c: &mut Criterion) {
 }
 
 #[allow(dead_code)]
-fn ann_benchmarks(c: &mut Criterion) {
+fn cakes_ann_benchmarks(c: &mut Criterion) {
     for (name, metric) in ANN_DATASETS.iter() {
         let (train, test) = read_ann_data(name).unwrap();
-        let train_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::<f32, f32>::new(train, metric, true).unwrap());
+        let train_dataset: Arc<dyn Dataset<f32, f32>> =
+            Arc::new(RowMajor::<f32, f32>::new(train, metric, true).unwrap());
         let test_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::<f32, f32>::new(test, metric, true).unwrap());
-        let search = Search::build(Arc::clone(&train_dataset), Some(50));
+        let search = Cakes::build(Arc::clone(&train_dataset), Some(50), None);
 
         for f in 2..5 {
             let radius = search.diameter() * (10_f32).powi(-f);
@@ -69,11 +70,11 @@ fn ann_benchmarks(c: &mut Criterion) {
 }
 
 #[allow(dead_code)]
-fn chess_chaoda(c: &mut Criterion) {
+fn cakes_chaoda_datasets(c: &mut Criterion) {
     for &name in CHAODA_DATASETS.iter() {
         let (data, _) = read_chaoda_data(name).unwrap();
         let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::new(data, "euclidean", true).unwrap());
-        let search = Search::build(Arc::clone(&dataset), Some(50));
+        let search = Cakes::build(Arc::clone(&dataset), Some(50), None);
 
         for f in 2..5 {
             let fraction = (10_f64).powi(-f);
@@ -90,7 +91,7 @@ fn chess_chaoda(c: &mut Criterion) {
             let id = &format!("{}, exponent {}", name, -f)[..];
             c.bench_function(id, |b| {
                 b.iter(|| {
-                    for q in 0..100 {
+                    for q in 0..1000 {
                         search.rnn(search.dataset.instance(q), Some(radius));
                     }
                 })
@@ -100,7 +101,7 @@ fn chess_chaoda(c: &mut Criterion) {
     }
 }
 
-// criterion_group!(benches, apogee_chess);
-// criterion_group!(benches, ann_benchmarks);
-criterion_group!(benches, chess_chaoda);
+// criterion_group!(benches, cakes_apogee);
+// criterion_group!(benches, cakes_ann_benchmarks);
+criterion_group!(benches, cakes_chaoda_datasets);
 criterion_main!(benches);

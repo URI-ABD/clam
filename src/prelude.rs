@@ -1,6 +1,6 @@
-pub use crate::metric::{Metric, metric_new, Number};
 pub use crate::dataset::Dataset;
-pub use crate::clam::{Cluster, Edge, Graph, Manifold, criteria};
+pub use crate::metric::{metric_new, Metric, Number};
+pub use crate::{criteria, Cluster, Edge, Graph, Manifold};
 
 pub type Index = usize;
 pub type Indices = Vec<Index>;

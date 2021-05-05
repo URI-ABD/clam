@@ -151,7 +151,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .vscode/
-benches
 pyclam/explorations.py
 
 # local data files and folders
@@ -183,4 +182,3 @@ data/greengenes*
 
 # Local files
 pyclam/explorations.py
-benches/*.txt

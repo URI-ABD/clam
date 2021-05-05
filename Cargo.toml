@@ -14,15 +14,14 @@ publish = false
 [dependencies]
 rand = "^0.8"
 rayon = "^1.5"
-dashmap = "^4.0"
 ndarray = { version = "^0.15", features = ["rayon"] }
 ndarray-npy = "^0.8"
 num-traits = "^0.2"
 
 [dev-dependencies]
 float-cmp = "^0.8"
-criterion = "^0.3"
+criterion =  { version = "^0.3", features = ["html_reports"] }
 
 [[bench]]
-name = "search"
+name = "cakes"
 harness = false
