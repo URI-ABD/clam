@@ -12,17 +12,16 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "^0.7"
+rand = "^0.8"
 rayon = "^1.5"
-dashmap = "3.11.10"
-ndarray = { version = "^0.13", features = ["rayon"] }
-ndarray-npy = "^0.6"
+ndarray = { version = "^0.15", features = ["rayon"] }
+ndarray-npy = "^0.8"
 num-traits = "^0.2"
 
 [dev-dependencies]
 float-cmp = "^0.8"
-criterion = "^0.3"
+criterion =  { version = "^0.3", features = ["html_reports"] }
 
 [[bench]]
-name = "search"
+name = "cakes"
 harness = false

@@ -1,55 +1,16 @@
-use std::marker::{Send, Sync};
+//! Criteria used for partitioning `Clusters` and selecting `Clusters` for `Graphs`.
 
-use crate::cluster::Cluster;
-use crate::metric::Number;
+use crate::prelude::*;
+/// A `Box` over a `closure` that takes a reference to a `Cluster` and returns a `bool`
+/// indicating whether that `Cluster` can be partitioned.
+pub type PartitionCriterion<T, U> = Box<dyn (Fn(&Cluster<T, U>) -> bool) + Send + Sync>;
 
-// TODO: Enum for criteria because you currently cannot have vec![MaxDepth, MinPoints].
-
-pub trait ClusterCriterion: Send + Sync {
-    fn check<T: Number, U: Number>(&self, cluster: &Cluster<T, U>) -> bool;
+/// A `Cluster` must have a `depth` lower than the given threshold for it to be partitioned.
+pub fn max_depth<T: Number, U: Number>(threshold: u8) -> PartitionCriterion<T, U> {
+    Box::new(move |cluster: &Cluster<T, U>| cluster.depth() < threshold)
 }
 
-#[derive(Debug)]
-pub struct MaxDepth {
-    depth: usize,
-}
-
-impl MaxDepth {
-    pub fn new(depth: usize) -> Box<Self> {
-        Box::new(MaxDepth { depth })
-    }
-}
-
-impl ClusterCriterion for MaxDepth {
-    fn check<T: Number, U: Number>(&self, cluster: &Cluster<T, U>) -> bool {
-        cluster.depth() < self.depth
-    }
-}
-
-#[derive(Debug)]
-pub struct MinPoints {
-    points: usize,
-}
-
-impl MinPoints {
-    pub fn new(points: usize) -> Box<Self> {
-        Box::new(MinPoints { points })
-    }
-}
-
-impl ClusterCriterion for MinPoints {
-    fn check<T: Number, U: Number>(&self, cluster: &Cluster<T, U>) -> bool {
-        cluster.cardinality() > self.points
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::MaxDepth;
-
-    #[test]
-    fn test_max_depth() {
-        let criterion = MaxDepth::new(5);
-        assert_eq!(format!("{:?}", criterion), "MaxDepth { depth: 5 }");
-    }
+/// A `Cluster` must have a `cardinality` higher than the given threshold for it to be partitioned.
+pub fn min_cardinality<T: Number, U: Number>(threshold: usize) -> PartitionCriterion<T, U> {
+    Box::new(move |cluster: &Cluster<T, U>| cluster.cardinality > threshold)
 }
