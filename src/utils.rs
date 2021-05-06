@@ -1,11 +1,10 @@
 use std::env;
 use std::path::PathBuf;
 
-use ndarray::{Array1, Array2};
+use ndarray::prelude::*;
 use ndarray_npy::{read_npy, ReadNpyError};
 
-use crate::metric::Number;
-use crate::types::Index;
+use crate::prelude::*;
 
 // TODO: Implement function to download datasets from internet
 
@@ -100,28 +99,28 @@ pub fn read_ann_data<T: Number, U: Number>(name: &str) -> Result<(Array2<T>, Arr
 
 #[allow(clippy::ptr_arg)]
 pub fn argmin<T: Number>(values: &Vec<T>) -> (Index, T) {
-    values
-        .iter()
-        .enumerate()
-        .fold((0, values[0]), |(i_min, v_min), (i, &v)| {
+    values.iter().enumerate().fold(
+        (0, values[0]),
+        |(i_min, v_min), (i, &v)| {
             if v < v_min {
                 (i, v)
             } else {
                 (i_min, v_min)
             }
-        })
+        },
+    )
 }
 
 #[allow(clippy::ptr_arg)]
 pub fn argmax<T: Number>(values: &Vec<T>) -> (Index, T) {
-    values
-        .iter()
-        .enumerate()
-        .fold((0, values[0]), |(i_max, v_max), (i, &v)| {
+    values.iter().enumerate().fold(
+        (0, values[0]),
+        |(i_max, v_max), (i, &v)| {
             if v > v_max {
                 (i, v)
             } else {
                 (i_max, v_max)
             }
-        })
+        },
+    )
 }

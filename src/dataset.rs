@@ -1,27 +1,37 @@
-/// CLAM Dataset.
-///
-/// This module contains the declaration and definition of the Dataset struct.
-use std::{fmt, result};
-use std::fmt::Debug;
-use std::sync::Arc;
+//! `Dataset` trait and some structs implementing it.
+//!
+//! Contains the declaration and definition of the `Dataset` trait and the
+//! `RowMajor` struct implementing Dataset to serves most of the use cases for `CLAM`.
+//!
+//! TODO: Implement more structs for other types of datasets.
+//! For example:
+//! * FASTA/FASTQ files containing variable length genomic sequences.
+//! * Images. e.g. from SDSS-MaNGA dataset
+//! * Molecular graphs with Tanamoto distance.
 
-use dashmap::DashMap;
-use ndarray::{Array2, ArrayView, Axis, IxDyn};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::sync::Mutex;
+use std::{fmt, result};
+
+use ndarray::prelude::*;
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 
-use crate::metric::{Metric, metric_new, Number};
-use crate::types::{Index, Indices};
+use crate::prelude::*;
 
-/// Dataset Trait.
+/// All datasets supplied to `CLAM` must implement this trait.
 ///
-/// All datasets supplied to CLAM must implement this trait.
-///
+/// The `cache` for a dataset is optional.
+/// It is meant to function as a memo-table and can save significant time
+/// when the `Metric` used is computationally expensive.
 pub trait Dataset<T, U>: Debug + Send + Sync {
     /// Returns the name of the metric used to compute the distance between instances.
     ///
-    /// :warning: This name must be available in the distances crate.
-    fn metric(&self) -> &'static str; // should this return the function directly?
+    /// Warning: This name must be available in the distances crate.
+    ///
+    /// TODO: change this return type to a closure?
+    fn metric(&self) -> Metric<T, U>; // should this return the function directly?
 
     /// Returns the number of instances in the dataset.
     fn ninstances(&self) -> usize;
@@ -36,29 +46,29 @@ pub trait Dataset<T, U>: Debug + Send + Sync {
     ///
     /// # Arguments
     ///
-    /// * `index` - The index of the instance to return in the dataset.
+    /// * `index` - The index of the instance to return from the dataset.
     ///
-    fn instance(&self, index: Index) -> Arc<ArrayView<T, IxDyn>>;
+    fn instance(&self, index: Index) -> ArrayView<T, IxDyn>;
 
-    /// Selects `n` unique instances from the given indices and returns their indices.
+    /// Returns `n` unique instances from the given indices and returns their indices.
     ///
     /// # Arguments
     ///
-    /// * `indices` - The indices to select instances from
-    /// * `n` - The number of indices to return
-    ///
+    /// * `n` - The number of unique instances
+    /// * `indices`:
+    ///   - Some - Select unique n from given indices.
+    ///   - None - Select unique n from all indices.
     fn choose_unique(&self, indices: Indices, n: usize) -> Indices;
 
-    /// Computes the distance between the two instances at the indices provided.
+    /// Returns the distance between the two instances at the indices provided.
     ///
     /// # Arguments
     ///
     /// * `left` - Index of an instance to compute distance from
     /// * `right`- Index of an instance to compute distance from
-    ///
     fn distance(&self, left: Index, right: Index) -> U;
 
-    /// Computes the distances from the instances at left to right.
+    /// Returns the distances from the instance at left to all instances with indices in right.
     ///
     /// # Arguments
     ///
@@ -67,20 +77,21 @@ pub trait Dataset<T, U>: Debug + Send + Sync {
     #[allow(clippy::ptr_arg)]
     fn distances_from(&self, left: Index, right: &Indices) -> Vec<U>;
 
-    /// Computes and returns distances amongst the instances at left and right.
+    /// Returns distances from the instances with indices in left to the instances
+    /// with indices in right.
     ///
     /// # Arguments
     ///
-    /// * `left` - Reference to the indices of instances to compute distances among
-    /// * `right` - Reference to the indices of instances to compute distances among
+    /// * `left` - Indices of instances
+    /// * `right` - Indices of instances
     #[allow(clippy::ptr_arg)]
     fn distances_among(&self, left: &Indices, right: &Indices) -> Vec<Vec<U>>;
 
-    /// Computes and returns the pairwise distances between the instances at the given indices.
+    /// Returns the pairwise distances between the instances at the given indices.
     ///
     /// # Arguments
     ///
-    /// * `indices` - Reference to indices of instances to compute pairwise distances on.
+    /// * `indices` - Indices of instances among which to compute pairwise distances.
     #[allow(clippy::ptr_arg)]
     fn pairwise_distances(&self, indices: &Indices) -> Vec<Vec<U>>;
 
@@ -88,39 +99,43 @@ pub trait Dataset<T, U>: Debug + Send + Sync {
     fn clear_cache(&self) {}
 
     /// Returns the size of the cache used for the dataset.
+    ///
+    /// If no cache is used, return None.
+    /// Otherwise, return the number of entries in the cache.
     fn cache_size(&self) -> Option<usize>;
 }
 
-/// RowMajor dataset represented as a 2-dimensional array where rows are instances and columns are attributes.
-///  
-/// A wrapper around an `Array2` of data, along with a provided `metric`, to provide an interface
-/// for computing distances between points contained within the dataset.
+/// RowMajor represents a dataset stored as a 2-dimensional array
+/// where rows are instances and columns are features/attributes.
 ///
-/// The resulting structure can make use of caching techniques to prevent repeated (potentially expensive)
-/// calls to its internal distance function.
+/// A wrapper around an `ndarray::Array2` of data, along with a `Metric`,
+/// to provide an interface for computing distances between instances
+/// contained within the dataset.
+///
+/// The resulting structure can make use of caching techniques to prevent
+/// repeated (potentially expensive) calls to its internal distance function.
 pub struct RowMajor<T: Number, U: Number> {
     /// 2D array of data
     pub data: Array2<T>,
 
-    // TODO: Remove the string name and rely only on a closure (Metric<T, U>).
-    /// Metric to use to compute distances (ex "euclidean")
-    pub metric: &'static str,
+    // A str name for the distance function being used
+    pub metric_name: &'static str,
 
     /// Whether this dataset should use an internal cache (recommended)
     pub use_cache: bool,
 
     // The stored function, used to compute distances.
-    function: Metric<T, U>,
+    pub metric: Metric<T, U>,
 
     // The internal cache.
-    cache: DashMap<(Index, Index), U>,
+    cache: Mutex<HashMap<(Index, Index), U>>,
 }
 
 impl<T: Number, U: Number> fmt::Debug for RowMajor<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("RowMajor Dataset")
             .field("data-shape", &self.data.shape())
-            .field("metric", &self.metric)
+            .field("metric", &self.metric_name)
             .field("cache-usage", &self.use_cache)
             .finish()
     }
@@ -128,24 +143,26 @@ impl<T: Number, U: Number> fmt::Debug for RowMajor<T, U> {
 
 impl<T: Number, U: Number> RowMajor<T, U> {
     /// Create a new Dataset, using the provided data and metric, optionally use a cache.
-    pub fn new(
-        data: Array2<T>,
-        metric: &'static str,
-        use_cache: bool,
-    ) -> Result<RowMajor<T, U>, String> {
+    ///
+    /// # Arguments
+    ///
+    /// * data - a 2-dimensional array.
+    /// * name - of distance-metric to use.
+    /// * use_cache - whether to use an internal cache for storing distances.
+    pub fn new(data: Array2<T>, metric: &'static str, use_cache: bool) -> Result<RowMajor<T, U>, String> {
         Ok(RowMajor {
             data,
-            metric,
+            metric_name: metric,
             use_cache,
-            function: metric_new(metric)?,
-            cache: DashMap::new(),
+            metric: metric_new(metric)?,
+            cache: Mutex::new(HashMap::new()),
         })
     }
 }
 
 impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
     /// Return the metric name for the dataset.
-    fn metric(&self) -> &'static str {
+    fn metric(&self) -> Metric<T, U> {
         self.metric
     }
 
@@ -165,8 +182,8 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
     }
 
     /// Return the row at the provided index.
-    fn instance(&self, i: Index) -> Arc<ArrayView<T, IxDyn>> {
-        Arc::new(self.data.index_axis(Axis(0), i).into_dyn())
+    fn instance(&self, i: Index) -> ArrayView<T, IxDyn> {
+        self.data.index_axis(Axis(0), i).into_dyn()
     }
 
     /// Return a random selection of unique indices.
@@ -176,9 +193,7 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
     #[allow(clippy::ptr_arg)]
     fn choose_unique(&self, indices: Indices, n: usize) -> Indices {
         // TODO: actually check for uniqueness among choices
-        indices
-            .into_iter()
-            .choose_multiple(&mut rand::thread_rng(), n)
+        indices.into_iter().choose_multiple(&mut rand::thread_rng(), n)
     }
 
     /// Compute the distance between `left` and `right`.
@@ -186,31 +201,21 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
         if left == right {
             U::zero()
         } else {
-            let key = if left < right {
-                (left, right)
+            let key = if left < right { (left, right) } else { (right, left) };
+            if !self.cache.lock().unwrap().contains_key(&key) {
+                let distance = (self.metric)(&self.data.row(left).into_dyn(), &self.data.row(right).into_dyn());
+                self.cache.lock().unwrap().insert(key, distance);
+                distance
             } else {
-                (right, left)
-            };
-            if !self.cache.contains_key(&key) {
-                self.cache.insert(
-                    key,
-                    (self.function)(
-                        Arc::new(self.data.row(left).into_dyn()),
-                        Arc::new(self.data.row(right).into_dyn()),
-                    ),
-                );
+                *self.cache.lock().unwrap().get(&key).unwrap()
             }
-            *self.cache.get(&key).unwrap()
         }
     }
 
     /// Compute the distances from `left` to all points in `right`.
     #[allow(clippy::ptr_arg)]
     fn distances_from(&self, left: Index, right: &Indices) -> Vec<U> {
-        right
-            .par_iter()
-            .map(|&r| self.distance(left, r))
-            .collect::<Vec<U>>()
+        right.par_iter().map(|&r| self.distance(left, r)).collect::<Vec<U>>()
     }
 
     /// Compute distances between all points in `left` and `right`.
@@ -224,24 +229,23 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
     /// Compute the pairwise distance between all points in `indices`.
     #[allow(clippy::ptr_arg)]
     fn pairwise_distances(&self, indices: &Indices) -> Vec<Vec<U>> {
+        // TODO: Optimize this to only make distance calls for lower triangular matrix
         self.distances_among(indices, indices)
     }
 
     /// Clears the internal cache.
     fn clear_cache(&self) {
-        self.cache.clear()
+        self.cache.lock().unwrap().clear()
     }
 
     /// Returns the number of elements in the internal cache.
     fn cache_size(&self) -> Option<usize> {
-        Some(self.cache.len())
+        Some(self.cache.lock().unwrap().len())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use float_cmp::approx_eq;
     use ndarray::prelude::*;
 
@@ -254,7 +258,7 @@ mod tests {
         let row_0 = array![1., 2., 3.].into_dyn();
         let dataset = RowMajor::new(data, "euclidean", false).unwrap();
         assert_eq!(dataset.ninstances(), 2);
-        assert_eq!(Arc::try_unwrap(dataset.instance(0)).unwrap(), row_0,);
+        assert_eq!(dataset.instance(0), row_0,);
 
         approx_eq!(f64, dataset.distance(0, 0), 0.);
         approx_eq!(f64, dataset.distance(0, 1), 3.);
