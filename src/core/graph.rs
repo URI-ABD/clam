@@ -1,6 +1,7 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use ndarray::prelude::*;
@@ -32,8 +33,8 @@ impl<T: Number, U: Number> PartialEq for Edge<T, U> {
 
 impl<T: Number, U: Number> Eq for Edge<T, U> {}
 
-impl<T: Number, U: Number> fmt::Display for Edge<T, U> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: Number, U: Number> std::fmt::Display for Edge<T, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:} -- {:}, {:}", self.left.name, self.right.name, self.distance)
     }
 }
@@ -74,11 +75,11 @@ pub struct Graph<T: Number, U: Number> {
     pub clusters: ClusterSet<T, U>,
     pub edges: EdgeSet<T, U>,
     pub is_built: bool,
-    pub cardinality: Index,
-    pub population: Index,
-    pub indices: Indices,
-    pub depth: u8,
-    pub min_depth: u8,
+    pub cardinality: usize,
+    pub population: usize,
+    pub indices: Vec<Index>,
+    pub depth: usize,
+    pub min_depth: usize,
     pub edges_dict: EdgesMap<T, U>,
 }
 // TODO: Implement Display, perhaps using Dot-String format
@@ -113,40 +114,31 @@ impl<T: Number, U: Number> Graph<T, U> {
         Ok(graph)
     }
 
-    fn cardinality(&self) -> Index {
+    fn cardinality(&self) -> usize {
         self.clusters.len()
     }
 
-    fn population(&self) -> Index {
+    fn population(&self) -> usize {
         self.clusters.iter().map(|cluster| cluster.cardinality).sum()
     }
 
-    fn indices(&self) -> Indices {
-        self.clusters
-            .par_iter()
-            .map(|cluster| cluster.indices.clone())
-            .flatten()
-            .collect()
+    fn indices(&self) -> Vec<Index> {
+        self.clusters.par_iter().map(|cluster| cluster.indices.clone()).flatten().collect()
     }
 
-    fn depth(&self) -> u8 {
+    fn depth(&self) -> usize {
         self.clusters.par_iter().map(|cluster| cluster.depth()).max().unwrap()
     }
 
-    fn min_depth(&self) -> u8 {
+    fn min_depth(&self) -> usize {
         self.clusters.par_iter().map(|cluster| cluster.depth()).min().unwrap()
     }
 
-    pub fn depth_range(&self) -> (u8, u8) {
+    pub fn depth_range(&self) -> (usize, usize) {
         (self.min_depth, self.depth)
     }
 
-    pub fn find_candidates(
-        &self,
-        _root: &Arc<Cluster<T, U>>,
-        _cluster: &Arc<Cluster<T, U>>,
-        _candidates_map: &Arc<CandidatesMap<T, U>>,
-    ) -> Result<(), String> {
+    pub fn find_candidates(&self, _root: &Arc<Cluster<T, U>>, _cluster: &Arc<Cluster<T, U>>, _candidates_map: &Arc<CandidatesMap<T, U>>) -> Result<(), String> {
         // TODO: Think about doing this in Manifold
         unimplemented!()
         // let mut radius = root.radius;
@@ -193,12 +185,7 @@ impl<T: Number, U: Number> Graph<T, U> {
         // Ok(())
     }
 
-    pub fn find_neighbors(
-        &self,
-        _root: &Arc<Cluster<T, U>>,
-        _cluster: &Arc<Cluster<T, U>>,
-        _candidates_map: &Arc<CandidatesMap<T, U>>,
-    ) -> Result<(), String> {
+    pub fn find_neighbors(&self, _root: &Arc<Cluster<T, U>>, _cluster: &Arc<Cluster<T, U>>, _candidates_map: &Arc<CandidatesMap<T, U>>) -> Result<(), String> {
         unimplemented!()
         // if !candidates_map.contains_key(cluster) {
         //     self.find_candidates(root, cluster, candidates_map)?;
@@ -221,16 +208,7 @@ impl<T: Number, U: Number> Graph<T, U> {
     fn edges_dict(&self) -> EdgesMap<T, U> {
         self.clusters
             .par_iter()
-            .map(|c| {
-                (
-                    Arc::clone(c),
-                    self.edges
-                        .iter()
-                        .filter(|&e| e.contains(c))
-                        .map(|e| Arc::clone(e))
-                        .collect(),
-                )
-            })
+            .map(|c| (Arc::clone(c), self.edges.iter().filter(|&e| e.contains(c)).map(|e| Arc::clone(e)).collect()))
             .collect()
     }
 
@@ -365,22 +343,14 @@ impl<T: Number, U: Number> Graph<T, U> {
     }
 
     pub fn diameter(&self) -> usize {
-        self.clusters
-            .iter()
-            .map(|cluster_item| self.eccentricity(cluster_item).unwrap())
-            .max()
-            .unwrap()
+        self.clusters.iter().map(|cluster_item| self.eccentricity(cluster_item).unwrap()).max().unwrap()
     }
 
     #[allow(clippy::type_complexity)]
     pub fn distance_matrix(&self) -> Result<(Vec<Arc<Cluster<T, U>>>, Array2<U>), String> {
         self.assert_built()?;
 
-        let clusters: Vec<Arc<Cluster<T, U>>> = self
-            .clusters
-            .iter()
-            .map(|cluster_item| Arc::clone(cluster_item))
-            .collect();
+        let clusters: Vec<Arc<Cluster<T, U>>> = self.clusters.iter().map(|cluster_item| Arc::clone(cluster_item)).collect();
         let mut indices = HashMap::new();
         clusters.iter().enumerate().for_each(|(i, cluster)| {
             indices.insert(Arc::clone(cluster), i).unwrap();

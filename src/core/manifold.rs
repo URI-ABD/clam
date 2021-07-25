@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use bitvec::prelude::*;
+
 use crate::prelude::*;
 use criteria::PartitionCriterion;
 
@@ -13,7 +15,7 @@ pub struct Manifold<T: Number, U: Number> {
 impl<T: Number, U: Number> Manifold<T, U> {
     pub fn new(dataset: Arc<dyn Dataset<T, U>>, cluster_criteria: Vec<PartitionCriterion<T, U>>) -> Manifold<T, U> {
         let indices = dataset.indices();
-        let root = Cluster::new(Arc::clone(&dataset), 1, indices).partition(&cluster_criteria);
+        let root = Cluster::new(Arc::clone(&dataset), bitvec![Lsb0, u8; 1], indices).partition(&cluster_criteria);
         Manifold {
             dataset,
             root: Arc::new(root),

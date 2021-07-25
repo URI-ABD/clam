@@ -2,16 +2,17 @@
 //!
 //! Define and implement the `Cluster` struct.
 
-use std::borrow::Borrow;
-use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
-use ndarray::prelude::*;
+use bitvec::prelude::*;
 use rayon::prelude::*;
 
 use crate::prelude::*;
-use crate::utils::{argmax, argmin};
+use crate::utils::argmax;
+use crate::utils::argmin;
 use criteria::PartitionCriterion;
 
 const SUB_SAMPLE: usize = 100;
@@ -19,6 +20,7 @@ const SUB_SAMPLE: usize = 100;
 /// A 2-tuple of `Arc<Cluster>` representing the two child `Clusters`
 /// formed when a `Cluster` is partitioned.
 type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
+pub type ClusterName = BitVec<Lsb0, u8>;
 
 // type ClusterMap<T, U> = HashMap<usize, Arc<Cluster<T, U>>>;
 
@@ -38,18 +40,13 @@ pub struct Cluster<T: Number, U: Number> {
     /// A Cluster's name is the turn when it would be visited in a breadth-first
     /// traversal of a perfect and balanced binary tree.
     /// The root is named 1 and all descendants follow.
-    ///
-    /// TODO: Switch to using a bit-vector to allow for trees with depth greater than 63.
-    pub name: u64,
+    pub name: ClusterName,
 
     /// The number of instances in this Cluster.
     pub cardinality: usize,
 
     /// The `Indices` (a Vec<usize>) of instances in this `Cluster`.
-    pub indices: Indices,
-
-    /// A subset of `indices' to use for fast, approximate calculations of center and radius.
-    argsamples: Indices,
+    pub indices: Vec<Index>,
 
     /// The `Index` of the center of the Cluster.
     pub argcenter: Index,
@@ -78,9 +75,10 @@ impl<T: Number, U: Number> Hash for Cluster<T, U> {
     }
 }
 
-impl<T: Number, U: Number> fmt::Display for Cluster<T, U> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)
+impl<T: Number, U: Number> std::fmt::Display for Cluster<T, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let name_str: Vec<&str> = self.name.iter().map(|b| if *b { "1" } else { "0" }).collect();
+        write!(f, "{}", name_str.join(""))
     }
 }
 
@@ -93,19 +91,17 @@ impl<T: Number, U: Number> Cluster<T, U> {
     ///   We never copy `Instances` from the `Dataset`.
     /// * `name`: An Optional String name for this `Cluster`. Defaults to "1" for the root `Cluster`.
     /// * `indices`: The `Indices` of `Instances` from the dataset that are contained in the `Cluster`.
-    pub fn new(dataset: Arc<dyn Dataset<T, U>>, name: u64, indices: Indices) -> Cluster<T, U> {
+    pub fn new(dataset: Arc<dyn Dataset<T, U>>, name: BitVec<Lsb0, u8>, indices: Vec<Index>) -> Cluster<T, U> {
         let mut cluster = Cluster {
             dataset,
             name,
             cardinality: indices.len(),
             indices,
             children: None,
-            argsamples: vec![],
             argcenter: 0,
             argradius: 0,
             radius: U::zero(),
         };
-        cluster.argsamples = cluster.argsamples();
         cluster.argcenter = cluster.argcenter();
         cluster.argradius = cluster.argradius();
         cluster.radius = cluster.radius();
@@ -113,17 +109,15 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     /// The depth of the `Cluster` in the tree. The root `Cluster` has depth 0.
-    pub fn depth(&self) -> u8 {
-        let size = std::mem::size_of::<usize>() << 3;
-        let zeros = self.name.leading_zeros() as usize;
-        (size - zeros - 1) as u8
+    pub fn depth(&self) -> usize {
+        self.name.len() - 1
     }
 
     /// A reference to the instance which is the (sometimes approximate) geometric median of the `Cluster`.
     ///
     /// TODO: Change the type of `Instance` to something generic.
     /// Ideally, something implementing an `Instance` trait so that `Dataset` becomes a collection of `Instances`.
-    pub fn center(&self) -> ArrayView<T, IxDyn> {
+    pub fn center(&self) -> Vec<T> {
         self.dataset.instance(self.argcenter)
     }
 
@@ -133,8 +127,30 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     /// Returns the distance from the center of the Cluster to the given instance.
-    pub fn distance_to(&self, other: &Arc<Cluster<T, U>>) -> U {
+    pub fn distance_to_other(&self, other: &Arc<Cluster<T, U>>) -> U {
         self.dataset.distance(self.argcenter, other.argcenter)
+    }
+
+    pub fn distance_to_instance(&self, instance: &[T]) -> U {
+        self.dataset.metric().distance(&self.center(), instance)
+    }
+
+    pub fn add_instance(&self, sequence: &[T], distance: U) -> HashMap<ClusterName, U> {
+        let mut result = match &self.children {
+            Some((left, right)) => {
+                let left_distance = left.distance_to_instance(sequence);
+                let right_distance = right.distance_to_instance(sequence);
+
+                if left_distance <= right_distance {
+                    left.add_instance(sequence, left_distance)
+                } else {
+                    right.add_instance(sequence, right_distance)
+                }
+            }
+            None => HashMap::new(),
+        };
+        result.insert(self.name.clone(), distance);
+        result
     }
 
     pub fn descend_towards(&self, _name: u64) -> Result<Arc<Cluster<T, U>>, String> {
@@ -155,14 +171,9 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
     /// Returns the indices of two maximally separated instances in the Cluster.
     fn poles(&self) -> (Index, Index) {
-        let indices = self
-            .indices
-            .par_iter()
-            .filter(|&&i| i != self.argradius)
-            .cloned()
-            .collect();
+        let indices: Vec<Index> = self.indices.par_iter().filter(|&&i| i != self.argradius).cloned().collect();
         let distances = self.dataset.distances_from(self.argradius, &indices);
-        let (farthest, _) = argmax(&distances);
+        let (farthest, _) = argmax(&distances.to_vec());
         (self.argradius, indices[farthest])
     }
 
@@ -172,11 +183,10 @@ impl<T: Number, U: Number> Cluster<T, U> {
     ///
     /// # Arguments
     ///
-    /// * `partition_criteria`: A reference to `Vec<PartitionCriterion>`.
-    ///   Each `Criterion` must evaluate to `true` otherwise the `Cluster`
+    /// * `partition_criteria`: A collection of `PartitionCriterion`.
+    ///   Each `PartitionCriterion` must evaluate to `true` otherwise the `Cluster`
     ///   cannot be partitioned.
-    #[allow(clippy::ptr_arg)]
-    pub fn partition(self, criteria: &Vec<PartitionCriterion<T, U>>) -> Cluster<T, U> {
+    pub fn partition(self, criteria: &[PartitionCriterion<T, U>]) -> Cluster<T, U> {
         // Cannot partition a singleton cluster.
         if self.is_singleton() {
             return self;
@@ -191,22 +201,28 @@ impl<T: Number, U: Number> Cluster<T, U> {
         let (left, right) = self.poles();
 
         // Split cluster indices by proximity to left or right pole
-        let (left, right): (Indices, Indices) = self
+        let (left, right): (Vec<Index>, Vec<Index>) = self
             .indices
             .par_iter()
             .partition(|&&i| self.dataset.distance(left, i) <= self.dataset.distance(i, right));
 
         // Ensure that left cluster is more populated than right cluster.
-        let (left, right) = if right.len() > left.len() {
-            (right, left)
-        } else {
-            (left, right)
+        let (left, right) = if right.len() > left.len() { (right, left) } else { (left, right) };
+        let left_name = {
+            let mut name = self.name.clone();
+            name.push(false);
+            name
+        };
+        let right_name = {
+            let mut name = self.name.clone();
+            name.push(true);
+            name
         };
 
         // Recursively apply partition to child clusters.
         let (left, right) = rayon::join(
-            || Cluster::new(Arc::clone(&self.dataset), self.name << 1, left).partition(criteria),
-            || Cluster::new(Arc::clone(&self.dataset), 1 + (self.name << 1), right).partition(criteria),
+            || Cluster::new(Arc::clone(&self.dataset), left_name, left).partition(criteria),
+            || Cluster::new(Arc::clone(&self.dataset), right_name, right).partition(criteria),
         );
 
         // Return new cluster with the proper subtree
@@ -215,7 +231,6 @@ impl<T: Number, U: Number> Cluster<T, U> {
             name: self.name,
             cardinality: self.cardinality,
             indices: self.indices,
-            argsamples: self.argsamples,
             argcenter: self.argcenter,
             argradius: self.argradius,
             radius: self.radius,
@@ -223,19 +238,29 @@ impl<T: Number, U: Number> Cluster<T, U> {
         }
     }
 
+    /// Returns a Vec of clusters containing all descendants of the cluster excluding itself.
+    pub fn flatten_tree(&self) -> Vec<Arc<Cluster<T, U>>> {
+        match &self.children {
+            Some((left, right)) => {
+                let mut descendants = vec![Arc::clone(left), Arc::clone(right)];
+                descendants.append(&mut left.flatten_tree());
+                descendants.append(&mut right.flatten_tree());
+                descendants
+            }
+            None => vec![],
+        }
+    }
+
     /// Returns the number of clusters in the subtree rooted at
     /// this cluster (excluding this cluster).
     pub fn num_descendants(&self) -> usize {
-        match self.children.borrow() {
-            Some((left, right)) => left.num_descendants() + right.num_descendants() + 2,
-            None => 0,
-        }
+        self.flatten_tree().len()
     }
 
     /// Returns unique samples from among Cluster.indices.
     ///
     /// These significantly speed up the computation of center and partition without much loss in accuracy.
-    fn argsamples(&self) -> Indices {
+    fn argsamples(&self) -> Vec<Index> {
         if self.cardinality <= SUB_SAMPLE {
             self.indices.clone()
         } else {
@@ -246,21 +271,22 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
     /// Returns the `Index` of the `center` of the `Cluster`.
     fn argcenter(&self) -> Index {
+        let argsamples = self.argsamples();
         let distances: Vec<U> = self
             .dataset
-            .pairwise_distances(&self.argsamples)
-            .par_iter()
-            .map(|v| v.par_iter().cloned().sum())
+            .pairwise_distances(&argsamples)
+            .outer_iter()
+            .map(|v| v.iter().cloned().sum())
             .collect();
         let (argcenter, _) = argmin(&distances);
-        self.argsamples[argcenter]
+        argsamples[argcenter]
     }
 
     /// Returns the `Index` of the `Instance` in the `Cluster` that is
     /// farthest away from the `center`.
     fn argradius(&self) -> Index {
         let distances = self.dataset.distances_from(self.argcenter, &self.indices);
-        let (argradius, _) = argmax(&distances);
+        let (argradius, _) = argmax(&distances.to_vec());
         self.indices[argradius]
     }
 
@@ -275,20 +301,18 @@ impl<T: Number, U: Number> Cluster<T, U> {
 mod tests {
     use std::sync::Arc;
 
-    use ndarray::{arr2, Array2};
+    use bitvec::prelude::*;
 
     use crate::dataset::RowMajor;
     use crate::prelude::*;
 
     #[test]
     fn test_cluster() {
-        let data: Array2<f64> = arr2(&[[0., 0., 0.], [1., 1., 1.], [2., 2., 2.], [3., 3., 3.]]);
-        let dataset: Arc<dyn Dataset<f64, f64>> =
-            Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", false).unwrap());
+        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
+        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::<f64, f64>::new(data, "euclidean", false).unwrap());
         let criteria = vec![criteria::max_depth(3), criteria::min_cardinality(1)];
-        let cluster = Cluster::new(Arc::clone(&dataset), 1, dataset.indices().clone()).partition(&criteria);
+        let cluster = Cluster::new(Arc::clone(&dataset), bitvec![Lsb0, u8; 1], dataset.indices()).partition(&criteria);
 
-        assert_eq!(cluster, cluster);
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality, 4);
         assert_eq!(cluster.num_descendants(), 6);
@@ -301,7 +325,6 @@ mod tests {
             format!("name: {:?},", cluster.name),
             format!("cardinality: {:?},", cluster.cardinality),
             format!("indices: {:?},", cluster.indices),
-            format!("argsamples: {:?},", cluster.argsamples),
             format!("argcenter: {:?},", cluster.argcenter),
             format!("argradius: {:?},", cluster.argradius),
             format!("radius: {:?},", cluster.radius),
@@ -312,8 +335,8 @@ mod tests {
         assert_eq!(format!("{:?}", cluster), cluster_str);
 
         let (left, right) = cluster.children.unwrap();
-        assert_eq!(format!("{:}", left), "2");
-        assert_eq!(format!("{:}", right), "3");
+        assert_eq!(format!("{:}", left), "10");
+        assert_eq!(format!("{:}", right), "11");
 
         for child in [left, right].iter() {
             assert_eq!(child.depth(), 1);

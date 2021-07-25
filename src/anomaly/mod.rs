@@ -1,3 +1,3 @@
-pub use chaoda::Chaoda;
-
 mod chaoda;
+
+pub use chaoda::Chaoda;
