@@ -6,12 +6,6 @@ use rayon::prelude::*;
 
 use crate::prelude::*;
 
-/// A Vec of Clusters that overlap with the query ball.
-type ClusterHits<T, U> = Vec<Arc<Cluster<T, U>>>;
-
-/// A Vec of tuples of index of hit and its distance to the query.
-type Hits<U> = Vec<(Index, U)>;
-
 /// CLAM-Augmented K-nearest-neighbors Entropy-scaling Search
 ///
 /// Provides tools for similarity search.
@@ -215,91 +209,101 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
         self.dataset.metric().distance(x, y)
     }
 
+    pub fn knn_indices(&self, query: &[T], k: usize) -> Vec<Index> {
+        self.knn(query, k).into_iter().map(|(i, _)| i).collect()
+    }
+
+    pub fn knn(&self, _query: &[T], _k: usize) -> Vec<(Index, U)> {
+        todo!()
+    }
+
     pub fn rnn_indices(&self, query: &[T], radius: Option<U>) -> Vec<Index> {
         self.rnn(query, radius).into_iter().map(|(i, _)| i).collect()
     }
 
     /// Performs accelerated rho-nearest search on the dataset and
     /// returns all hits inside a sphere of the given `radius` centered at the requested `query`.
-    pub fn rnn(&self, query: &[T], radius: Option<U>) -> Hits<U> {
-        self.leaf_search(&query, radius, self.tree_search(&query, radius))
+    pub fn rnn(&self, query: &[T], radius: Option<U>) -> Vec<(Index, U)> {
+        let (mut definites, potentials) = self.tree_search(query, radius);
+        definites.append(&mut self.leaf_search(query, radius, &potentials));
+        definites
     }
 
-    /// Performs coarse-grained tree-search to find all clusters that could potentially contain hits.
-    pub fn tree_search(&self, query: &[T], radius: Option<U>) -> ClusterHits<T, U> {
+    /// Performs coarse-grained tree-search to find all instances that are definite or potential hits.
+    pub fn tree_search(&self, query: &[T], radius: Option<U>) -> (Vec<(Index, U)>, Vec<Index>) {
         // parse the search radius
         let radius = radius.unwrap_or_else(U::zero);
         // if query ball has overlapping volume with the root, delegate to the recursive, private method.
-        if self.distance(&self.root.center(), query) <= (radius + self.root.radius) {
-            self._tree_search(&self.root, query, radius)
+        let distance = self.distance(&self.root.center(), query);
+        if distance <= (radius + self.root.radius) {
+            self._tree_search(&self.root, query, radius, distance)
         } else {
-            // otherwise, return an empty Vec signifying no possible hits.
-            vec![]
+            // otherwise, there are no possible hits.
+            (Vec::new(), Vec::new())
         }
     }
 
-    //noinspection DuplicatedCode
-    fn _tree_search(&self, cluster: &Arc<Cluster<T, U>>, query: &[T], radius: U) -> ClusterHits<T, U> {
+    fn _tree_search(&self, cluster: &Arc<Cluster<T, U>>, query: &[T], radius: U, distance: U) -> (Vec<(Index, U)>, Vec<Index>) {
         // Invariant: Entering this function means that the current cluster has overlapping volume with the query-ball.
         // Invariant: Triangle-inequality guarantees exactness of results from each recursive call.
-        match &cluster.children {
+        let (mut definites, potentials) = match &cluster.children {
             // There are children. Make recursive calls if necessary.
-            Some((left, right)) => {
+            Some((left_cluster, right_cluster)) => {
                 // get the two vectors of hits from up to two recursive calls.
-                let (mut left, mut right) = rayon::join(
+                let ((mut left_definites, mut left_potentials), (mut right_definites, mut right_potentials)) = rayon::join(
                     || {
                         // If the child has overlap with the query-ball, recurse into the child
-                        if self.query_distance(query, left.argcenter) <= (radius + left.radius) {
-                            self._tree_search(&left, query, radius)
+                        let distance = self.distance(query, &left_cluster.center());
+                        if distance <= (radius + left_cluster.radius) {
+                            self._tree_search(left_cluster, query, radius, distance)
                         } else {
                             // otherwise return an empty vec.
-                            vec![]
+                            (Vec::new(), Vec::new())
                         }
                     },
                     || {
-                        if self.query_distance(query, right.argcenter) <= (radius + right.radius) {
-                            self._tree_search(&right, query, radius)
+                        let distance = self.distance(query, &right_cluster.center());
+                        if distance <= (radius + right_cluster.radius) {
+                            self._tree_search(right_cluster, query, radius, distance)
                         } else {
-                            vec![]
+                            (Vec::new(), Vec::new())
                         }
                     },
                 );
-                // combine both Vectors into one.
-                left.append(&mut right);
-                left
+                left_definites.append(&mut right_definites);
+                left_potentials.append(&mut right_potentials);
+                (left_definites, left_potentials)
             }
             None => {
-                // There are no children so return a Vec containing only the current cluster.
-                vec![Arc::clone(cluster)]
+                // There are no children so return the indices of the current cluster.
+                (Vec::new(), cluster.indices.clone())
             }
+        };
+        // decide whether the cluster-center is a definite hit.
+        if distance <= radius {
+            definites.push((cluster.argcenter, distance));
         }
+        (definites, potentials)
     }
 
     /// Exhaustively searches the clusters identified by tree-search and
-    /// returns a HashMap of all hits and their distance from the query.
-    pub fn leaf_search(&self, query: &[T], radius: Option<U>, clusters: ClusterHits<T, U>) -> Hits<U> {
-        let indices = clusters.iter().map(|c| c.indices.clone()).into_iter().flatten().collect();
-        self.linear_search(query, radius, Some(indices))
+    /// returns a Vec of indices of all hits and their distance from the query.
+    pub fn leaf_search(&self, query: &[T], radius: Option<U>, indices: &[Index]) -> Vec<(Index, U)> {
+        self.linear_search(query, radius, indices)
     }
 
-    pub fn linear_search_indices(&self, query: &[T], radius: Option<U>, indices: Option<Vec<Index>>) -> Vec<Index> {
+    pub fn linear_search_indices(&self, query: &[T], radius: Option<U>, indices: &[Index]) -> Vec<Index> {
         self.linear_search(query, radius, indices).into_iter().map(|(i, _)| i).collect()
     }
 
     /// Naive search. Useful for leaf-search and for measuring acceleration from entropy-scaling search.
-    pub fn linear_search(&self, query: &[T], radius: Option<U>, indices: Option<Vec<Index>>) -> Hits<U> {
+    pub fn linear_search(&self, query: &[T], radius: Option<U>, indices: &[Index]) -> Vec<(Index, U)> {
         let radius = radius.unwrap_or_else(U::zero);
-        let indices = indices.unwrap_or_else(|| self.dataset.indices());
         indices
             .par_iter()
-            .map(|&i| (i, self.query_distance(query, i)))
+            .map(|&index| (index, self.distance(query, &self.dataset.instance(index))))
             .filter(|(_, d)| *d <= radius)
             .collect()
-    }
-
-    // A convenient wrapper to get the distance from a given query to an indexed instance in the dataset.
-    fn query_distance(&self, query: &[T], index: Index) -> U {
-        self.distance(query, &self.dataset.instance(index))
     }
 }
 
@@ -313,9 +317,7 @@ fn child_names<T: Number, U: Number>(cluster: &Arc<Cluster<T, U>>) -> (ClusterNa
     (left_name, right_name)
 }
 
-/// Given an unstacked tree as a HashMap of Clusters, rebuild all
-/// parent-child relationships and return the root cluster.
-/// This consumed the given HashMap.
+/// Given an unstacked tree as a HashMap of Clusters, rebuild all parent-child relationships and return the root cluster.
 pub fn restack_tree<T: Number, U: Number>(tree: Vec<Arc<Cluster<T, U>>>) -> Arc<Cluster<T, U>> {
     let depth = tree.par_iter().map(|c| c.depth()).max().unwrap();
     let mut tree: HashMap<_, _> = tree.into_par_iter().map(|c| (c.name.clone(), c)).collect();
@@ -385,7 +387,7 @@ mod tests {
 
         let query = &[0., 1.];
         let results = search.rnn_indices(query, Some(1.5));
-        assert_eq!(results.len(), 2);
+        assert!(results.len() <= 2);
         assert!(results.contains(&0));
         assert!(results.contains(&1));
         assert!(!results.contains(&2));
@@ -416,7 +418,7 @@ mod tests {
             let query = dataset.instance(q);
 
             let cakes_results = search.rnn_indices(&query, radius);
-            let naive_results = search.linear_search_indices(&query, radius, None);
+            let naive_results = search.linear_search_indices(&query, radius, &dataset.indices());
 
             let no_extra = cakes_results.iter().all(|i| naive_results.contains(i));
             assert!(no_extra, "had some extras {} / {}", naive_results.len(), cakes_results.len());

@@ -108,14 +108,16 @@ pub fn read_ann_data<T: Number, U: Number>(name: &str) -> Result<(Vec<Vec<T>>, V
     Ok((train, test))
 }
 
-pub fn argmin<T: Number>(values: &[T]) -> (Index, T) {
+/// Returns the index and value of the minimum value in the given slice.
+pub fn argmin<T: PartialOrd + Copy>(values: &[T]) -> (Index, T) {
     values
         .iter()
         .enumerate()
         .fold((0, values[0]), |(i_min, v_min), (i, &v)| if v < v_min { (i, v) } else { (i_min, v_min) })
 }
 
-pub fn argmax<T: Number>(values: &[T]) -> (Index, T) {
+/// Returns the index and value of the maximum value in the given slice.
+pub fn argmax<T: PartialOrd + Copy>(values: &[T]) -> (Index, T) {
     values
         .iter()
         .enumerate()

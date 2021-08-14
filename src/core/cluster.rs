@@ -103,6 +103,11 @@ impl<T: Number, U: Number> Cluster<T, U> {
             radius: U::zero(),
         };
         cluster.argcenter = cluster.argcenter();
+
+        // TODO: figure out if there is a way to maintain the graph invariant while also removing each cluster center from children
+        let position = cluster.indices.iter().position(|&i| i == cluster.argcenter).unwrap();
+        cluster.indices.swap_remove(position);
+
         cluster.argradius = cluster.argradius();
         cluster.radius = cluster.radius();
         cluster
@@ -171,7 +176,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
     /// Returns the indices of two maximally separated instances in the Cluster.
     fn poles(&self) -> (Index, Index) {
-        let indices: Vec<Index> = self.indices.par_iter().filter(|&&i| i != self.argradius).cloned().collect();
+        let indices: Vec<Index> = self.indices.iter().filter(|&&i| i != self.argradius).copied().collect();
         let distances = self.dataset.distances_from(self.argradius, &indices);
         let (farthest, _) = argmax(&distances.to_vec());
         (self.argradius, indices[farthest])
@@ -188,7 +193,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     ///   cannot be partitioned.
     pub fn partition(self, criteria: &[PartitionCriterion<T, U>]) -> Cluster<T, U> {
         // Cannot partition a singleton cluster.
-        if self.is_singleton() {
+        if self.is_singleton() || self.indices.len() == 1 {
             return self;
         }
 
@@ -198,16 +203,20 @@ impl<T: Number, U: Number> Cluster<T, U> {
         }
 
         // Get indices of left and right poles
-        let (left, right) = self.poles();
+        let (left_pole, right_pole) = self.poles();
 
         // Split cluster indices by proximity to left or right pole
-        let (left, right): (Vec<Index>, Vec<Index>) = self
+        let (left_indices, right_indices): (Vec<_>, Vec<_>) = self
             .indices
             .par_iter()
-            .partition(|&&i| self.dataset.distance(left, i) <= self.dataset.distance(i, right));
-
+            .partition(|&&i| self.dataset.distance(left_pole, i) <= self.dataset.distance(i, right_pole));
         // Ensure that left cluster is more populated than right cluster.
-        let (left, right) = if right.len() > left.len() { (right, left) } else { (left, right) };
+        let (left_indices, right_indices) = if right_indices.len() > left_indices.len() {
+            (right_indices, left_indices)
+        } else {
+            (left_indices, right_indices)
+        };
+
         let left_name = {
             let mut name = self.name.clone();
             name.push(false);
@@ -221,8 +230,8 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
         // Recursively apply partition to child clusters.
         let (left, right) = rayon::join(
-            || Cluster::new(Arc::clone(&self.dataset), left_name, left).partition(criteria),
-            || Cluster::new(Arc::clone(&self.dataset), right_name, right).partition(criteria),
+            || Cluster::new(Arc::clone(&self.dataset), left_name, left_indices).partition(criteria),
+            || Cluster::new(Arc::clone(&self.dataset), right_name, right_indices).partition(criteria),
         );
 
         // Return new cluster with the proper subtree
@@ -257,21 +266,20 @@ impl<T: Number, U: Number> Cluster<T, U> {
         self.flatten_tree().len()
     }
 
-    /// Returns unique samples from among Cluster.indices.
+    /// Returns the `Index` of the `center` of the `Cluster`.
     ///
-    /// These significantly speed up the computation of center and partition without much loss in accuracy.
-    fn argsamples(&self) -> Vec<Index> {
-        if self.cardinality <= SUB_SAMPLE {
+    /// If there are too many instances in the cluster, we use a random subsample of 'sqrt(cardinality)' instances to find an approximation.
+    /// This significantly speeds up the computation of `center` and `partition` without much loss in accuracy.
+    ///
+    /// TODO: Figure out approximation-bounds for this. There is probably some useful literature in computer graphics.
+    fn argcenter(&self) -> Index {
+        let argsamples = if self.cardinality <= SUB_SAMPLE {
             self.indices.clone()
         } else {
             let n = (self.cardinality as f64).sqrt() as Index;
             self.dataset.choose_unique(self.indices.clone(), n)
-        }
-    }
+        };
 
-    /// Returns the `Index` of the `center` of the `Cluster`.
-    fn argcenter(&self) -> Index {
-        let argsamples = self.argsamples();
         let distances: Vec<U> = self
             .dataset
             .pairwise_distances(&argsamples)
@@ -285,15 +293,25 @@ impl<T: Number, U: Number> Cluster<T, U> {
     /// Returns the `Index` of the `Instance` in the `Cluster` that is
     /// farthest away from the `center`.
     fn argradius(&self) -> Index {
-        let distances = self.dataset.distances_from(self.argcenter, &self.indices);
-        let (argradius, _) = argmax(&distances.to_vec());
-        self.indices[argradius]
+        if self.indices.is_empty() {
+            self.argcenter
+        } else if self.indices.len() == 1 {
+            self.indices[0]
+        } else {
+            let distances = self.dataset.distances_from(self.argcenter, &self.indices);
+            let (argradius, _) = argmax(&distances.to_vec());
+            self.indices[argradius]
+        }
     }
 
     /// Returns the distance from the `center` to the `Instance`
     /// in the `Cluster` that is farthest away from the `center.
     fn radius(&self) -> U {
-        self.dataset.distance(self.argcenter, self.argradius)
+        if self.indices.is_empty() {
+            U::from(0).unwrap()
+        } else {
+            self.dataset.distance(self.argcenter, self.argradius)
+        }
     }
 }
 
@@ -315,7 +333,7 @@ mod tests {
 
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality, 4);
-        assert_eq!(cluster.num_descendants(), 6);
+        assert_eq!(cluster.num_descendants(), 2);
         assert!(cluster.radius > 0.);
 
         assert_eq!(format!("{:}", cluster), "1");
@@ -336,12 +354,13 @@ mod tests {
 
         let (left, right) = cluster.children.unwrap();
         assert_eq!(format!("{:}", left), "10");
-        assert_eq!(format!("{:}", right), "11");
+        assert_eq!(left.depth(), 1);
+        assert_eq!(left.cardinality, 2);
+        assert_eq!(left.num_descendants(), 0);
 
-        for child in [left, right].iter() {
-            assert_eq!(child.depth(), 1);
-            assert_eq!(child.cardinality, 2);
-            assert_eq!(child.num_descendants(), 2);
-        }
+        assert_eq!(format!("{:}", right), "11");
+        assert_eq!(right.depth(), 1);
+        assert_eq!(right.cardinality, 1);
+        assert_eq!(right.num_descendants(), 0);
     }
 }

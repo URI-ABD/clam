@@ -58,18 +58,18 @@ impl<T: Number, U: Number> Edge<T, U> {
         cluster == &self.left || cluster == &self.right
     }
 
-    pub fn neighbor(&self, cluster: &Arc<Cluster<T, U>>) -> Result<&Arc<Cluster<T, U>>, String> {
+    pub fn neighbor(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Arc<Cluster<T, U>>, String> {
         if cluster == &self.left {
-            Ok(&self.right)
+            Ok(Arc::clone(&self.right))
         } else if cluster == &self.right {
-            Ok(&self.left)
+            Ok(Arc::clone(&self.left))
         } else {
-            let message = format!("Cluster {:} is not in this edge.", cluster.name);
-            Err(message)
+            Err(format!("Cluster {:} is not in this edge.", cluster.name))
         }
     }
 }
 
+//TODO: Documentation ...
 #[derive(Debug)]
 pub struct Graph<T: Number, U: Number> {
     pub clusters: ClusterSet<T, U>,
@@ -111,6 +111,7 @@ impl<T: Number, U: Number> Graph<T, U> {
         graph.indices = graph.indices();
         graph.depth = graph.depth();
         graph.min_depth = graph.min_depth();
+        graph.build_edges()?;
         Ok(graph)
     }
 
@@ -134,12 +135,16 @@ impl<T: Number, U: Number> Graph<T, U> {
         self.clusters.par_iter().map(|cluster| cluster.depth()).min().unwrap()
     }
 
+    pub fn argpoints(&self) -> Vec<Index> {
+        todo!()
+    }
+
     pub fn depth_range(&self) -> (usize, usize) {
         (self.min_depth, self.depth)
     }
 
+    // TODO: manifold will have a hash map of cluster -> set of candidate neighbors
     pub fn find_candidates(&self, _root: &Arc<Cluster<T, U>>, _cluster: &Arc<Cluster<T, U>>, _candidates_map: &Arc<CandidatesMap<T, U>>) -> Result<(), String> {
-        // TODO: Think about doing this in Manifold
         unimplemented!()
         // let mut radius = root.radius;
         // let mut grand_ancestor = Arc::clone(root);
@@ -187,6 +192,11 @@ impl<T: Number, U: Number> Graph<T, U> {
 
     pub fn find_neighbors(&self, _root: &Arc<Cluster<T, U>>, _cluster: &Arc<Cluster<T, U>>, _candidates_map: &Arc<CandidatesMap<T, U>>) -> Result<(), String> {
         unimplemented!()
+        // get candidate-neighbors, compute if not already in cache
+        // for each candidate,
+        //     if the candidate is not subsumed by the cluster and is a valid neighbor (within the right distance),
+        //     add that (cluster, candidate) pair to the set of edges.
+
         // if !candidates_map.contains_key(cluster) {
         //     self.find_candidates(root, cluster, candidates_map)?;
         // }
@@ -208,11 +218,11 @@ impl<T: Number, U: Number> Graph<T, U> {
     fn edges_dict(&self) -> EdgesMap<T, U> {
         self.clusters
             .par_iter()
-            .map(|c| (Arc::clone(c), self.edges.iter().filter(|&e| e.contains(c)).map(|e| Arc::clone(e)).collect()))
+            .map(|c| (Arc::clone(c), self.edges.iter().filter(|&e| e.contains(c)).map(Arc::clone).collect()))
             .collect()
     }
 
-    pub fn build_edges(&mut self) -> Result<(), String> {
+    fn build_edges(&mut self) -> Result<(), String> {
         unimplemented!()
         // for item in self.clusters.iter() {
         //     self.find_neighbors(root, item.key(), candidates_map)?;
@@ -248,7 +258,7 @@ impl<T: Number, U: Number> Graph<T, U> {
     pub fn neighbors(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Vec<Arc<Cluster<T, U>>>, String> {
         let mut neighbors = Vec::new();
         (self.edges_from(cluster)?).iter().for_each(|edge_item| {
-            neighbors.push(Arc::clone(edge_item.neighbor(cluster).unwrap()));
+            neighbors.push(edge_item.neighbor(cluster).unwrap());
         });
         Ok(neighbors)
     }

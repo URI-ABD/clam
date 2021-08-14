@@ -40,7 +40,9 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     fn dimensionality(&self) -> usize;
 
     /// Returns the Indices for the dataset.
-    fn indices(&self) -> Vec<Index>;
+    fn indices(&self) -> Vec<Index> {
+        (0..self.cardinality()).collect()
+    }
 
     /// Returns the instance at the given index.
     ///
@@ -241,11 +243,6 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
 
     fn dimensionality(&self) -> usize {
         self.data.par_iter().map(|row| row.len()).max().unwrap()
-    }
-
-    /// Return all of the indices in the dataset.
-    fn indices(&self) -> Vec<Index> {
-        (0..self.cardinality()).collect()
     }
 
     /// Return the row at the provided index.
