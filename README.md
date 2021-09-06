@@ -2,11 +2,27 @@
 
 ## Installation
 
+### Docker
+
+```
+docker build -t clam .
+```
+
+### Python
+
 ```bash
 python3 -m pip install pyclam
 ```
 
 ## Usage
+
+### Docker
+
+```
+docker run clam --help
+```
+
+### Python Scripting
 
 ```python
 from pyclam import Manifold

@@ -1,19 +1,19 @@
 [tool.poetry]
 name = "pyclam"
-version = "0.3.11"
+version = "0.4.0"
 description = "Clustered Learning of Approximate Manifolds"
-authors = ["Tom Howard <info@tomhoward.codes>", "Najib Ishaq <najib_ishaq@zoho.com>", "Noah Daniels <noah_daniels@uri.edu>"]
+authors = ["Najib Ishaq <najib_ishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<4.0"
-scipy = ">=1.6,<2.0"
-numpy = ">=1.19,<2.0"
+python = "^3.6"
+scipy = "1.*"
+numpy = "1.*"
 
 [tool.poetry.dev-dependencies]
-sphinx = ">=3.1.0,<4.0"
-toml = "^0.10.1"
+sphinx = "3.*"
+toml = "0.10.*"
 
 [build-system]
-requires = ["poetry>=1.1"]
+requires = ["poetry==1.1.7"]
 build-backend = "poetry.masonry.api"

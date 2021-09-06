@@ -1,4 +1,4 @@
-FROM rust:1.40-stretch
+FROM rust:1.54
 
 # Dependancies.
 RUN apt-get update --fix-missing \
@@ -8,12 +8,11 @@ RUN apt-get update --fix-missing \
         pkg-config \
         zlib1g-dev
 
-# Nightly toolchain
-RUN rustup toolchain install nightly
-
 # Copy source.
-WORKDIR /usr/src/distance
+WORKDIR /usr/src/clam
 COPY . .
 
+RUN cargo build --release
+
 # Default command runs tests.
-CMD ["cargo", "+nightly", "test"]
+ENTRYPOINT ["/usr/src/clam/target/release/clam"]
