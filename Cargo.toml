@@ -7,7 +7,7 @@ edition = "2018"
 # Publishing lock.
 # When you're ready to start publishing, set publish to true
 # and update the release github action.
-publish = false
+publish = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
