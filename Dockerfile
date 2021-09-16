@@ -15,4 +15,4 @@ COPY . .
 RUN cargo build --release
 
 # Default command runs tests.
-ENTRYPOINT ["/usr/src/clam/target/release/clam"]
+CMD ["/usr/src/clam/target/release/clam"]
