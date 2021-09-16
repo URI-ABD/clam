@@ -19,7 +19,7 @@
 //!
 //! [`git`]: https://git-scm.com/
 
-use clam::prelude::*;
+use uri_abd_clam::prelude::*;
 use eval_metrics::classification::RocCurve;
 use log::*;
 use serde_json::json;
@@ -202,7 +202,7 @@ fn chaoda(
 ) -> Result<String, String> {
     let read_labels = matches!(mode, ChaodaMode::Bench);
     let (data, labels) =
-        clam::utils::read_chaoda_data(dataset_path, read_labels)?;
+        uri_abd_clam::utils::read_chaoda_data(dataset_path, read_labels)?;
     let data = Arc::new(data);
 
     let datasets: Vec<_> = metrics
@@ -211,7 +211,7 @@ fn chaoda(
             let metric =
                 metric_from_name(&metric.to_string().to_lowercase()).unwrap();
             let dataset: Arc<dyn Dataset<f64, f64>> =
-                Arc::new(clam::dataset::RowMajor::<f64, f64>::new(
+                Arc::new(uri_abd_clam::dataset::RowMajor::<f64, f64>::new(
                     Arc::clone(&data),
                     metric,
                     true,
@@ -220,13 +220,13 @@ fn chaoda(
         })
         .collect();
 
-    let cluster_scorers = clam::get_meta_ml_scorers();
+    let cluster_scorers = uri_abd_clam::get_meta_ml_scorers();
 
     // Start a timer.
     let now = std::time::Instant::now();
 
     // Call chaoda::new.
-    let chaoda = clam::Chaoda::new(
+    let chaoda = uri_abd_clam::Chaoda::new(
         datasets,
         max_tree_depth,
         min_leaf_size,

@@ -1,5 +1,5 @@
 [package]
-name = "clam"
+name = "uri-abd-clam"
 version = "0.4.0"
 authors = ["Najib Ishaq <nishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
 edition = "2018"

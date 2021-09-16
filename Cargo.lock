@@ -147,30 +147,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clam"
-version = "0.4.0"
-dependencies = [
- "bitvec",
- "criterion",
- "dashmap",
- "easy-cast",
- "eval-metrics",
- "float-cmp",
- "log",
- "ndarray",
- "ndarray-npy",
- "num-traits",
- "ordered-float",
- "rand",
- "rayon",
- "serde_json",
- "simplelog",
- "statrs",
- "structopt",
- "sysinfo",
-]
-
-[[package]]
 name = "clap"
 version = "2.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1180,6 +1156,30 @@ name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
+
+[[package]]
+name = "uri-abd-clam"
+version = "0.4.0"
+dependencies = [
+ "bitvec",
+ "criterion",
+ "dashmap",
+ "easy-cast",
+ "eval-metrics",
+ "float-cmp",
+ "log",
+ "ndarray",
+ "ndarray-npy",
+ "num-traits",
+ "ordered-float",
+ "rand",
+ "rayon",
+ "serde_json",
+ "simplelog",
+ "statrs",
+ "structopt",
+ "sysinfo",
+]
 
 [[package]]
 name = "vec_map"
