@@ -16,10 +16,8 @@ fn cakes_apogee(c: &mut Criterion) {
 
     let (name, metric) = ("apogee", metric_from_name("euclidean").unwrap());
     let (train, test) = utils::read_ann_data::<f32, f32>(name).unwrap();
-    let train_dataset: Arc<dyn Dataset<f32, f32>> =
-        Arc::new(RowMajor::new(Arc::new(train), Arc::clone(&metric), true));
-    let test_dataset: Arc<dyn Dataset<f32, f32>> =
-        Arc::new(RowMajor::new(Arc::new(test), metric, true));
+    let train_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::new(Arc::new(train), Arc::clone(&metric), true));
+    let test_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::new(Arc::new(test), metric, true));
     let search = Cakes::build(Arc::clone(&train_dataset), Some(50), None);
     let num_queries = 1000;
 
@@ -55,13 +53,8 @@ fn cakes_ann_benchmarks(c: &mut Criterion) {
         let metric = metric_from_name(metric).unwrap();
         let (train, test) = utils::read_ann_data::<f32, f32>(name).unwrap();
         let train_dataset: Arc<dyn Dataset<f32, f32>> =
-            Arc::new(RowMajor::<f32, f32>::new(
-                Arc::new(train),
-                Arc::clone(&metric),
-                true,
-            ));
-        let test_dataset: Arc<dyn Dataset<f32, f32>> =
-            Arc::new(RowMajor::<f32, f32>::new(Arc::new(test), metric, true));
+            Arc::new(RowMajor::<f32, f32>::new(Arc::new(train), Arc::clone(&metric), true));
+        let test_dataset: Arc<dyn Dataset<f32, f32>> = Arc::new(RowMajor::<f32, f32>::new(Arc::new(test), metric, true));
         let search = Cakes::build(Arc::clone(&train_dataset), Some(50), None);
 
         for f in 3..6 {

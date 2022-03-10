@@ -1,35 +1,33 @@
-use std::sync::Arc;
-
 use crate::core::Ratios;
 use crate::criteria::MetaMLScorer;
 
 /// Returns a Slice of tuples of Scorer names and Boxed Scorer functions.
-pub fn get_meta_ml_scorers<'a>() -> Vec<(&'a str, Arc<MetaMLScorer>)> {
+pub fn get_meta_ml_scorers<'a>() -> Vec<(&'a str, MetaMLScorer)> {
     vec![
-        ("lr_manhattan_cc", Arc::new(Box::new(lr_manhattan_cc))),
-        ("lr_manhattan_sc", Arc::new(Box::new(lr_manhattan_sc))),
-        ("lr_manhattan_gn", Arc::new(Box::new(lr_manhattan_gn))),
-        ("lr_manhattan_cr", Arc::new(Box::new(lr_manhattan_cr))),
-        ("lr_manhattan_sp", Arc::new(Box::new(lr_manhattan_sp))),
-        ("lr_manhattan_vd", Arc::new(Box::new(lr_manhattan_vd))),
-        ("lr_euclidean_cc", Arc::new(Box::new(lr_euclidean_cc))),
-        ("lr_euclidean_sc", Arc::new(Box::new(lr_euclidean_sc))),
-        ("lr_euclidean_gn", Arc::new(Box::new(lr_euclidean_gn))),
-        ("lr_euclidean_cr", Arc::new(Box::new(lr_euclidean_cr))),
-        ("lr_euclidean_sp", Arc::new(Box::new(lr_euclidean_sp))),
-        ("lr_euclidean_vd", Arc::new(Box::new(lr_euclidean_vd))),
-        ("dt_manhattan_cc", Arc::new(Box::new(dt_manhattan_cc))),
-        ("dt_manhattan_sc", Arc::new(Box::new(dt_manhattan_sc))),
-        ("dt_manhattan_gn", Arc::new(Box::new(dt_manhattan_gn))),
-        ("dt_manhattan_cr", Arc::new(Box::new(dt_manhattan_cr))),
-        ("dt_manhattan_sp", Arc::new(Box::new(dt_manhattan_sp))),
-        ("dt_manhattan_vd", Arc::new(Box::new(dt_manhattan_vd))),
-        ("dt_euclidean_cc", Arc::new(Box::new(dt_euclidean_cc))),
-        ("dt_euclidean_sc", Arc::new(Box::new(dt_euclidean_sc))),
-        ("dt_euclidean_gn", Arc::new(Box::new(dt_euclidean_gn))),
-        ("dt_euclidean_cr", Arc::new(Box::new(dt_euclidean_cr))),
-        ("dt_euclidean_sp", Arc::new(Box::new(dt_euclidean_sp))),
-        ("dt_euclidean_vd", Arc::new(Box::new(dt_euclidean_vd))),
+        ("lr_manhattan_sc", Box::new(lr_manhattan_sc)),
+        ("lr_manhattan_cc", Box::new(lr_manhattan_cc)),
+        ("lr_manhattan_gn", Box::new(lr_manhattan_gn)),
+        ("lr_manhattan_cr", Box::new(lr_manhattan_cr)),
+        ("lr_manhattan_sp", Box::new(lr_manhattan_sp)),
+        ("lr_manhattan_vd", Box::new(lr_manhattan_vd)),
+        ("lr_euclidean_cc", Box::new(lr_euclidean_cc)),
+        ("lr_euclidean_sc", Box::new(lr_euclidean_sc)),
+        ("lr_euclidean_gn", Box::new(lr_euclidean_gn)),
+        ("lr_euclidean_cr", Box::new(lr_euclidean_cr)),
+        ("lr_euclidean_sp", Box::new(lr_euclidean_sp)),
+        ("lr_euclidean_vd", Box::new(lr_euclidean_vd)),
+        ("dt_manhattan_cc", Box::new(dt_manhattan_cc)),
+        ("dt_manhattan_sc", Box::new(dt_manhattan_sc)),
+        ("dt_manhattan_gn", Box::new(dt_manhattan_gn)),
+        ("dt_manhattan_cr", Box::new(dt_manhattan_cr)),
+        ("dt_manhattan_sp", Box::new(dt_manhattan_sp)),
+        ("dt_manhattan_vd", Box::new(dt_manhattan_vd)),
+        ("dt_euclidean_cc", Box::new(dt_euclidean_cc)),
+        ("dt_euclidean_sc", Box::new(dt_euclidean_sc)),
+        ("dt_euclidean_gn", Box::new(dt_euclidean_gn)),
+        ("dt_euclidean_cr", Box::new(dt_euclidean_cr)),
+        ("dt_euclidean_sp", Box::new(dt_euclidean_sp)),
+        ("dt_euclidean_vd", Box::new(dt_euclidean_vd)),
     ]
 }
 

@@ -1,25 +1,20 @@
 use std::sync::Arc;
 
 use ndarray::prelude::*;
-use rayon::prelude::*;
 
-use crate::anomaly;
-use crate::criteria;
 use crate::prelude::*;
+
+use super::MetaML;
 
 /// CLI Description
 /// ex: clam chaoda --(bench/train/infer/...)  <int: max-tree-depth (opt)> <int: min-leaf-size (opt)> <int: speed-threshold (opt)> <Path: out (opt: stdout)> <Path: dataset> <String[]: metrics>
 /// In bench mode, output running time of scoring everything to standard error. Do not include IO time to read the dataset.
 
-type NameMethodGraph<T, U> = (
-    String,
-    Arc<anomaly::IndividualAlgorithm<T, U>>,
-    Arc<Graph<T, U>>,
-);
+type MmlGraph<T, U> = (MetaML<T, U>, Arc<Graph<T, U>>);
 
 pub struct Chaoda<T: Number + 'static, U: Number + 'static> {
     manifolds: Vec<Arc<Manifold<T, U>>>,
-    names_methods_graphs: Vec<NameMethodGraph<T, U>>,
+    mml_graphs: Vec<MmlGraph<T, U>>,
     pub scores: Vec<f64>,
 }
 
@@ -28,27 +23,19 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
         datasets: Vec<Arc<dyn Dataset<T, U>>>,
         max_tree_depth: Option<usize>,
         min_leaf_size: Option<usize>,
-        cluster_scorers: Vec<(&str, Arc<criteria::MetaMLScorer>)>,
+        cluster_scorers: Vec<crate::anomaly::MetaML<T, U>>,
         min_selection_depth: Option<usize>,
         use_speed_threshold: bool,
     ) -> Self {
         let mut chaoda = Chaoda {
             manifolds: Vec::new(),
-            names_methods_graphs: Vec::new(),
+            mml_graphs: Vec::new(),
             scores: Vec::new(),
         };
-        let min_leaf_size = min_leaf_size.unwrap_or_else(|| {
-            std::cmp::max(1, datasets.get(0).unwrap().cardinality() / 1000)
-        });
-        chaoda.manifolds = chaoda.create_manifolds(
-            datasets,
-            max_tree_depth.unwrap_or(25),
-            min_leaf_size,
-        );
-
-        chaoda.names_methods_graphs = chaoda
-            .create_graphs(cluster_scorers, min_selection_depth.unwrap_or(4));
-
+        let min_cardinality = datasets.get(0).unwrap().cardinality() / 1000;
+        let min_leaf_size = min_leaf_size.unwrap_or_else(|| std::cmp::max(1, min_cardinality));
+        chaoda.manifolds = chaoda.create_manifolds(datasets, max_tree_depth.unwrap_or(50), min_leaf_size);
+        chaoda.mml_graphs = chaoda.create_graphs(cluster_scorers, min_selection_depth.unwrap_or(4));
         chaoda.scores = chaoda.calculate_anomaly_scores(use_speed_threshold);
 
         chaoda
@@ -66,53 +53,34 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
         ];
 
         datasets
-            .par_iter()
-            .map(|dataset| {
-                Manifold::new(Arc::clone(dataset), partition_criteria)
-            })
+            .iter()
+            .inspect(|&dataset| println!("Building manifold with metric {}", dataset.metric_name()))
+            .map(|dataset| Manifold::new(Arc::clone(dataset), partition_criteria))
             .collect()
     }
 
+    #[allow(clippy::needless_collect)]
     fn create_graphs(
         &self,
-        criteria: Vec<(&str, Arc<criteria::MetaMLScorer>)>,
+        mml_methods: Vec<crate::anomaly::MetaML<T, U>>,
         min_selection_depth: usize,
-    ) -> Vec<NameMethodGraph<T, U>> {
-        let (meta_ml_names, meta_ml_scorers): (Vec<_>, Vec<_>) =
-            criteria.into_iter().unzip();
-        let individual_algorithms = anomaly::get_individual_algorithms::<T, U>();
-
-        let graph_algorithms: Vec<_> = meta_ml_names
-            .par_iter()
-            .map(|&meta_ml_name| {
-                individual_algorithms
+    ) -> Vec<MmlGraph<T, U>> {
+        let graphs = mml_methods
+            .iter()
+            .map(|mml| {
+                let manifold = self
+                    .manifolds
                     .iter()
-                    .filter(|(name, _)| meta_ml_name.contains(*name))
-                    .map(|(_, algorithm)| algorithm)
-                    .next()
+                    .find(|&manifold| manifold.metric_name() == mml.metric)
                     .unwrap()
+                    .clone();
+                let clusters = manifold.select_clusters(&mml.mml_method, min_selection_depth);
+                manifold.create_graph(&clusters)
             })
-            .collect();
-
-        self.manifolds
-            .par_iter()
-            .flat_map(|manifold| {
-                meta_ml_names
-                    .par_iter()
-                    .zip(
-                        manifold
-                            .create_optimal_graphs(
-                                &meta_ml_scorers,
-                                min_selection_depth,
-                            )
-                            .into_par_iter(),
-                    )
-                    .zip(graph_algorithms.par_iter())
-                    .map(|((&name, graph), algorithm)| {
-                        (name.to_string(), Arc::clone(algorithm), graph)
-                    })
-            })
-            .collect()
+            .map(Arc::new)
+            .collect::<Vec<_>>();
+        println!("Got {} Graphs.", graphs.len());
+        mml_methods.into_iter().zip(graphs.into_iter()).collect()
     }
 
     fn calculate_anomaly_scores(&self, use_speed_threshold: bool) -> Vec<f64> {
@@ -123,20 +91,20 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
             cardinality
         };
 
-        let individual_scores: Vec<_> = self
-            .names_methods_graphs
-            .par_iter()
-            .filter(|(name, _, graph)| {
-                name.contains(&graph.metric_name)
-                    && (name.contains("cc")
-                        || name.contains("cr")
-                        || name.contains("vd")
-                        || graph.cardinality <= speed_threshold)
+        let individual_scores = self
+            .mml_graphs
+            .iter()
+            .filter(|(mml, graph)| {
+                mml.algorithm_name == "cc"
+                    || mml.algorithm_name == "cr"
+                    || mml.algorithm_name == "vd"
+                    || graph.cardinality <= speed_threshold
             })
-            .map(|(_, method, graph)| method(graph))
-            .map(Array1::from_vec)
-            .filter(|scores| scores.std(0.) > 1e-1)
-            .collect();
+            .inspect(|(mml, _)| println!("Applying {} method", mml))
+            .map(|(mml, graph)| Arc::clone(&mml.algorithm)(Arc::clone(graph)))
+            // .inspect(|scores| self.print_vec(scores))
+            .collect::<Vec<_>>();
+        println!("Scored {} algorithms.", individual_scores.len());
 
         if individual_scores.is_empty() {
             vec![0.5; cardinality]
@@ -147,7 +115,22 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
             )
             .unwrap();
 
+            // let scores = scores.mean_axis(Axis(0)).unwrap().to_vec();
+            // self.print_vec(&scores);
+            // scores
             scores.mean_axis(Axis(0)).unwrap().to_vec()
         }
+    }
+
+    #[allow(dead_code)]
+    fn print_vec(&self, values: &[f64]) {
+        println!(
+            "{:?}\n",
+            values
+                .iter()
+                .map(|v| format!("{:.2}", v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }

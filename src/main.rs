@@ -133,12 +133,7 @@ fn main() {
         LogLevel::Warning => LevelFilter::Warn,
         LogLevel::Error => LevelFilter::Error,
     };
-    let term_logger = TermLogger::new(
-        log_level,
-        Config::default(),
-        TerminalMode::Stderr,
-        ColorChoice::Auto,
-    );
+    let term_logger = TermLogger::new(log_level, Config::default(), TerminalMode::Stderr, ColorChoice::Auto);
     match opt.log_file {
         Some(file) => CombinedLogger::init(vec![
             term_logger,
@@ -178,10 +173,7 @@ fn main() {
     // Handle output (stdout or to file)
     match result {
         Ok(result) => match opt.out {
-            Some(path) => {
-                write!(std::fs::File::create(path).unwrap(), "{}", result)
-                    .unwrap()
-            }
+            Some(path) => write!(std::fs::File::create(path).unwrap(), "{}", result).unwrap(),
             None => println!("{:?}", result),
         },
         Err(error) => error!("Uh oh, something went wrong...\n{}", error),
@@ -201,26 +193,23 @@ fn chaoda(
     use_speed_threshold: bool,
 ) -> Result<String, String> {
     let read_labels = matches!(mode, ChaodaMode::Bench);
-    let (data, labels) =
-        clam::utils::read_chaoda_data(dataset_path, read_labels)?;
+    let (data, labels) = clam::utils::read_chaoda_data(dataset_path, read_labels)?;
     let data = Arc::new(data);
 
     let datasets: Vec<_> = metrics
         .iter()
         .map(|metric| {
-            let metric =
-                metric_from_name(&metric.to_string().to_lowercase()).unwrap();
-            let dataset: Arc<dyn Dataset<f64, f64>> =
-                Arc::new(clam::dataset::RowMajor::<f64, f64>::new(
-                    Arc::clone(&data),
-                    metric,
-                    true,
-                ));
+            let metric = metric_from_name(&metric.to_string().to_lowercase()).unwrap();
+            let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(clam::dataset::RowMajor::<f64, f64>::new(
+                Arc::clone(&data),
+                metric,
+                true,
+            ));
             dataset
         })
         .collect();
 
-    let cluster_scorers = clam::get_meta_ml_scorers();
+    let cluster_scorers = clam::get_meta_ml_methods();
 
     // Start a timer.
     let now = std::time::Instant::now();
@@ -241,9 +230,7 @@ fn chaoda(
     let result = match mode {
         ChaodaMode::Bench => {
             let roc_score = RocCurve::compute(&chaoda.scores, &labels)
-                .map_err(|error| {
-                    format!("Error: Failed to compute RocCurve. {}", error)
-                })?
+                .map_err(|error| format!("Error: Failed to compute RocCurve. {}", error))?
                 .auc();
             let result = json!({"roc_score": roc_score, "time (s)": time});
             to_string(&result).unwrap()

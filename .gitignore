@@ -183,3 +183,5 @@ data/greengenes*
 # Local files
 pyclam/explorations.py
 benches/*.txt
+
+.DS_Store
