@@ -72,10 +72,7 @@ pub fn read_test_data() -> DataLabels<f64, u8> {
     (data, labels.to_vec())
 }
 
-pub fn read_chaoda_data(
-    path: PathBuf,
-    read_labels: bool,
-) -> Result<DataLabels<f64, bool>, String> {
+pub fn read_chaoda_data(path: PathBuf, read_labels: bool) -> Result<DataLabels<f64, bool>, String> {
     let mut data_path = path.clone();
     data_path.set_extension("npy");
 
@@ -93,14 +90,13 @@ pub fn read_chaoda_data(
         labels_path.pop();
         let name = path.file_name().unwrap().to_str().unwrap();
         labels_path.push(format!("{}_labels.npy", name));
-        let labels: Array1<u8> =
-            read_npy(labels_path.clone()).map_err(|error| {
-                format!(
-                    "Error: Failed to read your dataset at {}. {:}",
-                    labels_path.to_str().unwrap(),
-                    error
-                )
-            })?;
+        let labels: Array1<u8> = read_npy(labels_path.clone()).map_err(|error| {
+            format!(
+                "Error: Failed to read your dataset at {}. {:}",
+                labels_path.to_str().unwrap(),
+                error
+            )
+        })?;
         labels.into_iter().map(|label| label != 0).collect()
     } else {
         data.iter().map(|_| true).collect()
@@ -109,9 +105,7 @@ pub fn read_chaoda_data(
     Ok((data, labels))
 }
 
-pub fn read_ann_data<T: Number, U: Number>(
-    name: &str,
-) -> Result<TrainTest<T>, ReadNpyError> {
+pub fn read_ann_data<T: Number, U: Number>(name: &str) -> Result<TrainTest<T>, ReadNpyError> {
     let mut data_dir: PathBuf = PathBuf::new();
     data_dir.push("/data");
     data_dir.push("abd");
@@ -131,27 +125,27 @@ pub fn read_ann_data<T: Number, U: Number>(
 }
 
 pub fn argmin<T: Number>(values: &[T]) -> (Index, T) {
-    values
-        .iter()
-        .enumerate()
-        .fold((0, values[0]), |(i_min, v_min), (i, &v)| {
+    values.iter().enumerate().fold(
+        (0, values[0]),
+        |(i_min, v_min), (i, &v)| {
             if v < v_min {
                 (i, v)
             } else {
                 (i_min, v_min)
             }
-        })
+        },
+    )
 }
 
 pub fn argmax<T: Number>(values: &[T]) -> (Index, T) {
-    values
-        .iter()
-        .enumerate()
-        .fold((0, values[0]), |(i_max, v_max), (i, &v)| {
+    values.iter().enumerate().fold(
+        (0, values[0]),
+        |(i_max, v_max), (i, &v)| {
             if v > v_max {
                 (i, v)
             } else {
                 (i_max, v_max)
             }
-        })
+        },
+    )
 }

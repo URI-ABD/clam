@@ -23,9 +23,9 @@ type Hits<U> = Vec<(Index, U)>;
 ///
 /// Paper pending...
 ///
-/// TODO: Add Compression and Decompression for the dataset and search tree.
+/// TODO Add Compression and Decompression for the dataset and search tree.
 ///
-/// TODO: Add Serde support for storing and loading the search tree.
+/// TODO Add Serde support for storing and loading the search tree.
 pub struct Cakes<T: Number, U: Number> {
     /// An Arc to any struct that implements the `Dataset` trait.
     pub dataset: Arc<dyn Dataset<T, U>>,
@@ -35,13 +35,8 @@ pub struct Cakes<T: Number, U: Number> {
 }
 
 impl<T: Number, U: Number> std::fmt::Debug for Cakes<T, U> {
-    fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter,
-    ) -> std::result::Result<(), std::fmt::Error> {
-        f.debug_struct("Search")
-            .field("dataset", &self.dataset)
-            .finish()
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        f.debug_struct("Search").field("dataset", &self.dataset).finish()
     }
 }
 
@@ -87,8 +82,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
         min_cardinality: Option<usize>,
     ) -> Self {
         let batch_size = dataset.batch_size(batch_fraction);
-        let (sample_indices, complement_indices) =
-            dataset.subsample_indices(batch_size);
+        let (sample_indices, complement_indices) = dataset.subsample_indices(batch_size);
 
         let subset = dataset.row_major_subset(&sample_indices);
         let mut cakes = Cakes::build(subset, max_depth, min_cardinality);
@@ -98,11 +92,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
             tree.push(Arc::clone(&cakes.root));
             tree.into_par_iter()
                 .map(|cluster| {
-                    let indices: Vec<_> = cluster
-                        .indices
-                        .par_iter()
-                        .map(|&i| sample_indices[i])
-                        .collect();
+                    let indices: Vec<_> = cluster.indices.par_iter().map(|&i| sample_indices[i]).collect();
                     let argcenter = sample_indices[cluster.argcenter];
                     let argradius = sample_indices[cluster.argcenter];
 
@@ -131,9 +121,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
             num_batches
         };
 
-        for (i, batch_indices) in
-            complement_indices.chunks(batch_size).enumerate()
-        {
+        for (i, batch_indices) in complement_indices.chunks(batch_size).enumerate() {
             println!(
                 "Inserting batch {} of {} with {} instances",
                 i + 1,
@@ -151,13 +139,8 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
                 .enumerate()
                 .map(|(i, _)| {
                     let instance = batch_dataset.instance(i);
-                    let distance = cakes
-                        .root
-                        .dataset
-                        .metric()
-                        .distance(&cakes.root.center(), &instance);
-                    let insertion_path =
-                        cakes.root.add_instance(&instance, distance);
+                    let distance = cakes.root.dataset.metric().distance(&cakes.root.center(), &instance);
+                    let insertion_path = cakes.root.add_instance(&instance, distance);
 
                     flat_tree
                         .par_iter()
@@ -213,8 +196,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
                 .zip(new_radii.into_par_iter())
                 .zip(insertions.into_par_iter())
                 .map(|((cluster, (argradius, radius)), indices)| {
-                    let mut indices: Vec<_> =
-                        indices.into_iter().map(|i| batch_indices[i]).collect();
+                    let mut indices: Vec<_> = indices.into_iter().map(|i| batch_indices[i]).collect();
                     indices.extend(cluster.indices.iter());
 
                     let (argradius, radius) = if radius > cluster.radius {
@@ -261,10 +243,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
     }
 
     pub fn rnn_indices(&self, query: &[T], radius: Option<U>) -> Vec<Index> {
-        self.rnn(query, radius)
-            .into_iter()
-            .map(|(i, _)| i)
-            .collect()
+        self.rnn(query, radius).into_iter().map(|(i, _)| i).collect()
     }
 
     /// Performs accelerated rho-nearest search on the dataset and
@@ -274,17 +253,11 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
     }
 
     /// Performs coarse-grained tree-search to find all clusters that could potentially contain hits.
-    pub fn tree_search(
-        &self,
-        query: &[T],
-        radius: Option<U>,
-    ) -> ClusterHits<T, U> {
+    pub fn tree_search(&self, query: &[T], radius: Option<U>) -> ClusterHits<T, U> {
         // parse the search radius
         let radius = radius.unwrap_or_else(U::zero);
         // if query ball has overlapping volume with the root, delegate to the recursive, private method.
-        if self.distance(&self.root.center(), query)
-            <= (radius + self.root.radius)
-        {
+        if self.distance(&self.root.center(), query) <= (radius + self.root.radius) {
             self._tree_search(&self.root, query, radius)
         } else {
             // otherwise, return an empty Vec signifying no possible hits.
@@ -293,12 +266,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
     }
 
     //noinspection DuplicatedCode
-    fn _tree_search(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-        query: &[T],
-        radius: U,
-    ) -> ClusterHits<T, U> {
+    fn _tree_search(&self, cluster: &Arc<Cluster<T, U>>, query: &[T], radius: U) -> ClusterHits<T, U> {
         // Invariant: Entering this function means that the current cluster has overlapping volume with the query-ball.
         // Invariant: Triangle-inequality guarantees exactness of results from each recursive call.
         match cluster.children.read().unwrap().clone() {
@@ -308,9 +276,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
                 let (mut left, mut right) = rayon::join(
                     || {
                         // If the child has overlap with the query-ball, recurse into the child
-                        if self.query_distance(query, left.argcenter)
-                            <= (radius + left.radius)
-                        {
+                        if self.query_distance(query, left.argcenter) <= (radius + left.radius) {
                             self._tree_search(&left, query, radius)
                         } else {
                             // otherwise return an empty vec.
@@ -318,9 +284,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
                         }
                     },
                     || {
-                        if self.query_distance(query, right.argcenter)
-                            <= (radius + right.radius)
-                        {
+                        if self.query_distance(query, right.argcenter) <= (radius + right.radius) {
                             self._tree_search(&right, query, radius)
                         } else {
                             vec![]
@@ -340,12 +304,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
 
     /// Exhaustively searches the clusters identified by tree-search and
     /// returns a HashMap of all hits and their distance from the query.
-    pub fn leaf_search(
-        &self,
-        query: &[T],
-        radius: Option<U>,
-        clusters: ClusterHits<T, U>,
-    ) -> Hits<U> {
+    pub fn leaf_search(&self, query: &[T], radius: Option<U>, clusters: ClusterHits<T, U>) -> Hits<U> {
         let indices = clusters
             .iter()
             .map(|c| c.indices.clone())
@@ -355,12 +314,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
         self.linear_search(query, radius, Some(indices))
     }
 
-    pub fn linear_search_indices(
-        &self,
-        query: &[T],
-        radius: Option<U>,
-        indices: Option<Vec<Index>>,
-    ) -> Vec<Index> {
+    pub fn linear_search_indices(&self, query: &[T], radius: Option<U>, indices: Option<Vec<Index>>) -> Vec<Index> {
         self.linear_search(query, radius, indices)
             .into_iter()
             .map(|(i, _)| i)
@@ -368,12 +322,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
     }
 
     /// Naive search. Useful for leaf-search and for measuring acceleration from entropy-scaling search.
-    pub fn linear_search(
-        &self,
-        query: &[T],
-        radius: Option<U>,
-        indices: Option<Vec<Index>>,
-    ) -> Hits<U> {
+    pub fn linear_search(&self, query: &[T], radius: Option<U>, indices: Option<Vec<Index>>) -> Hits<U> {
         let radius = radius.unwrap_or_else(U::zero);
         let indices = indices.unwrap_or_else(|| self.dataset.indices());
         indices
@@ -389,9 +338,7 @@ impl<T: 'static + Number, U: 'static + Number> Cakes<T, U> {
     }
 }
 
-fn child_names<T: Number, U: Number>(
-    cluster: &Arc<Cluster<T, U>>,
-) -> (ClusterName, ClusterName) {
+fn child_names<T: Number, U: Number>(cluster: &Arc<Cluster<T, U>>) -> (BitVec, BitVec) {
     let mut left_name = cluster.name.clone();
     left_name.push(false);
 
@@ -404,12 +351,9 @@ fn child_names<T: Number, U: Number>(
 /// Given an unstacked tree as a HashMap of Clusters, rebuild all
 /// parent-child relationships and return the root cluster.
 /// This consumed the given HashMap.
-pub fn restack_tree<T: Number, U: Number>(
-    tree: Vec<Arc<Cluster<T, U>>>,
-) -> Arc<Cluster<T, U>> {
+pub fn restack_tree<T: Number, U: Number>(tree: Vec<Arc<Cluster<T, U>>>) -> Arc<Cluster<T, U>> {
     let depth = tree.par_iter().map(|c| c.depth()).max().unwrap();
-    let mut tree: HashMap<_, _> =
-        tree.into_par_iter().map(|c| (c.name.clone(), c)).collect();
+    let mut tree: HashMap<_, _> = tree.into_par_iter().map(|c| (c.name.clone(), c)).collect();
 
     for d in (0..depth).rev() {
         let (leaves, mut ancestors): (HashMap<_, _>, HashMap<_, _>) =
@@ -460,7 +404,7 @@ pub fn restack_tree<T: Number, U: Number>(
     }
 
     assert_eq!(1, tree.len());
-    Arc::clone(tree.get(&bitvec![Lsb0, u8; 1]).unwrap())
+    Arc::clone(tree.get(&bitvec![1]).unwrap())
 }
 
 #[cfg(test)]
@@ -477,8 +421,7 @@ mod tests {
     fn test_search() {
         let data = vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]];
         let metric = metric_from_name("euclidean").unwrap();
-        let dataset: Arc<dyn Dataset<f64, f64>> =
-            Arc::new(RowMajor::new(Arc::new(data), metric, false));
+        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::new(Arc::new(data), metric, false));
         let search = Cakes::build(Arc::clone(&dataset), None, None);
 
         let query = &[0., 1.];
@@ -502,8 +445,7 @@ mod tests {
     fn test_search_large() {
         let (data, _) = read_test_data();
         let metric = metric_from_name("euclidean").unwrap();
-        let dataset: Arc<dyn Dataset<_, f64>> =
-            Arc::new(RowMajor::new(Arc::new(data), metric, true));
+        let dataset: Arc<dyn Dataset<_, f64>> = Arc::new(RowMajor::new(Arc::new(data), metric, true));
 
         let search = Cakes::build(Arc::clone(&dataset), Some(50), None);
 
@@ -521,11 +463,9 @@ mod tests {
             let query = dataset.instance(q);
 
             let cakes_results = search.rnn_indices(&query, radius);
-            let naive_results =
-                search.linear_search_indices(&query, radius, None);
+            let naive_results = search.linear_search_indices(&query, radius, None);
 
-            let no_extra =
-                cakes_results.iter().all(|i| naive_results.contains(i));
+            let no_extra = cakes_results.iter().all(|i| naive_results.contains(i));
             assert!(
                 no_extra,
                 "had some extras {} / {}",
@@ -533,8 +473,7 @@ mod tests {
                 cakes_results.len()
             );
 
-            let no_misses =
-                naive_results.iter().all(|i| cakes_results.contains(i));
+            let no_misses = naive_results.iter().all(|i| cakes_results.contains(i));
             assert!(
                 no_misses,
                 "had some misses {} / {}",

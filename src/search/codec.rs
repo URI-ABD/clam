@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use bitvec::prelude::*;
 use rayon::prelude::*;
 
 use crate::dataset::RowMajor;
@@ -14,21 +15,12 @@ use crate::{prelude::*, Cakes};
 /// Those bytes can also be used to decode an encoded instance by using the reference.
 pub trait CompressibleDataset<T: Number, U: Number>: Dataset<T, U> {
     /// Encode one instance in terms of another.
-    fn encode(
-        &self,
-        reference: Index,
-        target: Index,
-    ) -> Result<Vec<u8>, String> {
-        self.metric()
-            .encode(&self.instance(reference), &self.instance(target))
+    fn encode(&self, reference: Index, target: Index) -> Result<Vec<u8>, String> {
+        self.metric().encode(&self.instance(reference), &self.instance(target))
     }
 
     /// Decode an instance from the encoded bytes and the reference.
-    fn decode(
-        &self,
-        reference: Index,
-        encoding: &[u8],
-    ) -> Result<Vec<T>, String> {
+    fn decode(&self, reference: Index, encoding: &[u8]) -> Result<Vec<T>, String> {
         self.metric().decode(&self.instance(reference), encoding)
     }
 }
@@ -36,15 +28,13 @@ pub trait CompressibleDataset<T: Number, U: Number>: Dataset<T, U> {
 impl<T: Number, U: Number> CompressibleDataset<T, U> for RowMajor<T, U> {}
 
 impl<T: 'static + Number, U: 'static + Number> RowMajor<T, U> {
-    pub fn as_arc_compressible_dataset(
-        self: Arc<Self>,
-    ) -> Arc<dyn CompressibleDataset<T, U>> {
+    pub fn as_arc_compressible_dataset(self: Arc<Self>) -> Arc<dyn CompressibleDataset<T, U>> {
         self
     }
 }
 
 pub struct PackableCluster<U: Number> {
-    pub name: ClusterName,
+    pub name: BitVec,
     pub cardinality: usize,
     pub center: Vec<u8>,
     pub radius: U,
@@ -87,11 +77,7 @@ impl<U: Number> PackableCluster<U> {
         self.radius == U::from(0).unwrap()
     }
 
-    pub fn decode_center<T: Number>(
-        &self,
-        metric: &Arc<dyn Metric<T, U>>,
-        reference: &[T],
-    ) -> Result<Vec<T>, String> {
+    pub fn decode_center<T: Number>(&self, metric: &Arc<dyn Metric<T, U>>, reference: &[T]) -> Result<Vec<T>, String> {
         metric.decode(reference, &self.center)
     }
 
@@ -121,14 +107,11 @@ pub struct Codec<T: Number, U: Number> {
     pub dataset: Arc<dyn CompressibleDataset<T, U>>,
     pub root: Arc<PackableCluster<U>>,
     pub center: Vec<T>,
-    pub tree_map: HashMap<ClusterName, Arc<PackableCluster<U>>>,
+    pub tree_map: HashMap<BitVec, Arc<PackableCluster<U>>>,
 }
 
 impl<T: Number, U: Number> Codec<T, U> {
-    pub fn from_cakes(
-        _dataset: &Arc<dyn CompressibleDataset<T, U>>,
-        _cakes: &Cakes<T, U>,
-    ) -> Self {
+    pub fn from_cakes(_dataset: &Arc<dyn CompressibleDataset<T, U>>, _cakes: &Cakes<T, U>) -> Self {
         todo!()
     }
 
@@ -163,42 +146,22 @@ impl<T: Number, U: Number> Codec<T, U> {
         }
     }
 
-    fn _tree_search(
-        &self,
-        _cluster: &Arc<PackableCluster<U>>,
-        _query: &[T],
-        _radius: U,
-    ) -> ClusterHits<U> {
+    fn _tree_search(&self, _cluster: &Arc<PackableCluster<U>>, _query: &[T], _radius: U) -> ClusterHits<U> {
         todo!()
     }
 
-    pub fn leaf_search(
-        &self,
-        _query: &[T],
-        _radius: Option<U>,
-        _clusters: ClusterHits<U>,
-    ) -> Hits<T, U> {
+    pub fn leaf_search(&self, _query: &[T], _radius: Option<U>, _clusters: ClusterHits<U>) -> Hits<T, U> {
         todo!()
     }
 
-    pub fn linear_search_instances(
-        &self,
-        query: &[T],
-        radius: Option<U>,
-        instances: Vec<Vec<T>>,
-    ) -> Vec<Vec<T>> {
+    pub fn linear_search_instances(&self, query: &[T], radius: Option<U>, instances: Vec<Vec<T>>) -> Vec<Vec<T>> {
         self.linear_search(query, radius, instances)
             .into_iter()
             .map(|(instance, _)| instance)
             .collect()
     }
 
-    pub fn linear_search(
-        &self,
-        query: &[T],
-        radius: Option<U>,
-        instances: Vec<Vec<T>>,
-    ) -> Hits<T, U> {
+    pub fn linear_search(&self, query: &[T], radius: Option<U>, instances: Vec<Vec<T>>) -> Hits<T, U> {
         let radius = radius.unwrap_or_else(U::zero);
         instances
             .into_par_iter()
@@ -221,15 +184,9 @@ mod tests {
 
     #[test]
     fn test_codec() {
-        let data = vec![
-            vec![0., 0., 0.],
-            vec![1., 1., 1.],
-            vec![2., 2., 2.],
-            vec![3., 3., 3.],
-        ];
+        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
         let metric = metric_from_name("hamming").unwrap();
-        let dataset: Arc<dyn CompressibleDataset<_, f64>> =
-            Arc::new(RowMajor::new(Arc::new(data), metric, false));
+        let dataset: Arc<dyn CompressibleDataset<_, f64>> = Arc::new(RowMajor::new(Arc::new(data), metric, false));
 
         let encoded = dataset.encode(0, 1).unwrap();
         let decoded = dataset.decode(0, &encoded).unwrap();

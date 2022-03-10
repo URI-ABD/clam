@@ -36,11 +36,7 @@ impl<T: Number, U: Number> Eq for Edge<T, U> {}
 
 impl<T: Number, U: Number> std::fmt::Display for Edge<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{:} -- {:}, {:}",
-            self.left.name, self.right.name, self.distance
-        )
+        write!(f, "{:} -- {:}, {:}", self.left.name, self.right.name, self.distance)
     }
 }
 
@@ -51,23 +47,11 @@ impl<T: Number, U: Number> Hash for Edge<T, U> {
 }
 
 impl<T: Number, U: Number> Edge<T, U> {
-    pub fn new(
-        left: Arc<Cluster<T, U>>,
-        right: Arc<Cluster<T, U>>,
-        distance: U,
-    ) -> Arc<Self> {
+    pub fn new(left: Arc<Cluster<T, U>>, right: Arc<Cluster<T, U>>, distance: U) -> Arc<Self> {
         let edge = if format!("{}", left) < format!("{}", right) {
-            Edge {
-                left,
-                right,
-                distance,
-            }
+            Edge { left, right, distance }
         } else {
-            Edge {
-                right,
-                left,
-                distance,
-            }
+            Edge { right, left, distance }
         };
         Arc::new(edge)
     }
@@ -80,17 +64,13 @@ impl<T: Number, U: Number> Edge<T, U> {
         cluster == &self.left || cluster == &self.right
     }
 
-    pub fn neighbor(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<&Arc<Cluster<T, U>>, String> {
+    pub fn neighbor(&self, cluster: &Arc<Cluster<T, U>>) -> Result<&Arc<Cluster<T, U>>, String> {
         if cluster == &self.left {
             Ok(&self.right)
         } else if cluster == &self.right {
             Ok(&self.left)
         } else {
-            let message =
-                format!("Cluster {:} is not in this edge.", cluster.name);
+            let message = format!("Cluster {:} is not in this edge.", cluster.name);
             Err(message)
         }
     }
@@ -121,22 +101,9 @@ impl<T: Number, U: Number> PartialEq for Graph<T, U> {
 impl<T: Number, U: Number> Eq for Graph<T, U> {}
 
 impl<T: Number, U: Number> Graph<T, U> {
-    pub fn new(
-        clusters: HashSet<Arc<Cluster<T, U>>>,
-        edges: EdgeSet<T, U>,
-    ) -> Self {
-        assert!(
-            !clusters.is_empty(),
-            "Must have at least one cluster to make a graph."
-        );
-        let metric_name = clusters
-            .iter()
-            .next()
-            .unwrap()
-            .clone()
-            .dataset
-            .metric()
-            .name();
+    pub fn new(clusters: HashSet<Arc<Cluster<T, U>>>, edges: EdgeSet<T, U>) -> Self {
+        assert!(!clusters.is_empty(), "Must have at least one cluster to make a graph.");
+        let metric_name = clusters.iter().next().unwrap().clone().dataset.metric().name();
         let mut graph = Graph {
             clusters,
             edges,
@@ -162,26 +129,15 @@ impl<T: Number, U: Number> Graph<T, U> {
     }
 
     fn population(&self) -> usize {
-        self.clusters
-            .par_iter()
-            .map(|cluster| cluster.cardinality)
-            .sum()
+        self.clusters.par_iter().map(|cluster| cluster.cardinality).sum()
     }
 
     fn depth(&self) -> usize {
-        self.clusters
-            .par_iter()
-            .map(|cluster| cluster.depth())
-            .max()
-            .unwrap()
+        self.clusters.par_iter().map(|cluster| cluster.depth()).max().unwrap()
     }
 
     fn min_depth(&self) -> usize {
-        self.clusters
-            .par_iter()
-            .map(|cluster| cluster.depth())
-            .min()
-            .unwrap()
+        self.clusters.par_iter().map(|cluster| cluster.depth()).min().unwrap()
     }
 
     pub fn depth_range(&self) -> (usize, usize) {
@@ -197,39 +153,27 @@ impl<T: Number, U: Number> Graph<T, U> {
                     self.edges
                         .par_iter()
                         .filter(|&edge| edge.contains(cluster))
-                        .map(|edge| Arc::clone(edge))
+                        .map(Arc::clone)
                         .collect(),
                 )
             })
             .collect()
     }
 
-    fn assert_contains(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<(), String> {
+    fn assert_contains(&self, cluster: &Arc<Cluster<T, U>>) -> Result<(), String> {
         if self.clusters.contains(cluster) {
             Ok(())
         } else {
-            Err(format!(
-                "This Graph does not contain the Cluster {}.",
-                cluster.name
-            ))
+            Err(format!("This Graph does not contain the Cluster {}.", cluster.name))
         }
     }
 
-    pub fn edges_from(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<&EdgeSet<T, U>, String> {
+    pub fn edges_from(&self, cluster: &Arc<Cluster<T, U>>) -> Result<&EdgeSet<T, U>, String> {
         self.assert_contains(cluster)?;
         Ok(self.edges_dict.get(cluster).unwrap())
     }
 
-    pub fn neighbors(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<Vec<Arc<Cluster<T, U>>>, String> {
+    pub fn neighbors(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Vec<Arc<Cluster<T, U>>>, String> {
         Ok((self.edges_from(cluster)?)
             .par_iter()
             .map(|edge| edge.neighbor(cluster).unwrap())
@@ -237,20 +181,14 @@ impl<T: Number, U: Number> Graph<T, U> {
             .collect())
     }
 
-    pub fn distances(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<Vec<U>, String> {
+    pub fn distances(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Vec<U>, String> {
         Ok((self.edges_from(cluster)?)
             .par_iter()
             .map(|edge| edge.distance)
             .collect())
     }
 
-    pub fn subgraph(
-        &self,
-        cluster_set: HashSet<Arc<Cluster<T, U>>>,
-    ) -> Result<Self, String> {
+    pub fn subgraph(&self, cluster_set: HashSet<Arc<Cluster<T, U>>>) -> Result<Self, String> {
         for cluster in cluster_set.iter() {
             self.assert_contains(cluster)?;
         }
@@ -258,10 +196,7 @@ impl<T: Number, U: Number> Graph<T, U> {
         let edges = self
             .edges
             .par_iter()
-            .filter(|&edge| {
-                cluster_set.contains(&edge.left)
-                    && cluster_set.contains(&edge.right)
-            })
+            .filter(|&edge| cluster_set.contains(&edge.left) && cluster_set.contains(&edge.right))
             .map(Arc::clone)
             .collect();
 
@@ -283,9 +218,7 @@ impl<T: Number, U: Number> Graph<T, U> {
                     self.neighbors(c)
                         .unwrap()
                         .par_iter()
-                        .filter(|&n| {
-                            !visited.contains(n) && !frontier.contains(n)
-                        })
+                        .filter(|&n| !visited.contains(n) && !frontier.contains(n))
                         .map(Arc::clone)
                         .collect::<Vec<Arc<Cluster<T, U>>>>()
                 })
@@ -301,8 +234,7 @@ impl<T: Number, U: Number> Graph<T, U> {
     }
 
     pub fn find_components(&self) -> Vec<Arc<Self>> {
-        let components: Option<Vec<Arc<Self>>> =
-            self.components.read().unwrap().clone();
+        let components: Option<Vec<Arc<Self>>> = self.components.read().unwrap().clone();
         if components.is_none() {
             let mut components = Vec::new();
             let mut unvisited = self.clusters.clone();
@@ -324,16 +256,12 @@ impl<T: Number, U: Number> Graph<T, U> {
         self.components.read().unwrap().clone().unwrap()
     }
 
-    pub fn eccentricity(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<usize, String> {
+    pub fn eccentricity(&self, cluster: &Arc<Cluster<T, U>>) -> Result<usize, String> {
         self.assert_contains(cluster)?;
 
         if !self.eccentricities.contains_key(cluster) {
             let (_, eccentricity) = self.traverse(cluster);
-            self.eccentricities
-                .insert(Arc::clone(cluster), eccentricity);
+            self.eccentricities.insert(Arc::clone(cluster), eccentricity);
         }
 
         Ok(*self.eccentricities.get(cluster).unwrap().value())
@@ -348,8 +276,7 @@ impl<T: Number, U: Number> Graph<T, U> {
     }
 
     pub fn distance_matrix(&self) -> (ClusterVec<T, U>, Array2<U>) {
-        let clusters: Vec<_> =
-            self.clusters.par_iter().map(Arc::clone).collect();
+        let clusters: Vec<_> = self.clusters.par_iter().map(Arc::clone).collect();
         let indices: HashMap<_, _> = clusters
             .par_iter()
             .map(Arc::clone)
@@ -358,10 +285,7 @@ impl<T: Number, U: Number> Graph<T, U> {
             .collect();
         let mut matrix = Array2::zeros((self.cardinality, self.cardinality));
         for edge in self.edges.iter() {
-            let (&i, &j) = (
-                indices.get(&edge.left).unwrap(),
-                indices.get(&edge.right).unwrap(),
-            );
+            let (&i, &j) = (indices.get(&edge.left).unwrap(), indices.get(&edge.right).unwrap());
             matrix[[i, j]] = edge.distance;
             matrix[[j, i]] = edge.distance;
         }
@@ -413,10 +337,7 @@ impl<T: Number, U: Number> Graph<T, U> {
         (pruned_graph, subsumed_neighbors)
     }
 
-    pub fn component_containing(
-        &self,
-        cluster: &Arc<Cluster<T, U>>,
-    ) -> Result<Arc<Self>, String> {
+    pub fn component_containing(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Arc<Self>, String> {
         self.assert_contains(cluster)?;
         Ok(self
             .find_components()

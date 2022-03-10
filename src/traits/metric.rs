@@ -32,11 +32,7 @@ pub trait Metric<T, U>: Send + Sync {
     ///
     /// This method is optional and so the default just returns an Err.
     #[allow(unused_variables)]
-    fn decode(
-        &self,
-        reference: &[T],
-        encoding: &[u8],
-    ) -> Result<Vec<T>, String> {
+    fn decode(&self, reference: &[T], encoding: &[u8]) -> Result<Vec<T>, String> {
         Err(format!("decode is not implemented for {:?}", self.name()))
     }
 }
@@ -59,9 +55,7 @@ pub trait Metric<T, U>: Send + Sync {
 ///   - "levenshtein": Edit-distance among strings (e.g. genomic/amino-acid sequences).
 ///   - "wasserstein": Earth-Mover-Distance among high-dimensional probability distributions (will be usable with images)
 ///   - "tanamoto": Jaccard distance between the Maximal-Common-Subgraph of two molecular structures.
-pub fn metric_from_name<T: Number, U: Number>(
-    metric: &str,
-) -> Result<Arc<dyn Metric<T, U>>, String> {
+pub fn metric_from_name<T: Number, U: Number>(metric: &str) -> Result<Arc<dyn Metric<T, U>>, String> {
     match metric {
         "euclidean" => Ok(Arc::new(Euclidean)),
         "euclideansq" => Ok(Arc::new(EuclideanSq)),
@@ -82,11 +76,7 @@ impl<T: Number, U: Number> Metric<T, U> for Euclidean {
     }
 
     fn distance(&self, x: &[T], y: &[T]) -> U {
-        let d: T = x
-            .iter()
-            .zip(y.iter())
-            .map(|(&a, &b)| (a - b) * (a - b))
-            .sum();
+        let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
         let d: f64 = NumCast::from(d).unwrap();
         U::from(d.sqrt()).unwrap()
     }
@@ -101,11 +91,7 @@ impl<T: Number, U: Number> Metric<T, U> for EuclideanSq {
     }
 
     fn distance(&self, x: &[T], y: &[T]) -> U {
-        let d: T = x
-            .iter()
-            .zip(y.iter())
-            .map(|(&a, &b)| (a - b) * (a - b))
-            .sum();
+        let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
         U::from(d).unwrap()
     }
 }
@@ -182,12 +168,11 @@ impl<T: Number, U: Number> Metric<T, U> for Hamming {
             .zip(y.iter())
             .enumerate()
             .filter(|(_, (&l, &r))| l != r)
-            .map(|(i, (_, &r))| {
+            .flat_map(|(i, (_, &r))| {
                 let mut i = (i as u64).to_be_bytes().to_vec();
                 i.append(&mut r.to_bytes());
                 i
             })
-            .flatten()
             .collect();
         Ok(encoding)
     }
@@ -198,7 +183,7 @@ impl<T: Number, U: Number> Metric<T, U> for Hamming {
         y.chunks(step).for_each(|chunk| {
             let (index, value) = chunk.split_at(std::mem::size_of::<u64>());
             let index = u64::from_be_bytes(index.try_into().unwrap()) as usize;
-            x[index] = T::from_bytes(&value.to_vec());
+            x[index] = T::from_bytes(value);
         });
         Ok(x)
     }
@@ -219,20 +204,14 @@ impl<T: Number, U: Number> Metric<T, U> for Jaccard {
             return U::one();
         }
 
-        let x: HashSet<u64> =
-            x.iter().map(|&a| NumCast::from(a).unwrap()).collect();
-        let intersect = y
-            .iter()
-            .filter(|&&b| x.contains(&NumCast::from(b).unwrap()))
-            .count();
+        let x: HashSet<u64> = x.iter().map(|&a| NumCast::from(a).unwrap()).collect();
+        let intersect = y.iter().filter(|&&b| x.contains(&NumCast::from(b).unwrap())).count();
 
         if intersect == x.len() && intersect == y.len() {
             return U::zero();
         }
 
-        U::one()
-            - U::from(intersect).unwrap()
-                / U::from(x.len() + y.len() - intersect).unwrap()
+        U::one() - U::from(intersect).unwrap() / U::from(x.len() + y.len() - intersect).unwrap()
     }
 }
 

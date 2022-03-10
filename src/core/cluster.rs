@@ -23,7 +23,6 @@ const SUB_SAMPLE_LIMIT: usize = 100;
 /// A 2-tuple of `Arc<Cluster>` representing the two child `Clusters`
 /// formed when a `Cluster` is partitioned.
 type Children<T, U> = (Arc<Cluster<T, U>>, Arc<Cluster<T, U>>);
-pub type ClusterName = BitVec<Lsb0, u8>;
 
 /// A collection of similar `Instances` from a `Dataset`.
 ///
@@ -41,7 +40,7 @@ pub struct Cluster<T: Number, U: Number> {
     /// A Cluster's name is the turn when it would be visited in a breadth-first
     /// traversal of a perfect and balanced binary tree.
     /// The root is named 1 and all descendants follow.
-    pub name: ClusterName,
+    pub name: BitVec,
 
     /// The number of instances in this Cluster.
     pub cardinality: usize,
@@ -103,11 +102,7 @@ impl<T: Number, U: Number> Hash for Cluster<T, U> {
 
 impl<T: Number, U: Number> std::fmt::Display for Cluster<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let name_str: Vec<&str> = self
-            .name
-            .iter()
-            .map(|b| if *b { "1" } else { "0" })
-            .collect();
+        let name_str: Vec<&str> = self.name.iter().map(|b| if *b { "1" } else { "0" }).collect();
         write!(f, "{}", name_str.join(""))
     }
 }
@@ -119,7 +114,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     ///
     /// * `dataset`: A reference to a struct that implements the `Dataset` trait.
     pub fn new_root(dataset: Arc<dyn Dataset<T, U>>) -> Arc<Self> {
-        let name = bitvec![Lsb0, u8; 1];
+        let name = bitvec![1];
         let indices = dataset.indices();
         Cluster::new(dataset, name, indices, None, None)
     }
@@ -135,7 +130,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     /// * `parent`: Weak ref to the parent `Cluster`. Should be `None` for the root.
     pub fn new(
         dataset: Arc<dyn Dataset<T, U>>,
-        name: BitVec<Lsb0, u8>,
+        name: BitVec,
         indices: Vec<Index>,
         parent: Option<Weak<Cluster<T, U>>>,
         parent_ratios: Option<Ratios>,
@@ -174,16 +169,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     pub fn ancestry(self: &Arc<Self>) -> Vec<Arc<Cluster<T, U>>> {
         let mut ancestry = vec![Arc::clone(self)];
         while ancestry.last().unwrap().depth() > 0 {
-            ancestry.push(
-                ancestry
-                    .last()
-                    .unwrap()
-                    .parent
-                    .clone()
-                    .unwrap()
-                    .upgrade()
-                    .unwrap(),
-            );
+            ancestry.push(ancestry.last().unwrap().parent.clone().unwrap().upgrade().unwrap());
         }
         ancestry = ancestry.into_iter().rev().collect();
         ancestry.pop();
@@ -233,8 +219,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     pub fn is_ancestor_of(&self, other: &Arc<Cluster<T, U>>) -> bool {
-        self.depth() < other.depth()
-            && self.name[..] == other.name[..self.name.len()]
+        self.depth() < other.depth() && self.name[..] == other.name[..self.name.len()]
     }
 
     /// Returns the distance from the center of the Cluster to the given instance.
@@ -247,36 +232,22 @@ impl<T: Number, U: Number> Cluster<T, U> {
     }
 
     /// Find the candidate neighbors for the cluster given the candidates for the parent.
-    pub fn find_candidates(
-        &self,
-        parent_candidates: &HashMap<Arc<Cluster<T, U>>, U>,
-    ) -> HashMap<Arc<Cluster<T, U>>, U> {
-        let mut candidates: Vec<_> = parent_candidates
-            .iter()
-            .map(|(c, _)| Arc::clone(c))
-            .collect();
-        candidates.extend(parent_candidates.iter().flat_map(
-            |(candidate, _)| match candidate.children.read().unwrap().clone() {
+    pub fn find_candidates(&self, parent_candidates: &HashMap<Arc<Cluster<T, U>>, U>) -> HashMap<Arc<Cluster<T, U>>, U> {
+        let mut candidates: Vec<_> = parent_candidates.iter().map(|(c, _)| Arc::clone(c)).collect();
+        candidates.extend(parent_candidates.iter().flat_map(|(candidate, _)| {
+            match candidate.children.read().unwrap().clone() {
                 Some((left, right)) => vec![left, right],
                 None => Vec::new(),
-            },
-        ));
+            }
+        }));
         candidates
             .par_iter()
-            .map(|candidate| {
-                (Arc::clone(candidate), self.distance_to_other(candidate))
-            })
-            .filter(|(candidate, distance)| {
-                *distance <= U::from(4).unwrap() * self.radius + candidate.radius
-            })
+            .map(|candidate| (Arc::clone(candidate), self.distance_to_other(candidate)))
+            .filter(|(candidate, distance)| *distance <= U::from(4).unwrap() * self.radius + candidate.radius)
             .collect()
     }
 
-    pub fn add_instance(
-        &self,
-        sequence: &[T],
-        distance: U,
-    ) -> HashMap<ClusterName, U> {
+    pub fn add_instance(&self, sequence: &[T], distance: U) -> HashMap<BitVec, U> {
         let mut result = match self.children.read().unwrap().clone() {
             Some((left, right)) => {
                 let left_distance = left.distance_to_instance(sequence);
@@ -316,10 +287,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     /// * `partition_criteria`: A collection of `PartitionCriterion`.
     ///   Each `PartitionCriterion` must evaluate to `true` otherwise the `Cluster`
     ///   cannot be partitioned.
-    pub fn partition(
-        self: Arc<Self>,
-        criteria: &[PartitionCriterion<T, U>],
-    ) -> Arc<Self> {
+    pub fn partition(self: Arc<Self>, criteria: &[PartitionCriterion<T, U>]) -> Arc<Self> {
         // Cannot partition a singleton cluster.
         if self.is_singleton() {
             return self;
@@ -334,10 +302,10 @@ impl<T: Number, U: Number> Cluster<T, U> {
         let (left, right) = self.poles();
 
         // Split cluster indices by proximity to left or right pole
-        let (left, right): (Vec<Index>, Vec<Index>) =
-            self.indices.par_iter().partition(|&&i| {
-                self.dataset.distance(left, i) <= self.dataset.distance(i, right)
-            });
+        let (left, right): (Vec<Index>, Vec<Index>) = self
+            .indices
+            .par_iter()
+            .partition(|&&i| self.dataset.distance(left, i) <= self.dataset.distance(i, right));
 
         // Ensure that left cluster is more populated than right cluster.
         let (left, right) = if right.len() > left.len() {
@@ -388,8 +356,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     pub fn flatten_tree(&self) -> Vec<Arc<Cluster<T, U>>> {
         match self.children.read().unwrap().clone() {
             Some((left, right)) => {
-                let mut descendants =
-                    vec![Arc::clone(&left), Arc::clone(&right)];
+                let mut descendants = vec![Arc::clone(&left), Arc::clone(&right)];
                 descendants.append(&mut left.flatten_tree());
                 descendants.append(&mut right.flatten_tree());
                 descendants
@@ -411,10 +378,8 @@ impl<T: Number, U: Number> Cluster<T, U> {
         if self.cardinality <= SUB_SAMPLE_LIMIT {
             self.indices.clone()
         } else {
-            self.dataset.choose_unique(
-                self.indices.clone(),
-                (self.cardinality as f64).sqrt() as usize,
-            )
+            self.dataset
+                .choose_unique(self.indices.clone(), (self.cardinality as f64).sqrt() as usize)
         }
     }
 
@@ -433,10 +398,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
 
     /// Returns the index of the farthest point from the center, the distance to that point, and the local fractal dimension of the cluster.
     fn argradius_radius_lfd(&self) -> (Index, U, f64) {
-        let distances = self
-            .dataset
-            .distances_from(self.argcenter, &self.indices)
-            .to_vec();
+        let distances = self.dataset.distances_from(self.argcenter, &self.indices).to_vec();
         let (argradius, _) = argmax(&distances);
 
         let argradius = self.indices[argradius];
@@ -465,19 +427,11 @@ mod tests {
 
     #[test]
     fn test_cluster() {
-        let data = vec![
-            vec![0., 0., 0.],
-            vec![1., 1., 1.],
-            vec![2., 2., 2.],
-            vec![3., 3., 3.],
-        ];
+        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
         let metric = metric_from_name("euclidean").unwrap();
-        let dataset: Arc<dyn Dataset<f64, f64>> =
-            Arc::new(RowMajor::<f64, f64>::new(Arc::new(data), metric, false));
-        let criteria =
-            vec![criteria::max_depth(3), criteria::min_cardinality(1)];
-        let cluster =
-            Cluster::new_root(Arc::clone(&dataset)).partition(&criteria);
+        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::<f64, f64>::new(Arc::new(data), metric, false));
+        let criteria = vec![criteria::max_depth(3), criteria::min_cardinality(1)];
+        let cluster = Cluster::new_root(Arc::clone(&dataset)).partition(&criteria);
 
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality, 4);
@@ -516,19 +470,11 @@ mod tests {
 
     #[test]
     fn test_ancestry() {
-        let data = vec![
-            vec![0., 0., 0.],
-            vec![1., 1., 1.],
-            vec![2., 2., 2.],
-            vec![3., 3., 3.],
-        ];
+        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
         let metric = metric_from_name("euclidean").unwrap();
-        let dataset: Arc<dyn Dataset<f64, f64>> =
-            Arc::new(RowMajor::<f64, f64>::new(Arc::new(data), metric, false));
-        let criteria =
-            vec![criteria::max_depth(3), criteria::min_cardinality(1)];
-        let cluster =
-            Cluster::new_root(Arc::clone(&dataset)).partition(&criteria);
+        let dataset: Arc<dyn Dataset<f64, f64>> = Arc::new(RowMajor::<f64, f64>::new(Arc::new(data), metric, false));
+        let criteria = vec![criteria::max_depth(3), criteria::min_cardinality(1)];
+        let cluster = Cluster::new_root(Arc::clone(&dataset)).partition(&criteria);
         let (left, right) = cluster.children.read().unwrap().clone().unwrap();
 
         let left_ancestry = left.ancestry();

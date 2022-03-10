@@ -2,12 +2,12 @@
 //!
 //! Contains the declaration and definition of the `Dataset` trait and the
 //! `RowMajor` struct implementing Dataset to serves most of the use cases for `CLAM`.
-//!
-//! TODO: Implement more structs for other types of datasets.
-//! For example:
-//! * FASTA/FASTQ files containing variable length genomic sequences.
-//! * Images. e.g. from SDSS-MaNGA dataset
-//! * Molecular graphs with Tanamoto distance.
+
+// TODO Implement more structs for other types of datasets.
+// For example:
+// * FASTA/FASTQ files containing variable length genomic sequences.
+// * Images. e.g. from SDSS-MaNGA dataset
+// * Molecular graphs with Tanamoto distance.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -28,6 +28,10 @@ type Cache<U> = Arc<RwLock<HashMap<(Index, Index), U>>>;
 pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the function used to compute the distance between instances.
     fn metric(&self) -> Arc<dyn Metric<T, U>>;
+
+    fn metric_name(&self) -> String {
+        self.metric().name()
+    }
 
     /// Returns the number of instances in the dataset.
     fn cardinality(&self) -> usize;
@@ -53,10 +57,8 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     /// * `indices` - Indices from among which to collect sample.
     /// * `n` - The number of unique instances
     fn choose_unique(&self, indices: Vec<Index>, n: usize) -> Vec<Index> {
-        // TODO: actually check for uniqueness among choices
-        indices
-            .into_iter()
-            .choose_multiple(&mut rand::thread_rng(), n)
+        // TODO actually check for uniqueness among choices
+        indices.into_iter().choose_multiple(&mut rand::thread_rng(), n)
     }
 
     /// Randomly sub-samples n unique indices (without replacement) from the dataset.
@@ -174,10 +176,7 @@ pub struct RowMajor<T: Number, U: Number> {
 }
 
 impl<T: Number, U: Number> std::fmt::Debug for RowMajor<T, U> {
-    fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter,
-    ) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("RowMajor Dataset")
             .field("data-cardinality", &self.cardinality())
             .field("data-dimensionality", &self.dimensionality())
@@ -194,11 +193,7 @@ impl<T: 'static + Number, U: 'static + Number> RowMajor<T, U> {
     /// * data - a 2-dimensional array.
     /// * metric - distance-metric to use.
     /// * use_cache - whether to use an internal cache for storing distances.
-    pub fn new(
-        data: Arc<Vec<Vec<T>>>,
-        metric: Arc<dyn Metric<T, U>>,
-        use_cache: bool,
-    ) -> RowMajor<T, U> {
+    pub fn new(data: Arc<Vec<Vec<T>>>, metric: Arc<dyn Metric<T, U>>, use_cache: bool) -> RowMajor<T, U> {
         RowMajor {
             data,
             metric,
@@ -253,15 +248,9 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
         if left == right {
             U::zero()
         } else {
-            let key = if left < right {
-                (left, right)
-            } else {
-                (right, left)
-            };
+            let key = if left < right { (left, right) } else { (right, left) };
             if !self.cache.read().unwrap().contains_key(&key) {
-                let distance = self
-                    .metric
-                    .distance(&self.instance(left), &self.instance(right));
+                let distance = self.metric.distance(&self.instance(left), &self.instance(right));
                 self.cache.write().unwrap().insert(key, distance);
                 distance
             } else {
@@ -271,22 +260,19 @@ impl<T: Number, U: Number> Dataset<T, U> for RowMajor<T, U> {
     }
 
     fn distances_from(&self, left: Index, right: &[Index]) -> Array1<U> {
-        Array1::from_vec(
-            right.par_iter().map(|&r| self.distance(left, r)).collect(),
-        )
+        Array1::from_vec(right.par_iter().map(|&r| self.distance(left, r)).collect())
     }
 
     fn distances_among(&self, left: &[Index], right: &[Index]) -> Array2<U> {
         let distances: Array1<U> = left
             .iter()
-            .map(|&l| self.distances_from(l, right).to_vec())
-            .flatten()
+            .flat_map(|&l| self.distances_from(l, right).to_vec())
             .collect();
         distances.into_shape((left.len(), right.len())).unwrap()
     }
 
     fn pairwise_distances(&self, indices: &[Index]) -> Array2<U> {
-        // TODO: Optimize this to only make distance calls for lower triangular matrix
+        // TODO Optimize this to only make distance calls for lower triangular matrix
         self.distances_among(indices, indices)
     }
 }
@@ -321,8 +307,7 @@ mod tests {
     fn test_choose_unique() {
         let data = vec![vec![1., 2., 3.], vec![3., 3., 1.]];
         let metric = metric_from_name("euclidean").unwrap();
-        let dataset: RowMajor<f64, f64> =
-            RowMajor::new(Arc::new(data), metric, false);
+        let dataset: RowMajor<f64, f64> = RowMajor::new(Arc::new(data), metric, false);
         assert_eq!(dataset.choose_unique(vec![0], 1), [0]);
         assert_eq!(dataset.choose_unique(vec![0], 5), [0]);
         assert_eq!(dataset.choose_unique(vec![0, 1], 1).len(), 1);
