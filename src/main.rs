@@ -6,7 +6,8 @@
 //! In other words, the structure of a call to CLAM should be: `clam <args> <command> <command-specific args>`.
 //!
 //! Example call to `clam chaoda`:
-//! `clam --debug chaoda --mode=bench --max-tree-depth=5 --metrics euclidean --dataset=path/to/data
+//! `cargo build --release`
+//! `./target/release/clam chaoda --mode=bench --max-tree-depth=5 --metrics euclidean --dataset=path/to/data`
 //!
 //! # CHAODA: Clustered Hierarchical Anomaly and Outlier Detection Algorithms
 //!
@@ -193,7 +194,7 @@ fn chaoda(
     use_speed_threshold: bool,
 ) -> Result<String, String> {
     let read_labels = matches!(mode, ChaodaMode::Bench);
-    let (data, labels) = clam::utils::read_chaoda_data(dataset_path, read_labels)?;
+    let (data, labels) = clam::utils::readers::read_chaoda_data(dataset_path, read_labels)?;
     let data = Arc::new(data);
 
     let datasets: Vec<_> = metrics

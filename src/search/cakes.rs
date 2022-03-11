@@ -413,7 +413,7 @@ mod tests {
 
     use crate::dataset::RowMajor;
     use crate::prelude::*;
-    use crate::utils::read_test_data;
+    use crate::utils::readers::read_test_data;
 
     use super::Cakes;
 

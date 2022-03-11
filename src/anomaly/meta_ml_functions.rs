@@ -1,3 +1,6 @@
+//! This file contains the trained meta-ml functions used for the first CHAODA paper.
+//! The meta-ml models were first trainined in Python and the decision functions were extracted and then translated into Rust.
+
 use crate::core::Ratios;
 use crate::criteria::MetaMLScorer;
 

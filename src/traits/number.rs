@@ -35,201 +35,40 @@ pub trait Number:
     /// Returns the number as a vec of bytes.
     ///
     /// This must be the inverse of from_bytes
-    fn to_bytes(self) -> Vec<u8>;
+    fn to_bytes(&self) -> Vec<u8>;
 
     /// Reconstructs the Number from its vec of bytes.
     ///
     /// This must be the inverse of to_bytes.
     fn from_bytes(bytes: &[u8]) -> Self;
 
-    fn to_f64(self) -> f64;
+    /// Convers thhe number to an f64 for some helpful functions.
+    fn as_f64(&self) -> f64;
 }
 
-impl Number for f32 {
-    fn num_bytes() -> u8 {
-        4
-    }
+macro_rules! impl_number {
+    ($($ty:ty),*) => {
+        $(
+            impl Number for $ty {
+                fn num_bytes() -> u8 {
+                    (0 as $ty).to_be_bytes().to_vec().len() as u8
+                }
 
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
+                fn to_bytes(&self) -> Vec<u8> {
+                    <$ty>::to_be_bytes(*self).to_vec()
+                }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<f32>());
-        f32::from_be_bytes(value.try_into().unwrap())
-    }
+                fn from_bytes(bytes: &[u8]) -> $ty {
+                    let (value, _) = bytes.split_at(std::mem::size_of::<$ty>());
+                    <$ty>::from_be_bytes(value.try_into().unwrap())
+                }
 
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for f64 {
-    fn num_bytes() -> u8 {
-        8
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<f64>());
-        f64::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        self
+                fn as_f64(&self) -> f64 {
+                    f64::conv(*self)
+                }
+            }
+        )*
     }
 }
 
-impl Number for u8 {
-    fn num_bytes() -> u8 {
-        1
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        vec![self]
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        bytes[0]
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for u16 {
-    fn num_bytes() -> u8 {
-        2
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<u16>());
-        u16::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for u32 {
-    fn num_bytes() -> u8 {
-        4
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<u32>());
-        u32::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for u64 {
-    fn num_bytes() -> u8 {
-        8
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<u64>());
-        u64::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for i8 {
-    fn num_bytes() -> u8 {
-        1
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<i8>());
-        i8::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for i16 {
-    fn num_bytes() -> u8 {
-        2
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<i16>());
-        i16::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for i32 {
-    fn num_bytes() -> u8 {
-        4
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<i32>());
-        i32::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
-
-impl Number for i64 {
-    fn num_bytes() -> u8 {
-        8
-    }
-
-    fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let (value, _) = bytes.split_at(std::mem::size_of::<i64>());
-        i64::from_be_bytes(value.try_into().unwrap())
-    }
-
-    fn to_f64(self) -> f64 {
-        f64::conv(self)
-    }
-}
+impl_number!(f32, f64, u8, i8, u16, i16, u32, i32, u64, i64);

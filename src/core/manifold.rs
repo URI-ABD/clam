@@ -14,9 +14,13 @@ use criteria::PartitionCriterion;
 
 /// A `HashMap` from `Clusters` to a `HashMap` of their candidate neighbors and the distance to that candidate.
 pub type Candidates<T, U> = HashMap<Arc<Cluster<T, U>>, HashMap<Arc<Cluster<T, U>>, U>>;
+
+/// Cluster ratios of the geometric and topological properties used for anomaly detection.
 pub type Ratios = [f64; 6];
+
 type ScoresHeap<T, U> = BinaryHeap<(OrderedFloat<f64>, Arc<Cluster<T, U>>)>;
 
+/// A `Manifold` connects the tree and graph structures and enables higher-order applications such as search, compression, anomaly detection, etc.
 #[derive(Debug)]
 pub struct Manifold<T: Number, U: Number> {
     pub dataset: Arc<dyn Dataset<T, U>>,
@@ -25,6 +29,7 @@ pub struct Manifold<T: Number, U: Number> {
 }
 
 impl<T: Number, U: Number> Manifold<T, U> {
+    /// Create a new `Manifold` from a dataset and cluster-partitioning criteria.
     pub fn new(dataset: Arc<dyn Dataset<T, U>>, partition_criteria: &[PartitionCriterion<T, U>]) -> Arc<Self> {
         let mut manifold = Manifold {
             dataset: Arc::clone(&dataset),
@@ -35,14 +40,17 @@ impl<T: Number, U: Number> Manifold<T, U> {
         Arc::new(manifold)
     }
 
+    /// Returns the name of the metric used in the dataset.
     pub fn metric_name(&self) -> String {
         self.dataset.metric_name()
     }
 
+    /// Returns the number of instances in the dataset.
     pub fn dataset_cardinality(&self) -> usize {
         self.dataset.cardinality()
     }
 
+    /// Computes the candidate neighbors for all clusters in the tree. This is useful for graph construction.
     fn compute_candidates(&self) -> Candidates<T, U> {
         let mut candidates: Candidates<T, U> = [(
             Arc::clone(&self.root),
@@ -84,6 +92,7 @@ impl<T: Number, U: Number> Manifold<T, U> {
         candidates
     }
 
+    /// Returns a `Graph` created from the given clusters.
     pub fn create_graph(&self, clusters: &[Arc<Cluster<T, U>>]) -> Graph<T, U> {
         let edges = clusters
             .par_iter()
@@ -106,6 +115,9 @@ impl<T: Number, U: Number> Manifold<T, U> {
         Graph::new(clusters.iter().cloned().collect(), edges)
     }
 
+    /// Creates all layer-graphs for the manifold.
+    /// 
+    /// A layer graph contains clusters from a uniform tree-depth (and any leaves that exist at shallower depths) 
     pub fn create_layer_graphs(&self) -> Vec<Arc<Graph<T, U>>> {
         let mut tree = self.root.flatten_tree();
         let mut depth = 0;
@@ -131,6 +143,7 @@ impl<T: Number, U: Number> Manifold<T, U> {
         layers
     }
 
+    /// Returns clusters selected by some meta-ml criterion. This is used for anomaly detection.
     pub fn select_clusters(&self, criterion: &MetaMLScorer, min_selection_depth: usize) -> Vec<Arc<Cluster<T, U>>> {
         let (shallow_clusters, clusters): (Vec<_>, Vec<_>) = self
             .root
@@ -162,11 +175,13 @@ impl<T: Number, U: Number> Manifold<T, U> {
         selected
     }
 
+    /// Returns the graph created with clsuters selected by some meta-ml criterion.
     pub fn select_graph(&self, meta_ml: &Arc<MetaMLScorer>, min_selection_depth: usize) -> Arc<Graph<T, U>> {
         let clusters = self.select_clusters(meta_ml, min_selection_depth);
         Arc::new(self.create_graph(&clusters))
     }
 
+    /// Returns the graphs created by a collection of meta-ml criteria.
     pub fn create_optimal_graphs(
         &self,
         meta_ml_scorers: &[Arc<MetaMLScorer>],
@@ -198,6 +213,7 @@ impl<T: Number, U: Number> Manifold<T, U> {
         Ok(ancestors)
     }
 
+    /// Returns a cluster given the name of that cluster.
     pub fn select(&self, name: BitVec) -> Result<Arc<Cluster<T, U>>, String> {
         Ok(self.ancestry(&name)?.swap_remove(name.len() - 1))
     }
