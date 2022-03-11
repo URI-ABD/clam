@@ -6,12 +6,9 @@ use crate::prelude::*;
 
 use super::MetaML;
 
-/// CLI Description
-/// ex: clam chaoda --(bench/train/infer/...)  <int: max-tree-depth (opt)> <int: min-leaf-size (opt)> <int: speed-threshold (opt)> <Path: out (opt: stdout)> <Path: dataset> <String[]: metrics>
-/// In bench mode, output running time of scoring everything to standard error. Do not include IO time to read the dataset.
-
 type MmlGraph<T, U> = (MetaML<T, U>, Arc<Graph<T, U>>);
 
+/// This enables running the CHAODA algorithm on any data.
 pub struct Chaoda<T: Number + 'static, U: Number + 'static> {
     manifolds: Vec<Arc<Manifold<T, U>>>,
     mml_graphs: Vec<MmlGraph<T, U>>,
@@ -19,6 +16,8 @@ pub struct Chaoda<T: Number + 'static, U: Number + 'static> {
 }
 
 impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
+    /// Create a new chaoda object with the given data-metric combinations and the building criteria.
+    /// This object with have automatically computed all anomaly scores and will store the exsemble scores in the `scores` member.
     pub fn new(
         datasets: Vec<Arc<dyn Dataset<T, U>>>,
         max_tree_depth: Option<usize>,
@@ -41,6 +40,7 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
         chaoda
     }
 
+    /// Given the datasets and the partitioning criteria, creates a manifold for each dataset.
     fn create_manifolds(
         &self,
         datasets: Vec<Arc<dyn Dataset<T, U>>>,
@@ -59,7 +59,8 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
             .collect()
     }
 
-    #[allow(clippy::needless_collect)]
+    // #[allow(clippy::needless_collect)]
+    /// Given meta-ml selection methods, selects clsuters and builds graphs.
     fn create_graphs(
         &self,
         mml_methods: Vec<crate::anomaly::MetaML<T, U>>,
@@ -83,6 +84,7 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
         mml_methods.into_iter().zip(graphs.into_iter()).collect()
     }
 
+    /// Using the graphs and their corresponding individual algorithms, computes the anomaly scores for each individual method and combines them into an ensemble of scores.
     fn calculate_anomaly_scores(&self, use_speed_threshold: bool) -> Vec<f64> {
         let cardinality = self.manifolds.get(0).unwrap().dataset.cardinality();
         let speed_threshold = if use_speed_threshold {
@@ -122,6 +124,7 @@ impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
         }
     }
 
+    /// This is for debugging and will be removed in a later iteration of the code.
     #[allow(dead_code)]
     fn print_vec(&self, values: &[f64]) {
         println!(

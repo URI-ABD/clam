@@ -78,6 +78,7 @@ impl<T: Number, U: Number> PartialEq for Cluster<T, U> {
 
 impl<T: Number, U: Number> Eq for Cluster<T, U> {}
 
+/// Clusters can be sorted based on their name. Sorting a tree of clusters will leave them in the order of a breadth-first traversal.
 impl<T: Number, U: Number> PartialOrd for Cluster<T, U> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.depth() == other.depth() {
@@ -94,6 +95,9 @@ impl<T: Number, U: Number> Ord for Cluster<T, U> {
     }
 }
 
+/// Clusters are hashed by their names. This means that a hach is only usique within a single tree.
+/// 
+/// TODO: Add a tree-based prefix to the cluster names when we need to hash clusters from different trees into the same container.
 impl<T: Number, U: Number> Hash for Cluster<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state)
@@ -176,17 +180,19 @@ impl<T: Number, U: Number> Cluster<T, U> {
         ancestry
     }
 
-    fn next_ema(&self, ratio: f64, ema: f64) -> f64 {
+    /// The exponential moving average of ratios for the clsuter based on the parent's EMA.
+    fn next_ema(&self, ratio: f64, parent_ema: f64) -> f64 {
         let alpha = 2. / 11.;
-        alpha * ratio + (1. - alpha) * ema
+        alpha * ratio + (1. - alpha) * parent_ema
     }
 
+    /// The six ratios for the cluster based on the parent's ratios.
     fn ratios(&self, parent_ratios: Ratios) -> Ratios {
         match &self.parent {
             Some(parent) => {
                 let parent = parent.upgrade().unwrap();
                 let c = (self.cardinality as f64) / (parent.cardinality as f64);
-                let r = self.radius.to_f64() / parent.radius.to_f64();
+                let r = self.radius.as_f64() / parent.radius.as_f64();
                 let l = self.lfd / parent.lfd;
 
                 let [_, _, _, ema_c, ema_r, ema_l] = parent_ratios;
@@ -208,7 +214,7 @@ impl<T: Number, U: Number> Cluster<T, U> {
     /// A reference to the instance which is the (sometimes approximate) geometric median of the `Cluster`.
     ///
     /// TODO: Change the type of `Instance` to something generic.
-    /// Ideally, something implementing an `Instance` trait so that `Dataset` becomes a collection of `Instances`.
+    /// Ideally, something implementing an `Instance` trait so that `Dataset` becomes a collection of `Instance`s.
     pub fn center(&self) -> Vec<T> {
         self.dataset.instance(self.argcenter)
     }
@@ -222,11 +228,12 @@ impl<T: Number, U: Number> Cluster<T, U> {
         self.depth() < other.depth() && self.name[..] == other.name[..self.name.len()]
     }
 
-    /// Returns the distance from the center of the Cluster to the given instance.
+    /// Returns the distance from the center of the Cluster to the center of the given cluster.
     pub fn distance_to_other(&self, other: &Arc<Cluster<T, U>>) -> U {
         self.dataset.distance(self.argcenter, other.argcenter)
     }
 
+    /// Returns the distance from the center of the Cluster to the given instance.
     pub fn distance_to_instance(&self, instance: &[T]) -> U {
         self.dataset.metric().distance(&self.center(), instance)
     }
@@ -247,21 +254,24 @@ impl<T: Number, U: Number> Cluster<T, U> {
             .collect()
     }
 
-    pub fn add_instance(&self, sequence: &[T], distance: U) -> HashMap<BitVec, U> {
+    /// Add a new instance to the cluster and the subtree.
+    /// 
+    /// Returns the name of all clusters that had the instance added to them (along the branch of the subtree)
+    pub fn add_instance(&self, instance: &[T], distance_to_self: U) -> HashMap<BitVec, U> {
         let mut result = match self.children.read().unwrap().clone() {
             Some((left, right)) => {
-                let left_distance = left.distance_to_instance(sequence);
-                let right_distance = right.distance_to_instance(sequence);
+                let distance_to_left = left.distance_to_instance(instance);
+                let distance_to_right = right.distance_to_instance(instance);
 
-                if left_distance <= right_distance {
-                    left.add_instance(sequence, left_distance)
+                if distance_to_left <= distance_to_right {
+                    left.add_instance(instance, distance_to_left)
                 } else {
-                    right.add_instance(sequence, right_distance)
+                    right.add_instance(instance, distance_to_right)
                 }
             }
             None => HashMap::new(),
         };
-        result.insert(self.name.clone(), distance);
+        result.insert(self.name.clone(), distance_to_self);
         result
     }
 

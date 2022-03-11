@@ -123,29 +123,3 @@ pub fn read_ann_data<T: Number, U: Number>(name: &str) -> Result<TrainTest<T>, R
 
     Ok((train, test))
 }
-
-pub fn argmin<T: Number>(values: &[T]) -> (Index, T) {
-    values.iter().enumerate().fold(
-        (0, values[0]),
-        |(i_min, v_min), (i, &v)| {
-            if v < v_min {
-                (i, v)
-            } else {
-                (i_min, v_min)
-            }
-        },
-    )
-}
-
-pub fn argmax<T: Number>(values: &[T]) -> (Index, T) {
-    values.iter().enumerate().fold(
-        (0, values[0]),
-        |(i_max, v_max), (i, &v)| {
-            if v > v_max {
-                (i, v)
-            } else {
-                (i_max, v_max)
-            }
-        },
-    )
-}

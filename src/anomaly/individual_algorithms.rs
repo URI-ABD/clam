@@ -1,3 +1,8 @@
+//! These are the individual algorithms used in the ensemble for CHAODA.
+//! All algorithms operate on a graph and produce anomaly rankings for all instances in that graph.
+//! Each algorithm contributes a different inductive bias with a different approach to ranking anomalies.
+//! See the paper for details on each algorithm.
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -8,11 +13,13 @@ use rayon::prelude::*;
 use crate::core::Subsumed;
 use crate::prelude::*;
 
-// TODO Create Struct for IndividualAlgorithm. Add decision methods for each to intelligently decide when to apply the algorithm.
+// TODO: Create Struct for IndividualAlgorithm. Add decision methods for each to intelligently decide when to apply the algorithm.
 // This should be used to handle speed thresholds and also to avoid the case where all clusters would be assigned the same score.
-type ClusterScores<T, U> = Vec<(Arc<Cluster<T, U>>, f64)>;
-pub type IndividualAlgorithm<T, U> = Box<fn(Arc<Graph<T, U>>) -> Vec<f64>>;
 // pub type IndividualAlgorithm<T, U> = Box<dyn () + Send + Sync>;
+type ClusterScores<T, U> = Vec<(Arc<Cluster<T, U>>, f64)>;
+
+/// A `Box`ed function that takes a graph and retuns anomaly rankings of all instances in that graph.
+pub type IndividualAlgorithm<T, U> = Box<fn(Arc<Graph<T, U>>) -> Vec<f64>>;
 
 pub fn get_individual_algorithms<T: Number, U: Number>() -> Vec<(String, Arc<IndividualAlgorithm<T, U>>)> {
     vec![
@@ -25,31 +32,38 @@ pub fn get_individual_algorithms<T: Number, U: Number>() -> Vec<(String, Arc<Ind
     ]
 }
 
+/// Relative Cluster Cardinality
 fn cluster_cardinality<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Vec<f64> {
-    point_scores(normalize(_cluster_cardinality(graph)))
+    get_instance_scores(normalize(_cluster_cardinality(graph)))
 }
 
+/// Relative Component Cardinality
 fn subgraph_cardinality<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Vec<f64> {
-    point_scores(normalize(_subgraph_cardinality(graph)))
+    get_instance_scores(normalize(_subgraph_cardinality(graph)))
 }
 
+/// Graph Neighborhood Size
 fn graph_neighborhood<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Vec<f64> {
-    point_scores(normalize(_graph_neighborhood(graph)))
+    get_instance_scores(normalize(_graph_neighborhood(graph)))
 }
 
+/// Stationary Probabilities
 fn stationary_probabilities<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Vec<f64> {
-    point_scores(normalize(_stationary_probabilities(graph)))
+    get_instance_scores(normalize(_stationary_probabilities(graph)))
 }
 
+/// Child-parent Cardinality Ratios
 fn cardinality_ratio<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Vec<f64> {
-    point_scores(normalize(_cardinality_ratio(graph)))
+    get_instance_scores(normalize(_cardinality_ratio(graph)))
 }
 
+/// Relative Vertex Degree
 fn vertex_degree<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Vec<f64> {
-    point_scores(normalize(_vertex_degree(graph)))
+    get_instance_scores(normalize(_vertex_degree(graph)))
 }
 
-fn point_scores<T: Number, U: Number>(scores: ClusterScores<T, U>) -> Vec<f64> {
+/// Given scores for clusters, get scored for the individual instances.
+fn get_instance_scores<T: Number, U: Number>(scores: ClusterScores<T, U>) -> Vec<f64> {
     let mut scores: Vec<_> = scores
         .into_par_iter()
         .flat_map(|(cluster, score)| cluster.indices.par_iter().map(|&i| (i, score)).collect::<Vec<_>>())
@@ -60,6 +74,7 @@ fn point_scores<T: Number, U: Number>(scores: ClusterScores<T, U>) -> Vec<f64> {
     scores
 }
 
+/// Cormalize raw cluster scores to a [0, 1] range, using gaussian normalization.
 fn normalize<T: Number, U: Number>(scores: ClusterScores<T, U>) -> ClusterScores<T, U> {
     let (clusters, scores): (Vec<_>, Vec<_>) = scores.into_iter().unzip();
     let scores: Vec<_> = scores.into_iter().map(f64::from).collect();
@@ -107,6 +122,7 @@ fn _subgraph_cardinality<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Clust
         .collect()
 }
 
+/// Returns the number of clusters reachable from the starting cluster within a number of steps equal to the given fraction of the eccentricity of the cluster.
 fn find_neighborhood_size<T: Number, U: Number>(
     graph: Arc<Graph<T, U>>,
     start: Arc<Cluster<T, U>>,
@@ -143,6 +159,7 @@ fn find_neighborhood_size<T: Number, U: Number>(
     visited.len()
 }
 
+/// Compute scores for subsumed clusters given scores for the subsumer clusters.
 fn score_subsumed_clusters<T: Number, U: Number>(
     scores: HashMap<Arc<Cluster<T, U>>, f64>,
     subsumed_neighbors: Subsumed<T, U>,
@@ -185,13 +202,14 @@ fn _graph_neighborhood<T: Number, U: Number>(graph: Arc<Graph<T, U>>) -> Cluster
     score_subsumed_clusters(scores, subsumed_neighbors)
 }
 
+/// Returns the square matrix of stationary probabilities.
 fn steady_matrix<U: Number>(matrix: Array2<U>) -> Array2<f64> {
     let shape = (matrix.nrows(), matrix.ncols());
     let matrix: Array1<f64> = matrix
         .outer_iter()
         .flat_map(|row| {
-            let sum = row.sum().to_f64();
-            row.into_iter().map(move |&val| val.to_f64() / sum)
+            let sum = row.sum().as_f64();
+            row.into_iter().map(move |&val| val.as_f64() / sum)
         })
         .collect();
     let mut matrix: Array2<f64> = matrix.into_shape(shape).unwrap();
