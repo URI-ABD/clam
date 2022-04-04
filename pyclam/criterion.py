@@ -180,6 +180,11 @@ class MetaMLSelect(SelectionCriterion):
             else:
                 selected.add(cluster)
                 excluded.update(set(cluster.argpoints))
+
+        selected.update(
+            cluster for cluster in manifold.ordered_clusters
+            if cluster.depth < self.min_depth and cluster.children is None
+        )
         return selected
 
 
