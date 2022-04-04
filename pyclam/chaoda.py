@@ -54,6 +54,7 @@ class CHAODA:
     def __init__(
             self, *,
             metrics: Optional[List[Metric]] = None,
+            min_depth: int = 4,
             max_depth: int = 25,
             min_points: int = 1,
             meta_ml_functions: Optional[List[Tuple[str, str, Callable[[np.array], float]]]] = None,
@@ -69,6 +70,7 @@ class CHAODA:
                         A metric must deterministically produce positive real numbers for each pair of instances.
                         A metric need not obey the triangle inequality.
                         Any such metrics allowed by scipy are allowed here, as are user-defined functions (so long as scipy accepts them).
+        :param min_depth: The minimum depth clusters that can be selected for optimal graphs using meta-ml.
         :param max_depth: The max-depth of the cluster-trees in the manifolds.
         :param min_points: The minimum number of points in a cluster before it can be partitioned further.
         :param meta_ml_functions: A list of tuples of (metric-name, method-name, meta-ml-ranking-function).
@@ -83,6 +85,9 @@ class CHAODA:
         # Set criteria for building manifolds
         self.max_depth: int = max_depth
         self.min_points: int = min_points
+
+        # Set meta-ml selection criteria
+        self.min_depth: int = min_depth
 
         if meta_ml_functions is None:
             cardinality_percentile = 50 if cardinality_percentile is None else cardinality_percentile
@@ -110,7 +115,7 @@ class CHAODA:
                 for metric in self.metrics
             }
             for metric, method, function in meta_ml_functions:
-                self._criteria[metric][method].append(MetaMLSelect(function))
+                self._criteria[metric][method].append(MetaMLSelect(function, self.min_depth))
 
         self.speed_threshold: Optional[int] = speed_threshold
 
