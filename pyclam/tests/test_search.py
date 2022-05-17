@@ -77,9 +77,8 @@ class TestSearch(unittest.TestCase):
 
     def test_tree_search_history(self):
         search = Search(self.data, self.metric).build(max_depth=10)
-        start: Cluster = search.root
-        radius: float = start.radius / 10
-        history, hits = search.tree_search_history(self.query, radius, start)
+        radius: float = search.root.radius / 10
+        history, hits = search.tree_search_history(self.query, radius)
 
         for hit in hits:
             self.assertTrue(hit in history, f'The hit {str(hit)} was not found in history.')

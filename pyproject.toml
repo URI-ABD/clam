@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyclam"
-version = "0.4.1"
+version = "0.5.0"
 description = "Clustered Learning of Approximate Manifolds"
 authors = ["Najib Ishaq <najib_ishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
 license = "MIT"
@@ -9,6 +9,7 @@ license = "MIT"
 python = "^3.6"
 scipy = "1.*"
 numpy = "1.*"
+scikit-learn = "*"
 
 [tool.poetry.dev-dependencies]
 sphinx = "3.*"

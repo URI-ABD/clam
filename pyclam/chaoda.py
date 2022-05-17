@@ -15,10 +15,11 @@ from pyclam.criterion import Criterion
 from pyclam.criterion import MaxDepth
 from pyclam.criterion import MetaMLSelect
 from pyclam.criterion import MinPoints
-from pyclam.criterion import PropertyThreshold
 from pyclam.manifold import Cluster
 from pyclam.manifold import Graph
 from pyclam.manifold import Manifold
+from pyclam.meta_ml_models import META_ML_MODELS
+from pyclam.search import Search
 from pyclam.types import Metric
 from pyclam.utils import catch_normalization_mode
 from pyclam.utils import normalize
@@ -53,14 +54,11 @@ class CHAODA:
     # noinspection PyTypeChecker
     def __init__(
             self, *,
-            metrics: Optional[List[Metric]] = None,
+            metrics: List[Metric] = None,
             min_depth: int = 4,
             max_depth: int = 25,
             min_points: int = 1,
-            meta_ml_functions: Optional[List[Tuple[str, str, Callable[[np.array], float]]]] = None,
-            cardinality_percentile: Optional[float] = None,
-            radius_percentile: Optional[float] = None,
-            lfd_percentile: Optional[float] = None,
+            meta_ml_functions: List[Tuple[str, str, Callable[[np.array], float]]] = None,
             normalization_mode: Optional[str] = 'gaussian',
             speed_threshold: Optional[int] = 128,
     ):
@@ -74,9 +72,6 @@ class CHAODA:
         :param max_depth: The max-depth of the cluster-trees in the manifolds.
         :param min_points: The minimum number of points in a cluster before it can be partitioned further.
         :param meta_ml_functions: A list of tuples of (metric-name, method-name, meta-ml-ranking-function).
-        :param cardinality_percentile: The percentile of cluster cardinalities immediately under which clusters wil be selected for graphs.
-        :param radius_percentile: The percentile of cluster radii immediately under which clusters wil be selected for graphs.
-        :param lfd_percentile: The percentile of cluster local-fractal-dimensions immediately above which clusters wil be selected for graphs.
         :param normalization_mode: What normalization mode to use. Must be one of 'linear', 'gaussian', or 'sigmoid'.
         :param speed_threshold: number of clusters above which to skip the slow methods.
         """
@@ -89,33 +84,21 @@ class CHAODA:
         # Set meta-ml selection criteria
         self.min_depth: int = min_depth
 
-        if meta_ml_functions is None:
-            cardinality_percentile = 50 if cardinality_percentile is None else cardinality_percentile
-            radius_percentile = 50 if radius_percentile is None else radius_percentile
-            lfd_percentile = 25 if lfd_percentile is None else lfd_percentile
-            criteria = [
-                PropertyThreshold('cardinality', cardinality_percentile, 'below'),
-                PropertyThreshold('radius', radius_percentile, 'below'),
-                PropertyThreshold('lfd', lfd_percentile, 'above'),
-            ]
-            self._criteria = {
-                metric: {method: criteria for method in self.method_names}
-                for metric in self.metrics
-            }
-        else:
-            metrics = {metric for metric, _, _ in meta_ml_functions}
-            if not metrics <= set(self.metrics):
-                raise ValueError(f'some meta-ml-functions reference metrics not being used by CHAODA. {set(self.metrics) - metrics}')
-            methods = {method for _, method, _ in meta_ml_functions}
-            if not methods <= set(self.method_names):
-                raise ValueError(f'some meta-ml-functions reference methods not being used by CHAODA. {set(self.method_names) - methods}')
+        meta_ml_functions = META_ML_MODELS if meta_ml_functions is None else meta_ml_functions
 
-            self._criteria = {
-                metric: {method: list() for method in self.method_names}
-                for metric in self.metrics
-            }
-            for metric, method, function in meta_ml_functions:
-                self._criteria[metric][method].append(MetaMLSelect(function, self.min_depth))
+        metrics = {metric for metric, _, _ in meta_ml_functions}
+        if not metrics <= set(self.metrics):
+            raise ValueError(f'some meta-ml-functions reference metrics not being used by CHAODA. {set(self.metrics) - metrics}')
+        methods = {method for _, method, _ in meta_ml_functions}
+        if not methods <= set(self.method_names):
+            raise ValueError(f'some meta-ml-functions reference methods not being used by CHAODA. {set(self.method_names) - methods}')
+
+        self._criteria = {
+            metric: {method: list() for method in self.method_names}
+            for metric in self.metrics
+        }
+        for metric, method, function in meta_ml_functions:
+            self._criteria[metric][method].append(MetaMLSelect(function, self.min_depth))
 
         self.speed_threshold: Optional[int] = speed_threshold
 
@@ -140,18 +123,24 @@ class CHAODA:
 
         # Values to be set later
 
+        self._voting_mode: str = None
+
         # list of manifolds build during the fit method.
-        self._manifolds: Optional[List[Manifold]] = None
+        self._manifolds: List[Manifold] = None
 
         # These graphs are used with the individual-methods.
         #  This is a list of tuples os (method-name, graph).
-        self._graphs: Optional[List[Tuple[str, List[Graph]]]] = None
+        self._graphs: List[Tuple[str, Graph]] = None
+
+        # Each item in the list corresponds to a Graph and is a dictionary of
+        # the anomaly scores for the Clusters in that Graph.
+        self._cluster_scores: List[ClusterScores] = None
 
         # A list of all outlier-scores arrays to be voted amongst.
-        self._individual_scores: Optional[List[np.array]] = None
+        self._individual_scores: List[np.array] = None
 
         # outlier-scores for each point in the fitted data, after voting.
-        self._scores: Optional[np.array] = None
+        self._scores: np.array = None
 
     @property
     def manifolds(self) -> List[Manifold]:
@@ -171,24 +160,31 @@ class CHAODA:
             logging.warning(f'Individual-scores are currently empty. Please call the fit method.')
         return self._individual_scores
 
-    def build_manifolds(self, data: np.array) -> List[Manifold]:
+    def build_manifolds(self, data: np.array, indices: List[int] = None) -> List[Manifold]:
         """ Builds the list of manifolds for the class.
 
         :param data: numpy array of data where the rows are instances and the columns are features.
+        :param indices: Optional. List of indexes of data to which to restrict the Manifolds.
         :return: The list of manifolds.
         """
+        indices = list(range(data.shape[0])) if indices is None else indices
         criteria: List[Criterion] = [MaxDepth(self.max_depth), MinPoints(self.min_points)]
-        self._manifolds = [Manifold(data, metric).build(*criteria) for metric in self.metrics]
+        self._manifolds = [Manifold(data, metric, indices).build(*criteria) for metric in self.metrics]
         return self._manifolds
 
-    def fit(self, data: np.array, *, voting: str = 'mean') -> 'CHAODA':
+    def fit(self, data: np.array, *, indices: List[int] = None, voting: str = 'mean') -> 'CHAODA':
         """ Fits the anomaly detector to the data.
 
         :param data: numpy array of data where the rows are instances and the columns are features.
+        :param indices: Optional. List of indexes of data to which to restrict CHAODA.
         :param voting: How to vote among scores.
         :return: the fitted CHAODA model.
         """
-        self.build_manifolds(data)
+        if voting not in VOTING_MODES:
+            raise ValueError(f'\'voting\' must be one of {VOTING_MODES}. Got {voting} instead.')
+        self._voting_mode = voting
+
+        self.build_manifolds(data, indices)
         self._graphs = list()
         for manifold in self._manifolds:
             for method, meta_ml_criteria in self._criteria[manifold.metric].items():
@@ -197,21 +193,42 @@ class CHAODA:
                     if method in self.slow_methods and graph.cardinality > self.speed_threshold:
                         continue
                     self._graphs.append((method, graph))
-        self._ensemble(voting)
+        self._ensemble()
         return self
 
-    def predict(self, *, queries: np.array) -> np.array:
-        # TODO: Handle seeing unseen data for live, online anomaly detection
-        raise NotImplementedError
+    def predict_single(self, query: np.array) -> float:
+        """ Predict the anomaly score for a single query.
+        """
+        scores = list()
+        for cluster_scores in self._cluster_scores:
+            manifold = next(iter(cluster_scores.keys())).manifold
+            searcher = Search.from_manifold(manifold)
+            hits = list(searcher.tree_search_history(query, radius=0)[0].keys())
+            intersection = [cluster for cluster in hits if cluster in cluster_scores]
+            if len(intersection) > 0:
+                individual_scores = [cluster_scores[cluster] for cluster in intersection]
+            else:
+                individual_scores = [1.]
+            scores.append(self._vote(individual_scores))
+        score = self._vote(scores)
+        return score
 
-    def vote(self, voting: str = 'mean', replace: bool = True) -> np.array:
+    def predict(self, queries: np.array) -> np.array:
+        """ Predict the anomaly score for a 2d array of queries.
+        """
+        scores = list()
+        for i in range(queries.shape[0]):
+            logging.info(f'Predicting anomaly score for query {i} ...')
+            scores.append(self.predict_single(queries[i]))
+        return np.array(scores, dtype=np.float32)
+
+    def vote(self, replace: bool = True) -> np.array:
         """ Get ensemble scores with custom voting and normalization
 
-        :param voting: voting mode to use. Must be one of VOTING_MODES.
         :param replace: whether to replace internal scores with new scores.
         :return: 1-d array of outlier scores for fitted data.
         """
-        scores = self._vote(np.stack(self._individual_scores), voting)
+        scores = self._vote(np.stack(self._individual_scores))
         if replace:
             self._scores = scores
         return scores
@@ -284,49 +301,44 @@ class CHAODA:
         """
         return self._score_points(self._vertex_degree(graph))
 
-    def _ensemble(self, voting: str):
+    def _ensemble(self):
         """ Ensemble of individual methods.
-
-        :param voting: How to vote among scores.
         """
+        self._cluster_scores = list()
         argpoints = self._manifolds[0].root.argpoints
         self._individual_scores = list()
         for name, graph in self._graphs:
             method = self._names[name]
-            scores: Scores = self._score_points(method(graph))
+            self._cluster_scores.append(method(graph))
+            scores: Scores = self._score_points(self._cluster_scores[-1])
             self._individual_scores.append(np.asarray([scores[i] for i in argpoints], dtype=float))
 
         # store scores for fitted data.
-        self._scores = self.vote(voting)
+        self._scores = self.vote()
         return
 
-    # noinspection PyMethodMayBeStatic
-    def _vote(self, scores: np.array, mode: str):
+    def _vote(self, scores: np.array):
         """ Vote among all individual-scores for ensemble-score.
 
         :param scores: An array of shape (num_graphs, num_points) of scores to be voted among.
-        :param mode: Voting mode to use. Must be one of VOTING_MODES
         """
-        if mode not in VOTING_MODES:
-            raise ValueError(f'voting mode {mode} is invalid. Must be one of {VOTING_MODES}.')
-
-        if mode == 'mean':
+        if self._voting_mode == 'mean':
             scores = np.mean(scores, axis=0)
-        elif mode == 'product':
+        elif self._voting_mode == 'product':
             scores = np.product(scores, axis=0)
-        elif mode == 'median':
+        elif self._voting_mode == 'median':
             scores = np.median(scores, axis=0)
-        elif mode == 'min':
+        elif self._voting_mode == 'min':
             scores = np.min(scores, axis=0)
-        elif mode == 'max':
+        elif self._voting_mode == 'max':
             scores = np.max(scores, axis=0)
-        elif mode == 'p25':
+        elif self._voting_mode == 'p25':
             scores = np.percentile(scores, 25, axis=0)
-        elif mode == 'p75':
+        elif self._voting_mode == 'p75':
             scores = np.percentile(scores, 75, axis=0)
         else:
             # TODO: Investigate other voting methods.
-            pass
+            raise NotImplementedError(f'voting mode {self._voting_mode} s not implemented. Try one of {VOTING_MODES}.')
 
         return scores
 
