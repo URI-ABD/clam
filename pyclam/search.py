@@ -26,6 +26,14 @@ class Search:
         self.distance = self.manifold.distance
         self.root: Cluster = self.manifold.root
 
+    @staticmethod
+    def from_manifold(manifold: Manifold) -> 'Search':
+        search = Search(manifold.data, manifold.metric)
+        search.manifold = manifold
+        search.distance = manifold.distance
+        search.root = manifold.root
+        return search
+
     @property
     def depth(self) -> int:
         """ returns the depth of the search tree. """
@@ -55,7 +63,7 @@ class Search:
         :param max_depth: optional maximum search depth.
         :return: dictionary of index-of-hit -> distance-to-hit.
         """
-        candidate_clusters: ClusterResults = self.tree_search(query, radius, self.root, max_depth=max_depth)
+        candidate_clusters: ClusterResults = self.tree_search(query, radius, start=None, max_depth=max_depth)
         return self.leaf_search(query, radius, candidate_clusters)
 
     def rnn_points(self, query: Datum, radius: float, *, max_depth: Optional[int] = None) -> Data:
@@ -122,7 +130,7 @@ class Search:
         self._check_shape(query)
         return query
 
-    def tree_search(self, query: Datum, radius: float, start: Cluster, *, max_depth: Optional[int] = None) -> ClusterResults:
+    def tree_search(self, query: Datum, radius: float, *, start: Cluster = None, max_depth: int = None) -> ClusterResults:
         """ Performs tree-search for the query, starting at the given cluster.
 
         Consider the sphere around 'query' with the given 'radius'.
@@ -136,10 +144,19 @@ class Search:
         :param max_depth: optional maximum search depth starting at Cluster.
         :return: dictionary of cluster -> distance between query and cluster center
         """
-        return self.tree_search_history(query, radius, start, max_depth=max_depth)[1]
+        return self.tree_search_history(query, radius, start=start, max_depth=max_depth)[1]
 
-    def tree_search_history(self, query: Datum, radius: float, start: Cluster, *, max_depth: Optional[int] = None) -> Tuple[ClusterResults, ClusterResults]:
+    def tree_search_history(
+            self,
+            query: Datum,
+            radius: float,
+            *,
+            start: Cluster = None,
+            max_depth: int = None,
+    ) -> Tuple[ClusterResults, ClusterResults]:
         """ Same as tree-search, except that it also returns the history of candidate clusters at each depth. """
+        start = start or self.root
+
         if max_depth is None:
             max_depth = self.manifold.depth
         elif max_depth < 0:
