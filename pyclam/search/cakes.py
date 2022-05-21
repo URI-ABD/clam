@@ -1,34 +1,26 @@
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Set
-from typing import Tuple
+import numpy
 
-import numpy as np
+from ..core import Cluster
+from ..core import criterion
+from ..core import Manifold
+from ..core import types
+from ..utils import constants
 
-import pyclam.criterion as criterion
-from pyclam.manifold import Cluster
-from pyclam.manifold import EPSILON
-from pyclam.manifold import Manifold
-from pyclam.types import Data
-from pyclam.types import Datum
-from pyclam.types import Metric
-
-ClusterResults = Dict[Cluster, float]
-Results = Dict[int, float]
+ClusterResults = dict[Cluster, float]
+Results = dict[int, float]
 
 
-class Search:
-    def __init__(self, data: Data, metric: Metric):
-        self.data: Data = data
-        self.metric: Metric = metric
+class CAKES:
+    def __init__(self, data: types.Dataset, metric: types.Metric):
+        self.data: types.Dataset = data
+        self.metric: types.Metric = metric
         self.manifold: Manifold = Manifold(self.data, self.metric)
         self.distance = self.manifold.distance
         self.root: Cluster = self.manifold.root
 
     @staticmethod
-    def from_manifold(manifold: Manifold) -> 'Search':
-        search = Search(manifold.data, manifold.metric)
+    def from_manifold(manifold: Manifold) -> 'CAKES':
+        search = CAKES(manifold.data, manifold.metric)
         search.manifold = manifold
         search.distance = manifold.distance
         search.root = manifold.root
@@ -39,7 +31,7 @@ class Search:
         """ returns the depth of the search tree. """
         return self.manifold.depth
 
-    def build(self, *, max_depth: Optional[int] = None) -> 'Search':
+    def build(self, *, max_depth: int = None) -> 'CAKES':
         """ Builds the search tree upto leaves, or an optional maximum depth.
 
         This method can be called repeatedly, with higher depth values, to further increase the depth of the tree.
@@ -55,7 +47,7 @@ class Search:
             self.manifold.build_tree(criterion.MaxDepth(max_depth), criterion.Layer(-1))
         return self
 
-    def rnn(self, query: Datum, radius: float, *, max_depth: Optional[int] = None) -> Results:
+    def rnn(self, query: types.Datum, radius: float, *, max_depth: int = None) -> Results:
         """ Performs rho-nearest neighbors search around query with given radius.
 
         :param query: point around which to search.
@@ -66,12 +58,12 @@ class Search:
         candidate_clusters: ClusterResults = self.tree_search(query, radius, start=None, max_depth=max_depth)
         return self.leaf_search(query, radius, candidate_clusters)
 
-    def rnn_points(self, query: Datum, radius: float, *, max_depth: Optional[int] = None) -> Data:
+    def rnn_points(self, query: types.Datum, radius: float, *, max_depth: int = None) -> types.Dataset:
         """ Same as rnn, but returns the raw points rather than a dictionary of indices and distances. """
         results = [(d, p) for p, d in self.rnn(query, radius, max_depth=max_depth).items()]
         return self.data[[p for _, p in sorted(results)]]
 
-    def knn(self, query: Datum, k: int, *, max_depth: Optional[int] = None) -> Results:
+    def knn(self, query: types.Datum, k: int, *, max_depth: int = None) -> Results:
         """ Performs k-nearest neighbors search around query.
 
         :param query: point around which to look.
@@ -96,10 +88,10 @@ class Search:
                 lfd = 1
             else:
                 half_count = len([point for point, distance in hits.items() if distance <= radius / 2])
-                lfd = 1 if half_count == 0 else np.log2(len(hits) / half_count)
+                lfd = 1 if half_count == 0 else numpy.log2(len(hits) / half_count)
 
             # increase radius as guided by lfd
-            factor = (k / len(hits)) ** (1 / (lfd + EPSILON))
+            factor = (k / len(hits)) ** (1 / (lfd + constants.EPSILON))
             assert factor > 1, f'expected factor to be greater than 1. Got {factor:.2e} instead.'
             radius *= factor
 
@@ -107,15 +99,15 @@ class Search:
             hits = self.rnn(query, radius, max_depth=max_depth)
 
         # sort hits in non-decreasing order of distance to query
-        results: List[Tuple[float, int]] = list(sorted([(distance, point) for point, distance in hits.items()]))
+        results: list[tuple[float, int]] = list(sorted([(distance, point) for point, distance in hits.items()]))
         return {point: distance for distance, point in results[:k]}
 
-    def knn_points(self, query: Datum, k: int, *, max_depth: Optional[int] = None) -> Data:
+    def knn_points(self, query: types.Datum, k: int, *, max_depth: int = None) -> types.Dataset:
         """ Same as knn, but returns the raw points rather than a dictionary of indices and distances. """
         results = [(d, p) for p, d in self.knn(query, k, max_depth=max_depth).items()]
         return self.data[[p for _, p in sorted(results)]]
 
-    def _check_shape(self, points: np.ndarray) -> None:
+    def _check_shape(self, points: numpy.ndarray) -> None:
         if len(points.shape) != len(self.data.shape):
             raise ValueError(f'wrong number of dimensions in shape. Expected {len(self.data.shape)}, but got {len(points.shape)}')
         elif points.shape[1:] != self.data.shape[1:]:
@@ -123,14 +115,14 @@ class Search:
         else:
             return
 
-    def _parse_query(self, query: Datum) -> np.ndarray:
+    def _parse_query(self, query: types.Datum) -> numpy.ndarray:
         if isinstance(query, int):
-            query: np.ndarray = np.asarray([self.data[query]])
-        query = np.expand_dims(query, 0)
+            query: numpy.ndarray = numpy.asarray([self.data[query]])
+        query = numpy.expand_dims(query, 0)
         self._check_shape(query)
         return query
 
-    def tree_search(self, query: Datum, radius: float, *, start: Cluster = None, max_depth: int = None) -> ClusterResults:
+    def tree_search(self, query: types.Datum, radius: float, *, start: Cluster = None, max_depth: int = None) -> ClusterResults:
         """ Performs tree-search for the query, starting at the given cluster.
 
         Consider the sphere around 'query' with the given 'radius'.
@@ -148,12 +140,12 @@ class Search:
 
     def tree_search_history(
             self,
-            query: Datum,
+            query: types.Datum,
             radius: float,
             *,
             start: Cluster = None,
             max_depth: int = None,
-    ) -> Tuple[ClusterResults, ClusterResults]:
+    ) -> tuple[ClusterResults, ClusterResults]:
         """ Same as tree-search, except that it also returns the history of candidate clusters at each depth. """
         start = start or self.root
 
@@ -172,16 +164,16 @@ class Search:
             if len(candidates) == 0:
                 break
             # find distances to centers of candidate clusters
-            clusters: List[Cluster] = list(candidates.keys())
-            centers: np.ndarray = np.asarray([cluster.center for cluster in clusters])
+            clusters: list[Cluster] = list(candidates.keys())
+            centers: numpy.ndarray = numpy.asarray([cluster.center for cluster in clusters])
             self._check_shape(centers)
-            distances: List[float] = list(self.distance(query, centers)[0])
+            distances: list[float] = list(self.distance(query, centers)[0])
 
             candidates = {  # filter out clusters that are too far away
                 cluster: distance for cluster, distance in zip(clusters, distances)
                 if distance <= (radius + cluster.radius)
             }
-            subsumed: Set[Cluster] = {  # set of clusters that lie completely within radius of query
+            subsumed: set[Cluster] = {  # set of clusters that lie completely within radius of query
                 cluster for cluster, distance in candidates.items()
                 if (distance + cluster.radius) <= radius
             }
@@ -202,7 +194,7 @@ class Search:
 
         return history, hits
 
-    def leaf_search(self, query: Datum, radius: float, clusters: ClusterResults) -> Results:
+    def leaf_search(self, query: types.Datum, radius: float, clusters: ClusterResults) -> Results:
         """ Performs leaf search for query on given clusters.
 
         :param query: point around which to look.
@@ -216,12 +208,12 @@ class Search:
         hits: Results = dict()
 
         # get indices of all points in candidate clusters
-        argpoints: List[int] = [point for cluster in clusters for point in cluster.argpoints]
+        argpoints: list[int] = [point for cluster in clusters for point in cluster.argpoints]
 
         # get distances from query to candidate points
-        points: np.ndarray = self.data[argpoints]
+        points: numpy.ndarray = self.data[argpoints]
         self._check_shape(points)
-        distances: List[float] = list(self.distance(query, points)[0])
+        distances: list[float] = list(self.distance(query, points)[0])
 
         # update hits with points within radius of query
         hits.update({point: distance for point, distance in zip(argpoints, distances) if distance <= radius})

@@ -2,15 +2,19 @@ import unittest
 
 import numpy as np
 
-from pyclam import datasets, Manifold, Cluster, criterion
-from pyclam.utils import *
+from pyclam import Cluster
+from pyclam import criterion
+from pyclam import Manifold
+from pyclam.utils import constants
+from pyclam.utils import synthetic_datasets
 
 
 class TestCluster(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data = np.random.randn(1_000, 100)
-        cls.manifold = Manifold(cls.data, 'euclidean')
+        data = np.random.randn(1_000, 100)
+        cls.data = data
+        cls.manifold = Manifold(data, 'euclidean')
         return
 
     def setUp(self) -> None:
@@ -48,7 +52,7 @@ class TestCluster(unittest.TestCase):
 
     def test_iter(self):
         self.assertEqual(
-            (int(np.ceil(self.data.shape[0] / BATCH_SIZE)), min(BATCH_SIZE, self.data.shape[0]), self.data.shape[1]),
+            (int(np.ceil(self.data.shape[0] / constants.BATCH_SIZE)), min(constants.BATCH_SIZE, self.data.shape[0]), self.data.shape[1]),
             np.array(list(self.cluster.points)).shape
         )
         return
@@ -132,7 +136,7 @@ class TestCluster(unittest.TestCase):
         return
 
     def test_partition(self):
-        manifold = Manifold(datasets.xor()[0], 'euclidean')
+        manifold = Manifold(synthetic_datasets.xor()[0], 'euclidean')
         cluster = manifold.select('')
         children = list(cluster.partition())
         self.assertGreater(len(children), 1)

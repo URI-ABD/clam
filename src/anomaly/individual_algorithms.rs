@@ -18,7 +18,7 @@ use crate::prelude::*;
 // pub type IndividualAlgorithm<T, U> = Box<dyn () + Send + Sync>;
 type ClusterScores<T, U> = Vec<(Arc<Cluster<T, U>>, f64)>;
 
-/// A `Box`ed function that takes a graph and retuns anomaly rankings of all instances in that graph.
+/// A `Box`ed function that takes a graph and returns anomaly rankings of all instances in that graph.
 pub type IndividualAlgorithm<T, U> = Box<fn(Arc<Graph<T, U>>) -> Vec<f64>>;
 
 pub fn get_individual_algorithms<T: Number, U: Number>() -> Vec<(String, Arc<IndividualAlgorithm<T, U>>)> {

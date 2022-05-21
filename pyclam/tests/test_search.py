@@ -1,31 +1,31 @@
 import random
 import unittest
-from typing import Dict, List, Tuple, Set
 
-import numpy as np
+import numpy
 from scipy.spatial.distance import cdist
 
-from pyclam import datasets, Search, Cluster
-
-np.random.seed(42), random.seed(42)
+from pyclam import CAKES
+from pyclam.utils import synthetic_datasets
 
 
 class TestSearch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data, _ = datasets.bullseye(n=1000, num_rings=3)
+        numpy.random.seed(42), random.seed(42)
+
+        cls.data, _ = synthetic_datasets.bullseye(n=1000, num_rings=3)
         cls.query, cls.metric = cls.data[0], 'euclidean'
-        cls.distances: Dict[int, float] = {
+        cls.distances: dict[int, float] = {
             point: distance
             for point, distance in zip(
                 range(cls.data.shape[0]),
-                cdist(np.asarray([cls.query]), cls.data, cls.metric)[0]
+                cdist(numpy.asarray([cls.query]), cls.data, cls.metric)[0]
             )
         }
         return
 
     def test_init(self):
-        search = Search(self.data, 'euclidean')
+        search = CAKES(self.data, 'euclidean')
         self.assertEqual(0, search.depth, f'tree depth should be 0')
 
         search = search.build(max_depth=5)
@@ -36,7 +36,7 @@ class TestSearch(unittest.TestCase):
         return
 
     def test_rnn(self):
-        search = Search(self.data, self.metric).build(max_depth=10)
+        search = CAKES(self.data, self.metric).build(max_depth=10)
 
         self.assertEqual(1, len(search.rnn(self.query, 0)))
         self.assertLessEqual(1, len(search.rnn(self.query, 1)))
@@ -56,15 +56,15 @@ class TestSearch(unittest.TestCase):
         return
 
     def test_knn(self):
-        search = Search(self.data, self.metric).build(max_depth=10)
-        points: List[Tuple[float, int]] = list(sorted([(distance, point) for point, distance in self.distances.items()]))
-        points: List[int] = [p for _, p in points]
+        search = CAKES(self.data, self.metric).build(max_depth=10)
+        points: list[tuple[float, int]] = list(sorted([(distance, point) for point, distance in self.distances.items()]))
+        points: list[int] = [p for _, p in points]
 
-        ks: List[int] = list(range(1, 10))
+        ks: list[int] = list(range(1, 10))
         ks.extend(range(10, self.data.shape[0], 1000))
         for k in ks:
-            naive_results: List[int] = points[:k]
-            knn_results: List[int] = list(search.knn(self.query, k).keys())
+            naive_results: list[int] = points[:k]
+            knn_results: list[int] = list(search.knn(self.query, k).keys())
             self.assertEqual(len(naive_results), len(knn_results), f'expected the same number of results from naive and knn searches.')
             self.assertSetEqual(set(naive_results), set(knn_results), f'expected the same set of results from naive and knn searches.')
 
@@ -76,7 +76,7 @@ class TestSearch(unittest.TestCase):
         return
 
     def test_tree_search_history(self):
-        search = Search(self.data, self.metric).build(max_depth=10)
+        search = CAKES(self.data, self.metric).build(max_depth=10)
         radius: float = search.root.radius / 10
         history, hits = search.tree_search_history(self.query, radius)
 
@@ -88,6 +88,6 @@ class TestSearch(unittest.TestCase):
             if cluster not in hits:
                 self.assertGreater(len(cluster.children), 0, f'A non-hit member of history must have had children.')
 
-        depths: Set[int] = {cluster.depth for cluster in history}
+        depths: set[int] = {cluster.depth for cluster in history}
         for d in range(len(depths)):
             self.assertIn(d, depths, f'history should contain clusters from every depth. Did not contain: {d}')

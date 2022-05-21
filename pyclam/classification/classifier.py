@@ -3,7 +3,7 @@ import typing
 
 import numpy
 
-from . import chaoda
+from ..anomaly_detection import CHAODA
 
 
 class Classifier:
@@ -15,7 +15,7 @@ class Classifier:
         """
         self.kwargs = kwargs
 
-        self._bowls: typing.Dict[int, chaoda.CHAODA] = dict()
+        self._bowls: typing.Dict[int, CHAODA] = dict()
 
     def fit(self, data: numpy.ndarray, labels: typing.List[int], *, voting: str = 'mean') -> 'Classifier':
         """ Fits the Classifier to the data.
@@ -34,7 +34,7 @@ class Classifier:
             indices = list(numpy.argwhere(labels == label))
 
             logging.info(f'Fitting CHAODA object for label {label} ...')
-            bowl = chaoda.CHAODA(**self.kwargs)
+            bowl = CHAODA(**self.kwargs)
             bowl = bowl.fit(data, indices=indices, voting=voting)
             self._bowls[label] = bowl
 

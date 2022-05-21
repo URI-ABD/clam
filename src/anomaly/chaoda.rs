@@ -17,7 +17,7 @@ pub struct Chaoda<T: Number + 'static, U: Number + 'static> {
 
 impl<T: Number + 'static, U: Number + 'static> Chaoda<T, U> {
     /// Create a new chaoda object with the given data-metric combinations and the building criteria.
-    /// This object with have automatically computed all anomaly scores and will store the exsemble scores in the `scores` member.
+    /// This object with have automatically computed all anomaly scores and will store the ensemble scores in the `scores` member.
     pub fn new(
         datasets: Vec<Arc<dyn Dataset<T, U>>>,
         max_tree_depth: Option<usize>,
