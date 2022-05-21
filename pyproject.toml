@@ -1,20 +1,20 @@
 [tool.poetry]
 name = "pyclam"
-version = "0.5.0"
+version = "0.6.0"
 description = "Clustered Learning of Approximate Manifolds"
 authors = ["Najib Ishaq <najib_ishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.6"
-scipy = "1.*"
-numpy = "1.*"
-scikit-learn = "*"
+python = ">=3.9,<3.11"
+scipy = "1.8.*"
+numpy = "1.22.*"
+scikit-learn = "1.1.*"
 
 [tool.poetry.dev-dependencies]
-sphinx = "3.*"
+sphinx = "4.5.*"
 toml = "0.10.*"
 
 [build-system]
-requires = ["poetry==1.1.7"]
+requires = ["poetry==1.1.13"]
 build-backend = "poetry.masonry.api"

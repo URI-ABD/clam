@@ -1,17 +1,21 @@
 import unittest
-from itertools import combinations
-from typing import Set, Dict, List
+import itertools
 
-import numpy as np
+import numpy
 
-from pyclam import datasets, criterion, Manifold, Graph, Cluster, Edge
+from pyclam import Cluster
+from pyclam import criterion
+from pyclam import Edge
+from pyclam import Graph
+from pyclam import Manifold
+from pyclam.utils import synthetic_datasets
 
 
 class TestGraph(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        np.random.seed(42)
-        cls.data, _ = datasets.bullseye(n=1000, num_rings=2)
+        numpy.random.seed(42)
+        cls.data, _ = synthetic_datasets.bullseye(n=1000, num_rings=2)
         cls.manifold: Manifold = Manifold(cls.data, 'euclidean')
         cls.manifold.build(
             criterion.MaxDepth(10),
@@ -30,7 +34,7 @@ class TestGraph(unittest.TestCase):
 
     def test_eq(self):
         self.assertEqual(self.manifold.layers[0], self.manifold.layers[0])
-        for left, right in combinations(self.manifold.layers, 2):
+        for left, right in itertools.combinations(self.manifold.layers, 2):
             self.assertNotEqual(left, right)
         return
 
@@ -61,7 +65,7 @@ class TestGraph(unittest.TestCase):
         return
 
     def test_components(self):
-        components: Set[Graph] = self.graph.components
+        components: set[Graph] = self.graph.components
         [self.assertIsInstance(component, Graph) for component in components]
         self.assertEqual(self.graph.cardinality, sum(component.cardinality for component in components))
         return
@@ -95,13 +99,13 @@ class TestGraph(unittest.TestCase):
         graph = manifold.layers[-1].build_edges()
 
         for i in range(10):
-            clusters: Dict[int, Cluster] = {c: cluster for c, cluster in zip(range(graph.cardinality), graph.clusters)}
+            clusters: dict[int, Cluster] = {c: cluster for c, cluster in zip(range(graph.cardinality), graph.clusters)}
             if len(clusters) < 10:
                 break
             sample_size = len(clusters) // 10
-            samples: List[int] = list(map(int, np.random.choice(graph.cardinality, size=sample_size, replace=False)))
-            removals: Set[Cluster] = {clusters[c] for c in samples if clusters[c].children}
-            additions: Set[Cluster] = set()
+            samples: list[int] = list(map(int, numpy.random.choice(graph.cardinality, size=sample_size, replace=False)))
+            removals: set[Cluster] = {clusters[c] for c in samples if clusters[c].children}
+            additions: set[Cluster] = set()
             [additions.update(cluster.children) for cluster in removals]
 
             graph.replace_clusters(
@@ -109,12 +113,12 @@ class TestGraph(unittest.TestCase):
                 additions=additions,
             )
 
-            clusters: Set[Cluster] = set(graph.clusters)
+            clusters: set[Cluster] = set(graph.clusters)
 
             self.assertEqual(0, len(removals.intersection(clusters)), f'\n1. Some removals clusters were still in the graph. iter {i}')
             self.assertTrue(additions.issubset(clusters), f'\n2. Some additions clusters were not in the graph. iter {i}')
 
-            removal_edges: Set[Edge] = {edge for cluster in removals for edge in graph.edges if cluster in edge}
+            removal_edges: set[Edge] = {edge for cluster in removals for edge in graph.edges if cluster in edge}
             self.assertEqual(0, len(removal_edges), f'\n3. Some removals clusters were still found among edges. iter {i}')
 
             self.assertEqual(0, len(graph.cache), f'\n4. Graph cache had some elements. {[k for k in graph.cache.keys()]}. iter {i}')
@@ -123,14 +127,14 @@ class TestGraph(unittest.TestCase):
     def test_dot_file(self):
         manifold: Manifold = Manifold(self.data, 'euclidean').build(criterion.MinRadius(0.2), criterion.Layer(7))
         graph: Graph = manifold.graphs[0]
-        old_clusters: Set[Cluster] = {cluster for cluster in graph.clusters}
-        old_edges: Set[Edge] = {edge for edge in graph.edges}
+        old_clusters: set[Cluster] = {cluster for cluster in graph.clusters}
+        old_edges: set[Edge] = {edge for edge in graph.edges}
 
         dot_string = manifold.graphs[0].as_dot_string('bullseye_d7')
 
         graph = graph.from_dot_string(dot_string)
-        new_clusters: Set[Cluster] = {cluster for cluster in graph.clusters}
-        new_edges: Set[Edge] = {edge for edge in graph.edges}
+        new_clusters: set[Cluster] = {cluster for cluster in graph.clusters}
+        new_edges: set[Edge] = {edge for edge in graph.edges}
 
         self.assertEqual(old_clusters, new_clusters, f'Found mismatch between old and new clusters.')
         self.assertEqual(old_edges, new_edges, f'Found mismatch between old and new edges.')

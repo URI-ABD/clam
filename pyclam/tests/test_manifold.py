@@ -1,20 +1,21 @@
 import random
+import tempfile
 import unittest
-from tempfile import TemporaryFile
-from typing import List
 
-import numpy as np
+import numpy
 
-from pyclam import datasets, criterion, Manifold, Cluster
-
-np.random.seed(42)
-random.seed(42)
+from pyclam import Cluster
+from pyclam import criterion
+from pyclam import Manifold
+from pyclam.utils import synthetic_datasets
 
 
 class TestManifold(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data, cls.labels = datasets.random(n=1000, dimensions=3)
+        numpy.random.seed(42), random.seed(42)
+
+        cls.data, cls.labels = synthetic_datasets.random(n=1000, dimensions=3)
         cls.manifold = Manifold(cls.data, 'euclidean')
         cls.manifold.build(
             criterion.MaxDepth(8),
@@ -110,7 +111,7 @@ class TestManifold(unittest.TestCase):
         return
 
     def test_neighbors(self):
-        for dataset in [datasets.bullseye, ]:  # datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
+        for dataset in [synthetic_datasets.bullseye, ]:  # datasets.spiral_2d, datasets.tori, datasets.skewer, datasets.line]:
             data, labels = dataset()
             manifold = Manifold(data, 'euclidean').build(
                 criterion.MaxDepth(12),
@@ -118,10 +119,10 @@ class TestManifold(unittest.TestCase):
             )
 
             for cluster in manifold.graphs[0].clusters:
-                potential_neighbors: List[Cluster] = [c for c in manifold.graphs[0].clusters if c.name != cluster.name]
-                argcenters: List[int] = [c.argmedoid for c in potential_neighbors]
-                distances: List[float] = list(cluster.distance_from(argcenters))
-                radii: List[float] = [cluster.radius + c.radius for c in potential_neighbors]
+                potential_neighbors: list[Cluster] = [c for c in manifold.graphs[0].clusters if c.name != cluster.name]
+                argcenters: list[int] = [c.argmedoid for c in potential_neighbors]
+                distances: list[float] = list(cluster.distance_from(argcenters))
+                radii: list[float] = [cluster.radius + c.radius for c in potential_neighbors]
                 true_neighbors = {c: d for c, d, r in zip(potential_neighbors, distances, radii) if d <= r}
                 neighbors = {edge.neighbor(cluster): edge.distance for edge in manifold.graphs[0].edges_from(cluster)}
 
@@ -135,13 +136,13 @@ class TestManifold(unittest.TestCase):
         return
 
     def test_dump(self):
-        with TemporaryFile() as fp:
+        with tempfile.TemporaryFile() as fp:
             self.manifold.dump(fp)
         return
 
     def test_load(self):
         original = self.manifold
-        with TemporaryFile() as fp:
+        with tempfile.TemporaryFile() as fp:
             original.dump(fp)
             fp.seek(0)
             loaded = Manifold.load(fp, self.data)
@@ -159,7 +160,7 @@ class TestManifold(unittest.TestCase):
         return
 
     def test_partition_backends(self):
-        data = datasets.random(n=100, dimensions=5)[0]
+        data = synthetic_datasets.random(n=100, dimensions=5)[0]
         m_single = Manifold(data, 'euclidean')._partition_single([criterion.MaxDepth(5)])
         m_thread = Manifold(data, 'euclidean')._partition_threaded([criterion.MaxDepth(5)])
         self.assertEqual(m_single, m_thread)

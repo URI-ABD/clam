@@ -1,31 +1,21 @@
 """ This module provides the CHAODA algorithms implemented on top of CLAM.
 """
 import logging
-from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Set
-from typing import Tuple
-from typing import Union
+import typing
 
-import numpy as np
+import numpy
 
-from pyclam.criterion import Criterion
-from pyclam.criterion import MaxDepth
-from pyclam.criterion import MetaMLSelect
-from pyclam.criterion import MinPoints
-from pyclam.manifold import Cluster
-from pyclam.manifold import Graph
-from pyclam.manifold import Manifold
-from pyclam.meta_ml_models import META_ML_MODELS
-from pyclam.search import Search
-from pyclam.types import Metric
-from pyclam.utils import catch_normalization_mode
-from pyclam.utils import normalize
+from ..search import CAKES
+from ..anomaly_detection.meta_ml_models import META_ML_MODELS
+from ..core import Cluster
+from ..core import criterion
+from ..core import Graph
+from ..core import Manifold
+from ..core import types
+from ..utils import helpers
 
-ClusterScores = Dict[Cluster, float]
-Scores = Dict[int, float]
+ClusterScores = dict[Cluster, float]
+Scores = dict[int, float]
 VOTING_MODES = [
     'mean',
     'product',
@@ -54,13 +44,13 @@ class CHAODA:
     # noinspection PyTypeChecker
     def __init__(
             self, *,
-            metrics: List[Metric] = None,
+            metrics: list[types.Metric] = None,
             min_depth: int = 4,
             max_depth: int = 25,
             min_points: int = 1,
-            meta_ml_functions: List[Tuple[str, str, Callable[[np.array], float]]] = None,
-            normalization_mode: Optional[str] = 'gaussian',
-            speed_threshold: Optional[int] = 128,
+            meta_ml_functions: list[tuple[str, str, typing.Callable[[numpy.array], float]]] = None,
+            normalization_mode: typing.Optional[str] = 'gaussian',
+            speed_threshold: typing.Optional[int] = 128,
     ):
         """ Creates and initializes a CHAODA object.
 
@@ -75,7 +65,7 @@ class CHAODA:
         :param normalization_mode: What normalization mode to use. Must be one of 'linear', 'gaussian', or 'sigmoid'.
         :param speed_threshold: number of clusters above which to skip the slow methods.
         """
-        self.metrics: List[Metric] = ['euclidean', 'cityblock'] if metrics is None else metrics
+        self.metrics: list[types.Metric] = metrics or ['euclidean', 'cityblock']
 
         # Set criteria for building manifolds
         self.max_depth: int = max_depth
@@ -98,16 +88,16 @@ class CHAODA:
             for metric in self.metrics
         }
         for metric, method, function in meta_ml_functions:
-            self._criteria[metric][method].append(MetaMLSelect(function, self.min_depth))
+            self._criteria[metric][method].append(criterion.MetaMLSelect(function, self.min_depth))
 
-        self.speed_threshold: Optional[int] = speed_threshold
+        self.speed_threshold: typing.Optional[int] = speed_threshold
 
         if normalization_mode is not None:
-            catch_normalization_mode(normalization_mode)
-        self.normalization_mode: Optional[str] = normalization_mode
+            helpers.catch_normalization_mode(normalization_mode)
+        self.normalization_mode: typing.Optional[str] = normalization_mode
 
         # dict of name -> individual-method
-        self._names: Dict[str, Callable[[Graph], ClusterScores]] = {
+        self._names: dict[str, typing.Callable[[Graph], ClusterScores]] = {
             'cluster_cardinality': self._cluster_cardinality,
             'component_cardinality': self._component_cardinality,
             'graph_neighborhood': self._graph_neighborhood,
@@ -115,7 +105,7 @@ class CHAODA:
             'stationary_probabilities': self._stationary_probabilities,
             'vertex_degree': self._vertex_degree,
         }
-        self.slow_methods: List[str] = [
+        self.slow_methods: list[str] = [
             'component_cardinality',
             'graph_neighborhood',
             'stationary_probabilities',
@@ -126,41 +116,41 @@ class CHAODA:
         self._voting_mode: str = None
 
         # list of manifolds build during the fit method.
-        self._manifolds: List[Manifold] = None
+        self._manifolds: list[Manifold] = None
 
         # These graphs are used with the individual-methods.
         #  This is a list of tuples os (method-name, graph).
-        self._graphs: List[Tuple[str, Graph]] = None
+        self._graphs: list[tuple[str, Graph]] = None
 
         # Each item in the list corresponds to a Graph and is a dictionary of
-        # the anomaly scores for the Clusters in that Graph.
-        self._cluster_scores: List[ClusterScores] = None
+        # the outlier-scores for the Clusters in that Graph.
+        self._cluster_scores: list[ClusterScores] = None
 
         # A list of all outlier-scores arrays to be voted amongst.
-        self._individual_scores: List[np.array] = None
+        self._individual_scores: list[numpy.array] = None
 
         # outlier-scores for each point in the fitted data, after voting.
-        self._scores: np.array = None
+        self._scores: numpy.array = None
 
     @property
-    def manifolds(self) -> List[Manifold]:
+    def manifolds(self) -> list[Manifold]:
         """ Returns the list of manifolds being used for anomaly-detection. """
         return self._manifolds
 
     @property
-    def scores(self) -> Optional[np.array]:
+    def scores(self) -> numpy.ndarray:
         """ Returns the scores for data on which the model was last fit. """
         if self._scores is None:
-            logging.warning(f'Scores are currently empty. Please call the fit method.')
+            raise ValueError(f'Scores are currently empty. Please call the fit method.')
         return self._scores
 
     @property
-    def individual_scores(self) -> Optional[List[np.array]]:
+    def individual_scores(self) -> list[numpy.ndarray]:
         if self._individual_scores is None:
-            logging.warning(f'Individual-scores are currently empty. Please call the fit method.')
+            raise ValueError(f'Individual-scores are currently empty. Please call the fit method.')
         return self._individual_scores
 
-    def build_manifolds(self, data: np.array, indices: List[int] = None) -> List[Manifold]:
+    def build_manifolds(self, data: numpy.array, indices: list[int] = None) -> list[Manifold]:
         """ Builds the list of manifolds for the class.
 
         :param data: numpy array of data where the rows are instances and the columns are features.
@@ -168,11 +158,11 @@ class CHAODA:
         :return: The list of manifolds.
         """
         indices = list(range(data.shape[0])) if indices is None else indices
-        criteria: List[Criterion] = [MaxDepth(self.max_depth), MinPoints(self.min_points)]
+        criteria: list[criterion.Criterion] = [criterion.MaxDepth(self.max_depth), criterion.MinPoints(self.min_points)]
         self._manifolds = [Manifold(data, metric, indices).build(*criteria) for metric in self.metrics]
         return self._manifolds
 
-    def fit(self, data: np.array, *, indices: List[int] = None, voting: str = 'mean') -> 'CHAODA':
+    def fit(self, data: numpy.array, *, indices: list[int] = None, voting: str = 'mean') -> 'CHAODA':
         """ Fits the anomaly detector to the data.
 
         :param data: numpy array of data where the rows are instances and the columns are features.
@@ -196,13 +186,13 @@ class CHAODA:
         self._ensemble()
         return self
 
-    def predict_single(self, query: np.array) -> float:
+    def predict_single(self, query: numpy.array) -> float:
         """ Predict the anomaly score for a single query.
         """
         scores = list()
         for cluster_scores in self._cluster_scores:
             manifold = next(iter(cluster_scores.keys())).manifold
-            searcher = Search.from_manifold(manifold)
+            searcher = CAKES.from_manifold(manifold)
             hits = list(searcher.tree_search_history(query, radius=0)[0].keys())
             intersection = [cluster for cluster in hits if cluster in cluster_scores]
             if len(intersection) > 0:
@@ -213,22 +203,22 @@ class CHAODA:
         score = self._vote(scores)
         return score
 
-    def predict(self, queries: np.array) -> np.array:
+    def predict(self, queries: numpy.array) -> numpy.array:
         """ Predict the anomaly score for a 2d array of queries.
         """
         scores = list()
         for i in range(queries.shape[0]):
             logging.info(f'Predicting anomaly score for query {i} ...')
             scores.append(self.predict_single(queries[i]))
-        return np.array(scores, dtype=np.float32)
+        return numpy.array(scores, dtype=numpy.float32)
 
-    def vote(self, replace: bool = True) -> np.array:
+    def vote(self, replace: bool = True) -> numpy.array:
         """ Get ensemble scores with custom voting and normalization
 
         :param replace: whether to replace internal scores with new scores.
         :return: 1-d array of outlier scores for fitted data.
         """
-        scores = self._vote(np.stack(self._individual_scores))
+        scores = self._vote(numpy.stack(self._individual_scores))
         if replace:
             self._scores = scores
         return scores
@@ -265,7 +255,7 @@ class CHAODA:
         """
         return self._score_points(self._graph_neighborhood(graph, eccentricity_fraction))
 
-    def parent_cardinality(self, graph: Graph, weight: Callable[[int], float] = None) -> Scores:
+    def parent_cardinality(self, graph: Graph, weight: typing.Callable[[int], float] = None) -> Scores:
         """ Determines outlier scores for points by considering ratios of cardinalities of parent-child clusters.
 
         The ratios are weighted by the child's depth in the tree, and are then accumulated for each point in each cluster in the graph.
@@ -311,34 +301,34 @@ class CHAODA:
             method = self._names[name]
             self._cluster_scores.append(method(graph))
             scores: Scores = self._score_points(self._cluster_scores[-1])
-            self._individual_scores.append(np.asarray([scores[i] for i in argpoints], dtype=float))
+            self._individual_scores.append(numpy.asarray([scores[i] for i in argpoints], dtype=float))
 
         # store scores for fitted data.
         self._scores = self.vote()
         return
 
-    def _vote(self, scores: np.array):
+    def _vote(self, scores: numpy.array):
         """ Vote among all individual-scores for ensemble-score.
 
         :param scores: An array of shape (num_graphs, num_points) of scores to be voted among.
         """
         if self._voting_mode == 'mean':
-            scores = np.mean(scores, axis=0)
+            scores = numpy.mean(scores, axis=0)
         elif self._voting_mode == 'product':
-            scores = np.product(scores, axis=0)
+            scores = numpy.product(scores, axis=0)
         elif self._voting_mode == 'median':
-            scores = np.median(scores, axis=0)
+            scores = numpy.median(scores, axis=0)
         elif self._voting_mode == 'min':
-            scores = np.min(scores, axis=0)
+            scores = numpy.min(scores, axis=0)
         elif self._voting_mode == 'max':
-            scores = np.max(scores, axis=0)
+            scores = numpy.max(scores, axis=0)
         elif self._voting_mode == 'p25':
-            scores = np.percentile(scores, 25, axis=0)
+            scores = numpy.percentile(scores, 25, axis=0)
         elif self._voting_mode == 'p75':
-            scores = np.percentile(scores, 75, axis=0)
+            scores = numpy.percentile(scores, 75, axis=0)
         else:
             # TODO: Investigate other voting methods.
-            raise NotImplementedError(f'voting mode {self._voting_mode} s not implemented. Try one of {VOTING_MODES}.')
+            raise NotImplementedError(f'voting mode {self._voting_mode} is not implemented. Try one of {VOTING_MODES}.')
 
         return scores
 
@@ -354,7 +344,7 @@ class CHAODA:
                 scores[i] = 0.5
         return scores
 
-    def _normalize_scores(self, scores: Union[ClusterScores, Scores], high: bool) -> Union[ClusterScores, Scores]:
+    def _normalize_scores(self, scores: typing.Union[ClusterScores, Scores], high: bool) -> typing.Union[ClusterScores, Scores]:
         """ Normalizes scores to lie in the [0, 1] range.
 
         :param scores: A dictionary of outlier rankings for clusters.
@@ -363,11 +353,11 @@ class CHAODA:
         :return: A dict of cluster -> normalized outlier score.
         """
         if self.normalization_mode is None:
-            normalized_scores: List[float] = [(s if high is True else (1 - s)) for s in scores.values()]
+            normalized_scores: list[float] = [(s if high is True else (1 - s)) for s in scores.values()]
         else:
             sign = 1 if high is True else -1
-            normalized_scores: List[float] = list(normalize(
-                values=sign * np.asarray([score for score in scores.values()], dtype=float),
+            normalized_scores: list[float] = list(helpers.normalize(
+                values=sign * numpy.asarray([score for score in scores.values()], dtype=float),
                 mode=self.normalization_mode,
             ))
 
@@ -379,7 +369,7 @@ class CHAODA:
 
     def _component_cardinality(self, graph: Graph) -> ClusterScores:
         logging.info(f'with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
-        scores: Dict[Cluster, int] = {
+        scores: dict[Cluster, int] = {
             cluster: component.cardinality
             for component in graph.components
             for cluster in component.clusters
@@ -405,8 +395,8 @@ class CHAODA:
 
         def _neighborhood_size(start: Cluster, steps: int) -> int:
             """ Returns the number of clusters within 'steps' of 'start'. """
-            visited: Set[Cluster] = set()
-            frontier: Set[Cluster] = {start}
+            visited: set[Cluster] = set()
+            frontier: set[Cluster] = {start}
             for _ in range(steps):
                 if frontier:
                     visited.update(frontier)
@@ -419,14 +409,14 @@ class CHAODA:
                     break
             return len(visited)
 
-        scores: Dict[Cluster, int] = {
+        scores: dict[Cluster, int] = {
             cluster: _neighborhood_size(cluster, int(pruned_graph.eccentricity(cluster) * eccentricity_fraction))
             for cluster in pruned_graph.clusters
         }
         scores = self._inherit_subsumed(subsumed_neighbors, scores)
         return self._normalize_scores(scores, False)
 
-    def _parent_cardinality(self, graph: Graph, weight: Callable[[int], float] = None) -> ClusterScores:
+    def _parent_cardinality(self, graph: Graph, weight: typing.Callable[[int], float] = None) -> ClusterScores:
         logging.info(f'Running method PC with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
 
         weight = (lambda d: 1 / (d ** 0.5)) if weight is None else weight
@@ -439,18 +429,18 @@ class CHAODA:
 
     def _stationary_probabilities(self, graph: Graph, steps: int = 16) -> ClusterScores:
         logging.info(f'Running method SP with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
-        scores: Dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
+        scores: dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
         pruned_graph, subsumed_neighbors = graph.pruned_graph
         for component in pruned_graph.components:
             if component.cardinality > 1:
                 clusters, matrix = component.as_matrix
-                matrix = matrix / np.sum(matrix, axis=1)[:, None]
+                matrix = matrix / numpy.sum(matrix, axis=1)[:, None]
 
                 for _ in range(steps):
                     # TODO: Go until convergence. For now, matrix ^ (2 ^ 16) ought to be enough.
-                    matrix = np.linalg.matrix_power(matrix, 2)
+                    matrix = numpy.linalg.matrix_power(matrix, 2)
                 steady = matrix
-                scores.update({cluster: score for cluster, score in zip(clusters, np.sum(steady, axis=0))})
+                scores.update({cluster: score for cluster, score in zip(clusters, numpy.sum(steady, axis=0))})
             else:
                 scores.update({cluster: 0 for cluster in component.clusters})
         scores = self._inherit_subsumed(subsumed_neighbors, scores)
@@ -458,5 +448,5 @@ class CHAODA:
 
     def _vertex_degree(self, graph: Graph) -> ClusterScores:
         logging.info(f'Running method VD with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
-        scores: Dict[Cluster, float] = {cluster: graph.vertex_degree(cluster) for cluster in graph.clusters}
+        scores: dict[Cluster, float] = {cluster: graph.vertex_degree(cluster) for cluster in graph.clusters}
         return self._normalize_scores(scores, False)

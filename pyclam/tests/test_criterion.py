@@ -2,19 +2,19 @@ import unittest
 from collections import Counter
 from typing import Dict
 
-import numpy as np
+import numpy
 
+from pyclam import criterion
 from pyclam import Graph
 from pyclam import Manifold
-from pyclam import criterion
-from pyclam import datasets
+from pyclam.utils import synthetic_datasets
 
 
 # noinspection SpellCheckingInspection
 class TestCriterion(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.data = datasets.bullseye(n=500)[0]
+        cls.data = synthetic_datasets.bullseye(n=500)[0]
         return
 
     def setUp(self) -> None:
@@ -73,28 +73,28 @@ class TestCriterion(unittest.TestCase):
         return
 
     def test_multiple_selection_clauses(self):
-        def from_cc_gmean(ratios: np.array) -> float:
-            return float(np.dot(
+        def from_cc_gmean(ratios: numpy.array) -> float:
+            return float(numpy.dot(
                 a=ratios,
-                b=np.asarray([1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]),
+                b=numpy.asarray([1.26637064, 1.10890454, -0.10656351, -0.00044809, -0.39920286, 0.34369123]),
             ))
 
-        def from_pc_gmean(ratios: np.array) -> float:
-            return float(np.dot(
+        def from_pc_gmean(ratios: numpy.array) -> float:
+            return float(numpy.dot(
                 a=ratios,
-                b=np.asarray([0.09493048, 0.62547724, -0.16254063, -0.00043795, 0.13036630, -0.35289447]),
+                b=numpy.asarray([0.09493048, 0.62547724, -0.16254063, -0.00043795, 0.13036630, -0.35289447]),
             ))
 
-        def from_kn_gmean(ratios: np.array) -> float:
-            return float(np.dot(
+        def from_kn_gmean(ratios: numpy.array) -> float:
+            return float(numpy.dot(
                 a=ratios,
-                b=np.asarray([-0.36966981, 0.22567179, -0.08289614, 0.00006676, 0.55057955, -0.86832389]),
+                b=numpy.asarray([-0.36966981, 0.22567179, -0.08289614, 0.00006676, 0.55057955, -0.86832389]),
             ))
 
-        def from_sc_gmean(ratios: np.array) -> float:
-            return float(np.dot(
+        def from_sc_gmean(ratios: numpy.array) -> float:
+            return float(numpy.dot(
                 a=ratios,
-                b=np.asarray([-0.23789545, 0.08811996, -0.02485702, 0.00003283, 0.29501756, -0.49954759]),
+                b=numpy.asarray([-0.23789545, 0.08811996, -0.02485702, 0.00003283, 0.29501756, -0.49954759]),
             ))
 
         self.manifold.build(
@@ -110,7 +110,7 @@ class TestCriterion(unittest.TestCase):
         return
 
     def test_property_selector(self):
-        data, _ = datasets.bullseye()
+        data, _ = synthetic_datasets.bullseye()
         manifold: Manifold = Manifold(data, 'euclidean').build(
             criterion.MaxDepth(12),
             criterion.PropertyThreshold('cardinality', 50, 'below'),
@@ -123,13 +123,13 @@ class TestCriterion(unittest.TestCase):
         return
 
     def test_labels(self):
-        data, labels = datasets.bullseye()
+        data, labels = synthetic_datasets.bullseye()
 
-        anomalies = np.random.random(size=(data.shape[0] // 50, 2)) * (np.max(data, axis=0) - np.min(data, axis=0)) + np.min(data, axis=0)
-        data = np.concatenate([data, anomalies])
+        anomalies = numpy.random.random(size=(data.shape[0] // 50, 2)) * (numpy.max(data, axis=0) - numpy.min(data, axis=0)) + numpy.min(data, axis=0)
+        data = numpy.concatenate([data, anomalies])
         labels.extend([0 for _ in range(anomalies.shape[0])])
         labels_dict: Dict[int, int] = {i: l for i, l in enumerate(labels)}
-        half_labels_dict = {i: l for i, l in labels_dict.items() if np.random.random() < 0.5}
+        half_labels_dict = {i: l for i, l in labels_dict.items() if numpy.random.random() < 0.5}
 
         manifold: Manifold = Manifold(data, 'euclidean').build(
             criterion.MaxDepth(10),

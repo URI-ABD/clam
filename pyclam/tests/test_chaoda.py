@@ -1,19 +1,19 @@
 import random
 import unittest
 
-import numpy as np
+import numpy
 
-from pyclam import datasets
-
-np.random.seed(42), random.seed(42)
+from pyclam.utils import synthetic_datasets
 
 
 class TestSearch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        data, cls.labels = datasets.bullseye(n=1000, num_rings=3)
-        anomalies = np.random.random(size=(data.shape[0] // 20, 2)) * (np.max(data, axis=0) - np.min(data, axis=0)) + np.min(data, axis=0)
-        cls.data = np.concatenate([data, anomalies])
+        numpy.random.seed(42), random.seed(42)
+
+        data, cls.labels = synthetic_datasets.bullseye(n=1000, num_rings=3)
+        anomalies = numpy.random.random(size=(data.shape[0] // 20, 2)) * (numpy.max(data, axis=0) - numpy.min(data, axis=0)) + numpy.min(data, axis=0)
+        cls.data = numpy.concatenate([data, anomalies])
         cls.labels.extend([0 for _ in range(anomalies.shape[0])])
         return
 

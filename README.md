@@ -26,16 +26,16 @@ docker run clam --help
 
 ```python
 from pyclam import Manifold
-from pyclam import Search
+from pyclam import CAKES
 from pyclam import criterion
-from pyclam import datasets
+from pyclam.utils import synthetic_datasets
 
 # Get the data.
-data, _ = datasets.bullseye()
+data, _ = synthetic_datasets.bullseye()
 # data is a numpy.ndarray in this case but it could just as easily be a numpy.memmap if your data does fit in RAM.
 # We used numpy memmaps for the research, though they impose file-IO costs.
 
-search = Search(data, 'euclidean')
+search = CAKES(data, 'euclidean')
 # The Search class provides the functionality described in our CHESS paper.
 # TODO: Provide link to CHESS paper
 

@@ -1,33 +1,21 @@
 """ Clustered Learning of Approximate Manifolds.
 """
+import collections
 import concurrent.futures
 import logging
+import operator
 import pickle
-from collections import deque
-from operator import itemgetter
-from typing import Any
-from typing import BinaryIO
-from typing import Callable
-from typing import Dict
-from typing import IO
-from typing import Iterable
-from typing import List
-from typing import Optional
-from typing import Set
-from typing import Tuple
-from typing import Union
+import typing
 
-import numpy as np
+import numpy
 from scipy.spatial.distance import cdist
 
-from pyclam.types import Data
-from pyclam.types import Metric
-from pyclam.types import Radius
-from pyclam.types import Vector
-from pyclam.utils import BATCH_SIZE
-from pyclam.utils import EPSILON
-from pyclam.utils import SUBSAMPLE_LIMIT
-from pyclam.utils import normalize
+from .types import Dataset
+from .types import Distance
+from .types import Indices
+from .types import Metric
+from ..utils import constants
+from ..utils import helpers
 
 LOG_LEVEL = logging.INFO
 
@@ -49,7 +37,7 @@ class Cluster:
     Cluster implements methods that create and utilize the underlying tree structure used by Manifold.
     """
 
-    def __init__(self, manifold: 'Manifold', argpoints: Vector, name: str, **kwargs):
+    def __init__(self, manifold: 'Manifold', argpoints: Indices, name: str, **kwargs):
         """
         A Cluster needs to know the manifold it belongs to and the indexes of the points it contains.
         The name of a Cluster indicates its position in the tree.
@@ -60,9 +48,9 @@ class Cluster:
         """
         logging.debug(f"Cluster(name={name}, argpoints={argpoints})")
         self.manifold: 'Manifold' = manifold
-        self.argpoints: Vector = argpoints
+        self.argpoints: Indices = argpoints
         self.name: str = name
-        self.children: Optional[List['Cluster']] = None
+        self.children: typing.Optional[list['Cluster']] = None
 
         # Reference to the distance function for easier usage
         self.distance = self.manifold.distance
@@ -72,16 +60,16 @@ class Cluster:
         # Candidates have the following properties:
         #     candidate.depth <= self.depth
         #     self.distance_from([candidate.argmedoid]) <= candidate.radius + self.radius * 4
-        self.candidates: Optional[Dict['Cluster', float]] = None
+        self.candidates: typing.Optional[dict['Cluster', float]] = None
 
-        self.cache: Dict[str, Any] = dict()
+        self.cache: dict[str, typing.Any] = dict()
         self.cache.update(**kwargs)
 
         # This is used while reading clusters from file during Cluster.from_json().
         if not argpoints:
             if 'children' in self.cache:
-                self.children: Set[Cluster] = {child for child in self.cache['children']}
-                self.argpoints: List[int] = [p for child in self.children for p in child.argpoints]
+                self.children: set[Cluster] = {child for child in self.cache['children']}
+                self.argpoints: list[int] = [p for child in self.children for p in child.argpoints]
             else:
                 raise ValueError(f'Cluster {name} needs argpoints of children when reading from file')
         return
@@ -112,12 +100,12 @@ class Cluster:
             self.cache['repr'] = ': '.join([self.name, ', '.join(map(str, sorted(self.argpoints)))])
         return self.cache['repr']
 
-    def __iter__(self) -> Vector:
+    def __iter__(self) -> Indices:
         # Iterates in batches, instead of by element.
-        for i in range(0, self.cardinality, BATCH_SIZE):
-            yield self.argpoints[i:i + BATCH_SIZE]
+        for i in range(0, self.cardinality, constants.BATCH_SIZE):
+            yield self.argpoints[i:i + constants.BATCH_SIZE]
 
-    def __contains__(self, point: Data) -> bool:
+    def __contains__(self, point: Dataset) -> bool:
         """ Check weather the given point could be inside this cluster. """
         return self.overlaps(point=point, radius=0.)
 
@@ -152,18 +140,18 @@ class Cluster:
             self.cache['depth'] = self.name.count('0')
         return self.cache['depth']
 
-    def distance_from(self, x1: Union[List[int], Data]) -> np.ndarray:
+    def distance_from(self, x1: typing.Union[list[int], Dataset]) -> numpy.ndarray:
         """ Helper to ease calculation of distance from the cluster center. """
         return self.distance([self.argmedoid], x1)[0]
 
     @property
-    def points(self) -> Data:
+    def points(self) -> Dataset:
         """ An iterator, in batches, over the points in the Clusters. """
-        for i in range(0, self.cardinality, BATCH_SIZE):
-            yield self.manifold.data[self.argpoints[i:i + BATCH_SIZE]]
+        for i in range(0, self.cardinality, constants.BATCH_SIZE):
+            yield self.manifold.data[self.argpoints[i:i + constants.BATCH_SIZE]]
 
     @property
-    def argsamples(self) -> Vector:
+    def argsamples(self) -> Indices:
         """ Indices of samples chosen for finding poles.
 
         Ensures that there are at least 2 different points in samples,
@@ -172,16 +160,16 @@ class Cluster:
         """
         if 'argsamples' not in self.cache:
             logging.debug(f"building cache for {self}")
-            if self.cardinality <= SUBSAMPLE_LIMIT:
+            if self.cardinality <= constants.SUBSAMPLE_LIMIT:
                 n = len(self.argpoints)
                 indices = self.argpoints
             else:
-                n = int(np.sqrt(self.cardinality))
-                indices = [int(i) for i in np.random.choice(self.argpoints, n, replace=False)]
+                n = int(numpy.sqrt(self.cardinality))
+                indices = [int(i) for i in numpy.random.choice(self.argpoints, n, replace=False)]
 
             # Handle Duplicates.
             if self.distance(indices, indices).max(initial=0.) == 0.:
-                indices = np.unique(self.manifold.data[self.argpoints], return_index=True, axis=0)[1]
+                indices = numpy.unique(self.manifold.data[self.argpoints], return_index=True, axis=0)[1]
                 indices = [self.argpoints[i] for i in indices][:n]
 
             # Cache it.
@@ -189,7 +177,7 @@ class Cluster:
         return self.cache['argsamples']
 
     @property
-    def samples(self) -> Data:
+    def samples(self) -> Dataset:
         """ Returns the samples from the cluster. Samples are used in computing approximate centers and poles.
         """
         return self.manifold.data[self.argsamples]
@@ -204,7 +192,7 @@ class Cluster:
         return self.argmedoid
 
     @property
-    def center(self) -> Data:
+    def center(self) -> Dataset:
         return self.medoid
 
     @property
@@ -212,17 +200,17 @@ class Cluster:
         """ The index used to retrieve the medoid. """
         if 'argmedoid' not in self.cache:
             logging.debug(f"building cache for {self}")
-            argmedoid = np.argmin(self.distance(self.argsamples, self.argsamples).sum(axis=1))
+            argmedoid = numpy.argmin(self.distance(self.argsamples, self.argsamples).sum(axis=1))
             self.cache['argmedoid'] = self.argsamples[int(argmedoid)]
         return self.cache['argmedoid']
 
     @property
-    def centroid(self) -> Data:
+    def centroid(self) -> Dataset:
         """ The Geometric Mean of the cluster. """
-        return np.average(self.samples, axis=0)
+        return numpy.average(self.samples, axis=0)
 
     @property
-    def medoid(self) -> Data:
+    def medoid(self) -> Dataset:
         """ The Geometric Median of the cluster. """
         return self.manifold.data[self.argmedoid]
 
@@ -234,11 +222,11 @@ class Cluster:
 
             def argmax_max(b):
                 distances = self.distance_from(b)
-                argmax = int(np.argmax(distances))
+                argmax = int(numpy.argmax(distances))
                 return b[argmax], distances[argmax]
 
             argradii_radii = [argmax_max(batch) for batch in iter(self)]
-            argradius, radius = max(argradii_radii, key=itemgetter(1))
+            argradius, radius = max(argradii_radii, key=operator.itemgetter(1))
             if radius < 0:
                 raise ValueError(f'got cluster {self.name} with negative radius. '
                                  f'Make sure that the distance function used always returns non-negative values.')
@@ -247,7 +235,7 @@ class Cluster:
         return self.cache['argradius']
 
     @property
-    def radius(self) -> Radius:
+    def radius(self) -> Distance:
         """ The radius of the cluster.
 
         Computed as distance from medoid to the farthest point in the cluster.
@@ -271,17 +259,17 @@ class Cluster:
                     for distance in self.distance_from(batch)
                     if distance <= self.radius / 2
                 ])
-                self.cache['local_fractal_dimension'] = 1. if half_count == 0 else np.log2(self.cardinality / half_count)
+                self.cache['local_fractal_dimension'] = 1. if half_count == 0 else numpy.log2(self.cardinality / half_count)
         return self.cache['local_fractal_dimension']
 
     @property
-    def ancestors(self) -> List['Cluster']:
+    def ancestors(self) -> list['Cluster']:
         """ Ancestry of self, excluding self.
         """
         return self.manifold.ancestry(self)[:-1]
 
     @property
-    def descendents(self) -> List['Cluster']:
+    def descendents(self) -> list['Cluster']:
         """ All clusters in the subtree starting at self, excluding self.
         """
         return [cluster for layer in self.manifold.layers[self.depth + 1:]
@@ -294,11 +282,11 @@ class Cluster:
         self.cache.clear()
         return
 
-    def overlaps(self, point: Data, radius: Radius) -> bool:
+    def overlaps(self, point: Dataset, radius: Distance) -> bool:
         """ Checks if point is within radius + self.radius of cluster. """
-        return self.distance_from(np.asarray([point]))[0] <= (self.radius + radius)
+        return self.distance_from(numpy.asarray([point]))[0] <= (self.radius + radius)
 
-    def _find_poles(self) -> List[int]:
+    def _find_poles(self) -> list[int]:
         """ Poles are approximately the two farthest points in the cluster.
 
         :return: list of indexes of the poles.
@@ -306,7 +294,7 @@ class Cluster:
         assert len(self.argsamples) > 1, f'must have more than one unique point before poles can be chosen'
 
         if len(self.argsamples) > 2:
-            farthest = self.argsamples[int(np.argmax(self.distance([self.argradius], self.argsamples)[0]))]
+            farthest = self.argsamples[int(numpy.argmax(self.distance([self.argradius], self.argsamples)[0]))]
             poles = [self.argradius, farthest]
         else:
             poles = [p for p in self.argsamples]
@@ -314,7 +302,7 @@ class Cluster:
         assert len(set(poles)) == len(poles), f'poles cannot contain duplicate points.'
         return poles
 
-    def partition(self, *criterion) -> Set['Cluster']:
+    def partition(self, *criterion) -> set['Cluster']:
         """ Partition cluster into children.
 
         If the cluster can be partitioned, partition it and return list of children.
@@ -330,17 +318,17 @@ class Cluster:
             logging.debug(f'{self} cannot be partitioned.')
             self.children = list()
         else:
-            poles: List[int] = self._find_poles()
-            child_argpoints: List[List[int]] = [[p] for p in poles]
+            poles: list[int] = self._find_poles()
+            child_argpoints: list[list[int]] = [[p] for p in poles]
 
             for batch in iter(self):
                 argpoints = [p for p in batch if p not in poles]
                 if len(argpoints) > 0:
                     distances = self.distance(argpoints, poles)
-                    [child_argpoints[int(np.argmin(row))].append(p) for p, row in zip(argpoints, distances)]
+                    [child_argpoints[int(numpy.argmin(row))].append(p) for p, row in zip(argpoints, distances)]
 
             child_argpoints.sort(key=len)
-            self.children: Set['Cluster'] = {
+            self.children: set['Cluster'] = {
                 Cluster(self.manifold, argpoints, self.name + '0' + '1' * i)
                 for i, argpoints in enumerate(child_argpoints)
             }
@@ -377,7 +365,7 @@ class Cluster:
 
 class Edge:
     """ An Edge is a connection between two clusters. """
-    def __init__(self, clusters: Tuple[Cluster, Cluster], distance: float):
+    def __init__(self, clusters: tuple[Cluster, Cluster], distance: float):
         left, right = clusters
         if right < left:
             left, right = right, left
@@ -401,7 +389,7 @@ class Edge:
         return cluster in self.clusters
 
     @property
-    def clusters(self) -> Tuple[Cluster, Cluster]:
+    def clusters(self) -> tuple[Cluster, Cluster]:
         return self._left, self._right
 
     @property
@@ -444,10 +432,10 @@ class Graph:
         logging.debug(f'Graph(clusters={list(map(str, clusters))})')
         assert all(isinstance(c, Cluster) for c in clusters), 'all inputs to the Graph must be clusters.'
 
-        self._clusters: Set[Cluster] = {cluster for cluster in clusters}
-        self._edges: Set[Edge] = set()
+        self._clusters: set[Cluster] = {cluster for cluster in clusters}
+        self._edges: set[Edge] = set()
         self.is_built: bool = False  # this flag is set to True at the end of build_edges.
-        self.cache: Dict[str, Any] = dict()
+        self.cache: dict[str, typing.Any] = dict()
 
     def __eq__(self, other: 'Graph') -> bool:
         """ Two Graphs are identical if they have the same sets of clusters and edges. """
@@ -456,7 +444,7 @@ class Graph:
     def __bool__(self) -> bool:
         return self.cardinality > 0
 
-    def __iter__(self) -> Iterable[Cluster]:
+    def __iter__(self) -> typing.Iterable[Cluster]:
         yield from self.clusters
 
     def __str__(self) -> str:
@@ -476,15 +464,15 @@ class Graph:
         return cluster in self.clusters
 
     @property
-    def clusters(self) -> Set[Cluster]:
+    def clusters(self) -> set[Cluster]:
         return self._clusters
 
     @property
-    def edges(self) -> Set[Edge]:
+    def edges(self) -> set[Edge]:
         return self._edges
 
     @property
-    def argpoints(self) -> Set[int]:
+    def argpoints(self) -> set[int]:
         """ Returns the set of indices of all points in the Graph. """
         return {point for cluster in self.clusters for point in cluster.argpoints}
 
@@ -495,7 +483,7 @@ class Graph:
         return intersection / union
 
     @property
-    def edges_dict(self) -> Dict[Cluster, Set[Edge]]:
+    def edges_dict(self) -> dict[Cluster, set[Edge]]:
         if 'edges_dict' not in self.cache:
             self.cache['edges_dict'] = {cluster: set() for cluster in self.clusters}
             for edge in self.edges:
@@ -538,13 +526,13 @@ class Graph:
         return self.cache['min_depth']
 
     @property
-    def depth_range(self) -> Tuple[int, int]:
+    def depth_range(self) -> tuple[int, int]:
         return self.min_depth, self.depth
 
     def eccentricity(self, start: Cluster) -> int:
         """ The greatest path length from the start cluster to any other cluster in the same component. """
-        visited: Set[Cluster] = set()
-        frontier: Set[Cluster] = {start}
+        visited: set[Cluster] = set()
+        frontier: set[Cluster] = {start}
         eccentricity: int = 0
         while frontier:
             eccentricity += 1
@@ -560,14 +548,14 @@ class Graph:
         return self.cache['diameter']
 
     @property
-    def as_matrix(self) -> Tuple[List[Cluster], np.array]:
+    def as_matrix(self) -> tuple[list[Cluster], numpy.array]:
         """ The Graph as a square matrix where the entries are the corresponding edge lengths.
 
         :returns: The clusters in a list, and the matrix with columns corresponding to that ordering
         """
-        clusters: List[Cluster] = list(self.clusters)
-        indices: Dict[Cluster, int] = {cluster: i for i, cluster in enumerate(clusters)}
-        matrix: np.array = np.zeros(shape=(len(clusters), len(clusters)), dtype=float)
+        clusters: list[Cluster] = list(self.clusters)
+        indices: dict[Cluster, int] = {cluster: i for i, cluster in enumerate(clusters)}
+        matrix: numpy.array = numpy.zeros(shape=(len(clusters), len(clusters)), dtype=float)
         for edge in self.edges:
             i, j = indices[edge.left], indices[edge.right]
             matrix[i][j] = 1. / edge.distance
@@ -575,16 +563,16 @@ class Graph:
         return clusters, matrix
 
     @property
-    def components(self) -> Set['Graph']:
+    def components(self) -> set['Graph']:
         """ Returns the set of all connected components in the Graph. """
         if not self.is_built:
             self.build_edges()
 
         if 'components' not in self.cache:
-            components: Set['Graph'] = set()
-            unvisited: Set[Cluster] = {cluster for cluster in self.clusters}
+            components: set['Graph'] = set()
+            unvisited: set[Cluster] = {cluster for cluster in self.clusters}
             while unvisited:
-                component: Set[Cluster] = self.traverse(unvisited.pop())
+                component: set[Cluster] = self.traverse(unvisited.pop())
                 unvisited -= component
                 components.add(self.subgraph(component))
 
@@ -593,7 +581,7 @@ class Graph:
         return self.cache['components']
 
     @property
-    def pruned_graph(self) -> Tuple['Graph', Dict[Cluster, Set[Cluster]]]:
+    def pruned_graph(self) -> tuple['Graph', dict[Cluster, set[Cluster]]]:
         """ Get the pruned graph and a dict of subsumed clusters.
 
         The pruned graph is a graph on those clusters in Graph that are not subsumed by any other cluster.
@@ -601,7 +589,7 @@ class Graph:
         to the set of cluster subsumed by that cluster.
         """
         # determine subsumed clusters
-        subsumed_clusters: Set[Cluster] = set()
+        subsumed_clusters: set[Cluster] = set()
         for edge in self.edges:
             if edge.distance + edge.left.radius <= edge.right.radius:
                 subsumed_clusters.add(edge.left)
@@ -609,10 +597,10 @@ class Graph:
                 subsumed_clusters.add(edge.right)
 
         # determine walkable clusters
-        pruned_graph: Set[Cluster] = {cluster for cluster in self.clusters if cluster not in subsumed_clusters}
+        pruned_graph: set[Cluster] = {cluster for cluster in self.clusters if cluster not in subsumed_clusters}
 
         # create dict of walkable-cluster -> set-of-subsumed-clusters
-        subsumed_neighbors: Dict[Cluster, Set[Cluster]] = {
+        subsumed_neighbors: dict[Cluster, set[Cluster]] = {
             cluster: {neighbor for neighbor in self.neighbors(cluster) if neighbor not in pruned_graph}
             for cluster in pruned_graph
         }
@@ -626,7 +614,7 @@ class Graph:
         else:
             raise ValueError(f'cluster {str(cluster)} not found in any component.')
 
-    def subgraph(self, clusters: Set[Cluster]) -> 'Graph':
+    def subgraph(self, clusters: set[Cluster]) -> 'Graph':
         """ returns the subgraph containing only the given clusters. """
         if not clusters.issubset(self.clusters):
             raise ValueError(f'Some clusters were not found in the graph.')
@@ -643,9 +631,9 @@ class Graph:
     def as_dot_string(
             self,
             graph_name: str,
-            edge_constants: Optional[Tuple[str, int, int]] = None,
-            cluster_label: Optional[Callable[[Cluster], str]] = None,
-            edge_label: Optional[Callable[[Cluster, Edge], str]] = None,
+            edge_constants: tuple[str, int, int] = None,
+            cluster_label: typing.Callable[[Cluster], str] = None,
+            edge_label: typing.Callable[[Cluster, Edge], str] = None,
     ):
         """ Returns the graph as a dot-file string.
 
@@ -672,11 +660,11 @@ class Graph:
 
         if cluster_label is None:
             # normalize lfd values so that 0.5 is equal parts red and blue, 1 is all red, and 0 is all blue
-            normalized_lfds: np.array = normalize(
-                values=np.asarray([cluster.local_fractal_dimension for cluster in self.clusters], dtype=float),
+            normalized_lfds: numpy.array = helpers.normalize(
+                values=numpy.asarray([cluster.local_fractal_dimension for cluster in self.clusters], dtype=float),
                 mode='gaussian',
             )
-            colors: Dict[Cluster, str] = {  # dict of cluster -> hexadecimal string of rgb color
+            colors: dict[Cluster, str] = {  # dict of cluster -> hexadecimal string of rgb color
                 cluster: f'#{int(255 * lfd):02X}00{int(255 * (1 - lfd)):02X}'
                 for cluster, lfd in zip(self.clusters, normalized_lfds)
             }
@@ -695,7 +683,7 @@ class Graph:
                 """ The default edge label to use for dotfiles. """
                 return f'label="{edge.distance:.8e}"'
 
-        dot_file_lines: List[str] = [  # start the lines in the dot-file
+        dot_file_lines: list[str] = [  # start the lines in the dot-file
             f'graph {graph_name} ' + '{',  # graph type and name
             f'    edge[style={style}, penwidth="{penwidth}", labeldistance="{label_distance}"]'  # edge constants
         ]
@@ -734,7 +722,7 @@ class Graph:
     def _find_candidates(cluster: Cluster) -> None:
         """ Update the cluster.candidates dictionary. """
         radius: float = cluster.manifold.root.radius
-        ancestry: List[Cluster] = cluster.manifold.ancestry(cluster)
+        ancestry: list[Cluster] = cluster.manifold.ancestry(cluster)
 
         # iterate over non-root clusters in ancestry
         for depth in range(1, cluster.depth + 1):
@@ -744,7 +732,7 @@ class Graph:
             # This ensures that candidates are calculated once per cluster
             if ancestry[depth].candidates is None:
                 # Keep candidates from parent
-                candidates: Dict[Cluster, float] = {c: 0. for c in ancestry[depth - 1].candidates}
+                candidates: dict[Cluster, float] = {c: 0. for c in ancestry[depth - 1].candidates}
 
                 # Get all children of candidates at the same depth.
                 candidates.update({
@@ -795,26 +783,26 @@ class Graph:
         self.is_built = True
         return self
 
-    def edges_from(self, cluster: Cluster) -> List[Edge]:
+    def edges_from(self, cluster: Cluster) -> list[Edge]:
         """ returns all edges that connect to cluster. """
         return list(self.edges_dict[cluster])
 
-    def neighbors(self, cluster: Cluster) -> List[Cluster]:
+    def neighbors(self, cluster: Cluster) -> list[Cluster]:
         """ returns all neighbors of cluster. """
         return [edge.neighbor(cluster) for edge in self.edges_from(cluster)]
 
-    def distances(self, cluster: Cluster) -> List[float]:
+    def distances(self, cluster: Cluster) -> list[float]:
         """ returns distances to each neighbor of cluster. """
         return [edge.distance for edge in self.edges_from(cluster)]
 
-    def traverse(self, start: Cluster) -> Set[Cluster]:
+    def traverse(self, start: Cluster) -> set[Cluster]:
         """ Graph traversal starting at start. """
         if not self.is_built:
             self.build_edges()
 
         logging.debug(f'starting traversal from {start}')
-        visited: Set[Cluster] = set()
-        frontier: Set[Cluster] = {start}
+        visited: set[Cluster] = set()
+        frontier: set[Cluster] = {start}
 
         while frontier:
             visited.update(frontier)
@@ -826,14 +814,14 @@ class Graph:
 
         return visited
 
-    def bft(self, start: Cluster) -> Set[Cluster]:
+    def bft(self, start: Cluster) -> set[Cluster]:
         """ Breadth-First traversal starting at start. """
         if not self.is_built:
             self.build_edges()
 
         logging.debug(f'starting traversal from {start}')
-        visited: Set[Cluster] = set()
-        queue = deque([start])
+        visited: set[Cluster] = set()
+        queue = collections.deque([start])
 
         while queue:
             cluster = queue.popleft()
@@ -845,7 +833,7 @@ class Graph:
 
         return visited
 
-    def dft(self, start: Cluster) -> Set[Cluster]:
+    def dft(self, start: Cluster) -> set[Cluster]:
         """ Depth-First traversal starting at start. """
         if not self.is_built:
             self.build_edges()
@@ -853,8 +841,8 @@ class Graph:
             pass
 
         logging.debug(f'starting traversal from {start}')
-        visited: Set[Cluster] = set()
-        stack: List[Cluster] = [start]
+        visited: set[Cluster] = set()
+        stack: list[Cluster] = [start]
 
         while stack:
             cluster = stack.pop()
@@ -884,7 +872,7 @@ class Graph:
         self.clusters.remove(cluster)
         return
 
-    def replace_clusters(self, removals: Set[Cluster], additions: Set[Cluster]) -> 'Graph':
+    def replace_clusters(self, removals: set[Cluster], additions: set[Cluster]) -> 'Graph':
         """ Replace the Clusters in removals by the clusters in additions.
 
         The set of points in the to-be-removed clusters must be the same as the set of points in the to-be-added clusters.
@@ -898,8 +886,8 @@ class Graph:
         elif len(additions.intersection(self.clusters)) > 0:
             raise ValueError(f'Cannot add clusters that are already in the graph.')
         else:
-            added_points: Set[int] = {point for cluster in additions for point in cluster.argpoints}
-            removed_points: Set[int] = {point for cluster in removals for point in cluster.argpoints}
+            added_points: set[int] = {point for cluster in additions for point in cluster.argpoints}
+            removed_points: set[int] = {point for cluster in removals for point in cluster.argpoints}
             if added_points != removed_points:
                 raise ValueError(f'Mismatch between points being replaced. '
                                  f'Clusters being added must have the same set of points as those being removed')
@@ -917,9 +905,9 @@ class Manifold:
 
     def __init__(
             self,
-            data: Data,
+            data: Dataset,
             metric: Metric,
-            argpoints: Union[Vector, float] = None,
+            argpoints: typing.Union[Indices, float] = None,
             **kwargs
     ):
         """ A Manifold needs the data from which to learn the manifold, and a distance function to use while doing so.
@@ -927,10 +915,10 @@ class Manifold:
         :param data: The data to learn. This should be a numpy.ndarray or a numpy.memmap.
         :param metric: The distance function to use for the data.
                        Any distance function allowed by scipy.spatial.distance is allowed here.
-        :param argpoints: Optional. List of indexes or portion of data to which to restrict Manifold.
+        :param argpoints: Optional. list of indexes or portion of data to which to restrict Manifold.
         """
         logging.debug(f'Manifold(data={data.shape}, metric={metric}, argpoints={argpoints})')
-        self.data: Data = data
+        self.data: Dataset = data
         self.metric: Metric = metric
 
         if argpoints is None:
@@ -938,7 +926,7 @@ class Manifold:
         elif type(argpoints) is list:
             self.argpoints = list(map(int, argpoints))
         elif type(argpoints) is float:
-            self.argpoints = np.random.choice(
+            self.argpoints = numpy.random.choice(
                 self.data.shape[0],
                 int(self.data.shape[0] * argpoints),
                 replace=False
@@ -948,10 +936,10 @@ class Manifold:
             raise ValueError(f"Invalid argument to argpoints. {argpoints}")
 
         self.root: Cluster = Cluster(self, self.argpoints, '')
-        self.layers: List[Graph] = [Graph(self.root)]  # layer-graphs by depth in the tree
-        self.graphs: List[Graph] = list()  # optimal-graphs build from selection criteria
+        self.layers: list[Graph] = [Graph(self.root)]  # layer-graphs by depth in the tree
+        self.graphs: list[Graph] = list()  # optimal-graphs build from selection criteria
 
-        self.cache: Dict[str, Any] = dict()
+        self.cache: dict[str, typing.Any] = dict()
         self.cache.update(**kwargs)
         return
 
@@ -959,7 +947,7 @@ class Manifold:
         """ Two manifolds are identical if they have the same metric and the same leaf-clusters. """
         return self.metric == other.metric and set(self.layers[-1]) == set(other.layers[-1])
 
-    def __iter__(self) -> Iterable[Graph]:
+    def __iter__(self) -> typing.Iterable[Graph]:
         yield from self.layers
 
     def __getitem__(self, depth: int) -> Graph:
@@ -980,7 +968,7 @@ class Manifold:
         return
 
     @property
-    def ordered_clusters(self) -> List[Cluster]:
+    def ordered_clusters(self) -> list[Cluster]:
         """ Returns all clusters in the manifold in a standardized order. """
         if 'ordered_clusters' not in self.cache:
             self.cache['ordered_clusters'] = [
@@ -991,7 +979,7 @@ class Manifold:
         return self.cache['ordered_clusters']
 
     @property
-    def ratios(self) -> Dict[Cluster, np.array]:
+    def ratios(self) -> dict[Cluster, numpy.array]:
         """ Calculates and normalizes the parent-child ratios of several cluster properties.
 
         The ratios, in order, are:
@@ -1005,21 +993,21 @@ class Manifold:
         if 'ratios' not in self.cache:
             smoothing, period = 2, 10
             alpha = smoothing / (1 + period)
-            cluster_indices: Dict[Cluster, int] = {cluster: i for i, cluster in enumerate(self.ordered_clusters)}
-            cluster_ratios: np.array = np.ones(shape=(len(self.ordered_clusters), 6), dtype=float)
+            cluster_indices: dict[Cluster, int] = {cluster: i for i, cluster in enumerate(self.ordered_clusters)}
+            cluster_ratios: numpy.array = numpy.ones(shape=(len(self.ordered_clusters), 6), dtype=float)
             for layer in self.layers[1:]:
                 for cluster in layer.clusters:
-                    current = np.asarray([
+                    current = numpy.asarray([
                         cluster.cardinality / cluster.parent.cardinality,
-                        cluster.radius / (cluster.parent.radius + EPSILON),
+                        cluster.radius / (cluster.parent.radius + constants.EPSILON),
                         cluster.local_fractal_dimension / cluster.parent.local_fractal_dimension,
                     ], dtype=float)
                     previous = cluster_ratios[cluster_indices[cluster.parent]][3:]
                     new = alpha * current + (1 - alpha) * previous
-                    cluster_ratios[cluster_indices[cluster]] = np.concatenate([current, new])
+                    cluster_ratios[cluster_indices[cluster]] = numpy.concatenate([current, new])
 
             # TODO: Consider adding toggle for making normalization optional.
-            cluster_ratios = normalize(cluster_ratios, 'gaussian')
+            cluster_ratios = helpers.normalize(cluster_ratios, 'gaussian')
 
             self.cache['ratios'] = {
                 cluster: cluster_ratios[cluster_indices[cluster]]
@@ -1027,7 +1015,7 @@ class Manifold:
             }
         return self.cache['ratios']
 
-    def cluster_ratios(self, cluster: Cluster) -> np.array:
+    def cluster_ratios(self, cluster: Cluster) -> numpy.array:
         """ Returns the normalized ratios for the given cluster. """
         return self.ratios[cluster]
 
@@ -1035,7 +1023,7 @@ class Manifold:
     def depth(self) -> int:
         return len(self.layers) - 1
 
-    def distance(self, x1: Union[List[int], Data], x2: Union[List[int], Data]) -> np.ndarray:
+    def distance(self, x1: typing.Union[list[int], Dataset], x2: typing.Union[list[int], Dataset]) -> numpy.ndarray:
         """ Calculates the pairwise distances between all points in x1 and x2.
 
         This DOES NOT do any batching.
@@ -1048,25 +1036,25 @@ class Manifold:
         :param x2: a list of indices, or a 2D matrix of data points
         :return: matrix of pairwise distances.
         """
-        x1, x2 = np.asarray(x1), np.asarray(x2)
+        x1, x2 = numpy.asarray(x1), numpy.asarray(x2)
         # Fetch data if given indices.
         if len(x1.shape) < 2:
-            x1 = self.data[x1 if x1.ndim == 1 else np.expand_dims(x1, 0)]
+            x1 = self.data[x1 if x1.ndim == 1 else numpy.expand_dims(x1, 0)]
         if len(x2.shape) < 2:
-            x2 = self.data[x2 if x2.ndim == 1 else np.expand_dims(x2, 0)]
+            x2 = self.data[x2 if x2.ndim == 1 else numpy.expand_dims(x2, 0)]
 
         return cdist(x1, x2, metric=self.metric)
 
     def build(self, *criteria) -> 'Manifold':
         """ Rebuilds the Cluster-tree and the Graph-stack. """
-        from pyclam.criterion import ClusterCriterion, SelectionCriterion
+        from .criterion import ClusterCriterion, SelectionCriterion
 
-        cluster_criteria: List[ClusterCriterion] = [
+        cluster_criteria: list[ClusterCriterion] = [
             criterion for criterion in criteria
             if isinstance(criterion, ClusterCriterion)
         ]
 
-        selection_criteria: List[SelectionCriterion] = [
+        selection_criteria: list[SelectionCriterion] = [
             criterion for criterion in criteria
             if isinstance(criterion, SelectionCriterion)
         ]
@@ -1095,7 +1083,7 @@ class Manifold:
 
     def add_graphs(self, *criterion) -> 'Manifold':
         """ Uses the given selection criteria to add more graphs to the Manifold. """
-        from pyclam.criterion import SelectionCriterion
+        from .criterion import SelectionCriterion
 
         if not all((isinstance(c, SelectionCriterion) for c in criterion)):
             raise ValueError(f'Only Selection Criteria are allowed for building graphs.')
@@ -1106,7 +1094,7 @@ class Manifold:
 
     def replace_graphs(self, *criterion) -> 'Manifold':
         """ Uses the given selection criteria to replace the graphs in the Manifold. """
-        from pyclam.criterion import SelectionCriterion
+        from .criterion import SelectionCriterion
 
         if not all((isinstance(c, SelectionCriterion) for c in criterion)):
             raise ValueError(f'Only Selection Criteria are allowed for building graphs.')
@@ -1114,13 +1102,13 @@ class Manifold:
         self.graphs = list()
         return self.add_graphs(*criterion)
 
-    def _partition_single(self, criterion) -> List[Cluster]:
+    def _partition_single(self, criterion) -> list[Cluster]:
         # TODO: Consider removing and only keeping multi-threaded version
         # start new layer with all non-partitionable clusters
-        new_layer: List[Cluster] = [cluster for cluster in self.layers[-1].clusters if cluster.depth < self.depth]
+        new_layer: list[Cluster] = [cluster for cluster in self.layers[-1].clusters if cluster.depth < self.depth]
 
         # filter clusters that might get partitioned
-        partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == self.depth]
+        partitionable: list[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == self.depth]
 
         # partition all partitionable clusters
         [cluster.partition(*criterion) for cluster in partitionable]
@@ -1129,9 +1117,9 @@ class Manifold:
         [new_layer.extend(cluster.children) if cluster.children else new_layer.append(cluster) for cluster in partitionable]
         return new_layer
 
-    def _partition_threaded(self, criterion) -> List[Cluster]:
-        new_layer: List[Cluster] = [cluster for cluster in self.layers[-1].clusters if cluster.depth < self.depth]
-        partitionable: List[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == self.depth]
+    def _partition_threaded(self, criterion) -> list[Cluster]:
+        new_layer: list[Cluster] = [cluster for cluster in self.layers[-1].clusters if cluster.depth < self.depth]
+        partitionable: list[Cluster] = [cluster for cluster in self.layers[-1] if cluster.depth == self.depth]
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_cluster = [executor.submit(cluster.partition, *criterion) for cluster in partitionable]
@@ -1140,7 +1128,7 @@ class Manifold:
         [new_layer.extend(cluster.children) if cluster.children else new_layer.append(cluster) for cluster in partitionable]
         return new_layer
 
-    def ancestry(self, cluster: Union[str, Cluster]) -> List[Cluster]:
+    def ancestry(self, cluster: typing.Union[str, Cluster]) -> list[Cluster]:
         """ Returns the sequence of clusters that needs to be traversed to reach the requested cluster.
 
         :param cluster: A cluster or the name of a cluster.
@@ -1153,9 +1141,9 @@ class Manifold:
             raise ValueError(f'depth of requested cluster must not be greater than depth of cluster-tree. '
                              f'Got {cluster}, max-depth: {self.depth}')
 
-        lineage: List[Cluster] = [self.root]
+        lineage: list[Cluster] = [self.root]
         if len(cluster) > 0:
-            ancestry_pieces: List[str] = list(cluster.split('0'))
+            ancestry_pieces: list[str] = list(cluster.split('0'))
             ancestry = ['']
             for piece in ancestry_pieces[1:]:
                 ancestry.append(ancestry[-1] + '0' + piece)
@@ -1177,7 +1165,7 @@ class Manifold:
         """ Returns the cluster with the given name. """
         return self.ancestry(name)[-1]
 
-    def dump(self, fp: Union[BinaryIO, IO[bytes]]) -> None:
+    def dump(self, fp: typing.Union[typing.BinaryIO, typing.IO[bytes]]) -> None:
         pickle.dump({
             'metric': self.metric,
             'root': self.root.json(),
@@ -1186,7 +1174,7 @@ class Manifold:
         return
 
     @staticmethod
-    def load(fp: Union[BinaryIO, IO[bytes]], data: Data) -> 'Manifold':
+    def load(fp: typing.Union[typing.BinaryIO, typing.IO[bytes]], data: Dataset) -> 'Manifold':
         d = pickle.load(fp)
         manifold = Manifold(data, metric=d['metric'])
 

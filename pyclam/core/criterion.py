@@ -1,38 +1,32 @@
+import abc
+import collections
 import heapq
 import logging
-from abc import ABC
-from abc import abstractmethod
-from collections import Counter
-from typing import Any
-from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Set
-from typing import Tuple
+import typing
 
-import numpy as np
+import numpy
 from scipy.spatial.distance import cdist
 
-from pyclam.manifold import Cluster
-from pyclam.manifold import Manifold
-from pyclam.utils import normalize
+from .manifold import Cluster
+from .manifold import Manifold
+from ..utils import helpers
 
 
-class Criterion(ABC):
+class Criterion(abc.ABC):
     pass
 
 
 class ClusterCriterion(Criterion):
 
-    @abstractmethod
+    @abc.abstractmethod
     def __call__(self, cluster: Cluster) -> bool:
         pass
 
 
 class SelectionCriterion(Criterion):
 
-    @abstractmethod
-    def __call__(self, root: Cluster) -> Set[Cluster]:
+    @abc.abstractmethod
+    def __call__(self, root: Cluster) -> set[Cluster]:
         pass
 
 
@@ -88,7 +82,7 @@ class MedoidNearCentroid(ClusterCriterion):
         return
 
     def __call__(self, cluster: Cluster) -> bool:
-        distance = cdist(np.expand_dims(cluster.centroid, 0), np.expand_dims(cluster.medoid, 0), cluster.metric)[0][0]
+        distance = cdist(numpy.expand_dims(cluster.centroid, 0), numpy.expand_dims(cluster.medoid, 0), cluster.metric)[0][0]
         logging.debug(f'Cluster {str(cluster)} distance: {distance}')
         return any((
             cluster.depth < 1,
@@ -101,10 +95,10 @@ class UniformDistribution(ClusterCriterion):
         return
 
     def __call__(self, cluster: Cluster) -> bool:
-        distances = cdist(np.expand_dims(cluster.medoid, 0), cluster.samples)[0] / (cluster.radius + 1e-15)
+        distances = cdist(numpy.expand_dims(cluster.medoid, 0), cluster.samples)[0] / (cluster.radius + 1e-15)
         logging.debug(f'Cluster: {cluster}. Distances: {distances}')
-        freq, bins = np.histogram(distances, bins=[i / 10 for i in range(1, 10)])
-        ideal = np.full_like(freq, distances.shape[0] / bins.shape[0])
+        freq, bins = numpy.histogram(distances, bins=[i / 10 for i in range(1, 10)])
+        ideal = numpy.full_like(freq, distances.shape[0] / bins.shape[0])
         from scipy.stats import wasserstein_distance
         distance = wasserstein_distance(freq, ideal)
         return distance > 0.25
@@ -116,7 +110,7 @@ class Leaves(SelectionCriterion):
     def __init__(self):
         return
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
+    def __call__(self, root: Cluster) -> set[Cluster]:
         return {cluster for cluster in root.manifold.layers[-1].clusters}
 
 
@@ -128,7 +122,7 @@ class Layer(SelectionCriterion):
             raise ValueError(f'expected a \'-1\' or a non-negative depth. got: {depth}')
         self.depth = depth
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
+    def __call__(self, root: Cluster) -> set[Cluster]:
         manifold: Manifold = root.manifold
         if (self.depth == -1) or (manifold.depth <= self.depth):
             return {cluster for cluster in manifold.layers[-1].clusters}
@@ -139,7 +133,7 @@ class Layer(SelectionCriterion):
 class MetaMLSelect(SelectionCriterion):
     """ Uses a decision function from a trained meta-ml model to select best clusters for graph.
     """
-    def __init__(self, predict_auc: Callable[[np.array], float], min_depth: int = 4):
+    def __init__(self, predict_auc: typing.Callable[[numpy.array], float], min_depth: int = 4):
         """ A Meta-ML model to select Clusters for a Graph.
 
         :param predict_auc: A function that takes a cluster's ratios and returns a predicted auc for selecting that cluster.
@@ -157,22 +151,22 @@ class MetaMLSelect(SelectionCriterion):
         def ratios(cluster: Cluster):
             return cluster.manifold.cluster_ratios(cluster)
 
-        self.predict_auc: Callable[[Cluster], float] = lambda cluster: predict_auc(ratios(cluster))
+        self.predict_auc: typing.Callable[[Cluster], float] = lambda cluster: predict_auc(ratios(cluster))
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
+    def __call__(self, root: Cluster) -> set[Cluster]:
         manifold: Manifold = root.manifold
-        predicted_auc: Dict[Cluster, float] = {
+        predicted_auc: dict[Cluster, float] = {
             cluster: self.predict_auc(cluster)
             for cluster in manifold.ordered_clusters
             if cluster.depth >= self.min_depth
         }
-        normalized_auc = normalize(np.asarray([-v for v in predicted_auc.values()]), mode='gaussian')
+        normalized_auc = helpers.normalize(numpy.asarray([-v for v in predicted_auc.values()]), mode='gaussian')
         # Turn dict into max priority queue
         items = list(zip(normalized_auc, predicted_auc.keys()))
         heapq.heapify(items)
 
-        selected: Set[Cluster] = set()
-        excluded: Set[int] = set()
+        selected: set[Cluster] = set()
+        excluded: set[int] = set()
         while len(items) > 0:
             _, cluster = heapq.heappop(items)
             if len(excluded.intersection(set(cluster.argpoints))) > 0:
@@ -200,29 +194,29 @@ class LFDRange(SelectionCriterion):
         self.upper: float = float(upper)
         self.lower: float = float(lower)
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
+    def __call__(self, root: Cluster) -> set[Cluster]:
         upper, lower, grace_depth = self._range(root)
         return self._select(root, upper, lower, grace_depth)
 
-    def _range(self, root: Cluster) -> Tuple[float, float, int]:
+    def _range(self, root: Cluster) -> tuple[float, float, int]:
         manifold = root.manifold
         lfd_range = [], []
         for depth in range(1, manifold.depth):
             if manifold.layers[depth + 1].cardinality < 2 ** (depth + 1):
-                clusters: List[Cluster] = [cluster for cluster in manifold.layers[depth] if cluster.cardinality > 2]
+                clusters: list[Cluster] = [cluster for cluster in manifold.layers[depth] if cluster.cardinality > 2]
                 if len(clusters) > 0:
-                    lfds = np.percentile(
+                    lfds = numpy.percentile(
                         a=[c.local_fractal_dimension for c in clusters],
                         q=[self.upper, self.lower],
                     )
                     lfd_range[0].append(lfds[0]), lfd_range[1].append(lfds[1])
         if len(lfd_range[0]) > 0:
-            upper: float = float(np.median(lfd_range[0]))
-            lower: float = float(np.median(lfd_range[1]))
+            upper: float = float(numpy.median(lfd_range[0]))
+            lower: float = float(numpy.median(lfd_range[1]))
             depth: int = manifold.depth - len(lfd_range[0])
             return upper, lower, depth
         else:
-            lfds = np.percentile(
+            lfds = numpy.percentile(
                 a=[cluster.local_fractal_dimension for cluster in manifold.layers[-1]],
                 q=[self.upper, self.lower],
             )
@@ -230,23 +224,23 @@ class LFDRange(SelectionCriterion):
         pass
 
     @staticmethod
-    def _select(root: Cluster, upper: float, lower: float, grace_depth: int) -> Set[Cluster]:
+    def _select(root: Cluster, upper: float, lower: float, grace_depth: int) -> set[Cluster]:
         # childless clusters at or before grace depth are automatically selected
-        selected: Set[Cluster] = {
+        selected: set[Cluster] = {
             cluster
             for cluster in root.manifold.layers[grace_depth].clusters
             if not cluster.children
         }
-        inactive: Set[Cluster] = {
+        inactive: set[Cluster] = {
             cluster
             for cluster in root.manifold.layers[grace_depth].clusters
             if cluster.children
         }
-        active: Set[Cluster] = set()
+        active: set[Cluster] = set()
 
         while active or inactive:
             # Select childless clusters from inactive set
-            childless: Set[Cluster] = {cluster for cluster in inactive if len(cluster.children) == 0}
+            childless: set[Cluster] = {cluster for cluster in inactive if len(cluster.children) == 0}
             # Select childless clusters from active set
             childless.update({cluster for cluster in active if len(cluster.children) == 0})
             selected.update(childless)
@@ -254,12 +248,12 @@ class LFDRange(SelectionCriterion):
             active -= childless
 
             # Select active clusters that fall below the lower threshold
-            selections: Set[Cluster] = {cluster for cluster in active if cluster.local_fractal_dimension <= lower}
+            selections: set[Cluster] = {cluster for cluster in active if cluster.local_fractal_dimension <= lower}
             selected.update(selections)
             active -= selections
 
             # activate branches that rise above the upper threshold
-            activations: Set[Cluster] = {cluster for cluster in inactive if cluster.local_fractal_dimension >= upper}
+            activations: set[Cluster] = {cluster for cluster in inactive if cluster.local_fractal_dimension >= upper}
             active.update(activations)
             inactive -= activations
 
@@ -309,13 +303,13 @@ class PropertyThreshold(SelectionCriterion):
         else:
             raise ValueError(f'mode must be \'above\' or \'below\'. Got {mode} instead.')
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
-        threshold = float(np.percentile(
+    def __call__(self, root: Cluster) -> set[Cluster]:
+        threshold = float(numpy.percentile(
             [self.value(cluster) for cluster in root.descendents if cluster.cardinality > 1],
             self.percentile,
         ))
-        selected: Set[Cluster] = set()
-        frontier: Set[Cluster] = {root}
+        selected: set[Cluster] = set()
+        frontier: set[Cluster] = {root}
         while frontier:
             cluster = frontier.pop()
             if (
@@ -340,7 +334,7 @@ class Labels(SelectionCriterion):
     and let 't' be a given threshold in the (0, 1] range.
     Then the 'overwhelming majority' is defined as (1 - f * t).
     """
-    def __init__(self, labels: Dict[int, Any], threshold: float = 0.1):
+    def __init__(self, labels: dict[int, typing.Any], threshold: float = 0.1):
         """ Instantiates the Labels Selector.
 
         :param labels: A dictionary of index -> label for som or all of the points in the data.
@@ -349,21 +343,21 @@ class Labels(SelectionCriterion):
         """
         if not (0 < threshold <= 1):
             ValueError(f'threshold must be in the (0, 1] range.')
-        self.labels: Dict[int, Any] = labels
-        self.min_fraction: float = min(dict(Counter(labels.values())).values()) / len(labels)
+        self.labels: dict[int, typing.Any] = labels
+        self.min_fraction: float = min(dict(collections.Counter(labels.values())).values()) / len(labels)
         self.threshold: float = 1 - self.min_fraction * threshold
 
-    def __call__(self, root: Cluster) -> Set[Cluster]:
-        selected: Set[Cluster] = set()
-        frontier: Set[Cluster] = {root}
+    def __call__(self, root: Cluster) -> set[Cluster]:
+        selected: set[Cluster] = set()
+        frontier: set[Cluster] = {root}
         while frontier:
             cluster = frontier.pop()
             if cluster.children is None:
                 selected.add(cluster)
             else:
-                labels: List[Any] = [self.labels[p] for p in cluster.argpoints if p in self.labels]
+                labels: list[typing.Any] = [self.labels[p] for p in cluster.argpoints if p in self.labels]
                 if len(labels) > 0:
-                    max_fraction = max(dict(Counter(labels)).values()) / cluster.cardinality
+                    max_fraction = max(dict(collections.Counter(labels)).values()) / cluster.cardinality
                     if max_fraction > self.threshold:
                         selected.add(cluster)
                     else:
