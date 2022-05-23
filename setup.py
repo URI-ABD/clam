@@ -18,6 +18,6 @@ setup(
     description='Clustered Learning of Approximate Manifolds',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    install_requires=['numpy', 'scipy', 'toml'],
-    python_requires='>=3.6',
+    install_requires=['numpy', 'scipy', 'toml', 'scikit-learn'],
+    python_requires='>=3.9,<3.11',
 )
