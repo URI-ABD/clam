@@ -10,7 +10,7 @@ cargo = toml.load('Cargo.toml')
 setup(
     name='pyclam',
     version=cargo['package']['version'],
-    packages=['pyclam'],
+    packages=['pyclam', 'pyclam.anomaly_detection', 'pyclam.classification', 'pyclam.core', 'pyclam.search', 'pyclam.utils'],
     url='https://github.com/URI-ABD/clam',
     license='MIT',
     author='; '.join(cargo['package']['authors']),
