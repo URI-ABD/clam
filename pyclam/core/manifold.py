@@ -902,6 +902,8 @@ class Manifold:
     """ The Manifold class organizes the underlying Clusters and Graphs.
     """
     # TODO: Move data, metric, and distance-method functionality out to DataLoader class.
+    RATIO_NAMES = ['cardinality', 'radius', 'lfd']
+    RATIO_NAMES.extend([f'{name}_ema' for name in RATIO_NAMES])
 
     def __init__(
             self,
