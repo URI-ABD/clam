@@ -5,7 +5,7 @@ import typing
 
 import numpy
 
-from .meta_ml_models import META_ML_MODELS
+from .pretrained_models import META_ML_MODELS
 from ..core import Cluster
 from ..core import criterion
 from ..core import Graph
