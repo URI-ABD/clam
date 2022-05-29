@@ -1,4 +1,5 @@
 import abc
+import inspect
 import logging
 import typing
 
@@ -51,8 +52,8 @@ class GraphSelector(abc.ABC):
 
 
 DEFAULT_SELECTORS = [
-    GraphSelector(name, function)
-    for name, function in pretrained_models.META_MODELS.items()
+    GraphSelector(name, function).configure(criterion.MetaMLSelect, min_depth=4)
+    for name, function in inspect.getmembers(pretrained_models, inspect.isfunction)
 ]
 
 __all__ = [

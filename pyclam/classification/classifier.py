@@ -21,13 +21,12 @@ class Classifier:
 
         self._bowls: typing.Dict[int, CHAODA] = dict()
 
-    def fit(self, data: numpy.ndarray, labels: typing.List[int], *, voting: str = 'mean') -> 'Classifier':
+    def fit(self, data: numpy.ndarray, labels: typing.List[int]) -> 'Classifier':
         """ Fits the Classifier to the data.
 
         Args:
             data: 2d array where the rows are instances and the columns are features.
             labels: List of enumerated labels for each row of data.
-            voting: How to vote among scores.
 
         Returns:
             the fitted Classifier.
@@ -39,7 +38,7 @@ class Classifier:
 
             logger.info(f'Fitting CHAODA object for label {label} ...')
             bowl = CHAODA(**self.kwargs)
-            bowl = bowl.fit(data, indices=indices, voting=voting)
+            bowl = bowl.fit(data, indices=indices)
             self._bowls[label] = bowl
 
         return self

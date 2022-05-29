@@ -25,9 +25,9 @@ docker run clam --help
 ### Python Scripting
 
 ```python
-from pyclam import Manifold
-from pyclam import CAKES
 from pyclam import criterion
+from pyclam import Manifold
+from pyclam.search import CAKES
 from pyclam.utils import synthetic_datasets
 
 # Get the data.

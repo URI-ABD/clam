@@ -4,7 +4,7 @@ import unittest
 import numpy
 from scipy.spatial.distance import cdist
 
-from pyclam import CAKES
+from pyclam.search import CAKES
 from pyclam.utils import synthetic_datasets
 
 
@@ -42,8 +42,8 @@ class TestSearch(unittest.TestCase):
         self.assertLessEqual(1, len(search.rnn(self.query, 1)))
 
         for radius in [0.25, 0.5, 1.0, 2.0, 5.0]:
-            naive_results: Dict[int, float] = {point: distance for point, distance in self.distances.items() if distance <= radius}
-            rnn_results: List[int] = list(search.rnn(self.query, radius).keys())
+            naive_results: dict[int, float] = {point: distance for point, distance in self.distances.items() if distance <= radius}
+            rnn_results: list[int] = list(search.rnn(self.query, radius).keys())
             self.assertEqual(len(naive_results), len(rnn_results), f'expected the same number of results from naive and rnn searches.')
             self.assertSetEqual(set(naive_results.keys()), set(rnn_results), f'expected the same set of results from naive and rnn searches.')
 
