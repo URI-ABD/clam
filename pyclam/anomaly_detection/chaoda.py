@@ -5,14 +5,18 @@ import typing
 
 import numpy
 
-from ..search import CAKES
-from ..anomaly_detection.meta_ml_models import META_ML_MODELS
+from .meta_ml_models import META_ML_MODELS
 from ..core import Cluster
 from ..core import criterion
 from ..core import Graph
 from ..core import Manifold
 from ..core import types
+from ..search import CAKES
+from ..utils import constants
 from ..utils import helpers
+
+logger = logging.getLogger(__name__)
+logger.setLevel(constants.LOG_LEVEL)
 
 ClusterScores = dict[Cluster, float]
 Scores = dict[int, float]
@@ -208,7 +212,7 @@ class CHAODA:
         """
         scores = list()
         for i in range(queries.shape[0]):
-            logging.info(f'Predicting anomaly score for query {i} ...')
+            logger.info(f'Predicting anomaly score for query {i} ...')
             scores.append(self.predict_single(queries[i]))
         return numpy.array(scores, dtype=numpy.float32)
 
@@ -364,11 +368,11 @@ class CHAODA:
         return {cluster: float(score) for cluster, score in zip(scores.keys(), normalized_scores)}
 
     def _cluster_cardinality(self, graph: Graph) -> ClusterScores:
-        logging.info(f'with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        logger.info(f'with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
         return self._normalize_scores({cluster: cluster.cardinality for cluster in graph.clusters}, False)
 
     def _component_cardinality(self, graph: Graph) -> ClusterScores:
-        logging.info(f'with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        logger.info(f'with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
         scores: dict[Cluster, int] = {
             cluster: component.cardinality
             for component in graph.components
@@ -387,7 +391,7 @@ class CHAODA:
         return scores
 
     def _graph_neighborhood(self, graph: Graph, eccentricity_fraction: float = 0.25) -> ClusterScores:
-        logging.info(f'Running method GN with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        logger.info(f'Running method GN with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
         if not (0 < eccentricity_fraction <= 1):
             raise ValueError(f'eccentricity fraction must be in the (0, 1] range. Got {eccentricity_fraction:.2f} instead.')
 
@@ -417,7 +421,7 @@ class CHAODA:
         return self._normalize_scores(scores, False)
 
     def _parent_cardinality(self, graph: Graph, weight: typing.Callable[[int], float] = None) -> ClusterScores:
-        logging.info(f'Running method PC with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        logger.info(f'Running method PC with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
 
         weight = (lambda d: 1 / (d ** 0.5)) if weight is None else weight
         scores: ClusterScores = {cluster: 0 for cluster in graph.clusters}
@@ -428,7 +432,7 @@ class CHAODA:
         return self._normalize_scores(scores, True)
 
     def _stationary_probabilities(self, graph: Graph, steps: int = 16) -> ClusterScores:
-        logging.info(f'Running method SP with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        logger.info(f'Running method SP with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
         scores: dict[Cluster, float] = {cluster: -1 for cluster in graph.clusters}
         pruned_graph, subsumed_neighbors = graph.pruned_graph
         for component in pruned_graph.components:
@@ -447,6 +451,6 @@ class CHAODA:
         return self._normalize_scores(scores, False)
 
     def _vertex_degree(self, graph: Graph) -> ClusterScores:
-        logging.info(f'Running method VD with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
+        logger.info(f'Running method VD with metric {graph.metric} on graph {list(graph.depth_range)} with {graph.cardinality} clusters.')
         scores: dict[Cluster, float] = {cluster: graph.vertex_degree(cluster) for cluster in graph.clusters}
         return self._normalize_scores(scores, False)

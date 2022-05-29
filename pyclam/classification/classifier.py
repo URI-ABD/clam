@@ -4,6 +4,10 @@ import typing
 import numpy
 
 from ..anomaly_detection import CHAODA
+from ..utils import constants
+
+logger = logging.getLogger(__name__)
+logger.setLevel(constants.LOG_LEVEL)
 
 
 class Classifier:
@@ -33,7 +37,7 @@ class Classifier:
         for label in unique_labels:
             indices = list(numpy.argwhere(labels == label))
 
-            logging.info(f'Fitting CHAODA object for label {label} ...')
+            logger.info(f'Fitting CHAODA object for label {label} ...')
             bowl = CHAODA(**self.kwargs)
             bowl = bowl.fit(data, indices=indices, voting=voting)
             self._bowls[label] = bowl
@@ -53,6 +57,6 @@ class Classifier:
         """
         labels = list()
         for i in range(queries.shape[0]):
-            logging.info(f'Predicting class for query {i} ...')
+            logger.info(f'Predicting class for query {i} ...')
             labels.append(self.predict_single(queries[i]))
         return labels
