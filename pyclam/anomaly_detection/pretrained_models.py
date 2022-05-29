@@ -1,5 +1,3 @@
-import typing
-
 import numpy
 
 
@@ -370,37 +368,3 @@ def dt_euclidean_vertex_degree(ratios: numpy.array) -> float:
                 return 9.627948e-01
             else:
                 return 9.921575e-01
-
-
-META_MODELS = {
-    'lr_cityblock_cluster_cardinality': lr_cityblock_cluster_cardinality,
-    'dt_cityblock_cluster_cardinality': dt_cityblock_cluster_cardinality,
-    'lr_cityblock_component_cardinality': lr_cityblock_component_cardinality,
-    'dt_cityblock_component_cardinality': dt_cityblock_component_cardinality,
-    'lr_cityblock_graph_neighborhood': lr_cityblock_graph_neighborhood,
-    'dt_cityblock_graph_neighborhood': dt_cityblock_graph_neighborhood,
-    'lr_cityblock_parent_cardinality': lr_cityblock_parent_cardinality,
-    'dt_cityblock_parent_cardinality': dt_cityblock_parent_cardinality,
-    'lr_cityblock_stationary_probabilities': lr_cityblock_stationary_probabilities,
-    'dt_cityblock_stationary_probabilities': dt_cityblock_stationary_probabilities,
-    'lr_cityblock_vertex_degree': lr_cityblock_vertex_degree,
-    'dt_cityblock_vertex_degree': dt_cityblock_vertex_degree,
-    'lr_euclidean_cluster_cardinality': lr_euclidean_cluster_cardinality,
-    'dt_euclidean_cluster_cardinality': dt_euclidean_cluster_cardinality,
-    'lr_euclidean_component_cardinality': lr_euclidean_component_cardinality,
-    'dt_euclidean_component_cardinality': dt_euclidean_component_cardinality,
-    'lr_euclidean_graph_neighborhood': lr_euclidean_graph_neighborhood,
-    'dt_euclidean_graph_neighborhood': dt_euclidean_graph_neighborhood,
-    'lr_euclidean_parent_cardinality': lr_euclidean_parent_cardinality,
-    'dt_euclidean_parent_cardinality': dt_euclidean_parent_cardinality,
-    'lr_euclidean_stationary_probabilities': lr_euclidean_stationary_probabilities,
-    'dt_euclidean_stationary_probabilities': dt_euclidean_stationary_probabilities,
-    'lr_euclidean_vertex_degree': lr_euclidean_vertex_degree,
-    'dt_euclidean_vertex_degree': dt_euclidean_vertex_degree,
-}
-
-META_ML_MODELS: typing.List[typing.Tuple[str, str, typing.Callable[[numpy.array], float]]] = [
-    # tuple of (metric, method, function)
-    (name.split('_')[1], '_'.join(name.split('_')[2:]), method)
-    for name, method in META_MODELS.items()
-]

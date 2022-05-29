@@ -5,7 +5,7 @@ from sklearn.datasets import load_digits
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
-from pyclam import Classifier
+from pyclam.classification import Classifier
 from pyclam.utils import helpers
 
 
