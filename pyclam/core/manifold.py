@@ -112,6 +112,10 @@ class Cluster:
         return intersection / union
 
     @property
+    def is_leaf(self) -> bool:
+        return (self.children is None) or (len(self.children) == 0)
+
+    @property
     def parent(self) -> 'Cluster':
         if 'parent' not in self.cache:
             if self.depth > 0:
@@ -282,23 +286,23 @@ class Cluster:
         """ Checks if point is within radius + self.radius of cluster. """
         return self.distance_from(numpy.asarray([point]))[0] <= (self.radius + radius)
 
-    def _find_poles(self) -> list[int]:
+    def _find_poles(self) -> tuple[int, int]:
         """ Poles are approximately the two farthest points in the cluster.
 
-        :return: list of indexes of the poles.
+        :return: 2-tuple of indices of the poles.
         """
         assert len(self.argsamples) > 1, f'must have more than one unique point before poles can be chosen'
 
         if len(self.argsamples) > 2:
-            farthest = self.argsamples[int(numpy.argmax(self.distance([self.argradius], self.argsamples)[0]))]
-            poles = [self.argradius, farthest]
+            farthest: int = self.argsamples[int(numpy.argmax(self.distance([self.argradius], self.argsamples)[0]))]
+            poles = (self.argradius, farthest)
         else:
-            poles = [p for p in self.argsamples]
+            poles = (self.argsamples[0], self.argsamples[1])
 
-        assert len(set(poles)) == len(poles), f'poles cannot contain duplicate points.'
+        assert poles[0] != poles[1], f'poles cannot contain duplicate points.'
         return poles
 
-    def partition(self, *criterion) -> set['Cluster']:
+    def partition(self, *criterion) -> list['Cluster']:
         """ Partition cluster into children.
 
         If the cluster can be partitioned, partition it and return list of children.
@@ -314,20 +318,20 @@ class Cluster:
             logger.debug(f'{self} cannot be partitioned.')
             self.children = list()
         else:
-            poles: list[int] = self._find_poles()
+            poles: tuple[int, int] = self._find_poles()
             child_argpoints: list[list[int]] = [[p] for p in poles]
 
             for batch in iter(self):
                 argpoints = [p for p in batch if p not in poles]
                 if len(argpoints) > 0:
-                    distances = self.distance(argpoints, poles)
+                    distances = self.distance(argpoints, list(poles))
                     [child_argpoints[int(numpy.argmin(row))].append(p) for p, row in zip(argpoints, distances)]
 
             child_argpoints.sort(key=len)
-            self.children: set['Cluster'] = {
+            self.children: list['Cluster'] = [
                 Cluster(self.manifold, argpoints, self.name + '0' + '1' * i)
                 for i, argpoints in enumerate(child_argpoints)
-            }
+            ]
             [child.cache.update({'parent': self}) for child in self.children]
 
             logger.debug(f'{self} was partitioned into {len(self.children)} child clusters.')

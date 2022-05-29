@@ -151,22 +151,23 @@ class MetaMLSelect(SelectionCriterion):
         def ratios(cluster: Cluster):
             return cluster.manifold.cluster_ratios(cluster)
 
-        self.predict_auc: typing.Callable[[Cluster], float] = lambda cluster: predict_auc(ratios(cluster))
+        self.predict_auc: typing.Callable[[Cluster], float] = lambda cluster: -predict_auc(ratios(cluster))
 
     def __call__(self, root: Cluster) -> set[Cluster]:
         manifold: Manifold = root.manifold
-        predicted_auc: dict[Cluster, float] = {
-            cluster: self.predict_auc(cluster)
-            for cluster in manifold.ordered_clusters
-            if cluster.depth >= self.min_depth
-        }
-        normalized_auc = helpers.normalize(numpy.asarray([-v for v in predicted_auc.values()]), mode='gaussian')
+
+        candidate_clusters = list(filter(lambda c: c.depth >= self.min_depth, manifold.ordered_clusters))
+        normalized_auc = list(map(float, helpers.normalize(
+            numpy.asarray(list(map(self.predict_auc, candidate_clusters))),
+            mode='gaussian',
+        )))
+
         # Turn dict into max priority queue
-        items = list(zip(normalized_auc, predicted_auc.keys()))
+        items = list(zip(normalized_auc, candidate_clusters))
         heapq.heapify(items)
 
-        selected: set[Cluster] = set()
-        excluded: set[int] = set()
+        selected = set(filter(lambda c: c.depth < self.min_depth and c.is_leaf, manifold.ordered_clusters))
+        excluded: set[int] = set(i for cluster in selected for i in cluster.argpoints)
         while len(items) > 0:
             _, cluster = heapq.heappop(items)
             if len(excluded.intersection(set(cluster.argpoints))) > 0:
@@ -175,10 +176,6 @@ class MetaMLSelect(SelectionCriterion):
                 selected.add(cluster)
                 excluded.update(set(cluster.argpoints))
 
-        selected.update(
-            cluster for cluster in manifold.ordered_clusters
-            if cluster.depth < self.min_depth and cluster.children is None
-        )
         return selected
 
 
