@@ -1,3 +1,5 @@
+import logging
+
 import numpy
 
 from ..core import Cluster
@@ -5,6 +7,9 @@ from ..core import criterion
 from ..core import Manifold
 from ..core import types
 from ..utils import constants
+
+logger = logging.getLogger(__name__)
+logger.setLevel(constants.LOG_LEVEL)
 
 ClusterResults = dict[Cluster, float]
 Results = dict[int, float]
@@ -40,10 +45,12 @@ class CAKES:
         :return: the modified Search object.
         """
         if max_depth is None:
+            logger.info(f'Building CAKES tree to leaves.')
             self.manifold.build(criterion.Layer(-1))
         elif max_depth < 1:
             raise ValueError(f'Expected a positive integer for max_depth. Got {max_depth} instead.')
         elif max_depth > self.depth:
+            logger.info(f'Building CAKES tree to depth {max_depth}.')
             self.manifold.build_tree(criterion.MaxDepth(max_depth), criterion.Layer(-1))
         return self
 
@@ -161,6 +168,8 @@ class CAKES:
         history: ClusterResults = dict()
         hits: ClusterResults = dict()
         for depth in range(start.depth, max_depth + 1):
+            logger.debug(f'Searching tree at {depth = }')
+
             if len(candidates) == 0:
                 break
             # find distances to centers of candidate clusters
@@ -192,6 +201,7 @@ class CAKES:
                 if cluster not in hits
             }
 
+        logger.debug(f'Found {len(hits)} candidate clusters from tree-search.')
         return history, hits
 
     def leaf_search(self, query: types.Datum, radius: float, clusters: ClusterResults) -> Results:
@@ -204,18 +214,15 @@ class CAKES:
         """
         query = self._parse_query(query)
 
-        # initialize hits
-        hits: Results = dict()
-
         # get indices of all points in candidate clusters
         argpoints: list[int] = [point for cluster in clusters for point in cluster.argpoints]
+        logger.debug(f'Performing leaf-search over {len(argpoints)} points.')
 
         # get distances from query to candidate points
         points: numpy.ndarray = self.data[argpoints]
         self._check_shape(points)
         distances: list[float] = list(self.distance(query, points)[0])
 
-        # update hits with points within radius of query
-        hits.update({point: distance for point, distance in zip(argpoints, distances) if distance <= radius})
-
+        # Filter hits with points within radius of query
+        hits = {point: distance for point, distance in zip(argpoints, distances) if distance <= radius}
         return hits

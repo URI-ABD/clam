@@ -17,12 +17,8 @@ from .types import Metric
 from ..utils import constants
 from ..utils import helpers
 
-LOG_LEVEL = logging.INFO
-
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s:%(levelname)s:%(name)s:%(module)s.%(funcName)s:%(message)s"
-)
+logger = logging.getLogger(__name__)
+logger.setLevel(constants.LOG_LEVEL)
 
 
 class Cluster:
@@ -46,7 +42,7 @@ class Cluster:
         :param argpoints: A list of indexes of the points that belong to the cluster.
         :param name: The name of the cluster indicating its position in the tree.
         """
-        logging.debug(f"Cluster(name={name}, argpoints={argpoints})")
+        logger.debug(f"Cluster(name={name}, argpoints={argpoints})")
         self.manifold: 'Manifold' = manifold
         self.argpoints: Indices = argpoints
         self.name: str = name
@@ -159,7 +155,7 @@ class Cluster:
         i.e., if len(argsamples) == 1, the cluster contains only duplicates.
         """
         if 'argsamples' not in self.cache:
-            logging.debug(f"building cache for {self}")
+            logger.debug(f"building cache for {self}")
             if self.cardinality <= constants.SUBSAMPLE_LIMIT:
                 n = len(self.argpoints)
                 indices = self.argpoints
@@ -199,7 +195,7 @@ class Cluster:
     def argmedoid(self) -> int:
         """ The index used to retrieve the medoid. """
         if 'argmedoid' not in self.cache:
-            logging.debug(f"building cache for {self}")
+            logger.debug(f"building cache for {self}")
             argmedoid = numpy.argmin(self.distance(self.argsamples, self.argsamples).sum(axis=1))
             self.cache['argmedoid'] = self.argsamples[int(argmedoid)]
         return self.cache['argmedoid']
@@ -218,7 +214,7 @@ class Cluster:
     def argradius(self) -> int:
         """ The index of the point which is farthest from the medoid. """
         if ('argradius' not in self.cache) or ('radius' not in self.cache):
-            logging.debug(f'building cache for {self}')
+            logger.debug(f'building cache for {self}')
 
             def argmax_max(b):
                 distances = self.distance_from(b)
@@ -241,7 +237,7 @@ class Cluster:
         Computed as distance from medoid to the farthest point in the cluster.
         """
         if 'radius' not in self.cache:
-            logging.debug(f'building cache for {self}')
+            logger.debug(f'building cache for {self}')
             _ = self.argradius
         return self.cache['radius']
 
@@ -249,7 +245,7 @@ class Cluster:
     def local_fractal_dimension(self) -> float:
         """ The local fractal dimension of the cluster. """
         if 'local_fractal_dimension' not in self.cache:
-            logging.debug(f'building cache for {self}')
+            logger.debug(f'building cache for {self}')
             if self.nsamples == 1:
                 self.cache['local_fractal_dimension'] = 1.
             else:
@@ -278,7 +274,7 @@ class Cluster:
 
     def clear_cache(self) -> None:
         """ Clears the cache for the cluster. """
-        logging.debug(f'clearing cache for {self}')
+        logger.debug(f'clearing cache for {self}')
         self.cache.clear()
         return
 
@@ -315,7 +311,7 @@ class Cluster:
             self.nsamples > 1,
             *(c(self) for c in criterion),
         )):  # cluster cannot be partitioned
-            logging.debug(f'{self} cannot be partitioned.')
+            logger.debug(f'{self} cannot be partitioned.')
             self.children = list()
         else:
             poles: list[int] = self._find_poles()
@@ -334,7 +330,7 @@ class Cluster:
             }
             [child.cache.update({'parent': self}) for child in self.children]
 
-            logging.debug(f'{self} was partitioned into {len(self.children)} child clusters.')
+            logger.debug(f'{self} was partitioned into {len(self.children)} child clusters.')
 
         return self.children
 
@@ -429,7 +425,7 @@ class Graph:
     # TODO: Implement dump/load
 
     def __init__(self, *clusters):
-        logging.debug(f'Graph(clusters={list(map(str, clusters))})')
+        logger.debug(f'Graph(clusters={list(map(str, clusters))})')
         assert all(isinstance(c, Cluster) for c in clusters), 'all inputs to the Graph must be clusters.'
 
         self._clusters: set[Cluster] = {cluster for cluster in clusters}
@@ -776,7 +772,7 @@ class Graph:
 
         We define two clusters to share an edge when those two clusters have overlapping volumes.
         """
-        logging.info(f'building edges for graph with {self.cardinality} clusters in {list(self.depth_range)} depth range.')
+        logger.info(f'building edges for graph with {self.cardinality} clusters in {list(self.depth_range)} depth range.')
 
         # build edges
         [self._find_neighbors(cluster) for cluster in self.clusters]
@@ -800,7 +796,7 @@ class Graph:
         if not self.is_built:
             self.build_edges()
 
-        logging.debug(f'starting traversal from {start}')
+        logger.debug(f'starting traversal from {start}')
         visited: set[Cluster] = set()
         frontier: set[Cluster] = {start}
 
@@ -819,7 +815,7 @@ class Graph:
         if not self.is_built:
             self.build_edges()
 
-        logging.debug(f'starting traversal from {start}')
+        logger.debug(f'starting traversal from {start}')
         visited: set[Cluster] = set()
         queue = collections.deque([start])
 
@@ -840,7 +836,7 @@ class Graph:
         else:
             pass
 
-        logging.debug(f'starting traversal from {start}')
+        logger.debug(f'starting traversal from {start}')
         visited: set[Cluster] = set()
         stack: list[Cluster] = [start]
 
@@ -917,7 +913,7 @@ class Manifold:
                        Any distance function allowed by scipy.spatial.distance is allowed here.
         :param argpoints: Optional. list of indexes or portion of data to which to restrict Manifold.
         """
-        logging.debug(f'Manifold(data={data.shape}, metric={metric}, argpoints={argpoints})')
+        logger.debug(f'Manifold(data={data.shape}, metric={metric}, argpoints={argpoints})')
         self.data: Dataset = data
         self.metric: Metric = metric
 
@@ -1066,14 +1062,14 @@ class Manifold:
         if len(selection_criteria) > 0:
             self.add_graphs(*selection_criteria)
         else:
-            logging.warning('No Selection Criterion was provided. Using leaves for building graph.')
+            logger.warning('No Selection Criterion was provided. Using leaves for building graph.')
             self.graphs = [Graph(*[cluster for cluster in self.layers[-1].clusters]).build_edges()]
         return self
 
     def build_tree(self, *criterion) -> 'Manifold':
         """ Builds the Cluster-tree. """
         while True:
-            logging.info(f'depth: {self.depth}, {self.layers[-1].cardinality} clusters')
+            logger.info(f'depth: {self.depth}, {self.layers[-1].cardinality} clusters')
             clusters = self._partition_threaded(criterion)
             if self.layers[-1].cardinality < len(clusters):
                 self.layers.append(Graph(*clusters))
@@ -1088,7 +1084,7 @@ class Manifold:
         if not all((isinstance(c, SelectionCriterion) for c in criterion)):
             raise ValueError(f'Only Selection Criteria are allowed for building graphs.')
 
-        logging.info(f'building graphs with {len(criterion)} Selection Criteria.')
+        logger.info(f'building graphs with {len(criterion)} Selection Criteria.')
         self.graphs.extend([Graph(*select(self.root)).build_edges() for select in criterion])
         return self
 
