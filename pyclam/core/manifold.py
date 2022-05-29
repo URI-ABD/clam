@@ -928,12 +928,11 @@ class Manifold:
         elif type(argpoints) is list:
             self.argpoints = list(map(int, argpoints))
         elif type(argpoints) is float:
-            self.argpoints = numpy.random.choice(
+            self.argpoints = list(map(int, numpy.random.choice(
                 self.data.shape[0],
                 int(self.data.shape[0] * argpoints),
                 replace=False
-            )
-            self.argpoints = list(map(int, self.argpoints))
+            )))
         else:
             raise ValueError(f"Invalid argument to argpoints. {argpoints}")
 
