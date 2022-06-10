@@ -1,15 +1,13 @@
 import abc
-import logging
 
 import numpy
 from sklearn import linear_model
 from sklearn import tree
 
-from ..core import Manifold
 from ..utils import constants
+from ..utils import helpers
 
-logger = logging.getLogger(__name__)
-logger.setLevel(constants.LOG_LEVEL)
+logger = helpers.make_logger(__name__)
 
 
 class MetaMLModel(abc.ABC):
@@ -71,7 +69,7 @@ class MetaDT(MetaMLModel):
         undefined_feature = tree._tree.TREE_UNDEFINED
 
         feature_names = [
-            Manifold.RATIO_NAMES[i] if i != undefined_feature else "undefined!"
+            constants.RATIO_NAMES[i] if i != undefined_feature else "undefined!"
             for i in self.model.tree_.feature
         ]
 
@@ -79,7 +77,7 @@ class MetaDT(MetaMLModel):
         function_name = f'{self.name}_{metric}_{method}'
         code_lines: list[str] = [
             f'def {function_name}(ratios: numpy.ndarray) -> float:',
-            f'    {", ".join(Manifold.RATIO_NAMES)} = tuple(ratios)',
+            f'    {", ".join(constants.RATIO_NAMES)} = tuple(ratios)',
         ]
 
         def extract_lines(node_index: int, indent: str):
@@ -139,3 +137,10 @@ class MetaLR(MetaMLModel):
         ])
 
         return imports, code
+
+
+__all__ = [
+    'MetaMLModel',
+    'MetaDT',
+    'MetaLR',
+]

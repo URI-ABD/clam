@@ -1,6 +1,6 @@
 [package]
 name = "clam"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Najib Ishaq <nishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
 edition = "2021"
 

@@ -1,5 +1,4 @@
 import json
-import logging
 import pathlib
 import subprocess
 import typing
@@ -8,13 +7,10 @@ import h5py
 import numpy
 import scipy.io
 
-from ..utils import constants
-from ..utils import helpers
+from pyclam.core import dataset
+from pyclam.utils import helpers
 
-__all__ = ['DATASET_URLS', 'ChaodaData']
-
-logger = logging.getLogger(__name__)
-logger.setLevel(constants.LOG_LEVEL)
+logger = helpers.make_logger(__name__)
 
 MAT_FILE_URLS: dict[str, str] = {
     'annthyroid': 'https://www.dropbox.com/s/aifk51owxbogwav/annthyroid.mat?dl=0',
@@ -48,10 +44,10 @@ HDF5_FILE_URLS = {
 
 DATASET_URLS = {**MAT_FILE_URLS, **HDF5_FILE_URLS}
 
-MMapMode = typing.Literal["r", None]
+MMapMode = typing.Literal['r', None]
 
 
-class ChaodaData:
+class AnomalyData:
 
     __slots__ = [
         'data_dir',
@@ -84,10 +80,31 @@ class ChaodaData:
         self.normalized_features_path = preprocessed_dir.joinpath(f'{name}_features_normalized.npy')
         self.scores_path = preprocessed_dir.joinpath(f'{name}_scores.npy')
 
+    @property
+    def features(self):
+        if not self.features_path.exists():
+            raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
+        else:
+            return numpy.load(str(self.features_path), self.mmap_mode)
+
+    @property
+    def normalized_features(self):
+        if not self.normalized_features_path.exists():
+            raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
+        else:
+            return numpy.load(str(self.normalized_features_path), self.mmap_mode)
+
+    @property
+    def scores(self):
+        if not self.features_path.exists():
+            raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
+        else:
+            return numpy.load(str(self.scores_path))
+
     def save(self) -> pathlib.Path:
         save_path = self.data_dir.joinpath('classes').joinpath(f'{self.name}.json')
         save_path.parent.mkdir(exist_ok=True)
-        attributes = {
+        attributes: dict[str, typing.Any] = {
             'name': self.name,
             'url': self.url,
             'mmap_threshold': self.mmap_threshold,
@@ -108,19 +125,19 @@ class ChaodaData:
         return save_path
 
     @staticmethod
-    def load(data_dir: pathlib.Path, name: str) -> 'ChaodaData':
+    def load(data_dir: pathlib.Path, name: str) -> 'AnomalyData':
         save_path = data_dir.joinpath('classes').joinpath(f'{name}.json')
         with open(save_path, 'r') as reader:
             attributes = json.load(reader)
 
-        data = ChaodaData(
+        data = AnomalyData(
             data_dir=data_dir,
             name=attributes['name'],
             url=attributes['url'],
             mmap_threshold=int(attributes['mmap_threshold']),
             mmap_mode=attributes['mmap_mode'],
         )
-        for k in ChaodaData.__slots__:
+        for k in AnomalyData.__slots__:
             if 'path' in k:
                 v = data_dir.joinpath(pathlib.Path(attributes[k]))
                 setattr(data, k, v)
@@ -133,11 +150,11 @@ class ChaodaData:
             force: bool = False,
             suppress_stdout: bool = True,
             suppress_stderr: bool = True,
-    ):
+    ) -> 'AnomalyData':
         self.raw_path = self.raw_path.with_name(f'{self.name}.{extension}')
 
         if not force and self.raw_path.exists():
-            return
+            return self
 
         self.raw_path.unlink(missing_ok=True)
 
@@ -146,23 +163,26 @@ class ChaodaData:
             kwargs['stdout'] = subprocess.DEVNULL
         if suppress_stderr:
             kwargs['stderr'] = subprocess.DEVNULL
-        # wget.download(self.url, out=str(self.raw_path))
         subprocess.run(['wget', self.url, '-O', self.raw_path], **kwargs)
+
+        # TODO: I would rather not use a `subprocess` command to download the
+        #  data. However, I have tried using the `wget` package, `requests`,
+        #  `urllib` and others. Each of those somehow corrupts the `.mat` file
+        #  and renders it unable to be read by `scipy.io.loadmat` or`h5py.File`.
+        # wget.download(self.url, out=str(self.raw_path))
 
         size = self.raw_path.stat().st_size
         if size < 1024:
             warning = f'Downloaded file for {self.name} was too small. {size} bytes.'
-            logging.warning(warning)
-            raise BytesWarning(warning)
+            logger.warning(warning)
+            raise Exception(warning)
 
         if size > self.mmap_threshold:
             self.mmap_mode = 'r'
 
-        return
+        return self
 
-    def preprocess(self, normalization_mode: str = 'gaussian'):
-        helpers.catch_normalization_mode(normalization_mode)
-
+    def preprocess(self, normalization_mode: helpers.NormalizationMode = 'gaussian') -> 'AnomalyData':
         data_dict = dict()
         if self.name in HDF5_FILE_URLS:
             with h5py.File(self.raw_path, 'r') as reader:
@@ -180,18 +200,17 @@ class ChaodaData:
         scores = numpy.asarray(data_dict['y'], dtype=numpy.uint8).squeeze()
         numpy.save(str(self.scores_path), scores, allow_pickle=False, fix_imports=False)
 
-        return
+        return self
 
-    @property
-    def features(self):
-        if not self.features_path.exists():
-            raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
-        else:
-            return numpy.load(str(self.features_path), self.mmap_mode)
+    def as_tabular_dataset(self, normalized: bool = True) -> dataset.TabularDataset:
+        return dataset.TabularDataset(
+            data=self.normalized_features if normalized else self.features,
+            name=self.name,
+        )
 
-    @property
-    def scores(self):
-        if not self.features_path.exists():
-            raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
-        else:
-            return numpy.load(str(self.scores_path))
+
+__all__ = [
+    'DATASET_URLS',
+    'MMapMode',
+    'AnomalyData',
+]

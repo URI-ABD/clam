@@ -36,9 +36,9 @@ def bullseye(n: int = 2_000, num_rings: int = 3, noise: float = 0.05) -> Data:
 
     data = numpy.ndarray(shape=(0, 2))
     labels = list()
-    for r in range(1, 2 * num_rings, 2):
+    for i, r in enumerate(range(1, 2 * num_rings, 2)):
         ring: numpy.ndarray = ring_data(n=n * r, radius=r, noise=noise)
-        labels.extend([r for _ in range(n * r)])
+        labels.extend([i for _ in range(n * r)])
         data = numpy.concatenate([data, ring], axis=0)
     return numpy.asarray(data, dtype=numpy.float64), labels
 

@@ -1,6 +1,5 @@
-from . import datasets
-from . import graph_selectors
-from . import individual_algorithms
-from . import meta_ml_models
-from . import pretrained_models
-from .chaoda import CHAODA
+from . import chaoda as chaoda
+from . import models as models
+from . import pretrained_models as pretrained_models
+from . import scorers as scorers
+from .chaoda import CHAODA as CHAODA
