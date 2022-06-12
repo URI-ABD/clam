@@ -7,23 +7,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+
+    - name: Install HDF5
+      run: sudo apt-get install hdf5-tools libhdf5-dev
+
     - name: Build
-      run: cargo build
+      run: cargo build --release
+
     - name: Run tests
-      run: cargo test
+      run: cargo test --release
   
   unittest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - name: Python
         uses: actions/setup-python@v1
         with:
           python-version: 3.9
+
       - name: Dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install toml
           pip install .
+
       - name: Run
         run: python -m unittest discover

@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::sync::Arc;
 
 use num_traits::NumCast;
+use rayon::prelude::*;
 
 use crate::Number;
 
@@ -12,13 +12,41 @@ use crate::Number;
 /// from a `Dataset` and deterministically produces a non-negative `Number` U.
 ///
 /// Optionally, a `Metric` also allows us to encode one instance in terms of another
-/// and decode decode an instance from a reference and an encoding.
-pub trait Metric<T, U>: Send + Sync {
+/// and decode an instance from a reference and an encoding.
+pub trait Metric<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the name of the `Metric` as a String.
     fn name(&self) -> String;
 
     /// Returns the distance between two instances.
-    fn distance(&self, x: &[T], y: &[T]) -> U;
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U;
+
+    fn one_to_many(&self, x: &[T], ys: &[Vec<T>]) -> Vec<U> {
+        ys.iter().map(|y| self.one_to_one(x, y)).collect()
+    }
+
+    fn par_one_to_many(&self, x: &[T], ys: &[Vec<T>]) -> Vec<U> {
+        ys.par_iter().map(|y| self.one_to_one(x, y)).collect()
+    }
+
+    fn many_to_many(&self, xs: &[Vec<T>], ys: &[Vec<T>]) -> Vec<Vec<U>> {
+        xs.iter().map(|x| self.one_to_many(x, ys)).collect()
+    }
+
+    fn par_many_to_many(&self, xs: &[Vec<T>], ys: &[Vec<T>]) -> Vec<Vec<U>> {
+        xs.par_iter().map(|x| self.one_to_many(x, ys)).collect()
+    }
+
+    fn pairwise(&self, is: &[Vec<T>]) -> Vec<Vec<U>> {
+        self.many_to_many(is, is)
+    }
+
+    fn par_pairwise(&self, is: &[Vec<T>]) -> Vec<Vec<U>> {
+        self.par_many_to_many(is, is)
+    }
+
+    fn is_expensive(&self) -> bool {
+        false
+    }
 
     /// Encodes the target instance in terms of the reference and produces a vec of bytes.
     ///
@@ -55,19 +83,20 @@ pub trait Metric<T, U>: Send + Sync {
 ///   - "levenshtein": Edit-distance among strings (e.g. genomic/amino-acid sequences).
 ///   - "wasserstein": Earth-Mover-Distance among high-dimensional probability distributions (will be usable with images)
 ///   - "tanamoto": Jaccard distance between the Maximal-Common-Subgraph of two molecular structures.
-pub fn metric_from_name<T: Number, U: Number>(metric: &str) -> Result<Arc<dyn Metric<T, U>>, String> {
+pub fn metric_from_name<T: Number, U: Number>(metric: &str) -> Result<&dyn Metric<T, U>, String> {
     match metric {
-        "euclidean" => Ok(Arc::new(Euclidean)),
-        "euclideansq" => Ok(Arc::new(EuclideanSq)),
-        "manhattan" => Ok(Arc::new(Manhattan)),
-        "cosine" => Ok(Arc::new(Cosine)),
-        "hamming" => Ok(Arc::new(Hamming)),
-        "jaccard" => Ok(Arc::new(Jaccard)),
+        "euclidean" => Ok(&Euclidean),
+        "euclideansq" => Ok(&EuclideanSq),
+        "manhattan" => Ok(&Manhattan),
+        "cosine" => Ok(&Cosine),
+        "hamming" => Ok(&Hamming),
+        "jaccard" => Ok(&Jaccard),
         _ => Err(format!("{} is not defined as a metric.", metric)),
     }
 }
 
 /// Implements Euclidean distance, the L2-norm.
+#[derive(Debug)]
 pub struct Euclidean;
 
 impl<T: Number, U: Number> Metric<T, U> for Euclidean {
@@ -75,7 +104,7 @@ impl<T: Number, U: Number> Metric<T, U> for Euclidean {
         "euclidean".to_string()
     }
 
-    fn distance(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
         let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
         let d: f64 = NumCast::from(d).unwrap();
         U::from(d.sqrt()).unwrap()
@@ -83,6 +112,7 @@ impl<T: Number, U: Number> Metric<T, U> for Euclidean {
 }
 
 /// Implements Squared-Euclidean distance, the squared L2-norm.
+#[derive(Debug)]
 pub struct EuclideanSq;
 
 impl<T: Number, U: Number> Metric<T, U> for EuclideanSq {
@@ -90,13 +120,14 @@ impl<T: Number, U: Number> Metric<T, U> for EuclideanSq {
         "euclideansq".to_string()
     }
 
-    fn distance(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
         let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
         U::from(d).unwrap()
     }
 }
 
 /// Implements Manhattan/Cityblock distance, the L1-norm.
+#[derive(Debug)]
 pub struct Manhattan;
 
 impl<T: Number, U: Number> Metric<T, U> for Manhattan {
@@ -104,7 +135,7 @@ impl<T: Number, U: Number> Metric<T, U> for Manhattan {
         "manhattan".to_string()
     }
 
-    fn distance(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
         let d: T = x
             .iter()
             .zip(y.iter())
@@ -115,6 +146,7 @@ impl<T: Number, U: Number> Metric<T, U> for Manhattan {
 }
 
 /// Implements Cosine distance, 1 - cosine-similarity.
+#[derive(Debug)]
 pub struct Cosine;
 
 fn dot<T: Number>(x: &[T], y: &[T]) -> T {
@@ -127,7 +159,7 @@ impl<T: Number, U: Number> Metric<T, U> for Cosine {
     }
 
     #[allow(clippy::suspicious_operation_groupings)]
-    fn distance(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
         let xx = dot(x, x);
         if xx == T::zero() {
             return U::one();
@@ -150,6 +182,7 @@ impl<T: Number, U: Number> Metric<T, U> for Cosine {
 
 /// Implements Hamming distance.
 /// This is not normalized by the number of features.
+#[derive(Debug)]
 pub struct Hamming;
 
 impl<T: Number, U: Number> Metric<T, U> for Hamming {
@@ -157,7 +190,7 @@ impl<T: Number, U: Number> Metric<T, U> for Hamming {
         "hamming".to_string()
     }
 
-    fn distance(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
         let d = x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count();
         U::from(d).unwrap()
     }
@@ -192,6 +225,7 @@ impl<T: Number, U: Number> Metric<T, U> for Hamming {
 /// Implements Cosine distance, 1 - jaccard-similarity.
 ///
 /// Warning: DO NOT use this with floating-point numbers.
+#[derive(Debug)]
 pub struct Jaccard;
 
 impl<T: Number, U: Number> Metric<T, U> for Jaccard {
@@ -199,7 +233,7 @@ impl<T: Number, U: Number> Metric<T, U> for Jaccard {
         "jaccard".to_string()
     }
 
-    fn distance(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
         if x.is_empty() || y.is_empty() {
             return U::one();
         }
@@ -218,27 +252,25 @@ impl<T: Number, U: Number> Metric<T, U> for Jaccard {
 #[cfg(test)]
 mod tests {
     use float_cmp::approx_eq;
-    use ndarray::{arr2, Array2};
 
     use crate::metric::metric_from_name;
 
     #[test]
     fn test_on_real() {
-        let data: Array2<f64> = arr2(&[[1., 2., 3.], [3., 3., 1.]]);
-        let row0 = data.row(0).to_vec();
-        let row1 = data.row(1).to_vec();
+        let a = vec![1., 2., 3.];
+        let b = vec![3., 3., 1.];
 
         let metric = metric_from_name("euclideansq").unwrap();
-        approx_eq!(f64, metric.distance(&row0, &row0), 0.);
-        approx_eq!(f64, metric.distance(&row0, &row1), 9.);
+        approx_eq!(f64, metric.one_to_one(&a, &a), 0.);
+        approx_eq!(f64, metric.one_to_one(&a, &b), 9.);
 
         let metric = metric_from_name("euclidean").unwrap();
-        approx_eq!(f64, metric.distance(&row0, &row0), 0.);
-        approx_eq!(f64, metric.distance(&row0, &row1), 3.);
+        approx_eq!(f64, metric.one_to_one(&a, &a), 0.);
+        approx_eq!(f64, metric.one_to_one(&a, &b), 3.);
 
         let metric = metric_from_name("manhattan").unwrap();
-        approx_eq!(f64, metric.distance(&row0, &row0), 0.);
-        approx_eq!(f64, metric.distance(&row0, &row1), 5.);
+        approx_eq!(f64, metric.one_to_one(&a, &a), 0.);
+        approx_eq!(f64, metric.one_to_one(&a, &b), 5.);
     }
 
     #[test]

@@ -7,28 +7,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::iter::Sum;
 
-use easy_cast::Conv;
-use ndarray_npy::ReadableElement;
-use ndarray_npy::WritableElement;
 use num_traits::Num;
 use num_traits::NumCast;
 
 /// Collections of `Numbers` can be used to calculate distances.
-pub trait Number:
-    Num
-    + NumCast
-    + Sum
-    + Copy
-    + Clone
-    + PartialOrd
-    + Send
-    + Sync
-    + Debug
-    + Display
-    + ReadableElement
-    + WritableElement
-    + Conv<Self>
-{
+pub trait Number: Num + NumCast + Sum + Copy + Clone + PartialOrd + Send + Sync + Debug + Display {
     /// Returns the number of bytes used to store this number
     fn num_bytes() -> u8;
 
@@ -64,11 +47,11 @@ macro_rules! impl_number {
                 }
 
                 fn as_f64(&self) -> f64 {
-                    f64::conv(*self)
+                    *self as f64
                 }
             }
         )*
     }
 }
 
-impl_number!(f32, f64, u8, i8, u16, i16, u32, i32, u64, i64);
+impl_number!(f32, f64, u8, i8, u16, i16, u32, i32, u64, i64, isize, usize);

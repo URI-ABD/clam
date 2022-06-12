@@ -6,7 +6,7 @@ use std::sync::Arc;
 use bitvec::prelude::*;
 use rayon::prelude::*;
 
-use crate::dataset::RowMajor;
+use crate::dataset::Tabular;
 use crate::{prelude::*, Cakes};
 
 /// A `Dataset` that also allows for compression and decompression.
@@ -16,18 +16,18 @@ use crate::{prelude::*, Cakes};
 pub trait CompressibleDataset<T: Number, U: Number>: Dataset<T, U> {
     /// Encode one instance in terms of another.
     fn encode(&self, reference: Index, target: Index) -> Result<Vec<u8>, String> {
-        self.metric().encode(&self.instance(reference), &self.instance(target))
+        self.metric().encode(&self.get(reference), &self.get(target))
     }
 
     /// Decode an instance from the encoded bytes and the reference.
     fn decode(&self, reference: Index, encoding: &[u8]) -> Result<Vec<T>, String> {
-        self.metric().decode(&self.instance(reference), encoding)
+        self.metric().decode(&self.get(reference), encoding)
     }
 }
 
-impl<T: Number, U: Number> CompressibleDataset<T, U> for RowMajor<T, U> {}
+impl<T: Number, U: Number> CompressibleDataset<T, U> for Tabular<T, U> {}
 
-impl<T: 'static + Number, U: 'static + Number> RowMajor<T, U> {
+impl<T: 'static + Number, U: 'static + Number> Tabular<T, U> {
     pub fn as_arc_compressible_dataset(self: Arc<Self>) -> Arc<dyn CompressibleDataset<T, U>> {
         self
     }
@@ -178,7 +178,7 @@ impl<T: Number, U: Number> Codec<T, U> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::dataset::RowMajor;
+    use crate::dataset::Tabular;
     use crate::metric_from_name;
     use crate::CompressibleDataset;
 
@@ -186,11 +186,11 @@ mod tests {
     fn test_codec() {
         let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
         let metric = metric_from_name("hamming").unwrap();
-        let dataset: Arc<dyn CompressibleDataset<_, f64>> = Arc::new(RowMajor::new(Arc::new(data), metric, false));
+        let dataset: Arc<dyn CompressibleDataset<_, f64>> = Arc::new(Tabular::new(Arc::new(data), metric, false));
 
         let encoded = dataset.encode(0, 1).unwrap();
         let decoded = dataset.decode(0, &encoded).unwrap();
 
-        assert_eq!(dataset.instance(1), decoded);
+        assert_eq!(dataset.get(1), decoded);
     }
 }
