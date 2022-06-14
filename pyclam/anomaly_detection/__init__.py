@@ -4,4 +4,7 @@ from . import chaoda as chaoda
 from . import graph_scorers as graph_scorers
 from . import meta_ml as meta_ml
 from . import pretrained_models as pretrained_models
+from . import training as training
+from .anomaly_dataset import AnomalyDataset as AnomalyDataset
+from .anomaly_space import AnomalySpace as AnomalySpace
 from .chaoda import CHAODA as CHAODA

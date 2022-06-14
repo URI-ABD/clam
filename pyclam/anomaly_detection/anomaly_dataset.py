@@ -10,7 +10,7 @@ class AnomalyDataset(core.Dataset):
 
     @property
     @abc.abstractmethod
-    def scores(self) -> numpy.ndarray:
+    def labels(self) -> numpy.ndarray:
         pass
 
 
@@ -31,7 +31,7 @@ class AnomalyTabular(AnomalyDataset):
         return self.__data
 
     @property
-    def scores(self) -> numpy.ndarray:
+    def labels(self) -> numpy.ndarray:
         return self.__scores
 
     @property

@@ -29,6 +29,12 @@ class MetaMLModel(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def predict(self, ratios: numpy.ndarray) -> float:
+        """ Predicts using the underlying model.
+        """
+        pass
+
+    @abc.abstractmethod
     def extract_python(self, *args, **kwargs) -> tuple[list[str], str]:
         """ Extracts the scoring function as a string which can be written to disk.
 
@@ -52,8 +58,8 @@ class MetaMLModel(abc.ABC):
 
 class MetaDT(MetaMLModel):
 
-    def __init__(self, max_depth: int = 3):
-        super().__init__(tree.DecisionTreeRegressor, max_depth=max_depth)
+    def __init__(self):
+        super().__init__(tree.DecisionTreeRegressor, max_depth=3)
 
     @property
     def name(self) -> str:
@@ -63,6 +69,9 @@ class MetaDT(MetaMLModel):
         logger.info(f'Fitting meta-model {self.name} on data with shape {data.shape} ...')
         self.model.fit(data, scores)
         return
+
+    def predict(self, ratios: numpy.ndarray) -> float:
+        return self.model.predict(ratios)
 
     def extract_python(self, metric: str, method: str) -> tuple[list[str], str]:
         # noinspection PyProtectedMember
@@ -122,6 +131,9 @@ class MetaLR(MetaMLModel):
         logger.info(f'Fitting meta-model {self.name} on data with shape {data.shape} ...')
         self.model.fit(data, scores)
         return
+
+    def predict(self, ratios: numpy.ndarray) -> float:
+        return self.model.predict(ratios)
 
     def extract_python(self, metric: str, method: str) -> tuple[list[str], str]:
         imports = ['import numpy']
