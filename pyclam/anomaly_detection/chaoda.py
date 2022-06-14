@@ -5,7 +5,7 @@ import typing
 import numpy
 
 from . import pretrained_models
-from . import scorers
+from . import graph_scorers
 from .. import core
 from .. import search
 from .. import utils

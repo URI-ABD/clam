@@ -1,6 +1,7 @@
 import pathlib
 
 import anomaly_data
+from pyclam.core import dataset
 from utils import paths
 
 DATA_DIR = paths.DATA_ROOT.joinpath('anomaly_data')
@@ -25,6 +26,18 @@ def load(data_dir: pathlib.Path):
         print(f'loaded {data.name} data with features of shape {data.features.shape}.')
 
     return
+
+
+def default_datasets(data_dir: pathlib.Path) -> list[dataset.TabularDataset]:
+    # These are the datasets which we randomly selected for training the models for the original CHAODA paper.
+    names = ['annthyroid', 'mnist', 'pendigits', 'satellite', 'shuttle', 'thyroid']
+
+    datasets = list()
+    for name in names:
+        data = anomaly_data.AnomalyData.load(data_dir, name)
+        datasets.append(data.normalized_features)
+
+    return datasets
 
 
 if __name__ == '__main__':
