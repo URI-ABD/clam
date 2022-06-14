@@ -3,9 +3,9 @@ import typing
 
 import numpy
 
+from . import anomaly_space
 from . import graph_scorers
 from . import meta_ml
-from .. import core
 
 
 def default_models() -> list[typing.Type[meta_ml.MetaMLModel]]:
@@ -36,20 +36,14 @@ def data_from_graph(
 
 
 def train_meta_ml(
-        out_path: pathlib.Path,
-        metric_spaces: list[core.MetricSpace],
+        metric_spaces: list[anomaly_space.AnomalySpace],
         models: list[typing.Type[meta_ml.MetaMLModel]],
         scorers: list[graph_scorers.GraphScorer],
+        out_path: pathlib.Path,
 ):
-    """ Trains meta-ml models on
 
-    Args:
-        out_path:
-        metric_spaces:
-        models:
-        scorers:
+    metric_names = [s.distance_metric.name for s in metric_spaces]
 
-    Returns:
+    scorer_names = [s.name for s in scorers]
 
-    """
-    pass
+    return

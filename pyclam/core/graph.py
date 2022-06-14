@@ -161,7 +161,7 @@ class Graph:
         return self.__edges
 
     @property
-    def metric_space(self) -> space.MetricSpace:
+    def metric_space(self) -> space.Space:
         return self.__metric_space
 
     @property

@@ -20,7 +20,7 @@ class CAKES:
 
     """
 
-    def __init__(self, metric_space: space.MetricSpace):
+    def __init__(self, metric_space: space.Space):
         self.__metric_space = metric_space
         self.__root = cluster.Cluster.new_root(metric_space)
 
@@ -45,7 +45,7 @@ class CAKES:
         return self.__root
 
     @property
-    def metric_space(self) -> space.MetricSpace:
+    def metric_space(self) -> space.Space:
         return self.__metric_space
 
     @property

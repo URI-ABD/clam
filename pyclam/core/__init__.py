@@ -10,4 +10,4 @@ from .dataset import Dataset as Dataset
 from .graph import Edge as Edge
 from .graph import Graph as Graph
 from .metric import Metric as Metric
-from .space import MetricSpace as MetricSpace
+from .space import Space as Space

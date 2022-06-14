@@ -8,7 +8,7 @@ from . import dataset
 from . import metric
 
 
-class MetricSpace(abc.ABC):
+class Space(abc.ABC):
     """ This class combines a `Dataset` and a `Metric` into a `MetricSpace`. We
      build `Cluster`s and `Graph`s over a `MetricSpace`. This class provides
      access to the underlying `Dataset` and `Metric`. Subclasses should
@@ -49,7 +49,7 @@ class MetricSpace(abc.ABC):
         return self.distance_one_to_one(left, right) == 0.
 
     @abc.abstractmethod
-    def subset(self, indices: list[int], subset_data_name: str) -> 'MetricSpace':
+    def subset(self, indices: list[int], subset_data_name: str) -> 'Space':
         """ See the `Dataset.subset`
         """
         pass
@@ -167,7 +167,7 @@ class MetricSpace(abc.ABC):
         return chosen
 
 
-class TabularSpace(MetricSpace):
+class TabularSpace(Space):
     """ This wraps a `Metric` and either a `TabularDataset` or a `TabularMMap`
      into a `MetricSpace`. It does not use the cache.
     """
@@ -223,6 +223,6 @@ class TabularSpace(MetricSpace):
 
 
 __all__ = [
-    'MetricSpace',
+    'Space',
     'TabularSpace',
 ]
