@@ -7,7 +7,7 @@ from . import anomaly_space
 from . import graph_scorers
 from . import meta_ml
 from .. import core
-from .. import graph_criteria
+from ..core import graph_criteria
 from ..utils import helpers
 
 logger = helpers.make_logger(__name__)
