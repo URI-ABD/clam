@@ -81,14 +81,14 @@ class AnomalyData:
         self.scores_path = preprocessed_dir.joinpath(f'{name}_scores.npy')
 
     @property
-    def features(self):
+    def features(self) -> numpy.ndarray:
         if not self.features_path.exists():
             raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
         else:
             return numpy.load(str(self.features_path), self.mmap_mode)
 
     @property
-    def normalized_features(self):
+    def normalized_features(self) -> numpy.ndarray:
         if not self.normalized_features_path.exists():
             raise ValueError(f'Dataset {self.name} as not yet been downloaded.')
         else:

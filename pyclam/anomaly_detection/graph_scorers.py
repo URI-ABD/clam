@@ -235,8 +235,8 @@ class GraphNeighborhood(GraphScorer):
     def short_name(self) -> str:
         return 'gn'
 
-    def should_be_fast(self, _) -> bool:
-        return True
+    def should_be_fast(self, g: core.Graph) -> bool:
+        return g.vertex_cardinality < 512
 
     def num_steps(self, g: core.Graph, c: core.Cluster) -> int:
         return int(g.eccentricity(c) * self.eccentricity_fraction) + 1
@@ -269,7 +269,7 @@ class StationaryProbabilities(GraphScorer):
     def short_name(self) -> str:
         return 'sp'
 
-    def should_be_fast(self, _) -> bool:
+    def should_be_fast(self, g: core.Graph) -> bool:
         return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:

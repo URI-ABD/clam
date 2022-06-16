@@ -58,12 +58,14 @@ def save_models(
         writer.write('\n')
 
         for code in function_codes:
-            writer.write(f'{code}\n\n')
+            writer.write('\n\n')
+            writer.write(f'{code}\n')
 
     return
 
 
 def train_meta_ml(
+        *,
         spaces_criteria: list[tuple[anomaly_space.AnomalySpace, list[core.ClusterCriterion]]],
         models_kwargs: list[tuple[typing.Type[meta_ml.MetaMLModel], dict[str, typing.Any]]],
         scorers: list[graph_scorers.GraphScorer],  # Should all have unique names.
@@ -71,7 +73,7 @@ def train_meta_ml(
         num_epochs: int = 10,
         save_frequency: int = 1,
         only_train_fast_scorers: bool = False,
-) -> None:
+) -> pathlib.Path:
     """ Trains meta-ml models for CHAODA. See examples/chaoda_training.py for
      usage.
 
@@ -143,7 +145,7 @@ def train_meta_ml(
                 selectors = [graph_criteria.Layer(d) for d in range(5, root.max_leaf_depth, 5)]
             else:
                 selectors = [
-                    graph_criteria.MetaMLSelect(lambda ratios: model.predict(ratios), name=model.name)
+                    graph_criteria.MetaMLSelect(lambda ratios: model.predict(ratios[None, :]), name=model.name)
                     for models in meta_models[metric_name].values()
                     for model in models
                 ]
@@ -151,7 +153,7 @@ def train_meta_ml(
             for scorer in scorers:
 
                 for selector in selectors:
-                    graph = core.Graph(selector(root))
+                    graph = core.Graph(selector(root)).build()
 
                     if only_train_fast_scorers and (not scorer.should_be_fast(graph)):
                         continue
@@ -163,8 +165,8 @@ def train_meta_ml(
                         full_train_x[metric_name][scorer] = train_x
                         full_train_y[metric_name][scorer] = train_y
                     else:
-                        full_train_x[metric_name][scorer] = numpy.concatenate(full_train_x[metric_name][scorer], train_x, axis=0)
-                        full_train_y[metric_name][scorer] = numpy.concatenate(full_train_y[metric_name][scorer], train_y, axis=0)
+                        full_train_x[metric_name][scorer] = numpy.concatenate([full_train_x[metric_name][scorer], train_x], axis=0)
+                        full_train_y[metric_name][scorer] = numpy.concatenate([full_train_y[metric_name][scorer], train_y], axis=0)
 
                 for model in meta_models[metric_name][scorer]:
                     logger.info(f'Fitting model {model.name} with scorer {scorer.name} ...')
@@ -176,9 +178,10 @@ def train_meta_ml(
         if epoch % save_frequency == 0:
             save_models(out_dir.joinpath(f'models_epoch_{epoch}.py'), meta_models)
 
-    save_models(out_dir.joinpath(f'models_final.py'), meta_models)
+    final_path = out_dir.joinpath(f'models_final.py')
+    save_models(final_path, meta_models)
 
-    return
+    return final_path
 
 
 __all__ = [
