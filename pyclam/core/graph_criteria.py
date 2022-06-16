@@ -145,7 +145,7 @@ class MetaMLSelect(GraphCriterion):
      clusters.
     """
 
-    def __init__(self, scorer: typing.Callable[[numpy.ndarray], float], min_depth: int = 4):
+    def __init__(self, scorer: typing.Callable[[numpy.ndarray], float], name: typing.Optional[str] = None, min_depth: int = 4):
         """
         Args:
             scorer: A function that takes the ratios of a cluster and returns
@@ -157,7 +157,7 @@ class MetaMLSelect(GraphCriterion):
         if min_depth < 1:
             raise ValueError(f'min-depth must be a positive integer.')
 
-        self.__name = scorer.__name__
+        self.__name = scorer.__name__ if name is None else name
         self.scorer = lambda c: -scorer(numpy.asarray(c.ratios, dtype=numpy.float32))
         self.min_depth = min_depth
 

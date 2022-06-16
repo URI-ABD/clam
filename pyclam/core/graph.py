@@ -161,7 +161,7 @@ class Graph:
         return self.__edges
 
     @property
-    def metric_space(self) -> space.MetricSpace:
+    def metric_space(self) -> space.Space:
         return self.__metric_space
 
     @property
@@ -305,19 +305,19 @@ class Graph:
 
     def vertex_degree(self, c: cluster.Cluster) -> int:
         self.assert_contains(c)
-        return len(self.__adjacency_dict[c])
+        return len(self.adjacency_dict[c])
 
     def edges_of(self, c: cluster.Cluster) -> list[Edge]:
         self.assert_contains(c)
-        return list(self.__adjacency_dict[c])
+        return list(self.adjacency_dict[c])
 
     def neighbors_of(self, c: cluster.Cluster) -> list[cluster.Cluster]:
         self.assert_contains(c)
-        return [e.neighbor(c) for e in self.__adjacency_dict[c]]
+        return [e.neighbor(c) for e in self.adjacency_dict[c]]
 
     def edge_distances_of(self, c: cluster.Cluster) -> list[float]:
         self.assert_contains(c)
-        return [e.distance for e in self.__adjacency_dict[c]]
+        return [e.distance for e in self.adjacency_dict[c]]
 
     def __traverse(self, start: cluster.Cluster) -> tuple[set[cluster.Cluster], list[int]]:
         """ Performs a traversal, in arbitrary order, starting at the given

@@ -6,8 +6,10 @@ from . import graph_criteria as graph_criteria
 from . import metric as metric
 from . import space as space
 from .cluster import Cluster as Cluster
+from .cluster_criteria import ClusterCriterion as ClusterCriterion
 from .dataset import Dataset as Dataset
 from .graph import Edge as Edge
 from .graph import Graph as Graph
+from .graph_criteria import GraphCriterion as GraphCriterion
 from .metric import Metric as Metric
-from .space import MetricSpace as MetricSpace
+from .space import Space as Space

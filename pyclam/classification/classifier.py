@@ -15,7 +15,7 @@ class Classifier:
     def __init__(
             self,
             labels: numpy.ndarray,
-            metric_spaces: list[core.MetricSpace],
+            metric_spaces: list[core.Space],
             **kwargs,
     ):
         """ Creates and initializes a CLAM Classifier.

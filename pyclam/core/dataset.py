@@ -153,7 +153,7 @@ class TabularDataset(Dataset):
     def approx_memory_size(self) -> int:
         return self.cardinality * self.max_instance_size
 
-    def __getitem__(self, item: typing.Union[int, typing.Iterable[int]]):
+    def __getitem__(self, item: typing.Union[int, typing.Iterable[int]]) -> numpy.ndarray:
         return self.__data[item]
 
     def subset(self, indices: list[int], subset_name: str) -> 'TabularDataset':

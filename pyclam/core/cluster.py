@@ -48,7 +48,7 @@ class Cluster:
     ]
 
     @staticmethod
-    def new_root(metric_space: space.MetricSpace) -> 'Cluster':
+    def new_root(metric_space: space.Space) -> 'Cluster':
         """ Creates a new root Cluster on the `metric_space`. Most users should
          never need to interact with a non-root cluster.
         """
@@ -60,7 +60,7 @@ class Cluster:
         )
         return root
 
-    def __init__(self, metric_space: space.MetricSpace, *, indices: list[int], name: str, parent: typing.Optional['Cluster']):
+    def __init__(self, metric_space: space.Space, *, indices: list[int], name: str, parent: typing.Optional['Cluster']):
         if len(indices) == 0:
             raise ValueError(f'Cannot instantiate a cluster with an empty list of `indices`.')
 
@@ -99,7 +99,7 @@ class Cluster:
         return hash(repr(self.__name))
 
     @property
-    def metric_space(self) -> space.MetricSpace:
+    def metric_space(self) -> space.Space:
         return self.__metric_space
 
     @property

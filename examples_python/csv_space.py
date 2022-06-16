@@ -126,7 +126,7 @@ class CsvDataset(dataset.Dataset):
         )
 
 
-class CsvSpace(space.MetricSpace):
+class CsvSpace(space.Space):
 
     def __init__(self, data: CsvDataset, distance_metric: metric.Metric, use_cache: bool):
         super().__init__(use_cache)

@@ -75,7 +75,7 @@ class HDF5Dataset(dataset.Dataset):
         return HDF5Dataset(self.data, subset_name, indices)
 
 
-class HDF5Space(space.MetricSpace):
+class HDF5Space(space.Space):
 
     def __init__(self, data: HDF5Dataset, distance_metric: metric.Metric):
         super().__init__(True)

@@ -14,6 +14,7 @@ ClusterScores = dict[core.Cluster, float]
 InstanceScores = dict[int, float]
 
 # TODO: Look at DSD (diffusion-state-distance) as a possible individual-method.
+# TODO: Specialize `should_be_fast` for each algorithm based on complexity analysis and graph properties.
 
 
 class GraphScorer(abc.ABC):
@@ -67,6 +68,12 @@ class GraphScorer(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def __hash__(self):
+        """ A way to uniquely identify each `GraphScorer` object.
+        """
+        pass
+
     @property
     @abc.abstractmethod
     def short_name(self) -> str:
@@ -82,13 +89,12 @@ class GraphScorer(abc.ABC):
         """
         pass
 
-    @staticmethod
-    def should_be_fast(g: core.Graph) -> bool:
+    @abc.abstractmethod
+    def should_be_fast(self, g: core.Graph) -> bool:
         """ Whether this algorithm is expected to run in a reasonably short
          time on the given `Graph`. This method should make a quick estimate.
         """
-        # TODO: Specialize this for each algorithm based on complexity analysis and graph properties.
-        return True
+        pass
 
     def __normalize_scores(self, scores: typing.Union[ClusterScores, InstanceScores]):
         new_scores = numpy.asarray(list(scores.values()), dtype=numpy.float32)
@@ -113,9 +119,15 @@ class ClusterCardinality(GraphScorer):
     def name(self) -> str:
         return 'cluster_cardinality'
 
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def short_name(self) -> str:
         return 'cc'
+
+    def should_be_fast(self, _) -> bool:
+        return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
         return {c: c.cardinality for c in g.clusters}
@@ -130,9 +142,15 @@ class ComponentCardinality(GraphScorer):
     def name(self) -> str:
         return 'component_cardinality'
 
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def short_name(self) -> str:
         return 'sc'
+
+    def should_be_fast(self, _) -> bool:
+        return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
         return {
@@ -151,9 +169,15 @@ class VertexDegree(GraphScorer):
     def name(self) -> str:
         return 'vertex_degree'
 
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def short_name(self) -> str:
         return 'vd'
+
+    def should_be_fast(self, _) -> bool:
+        return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
         return {c: g.vertex_degree(c) for c in g.clusters}
@@ -169,9 +193,15 @@ class ParentCardinality(GraphScorer):
     def name(self) -> str:
         return 'parent_cardinality'
 
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def short_name(self) -> str:
         return 'pc'
+
+    def should_be_fast(self, _) -> bool:
+        return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
 
@@ -198,9 +228,15 @@ class GraphNeighborhood(GraphScorer):
     def name(self) -> str:
         return 'graph_neighborhood'
 
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def short_name(self) -> str:
         return 'gn'
+
+    def should_be_fast(self, g: core.Graph) -> bool:
+        return g.vertex_cardinality < 512
 
     def num_steps(self, g: core.Graph, c: core.Cluster) -> int:
         return int(g.eccentricity(c) * self.eccentricity_fraction) + 1
@@ -226,9 +262,15 @@ class StationaryProbabilities(GraphScorer):
     def name(self) -> str:
         return 'stationary_probabilities'
 
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def short_name(self) -> str:
         return 'sp'
+
+    def should_be_fast(self, g: core.Graph) -> bool:
+        return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
 

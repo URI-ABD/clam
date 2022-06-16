@@ -4,8 +4,8 @@ import typing
 
 import numpy
 
+from . import graph_scorers
 from . import pretrained_models
-from . import scorers
 from .. import core
 from .. import search
 from .. import utils
@@ -31,13 +31,13 @@ DEFAULT_GRAPH_CRITERIA = [
     for _, function in inspect.getmembers(pretrained_models, inspect.isfunction)
 ]
 
-DEFAULT_GRAPH_SCORERS: list[scorers.GraphScorer] = [
-    scorers.ClusterCardinality(),
-    scorers.ComponentCardinality(),
-    scorers.VertexDegree(),
-    scorers.ParentCardinality(weight=lambda d: 1 / (d ** 0.5)),
-    scorers.GraphNeighborhood(eccentricity_fraction=0.25),
-    scorers.StationaryProbabilities(steps=16),
+DEFAULT_GRAPH_SCORERS: list[graph_scorers.GraphScorer] = [
+    graph_scorers.ClusterCardinality(),
+    graph_scorers.ComponentCardinality(),
+    graph_scorers.VertexDegree(),
+    graph_scorers.ParentCardinality(weight=lambda d: 1 / (d ** 0.5)),
+    graph_scorers.GraphNeighborhood(eccentricity_fraction=0.25),
+    graph_scorers.StationaryProbabilities(steps=16),
 ]
 
 
@@ -46,10 +46,10 @@ class CHAODA:
 
     def __init__(
             self,
-            metric_spaces: list[core.MetricSpace],
+            metric_spaces: list[core.Space],
             *,
             partition_criteria: typing.Optional[list[cluster_criteria.ClusterCriterion]] = None,
-            selector_scorers: typing.Optional[list[tuple[graph_criteria.GraphCriterion, list[scorers.GraphScorer]]]] = None,
+            selector_scorers: typing.Optional[list[tuple[graph_criteria.GraphCriterion, list[graph_scorers.GraphScorer]]]] = None,
             normalization_mode: helpers.NormalizationMode = 'gaussian',
             use_speed_threshold: bool = True,
             voting_mode: VotingMode = 'mean',
@@ -82,7 +82,7 @@ class CHAODA:
             cluster_criteria.MinPoints(int(math.log2(self.__metric_spaces[0].data.cardinality))),
         ]
 
-        self.__selector_scorers: list[tuple[graph_criteria.GraphCriterion, list[scorers.GraphScorer]]] = selector_scorers or [
+        self.__selector_scorers: list[tuple[graph_criteria.GraphCriterion, list[graph_scorers.GraphScorer]]] = selector_scorers or [
             (c, [s for s in DEFAULT_GRAPH_SCORERS if s.name in c.name])
             for c in DEFAULT_GRAPH_CRITERIA
         ]
@@ -178,9 +178,9 @@ class SingleSpaceChaoda:
 
     def __init__(
             self,
-            metric_space: core.MetricSpace,
+            metric_space: core.Space,
             partition_criteria: list[cluster_criteria.ClusterCriterion],
-            selectors_scorers: list[tuple[graph_criteria.GraphCriterion, list[scorers.GraphScorer]]],
+            selectors_scorers: list[tuple[graph_criteria.GraphCriterion, list[graph_scorers.GraphScorer]]],
             normalization_mode: helpers.NormalizationMode,
             use_speed_threshold: bool,
     ):
@@ -203,14 +203,14 @@ class SingleSpaceChaoda:
 
         self.__metric_space = metric_space
         self.__partition_criteria = partition_criteria
-        self.__graph_selectors = [s for s, _ in selectors_scorers]
-        self.__graph_scorers = [s for _, s in selectors_scorers]
+        self.__selectors = [s for s, _ in selectors_scorers]
+        self.__scorers = [s for _, s in selectors_scorers]
         self.__normalization_mode = normalization_mode
         self.__use_speed_threshold = use_speed_threshold
 
         self.__root: typing.Union[core.Cluster, utils.Unset] = constants.UNSET
         self.__graphs: typing.Union[list[core.Graph], utils.Unset] = constants.UNSET
-        self.__cluster_scores_list: typing.Union[list[scorers.ClusterScores], utils.Unset] = constants.UNSET
+        self.__cluster_scores_list: typing.Union[list[graph_scorers.ClusterScores], utils.Unset] = constants.UNSET
         self.__scores: typing.Union[numpy.ndarray, utils.Unset] = constants.UNSET
         self.__searcher: typing.Union[search.CAKES, utils.Unset] = constants.UNSET
 
@@ -227,7 +227,7 @@ class SingleSpaceChaoda:
         return self.__scores
 
     @property
-    def cluster_scores_list(self) -> list[scorers.ClusterScores]:
+    def cluster_scores_list(self) -> list[graph_scorers.ClusterScores]:
         if self.__cluster_scores_list is constants.UNSET:
             raise ValueError(f'Please call the `fit` method before using this property.')
         return self.__cluster_scores_list
@@ -252,14 +252,14 @@ class SingleSpaceChaoda:
 
         self.__graphs = [
             core.Graph(selector(self.__root)).build()
-            for selector in self.__graph_selectors
+            for selector in self.__selectors
         ]
 
         if self.__use_speed_threshold:
             individual_scores = [
                 method(g)
-                for g, graph_scorers in zip(self.__graphs, self.__graph_scorers)
-                for method in graph_scorers
+                for g, scorers in zip(self.__graphs, self.__scorers)
+                for method in scorers
                 if method.should_be_fast(g)
             ]
             if len(individual_scores) == 0:
@@ -269,8 +269,8 @@ class SingleSpaceChaoda:
         else:
             individual_scores = [
                 method(g)
-                for g, graph_scorers in zip(self.__graphs, self.__graph_scorers)
-                for method in graph_scorers
+                for g, scorers in zip(self.__graphs, self.__scorers)
+                for method in scorers
             ]
 
         self.__scores = numpy.stack([s for _, s in individual_scores])
