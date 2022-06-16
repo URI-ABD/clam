@@ -97,9 +97,9 @@ def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
         models_kwargs=models_kwargs,
         scorers=scorers,
         out_dir=output_dir,
-        num_epochs=2,
+        num_epochs=10,
         save_frequency=1,
-        only_train_fast_scorers=False,
+        only_train_fast_scorers=True,
     )
 
     return final_path
