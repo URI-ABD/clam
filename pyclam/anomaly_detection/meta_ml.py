@@ -23,7 +23,7 @@ class MetaMLModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def fit(self, *args, **kwargs):
+    def fit(self, *args, **kwargs) -> 'MetaMLModel':
         """ Fits the model.
         """
         pass
@@ -65,10 +65,10 @@ class MetaDT(MetaMLModel):
     def name(self) -> str:
         return 'dt'
 
-    def fit(self, data: numpy.ndarray, scores: numpy.ndarray):
+    def fit(self, data: numpy.ndarray, scores: numpy.ndarray) -> 'MetaDT':
         logger.info(f'Fitting meta-model {self.name} on data with shape {data.shape} ...')
-        self.model.fit(data, scores)
-        return
+        self.model = self.model.fit(data, scores)
+        return self
 
     def predict(self, ratios: numpy.ndarray) -> float:
         return self.model.predict(ratios)
@@ -127,10 +127,10 @@ class MetaLR(MetaMLModel):
     def name(self) -> str:
         return 'lr'
 
-    def fit(self, data: numpy.ndarray, scores: numpy.ndarray):
+    def fit(self, data: numpy.ndarray, scores: numpy.ndarray) -> 'MetaLR':
         logger.info(f'Fitting meta-model {self.name} on data with shape {data.shape} ...')
-        self.model.fit(data, scores)
-        return
+        self.model = self.model.fit(data, scores)
+        return self
 
     def predict(self, ratios: numpy.ndarray) -> float:
         return self.model.predict(ratios)

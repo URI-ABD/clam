@@ -40,19 +40,18 @@ def load(data_dir: pathlib.Path):
 
 
 def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
-    # These are the datasets which we randomly selected for training the models for the original CHAODA paper.
-    data_names = [
+    totally_random_dataset_names = [
         'annthyroid',
         'mnist',
-        'pendigits',
-        'satellite',
-        'shuttle',
-        'thyroid',
+        # 'pendigits',
+        # 'satellite',
+        # 'shuttle',
+        # 'thyroid',
     ]
 
     raw_datasets = [
         anomaly_data.AnomalyData.load(data_dir, name)
-        for name in data_names
+        for name in totally_random_dataset_names
     ]
     datasets = [
         anomaly_detection.anomaly_dataset.AnomalyTabular(
@@ -60,7 +59,7 @@ def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
             scores=data.scores,
             name=name
         )
-        for name, data in zip(data_names, raw_datasets)
+        for name, data in zip(totally_random_dataset_names, raw_datasets)
     ]
 
     metrics = [

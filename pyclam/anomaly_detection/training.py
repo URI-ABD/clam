@@ -46,7 +46,7 @@ def data_from_graph(
 
         y_true = numpy.asarray(labels[cluster.indices], dtype=numpy.float32)
 
-        loss = float(numpy.mean(numpy.square(score - y_true))) / cluster.cardinality
+        loss = float(numpy.sqrt(numpy.mean(numpy.square(score - y_true)))) / cluster.cardinality
 
         train_y[i] = 1. - loss
 
@@ -214,12 +214,14 @@ def train_meta_ml(
                         full_train_x[metric_name][scorer] = numpy.concatenate([full_train_x[metric_name][scorer], train_x], axis=0)
                         full_train_y[metric_name][scorer] = numpy.concatenate([full_train_y[metric_name][scorer], train_y], axis=0)
 
+                new_models = list()
                 for model in meta_models[metric_name][scorer]:
                     logger.info(f'Epoch {epoch}/{num_epochs}: Fitting model {model.name} with root {root_name} and scorer {scorer.name} ...')
-                    model.fit(
+                    new_models.append(model.fit(
                         full_train_x[metric_name][scorer],
                         full_train_y[metric_name][scorer],
-                    )
+                    ))
+                meta_models[metric_name][scorer] = new_models
 
         if epoch % save_frequency == 0:
             logger.info(f'Saving intermediate models for after epoch {epoch}/{num_epochs} ...')
