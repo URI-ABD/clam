@@ -6,7 +6,7 @@
 //! - [CHAODA](https://arxiv.org/abs/2103.11774)
 //!
 
-// pub mod anomaly_detection;
+pub mod anomaly;
 // pub mod classification;
 pub mod core;
 pub mod prelude;
@@ -14,7 +14,7 @@ pub mod search;
 pub mod traits;
 pub mod utils;
 
-// pub use crate::anomaly_detection::Chaoda;
+pub use crate::anomaly::CHAODA;
 // pub use crate::anomaly_detection::get_individual_algorithms;
 // pub use crate::anomaly_detection::get_meta_ml_methods;
 
