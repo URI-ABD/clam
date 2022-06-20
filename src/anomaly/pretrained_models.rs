@@ -2,11 +2,11 @@
 //! paper. The meta-ml models were first trainined in Python and the decision
 //! functions were extracted and then translated into Rust.
 
-use crate::core::Ratios;
-use crate::criteria::MetaMLScorer;
+use crate::graph_criteria;
+use crate::Ratios;
 
-/// Returns a Slice of tuples of Scorer names and Boxed Scorer functions.
-pub fn get_meta_ml_scorers<'a>() -> Vec<(&'a str, MetaMLScorer)> {
+/// Returns a Vec of tuples of Scorer names and Boxed MetaMLScorer functions.
+pub fn get_meta_ml_scorers<'a>() -> Vec<(&'a str, graph_criteria::MetaMLScorer)> {
     vec![
         ("lr_manhattan_sc", Box::new(lr_manhattan_sc)),
         ("lr_manhattan_cc", Box::new(lr_manhattan_cc)),
