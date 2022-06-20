@@ -97,7 +97,9 @@ class GraphScorer(abc.ABC):
 
     @staticmethod
     def ordered_scores(g: core.Graph, scores: InstanceScores) -> numpy.ndarray:
-        return numpy.asarray([scores[i] for c in g.clusters for i in c.indices], dtype=numpy.float32)
+        [indices, scores] = list(zip(*sorted(scores.items())))
+        assert set(indices) == {i for c in g.clusters for i in c.indices}
+        return numpy.asarray(scores, dtype=numpy.float32)
 
 
 class ClusterCardinality(GraphScorer):
