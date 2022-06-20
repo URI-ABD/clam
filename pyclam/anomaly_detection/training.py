@@ -184,22 +184,29 @@ def train_meta_ml(
             metric_name = space.distance_metric.name
             labels = space.data.labels
 
-            selectors: list[graph_criteria.GraphCriterion]
+            graphs: dict[graph_scorers.GraphScorer, list[core.Graph]]
             if epoch == 1:
-                selectors = [graph_criteria.Layer(d) for d in range(5, root.max_leaf_depth, 5)]
-            else:
-                selectors = [
-                    graph_criteria.MetaMLSelect(lambda ratios: model.predict(ratios[None, :]), name=model.name)
-                    for models in meta_models[metric_name].values()
-                    for model in models
+                graphs_list = [
+                    core.Graph(graph_criteria.Layer(d)(root)).build()
+                    for d in range(5, root.max_leaf_depth, 5)
                 ]
-
-            graphs = [core.Graph(selector(root)).build() for selector in selectors]
+                graphs = {
+                    scorer: graphs_list
+                    for scorer in scorers
+                }
+            else:
+                graphs = {
+                     scorer: [
+                         core.Graph(graph_criteria.MetaMLSelect(lambda ratios: model.predict(ratios[None, :]), name=model.name)(root)).build()
+                         for model in models
+                     ]
+                     for scorer, models in meta_models[metric_name].items()
+                }
 
             for scorer in scorers:
                 logger.info(f'Epoch {epoch}/{num_epochs}: Using root {root_name} and scorer {scorer.name} ...')
 
-                for graph in graphs:
+                for graph in graphs[scorer]:
 
                     if only_train_fast_scorers and (not scorer.should_be_fast(graph)):
                         continue
@@ -224,7 +231,7 @@ def train_meta_ml(
                 meta_models[metric_name][scorer] = new_models
 
         if epoch % save_frequency == 0:
-            logger.info(f'Saving intermediate models for after epoch {epoch}/{num_epochs} ...')
+            logger.info(f'Saving models after epoch {epoch}/{num_epochs} ...')
             save_models(out_dir.joinpath(f'models_epoch_{epoch}.py'), meta_models)
 
     final_path = out_dir.joinpath(f'models_final.py')
