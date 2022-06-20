@@ -328,7 +328,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
             let sds: [f64; 6] = ratios
                 .iter()
                 .zip(means.iter())
-                .map(|(values, &mean)| 1e-8 + helpers::std(values, mean))
+                .map(|(values, &mean)| 1e-8 + helpers::sd(values, mean))
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();

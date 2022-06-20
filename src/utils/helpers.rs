@@ -30,7 +30,7 @@ pub fn mean<T: Number>(values: &[T]) -> T {
     values.iter().cloned().sum::<T>() / T::from(values.len()).unwrap()
 }
 
-pub fn std<T: Number>(values: &[T], mean: T) -> T {
+pub fn sd<T: Number>(values: &[T], mean: T) -> T {
     T::from(
         values
             .iter()
@@ -45,7 +45,7 @@ pub fn std<T: Number>(values: &[T], mean: T) -> T {
 
 pub fn normalize_1d(values: &[f64]) -> Vec<f64> {
     let mean = mean(values);
-    let std = 1e-8 + std(values, mean);
+    let std = 1e-8 + sd(values, mean);
     values
         .iter()
         .map(|value| (value - mean) / (std * 2_f64.sqrt()))
