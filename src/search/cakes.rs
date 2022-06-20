@@ -1,6 +1,5 @@
 use rayon::prelude::*;
 
-use crate::criteria;
 use crate::prelude::*;
 
 pub type SearchHistory<'a, T, U> = Vec<(&'a Cluster<'a, T, U>, U)>;
@@ -21,7 +20,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         }
     }
 
-    pub fn build(self, criteria: &criteria::PartitionCriteria<T, U>) -> Self {
+    pub fn build(self, criteria: &crate::PartitionCriteria<T, U>) -> Self {
         let root = self.root.partition(criteria, true);
         let depth = root.max_leaf_depth();
         CAKES {
@@ -185,7 +184,7 @@ mod tests {
         let dataset = crate::Tabular::new(&data, "test_search".to_string());
         let metric = metric_from_name("euclidean", false).unwrap();
         let space = crate::TabularSpace::new(&dataset, metric.as_ref(), false);
-        let cakes = CAKES::new(&space).build(&criteria::PartitionCriteria::new(true));
+        let cakes = CAKES::new(&space).build(&crate::PartitionCriteria::new(true));
 
         let query = &[0., 1.];
         let (results, _): (Vec<_>, Vec<_>) = cakes.rnn_search(query, 1.5).into_iter().unzip();

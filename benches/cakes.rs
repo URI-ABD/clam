@@ -23,7 +23,7 @@ fn cakes(c: &mut Criterion) {
         let euclidean = metric_from_name::<f32, f32>("euclidean", false).unwrap();
         let space = clam::TabularSpace::new(&dataset, euclidean.as_ref(), false);
         let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
-        let partition_criteria = clam::criteria::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
+        let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
         let cakes = clam::CAKES::new(&space).build(&partition_criteria);
 
         let radius = cakes.diameter();

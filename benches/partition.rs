@@ -18,7 +18,7 @@ fn partition(c: &mut Criterion) {
         let dataset = clam::Tabular::new(&features, data_name.to_string());
         let euclidean = metric_from_name::<f32, f32>("euclidean", false).unwrap();
         let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
-        let partition_criteria = clam::criteria::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
+        let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
 
         for use_cache in [false, true] {
             let bench_name = format!("{}-distance-cache-{}", data_name, use_cache);

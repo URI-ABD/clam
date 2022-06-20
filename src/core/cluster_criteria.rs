@@ -1,6 +1,5 @@
 //! Criteria used for partitioning `Clusters` and selecting `Clusters` for `Graphs`.
 
-use super::cluster;
 use crate::prelude::*;
 
 pub trait PartitionCriterion<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
@@ -63,18 +62,3 @@ impl<T: Number, U: Number> PartitionCriterion<T, U> for MinCardinality {
         c.cardinality() > self.0
     }
 }
-
-// A `Box`ed function that decides whether a `Cluster` can be partitioned.
-
-// A `Cluster` must have a `depth` lower than the given threshold for it to be partitioned.
-// pub fn max_depth<T: Number, U: Number>(threshold: usize) -> PartitionCriterion<T, U> {
-//     Box::new(move |cluster: &Cluster<T, U>| cluster.depth() < threshold)
-// }
-
-// A `Cluster` must have a `cardinality` higher than the given threshold for it to be partitioned.
-// pub fn min_cardinality<T: Number, U: Number>(threshold: usize) -> PartitionCriterion<T, U> {
-//     Box::new(move |cluster: &Cluster<T, U>| cluster.cardinality() > threshold)
-// }
-
-/// A `Box`ed function that assigns a score for a given `Cluster`.
-pub type MetaMLScorer = Box<dyn (Fn(cluster::Ratios) -> f64) + Send + Sync>;

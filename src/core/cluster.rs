@@ -266,7 +266,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
     /// # Panics:
     ///
     /// * If called before calling `build`.
-    pub fn partition(mut self, partition_criteria: &criteria::PartitionCriteria<T, U>, recursive: bool) -> Self {
+    pub fn partition(mut self, partition_criteria: &crate::PartitionCriteria<T, U>, recursive: bool) -> Self {
         if partition_criteria.check(&self) {
             let [left, right] = self.partition_once();
 
@@ -623,7 +623,7 @@ mod tests {
         let dataset = Tabular::<f64>::new(&data, "test_cluster".to_string());
         let metric = metric_from_name::<f64, f64>("euclidean", false).unwrap();
         let space = TabularSpace::new(&dataset, metric.as_ref(), false);
-        let partition_criteria = criteria::PartitionCriteria::new(true)
+        let partition_criteria = crate::PartitionCriteria::new(true)
             .with_max_depth(3)
             .with_min_cardinality(1);
         let cluster = Cluster::new_root(&space).build().partition(&partition_criteria, true);

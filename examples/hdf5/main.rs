@@ -25,7 +25,7 @@ pub fn read_search_data(name: &str) -> hdf5::Result<hdf5::File> {
 #[derive(Debug, Clone)]
 struct MinRadius<U: Number>(U);
 
-impl<T: Number, U: Number> clam::criteria::PartitionCriterion<T, U> for MinRadius<U> {
+impl<T: Number, U: Number> clam::PartitionCriterion<T, U> for MinRadius<U> {
     fn check(&self, c: &Cluster<T, U>) -> bool {
         c.radius() > self.0
     }
@@ -80,7 +80,7 @@ where
         0.01
     };
     let partition_criteria =
-        clam::criteria::PartitionCriteria::<T, f32>::new(true).with_custom(Box::new(MinRadius(search_radius)));
+        clam::PartitionCriteria::<T, f32>::new(true).with_custom(Box::new(MinRadius(search_radius)));
 
     let start = std::time::Instant::now();
     let cakes = cakes.build(&partition_criteria);

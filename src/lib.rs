@@ -18,7 +18,9 @@ pub use crate::anomaly::CHAODA;
 // pub use crate::anomaly_detection::get_individual_algorithms;
 // pub use crate::anomaly_detection::get_meta_ml_methods;
 
-pub use crate::core::criteria;
+pub use crate::core::cluster_criteria::PartitionCriteria;
+pub use crate::core::cluster_criteria::PartitionCriterion;
+pub use crate::core::graph_criteria;
 pub use crate::core::Cluster;
 pub use crate::core::Edge;
 pub use crate::core::Graph;
