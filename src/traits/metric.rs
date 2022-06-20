@@ -1,18 +1,13 @@
-//! A `Metric` allows for calculating distances between instances in a `Dataset`.
-
-use std::collections::HashSet;
-use std::convert::TryInto;
+//! Provides the `Metric` trait and implementations for some common distance
+//! functions.
 
 use num_traits::NumCast;
 use rayon::prelude::*;
 
 use crate::Number;
 
-/// A `Metric` is a function that takes two instances (generic over a `Number` T)
-/// from a `Dataset` and deterministically produces a non-negative `Number` U.
-///
-/// Optionally, a `Metric` also allows us to encode one instance in terms of another
-/// and decode an instance from a reference and an encoding.
+/// A `Metric` is a function that takes two instances (over a `Number` T) from a
+/// `Dataset` and deterministically produces a non-negative `Number` U.
 pub trait Metric<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the name of the `Metric` as a String.
     fn name(&self) -> String;
@@ -44,60 +39,48 @@ pub trait Metric<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
         self.par_many_to_many(is, is)
     }
 
-    fn is_expensive(&self) -> bool {
-        false
-    }
-
-    /// Encodes the target instance in terms of the reference and produces a vec of bytes.
-    ///
-    /// This method is optional and so the default just returns an Err.
-    #[allow(unused_variables)]
-    fn encode(&self, reference: &[T], target: &[T]) -> Result<Vec<u8>, String> {
-        Err(format!("encode is not implemented for {:?}", self.name()))
-    }
-
-    /// Decodes a target instances from a reference instance and a bytes encoding.
-    ///
-    /// This method is optional and so the default just returns an Err.
-    #[allow(unused_variables)]
-    fn decode(&self, reference: &[T], encoding: &[u8]) -> Result<Vec<T>, String> {
-        Err(format!("decode is not implemented for {:?}", self.name()))
-    }
+    /// Whether the metric is expensive to compute.
+    fn is_expensive(&self) -> bool;
 }
 
-/// Returns a `Metric` from a given name, or an Err if the name
-/// is not found among the implemented `Metrics`.
+/// Returns a `Metric` from a given name, or an Err if the name is not found
+/// among the implemented `Metrics`.
 ///
 /// # Arguments
 ///
-/// * `metric`: A `&str` name of a distance function.
+/// * `name`: of the distance function.
 /// This can be one of:
-///   - "euclidean": L2-norm.
-///   - "euclideansq": Squared L2-norm.
-///   - "manhattan": L1-norm.
-///   - "cosine": Cosine distance.
-///   - "hamming": Hamming distance.
-///   - "jaccard": Jaccard distance.
+///     - "euclidean": L2-norm.
+///     - "euclideansq": Squared L2-norm.
+///     - "manhattan": L1-norm.
+///     - "cosine": Cosine distance.
+///     - "hamming": Hamming distance.
+///     - "jaccard": Jaccard distance.
 ///
 /// We plan on adding the following:
-///   - "levenshtein": Edit-distance among strings (e.g. genomic/amino-acid sequences).
-///   - "wasserstein": Earth-Mover-Distance among high-dimensional probability distributions (will be usable with images)
-///   - "tanamoto": Jaccard distance between the Maximal-Common-Subgraph of two molecular structures.
-pub fn metric_from_name<T: Number, U: Number>(metric: &str) -> Result<&dyn Metric<T, U>, String> {
-    match metric {
-        "euclidean" => Ok(&Euclidean),
-        "euclideansq" => Ok(&EuclideanSq),
-        "manhattan" => Ok(&Manhattan),
-        "cosine" => Ok(&Cosine),
-        "hamming" => Ok(&Hamming),
-        "jaccard" => Ok(&Jaccard),
-        _ => Err(format!("{} is not defined as a metric.", metric)),
+/// - "levenshtein": Minimum edit distance among strings (e.g.
+/// genomic/amino-acid sequences).
+/// - "wasserstein": Earth-Mover-Distance among high-dimensional probability
+/// distributions (will be usable with images)
+/// - "tanamoto": Jaccard distance between the Maximal-Common-Subgraph of two
+/// molecular structures.
+pub fn metric_from_name<T: Number, U: Number>(name: &str, is_expensive: bool) -> Result<Box<dyn Metric<T, U>>, String> {
+    match name {
+        "euclidean" => Ok(Box::new(Euclidean { is_expensive })),
+        "euclideansq" => Ok(Box::new(EuclideanSq { is_expensive })),
+        "manhattan" => Ok(Box::new(Manhattan { is_expensive })),
+        "cosine" => Ok(Box::new(Cosine { is_expensive })),
+        "hamming" => Ok(Box::new(Hamming { is_expensive })),
+        "jaccard" => Ok(Box::new(Jaccard { is_expensive })),
+        _ => Err(format!("{} is not defined as a metric.", name)),
     }
 }
 
-/// Implements Euclidean distance, the L2-norm.
+/// L2-norm.
 #[derive(Debug)]
-pub struct Euclidean;
+pub struct Euclidean {
+    pub is_expensive: bool,
+}
 
 impl<T: Number, U: Number> Metric<T, U> for Euclidean {
     fn name(&self) -> String {
@@ -109,11 +92,17 @@ impl<T: Number, U: Number> Metric<T, U> for Euclidean {
         let d: f64 = NumCast::from(d).unwrap();
         U::from(d.sqrt()).unwrap()
     }
+
+    fn is_expensive(&self) -> bool {
+        self.is_expensive
+    }
 }
 
-/// Implements Squared-Euclidean distance, the squared L2-norm.
+/// Squared L2-norm.
 #[derive(Debug)]
-pub struct EuclideanSq;
+pub struct EuclideanSq {
+    pub is_expensive: bool,
+}
 
 impl<T: Number, U: Number> Metric<T, U> for EuclideanSq {
     fn name(&self) -> String {
@@ -124,11 +113,17 @@ impl<T: Number, U: Number> Metric<T, U> for EuclideanSq {
         let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
         U::from(d).unwrap()
     }
+
+    fn is_expensive(&self) -> bool {
+        self.is_expensive
+    }
 }
 
-/// Implements Manhattan/Cityblock distance, the L1-norm.
+/// L1-norm.
 #[derive(Debug)]
-pub struct Manhattan;
+pub struct Manhattan {
+    pub is_expensive: bool,
+}
 
 impl<T: Number, U: Number> Metric<T, U> for Manhattan {
     fn name(&self) -> String {
@@ -143,14 +138,16 @@ impl<T: Number, U: Number> Metric<T, U> for Manhattan {
             .sum();
         U::from(d).unwrap()
     }
+
+    fn is_expensive(&self) -> bool {
+        self.is_expensive
+    }
 }
 
-/// Implements Cosine distance, 1 - cosine-similarity.
+/// 1 - cosine-similarity.
 #[derive(Debug)]
-pub struct Cosine;
-
-fn dot<T: Number>(x: &[T], y: &[T]) -> T {
-    x.iter().zip(y.iter()).map(|(&a, &b)| a * b).sum()
+pub struct Cosine {
+    pub is_expensive: bool,
 }
 
 impl<T: Number, U: Number> Metric<T, U> for Cosine {
@@ -158,32 +155,32 @@ impl<T: Number, U: Number> Metric<T, U> for Cosine {
         "cosine".to_string()
     }
 
-    #[allow(clippy::suspicious_operation_groupings)]
     fn one_to_one(&self, x: &[T], y: &[T]) -> U {
-        let xx = dot(x, x);
-        if xx == T::zero() {
+        let (xx, yy, xy) = x
+            .iter()
+            .zip(y.iter())
+            .fold((T::zero(), T::zero(), T::zero()), |(xx, yy, xy), (&a, &b)| {
+                (xx + a * a, yy + b * b, xy + a * b)
+            });
+
+        if xx == T::zero() || yy == T::zero() || xy <= T::zero() {
             return U::one();
         }
 
-        let yy = dot(y, y);
-        if yy == T::zero() {
-            return U::one();
-        }
+        U::one() - U::from(xy.as_f64() / (xx * yy).as_f64().sqrt()).unwrap()
+    }
 
-        let xy = dot(x, y);
-        if xy <= T::zero() {
-            return U::one();
-        }
-
-        let similarity: f64 = NumCast::from(xy * xy / (xx * yy)).unwrap();
-        U::one() - U::from(similarity.sqrt()).unwrap()
+    fn is_expensive(&self) -> bool {
+        self.is_expensive
     }
 }
 
-/// Implements Hamming distance.
-/// This is not normalized by the number of features.
+/// Count of differences at each indexed feature. This is not normalized by the
+/// number of features.
 #[derive(Debug)]
-pub struct Hamming;
+pub struct Hamming {
+    pub is_expensive: bool,
+}
 
 impl<T: Number, U: Number> Metric<T, U> for Hamming {
     fn name(&self) -> String {
@@ -195,38 +192,18 @@ impl<T: Number, U: Number> Metric<T, U> for Hamming {
         U::from(d).unwrap()
     }
 
-    fn encode(&self, x: &[T], y: &[T]) -> Result<Vec<u8>, String> {
-        let encoding = x
-            .iter()
-            .zip(y.iter())
-            .enumerate()
-            .filter(|(_, (&l, &r))| l != r)
-            .flat_map(|(i, (_, &r))| {
-                let mut i = (i as u64).to_be_bytes().to_vec();
-                i.append(&mut r.to_bytes());
-                i
-            })
-            .collect();
-        Ok(encoding)
-    }
-
-    fn decode(&self, x: &[T], y: &[u8]) -> Result<Vec<T>, String> {
-        let mut x = x.to_owned();
-        let step = (8 + T::num_bytes()) as usize;
-        y.chunks(step).for_each(|chunk| {
-            let (index, value) = chunk.split_at(std::mem::size_of::<u64>());
-            let index = u64::from_be_bytes(index.try_into().unwrap()) as usize;
-            x[index] = T::from_bytes(value);
-        });
-        Ok(x)
+    fn is_expensive(&self) -> bool {
+        self.is_expensive
     }
 }
 
-/// Implements Cosine distance, 1 - jaccard-similarity.
+/// 1 - jaccard-similarity.
 ///
 /// Warning: DO NOT use this with floating-point numbers.
 #[derive(Debug)]
-pub struct Jaccard;
+pub struct Jaccard {
+    pub is_expensive: bool,
+}
 
 impl<T: Number, U: Number> Metric<T, U> for Jaccard {
     fn name(&self) -> String {
@@ -238,14 +215,22 @@ impl<T: Number, U: Number> Metric<T, U> for Jaccard {
             return U::one();
         }
 
-        let x: HashSet<u64> = x.iter().map(|&a| NumCast::from(a).unwrap()).collect();
-        let intersect = y.iter().filter(|&&b| x.contains(&NumCast::from(b).unwrap())).count();
+        let x = std::collections::HashSet::<u64>::from_iter(x.iter().map(|&a| NumCast::from(a).unwrap()));
+        let y = std::collections::HashSet::from_iter(y.iter().map(|&a| NumCast::from(a).unwrap()));
 
-        if intersect == x.len() && intersect == y.len() {
+        let intersection = x.intersection(&y).count();
+
+        if intersection == x.len() && intersection == y.len() {
             return U::zero();
         }
 
-        U::one() - U::from(intersect).unwrap() / U::from(x.len() + y.len() - intersect).unwrap()
+        let union = x.union(&y).count();
+
+        U::one() - U::from(intersection as f64 / union as f64).unwrap()
+    }
+
+    fn is_expensive(&self) -> bool {
+        self.is_expensive
     }
 }
 
@@ -260,15 +245,15 @@ mod tests {
         let a = vec![1., 2., 3.];
         let b = vec![3., 3., 1.];
 
-        let metric = metric_from_name("euclideansq").unwrap();
+        let metric = metric_from_name("euclideansq", false).unwrap();
         approx_eq!(f64, metric.one_to_one(&a, &a), 0.);
         approx_eq!(f64, metric.one_to_one(&a, &b), 9.);
 
-        let metric = metric_from_name("euclidean").unwrap();
+        let metric = metric_from_name("euclidean", false).unwrap();
         approx_eq!(f64, metric.one_to_one(&a, &a), 0.);
         approx_eq!(f64, metric.one_to_one(&a, &b), 3.);
 
-        let metric = metric_from_name("manhattan").unwrap();
+        let metric = metric_from_name("manhattan", false).unwrap();
         approx_eq!(f64, metric.one_to_one(&a, &a), 0.);
         approx_eq!(f64, metric.one_to_one(&a, &b), 5.);
     }
@@ -276,6 +261,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_panic() {
-        let _ = metric_from_name::<f32, f32>("aloha").unwrap();
+        let _ = metric_from_name::<f32, f32>("aloha", false).unwrap();
     }
 }

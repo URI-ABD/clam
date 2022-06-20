@@ -16,6 +16,7 @@ bitvec = "1.0"
 num-traits = "0.2"
 rayon = "1.5"
 libm = "0.2"
+priority-queue = "1.2"
 rand = "0.8"
 # easy-cast = "0.4.4"
 # eval-metrics = "1.0.1"
@@ -45,6 +46,10 @@ features = ["lzf", "blosc"]
 [[example]]
 name = "hdf5"
 path = "examples/hdf5/main.rs"
+
+[[example]]
+name = "search1b"
+path = "examples/search1b/main.rs"
 
 [[bench]]
 name = "partition"

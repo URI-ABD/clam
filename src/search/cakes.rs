@@ -67,33 +67,16 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
     }
 
     pub fn rnn_search(&self, query: &[T], radius: U) -> Vec<(usize, U)> {
-        let candidate_clusters = self.tree_search_history(query, radius, false).1;
+        let candidate_clusters = self.rnn_tree_search(query, radius).1;
 
         if candidate_clusters.is_empty() {
             Vec::new()
         } else {
-            self.leaf_search(query, radius, &candidate_clusters)
+            self.rnn_leaf_search(query, radius, &candidate_clusters)
         }
     }
 
-    pub fn batch_knn_search(&self, queries_ks: &[(Vec<T>, usize)]) -> Vec<Vec<(usize, U)>> {
-        queries_ks
-            .par_iter()
-            .map(|(query, k)| self.knn_search(query, *k))
-            .collect()
-    }
-
-    #[allow(unused_variables)]
-    pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
-        todo!()
-    }
-
-    pub fn tree_search_history(
-        &self,
-        query: &[T],
-        radius: U,
-        continue_to_leaves: bool,
-    ) -> (SearchHistory<T, U>, Vec<&Cluster<T, U>>) {
+    pub fn rnn_tree_search(&self, query: &[T], radius: U) -> (SearchHistory<T, U>, Vec<&Cluster<T, U>>) {
         let mut history = Vec::new();
         let mut hits = Vec::new();
         let mut candidate_clusters = vec![self.root()];
@@ -113,7 +96,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
             history.extend(close_enough.iter().cloned());
             let (terminal, non_terminal): (Vec<_>, Vec<_>) = close_enough
                 .into_iter()
-                .partition(|(c, d)| c.is_leaf() || (!continue_to_leaves && (c.radius() + *d) <= radius));
+                .partition(|(c, d)| c.is_leaf() || (c.radius() + *d) <= radius);
             hits.extend(terminal.into_iter().map(|(c, _)| c));
             candidate_clusters = non_terminal
                 .into_iter()
@@ -124,7 +107,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         (history, hits)
     }
 
-    pub fn leaf_search(&self, query: &[T], radius: U, candidate_clusters: &[&Cluster<T, U>]) -> Vec<(usize, U)> {
+    pub fn rnn_leaf_search(&self, query: &[T], radius: U, candidate_clusters: &[&Cluster<T, U>]) -> Vec<(usize, U)> {
         self.linear_search(
             query,
             radius,
@@ -132,10 +115,38 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         )
     }
 
+    pub fn batch_knn_search(&self, queries_ks: &[(Vec<T>, usize)]) -> Vec<Vec<(usize, U)>> {
+        queries_ks
+            .par_iter()
+            .map(|(query, k)| self.knn_search(query, *k))
+            .collect()
+    }
+
+    #[allow(unused_variables)]
+    pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
+        let candidate_clusters = self.knn_tree_search(query, k);
+        assert!(candidate_clusters.len() >= k);
+
+        let knn = self.knn_leaf_search(query, k, &candidate_clusters);
+        assert!(knn.len() == k);
+
+        knn
+    }
+
+    #[allow(unused_variables)]
+    pub fn knn_tree_search(&self, query: &[T], k: usize) -> Vec<(&Cluster<T, U>, U)> {
+        todo!()
+    }
+
+    #[allow(unused_variables)]
+    pub fn knn_leaf_search(&self, query: &[T], k: usize, candidate_clusters: &[(&Cluster<T, U>, U)]) -> Vec<(usize, U)> {
+        todo!()
+    }
+
     pub fn linear_search(&self, query: &[T], radius: U, indices: Option<Vec<usize>>) -> Vec<(usize, U)> {
         let indices = indices.unwrap_or_else(|| self.root.indices());
 
-        if self.metric().is_expensive() {
+        if self.metric().is_expensive() || indices.len() > 1000 {
             indices
                 .into_par_iter()
                 .map(|i| (i, self.data().get(i)))
@@ -172,8 +183,8 @@ mod tests {
     fn test_search() {
         let data = vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]];
         let dataset = crate::Tabular::new(&data, "test_search".to_string());
-        let metric = metric_from_name("euclidean").unwrap();
-        let space = crate::TabularSpace::new(&dataset, metric, false);
+        let metric = metric_from_name("euclidean", false).unwrap();
+        let space = crate::TabularSpace::new(&dataset, metric.as_ref(), false);
         let cakes = CAKES::new(&space).build(&criteria::PartitionCriteria::new(true));
 
         let query = &[0., 1.];

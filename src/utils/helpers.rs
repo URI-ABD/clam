@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-pub fn argmin<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
+pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     values.iter().enumerate().fold(
         (0, values[0]),
         |(i_min, v_min), (i, &v)| {
@@ -13,7 +13,7 @@ pub fn argmin<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     )
 }
 
-pub fn argmax<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
+pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     values.iter().enumerate().fold(
         (0, values[0]),
         |(i_max, v_max), (i, &v)| {

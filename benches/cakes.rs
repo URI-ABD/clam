@@ -20,8 +20,8 @@ fn cakes(c: &mut Criterion) {
         let (features, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
         let dataset = clam::Tabular::new(&features, data_name.to_string());
 
-        let euclidean = metric_from_name::<f32, f32>("euclidean").unwrap();
-        let space = clam::TabularSpace::new(&dataset, euclidean, false);
+        let euclidean = metric_from_name::<f32, f32>("euclidean", false).unwrap();
+        let space = clam::TabularSpace::new(&dataset, euclidean.as_ref(), false);
         let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
         let partition_criteria = clam::criteria::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
         let cakes = clam::CAKES::new(&space).build(&partition_criteria);

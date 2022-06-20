@@ -66,9 +66,9 @@ where
     let train_vec = h5data::H5Data::new(&file, "train", "temp".to_string())?.to_vec_vec::<Tr, T>()?;
     let train = clam::Tabular::new(&train_vec, format!("{}_train", data_name));
 
-    let metric = clam::metric_from_name::<T, f32>(metric_name)?;
+    let metric = clam::metric_from_name::<T, f32>(metric_name, false)?;
 
-    let space = clam::TabularSpace::new(&train, metric, false);
+    let space = clam::TabularSpace::new(&train, metric.as_ref(), false);
 
     // let log_cardinality = (space.data().cardinality() as f64).log2() as usize;
     // let partition_criteria =
@@ -117,7 +117,7 @@ where
     // let mean_recall = clam::utils::helpers::mean(&recalls);
 
     let output_sizes: Vec<f64> = hits.first().unwrap().iter().map(|row| row.len() as f64).collect();
-    let mean_output_size = clam::utils::helpers::argmax(&output_sizes).1;
+    let mean_output_size = clam::utils::helpers::arg_max(&output_sizes).1;
 
     let time_per_query = search_time / (num_queries as f64);
     let queries_per_second = (num_queries as f64) / search_time;

@@ -16,14 +16,14 @@ fn partition(c: &mut Criterion) {
         let (features, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
 
         let dataset = clam::Tabular::new(&features, data_name.to_string());
-        let euclidean = metric_from_name::<f32, f32>("euclidean").unwrap();
+        let euclidean = metric_from_name::<f32, f32>("euclidean", false).unwrap();
         let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
         let partition_criteria = clam::criteria::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
 
         for use_cache in [false, true] {
             let bench_name = format!("{}-distance-cache-{}", data_name, use_cache);
             group.bench_with_input(&bench_name, &use_cache, |b, &use_cache| {
-                let space = clam::TabularSpace::new(&dataset, euclidean, use_cache);
+                let space = clam::TabularSpace::new(&dataset, euclidean.as_ref(), use_cache);
                 b.iter_with_large_drop(|| Cluster::new_root(&space).build().partition(&partition_criteria, true))
             });
         }

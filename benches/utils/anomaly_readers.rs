@@ -30,12 +30,11 @@ pub static ANOMALY_DATASETS: &[&str] = &[
 pub fn read_anomaly_data(name: &str, normalized: bool) -> Result<(Vec<Vec<f32>>, Vec<u8>), String> {
     let mut data_dir = std::env::current_dir().unwrap();
     data_dir.pop();
-    data_dir.pop();
     data_dir.push("data");
     data_dir.push("anomaly_data");
     data_dir.push("preprocessed");
 
-    assert!(data_dir.exists());
+    assert!(data_dir.exists(), "directory not found: {:?}", data_dir);
 
     let features = {
         let mut path = data_dir.clone();
