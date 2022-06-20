@@ -215,7 +215,7 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         self
     }
 
-    pub fn find_components(&'a self) -> Vec<Self> {
+    pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, T, U>> {
         let mut components = Vec::new();
 
         let mut unvisited = self.clusters.clone();
@@ -224,15 +224,8 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
             let (visited, _) = self.unchecked_traverse(start);
             unvisited = unvisited.into_iter().filter(|&c| !visited.contains(c)).collect();
 
-            let edges = self
-                .edges
-                .iter()
-                .filter(|&&e| visited.contains(e.left()) && visited.contains(e.right()))
-                .copied()
-                .collect();
-
             // TODO: Also grab adjacency map, distance matrix, and adjacency matrix
-            components.push(Graph::new(visited, edges));
+            components.push(visited);
         }
 
         components
