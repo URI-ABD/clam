@@ -30,7 +30,7 @@ def make_bullseye(path: pathlib.Path, n: int, force: bool = False):
     if not force and path.exists():
         return
 
-    data, labels = synthetic_datasets.bullseye(n=n, num_rings=5, noise=0.10)
+    data, labels = synthetic_datasets.bullseye(n=n, num_rings=3, noise=0.10)
     x = data[:, 0].astype(numpy.float32)
     y = data[:, 1].astype(numpy.float32)
     labels = numpy.asarray(labels, dtype=numpy.int8)
@@ -84,15 +84,15 @@ def main():
 
     print(f'The accuracy score was {score:.3f}')
 
-    # M1Pro     cached, non-cached
-    # build,    397,    388
-    # search,   93.9,   91.5
-    # accuracy, 0.995,  0.999
+    # Desktop   cached, non-cached
+    # build,    152,    154
+    # search,   105,    106
+    # accuracy, 0.999,  1.000
 
     return
 
 
 if __name__ == '__main__':
-    make_bullseye(BULLSEYE_TRAIN_PATH, n=2000)
-    make_bullseye(BULLSEYE_TEST_PATH, n=500)
+    make_bullseye(BULLSEYE_TRAIN_PATH, n=1000, force=True)
+    make_bullseye(BULLSEYE_TEST_PATH, n=200, force=True)
     main()
