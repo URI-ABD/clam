@@ -155,7 +155,7 @@ def train_meta_ml(
     for space, criteria in spaces_criteria:
         logger.info(f'Building root cluster for {space.name} ...')
 
-        root = core.Cluster.new_root(space).build().iterative_partition(criteria)
+        root = core.Cluster.new_root(space).build().iterative_partition(criteria).normalize_ratios('gaussian')
         roots.append(root)
 
     metric_names = list(set(s.distance_metric.name for s, _ in spaces_criteria))

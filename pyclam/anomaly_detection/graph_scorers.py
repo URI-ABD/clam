@@ -226,7 +226,7 @@ class ParentCardinality(GraphScorer):
             for i in range(1, len(ancestry)):
                 scores[c] += (self.weight(i) * ancestry[i - 1].cardinality / ancestry[i].cardinality)
 
-        return {c: -scores[c] for c in g.clusters}
+        return {c: scores[c] for c in g.clusters}
 
 
 class GraphNeighborhood(GraphScorer):

@@ -101,6 +101,7 @@ class Dataset(abc.ABC):
         if not (0 < n < self.cardinality):
             raise ValueError(f'`n` must be a positive integer smaller than the cardinality of the dataset ({self.cardinality}). Got {n} instead.')
 
+        # TODO: This should be from self.indices
         indices = list(range(n))
         random.shuffle(indices)
 

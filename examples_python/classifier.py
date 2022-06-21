@@ -41,6 +41,7 @@ def make_bullseye(path: pathlib.Path, n: int, force: bool = False):
     return
 
 
+# noinspection DuplicatedCode
 def main():
     bullseye_train = csv_space.CsvDataset(
         BULLSEYE_TRAIN_PATH,
@@ -84,10 +85,15 @@ def main():
 
     print(f'The accuracy score was {score:.3f}')
 
-    # Desktop   cached, non-cached
-    # build,    152,    154
-    # search,   105,    106
-    # accuracy, 0.999,  1.000
+    # Desktop   non-cached, cached
+    # build,    152,        154
+    # search,   105,        106
+    # accuracy, 0.999,      1.000
+
+    # M1Pro     non-cached, cached
+    # build,    95.7,       96.1
+    # search,   48.4,       48.7
+    # accuracy, 0.999,      0.999
 
     return
 

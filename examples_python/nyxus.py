@@ -82,6 +82,7 @@ def read_nyxus_images():
     )
 
 
+# noinspection DuplicatedCode
 def experiment():
     nyxus_full = read_nyxus_images()
 

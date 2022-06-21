@@ -88,7 +88,7 @@ class Classifier:
         """
         label_scores = list()
         for i in range(queries.cardinality):
-            logger.info(f'Predicting class for query {i} ...')
+            logger.info(f'Predicting class for query {i + 1}/{queries.cardinality} ...')
             label_scores.append(self.predict_single(queries[i]))
         [labels, scores] = list(zip(*label_scores))
         return labels, scores
