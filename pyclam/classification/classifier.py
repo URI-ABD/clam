@@ -55,14 +55,31 @@ class Classifier:
 
         return self
 
-    def predict_single(self, query) -> tuple[int, float]:
-        """ Predicts the label for a single query.
+    def rank_single(self, query) -> list[tuple[int, float]]:
+        """ Predicts the class rankings for a single query. Lower scores are
+        better.
         """
         label_scores = list()
         for label, bowl in self.__bowls.items():
             score = bowl.predict_single(query)
             label_scores.append((label, score))
 
+        return label_scores
+
+    def rank(self, queries: core.Dataset) -> list[list[tuple[int, float]]]:
+        """ Predicts the class rankings for a set of queries. Lower scores are
+        better.
+        """
+        label_scores = list()
+        for i in range(queries.cardinality):
+            logger.info(f'Predicting class for query {i} ...')
+            label_scores.append(self.rank_single(queries[i]))
+        return label_scores
+
+    def predict_single(self, query) -> tuple[int, float]:
+        """ Predicts the label for a single query.
+        """
+        label_scores = self.rank_single(query)
         best_label, best_score = min(label_scores, key=operator.itemgetter(1))
         return best_label, best_score
 
