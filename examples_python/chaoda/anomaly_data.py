@@ -44,6 +44,16 @@ HDF5_FILE_URLS = {
 
 DATASET_URLS = {**MAT_FILE_URLS, **HDF5_FILE_URLS}
 
+TRAINING_SET = [
+    'annthyroid',
+    'mnist',
+    'pendigits',
+    'satellite',
+    'shuttle',
+    'thyroid',
+]
+INFERENCE_SET = list(filter(lambda _n: _n not in TRAINING_SET, DATASET_URLS.keys()))
+
 MMapMode = typing.Literal['r', None]
 
 
