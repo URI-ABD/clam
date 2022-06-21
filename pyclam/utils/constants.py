@@ -17,13 +17,14 @@ RATIO_NAMES.extend([f'{name}_ema' for name in RATIO_NAMES])
 
 class Unset:
     """ This is a hack around type-hinting when a value cannot be set in the
-     __init__ method for a class.
+    __init__ method for a class.
 
     https://peps.python.org/pep-0661/
 
     Usage:
 
     ```python
+
     class MyClass:
         def __init__(self, *args, **kwargs):
             ...

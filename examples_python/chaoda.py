@@ -43,10 +43,10 @@ def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
     totally_random_dataset_names = [
         'annthyroid',
         'mnist',
-        # 'pendigits',
-        # 'satellite',
-        # 'shuttle',
-        # 'thyroid',
+        'pendigits',
+        'satellite',
+        'shuttle',
+        'thyroid',
     ]
 
     raw_datasets = [

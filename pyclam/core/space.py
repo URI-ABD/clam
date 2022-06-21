@@ -10,15 +10,15 @@ from . import metric
 
 class Space(abc.ABC):
     """ This class combines a `Dataset` and a `Metric` into a `MetricSpace`. We
-     build `Cluster`s and `Graph`s over a `MetricSpace`. This class provides
-     access to the underlying `Dataset` and `Metric`. Subclasses should
-     implement the methods to compute distances between indexed instances using
-     the underlying `Metric` and `Dataset`.
+    build `Cluster`s and `Graph`s over a `MetricSpace`. This class provides
+    access to the underlying `Dataset` and `Metric`. Subclasses should
+    implement the methods to compute distances between indexed instances using
+    the underlying `Metric` and `Dataset`.
 
-     For those cases where the distance function in `Metric` is expensive to
-     compute, this class provides a cache which stores the distance values
-     between pairs of instances by their indices. If you want to use the cache,
-     set the `use_cache` parameter to True when instantiating a metric space.
+    For those cases where the distance function in `Metric` is expensive to
+    compute, this class provides a cache which stores the distance values
+    between pairs of instances by their indices. If you want to use the cache,
+    set the `use_cache` parameter to True when instantiating a metric space.
     """
 
     def __init__(self, use_cache: bool):
@@ -42,9 +42,9 @@ class Space(abc.ABC):
     @abc.abstractmethod
     def are_instances_equal(self, left: int, right: int) -> bool:
         """ Given two indices, returns whether the corresponding instances are
-         equal. Usually, this will rely on using a `Metric`. Two equal instances
-         should have a distance of zero between them. The default implementation
-         relies on this.
+        equal. Usually, this will rely on using a `Metric`. Two equal instances
+        should have a distance of zero between them. The default implementation
+        relies on this.
         """
         return self.distance_one_to_one(left, right) == 0.
 
@@ -57,7 +57,7 @@ class Space(abc.ABC):
     @abc.abstractmethod
     def distance_one_to_one(self, left: int, right: int) -> float:
         """ See the `Dataset.one_to_one`. The default implementation uses the
-         cache.
+        cache.
         """
         if not self.is_in_cache(left, right):
             d = self.distance_metric.one_to_one(self.data[left], self.data[right])
@@ -67,7 +67,7 @@ class Space(abc.ABC):
     @abc.abstractmethod
     def distance_one_to_many(self, left: int, right: list[int]) -> numpy.ndarray:
         """ See the `Dataset.one_to_many`. The default implementation uses the
-         cache.
+        cache.
         """
         distances = [self.distance_one_to_one(left, r) for r in right]
         return numpy.asarray(distances, dtype=numpy.float32)
@@ -75,7 +75,7 @@ class Space(abc.ABC):
     @abc.abstractmethod
     def distance_many_to_many(self, left: list[int], right: list[int]) -> numpy.ndarray:
         """ See the `Dataset.many_to_many`. The default implementation uses the
-         cache.
+        cache.
         """
         distances = [self.distance_one_to_many(l, right) for l in left]
         return numpy.stack(distances)
@@ -83,7 +83,7 @@ class Space(abc.ABC):
     @abc.abstractmethod
     def distance_pairwise(self, indices: list[int]) -> numpy.ndarray:
         """ See the `Dataset.pairwise`. The default implementation uses the
-         cache.
+        cache.
         """
         return self.distance_many_to_many(indices, indices)
 
@@ -101,14 +101,14 @@ class Space(abc.ABC):
 
     def is_in_cache(self, i: int, j: int) -> bool:
         """ Checks whether the distance between the instances indexed by `i` and
-         `j` is in the cache.
+        `j` is in the cache.
         """
         return self.__cache_key(i, j) in self.__cache
 
     def get_from_cache(self, i: int, j: int) -> float:
         """ Returns the distance between the instances indexed by `i` and `j`
-         from the cache. Raises a KeyError if the distance value is not in the
-         cache.
+        from the cache. Raises a KeyError if the distance value is not in the
+        cache.
         """
         return self.__cache[self.__cache_key(i, j)]
 
@@ -120,14 +120,14 @@ class Space(abc.ABC):
 
     def remove_from_cache(self, i: int, j: int):
         """ Removes the distance between the instances indexed by `i` and `j`
-         from the cache.
+        from the cache.
         """
         self.__cache.pop(self.__cache_key(i, j), default=0)
         return
 
     def clear_cache(self) -> int:
         """ Empty the cache and return the number of items that were in the
-         cache.
+        cache.
         """
         num_items = len(self.__cache)
         self.__cache.clear()
@@ -169,7 +169,7 @@ class Space(abc.ABC):
 
 class TabularSpace(Space):
     """ This wraps a `Metric` and either a `TabularDataset` or a `TabularMMap`
-     into a `MetricSpace`. It does not use the cache.
+    into a `MetricSpace`. It does not use the cache.
     """
 
     def __init__(

@@ -17,7 +17,6 @@ IndexedHits = dict[int, float]
 
 class CAKES:
     """ CLAM Augmented K-nearest neighbors Entropy-scaling Search
-
     """
 
     def __init__(self, metric_space: space.Space):
@@ -62,7 +61,7 @@ class CAKES:
             additional_criteria: typing.Optional[list[cluster_criteria.ClusterCriterion]] = None,
     ) -> 'CAKES':
         """ Builds the search tree upto singleton leaves, or an optional maximum
-         depth.
+        depth.
 
         Args:
             max_depth: Optional. maximum depth of search tree.
@@ -88,7 +87,7 @@ class CAKES:
         Args:
             query_instance: instance around which to search.
             search_radius: distance from query from within which to return
-                all hits.
+             all hits.
 
         Returns:
             dictionary of index-of-neighbor -> distance-to-neighbor.
@@ -148,10 +147,10 @@ class CAKES:
         """ Performs tree-search for the query, starting at the root.
 
         Consider the sphere centered at `query_instance` with the given
-         `search_radius`. This method performs a breadth-first search over the
-         tree and, at each iteration, discards the clusters whose volumes do not
-         overlap with this sphere. Once the search terminates, the remaining
-         clusters are returned.
+        `search_radius`. This method performs a breadth-first search over the
+        tree and, at each iteration, discards the clusters whose volumes do not
+        overlap with this sphere. Once the search terminates, the remaining
+        clusters are returned.
 
         Args:
             query_instance: around which to search.
@@ -164,7 +163,7 @@ class CAKES:
 
     def tree_search_history(self, query_instance, search_radius: float) -> tuple[ClusterHits, list[cluster.Cluster]]:
         """ Same as `tree_search`, except that it also returns the history of
-         candidate clusters at each depth.
+        candidate clusters at each depth.
         """
 
         history: ClusterHits = dict()
@@ -200,7 +199,7 @@ class CAKES:
             query_instance: around which to look.
             search_radius: within which to look.
             candidate_clusters: candidate clusters which need to be exhaustively
-                searched.
+             searched.
 
         Returns:
             dictionary of index-of-hit-instance -> distance-to-hit.

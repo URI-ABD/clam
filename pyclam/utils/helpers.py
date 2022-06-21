@@ -26,9 +26,15 @@ def next_ema(ratio: float, ema: float) -> float:
 def normalize(values: numpy.ndarray, mode: NormalizationMode):
     """ Normalizes each column in values into a [0, 1] range.
 
-    :param values: A 1-d or 2-d array of values to normalize.
-    :param mode: Normalization mode to use. Must be one of 'linear', 'gaussian', or 'sigmoid'.
-    :return: array of normalized values.
+    Args:
+        values: A 1-d or 2-d array of values to normalize.
+        mode: Normalization mode to use. Must be one of:
+         - 'linear',
+         - 'gaussian', or
+         - 'sigmoid'.
+
+    Returns:
+        array of normalized values.
     """
     squeeze = False
     if len(values.shape) == 1:

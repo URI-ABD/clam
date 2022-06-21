@@ -8,11 +8,11 @@ logger = helpers.make_logger(__name__)
 
 class ClusterCriterion(abc.ABC):
     """ A rule to decide when a cluster can be partitioned. Subclasses must
-     implement the `__call__` method to take a single `Cluster` and return a
-     `bool` to indicate whether that cluster can be partitioned.
+    implement the `__call__` method to take a single `Cluster` and return a
+    `bool` to indicate whether that cluster can be partitioned.
 
     If multiple criteria are used during `partition`, they must all return
-     `True` to allow the cluster to be partitioned.
+    `True` to allow the cluster to be partitioned.
     """
 
     @abc.abstractmethod
@@ -33,7 +33,7 @@ class MaxDepth(ClusterCriterion):
 
 class MinPoints(ClusterCriterion):
     """ Clusters with `cardinality` greater than `min_points` may be
-     partitioned.
+    partitioned.
     """
 
     def __init__(self, min_points):

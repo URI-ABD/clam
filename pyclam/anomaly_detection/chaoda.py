@@ -169,9 +169,8 @@ class CHAODA:
 
 
 class SingleSpaceChaoda:
-    """ This class is a single-metric-space version of CHAODA. This is
-     intended to be used from the CHAODA class. This class has almost no input
-     validation.
+    """ This class is a single-metric-space version of CHAODA. This is intended
+    to be used from the CHAODA class. This class has almost no input validation.
 
     This class does not vote among scores to form an ensemble.
     """

@@ -93,42 +93,42 @@ def train_meta_ml(
         only_train_fast_scorers: bool = False,
 ) -> pathlib.Path:
     """ Trains meta-ml models for CHAODA. See examples/chaoda_training.py for
-     usage.
+    usage.
 
     Training for CHAODA takes the following steps:
 
-        1. We build a cluster tree for each given metric space using the respective
-        partition criteria. These trees are only built once. They are used to
-        select graphs during training.
+    1. We build a cluster tree for each given metric space using the respective
+    partition criteria. These trees are only built once. They are used to select
+    graphs during training.
 
-        2. We start the first training epoch. In this epoch, since we do not have
-        pretrained meta-ml models for selecting graphs, we will select every
-        fifth layer from the trees to use as graphs for training the models.
-        For each subsequent epoch, we will use the meta-ml models from the
-        previous epoch to select new graphs.
+    2. We start the first training epoch. In this epoch, since we do not have
+    pretrained meta-ml models for selecting graphs, we will select every fifth
+    layer from the trees to use as graphs for training the models. For each
+    subsequent epoch, we will use the meta-ml models from the previous epoch to
+    select new graphs.
 
-        3. During an epoch, from each tree, we use each graph selection
-        criterion, i.e. fixed-depth layers for the first epoch and meta-ml
-        models for other epochs, to select a graph.
+    3. During an epoch, from each tree, we use each graph selection criterion,
+    i.e. fixed-depth layers for the first epoch and meta-ml models for other
+    epochs, to select a graph.
 
-        4. For each individual algorithm for graph scoring, we score the
-        clusters in the graph. For each cluster, we compute the difference, i.e.
-        the loss between the mean ground-truth scores of the points in that
-        cluster and the predicted anomaly score from the graph. The training
-        data for the models are six ratios for each cluster as the feature
-        vector and (1 - loss) as the target.
+    4. For each individual algorithm for graph scoring, we score the clusters in
+    the graph. For each cluster, we compute the difference, i.e. the loss
+    between the mean ground-truth scores of the points in that cluster and the
+    predicted anomaly score from the graph. The training data for the models are
+    six ratios for each cluster as the feature vector and (1 - loss) as the
+    target.
 
-        5. For each individual algorithm, we merge the training data from the
-        current epoch with those data from previous epochs. We use these data to
-        train the meta-ml models. Using data from previous epochs in this way
-        ensures that models learn what cluster ratios make for good performance
-        and what ratios make for poor performance on the anomaly detection task.
+    5. For each individual algorithm, we merge the training data from the
+    current epoch with those data from previous epochs. We use these data to
+    train the meta-ml models. Using data from previous epochs in this way
+    ensures that models learn what cluster ratios make for good performance and
+    what ratios make for poor performance on the anomaly detection task.
 
-        6. After finishing training, and during training at the user specified
-        frequency, we extract the decision functions from the trained meta-ml
-        models and write them out as python functions. These exported functions
-        can be used in `graph_criteria.MetaMLSelect` to select graphs for
-        inference on new datasets.
+    6. After finishing training, and during training at the user specified
+    frequency, we extract the decision functions from the trained meta-ml models
+    and write them out as python functions. These exported functions can be used
+    in `graph_criteria.MetaMLSelect` to select graphs for inference on new
+    datasets.
 
     Args:
         spaces_criteria: list of 2-tuples whose items are:
@@ -146,6 +146,9 @@ def train_meta_ml(
         only_train_fast_scorers: Whether to use the `should_be_fast` method on
             `GraphScorer`s to avoid generating training data from slow
             algorithms.
+
+    Returns:
+        Path to file where the final models were saved.
     """
 
     roots = list()
@@ -197,14 +200,18 @@ def train_meta_ml(
             else:
                 graphs = {
                      scorer: [
-                         core.Graph(graph_criteria.MetaMLSelect(lambda ratios: model.predict(ratios[None, :]), name=model.name)(root)).build()
+                         core.Graph(graph_criteria.MetaMLSelect(
+                             lambda ratios: model.predict(ratios[None, :]),
+                             name=model.name,
+                         )(root)).build()
                          for model in models
                      ]
                      for scorer, models in meta_models[metric_name].items()
                 }
 
             for scorer in scorers:
-                logger.info(f'Epoch {epoch}/{num_epochs}: Using root {root_name} and scorer {scorer.name} ...')
+                logger.info(f'Epoch {epoch}/{num_epochs}: Using root '
+                            f'{root_name} and scorer {scorer.name} ...')
 
                 for graph in graphs[scorer]:
 
@@ -218,12 +225,20 @@ def train_meta_ml(
                         full_train_x[metric_name][scorer] = train_x
                         full_train_y[metric_name][scorer] = train_y
                     else:
-                        full_train_x[metric_name][scorer] = numpy.concatenate([full_train_x[metric_name][scorer], train_x], axis=0)
-                        full_train_y[metric_name][scorer] = numpy.concatenate([full_train_y[metric_name][scorer], train_y], axis=0)
+                        full_train_x[metric_name][scorer] = numpy.concatenate(
+                            [full_train_x[metric_name][scorer], train_x],
+                            axis=0,
+                        )
+                        full_train_y[metric_name][scorer] = numpy.concatenate(
+                            [full_train_y[metric_name][scorer], train_y],
+                            axis=0,
+                        )
 
                 new_models = list()
                 for model in meta_models[metric_name][scorer]:
-                    logger.info(f'Epoch {epoch}/{num_epochs}: Fitting model {model.name} with root {root_name} and scorer {scorer.name} ...')
+                    logger.info(f'Epoch {epoch}/{num_epochs}: Fitting model '
+                                f'{model.name}, scorer {scorer.name} with root '
+                                f'{root_name} and scorer {scorer.name} ...')
                     new_models.append(model.fit(
                         full_train_x[metric_name][scorer],
                         full_train_y[metric_name][scorer],

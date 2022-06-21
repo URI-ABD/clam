@@ -8,15 +8,15 @@ import numpy
 
 class Dataset(abc.ABC):
     """ A `Dataset` is a collection of `instance`s. This abstract class provides
-     utilities for accessing instances from the data. A `Dataset` should be
-     combined with a `Metric` to produce a `MetricSpace`.
+    utilities for accessing instances from the data. A `Dataset` should be
+    combined with a `Metric` to produce a `MetricSpace`.
     """
 
     @property
     @abc.abstractmethod
     def name(self) -> str:
         """ Ideally, a user would supply a unique name for each `Dataset` they
-         instantiate.
+    instantiate.
         """
         pass
 
@@ -65,13 +65,13 @@ class Dataset(abc.ABC):
     @abc.abstractmethod
     def subset(self, indices: list[int], subset_name: str) -> 'Dataset':
         """ Returns a subset of the data using only the indexed instances. This
-         subset should be of the same class as object from which it is created.
+        subset should be of the same class as object from which it is created.
         """
         pass
 
     def max_batch_size(self, available_memory: int) -> int:
         """ Returns a conservative estimate of the number of instances that will
-         fill `available_memory` bytes.
+        fill `available_memory` bytes.
 
         Args:
             available_memory: in bytes.
@@ -83,7 +83,7 @@ class Dataset(abc.ABC):
 
     def complement_indices(self, indices: list[int]) -> list[int]:
         """ Returns the list of indices in the dataset that are not in the given
-         `indices`.
+        `indices`.
         """
         return list(set(range(self.cardinality)) - set(indices))
 
@@ -109,13 +109,13 @@ class Dataset(abc.ABC):
 
 class TabularDataset(Dataset):
     """ This wraps a 2d numpy array whose rows are instances and columns are
-     features.
+    features.
 
     To check if two `TabularDataset`s are equal, this class only checks that
-     they have the same `name`.
+    they have the same `name`.
 
     To check if two instances are equal, this class simply checks for
-     element-wise equality among the instances.
+    element-wise equality among the instances.
     """
 
     def __init__(self, data: numpy.ndarray, name: str):
@@ -162,7 +162,7 @@ class TabularDataset(Dataset):
 
 class TabularMMap(TabularDataset):
     """ This is identical to a `TabularDataset` but the underlying data is a
-     numpy array loaded with `mmap_mode = 'r'`.
+    numpy array loaded with `mmap_mode = 'r'`.
     """
 
     def __init__(

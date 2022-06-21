@@ -33,14 +33,14 @@ SCIPY_METRICS = [
 
 class Metric(abc.ABC):
     """ This represents a general distance metric for computing distances
-     between data points. Mathematically, this is a distance function, `f`,
-     which obeys the following properties:
-         - scalar-valued: `f(x, y)` is a Real number for all `x` and `y`
-         - non-negativity: `f(x, y)` >= 0 for all `x` and `y`
-         - identity: `f(x, y)` = 0 iff `x` = `y`
-         - symmetry: `f(x, y)` = `f(y, x)`
-         - triangle inequality (optional): `f(x, y)` <= `f(x, z)` + `f(z, y)`
-           for all `x`, `y` and `z`.
+    between data points. Mathematically, this is a distance function, `f`,
+    which obeys the following properties:
+        - scalar-valued: `f(x, y)` is a Real number for all `x` and `y`
+        - non-negativity: `f(x, y)` >= 0 for all `x` and `y`
+        - identity: `f(x, y)` = 0 iff `x` = `y`
+        - symmetry: `f(x, y)` = `f(y, x)`
+        - triangle inequality (optional): `f(x, y)` <= `f(x, z)` + `f(z, y)`
+          for all `x`, `y` and `z`.
     """
     def __init__(self, name: str):
         self.name = name
@@ -57,21 +57,21 @@ class Metric(abc.ABC):
     @abc.abstractmethod
     def one_to_one(self, left, right) -> float:
         """ `left` and `right` are each a single data instance. Compute the
-         distance between the two.
+        distance between the two.
         """
         pass
 
     @abc.abstractmethod
     def one_to_many(self, left, right) -> numpy.ndarray:
         """ `left` is a single instance and `right` is multiple instances.
-         Compute a 1d array of distances from `left` to instances in `right`.
+        Compute a 1d array of distances from `left` to instances in `right`.
         """
         pass
 
     @abc.abstractmethod
     def many_to_many(self, left, right) -> numpy.ndarray:
         """ `left` and `right` are both multiple instances. Compute a 2d array
-         of distances from each instance in `left` to each instance in `right`.
+        of distances from each instance in `left` to each instance in `right`.
         """
         pass
 
@@ -84,7 +84,7 @@ class Metric(abc.ABC):
 
 class ScipyMetric(Metric):
     """ See scipy.spatial.distance.cdist
-     https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html
     """
     def __init__(self, name: str):
         if name not in SCIPY_METRICS:

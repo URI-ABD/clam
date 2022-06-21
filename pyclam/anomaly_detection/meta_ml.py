@@ -41,8 +41,7 @@ class MetaMLModel(abc.ABC):
         The scoring function should have the following signature:
 
         ```
-        def helpful_function_name(ratios: numpy.ndarray) -> float:
-            ...
+        helpful_function_name(ratios: numpy.ndarray) -> float
         ```
 
         where `ratios` is a 1d array of floats with 6 elements. These ratios are
@@ -121,7 +120,7 @@ class MetaDT(MetaMLModel):
 class MetaLR(MetaMLModel):
 
     def __init__(self):
-        super().__init__(linear_model.LinearRegression)
+        super().__init__(linear_model.LinearRegression, fit_intercept=False)
 
     @property
     def name(self) -> str:

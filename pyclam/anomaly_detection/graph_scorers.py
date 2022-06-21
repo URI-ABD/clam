@@ -71,15 +71,15 @@ class GraphScorer(abc.ABC):
     @abc.abstractmethod
     def score_graph(self, g: core.Graph) -> ClusterScores:
         """ The method with which to assign anomaly scores to `Clusters` in the
-         `Graph`. This should return a dictionary whose keys are `Clusters` in
-         the `Graph` and whose values are the pre-normalization anomaly scores.
+        `Graph`. This should return a dictionary whose keys are `Clusters` in
+        the `Graph` and whose values are the pre-normalization anomaly scores.
         """
         pass
 
     @abc.abstractmethod
     def should_be_fast(self, g: core.Graph) -> bool:
         """ Whether this algorithm is expected to run in a reasonably short
-         time on the given `Graph`. This method should make a quick estimate.
+        time on the given `Graph`. This method should make a quick estimate.
         """
         pass
 
@@ -127,7 +127,7 @@ class ClusterCardinality(GraphScorer):
         return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
-        return {c: c.cardinality for c in g.clusters}
+        return {c: -c.cardinality for c in g.clusters}
 
 
 class ComponentCardinality(GraphScorer):
@@ -156,7 +156,7 @@ class ComponentCardinality(GraphScorer):
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
         return {
-            c: component.vertex_cardinality
+            c: -component.vertex_cardinality
             for component in g.components
             for c in component.clusters
         }
@@ -187,7 +187,7 @@ class VertexDegree(GraphScorer):
         return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
-        return {c: g.vertex_degree(c) for c in g.clusters}
+        return {c: -g.vertex_degree(c) for c in g.clusters}
 
 
 class ParentCardinality(GraphScorer):
@@ -257,7 +257,7 @@ class GraphNeighborhood(GraphScorer):
         return 'gaussian'
 
     def should_be_fast(self, g: core.Graph) -> bool:
-        return g.vertex_cardinality < 512
+        return g.vertex_cardinality < 256
 
     def num_steps(self, g: core.Graph, c: core.Cluster) -> int:
         return int(g.eccentricity(c) * self.eccentricity_fraction) + 1

@@ -17,17 +17,17 @@ SUB_SAMPLE_LIMIT = 100
 
 class Cluster:
     """ A `Cluster` represents a collection of `"nearby"` instances in a metric
-     space. A `Cluster` is a node in a binary tree we call the `Cluster Tree`.
+    space. A `Cluster` is a node in a binary tree we call the `Cluster Tree`.
 
     Ideally, a user will instantiate a `Cluster` using the `new_root` method and
-     chain calls to the `build` and `partition` methods to create the full tree.
-     We also provide an `iterative_partition` method to avoid the inefficiencies
-     of recursion in Python.
+    chain calls to the `build` and `partition` methods to create the full tree.
+    We also provide an `iterative_partition` method to avoid the inefficiencies
+    of recursion in Python.
 
     The name of a `Cluster` is uniquely determined by its location in the tree.
-     Names are generated as they would be for a huffman tree. The root cluster
-     has the name `"1"`. A left-child appends a `"0"` and a right-child appends
-     a `"1"` to the name of the parent.
+    Names are generated as they would be for a huffman tree. The root cluster
+    has the name `"1"`. A left-child appends a `"0"` and a right-child appends
+    a `"1"` to the name of the parent.
     """
 
     __slots__ = [
@@ -50,7 +50,7 @@ class Cluster:
     @staticmethod
     def new_root(metric_space: space.Space) -> 'Cluster':
         """ Creates a new root Cluster on the `metric_space`. Most users should
-         never need to interact with a non-root cluster.
+        never need to interact with a non-root cluster.
         """
         root = Cluster(
             metric_space,
@@ -145,7 +145,7 @@ class Cluster:
     @property
     def arg_radius(self) -> int:
         """ Index of the instance in the cluster that is farthest from the
-         center.
+        center.
         """
         if self.__arg_radius is constants.UNSET:
             raise ValueError(f'Please call `build` on the cluster before using this property.')
@@ -162,8 +162,8 @@ class Cluster:
     @property
     def is_singleton(self) -> bool:
         """ Returns true if the cluster contains only one instance or if all
-         instances in the cluster are equal to each other. This works because of
-         the `identity` property of a `Metric`.
+        instances in the cluster are equal to each other. This works because of
+        the `identity` property of a `Metric`.
         """
         if self.__radius is constants.UNSET:
             raise ValueError(f'Please call `build` on the cluster before using this property.')
@@ -172,7 +172,7 @@ class Cluster:
     @property
     def lfd(self) -> float:
         """ A discrete approximation of fractal dimension in the vicinity of
-         this cluster.
+        this cluster.
         """
         if self.__lfd is constants.UNSET:
             raise ValueError(f'Please call `build` on the cluster before using this property.')
@@ -185,8 +185,8 @@ class Cluster:
     @property
     def ratios(self) -> utils.Ratios:
         """ The six cluster ratios used for mata machine learning in CHAODA.
-         To build a correct set of ratios, the user need to call the
-         `normalize_ratios` method on the root of a tree.
+        To build a correct set of ratios, the user need to call the
+        `normalize_ratios` method on the root of a tree.
         """
         if self.__ratios is constants.UNSET:
             raise ValueError(f'Please call `build` on the cluster before using this property.')
@@ -221,8 +221,8 @@ class Cluster:
     @property
     def subtree(self) -> list[list['Cluster']]:
         """ Returns a list of lists of all clusters in the subtree of this
-         cluster. Each inner list contains clusters at the same depth. The
-         subtree includes the cluster itself.
+        cluster. Each inner list contains clusters at the same depth. The
+        subtree includes the cluster itself.
         """
         if self.__subtree is constants.UNSET:
             if self.is_leaf:
@@ -252,7 +252,7 @@ class Cluster:
     @property
     def ancestry(self) -> list['Cluster']:
         """ Returns the list of clusters in the branch of the tree starting at
-         the root and ending at the parent of this cluster.
+        the root and ending at the parent of this cluster.
         """
         if self.__ancestry is constants.UNSET:
             if self.__parent is None:
@@ -264,9 +264,9 @@ class Cluster:
     @property
     def candidate_neighbors(self) -> dict['Cluster', float]:
         """ Find clusters in the tree that could be neighbors, or whose
-         descendents could be neighbors, of this cluster or of its descendents
-         if any subset of them were selected to build a `Graph`. This property
-         helps optimize the process of finding edges when building `Graph`s.
+        descendents could be neighbors, of this cluster or of its descendents
+        if any subset of them were selected to build a `Graph`. This property
+        helps optimize the process of finding edges when building `Graph`s.
         """
 
         if self.__candidate_neighbors is constants.UNSET:
@@ -299,14 +299,14 @@ class Cluster:
 
     def build(self) -> 'Cluster':
         """ Calculates and sets important properties of the Cluster. These
-         include:
-             - arg_samples
-             - arg_center
-             - center
-             - arg_radius
-             - radius
-             - lfd (local fractal dimension)
-             - ratios (before normalization)
+        include:
+            - arg_samples
+            - arg_center
+            - center
+            - arg_radius
+            - radius
+            - lfd (local fractal dimension)
+            - ratios (before normalization)
 
         Returns:
             The modified `Cluster` with after calculating essential properties.
@@ -365,13 +365,13 @@ class Cluster:
 
     def distance_to_indexed_instance(self, index: int) -> float:
         """ Compute the distance between the center of the Cluster to the given
-         indexed instance in the metric space.
+        indexed instance in the metric space.
         """
         return self.__metric_space.distance_one_to_one(self.__arg_center, index)
 
     def distance_to_instance(self, instance) -> float:
         """ Compute the distance between the center of the Cluster to the given
-         instance.
+        instance.
         """
         return self.__metric_space.distance_metric.one_to_one(self.center, instance)
 
@@ -386,8 +386,8 @@ class Cluster:
 
     def iterative_partition(self, criteria: list[cluster_criteria.ClusterCriterion]) -> 'Cluster':
         """ Iteratively partitions the cluster to leaves. This iteratively
-         builds the tree in a breadth-first manner, helping avoid the
-         inefficiencies of recursion in Python.
+        builds the tree in a breadth-first manner, helping avoid the
+        inefficiencies of recursion in Python.
         """
 
         if not self.__can_be_partitioned(criteria):
@@ -411,16 +411,16 @@ class Cluster:
 
     def partition(self, criteria: list[cluster_criteria.ClusterCriterion], recursive: bool = True) -> 'Cluster':
         """ Tries to partition this cluster into two child clusters. If the
-         cluster gets partitioned, then the `children` property will be assigned
-         as a tuple of the left and right child clusters.
+        cluster gets partitioned, then the `children` property will be assigned
+        as a tuple of the left and right child clusters.
 
         `partition` starts by selecting two highly separated instances from the
-         cluster. These are the left and right poles. The remaining instances
-         are then split into two sets. Instances closer to the left pole are in
-         the left split and instances closer to the right pole are in the right
-         split. The left and right sets, along with their respective poles, are
-         each used to instantiate the child clusters. Each child cluster is then
-         built and, optionally, partitioned with the same `criteria`.
+        cluster. These are the left and right poles. The remaining instances
+        are then split into two sets. Instances closer to the left pole are in
+        the left split and instances closer to the right pole are in the right
+        split. The left and right sets, along with their respective poles, are
+        each used to instantiate the child clusters. Each child cluster is then
+        built and, optionally, partitioned with the same `criteria`.
 
         Args:
             criteria: A list of rules for partitioning a cluster. Each criterion
@@ -492,14 +492,14 @@ class Cluster:
 
     def normalize_ratios(self, mode: helpers.NormalizationMode = 'gaussian') -> 'Cluster':
         """ Normalize the cluster ratios in the `subtree` of this cluster. This
-         method is intended to only be called once and only on the root. The
-         user is responsible for this contract.
+        method is intended to only be called once and only on the root. The
+        user is responsible for this contract.
 
         Args:
             mode: Normalization method to use. Must be one of:
-                  - 'linear',
-                  - 'gaussian', or
-                  - 'sigmoid'.
+                - 'linear',
+                - 'gaussian', or
+                - 'sigmoid'.
 
         Returns:
             The modified cluster after setting the normalized ratios.
@@ -518,17 +518,16 @@ class Cluster:
 
     def add_instance(self, index: int) -> list['Cluster']:
         """ Add an instance to the tree after having added it to the metric
-         space. This method may only be called on a root cluster. The primary
-         use of this method is when the full dataset does not fit in memory. In
-         such a case, the user can create a tree on a subset of the full data.
-         Instances in the complement of that subset can then be added to the
-         tree.
+        space. This method may only be called on a root cluster. The primary use
+        of this method is when the full dataset does not fit in memory. In such
+        a case, the user can create a tree on a subset of the full data.
+        Instances in the complement of the subset can then be added to the tree.
 
         The instance is recursively added to the child whose center is closer.
 
         This method will almost certainly invalidate cluster properties such as
-         `center` and `radius`. It is upon the user to rebuild clusters after
-         adding instances.
+        `center` and `radius`. It is upon the user to rebuild clusters after
+        adding instances.
 
         Args:
             index: of the instance in the metric space.
@@ -546,7 +545,7 @@ class Cluster:
 
     def __add_instance(self, index: int) -> list['Cluster']:
         """ Recursively add the indexed instance to the tree. Appends `index` to
-         `__indices` after addition.
+        `__indices` after addition.
         """
 
         result = [self]

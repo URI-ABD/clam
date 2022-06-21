@@ -12,11 +12,11 @@ logger = helpers.make_logger(__name__)
 
 class GraphCriterion(abc.ABC):
     """ A `GraphCriterion` can be called on the `root` cluster of a tree to
-     select a set of clusters from the tree. These clusters can be used to
-     create a `Graph`. Subclasses much implement the `select` method. The
-     abstract `GraphCriterion` will verify that the set of selected clusters
-     obey the graph invariant. See the documentation for `Graph` for details on
-     the graph invariant.
+    select a set of clusters from the tree. These clusters can be used to
+    create a `Graph`. Subclasses much implement the `select` method. The
+    abstract `GraphCriterion` will verify that the set of selected clusters
+    obey the graph invariant. See the documentation for `Graph` for details on
+    the graph invariant.
     """
 
     @property
@@ -37,9 +37,11 @@ class GraphCriterion(abc.ABC):
         indices = {i for c in selected for i in c.indices}
 
         if len(indices) != root.cardinality:
-            raise ValueError(f'There was a mis-match in the number of instances that were selected. '
-                             f'The selected clusters have {len(indices)} instance but the root has '
-                             f'{root.cardinality}.')
+            raise ValueError(
+                f'There was a mis-match in the number of instances that were '
+                f'selected. The selected clusters have {len(indices)} instance '
+                f'but the root has {root.cardinality}.'
+            )
 
         return
 
@@ -75,7 +77,7 @@ class Layer(GraphCriterion):
 
 class PropertyThreshold(GraphCriterion):
     """ Selects clusters when the given property crosses the given
-     percentile.
+    percentile.
     """
 
     def __init__(
@@ -86,18 +88,18 @@ class PropertyThreshold(GraphCriterion):
     ):
         """
         During a BFT of the tree, this keeps track of the given cluster
-         property. A cluster is selected if any of the following is true:
+        property. A cluster is selected if any of the following is true:
             - it is a leaf, or
             - it qualifies by `mode`, or
             - both children qualify by `mode`.
 
         If `mode` is 'above', a cluster qualifies if the property goes above the
-         `percentile`. If `mode` is 'below', a cluster qualifies if the property
-         goes below the `percentile`.
+        `percentile`. If `mode` is 'below', a cluster qualifies if the property
+        goes below the `percentile`.
 
         Args:
             value: The cluster property to keep track of. Must be one of
-                'cardinality', 'radius', or 'lfd'.
+             'cardinality', 'radius', or 'lfd'.
             percentile: the percentile, in the (0, 100) range, to be crossed.
             mode: select a cluster when `value` is 'above' or 'below' the
              `percentile`.
@@ -142,17 +144,17 @@ class PropertyThreshold(GraphCriterion):
 
 class MetaMLSelect(GraphCriterion):
     """ Uses the scoring function from a trained meta-ml model to select
-     clusters.
+    clusters.
     """
 
     def __init__(self, scorer: typing.Callable[[numpy.ndarray], float], name: typing.Optional[str] = None, min_depth: int = 4):
         """
         Args:
             scorer: A function that takes the ratios of a cluster and returns
-                its predicted score. Higher scoring clusters are considered
-                better than lower scoring clusters.
+             its predicted score. Higher scoring clusters are considered
+             better than lower scoring clusters.
             min_depth: The minimum depth in the tree for a cluster to be
-                selected.
+             selected.
         """
         if min_depth < 1:
             raise ValueError(f'min-depth must be a positive integer.')

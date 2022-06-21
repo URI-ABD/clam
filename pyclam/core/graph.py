@@ -88,20 +88,20 @@ class Edge:
 
 class Graph:
     """ A `Graph` is a collection of `Cluster`s with `Edge`s between clusters
-     with overlapping volumes. We can select clusters from a tree to build a
-     graph.
+    with overlapping volumes. We can select clusters from a tree to build a
+    graph.
 
     All clusters in a graph must come from the same tree and the same
-     `MetricSpace`. If using any of the `SelectionCriteria` from CLAM, this
-     property will hold. Otherwise, it is upon the user to ensure.
+    `MetricSpace`. If using any of the `SelectionCriteria` from CLAM, this
+    property will hold. Otherwise, it is upon the user to ensure.
 
     In CLAM, a `Graph` has a useful invariant:
         - Every instance in the dataset is in exactly one cluster in the graph.
         - No cluster is an ancestor/descendent of another cluster in the graph.
 
     If clusters were selected using any of the `SelectionCriteria`, this
-     invariant will hold. Otherwise, the user must verify this manually.
-     This invariant does not hold for sub-graphs such as connected components.
+    invariant will hold. Otherwise, the user must verify this manually.
+    This invariant does not hold for sub-graphs such as connected components.
     """
 
     __slots__ = [
@@ -120,8 +120,8 @@ class Graph:
 
     def __init__(self, clusters: set[cluster.Cluster], edges: typing.Optional[set[Edge]] = None):
         """ Creates a graph from the given clusters. The edges need not be
-         provided because we have efficient internal algorithms for finding all
-         edges.
+        provided because we have efficient internal algorithms for finding all
+        edges.
 
         Args:
             clusters: The set of clusters with which to build the graph.
@@ -219,8 +219,8 @@ class Graph:
     @property
     def components(self) -> list['Graph']:
         """ List of connected components, as sub-`Graph`s of this graph. If
-         there is more than one component, no component will uphold the graph
-         invariant.
+        there is more than one component, no component will uphold the graph
+        invariant.
         """
 
         if self.__components is constants.UNSET:
@@ -266,7 +266,7 @@ class Graph:
 
     def build(self) -> 'Graph':
         """ Builds the `edges` and `adjacency_dict` of the graph, sets the
-         properties and returns the modified graph.
+        properties and returns the modified graph.
         """
         logger.info(f'Building graph with {self.vertex_cardinality} clusters in a depth range of {self.depth_range} ...')
 
@@ -321,7 +321,7 @@ class Graph:
 
     def __traverse(self, start: cluster.Cluster) -> tuple[set[cluster.Cluster], list[int]]:
         """ Performs a traversal, in arbitrary order, starting at the given
-         cluster. The traversal continues until no new clusters can be visited.
+        cluster. The traversal continues until no new clusters can be visited.
 
         Args:
             start: where the traversal will start.
