@@ -27,13 +27,13 @@ def run_one_dataset(
         for metric in metrics
     ]
 
-    min_cardinality: int
-    if dataset.cardinality < 10_000:
-        min_cardinality = 1
-    elif dataset.cardinality < 100_000:
-        min_cardinality = 1 + int(math.log2(dataset.cardinality))
-    else:
-        min_cardinality = 1 + int(math.sqrt(dataset.cardinality))
+    min_cardinality: int = 1 + int(math.log2(dataset.cardinality))
+    # if dataset.cardinality < 10_000:
+    #     min_cardinality = 1
+    # elif dataset.cardinality < 100_000:
+    #     min_cardinality = 1 + int(math.log2(dataset.cardinality))
+    # else:
+    #     min_cardinality = 1 + int(math.sqrt(dataset.cardinality))
 
     criteria = [pyclam.cluster_criteria.MinPoints(min_cardinality)]
 

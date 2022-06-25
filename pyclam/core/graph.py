@@ -274,9 +274,8 @@ class Graph:
             self.__edges: set[Edge] = {
                 Edge(c, n, d) for c in self.__clusters
                 for n, d in c.candidate_neighbors.items()
-                if (n in self.__clusters) and (d <= (c.radius + n.radius))
+                if (n != c) and (n in self.__clusters) and (d <= (c.radius + n.radius))
             }
-            self.__edges = {e for e in self.__edges if not e.to_self}
 
         self.__adjacency_dict: AdjacencyDict = {c: set() for c in self.__clusters}
         for e in self.__edges:
