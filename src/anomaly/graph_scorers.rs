@@ -217,3 +217,48 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for ParentCardinality<'a, T
             .collect()
     }
 }
+
+pub struct GraphNeighborhood {
+    eccentricity_fraction: f64,
+}
+
+impl GraphNeighborhood {
+    fn num_steps<'a, T: Number, U: Number>(&self, graph: &'a Graph<'a, T, U>, c: &'a Cluster<'a, T, U>) -> usize {
+        let steps = graph.unchecked_eccentricity(c) as f64 * self.eccentricity_fraction;
+        1 + steps as usize
+    }
+}
+
+impl Hash for GraphNeighborhood {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        "graph_neighborhood".hash(state)
+    }
+}
+
+impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for GraphNeighborhood {
+    fn name(&self) -> &str {
+        "graph_neighborhood"
+    }
+
+    fn short_name(&self) -> &str {
+        "gn"
+    }
+
+    fn normalize_on_clusters(&self) -> bool {
+        true
+    }
+
+    fn score_graph(&self, graph: &'a Graph<T, U>) -> ClusterScores<'a, T, U> {
+        graph
+            .ordered_clusters()
+            .iter()
+            .map(|&c| {
+                let steps = self.num_steps(graph, c);
+                let score = (0..steps + 1)
+                    .zip(graph.unchecked_frontier_sizes(c).iter())
+                    .fold(0, |score, (_, &size)| score + size);
+                (c, -(score as f64))
+            })
+            .collect()
+    }
+}
