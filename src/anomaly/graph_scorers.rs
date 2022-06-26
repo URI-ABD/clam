@@ -223,6 +223,10 @@ pub struct GraphNeighborhood {
 }
 
 impl GraphNeighborhood {
+    pub fn new(eccentricity_fraction: f64) -> Self {
+        Self { eccentricity_fraction }
+    }
+
     fn num_steps<'a, T: Number, U: Number>(&self, graph: &'a Graph<'a, T, U>, c: &'a Cluster<'a, T, U>) -> usize {
         let steps = graph.unchecked_eccentricity(c) as f64 * self.eccentricity_fraction;
         1 + steps as usize
@@ -260,5 +264,39 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for GraphNeighborhood {
                 (c, -(score as f64))
             })
             .collect()
+    }
+}
+
+pub struct StationaryProbabilities {
+    num_steps: usize,
+}
+
+impl Hash for StationaryProbabilities {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        "stationary_probabilities".hash(state)
+    }
+}
+
+impl StationaryProbabilities {
+    pub fn new(num_steps: usize) -> Self {
+        Self { num_steps }
+    }
+}
+
+impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for StationaryProbabilities {
+    fn name(&self) -> &str {
+        "stationary_probabilities"
+    }
+
+    fn short_name(&self) -> &str {
+        "sp"
+    }
+
+    fn normalize_on_clusters(&self) -> bool {
+        true
+    }
+
+    fn score_graph(&self, graph: &'a Graph<T, U>) -> ClusterScores<'a, T, U> {
+        todo!()
     }
 }
