@@ -167,7 +167,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
         } else {
             let half_count = center_distances
                 .into_iter()
-                .filter(|&d| d <= (radius / U::from(2u64).unwrap()))
+                .filter(|&d| d <= (radius / U::from(2_u64).unwrap()))
                 .count();
             if half_count > 0 {
                 ((indices.len() as f64) / (half_count as f64)).log2()

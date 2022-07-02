@@ -167,7 +167,7 @@ impl<T: Number, U: Number> Metric<T, U> for Cosine {
             return U::one();
         }
 
-        U::one() - U::from(xy.as_f64() / (xx * yy).as_f64().sqrt()).unwrap()
+        U::from(1. - xy.as_f64() / (xx * yy).as_f64().sqrt()).unwrap()
     }
 
     fn is_expensive(&self) -> bool {

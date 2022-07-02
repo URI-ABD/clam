@@ -258,6 +258,7 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for GraphNeighborhood {
             .iter()
             .map(|&c| {
                 let steps = self.num_steps(graph, c);
+                // TODO: Do we need +1? 
                 let score = (0..steps + 1)
                     .zip(graph.unchecked_frontier_sizes(c).iter())
                     .fold(0, |score, (_, &size)| score + size);
