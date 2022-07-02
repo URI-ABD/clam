@@ -52,7 +52,7 @@ class GraphCriterion(abc.ABC):
 
 
 class Layer(GraphCriterion):
-    """ Selects the layer at the specified depth.
+    """ Selects the layer at the specified depth, -1 means go to leaves.
     """
     def __init__(self, depth: int):
         if depth < -1:

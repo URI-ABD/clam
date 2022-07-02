@@ -24,7 +24,7 @@ class MaxDepth(ClusterCriterion):
     """ Clusters with `depth` less than `max_depth` may be partitioned.
     """
 
-    def __init__(self, max_depth):
+    def __init__(self, max_depth: int):
         self.max_depth = max_depth
 
     def __call__(self, c: 'cluster.Cluster') -> bool:
@@ -36,7 +36,7 @@ class MinPoints(ClusterCriterion):
     partitioned.
     """
 
-    def __init__(self, min_points):
+    def __init__(self, min_points: int):
         self.min_points = min_points
 
     def __call__(self, c: 'cluster.Cluster') -> bool:

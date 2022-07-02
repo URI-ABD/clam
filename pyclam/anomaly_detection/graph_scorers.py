@@ -192,8 +192,8 @@ class VertexDegree(GraphScorer):
 
 class ParentCardinality(GraphScorer):
 
-    def __init__(self, weight: typing.Callable[[int], float]):
-        self.weight = weight
+    def __init__(self, depth_weight: typing.Callable[[int], float]):
+        self.weight = depth_weight
 
     def __hash__(self):
         return hash(self.name)

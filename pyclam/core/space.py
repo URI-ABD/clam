@@ -28,6 +28,12 @@ class Space(abc.ABC):
     @property
     def name(self) -> str:
         return f'{self.data.name}__{self.distance_metric.name}'
+    
+    @property
+    def uses_cache(self) -> bool:
+        """ Whether the object distance values.
+        """
+        return self.__use_cache
 
     @property
     @abc.abstractmethod
@@ -87,12 +93,6 @@ class Space(abc.ABC):
         """
         return self.distance_many_to_many(indices, indices)
 
-    @property
-    def uses_cache(self) -> bool:
-        """ Whether the object distance values.
-        """
-        return self.__use_cache
-
     @staticmethod
     def __cache_key(i: int, j: int) -> tuple[int, int]:
         """ This works because of the `symmetry` property of a `Metric`.
@@ -118,12 +118,11 @@ class Space(abc.ABC):
         self.__cache[self.__cache_key(i, j)] = distance
         return
 
-    def remove_from_cache(self, i: int, j: int):
+    def remove_from_cache(self, i: int, j: int) -> float:
         """ Removes the distance between the instances indexed by `i` and `j`
         from the cache.
         """
-        self.__cache.pop(self.__cache_key(i, j), default=0)
-        return
+        return self.__cache.pop(self.__cache_key(i, j), default=0.)
 
     def clear_cache(self) -> int:
         """ Empty the cache and return the number of items that were in the
@@ -169,7 +168,7 @@ class Space(abc.ABC):
 
 class TabularSpace(Space):
     """ This wraps a `Metric` and either a `TabularDataset` or a `TabularMMap`
-    into a `MetricSpace`. It does not use the cache.
+    into a `MetricSpace`.
     """
 
     def __init__(

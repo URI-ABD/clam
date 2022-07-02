@@ -172,8 +172,13 @@ class TabularMMap(TabularDataset):
             name: str,
             indices: list[int] = None,
     ):
+        self.file_path = file_path
         data = numpy.load(str(file_path), mmap_mode='r')
-        self.__indices = numpy.asarray(list(range(data.shape[0])) if indices is None else indices, dtype=numpy.uint)
+        indices = list(range(data.shape[0])) if indices is None else indices
+        self.__indices = numpy.asarray(indices, dtype=numpy.uint)
+        if self.__indices.max(initial=0) >= data.shape[0]:
+            raise IndexError("Invalid indices provided.")
+        
         super().__init__(data, name)
 
     @property
@@ -185,8 +190,7 @@ class TabularMMap(TabularDataset):
         return numpy.asarray(self.data[indices, :])
 
     def subset(self, indices: list[int], subset_name: str) -> 'TabularDataset':
-        return TabularDataset(self.data[indices, :], subset_name)
-
+        return TabularMMap(self.file_path, subset_name, indices)
 
 __all__ = [
     'Dataset',

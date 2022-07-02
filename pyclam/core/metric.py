@@ -1,9 +1,10 @@
 import abc
+import typing
 
 import numpy
 from scipy.spatial.distance import cdist
 
-SCIPY_METRICS = [
+SCIPY_METRICS = typing.Literal[
     'braycurtis',
     'canberra',
     'chebyshev',
@@ -55,28 +56,28 @@ class Metric(abc.ABC):
         return self.name
 
     @abc.abstractmethod
-    def one_to_one(self, left, right) -> float:
+    def one_to_one(self, left: typing.Any, right: typing.Any) -> float:
         """ `left` and `right` are each a single data instance. Compute the
         distance between the two.
         """
         pass
 
     @abc.abstractmethod
-    def one_to_many(self, left, right) -> numpy.ndarray:
+    def one_to_many(self, left: typing.Any, right: typing.Any) -> numpy.ndarray:
         """ `left` is a single instance and `right` is multiple instances.
         Compute a 1d array of distances from `left` to instances in `right`.
         """
         pass
 
     @abc.abstractmethod
-    def many_to_many(self, left, right) -> numpy.ndarray:
+    def many_to_many(self, left: typing.Any, right: typing.Any) -> numpy.ndarray:
         """ `left` and `right` are both multiple instances. Compute a 2d array
         of distances from each instance in `left` to each instance in `right`.
         """
         pass
 
     @abc.abstractmethod
-    def pairwise(self, instances) -> numpy.ndarray:
+    def pairwise(self, instances: typing.Any) -> numpy.ndarray:
         """ Compute a 2d array of distances among each pair in `instances`.
         """
         pass
@@ -86,8 +87,8 @@ class ScipyMetric(Metric):
     """ See scipy.spatial.distance.cdist
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html
     """
-    def __init__(self, name: str):
-        if name not in SCIPY_METRICS:
+    def __init__(self, name: SCIPY_METRICS):
+        if name not in typing.get_args(SCIPY_METRICS):
             raise ValueError(f'`name` must be one of {SCIPY_METRICS}. Got {name} instead')
         super().__init__(name)
 
@@ -101,8 +102,7 @@ class ScipyMetric(Metric):
         return self.many_to_many(left, right, **kwargs)[0]
 
     def many_to_many(self, left: numpy.ndarray, right: numpy.ndarray, **kwargs) -> numpy.ndarray:
-        # noinspection PyTypeChecker
-        return cdist(left, right, metric=self.name, **kwargs)
+        return cdist(left, right, metric=self.name, **kwargs)  # type: ignore
 
     def pairwise(self, instances: numpy.ndarray, **kwargs) -> numpy.ndarray:
         return self.many_to_many(instances, instances, **kwargs)

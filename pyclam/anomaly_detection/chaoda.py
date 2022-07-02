@@ -35,7 +35,7 @@ DEFAULT_GRAPH_SCORERS: list[graph_scorers.GraphScorer] = [
     graph_scorers.ClusterCardinality(),
     graph_scorers.ComponentCardinality(),
     graph_scorers.VertexDegree(),
-    graph_scorers.ParentCardinality(weight=lambda d: 1 / (d ** 0.5)),
+    graph_scorers.ParentCardinality(depth_weight=lambda d: 1 / (d ** 0.5)),
     graph_scorers.GraphNeighborhood(eccentricity_fraction=0.25),
     graph_scorers.StationaryProbabilities(steps=16),
 ]

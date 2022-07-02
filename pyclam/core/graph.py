@@ -75,6 +75,9 @@ class Edge:
         return self.left == self.right
 
     def neighbor(self, c: cluster.Cluster) -> cluster.Cluster:
+        """ Returns the neighbor of the given cluster, if the cluster is in 
+        the edge. Otherwise raises a ValueError.
+        """
 
         if c == self.__right:
             return self.__left
@@ -288,7 +291,7 @@ class Graph:
         """ Raises a ValueError if `c` is not in the graph.
         """
         if c not in self.__clusters:
-            raise ValueError(f'Cluster {c} is not in this Graph.')
+            raise AssertionError(f'Cluster {c} is not in this Graph.')
         return
 
     def jaccard(self, other: 'Graph') -> float:
