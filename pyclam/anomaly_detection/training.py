@@ -82,6 +82,21 @@ def save_models(path: pathlib.Path, meta_models: ModelsDict):
     return
 
 
+def save_training_data(x_or_y: str, data_dict: ScorerData, out_dir: pathlib.Path):
+    assert x_or_y in ['x', 'y']
+
+    for metric_name, scorer_array in data_dict.items():
+        for scorer, data in scorer_array.items():
+            path = out_dir.joinpath(f'{metric_name}_{scorer.name}_{x_or_y}.npy')
+            numpy.save(
+                file=str(path),
+                arr=numpy.asarray(data, dtype=numpy.float64),
+                fix_imports=False,
+                allow_pickle=False,
+            )
+    return
+
+
 def train_meta_ml(
         *,
         spaces_criteria: list[tuple[anomaly_space.AnomalySpace, list[core.ClusterCriterion]]],
@@ -248,6 +263,11 @@ def train_meta_ml(
         if epoch % save_frequency == 0:
             logger.info(f'Saving models after epoch {epoch}/{num_epochs} ...')
             save_models(out_dir.joinpath(f'models_epoch_{epoch}.py'), meta_models)
+
+    data_dir = out_dir.joinpath('training_data')
+    data_dir.mkdir(exist_ok=True)
+    save_training_data('x', full_train_x, data_dir)
+    save_training_data('y', full_train_y, data_dir)
 
     final_path = out_dir.joinpath(f'models_final.py')
     save_models(final_path, meta_models)
