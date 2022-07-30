@@ -258,7 +258,7 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for GraphNeighborhood {
             .iter()
             .map(|&c| {
                 let steps = self.num_steps(graph, c);
-                // TODO: Do we need +1? 
+                // TODO: Do we need +1?
                 let score = (0..steps + 1)
                     .zip(graph.unchecked_frontier_sizes(c).iter())
                     .fold(0, |score, (_, &size)| score + size);
@@ -268,6 +268,7 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for GraphNeighborhood {
     }
 }
 
+#[allow(dead_code)]
 pub struct StationaryProbabilities {
     num_steps: usize,
 }
@@ -297,6 +298,7 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for StationaryProbabilities
         true
     }
 
+    #[allow(unused_variables)]
     fn score_graph(&self, graph: &'a Graph<T, U>) -> ClusterScores<'a, T, U> {
         todo!()
     }
