@@ -51,6 +51,9 @@ fn cakes(c: &mut Criterion) {
                     b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries_radii))
                 }
             });
+            if factor > 5 {
+                break;
+            }
         }
         if dataset.cardinality() > 0 {
             break;

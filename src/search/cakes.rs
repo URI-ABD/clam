@@ -145,7 +145,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
     pub fn linear_search(&self, query: &[T], radius: U, indices: Option<Vec<usize>>) -> Vec<(usize, U)> {
         let indices = indices.unwrap_or_else(|| self.root.indices());
 
-        if self.metric().is_expensive() || indices.len() > 1000 {
+        if self.metric().is_expensive() || indices.len() > 1 {
             indices
                 .into_par_iter()
                 .map(|i| (i, self.data().get(i)))
