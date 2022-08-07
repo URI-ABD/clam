@@ -121,7 +121,6 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
             .collect()
     }
 
-    #[allow(unused_variables)]
     pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
         let candidate_clusters = self.knn_tree_search(query, k);
         assert!(candidate_clusters.len() >= k);
@@ -132,9 +131,14 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         knn
     }
 
-    #[allow(unused_variables)]
-    pub fn knn_tree_search(&self, query: &[T], k: usize) -> Vec<(&Cluster<T, U>, U)> {
-        todo!()
+    pub fn knn_tree_search(&self, query: &'a [T], k: usize) -> Vec<(&Cluster<T, U>, U)> {
+        let mut sieve = super::KnnSieve::new(vec![&self.root], query, k);
+
+        while !sieve.are_all_leaves() {
+            sieve = sieve.replace_with_child_clusters().filter();
+        }
+
+        sieve.clusters.into_iter().zip(sieve.deltas_0.into_iter()).collect()
     }
 
     #[allow(unused_variables)]
@@ -145,7 +149,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
     pub fn linear_search(&self, query: &[T], radius: U, indices: Option<Vec<usize>>) -> Vec<(usize, U)> {
         let indices = indices.unwrap_or_else(|| self.root.indices());
 
-        if self.metric().is_expensive() || indices.len() > 1 {
+        if self.metric().is_expensive() || indices.len() > 1000 {
             indices
                 .into_par_iter()
                 .map(|i| (i, self.data().get(i)))
