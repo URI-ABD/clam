@@ -122,28 +122,31 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
     }
 
     pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
-        let candidate_clusters = self.knn_tree_search(query, k);
-        assert!(candidate_clusters.len() >= k);
+        let sieve = {
+            let mut sieve = super::KnnSieve::new(vec![&self.root], query, k);
 
-        let knn = self.knn_leaf_search(query, k, &candidate_clusters);
+            while !sieve.are_all_leaves() {
+                sieve = sieve.replace_with_child_clusters().filter();
+            }
+
+            sieve
+        };
+
+        // TODO: These three lines should be a unittest on KnnSieve
+        // let last = sieve.cumulative_cardinalities.len() - 1;
+        // assert!(
+        //     sieve.cumulative_cardinalities[last] >= k,
+        //     "Sieve does not have enough clusters to produce k hits."
+        // );
+        // assert!(
+        //     sieve.cumulative_cardinalities[last - 1] < k,
+        //     "Sieve has too many clusters and needs better filtering."
+        // );
+
+        let knn = sieve.extract();
         assert!(knn.len() == k);
 
         knn
-    }
-
-    pub fn knn_tree_search(&self, query: &'a [T], k: usize) -> Vec<(&Cluster<T, U>, U)> {
-        let mut sieve = super::KnnSieve::new(vec![&self.root], query, k);
-
-        while !sieve.are_all_leaves() {
-            sieve = sieve.replace_with_child_clusters().filter();
-        }
-
-        sieve.clusters.into_iter().zip(sieve.deltas_0.into_iter()).collect()
-    }
-
-    #[allow(unused_variables)]
-    pub fn knn_leaf_search(&self, query: &[T], k: usize, candidate_clusters: &[(&Cluster<T, U>, U)]) -> Vec<(usize, U)> {
-        todo!()
     }
 
     pub fn linear_search(&self, query: &[T], radius: U, indices: Option<Vec<usize>>) -> Vec<(usize, U)> {

@@ -20,7 +20,7 @@ pub struct KnnSieve<'a, T: Number, U: Number> {
     pub clusters: Vec<&'a Cluster<'a, T, U>>,
     query: &'a [T],
     k: usize,
-    cumulative_cardinalities: Vec<usize>,
+    pub cumulative_cardinalities: Vec<usize>,
     pub deltas_0: Vec<U>,
     deltas_1: Vec<U>,
     deltas_2: Vec<U>,
@@ -28,33 +28,53 @@ pub struct KnnSieve<'a, T: Number, U: Number> {
 
 impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
     pub fn new(clusters: Vec<&'a Cluster<'a, T, U>>, query: &'a [T], k: usize) -> Self {
-        let mut cumulative_cardinalities: Vec<usize> = vec![clusters[0].cardinality()];
-        for i in 1..clusters.len() {
-            cumulative_cardinalities.push(cumulative_cardinalities[i - 1] + clusters[i].cardinality());
-        }
-
-        let deltas_0: Vec<U> = clusters.iter().map(|c| KnnSieve::compute_delta0(c, query)).collect();
-
-        let deltas_1 = clusters
-            .iter()
-            .zip(deltas_0.iter())
-            .map(|(c, d)| KnnSieve::compute_delta1(c, *d))
-            .collect();
-
-        let deltas_2 = clusters
-            .iter()
-            .zip(deltas_0.iter())
-            .map(|(c, d)| KnnSieve::compute_delta2(c, *d))
-            .collect();
-
         KnnSieve {
             clusters,
             query,
             k,
-            cumulative_cardinalities,
-            deltas_0,
-            deltas_1,
-            deltas_2,
+            cumulative_cardinalities: vec![],
+            deltas_0: vec![],
+            deltas_1: vec![],
+            deltas_2: vec![],
+        }
+    }
+
+    pub fn build(mut self) -> Self {
+        self.cumulative_cardinalities = self.clusters
+            .iter()
+            .scan(0, |acc, c| {
+                *acc += c.cardinality();
+                Some(*acc)
+            })
+            .collect();
+        
+        self.deltas_0 = self.clusters
+            .iter()
+            .map(|&c| self.d0(c))
+            .collect();
+        
+        (self.deltas_1, self.deltas_2) = self.clusters
+            .iter()
+            .zip(self.deltas_0.iter())
+            .map(|(&c, d0)| (self.d1(c, *d0), self.d2(c, *d0)))
+            .unzip();
+
+        self
+    }
+
+    fn d0(&self, c: &Cluster<T, U>) -> U {
+        c.distance_to_instance(self.query)
+    }
+
+    fn d1(&self, c: &Cluster<T, U>, d0: U) -> U {
+        d0 + c.radius()
+    }
+
+    fn d2(&self, c: &Cluster<T, U>, d0: U) -> U {
+        if d0 > c.radius() {
+            d0 - c.radius()
+        } else {
+            U::zero()
         }
     }
 
@@ -333,6 +353,16 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
 
     pub fn are_all_leaves(&self) -> bool {
         self.clusters.iter().all(|c| c.is_leaf())
+    }
+
+    /// Returns `k` best hits from the sieve along with their distances from the
+    /// query. If this method is called when the `are_all_leaves` method
+    /// evaluates to `true`, the result will have the best recall. If the
+    /// `metric` in use obeys the triangle inequality, then the results will
+    /// have perfect recall. If this method is called before the sieve has been
+    /// filtered down to the leaves, the results may not have perfect recall.
+    pub fn extract(&self) -> Vec<(usize, U)> {
+        todo!()
     }
 
     // fn filter(mut self, kth_delta1: U) -> Self{
