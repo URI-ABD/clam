@@ -304,35 +304,29 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
 
     pub fn filter(mut self) -> Self {
         let d1_k = self.find_kth(&Delta::Delta1);
-        let keep: Vec<_> = self.deltas_2.iter().map(|d2| *d2 <= d1_k).collect();
-        self.clusters = self
+        let keep = self.deltas_2.iter().map(|d2| *d2 <= d1_k); 
+
+        (self.clusters, self.deltas_0, self.deltas_1, self.deltas_2) = self
             .clusters
-            .iter()
-            .zip(keep.iter())
-            .filter(|(&_, &k)| k)
-            .map(|(&c, _)| c)
-            .collect();
-        self.deltas_0 = self
-            .deltas_0
-            .iter()
-            .zip(keep.iter())
-            .filter(|(&_, &k)| k)
-            .map(|(&c, _)| c)
-            .collect();
-        self.deltas_1 = self
-            .deltas_1
-            .iter()
-            .zip(keep.iter())
-            .filter(|(&_, &k)| k)
-            .map(|(&c, _)| c)
-            .collect();
-        self.deltas_2 = self
-            .deltas_2
-            .iter()
-            .zip(keep.iter())
-            .filter(|(&_, &k)| k)
-            .map(|(&c, _)| c)
-            .collect();
+            .into_iter()
+            .zip(self.deltas_0.into_iter())
+            .zip(self.deltas_1.into_iter())
+            .zip(self.deltas_2.clone().into_iter())
+            .zip(keep)
+            .fold(
+                (vec![], vec![], vec![], vec![]), 
+                |(mut c, mut d0, mut d1, mut d2), ((((c_, d0_), d1_), d2_), k_) | {
+                    if k_ {
+                        c.push(c_);
+                        d0.push(d0_);
+                        d1.push(d1_);
+                        d2.push(d2_);
+                    }
+                    (c, d0, d1, d2)
+
+                }, 
+            ); 
+
         self.update_cumulative_cardinalities(0, self.clusters.len() - 1);
         self
     }
