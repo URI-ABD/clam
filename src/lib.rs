@@ -32,6 +32,7 @@ pub use crate::traits::dataset;
 pub use crate::traits::dataset::Tabular;
 pub use crate::traits::metric;
 pub use crate::traits::metric::metric_from_name;
+pub use crate::traits::space::Cache;
 pub use crate::traits::space::TabularSpace;
 pub use crate::traits::Dataset;
 pub use crate::traits::Metric;

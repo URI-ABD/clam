@@ -34,7 +34,7 @@ pub fn read_anomaly_data(name: &str, normalized: bool) -> Result<(Vec<Vec<f32>>,
     data_dir.push("anomaly_data");
     data_dir.push("preprocessed");
 
-    assert!(data_dir.exists(), "directory not found: {:?}", data_dir);
+    assert!(data_dir.exists(), "Path not found: {:?}", data_dir);
 
     let features = {
         let mut path = data_dir.clone();
@@ -43,7 +43,7 @@ pub fn read_anomaly_data(name: &str, normalized: bool) -> Result<(Vec<Vec<f32>>,
         } else {
             format!("{}_features.npy", name)
         });
-        assert!(path.exists());
+        assert!(path.exists(), "Path not found: {:?}", path);
 
         let features: Array2<f32> = ndarray_npy::read_npy(&path).map_err(|error| {
             format!(
@@ -59,7 +59,7 @@ pub fn read_anomaly_data(name: &str, normalized: bool) -> Result<(Vec<Vec<f32>>,
     let scores = {
         let mut path = data_dir.clone();
         path.push(format!("{}_scores.npy", name));
-        assert!(path.exists());
+        assert!(path.exists(), "Path not found: {:?}", path);
 
         let features: Array1<u8> = ndarray_npy::read_npy(&path).map_err(|error| {
             format!(

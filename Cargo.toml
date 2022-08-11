@@ -18,20 +18,18 @@ rayon = "1.5"
 libm = "0.2"
 priority-queue = "1.2"
 rand = "0.8"
-itertools = "0.10.2"
 # easy-cast = "0.4.4"
 # eval-metrics = "1.0.1"
-# log = "0.4.14"
 # ordered-float = "3.0"
-# serde_json = "1.0.67"
 # simplelog = "0.11.1"
 # structopt = "0.3.23"
 # sysinfo = "0.23.5"
 
-
 [dev-dependencies]
 float-cmp = "0.9"
 ndarray-npy = "0.8"
+log = "0.4"
+env_logger = "0.9"
 
 [dev-dependencies.criterion]
 version = "0.3"
@@ -44,6 +42,14 @@ features = ["rayon"]
 [dev-dependencies.hdf5]
 version = "0.8"
 features = ["lzf", "blosc"]
+
+[dev-dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dev-dependencies.serde_json]
+version = "1.0"
+features = ["alloc"]
 
 [[example]]
 name = "hdf5"

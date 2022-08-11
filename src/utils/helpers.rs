@@ -26,21 +26,18 @@ pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     )
 }
 
-pub fn mean<T: Number>(values: &[T]) -> T {
-    values.iter().cloned().sum::<T>() / T::from(values.len()).unwrap()
+pub fn mean<T: Number>(values: &[T]) -> f64 {
+    values.iter().cloned().sum::<T>().as_f64() / values.len() as f64
 }
 
-pub fn sd<T: Number>(values: &[T], mean: T) -> T {
-    T::from(
-        values
-            .iter()
-            .map(|&v| (v - mean) * (v - mean))
-            .sum::<T>()
-            .as_f64()
-            .sqrt()
-            / (values.len() as f64),
-    )
-    .unwrap()
+pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
+    values
+        .iter()
+        .map(|v| v.as_f64())
+        .map(|v| (v - mean) * (v - mean))
+        .sum::<f64>()
+        .sqrt()
+        / (values.len() as f64)
 }
 
 pub fn normalize_1d(values: &[f64]) -> Vec<f64> {

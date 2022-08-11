@@ -82,7 +82,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
 
         while !candidate_clusters.is_empty() {
             let centers: Vec<_> = candidate_clusters.iter().map(|c| c.center()).collect();
-            let distances = if self.metric().is_expensive() {
+            let distances = if self.metric().is_expensive() || centers.len() > 1000 {
                 self.metric().par_one_to_many(query, &centers)
             } else {
                 self.metric().one_to_many(query, &centers)

@@ -1,10 +1,12 @@
-pub struct H5Data {
+#[allow(dead_code)]
+pub struct H5Data<Tr: crate::h5number::H5Number> {
     data: hdf5::Dataset,
     name: String,
     shape: (usize, usize),
+    zero: Tr,
 }
 
-impl H5Data {
+impl<Tr: crate::h5number::H5Number> H5Data<Tr> {
     pub fn new(file: &hdf5::File, member_name: &str, name: String) -> Result<Self, String> {
         let data = file
             .dataset(member_name)
@@ -14,27 +16,27 @@ impl H5Data {
             data,
             name,
             shape: (shape[0], shape[1]),
+            zero: Tr::zero(),
         })
     }
 
-    pub fn to_vec_vec<T, U>(&self) -> Result<Vec<Vec<U>>, String>
+    pub fn to_vec_vec<T>(&self) -> Result<Vec<Vec<T>>, String>
     where
-        T: crate::h5number::H5Number,
-        U: clam::Number,
+        T: clam::Number,
     {
-        let data: ndarray::Array2<T> = self
+        let data: ndarray::Array2<Tr> = self
             .data
             .read_2d()
             .map_err(|reason| format!("Could not convert from HDF% to Tabular because {}", reason))?;
 
         Ok(data
             .outer_iter()
-            .map(|row| row.into_iter().map(|&v| U::from(v).unwrap()).collect())
+            .map(|row| row.into_iter().map(|&v| T::from(v).unwrap()).collect())
             .collect())
     }
 }
 
-impl std::fmt::Debug for H5Data {
+impl<Tr: crate::h5number::H5Number> std::fmt::Debug for H5Data<Tr> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("Tabular Dataset")
             .field("name", &self.name)
@@ -44,7 +46,7 @@ impl std::fmt::Debug for H5Data {
     }
 }
 
-impl<T: crate::h5number::H5Number> clam::Dataset<T> for H5Data {
+impl<Tr: crate::h5number::H5Number, T: clam::Number> clam::Dataset<T> for H5Data<Tr> {
     fn name(&self) -> String {
         self.name.clone()
     }
@@ -62,6 +64,7 @@ impl<T: crate::h5number::H5Number> clam::Dataset<T> for H5Data {
     }
 
     fn get(&self, index: usize) -> Vec<T> {
-        self.data.read_slice_1d(ndarray::s![index, ..]).unwrap().to_vec()
+        let row: Vec<Tr> = self.data.read_slice_1d(ndarray::s![index, ..]).unwrap().to_vec();
+        row.into_iter().map(|v| T::from(v).unwrap()).collect()
     }
 }

@@ -1,4 +1,4 @@
-mod utils;
+pub mod utils;
 
 use criterion::criterion_group;
 use criterion::criterion_main;
@@ -9,8 +9,10 @@ use utils::anomaly_readers;
 
 fn partition(c: &mut Criterion) {
     let mut group = c.benchmark_group("Partition");
-    group.significance_level(0.05).sample_size(30);
-    // .measurement_time(std::time::Duration::new(60, 0));
+    group
+        .significance_level(0.05)
+        .measurement_time(std::time::Duration::new(60, 0));
+    // .sample_size(30);
 
     for &data_name in anomaly_readers::ANOMALY_DATASETS.iter() {
         let (features, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
@@ -21,6 +23,10 @@ fn partition(c: &mut Criterion) {
         let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
 
         for use_cache in [false, true] {
+            if use_cache {
+                continue;
+            }
+
             let bench_name = format!("{}-distance-cache-{}", data_name, use_cache);
             group.bench_with_input(&bench_name, &use_cache, |b, &use_cache| {
                 let space = clam::TabularSpace::new(&dataset, euclidean.as_ref(), use_cache);

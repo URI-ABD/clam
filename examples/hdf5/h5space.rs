@@ -1,29 +1,31 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::RwLock;
+
+use crate::h5data;
+use crate::h5number;
+
 #[derive(Debug, Clone)]
-pub struct H5Space<'a, T: crate::h5number::H5Number, U: clam::Number> {
-    data: &'a crate::h5data::H5Data,
+pub struct H5Space<'a, Tr: h5number::H5Number, T: clam::Number, U: clam::Number> {
+    data: &'a h5data::H5Data<Tr>,
     metric: &'a dyn clam::Metric<T, U>,
     uses_cache: bool,
-    cache: clam::traits::space::Cache<U>,
+    cache: clam::Cache<U>,
 }
 
-impl<'a, T: crate::h5number::H5Number, U: clam::Number> H5Space<'a, T, U> {
+impl<'a, Tr: h5number::H5Number, T: clam::Number, U: clam::Number> H5Space<'a, Tr, T, U> {
     #[allow(dead_code)]
-    pub fn new(data: &'a crate::h5data::H5Data, metric: &'a dyn clam::Metric<T, U>, use_cache: bool) -> Self {
+    pub fn new(data: &'a h5data::H5Data<Tr>, metric: &'a dyn clam::Metric<T, U>, use_cache: bool) -> Self {
         Self {
             data,
             metric,
             uses_cache: use_cache,
-            cache: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            cache: Arc::new(RwLock::new(HashMap::new())),
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn as_space(&self) -> &dyn clam::Space<T, U> {
-        self
     }
 }
 
-impl<'a, T: crate::h5number::H5Number, U: clam::Number> clam::Space<T, U> for H5Space<'a, T, U> {
+impl<'a, Tr: h5number::H5Number, T: clam::Number, U: clam::Number> clam::Space<T, U> for H5Space<'a, Tr, T, U> {
     fn data(&self) -> &dyn clam::Dataset<T> {
         self.data
     }
@@ -36,7 +38,7 @@ impl<'a, T: crate::h5number::H5Number, U: clam::Number> clam::Space<T, U> for H5
         self.uses_cache
     }
 
-    fn cache(&self) -> clam::traits::space::Cache<U> {
+    fn cache(&self) -> clam::Cache<U> {
         self.cache.clone()
     }
 }

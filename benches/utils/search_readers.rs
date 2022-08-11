@@ -1,9 +1,6 @@
-#![allow(dead_code, unused_imports, unused_variables)]
-
 use ndarray::prelude::*;
 
-use clam::prelude::*;
-pub type TrainTest<T> = (Vec<Vec<T>>, Vec<Vec<T>>);
+type TrainTest<T> = (Vec<Vec<T>>, Vec<Vec<T>>);
 
 pub static SEARCH_DATASETS: &[(&str, &str)] = &[
     ("deep-image", "cosine"),       // 0
@@ -20,6 +17,37 @@ pub static SEARCH_DATASETS: &[(&str, &str)] = &[
     ("lastfm", "cosine"),           // 11
 ];
 
-pub fn read_search_data<T: Number>(name: &str) -> Result<TrainTest<T>, String> {
-    todo!()
+fn make_path(dir: &std::path::Path, name: &str, variant: &str) -> std::path::PathBuf {
+    let mut path = dir.to_path_buf();
+    path.push("as_npy");
+    path.push(format!("{}_{}.npy", name, variant));
+    assert!(path.exists(), "Path not found: {:?}", path);
+    path
+}
+
+fn read_npy(path: &std::path::PathBuf) -> Result<Vec<Vec<f32>>, String> {
+    let data: Array2<f32> = ndarray_npy::read_npy(&path).map_err(|error| {
+        format!(
+            "Error: Failed to read your dataset at {}. {:}",
+            path.to_str().unwrap(),
+            error
+        )
+    })?;
+
+    Ok(data.outer_iter().map(|row| row.to_vec()).collect())
+}
+
+pub fn read_search_data(name: &str) -> Result<TrainTest<f32>, String> {
+    let mut data_dir = std::env::current_dir().unwrap();
+    data_dir.pop();
+    data_dir.push("data");
+    data_dir.push("search_small");
+
+    assert!(data_dir.exists(), "Path not found: {:?}", data_dir);
+
+    let train_data = read_npy(&make_path(&data_dir, name, "train"))?;
+
+    let test_data = read_npy(&make_path(&data_dir, name, "test"))?;
+
+    Ok((train_data, test_data))
 }

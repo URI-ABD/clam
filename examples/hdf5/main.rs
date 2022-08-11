@@ -1,15 +1,18 @@
+use std::collections::HashSet;
+use std::io::Write;
+
+use clam::prelude::*;
+
 mod h5data;
 mod h5number;
 mod h5space;
+mod reports;
 
-use clam::prelude::*;
-use std::io::Write;
-
-pub fn read_search_data(name: &str) -> hdf5::Result<hdf5::File> {
+pub fn open_hdf5_file(name: &str) -> hdf5::Result<hdf5::File> {
     let mut data_dir = std::env::current_dir().unwrap();
     data_dir.pop();
     data_dir.push("data");
-    data_dir.push("search_data");
+    data_dir.push("search_small");
     data_dir.push("as_hdf5");
 
     let train_path = {
@@ -22,129 +25,208 @@ pub fn read_search_data(name: &str) -> hdf5::Result<hdf5::File> {
     hdf5::File::open(train_path)
 }
 
+// An example for a custom partition criterion.
 #[derive(Debug, Clone)]
-struct MinRadius<U: Number>(U);
+struct MinRadius<U: Number> {
+    threshold: U,
+}
 
 impl<T: Number, U: Number> clam::PartitionCriterion<T, U> for MinRadius<U> {
     fn check(&self, c: &Cluster<T, U>) -> bool {
-        c.radius() > self.0
+        c.radius() > self.threshold
     }
 }
 
-fn search<Tr, Te, T>(data_name: &str, metric_name: &str) -> Result<(), String>
+fn search<Tr, Te, N, D, T>(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), String>
 where
-    Tr: crate::h5number::H5Number, // For reading "train" data from hdf5 files.
-    Te: crate::h5number::H5Number, // For reading "test" data from hdf5 files.
-    T: clam::Number,               // For converting Tr and Te away from bool for kosarak.
+    Tr: h5number::H5Number, // For reading "train" data from hdf5 files.
+    Te: h5number::H5Number, // For reading "test" data from hdf5 files.
+    N: h5number::H5Number,  // For reading ground-truth neighbors' indices.
+    D: h5number::H5Number,  // For reading ground-truth neighbors' distances.
+    T: Number,              // For converting Tr and Te away from bool for kosarak data.
 {
-    print!("{}, {}, ", data_name, metric_name);
-    std::io::stdout().flush().unwrap();
+    let output_dir = {
+        let mut output_dir = std::env::current_dir().unwrap();
+        output_dir.pop();
+        output_dir.push("data");
+        output_dir.push("search_small");
+        output_dir.push("reports");
+        assert!(output_dir.exists(), "Path not found: {:?}", output_dir);
+        output_dir.push("ark_buffer_10");
+        if !output_dir.exists() {
+            std::fs::create_dir(&output_dir).unwrap();
+        }
+        output_dir
+    };
+
+    log::info!("Running {}-{} data ...", data_name, metric_name);
 
     let file =
-        read_search_data(data_name).map_err(|reason| format!("Could not read file {} because {}", data_name, reason))?;
+        open_hdf5_file(data_name).map_err(|reason| format!("Could not read file {} because {}", data_name, reason))?;
 
-    // let neighbors: Vec<Vec<usize>> = h5data::H5Data::new(&file, "neighbors", format!("{}_neighbors", data_name))?
-    //     .to_vec_vec::<i32>()?
+    let neighbors =
+        h5data::H5Data::<N>::new(&file, "neighbors", format!("{}_neighbors", data_name))?.to_vec_vec::<usize>()?;
+
+    let distances =
+        h5data::H5Data::<D>::new(&file, "distances", format!("{}_distances", data_name))?.to_vec_vec::<D>()?;
+
+    // let search_radii: Vec<_> = distances
     //     .into_iter()
-    //     .map(|row| row.into_iter().map(|v| v as usize).collect())
+    //     .map(|row| clam::utils::helpers::arg_max(&row).1)
     //     .collect();
 
-    // let distances = h5data::H5Data::new(&file, "distances", format!("{}_distances", data_name))?.to_vec_vec::<f32>()?;
+    // Adding a 10% buffer to search radius to test change in recall
+    let search_radii: Vec<_> = distances
+        .into_iter()
+        .map(|row| clam::utils::helpers::arg_max(&row).1)
+        .map(|v| D::from(v.as_f64() * 1.1).unwrap())
+        .collect();
 
-    // let search_radii: Vec<f32> = distances
-    //     .into_iter()
-    //     .map(|row| clam::utils::helpers::argmax(&row).1)
-    //     .collect();
+    let min_radius = clam::utils::helpers::arg_min(&search_radii).1;
 
-    let queries = h5data::H5Data::new(&file, "test", format!("{}_test", data_name))?.to_vec_vec::<Te, T>()?;
-    let num_queries = queries.len();
-    print!("{}, ", num_queries);
-    std::io::stdout().flush().unwrap();
+    let queries = h5data::H5Data::<Te>::new(&file, "test", format!("{}_test", data_name))?.to_vec_vec::<T>()?;
 
-    // let queries_radii: Vec<(Vec<T>, f32)> = queries.into_iter().zip(search_radii.into_iter()).collect();
+    let queries_radii: Vec<(Vec<T>, D)> = queries.into_iter().zip(search_radii.iter().cloned()).collect();
 
-    let train_vec = h5data::H5Data::new(&file, "train", "temp".to_string())?.to_vec_vec::<Tr, T>()?;
-    let train = clam::Tabular::new(&train_vec, format!("{}_train", data_name));
+    let metric = clam::metric_from_name::<T, D>(metric_name, false)?;
 
-    let metric = clam::metric_from_name::<T, f32>(metric_name, false)?;
+    let train = h5data::H5Data::<Tr>::new(&file, "train", "temp".to_string())?;
 
+    // because reading h5 data with this crate is too slow ...
+    // let space = h5space::H5Space::new(&train, metric.as_ref(), false);
+    let train = train.to_vec_vec::<T>()?;
+    let train = clam::Tabular::new(&train, data_name.to_string());
     let space = clam::TabularSpace::new(&train, metric.as_ref(), false);
 
     // let log_cardinality = (space.data().cardinality() as f64).log2() as usize;
-    // let partition_criteria =
-    //     clam::criteria::PartitionCriteria::<T, f32>::new(true).with_min_cardinality(1 + log_cardinality);
-    let cakes = clam::CAKES::new(&space);
-    let search_radius = if metric_name == "euclidean" {
-        cakes.radius() / 100.
-    } else {
-        0.01
-    };
-    let partition_criteria =
-        clam::PartitionCriteria::<T, f32>::new(true).with_custom(Box::new(MinRadius(search_radius)));
+    let partition_criteria = clam::PartitionCriteria::new(true)
+        .with_min_cardinality(10)
+        .with_custom(Box::new(MinRadius {
+            threshold: D::from(min_radius.as_f64() / 1000.).unwrap(),
+        }));
+
+    log::info!("Building search tree on {}-{} data ...", data_name, metric_name);
 
     let start = std::time::Instant::now();
+    let cakes = clam::CAKES::new(&space);
     let cakes = cakes.build(&partition_criteria);
     let build_time = start.elapsed().as_secs_f64();
-    let tree_depth = cakes.depth();
-    print!("{}, {:.2e}, ", tree_depth, build_time);
-    std::io::stdout().flush().unwrap();
+    log::info!("Built tree to a depth of {} ...", cakes.depth());
 
-    let queries_radii: Vec<(Vec<T>, f32)> = queries.into_iter().map(|q| (q, search_radius)).collect();
+    log::info!("Writing tree report on {}-{} data ...", data_name, metric_name);
+    reports::report_tree(&output_dir.join("trees"), cakes.root(), build_time)?;
 
-    // let true_hits: Vec<HashSet<usize>> = neighbors.into_iter().map(|n_row| n_row.into_iter().collect()).collect();
+    log::info!("Starting search on {}-{} data ...", data_name, metric_name);
 
-    let num_runs = 1;
-    let start = std::time::Instant::now();
-    let hits: Vec<_> = (0..num_runs).map(|_| cakes.batch_rnn_search(&queries_radii)).collect();
-    let end = start.elapsed().as_secs_f64();
-    let search_time = end / (num_runs as f64);
+    let (hits, search_times): (Vec<_>, Vec<_>) = queries_radii
+        .iter()
+        .enumerate()
+        .map(|(i, (query, radius))| {
+            if (i + 1) % 10 == 0 {
+                log::info!(
+                    "Progress {:6.2}% on {}-{} data ...",
+                    100. * (i as f64 + 1.) / queries_radii.len() as f64,
+                    data_name,
+                    metric_name
+                );
+            }
+            let sample = (0..num_runs)
+                .map(|_| {
+                    let start = std::time::Instant::now();
+                    let results = cakes.rnn_search(query, *radius);
+                    (results, start.elapsed().as_secs_f64())
+                })
+                .collect::<Vec<_>>();
+            // let hits = sample.first().unwrap().0.clone();
+            let hits = {
+                let mut hits = sample.first().unwrap().0.clone();
+                hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                if hits.len() > 100 {
+                    let threshold = hits[100].1;
+                    hits.into_iter().filter(|(_, d)| *d <= threshold).collect()
+                } else {
+                    hits
+                }
+            };
+            let times = sample.into_iter().map(|(_, t)| t).collect();
+            (hits, times)
+        })
+        .unzip();
 
-    // let hits: Vec<HashSet<usize>> = hits
-    //     .first()
-    //     .unwrap()
-    //     .into_iter()
-    //     .map(|row| HashSet::from_iter(row.into_iter().map(|(v, _)| *v)))
-    //     .collect();
-    // let recalls: Vec<f64> = hits
-    //     .into_iter()
-    //     .zip(true_hits.into_iter())
-    //     .map(|(pred, actual)| {
-    //         let intersection = pred.intersection(&actual).count();
-    //         (intersection as f64) / (actual.len() as f64)
-    //     })
-    //     .collect();
+    log::info!("Collecting report on {}-{} data ...", data_name, metric_name);
 
-    // let mean_recall = clam::utils::helpers::mean(&recalls);
+    let true_hits = neighbors.into_iter().map(|n_row| n_row.into_iter().collect());
+    let hits: Vec<HashSet<usize>> = hits
+        .iter()
+        .map(|row| HashSet::from_iter(row.iter().map(|(v, _)| *v)))
+        .collect();
+    let recalls: Vec<f64> = hits
+        .iter()
+        .zip(true_hits)
+        .map(|(pred, actual)| {
+            let intersection = pred.intersection(&actual).count();
+            (intersection as f64) / (actual.len() as f64)
+        })
+        .collect();
 
-    let output_sizes: Vec<f64> = hits.first().unwrap().iter().map(|row| row.len() as f64).collect();
-    let mean_output_size = clam::utils::helpers::arg_max(&output_sizes).1;
+    let outputs = hits.iter().map(|row| row.iter().cloned().collect::<Vec<_>>()).collect();
 
-    let time_per_query = search_time / (num_queries as f64);
-    let queries_per_second = (num_queries as f64) / search_time;
-    println!(
-        "{:.2e}, {:.2e}, {:.5}",
-        time_per_query, queries_per_second, mean_output_size
-    );
+    let report = reports::RnnReport {
+        data_name,
+        metric_name,
+        num_queries: queries_radii.len(),
+        num_runs,
+        cardinality: train.cardinality(),
+        dimensionality: train.dimensionality(),
+        tree_depth: cakes.depth(),
+        build_time,
+        root_radius: cakes.radius().as_f64(),
+        search_radii: search_radii.into_iter().map(|v| v.as_f64()).collect(),
+        search_times,
+        outputs,
+        recalls,
+    };
 
-    Ok(())
+    let failures = report.is_valid();
+    if failures.is_empty() {
+        let report = serde_json::to_string_pretty(&report)
+            .map_err(|reason| format!("Could not convert report to json because {}", reason))?;
+        let output_path = output_dir.join(format!("{}-{}.json", data_name, metric_name));
+        let mut file = std::fs::File::create(&output_path)
+            .map_err(|reason| format!("Could not create/open file {:?} because {}", output_path, reason))?;
+        Ok(write!(&mut file, "{}", report)
+            .map_err(|reason| format!("Could not write report to {:?} because {}.", output_path, reason))?)
+    } else {
+        Err(format!("The report was invalid:\n{:?}", failures.join("\n")))
+    }
 }
 
 fn main() -> Result<(), String> {
-    println!(
-        "dataset, metric, num_queries, tree_depth, build_time (s), time_per_query (s), queries_per_second (1/s), mean_output_size"
-    );
+    env_logger::Builder::new().parse_filters("info").init();
 
-    // search::<f32, f32, f32>("deep-image", "cosine")?;
-    search::<f32, f32, f32>("fashion-mnist", "euclidean")?;
-    // search::<f32, f32, f32>("gist", "euclidean")?;
-    // search::<f32, f32, f32>("glove-25", "cosine")?;
-    // search::<f32, f32, f32>("glove-50", "cosine")?;
-    // search::<f32, f32, f32>("glove-100", "cosine")?;
-    // search::<f32, f32, f32>("glove-200", "cosine")?;
-    // search::<bool, bool, f32>("kosarak", "jaccard")?;
-    search::<f32, f32, f32>("mnist", "euclidean")?;
-    // search::<f32, f32, f32>("nytimes", "cosine")?;
-    // search::<f32, f32, f32>("sift", "euclidean")?;
-    // search::<f32, f64, f32>("lastfm", "cosine")?;
+    let results = [
+        search::<f32, f32, i32, f32, f32>("deep-image", "cosine", 10),
+        search::<f32, f32, i32, f32, f32>("fashion-mnist", "euclidean", 10),
+        search::<f32, f32, i32, f32, f32>("gist", "euclidean", 10),
+        search::<f32, f32, i32, f32, f32>("glove-25", "cosine", 10),
+        search::<f32, f32, i32, f32, f32>("glove-50", "cosine", 10),
+        search::<f32, f32, i32, f32, f32>("glove-100", "cosine", 10),
+        search::<f32, f32, i32, f32, f32>("glove-200", "cosine", 10),
+        search::<f32, f64, i32, f32, f32>("lastfm", "cosine", 10),
+        search::<f32, f32, i32, f32, f32>("mnist", "euclidean", 10),
+        search::<f32, f32, i32, f32, f32>("nytimes", "cosine", 10),
+        search::<f32, f32, i32, f32, f32>("sift", "euclidean", 10),
+        // search::<bool, bool, i32, f32, u8>("kosarak", "jaccard", 10),
+    ];
+    println!(
+        "Successful for {}/{} datasets.",
+        results.iter().filter(|v| v.is_ok()).count(),
+        results.len()
+    );
+    let failures: Vec<_> = results.iter().filter(|v| v.is_err()).cloned().collect();
+    if !failures.is_empty() {
+        println!("Failed for {}/{} datasets.", failures.len(), results.len());
+        failures.into_iter().for_each(|v| println!("{:?}\n", v));
+    }
     Ok(())
 }
