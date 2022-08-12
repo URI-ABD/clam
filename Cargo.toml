@@ -1,7 +1,11 @@
 [package]
 name = "clam"
 version = "0.8.0"
-authors = ["Najib Ishaq <nishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
+authors = [
+    "Najib Ishaq <nishaq@zoho.com>",
+    "Tom Howard <info@tomhoward.codes>",
+    "Noah Daniels <noah_daniels@uri.edu>",
+]
 edition = "2021"
 
 # Publishing lock.
@@ -16,8 +20,8 @@ bitvec = "1.0"
 num-traits = "0.2"
 rayon = "1.5"
 libm = "0.2"
-priority-queue = "1.2"
 rand = "0.8"
+# priority-queue = "1.2"
 # easy-cast = "0.4.4"
 # eval-metrics = "1.0.1"
 # ordered-float = "3.0"
