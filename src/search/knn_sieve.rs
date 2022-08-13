@@ -40,20 +40,19 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
     }
 
     pub fn build(mut self) -> Self {
-        self.cumulative_cardinalities = self.clusters
+        self.cumulative_cardinalities = self
+            .clusters
             .iter()
             .scan(0, |acc, c| {
                 *acc += c.cardinality();
                 Some(*acc)
             })
             .collect();
-        
-        self.deltas_0 = self.clusters
-            .iter()
-            .map(|&c| self.d0(c))
-            .collect();
-        
-        (self.deltas_1, self.deltas_2) = self.clusters
+
+        self.deltas_0 = self.clusters.iter().map(|&c| self.d0(c)).collect();
+
+        (self.deltas_1, self.deltas_2) = self
+            .clusters
             .iter()
             .zip(self.deltas_0.iter())
             .map(|(&c, d0)| (self.d1(c, *d0), self.d2(c, *d0)))
@@ -325,7 +324,7 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
 
     pub fn filter(mut self) -> Self {
         let d1_k = self.find_kth(&Delta::Delta1);
-        let keep = self.deltas_2.iter().map(|d2| *d2 <= d1_k); 
+        let keep = self.deltas_2.iter().map(|d2| *d2 <= d1_k);
 
         (self.clusters, self.deltas_0, self.deltas_1, self.deltas_2) = self
             .clusters
@@ -335,8 +334,8 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
             .zip(self.deltas_2.clone().into_iter())
             .zip(keep)
             .fold(
-                (vec![], vec![], vec![], vec![]), 
-                |(mut c, mut d0, mut d1, mut d2), ((((c_, d0_), d1_), d2_), k_) | {
+                (vec![], vec![], vec![], vec![]),
+                |(mut c, mut d0, mut d1, mut d2), ((((c_, d0_), d1_), d2_), k_)| {
                     if k_ {
                         c.push(c_);
                         d0.push(d0_);
@@ -344,9 +343,8 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
                         d2.push(d2_);
                     }
                     (c, d0, d1, d2)
-
-                }, 
-            ); 
+                },
+            );
 
         self.update_cumulative_cardinalities(0, self.clusters.len() - 1);
         self
