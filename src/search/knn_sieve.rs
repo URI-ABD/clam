@@ -188,6 +188,7 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
     /// `delta0` = dist from query to cluster center
     /// `delta1` = dist from query to potentially farthest instance in cluster
     /// `delta2` = dist from query to potentially closest instance in cluster
+    #[allow(dead_code)]
     fn compute_delta(c: &Cluster<T, U>, query: &[T], delta: &Delta) -> U {
         let delta0 = KnnSieve::compute_delta0(c, query);
         match delta {
@@ -475,7 +476,7 @@ mod tests {
         let cluster = Cluster::new_root(&space).build().partition(&partition_criteria, true);
 
         let flat_tree = cluster.subtree();
-        let mut sieve = KnnSieve::new(flat_tree, &data[0], 1);
+        let mut sieve = KnnSieve::new(flat_tree, &data[0], 2).build();
 
         // let mut v: Vec<DeltaValues<f64>> = vec![
         //     DeltaValues {
