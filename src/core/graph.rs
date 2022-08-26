@@ -47,7 +47,7 @@ impl<'a, T: Number, U: Number> Edge<'a, T, U> {
     ///
     /// It is upon the user to verify that the two `Cluster`s are close enough
     /// to have an edge between them.
-    pub fn new(left: &'a Cluster<T, U>, right: &'a Cluster<T, U>, distance: U) -> Self {
+    pub fn new(left: &'a Cluster<'a, T, U>, right: &'a Cluster<'a, T, U>, distance: U) -> Self {
         if left < right {
             Edge { left, right, distance }
         } else {
@@ -60,22 +60,22 @@ impl<'a, T: Number, U: Number> Edge<'a, T, U> {
     }
 
     /// Whether this edge has the given `Cluster` at one of its ends.
-    pub fn contains(&self, c: &Cluster<T, U>) -> bool {
+    pub fn contains(&self, c: &Cluster<'a, T, U>) -> bool {
         c == self.left || c == self.right
     }
 
     /// A 2-slice of the `Cluster`s in this `Edge`.
-    pub fn clusters(&self) -> [&Cluster<T, U>; 2] {
+    pub fn clusters(&self) -> [&Cluster<'a, T, U>; 2] {
         [self.left, self.right]
     }
 
     /// A reference to the `Cluster` at the `left` end of the `Edge`.
-    pub fn left(&self) -> &Cluster<T, U> {
+    pub fn left(&self) -> &Cluster<'a, T, U> {
         self.left
     }
 
     /// A reference to the `Cluster` at the `right` end of the `Edge`.
-    pub fn right(&self) -> &Cluster<T, U> {
+    pub fn right(&self) -> &Cluster<'a, T, U> {
         self.right
     }
 
@@ -94,7 +94,7 @@ impl<'a, T: Number, U: Number> Edge<'a, T, U> {
     /// Err:
     ///
     /// * If `c` is not one of the `Cluster`s connected by this `Edge`.
-    pub fn neighbor(&self, c: &Cluster<T, U>) -> Result<&Cluster<T, U>, String> {
+    pub fn neighbor(&self, c: &Cluster<'a, T, U>) -> Result<&Cluster<'a, T, U>, String> {
         if c == self.left {
             Ok(self.right)
         } else if c == self.right {
@@ -204,15 +204,26 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         self
     }
 
-    pub fn with_eccentricities(mut self) -> Self {
-        self.frontier_sizes = Some(
+    pub fn with_eccentricities(&'a self) -> Self {
+        let frontier_sizes = Some(
             self.clusters
                 .iter()
                 .map(|&c| (c, self.unchecked_traverse(c).1))
                 .collect(),
         );
 
-        self
+        Self {
+            clusters: self.clusters.clone(),
+            edges: self.edges.clone(),
+            adjacency_map: self.adjacency_map.clone(),
+            population: self.population,
+            min_depth: self.min_depth,
+            max_depth: self.max_depth,
+            ordered_clusters: self.ordered_clusters.clone(),
+            distance_matrix: self.distance_matrix.clone(),
+            adjacency_matrix: self.adjacency_matrix.clone(),
+            frontier_sizes,
+        }
     }
 
     pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, T, U>> {
@@ -231,11 +242,11 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         components
     }
 
-    pub fn clusters(&self) -> &ClusterSet<T, U> {
+    pub fn clusters(&self) -> &ClusterSet<'a, T, U> {
         &self.clusters
     }
 
-    pub fn edges(&self) -> &EdgeSet<T, U> {
+    pub fn edges(&self) -> &EdgeSet<'a, T, U> {
         &self.edges
     }
 
@@ -267,7 +278,7 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         &self.adjacency_map
     }
 
-    pub fn ordered_clusters(&self) -> &[&Cluster<T, U>] {
+    pub fn ordered_clusters(&self) -> &[&Cluster<'a, T, U>] {
         &self.ordered_clusters
     }
 
@@ -291,7 +302,7 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
             .unwrap()
     }
 
-    fn assert_contains(&self, c: &Cluster<T, U>) -> Result<(), String> {
+    fn assert_contains(&self, c: &Cluster<'a, T, U>) -> Result<(), String> {
         if self.clusters.contains(&c) {
             Ok(())
         } else {
@@ -299,20 +310,20 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         }
     }
 
-    pub fn unchecked_vertex_degree(&self, c: &Cluster<'a, T, U>) -> usize {
+    pub fn unchecked_vertex_degree(&'a self, c: &Cluster<'a, T, U>) -> usize {
         self.unchecked_neighbors_of(c).len()
     }
 
-    pub fn vertex_degree(&self, c: &Cluster<'a, T, U>) -> Result<usize, String> {
+    pub fn vertex_degree(&'a self, c: &Cluster<'a, T, U>) -> Result<usize, String> {
         self.assert_contains(c)?;
         Ok(self.unchecked_vertex_degree(c))
     }
 
-    pub fn unchecked_neighbors_of(&self, c: &Cluster<'a, T, U>) -> &ClusterSet<T, U> {
+    pub fn unchecked_neighbors_of(&'a self, c: &Cluster<'a, T, U>) -> &ClusterSet<T, U> {
         self.adjacency_map.get(c).unwrap()
     }
 
-    pub fn neighbors_of(&self, c: &Cluster<'a, T, U>) -> Result<&ClusterSet<T, U>, String> {
+    pub fn neighbors_of(&'a self, c: &Cluster<'a, T, U>) -> Result<&ClusterSet<T, U>, String> {
         self.assert_contains(c)?;
         Ok(self.unchecked_neighbors_of(c))
     }
@@ -342,7 +353,7 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         Ok(self.unchecked_traverse(start))
     }
 
-    pub fn unchecked_frontier_sizes(&'a self, c: &'a Cluster<T, U>) -> &[usize] {
+    pub fn unchecked_frontier_sizes(&'a self, c: &'a Cluster<'a, T, U>) -> &[usize] {
         self.frontier_sizes
             .as_ref()
             .expect("Please call `with_eccentricities` before using this method.")
@@ -350,16 +361,16 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
             .unwrap()
     }
 
-    pub fn frontier_sizes(&'a self, c: &'a Cluster<T, U>) -> Result<&[usize], String> {
+    pub fn frontier_sizes(&'a self, c: &'a Cluster<'a, T, U>) -> Result<&[usize], String> {
         self.assert_contains(c)?;
         Ok(self.unchecked_frontier_sizes(c))
     }
 
-    pub fn unchecked_eccentricity(&'a self, c: &'a Cluster<T, U>) -> usize {
+    pub fn unchecked_eccentricity(&'a self, c: &'a Cluster<'a, T, U>) -> usize {
         self.unchecked_frontier_sizes(c).len()
     }
 
-    pub fn eccentricity(&'a self, c: &'a Cluster<T, U>) -> Result<usize, String> {
+    pub fn eccentricity(&'a self, c: &'a Cluster<'a, T, U>) -> Result<usize, String> {
         self.assert_contains(c)?;
         Ok(self.unchecked_eccentricity(c))
     }

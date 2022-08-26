@@ -8,7 +8,7 @@ pub type ClusterScores<'a, T, U> = HashMap<&'a Cluster<'a, T, U>, f64>;
 pub type InstanceScores = HashMap<usize, f64>;
 
 pub trait GraphScorer<'a, T: Number, U: Number>: Hash {
-    fn call(&self, graph: &'a Graph<T, U>) -> (ClusterScores<'a, T, U>, Vec<f64>) {
+    fn call(&self, graph: &'a Graph<'a, T, U>) -> (ClusterScores<'a, T, U>, Vec<f64>) {
         let cluster_scores = {
             let mut cluster_scores = self.score_graph(graph);
             if self.normalize_on_clusters() {
@@ -44,7 +44,7 @@ pub trait GraphScorer<'a, T: Number, U: Number>: Hash {
 
     fn normalize_on_clusters(&self) -> bool;
 
-    fn score_graph(&self, graph: &'a Graph<T, U>) -> ClusterScores<'a, T, U>;
+    fn score_graph(&self, graph: &'a Graph<'a, T, U>) -> ClusterScores<'a, T, U>;
 
     fn inherit_scores(&self, scores: &ClusterScores<T, U>) -> InstanceScores {
         scores
@@ -82,7 +82,7 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for ClusterCardinality {
         true
     }
 
-    fn score_graph(&self, graph: &'a Graph<T, U>) -> ClusterScores<'a, T, U> {
+    fn score_graph(&self, graph: &'a Graph<'a, T, U>) -> ClusterScores<'a, T, U> {
         graph
             .ordered_clusters()
             .iter()
@@ -252,7 +252,7 @@ impl<'a, T: Number, U: Number> GraphScorer<'a, T, U> for GraphNeighborhood {
         true
     }
 
-    fn score_graph(&self, graph: &'a Graph<T, U>) -> ClusterScores<'a, T, U> {
+    fn score_graph(&self, graph: &'a Graph<'a, T, U>) -> ClusterScores<'a, T, U> {
         graph
             .ordered_clusters()
             .iter()

@@ -6,9 +6,11 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use bitvec::prelude::*;
+// use rayon::prelude::*;
 
 use crate::prelude::*;
 use crate::utils::helpers;
+// use crate::utils::reports;
 
 const SUB_SAMPLE_LIMIT: usize = 100;
 
@@ -33,7 +35,7 @@ pub type Ratios = [f64; 6];
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug, Clone)]
 pub struct Cluster<'a, T: Number, U: Number> {
-    space: &'a dyn Space<T, U>,
+    space: &'a dyn Space<'a, T, U>,
     cardinality: usize,
     // indices are only held at leaf clusters. This helps reduce the memory
     // footprint of the tree.
@@ -100,7 +102,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
     /// # Arguments
     ///
     /// * `space`: metric-space on which to create the `Cluster`.
-    pub fn new_root(space: &'a dyn Space<T, U>) -> Self {
+    pub fn new_root(space: &'a dyn Space<'a, T, U>) -> Self {
         let name = bitvec![1];
         let indices = space.data().indices();
         Cluster::new(space, indices, name)
@@ -114,7 +116,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
     /// * `indices`: The indices of instances from the `Dataset` that are
     /// contained in the `Cluster`.
     /// * `name`: `BitVec` name for the `Cluster`.
-    pub fn new(space: &'a dyn Space<T, U>, indices: Vec<usize>, name: BitVec) -> Self {
+    pub fn new(space: &'a dyn Space<'a, T, U>, indices: Vec<usize>, name: BitVec) -> Self {
         Cluster {
             space,
             cardinality: indices.len(),
@@ -151,14 +153,14 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
 
         let sample_distances: Vec<U> = self
             .space
-            .distance_pairwise(&arg_samples)
+            .pairwise(&arg_samples)
             .into_iter()
             .map(|v| v.into_iter().sum())
             .collect();
 
         let arg_center = arg_samples[helpers::arg_min(&sample_distances).0];
 
-        let center_distances = self.space.distance_one_to_many(arg_center, &indices);
+        let center_distances = self.space.one_to_many(arg_center, &indices);
         let (arg_radius, radius) = helpers::arg_max(&center_distances);
         let arg_radius = indices[arg_radius];
 
@@ -191,7 +193,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
 
         let left_pole = self.arg_radius();
         let remaining_indices: Vec<usize> = indices.iter().filter(|&&i| i != left_pole).cloned().collect();
-        let left_distances = self.space.distance_one_to_many(left_pole, &remaining_indices);
+        let left_distances = self.space.one_to_many(left_pole, &remaining_indices);
 
         let arg_right = helpers::arg_max(&left_distances).0;
         let right_pole = remaining_indices[arg_right];
@@ -207,7 +209,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
                 .filter(|&&i| i != right_pole)
                 .cloned()
                 .collect();
-            let right_distances = self.space.distance_one_to_many(right_pole, &remaining_indices);
+            let right_distances = self.space.one_to_many(right_pole, &remaining_indices);
 
             let (left_indices, right_indices): (Vec<_>, Vec<_>) = remaining_indices
                 .into_iter()
@@ -271,6 +273,10 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
             let [left, right] = self.partition_once();
 
             let (left, right) = if recursive {
+                // (
+                //     left.partition(partition_criteria, recursive),
+                //     right.partition(partition_criteria, recursive),
+                // )
                 rayon::join(
                     || left.partition(partition_criteria, recursive),
                     || right.partition(partition_criteria, recursive),
@@ -388,8 +394,38 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
         self
     }
 
+    // pub fn report_cluster(&self) -> reports::ClusterReport {
+    //     reports::ClusterReport {
+    //         name: self.name_str(),
+    //         cardinality: self.cardinality,
+    //         indices: self.indices.clone(),
+    //         arg_center: self.arg_center,
+    //         arg_radius: self.arg_radius,
+    //         radius: self.radius.map(|v| v.as_f64()),
+    //         lfd: self.lfd,
+    //         ratios: self.ratios,
+    //     }
+    // }
+
+    // pub fn report_tree(&self, build_time: f64) -> (reports::TreeReport, Vec<reports::ClusterReport>) {
+    //     let tree_report = reports::TreeReport {
+    //         data_name: self.space.data().name(),
+    //         cardinality: self.space.data().cardinality(),
+    //         dimensionality: self.space.data().dimensionality(),
+    //         metric_name: self.space.metric().name(),
+    //         root_name: self.name_str(),
+    //         max_depth: self.max_leaf_depth(),
+    //         build_time,
+    //     };
+
+    //     // let cluster_reports = self.subtree().into_par_iter().map(|c| c.report_cluster()).collect();
+    //     let cluster_reports = self.subtree().into_iter().map(|c| c.report_cluster()).collect();
+
+    //     (tree_report, cluster_reports)
+    // }
+
     /// A reference to the underlying metric space.
-    pub fn space(&self) -> &dyn Space<T, U> {
+    pub fn space(&self) -> &dyn Space<'a, T, U> {
         self.space
     }
 
@@ -456,7 +492,7 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
     /// The instance at the center, i.e. the geometric median, of the `Cluster`.
     ///
     /// For `Cluster`s with a large `cardinality`, this is an approximation.
-    pub fn center(&self) -> Vec<T> {
+    pub fn center(&self) -> &'a [T] {
         self.space.data().get(self.arg_center())
     }
 
@@ -569,12 +605,12 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
 
     /// Distance from the `center` to the given indexed instance.
     pub fn distance_to_indexed_instance(&self, index: usize) -> U {
-        self.space().distance_one_to_one(self.arg_center(), index)
+        self.space().one_to_one(self.arg_center(), index)
     }
 
     /// Distance from the `center` to the given instance.
     pub fn distance_to_instance(&self, instance: &[T]) -> U {
-        self.space().metric().one_to_one(&self.center(), instance)
+        self.space().metric().one_to_one(self.center(), instance)
     }
 
     /// Distance from the `center` of this `Cluster` to the center of the

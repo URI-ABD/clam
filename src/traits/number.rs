@@ -4,15 +4,22 @@
 //! Distance values are also represented as `Number`s.
 
 use std::convert::TryInto;
-use std::fmt::Debug;
-use std::fmt::Display;
-use std::iter::Sum;
-
-use num_traits::Num;
-use num_traits::NumCast;
 
 /// Collections of `Number`s can be used to calculate distances.
-pub trait Number: Num + NumCast + Sum + Copy + Clone + PartialOrd + Send + Sync + Debug + Display {
+pub trait Number:
+    num_traits::Num
+    + num_traits::NumCast
+    + std::iter::Sum
+    + Copy
+    + Clone
+    + PartialOrd
+    + Send
+    + Sync
+    + std::fmt::Debug
+    + std::fmt::Display
+    + serde::Serialize
+    + serde::Deserialize<'static>
+{
     /// Returns the number of bytes used to store this number
     fn num_bytes() -> u8;
 
@@ -28,8 +35,8 @@ pub trait Number: Num + NumCast + Sum + Copy + Clone + PartialOrd + Send + Sync 
     fn from_le_bytes(bytes: &[u8]) -> Result<Self, String>;
     fn from_be_bytes(bytes: &[u8]) -> Result<Self, String>;
 
-    /// Converts the number to an f64 for some helpful functions.
     fn as_f64(&self) -> f64;
+    // fn as_f32(&self) -> f32;
 }
 
 macro_rules! impl_number {
@@ -65,6 +72,10 @@ macro_rules! impl_number {
                 fn as_f64(&self) -> f64 {
                     *self as f64
                 }
+
+                // fn as_f32(&self) -> f32 {
+                //     *self as f32
+                // }
             }
         )*
     }

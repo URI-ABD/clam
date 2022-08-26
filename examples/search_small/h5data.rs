@@ -46,7 +46,7 @@ impl<Tr: crate::h5number::H5Number> std::fmt::Debug for H5Data<Tr> {
     }
 }
 
-impl<Tr: crate::h5number::H5Number, T: clam::Number> clam::Dataset<T> for H5Data<Tr> {
+impl<'a, Tr: crate::h5number::H5Number, T: clam::Number> clam::Dataset<'a, T> for H5Data<Tr> {
     fn name(&self) -> String {
         self.name.clone()
     }
@@ -63,8 +63,10 @@ impl<Tr: crate::h5number::H5Number, T: clam::Number> clam::Dataset<T> for H5Data
         (0..self.shape.0).collect()
     }
 
-    fn get(&self, index: usize) -> Vec<T> {
-        let row: Vec<Tr> = self.data.read_slice_1d(ndarray::s![index, ..]).unwrap().to_vec();
-        row.into_iter().map(|v| T::from(v).unwrap()).collect()
+    #[allow(unused_variables)]
+    fn get(&self, index: usize) -> &'a [T] {
+        todo!()
+        // let row: Vec<Tr> = self.data.read_slice_1d(ndarray::s![index, ..]).unwrap().to_vec();
+        // row.into_iter().map(|v| T::from(v).unwrap()).collect::<Vec<_>>()
     }
 }

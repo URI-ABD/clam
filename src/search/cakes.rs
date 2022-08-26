@@ -2,17 +2,17 @@ use rayon::prelude::*;
 
 use crate::prelude::*;
 
-pub type SearchHistory<'a, T, U> = Vec<(&'a Cluster<'a, T, U>, U)>;
+pub type ClusterResults<'a, T, U> = Vec<(&'a Cluster<'a, T, U>, U)>;
 
 #[derive(Debug, Clone)]
 pub struct CAKES<'a, T: Number, U: Number> {
-    space: &'a dyn Space<T, U>,
+    space: &'a dyn Space<'a, T, U>,
     root: Cluster<'a, T, U>,
     depth: usize,
 }
 
 impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
-    pub fn new(space: &'a dyn Space<T, U>) -> Self {
+    pub fn new(space: &'a dyn Space<'a, T, U>) -> Self {
         CAKES {
             space,
             root: Cluster::new_root(space).build(),
@@ -30,11 +30,11 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         }
     }
 
-    pub fn space(&self) -> &dyn Space<T, U> {
+    pub fn space(&self) -> &dyn Space<'a, T, U> {
         self.space
     }
 
-    pub fn data(&self) -> &dyn Dataset<T> {
+    pub fn data(&self) -> &dyn Dataset<'a, T> {
         self.space.data()
     }
 
@@ -42,7 +42,7 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         self.space.metric()
     }
 
-    pub fn root(&self) -> &Cluster<T, U> {
+    pub fn root(&self) -> &Cluster<'a, T, U> {
         &self.root
     }
 
@@ -58,120 +58,156 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
         self.root.radius() * U::from(2).unwrap()
     }
 
-    pub fn batch_rnn_search(&self, queries_radii: &[(Vec<T>, U)]) -> Vec<Vec<(usize, U)>> {
+    pub fn batch_rnn_search(&'a self, queries_radii: &[(&[T], U)]) -> Vec<Vec<(usize, U)>> {
         queries_radii
             .par_iter()
+            // .iter()
             .map(|(query, radius)| self.rnn_search(query, *radius))
             .collect()
     }
 
-    pub fn rnn_search(&self, query: &[T], radius: U) -> Vec<(usize, U)> {
-        let candidate_clusters = self.rnn_tree_search(query, radius).1;
+    pub fn rnn_search(&'a self, query: &[T], radius: U) -> Vec<(usize, U)> {
+        let [confirmed, straddlers] = self.rnn_tree_search(query, radius);
 
-        if candidate_clusters.is_empty() {
-            Vec::new()
-        } else {
-            self.rnn_leaf_search(query, radius, &candidate_clusters)
-        }
+        let clusters = confirmed
+            .into_iter()
+            .map(|(c, _)| c)
+            .chain(straddlers.into_iter().map(|(c, _)| c))
+            .collect::<Vec<_>>();
+        self.rnn_leaf_search(query, radius, &clusters)
+
+        // confirmed
+        //     .into_iter()
+        //     .flat_map(|(c, d)| {
+        //         let distances = if c.is_leaf() {
+        //             vec![d; c.cardinality()]
+        //         } else {
+        //             self.space.query_to_many(query, &c.indices())
+        //         };
+        //         c.indices().into_iter().zip(distances.into_iter())
+        //     });
+
+        // straddlers
+        //     .into_iter()
+        //     .flat_map(|(c, _)| c.indices())
+        //     .filter(|&i| self.space.query_to_one(query, i) <= radius)
+        //     .chain(confirmed.into_iter().flat_map(|(c, _)| c.indices()))
+        //     .collect()
     }
 
-    pub fn rnn_tree_search(&self, query: &[T], radius: U) -> (SearchHistory<T, U>, Vec<&Cluster<T, U>>) {
-        let mut history = Vec::new();
-        let mut hits = Vec::new();
+    pub fn rnn_tree_search(&'a self, query: &[T], radius: U) -> [ClusterResults<'a, T, U>; 2] {
+        let mut confirmed = Vec::new();
+        let mut straddlers = Vec::new();
         let mut candidate_clusters = vec![self.root()];
 
         while !candidate_clusters.is_empty() {
-            let centers: Vec<_> = candidate_clusters.iter().map(|c| c.center()).collect();
-            let distances = if self.metric().is_expensive() || centers.len() > 1000 {
-                self.metric().par_one_to_many(query, &centers)
-            } else {
-                self.metric().one_to_many(query, &centers)
-            };
-            let close_enough: Vec<_> = candidate_clusters
+            let (terminal, non_terminal): (Vec<_>, Vec<_>) = candidate_clusters
                 .into_iter()
-                .zip(distances.into_iter())
-                .filter(|(c, d)| *d <= (c.radius() + radius))
-                .collect();
-            history.extend(close_enough.iter().cloned());
-            let (terminal, non_terminal): (Vec<_>, Vec<_>) = close_enough
-                .into_iter()
-                .partition(|(c, d)| c.is_leaf() || (c.radius() + *d) <= radius);
-            hits.extend(terminal.into_iter().map(|(c, _)| c));
-            candidate_clusters = non_terminal
-                .into_iter()
-                .flat_map(|(c, _)| [c.left_child(), c.right_child()])
-                .collect();
+                .map(|c| (c, self.space.query_to_one(query, c.arg_center())))
+                .filter(|&(c, d)| d <= (c.radius() + radius))
+                .partition(|&(c, d)| (c.radius() + d) <= radius);
+            confirmed.extend(terminal.into_iter());
+
+            let (terminal, non_terminal): (Vec<_>, Vec<_>) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
+            straddlers.extend(terminal.into_iter());
+
+            candidate_clusters = non_terminal.into_iter().flat_map(|(c, _)| c.children()).collect();
         }
 
-        (history, hits)
+        [confirmed, straddlers]
     }
 
     pub fn rnn_leaf_search(&self, query: &[T], radius: U, candidate_clusters: &[&Cluster<T, U>]) -> Vec<(usize, U)> {
         self.linear_search(
             query,
             radius,
-            Some(candidate_clusters.iter().flat_map(|c| c.indices()).collect()),
+            Some(candidate_clusters.iter().flat_map(|&c| c.indices()).collect()),
         )
     }
 
-    pub fn batch_knn_search(&self, queries_ks: &[(Vec<T>, usize)]) -> Vec<Vec<(usize, U)>> {
-        queries_ks
+    pub fn batch_knn_search(&'a self, queries: &'a [&[T]], k: usize) -> Vec<Vec<usize>> {
+        queries
             .par_iter()
-            .map(|(query, k)| self.knn_search(query, *k))
+            // .iter()
+            .map(|&query| self.knn_search(query, k))
             .collect()
     }
 
-    pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
-        let sieve = {
-            let mut sieve = super::KnnSieve::new(vec![&self.root], query, k);
+    pub fn knn_search(&'a self, query: &'a [T], k: usize) -> Vec<usize> {
+        if k > self.root.cardinality() {
+            self.root.indices()
+        } else {
+            let mut sieve = super::KnnSieve::new(self.root.children().to_vec(), query, k);
+            let mut counter = 0;
 
-            while !sieve.are_all_leaves() {
-                sieve = sieve.replace_with_child_clusters().filter();
+            while !sieve.is_refined {
+                sieve = sieve.refine_step(counter);
+                counter += 1;
             }
+            sieve.refined_extract()
+        }
+    }
 
-            sieve
-        };
+    fn compute_lfd(&self, distances: &[U], radius: U) -> f64 {
+        if radius == U::zero() {
+            1.
+        } else {
+            let half_count = distances
+                .iter()
+                .filter(|&&d| d <= (radius / U::from(2).unwrap()))
+                .count();
+            if half_count > 0 {
+                ((distances.len() as f64) / (half_count as f64)).log2()
+            } else {
+                1.
+            }
+        }
+    }
 
-        // TODO: These three lines should be a unittest on KnnSieve
-        // let last = sieve.cumulative_cardinalities.len() - 1;
-        // assert!(
-        //     sieve.cumulative_cardinalities[last] >= k,
-        //     "Sieve does not have enough clusters to produce k hits."
-        // );
-        // assert!(
-        //     sieve.cumulative_cardinalities[last - 1] < k,
-        //     "Sieve has too many clusters and needs better filtering."
-        // );
+    pub fn batch_knn_by_rnn(&'a self, queries: &[&[T]], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries
+            .par_iter()
+            // .iter()
+            .map(|&q| self.knn_by_rnn(q, k))
+            .collect()
+    }
 
-        let knn = sieve.extract();
-        assert!(knn.len() == k);
+    pub fn knn_by_rnn(&'a self, query: &[T], k: usize) -> Vec<(usize, U)> {
+        let mut radius = self.root.radius() / U::from(self.root.cardinality()).unwrap();
+        let mut hits = self.rnn_search(query, radius);
 
-        knn
+        while hits.is_empty() {
+            radius = U::from((radius * U::from(2).unwrap()).as_f64() + 1e-12).unwrap();
+            hits = self.rnn_search(query, radius);
+        }
+
+        while hits.len() < k {
+            let distances = hits.iter().map(|(_, d)| *d).collect::<Vec<_>>();
+            let lfd = self.compute_lfd(&distances, radius);
+            let factor = ((k as f64) / (hits.len() as f64)).powf(1. / (lfd + 1e-12));
+            assert!(factor > 1.);
+            radius = U::from(radius.as_f64() * factor).unwrap();
+            hits = self.rnn_search(query, radius);
+        }
+
+        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+        hits[..k].to_vec()
     }
 
     pub fn linear_search(&self, query: &[T], radius: U, indices: Option<Vec<usize>>) -> Vec<(usize, U)> {
         let indices = indices.unwrap_or_else(|| self.root.indices());
-
-        if self.metric().is_expensive() || indices.len() > 1000 {
-            indices
-                .into_par_iter()
-                .map(|i| (i, self.data().get(i)))
-                .map(|(i, y)| (i, self.metric().one_to_one(query, &y)))
-                .filter(|(_, d)| *d <= radius)
-                .collect()
-        } else {
-            indices
-                .into_iter()
-                .map(|i| (i, self.data().get(i)))
-                .map(|(i, y)| (i, self.metric().one_to_one(query, &y)))
-                .filter(|(_, d)| *d <= radius)
-                .collect()
-        }
+        let distances = self.space.query_to_many(query, &indices);
+        indices
+            .into_iter()
+            .zip(distances.into_iter())
+            .filter(|(_, d)| *d <= radius)
+            .collect()
     }
 
     pub fn batch_linear_search(&self, queries_radii: &[(Vec<T>, U)]) -> Vec<Vec<(usize, U)>> {
         queries_radii
             .par_iter()
+            // .iter()
             .map(|(query, radius)| self.linear_search(query, *radius, None))
             .collect()
     }
@@ -179,8 +215,6 @@ impl<'a, T: Number, U: Number> CAKES<'a, T, U> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::prelude::*;
 
     use super::CAKES;
@@ -189,7 +223,7 @@ mod tests {
     fn test_search() {
         let data = vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]];
         let dataset = crate::Tabular::new(&data, "test_search".to_string());
-        let metric = metric_from_name("euclidean", false).unwrap();
+        let metric = metric_from_name::<f64, f64>("euclidean", false).unwrap();
         let space = crate::TabularSpace::new(&dataset, metric.as_ref(), false);
         let cakes = CAKES::new(&space).build(&crate::PartitionCriteria::new(true));
 
@@ -201,8 +235,8 @@ mod tests {
         assert!(!results.contains(&2));
         assert!(!results.contains(&3));
 
-        let query = Arc::new(cakes.data()).get(1);
-        let (results, _): (Vec<_>, Vec<_>) = cakes.rnn_search(&query, 0.).into_iter().unzip();
+        let query = cakes.data().get(1);
+        let (results, _): (Vec<_>, Vec<_>) = cakes.rnn_search(query, 0.).into_iter().unzip();
         assert_eq!(results.len(), 1);
         assert!(!results.contains(&0));
         assert!(results.contains(&1));

@@ -1,521 +1,614 @@
 use std::cmp::Ordering;
 
-use crate::prelude::*;
+// use rayon::prelude::*;
 
-#[derive(Debug)]
+use crate::{prelude::*, search::find_kth};
+// use crate::utils::helpers;
+
+#[derive(Debug, Clone)]
 pub enum Delta {
-    Delta0,
-    Delta1,
-    Delta2,
+    D,
+    Max,
+    Min,
+}
+
+#[derive(Debug, Clone)]
+pub struct Grain<'a, T: Number, U: Number> {
+    pub c: &'a Cluster<'a, T, U>,
+    pub d: U,
+    pub d_min: U,
+    pub d_max: U,
+}
+
+impl<'a, T: Number, U: Number> std::fmt::Display for Grain<'a, T, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "name: {}, d {:6.12}, d_min: {:6.12}, d_max: {:6.12}",
+            self.c.name_str(),
+            self.d,
+            self.d_min,
+            self.d_max
+        )
+    }
+}
+
+impl<'a, T: Number, U: Number> PartialEq for Grain<'a, T, U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.d_max == other.d_max
+    }
+}
+
+impl<'a, T: Number, U: Number> Eq for Grain<'a, T, U> {}
+
+impl<'a, T: Number, U: Number> PartialOrd for Grain<'a, T, U> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.d_max.partial_cmp(&other.d_max)
+    }
+}
+
+impl<'a, T: Number, U: Number> Ord for Grain<'a, T, U> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl<'a, T: Number, U: Number> Grain<'a, T, U> {
+    pub fn new(c: &'a Cluster<'a, T, U>, d: U) -> Self {
+        let d_min = if d > c.radius() { d - c.radius() } else { U::zero() };
+        let d_max = d + c.radius();
+        Self { c, d, d_min, d_max }
+    }
+
+    pub fn is_inside(&self, threshold: U) -> bool {
+        self.d_max <= threshold
+    }
+
+    pub fn is_outside(&self, threshold: U) -> bool {
+        self.d_min > threshold
+    }
+
+    pub fn is_straddling(&self, threshold: U) -> bool {
+        !(self.is_inside(threshold) || self.is_outside(threshold))
+    }
+
+    pub fn ord_by_d(&self, other: &Self) -> Ordering {
+        self.d.partial_cmp(&other.d).unwrap()
+    }
+
+    pub fn ord_by_d_min(&self, other: &Self) -> Ordering {
+        self.d_min.partial_cmp(&other.d_min).unwrap()
+    }
+
+    pub fn ord_by_d_max(&self, other: &Self) -> Ordering {
+        self.d_max.partial_cmp(&other.d_max).unwrap()
+    }
 }
 
 #[derive(Debug)]
-//See note above sieve_swap about choice to have 3 separate delta members
+pub struct OrdNumber<U: Number> {
+    pub number: U,
+}
+
+impl<U: Number> PartialEq for OrdNumber<U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number
+    }
+}
+
+impl<U: Number> Eq for OrdNumber<U> {}
+
+impl<U: Number> PartialOrd for OrdNumber<U> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.number.partial_cmp(&other.number)
+    }
+}
+
+impl<U: Number> Ord for OrdNumber<U> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
 
 /// Struct for facilitating knn tree search
 /// `clusters` represents the list of candidate Clusters
 /// The ith element of `cumulative_cardinalities` represents the sum of cardinalities of the 0th through ith Cluster in
 /// `clusters`.
+#[derive(Debug)]
 pub struct KnnSieve<'a, T: Number, U: Number> {
-    pub clusters: Vec<&'a Cluster<'a, T, U>>,
+    space: &'a dyn Space<'a, T, U>,
+    pub grains: Vec<Grain<'a, T, U>>,
     query: &'a [T],
-    k: usize,
+    pub k: usize,
     pub cumulative_cardinalities: Vec<usize>,
-    pub deltas_0: Vec<U>,
-    deltas_1: Vec<U>,
-    deltas_2: Vec<U>,
+    pub is_refined: bool,
+    insiders: Vec<Grain<'a, T, U>>,
+    straddlers: Vec<Grain<'a, T, U>>,
+    pub guaranteed_cardinalities: Vec<usize>,
+    threshold: U,
+    pub hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
+}
+
+impl<'a, T: Number, U: Number> std::fmt::Display for KnnSieve<'a, T, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "k: {}, \n\n{}.\n",
+            self.k,
+            self.grains
+                .iter()
+                .zip(self.cumulative_cardinalities.iter())
+                .enumerate()
+                .map(|(i, (g, c))| format!("i: {}, car: {}, grain: {}", i, c, g))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+}
+
+fn grain_filter<T: Number, U: Number>(mut grains: Vec<Grain<T, U>>, threshold: U) -> [Vec<Grain<T, U>>; 2] {
+    let (insiders, straddlers) = grains
+        .drain(..)
+        .filter(|g| !g.is_outside(threshold))
+        .partition(|g| g.is_inside(threshold));
+
+    [insiders, straddlers]
 }
 
 impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
     pub fn new(clusters: Vec<&'a Cluster<'a, T, U>>, query: &'a [T], k: usize) -> Self {
-        KnnSieve {
-            clusters,
-            query,
-            k,
-            cumulative_cardinalities: vec![],
-            deltas_0: vec![],
-            deltas_1: vec![],
-            deltas_2: vec![],
-        }
-    }
-
-    pub fn build(mut self) -> Self {
-        self.cumulative_cardinalities = self
-            .clusters
+        let space = clusters.first().unwrap().space();
+        let grains = clusters
+            .iter()
+            .map(|&c| Grain::new(c, space.query_to_one(query, c.arg_center())))
+            .collect();
+        let cumulative_cardinalities = clusters
             .iter()
             .scan(0, |acc, c| {
                 *acc += c.cardinality();
                 Some(*acc)
             })
             .collect();
+        Self {
+            space,
+            grains,
+            query,
+            k,
+            cumulative_cardinalities,
+            is_refined: false,
+            insiders: vec![],
+            straddlers: vec![],
+            guaranteed_cardinalities: vec![],
+            threshold: U::zero(),
+            hits: priority_queue::DoublePriorityQueue::new(),
+        }
+    }
 
-        self.deltas_0 = self.clusters.iter().map(|&c| self.d0(c)).collect();
+    #[inline(never)]
+    #[allow(clippy::needless_collect)]
+    pub fn refine_step(mut self, step: usize) -> Self {
+        log::debug!("");
+        log::debug!("Step {}: Starting with {} grains ...", step, self.grains.len());
 
-        (self.deltas_1, self.deltas_2) = self
-            .clusters
+        let mut thresholds = self
+            .grains
             .iter()
-            .zip(self.deltas_0.iter())
-            .map(|(&c, d0)| (self.d1(c, *d0), self.d2(c, *d0)))
-            .unzip();
+            .map(|g| (g.d, if g.c.is_leaf() { g.c.cardinality() } else { 1 }))
+            .chain(
+                self.grains
+                    .iter()
+                    .filter(|g| !g.c.is_leaf())
+                    .map(|g| (g.d_max, g.c.cardinality() - 1)),
+            )
+            .chain(self.hits.iter().map(|(_, d)| (d.number, 1)))
+            .collect::<Vec<_>>();
+        let (index, (threshold, _)) = find_kth::find_kth_threshold(&mut thresholds, self.k);
 
-        self
-    }
-
-    fn d0(&self, c: &Cluster<T, U>) -> U {
-        c.distance_to_instance(self.query)
-    }
-
-    fn d1(&self, c: &Cluster<T, U>, d0: U) -> U {
-        d0 + c.radius()
-    }
-
-    fn d2(&self, c: &Cluster<T, U>, d0: U) -> U {
-        if d0 > c.radius() {
-            d0 - c.radius()
-        } else {
-            U::zero()
+        if index > 0 {
+            (0..index).for_each(|i| {
+                assert!(
+                    thresholds[i].0 <= threshold,
+                    "Failed in smaller partition at index: {}, i: {}, new_threshold: {} vs old_threshold: {}",
+                    index,
+                    i,
+                    thresholds[i].0,
+                    threshold
+                )
+            });
         }
-    }
+        ((index + 1)..thresholds.len()).for_each(|i| {
+            assert!(
+                thresholds[i].0 > threshold,
+                "Failed in larger partition at index: {}, i: {}, new_threshold: {} vs old_threshold: {}",
+                index,
+                i,
+                thresholds[i].0,
+                threshold
+            )
+        });
 
-    /// `sort_by_delta_0`, `sort_by_delta_1`, `sort_by_delta_2` sort `clusters` by the desired delta value for each
-    /// cluster.
-    /// NOTE: Right now, these do not also update the delta lists to reflect the sorted order of `clusters`, so
-    /// after the sort, the delta lists will be outdated. This will cause issues. I don't think need to update all of them--
-    /// only those deltas which will be a sort criterion in the subsequent step. After the sorting step is the replacement
-    /// (with child Clusters) step and after that all of the deltas will need to be recomputed anyway.
-    // pub fn sort_by_delta_0(mut self) -> Self {
-    //     let mut indices: Vec<_> = (0..self.deltas_0.len()).collect();
-    //     indices.sort_by(|&i, &j| self.deltas_0[i].partial_cmp(&self.deltas_0[j]).unwrap());
-    //     self.clusters = indices.into_iter().map(|i| self.clusters[i]).collect();
-    //     self
-    // }
+        let num_guaranteed = thresholds[..=index].iter().fold(0, |acc, &(_, c)| acc + c);
+        assert!(
+            num_guaranteed >= self.k,
+            "Step {}: too few guarantees {} vs {}, index: {}, threshold: {}",
+            step,
+            num_guaranteed,
+            self.k,
+            index,
+            threshold,
+        );
+        log::debug!(
+            "Step {}: Chose index {}, threshold {}, and guaranteed {} points, with {} in hits",
+            step,
+            index,
+            threshold,
+            num_guaranteed,
+            self.hits.len(),
+        );
 
-    fn update_deltas(&mut self, indices: &[usize]) {
-        self.deltas_0 = indices.iter().map(|i| self.deltas_0[*i]).collect();
-        self.deltas_1 = indices.iter().map(|i| self.deltas_1[*i]).collect();
-        self.deltas_2 = indices.iter().map(|i| self.deltas_2[*i]).collect();
-    }
-
-    pub fn sort_by_delta_0(&mut self) {
-        let mut indices: Vec<_> = (0..self.deltas_0.len()).collect();
-        indices.sort_by(|&i, &j| self.deltas_0[i].partial_cmp(&self.deltas_0[j]).unwrap());
-        let deltas_indices = indices.clone();
-
-        self.clusters = indices.into_iter().map(|i| self.clusters[i]).collect();
-        self.update_deltas(&deltas_indices);
-    }
-
-    pub fn sort_by_delta_1(&mut self) {
-        let mut indices: Vec<_> = (0..self.deltas_1.len()).collect();
-        indices.sort_by(|&i, &j| self.deltas_1[i].partial_cmp(&self.deltas_1[j]).unwrap());
-        let deltas_indices = indices.clone();
-
-        self.clusters = indices.into_iter().map(|i| self.clusters[i]).collect();
-        self.update_deltas(&deltas_indices);
-    }
-
-    pub fn sort_by_delta_2(&mut self) {
-        let mut indices: Vec<_> = (0..self.deltas_2.len()).collect();
-        indices.sort_by(|&i, &j| self.deltas_2[i].partial_cmp(&self.deltas_2[j]).unwrap());
-        let deltas_indices = indices.clone();
-
-        self.clusters = indices.into_iter().map(|i| self.clusters[i]).collect();
-        self.update_deltas(&deltas_indices);
-    }
-
-    /// Public version of _find_kth()
-    pub fn find_kth(&mut self, delta: &Delta) -> U {
-        self._find_kth(0, self.clusters.len() - 1, delta)
-    }
-
-    // NOTE: I don't know if maintaining all three deltas lists is the best way to do things.
-    //
-    // It would be possible to just maintain deltas_0 and compute delta1 and delta2 for a particular cluster from deltas_0
-    // without ever actually having (and thus without maintaining) deltas_1 and deltas_2. That seems like a lot of calcultion
-    // though, especially when filtering and sorting will rely heavily on delta1 and delta2 values.
-    //
-    // Another option would be to maintain only deltas_0 during find_kth and then recompute lists of deltas_1 and deltas_2 only
-    // before sorting and filtering stage
-
-    /// Swaps elements at given indices, `a` and `b` in `clusters` and each list of deltas such that the ith element in each delta list
-    /// is the delta value for the ith Cluster in `clusters`.
-    fn sieve_swap(&mut self, a: usize, b: usize) {
-        self.clusters.swap(a, b);
-        self.deltas_0.swap(a, b);
-        self.deltas_1.swap(a, b);
-        self.deltas_2.swap(a, b);
-    }
-
-    /// Updates `cumulative_cardinalities` to reflect changes in the order of `clusters.` `l` and `r` specify
-    /// first and last indices in `cumulative_cardinalities` to edit respectively
-    ///
-    /// Requires l >= 0, r < self.clusters.len()
-    fn update_cumulative_cardinalities(&mut self, l: usize, r: usize) {
-        let range = if l == 0 {
-            self.cumulative_cardinalities[0] = self.clusters[0].cardinality();
-            1..=r
-        } else {
-            l..=r
-        };
-        for (i, &c) in range.zip(self.clusters.iter().skip(l)) {
-            self.cumulative_cardinalities[i] = self.cumulative_cardinalities[i - 1] + c.cardinality();
-        }
-    }
-
-    /// Computes `delta0` = dist from query to cluster center
-    fn compute_delta0(c: &Cluster<T, U>, query: &[T]) -> U {
-        c.distance_to_instance(query)
-    }
-
-    /// Computes `delta1` = dist from query to potentially farthest instance in cluster
-    fn compute_delta1(c: &Cluster<T, U>, delta0: U) -> U {
-        delta0 + c.radius()
-    }
-
-    /// Computes `delta2` = dist from query to potentially closest instance in cluster
-    fn compute_delta2(c: &Cluster<T, U>, delta0: U) -> U {
-        if delta0 > c.radius() {
-            delta0 - c.radius()
-        } else {
-            U::zero()
-        }
-    }
-
-    /// Currently, get_delta_by_cluster_index is being used where this was
-    /// Gets the value of the given delta type (0, 1, or 2) based on cluster
-    ///
-    /// `delta0` = dist from query to cluster center
-    /// `delta1` = dist from query to potentially farthest instance in cluster
-    /// `delta2` = dist from query to potentially closest instance in cluster
-    #[allow(dead_code)]
-    fn compute_delta(c: &Cluster<T, U>, query: &[T], delta: &Delta) -> U {
-        let delta0 = KnnSieve::compute_delta0(c, query);
-        match delta {
-            Delta::Delta0 => delta0,
-            Delta::Delta1 => KnnSieve::compute_delta1(c, delta0),
-            Delta::Delta2 => KnnSieve::compute_delta2(c, delta0),
-        }
-    }
-
-    /// Gets the value of the given delta type (0, 1, or 2) based on index (of Cluster)
-    ///
-    /// `delta0` = dist from query to Cluster center
-    /// `delta1` = dist from query to potentially farthest instance in Cluster
-    /// `delta2` = dist from query to potentially closest instance in Cluster
-    fn get_delta_by_cluster_index(&self, index: usize, delta: &Delta) -> U {
-        match delta {
-            Delta::Delta0 => self.deltas_0[index],
-            Delta::Delta1 => self.deltas_1[index],
-            Delta::Delta2 => self.deltas_2[index],
-        }
-    }
-
-    /// Called by `find_kth()`. Takes the same arguments as `find_kth()` and returns the "true"
-    /// index (i.e., index if `clusters` were fully sorted by `delta`) of the Cluster currently at the
-    /// rightmost possible index that could still have the `k`th Cluster (i.e.,`r`th index).
-    /// Cluster at this `r`th index is based on `pivot`, which is simply the element at floor(`r+l`/`2`).
-    ///
-    /// `j` tracks the index of the Cluster being evaluated at each iteration of the while loop. `i`
-    /// counts the number of Clusters whose delta value is less than that of the `r`th Cluster.
-    ///
-    /// If a Cluster has a delta value greater than or equal to that of the `r`th Cluster, it  
-    /// swaps position with the next Cluster whose delta is less than that of the `r`th Cluster.
-    ///
-    /// Since `i` counts the number of Clusters with a delta less than the `r`th Cluster, the final
-    /// swap of the `i`th and `r`th Clusters puts that `r`th Cluster in its correct position (as if
-    /// `i` were sorted).
-    ///
-    /// In `clusters`, each Cluster is of multiplicity 1. `k`, however, reflects the desired index in
-    /// a list of Clusters where each Clusters' multiplicity is its cardinality. As a result, we maintain
-    /// a list of cumulative sums of Cluster cardinalities, hence the call to `update_cumulative_cardinalities`
-    fn partition(&mut self, l: usize, r: usize, delta: &Delta) -> usize {
-        let pivot = (r + l) / 2;
-        self.sieve_swap(pivot, r);
-
-        let mut i = l;
-        let mut j = l;
-
-        while j < r {
-            if self.get_delta_by_cluster_index(j, delta) < self.get_delta_by_cluster_index(r, delta) {
-                self.sieve_swap(i, j);
-                i += 1;
-            }
-
-            j += 1;
+        while !self.hits.is_empty() && self.hits.peek_max().unwrap().1.number > threshold {
+            self.hits.pop_max().unwrap();
         }
 
-        self.sieve_swap(i, r);
-        self.update_cumulative_cardinalities(l, r);
+        (self.insiders, self.straddlers) = self
+            .grains
+            .drain(..)
+            .filter(|g| !g.is_outside(threshold))
+            .partition(|g| g.is_inside(threshold));
+        log::debug!(
+            "Step {}: Got {} insiders and {} straddlers, with {} in hits ...",
+            step,
+            self.insiders.len(),
+            self.straddlers.len(),
+            self.hits.len(),
+        );
 
-        i
-    }
+        let (small_insiders, insiders): (Vec<_>, Vec<_>) = self
+            .insiders
+            .drain(..)
+            .partition(|g| (g.c.cardinality() <= self.k) || g.c.is_leaf());
+        self.insiders = insiders;
+        small_insiders.into_iter().for_each(|g| {
+            let new_hits =
+                g.c.indices()
+                    // .into_par_iter()
+                    .into_iter()
+                    .map(|i| (i, self.space.query_to_one(self.query, i)))
+                    .map(|(i, d)| (i, OrdNumber { number: d }))
+                    .collect::<Vec<_>>();
+            self.hits.extend(new_hits.into_iter());
+        });
 
-    /// Finds the `k`th Cluster in a theoretical list containing the Clusters in `clusters` where
-    /// each Clusters' multiplicity is its cardinality
-    /// Based on the QuickSelect Algorithm found here: https://www.geeksforgeeks.org/quickselect-algorithm/
-    ///
-    /// Takes `clusters` (candidate list of Clusters), the leftmost index in `clusters` that could
-    /// possibly have the `k`th cluster (`l`), the rightmost index in `clusters` that could possibly
-    /// have the `k`th cluster (`r`), the desired index (`k`), and the desired delta type of the Cluster in the `k`th
-    /// position if `v` were sorted (`delta`). Note that while `k` reflects an index in a theoretical list,
-    /// `l` and `r` are actual, legitimate indices of `clusters`.
-    ///
-    /// With each recursive call, a `pivot` index is chosen and `partition_index` reflects the number of
-    /// Clusters in `clusters` with a delta value less than that of the Cluster at the `pivot` index.
-    ///
-    /// If `cumulative_cardinalities`[`partition_index`] < `k`, partition index is too low, and `find_kth()`
-    /// calls itself with `l` adjusted to reflect the new possible indices for the `k`th Cluster.
-    ///
-    /// If `cumulative_cardinalities`[`partition_index`] == `k`, recursion ceases and the desired delta value of
-    /// the `k`th Cluster is returned.
-    ///
-    /// If `cumulative_cardinalities`[partition_index] > `k`, we must also consider
-    /// cumulative_cardinalities`[`partition_index`-1]. If `cumulative_cardinalities`[`partition_index`-1] < `k`, then
-    /// we can infer that the `k`th Cluster is one of the theoretical copies of the Cluster at `partition_index`, in which
-    /// case recursion ceases and the desired delta value of the `k`th Cluster is returned. Otherwise, the returned
-    /// `partition_index` is too high, and `_find_kth()` calls itself with `r` adjusted to reflect the new possible
-    /// indices for the `k`th Cluster.
-    fn _find_kth(&mut self, l: usize, r: usize, delta: &Delta) -> U {
-        let partition_index = self.partition(l, r, delta);
+        let insider_cardinalities = self.insiders.iter().map(|g| g.c.cardinality()).sum::<usize>();
+        log::debug!(
+            "Step {}: Insider cardinalities are {}, with another {} in hits ...",
+            step,
+            insider_cardinalities,
+            self.hits.len()
+        );
 
-        match self.cumulative_cardinalities[partition_index].cmp(&self.k) {
-            Ordering::Less => self._find_kth(partition_index + 1, r, delta),
-            Ordering::Equal => self.get_delta_by_cluster_index(partition_index, delta), //terminate search immediately and take all clusters from 0 to i
-            Ordering::Greater => {
-                if self.cumulative_cardinalities[partition_index - 1] > self.k {
-                    self._find_kth(l, partition_index - 1, delta)
-                } else {
-                    self.get_delta_by_cluster_index(partition_index, delta)
+        if self.straddlers.is_empty() || self.straddlers.iter().all(|g| g.c.is_leaf()) {
+            self.insiders.drain(..).chain(self.straddlers.drain(..)).for_each(|g| {
+                let new_hits =
+                    g.c.indices()
+                        // .into_par_iter()
+                        .into_iter()
+                        .map(|i| (i, self.space.query_to_one(self.query, i)))
+                        .map(|(i, d)| (i, OrdNumber { number: d }))
+                        .collect::<Vec<_>>();
+                self.hits.extend(new_hits.into_iter());
+            });
+            if self.hits.len() > self.k {
+                let mut potential_ties = vec![self.hits.pop_max().unwrap()];
+                while self.hits.len() >= self.k {
+                    let item = self.hits.pop_max().unwrap();
+                    if item.1.number < potential_ties.last().unwrap().1.number {
+                        potential_ties.clear();
+                    }
+                    potential_ties.push(item);
                 }
+                self.hits.extend(potential_ties.drain(..));
             }
+            self.is_refined = true;
+            log::debug!("Step {}: Sieve is refined! ...", step);
+        } else {
+            self.grains = self.insiders.drain(..).chain(self.straddlers.drain(..)).collect();
+            let (leaves, non_leaves): (Vec<_>, Vec<_>) = self.grains.drain(..).partition(|g| g.c.is_leaf());
+
+            log::debug!(
+                "Step {}: Of the straddlers, got {} leaves and {} non-leaves ...",
+                step,
+                leaves.len(),
+                non_leaves.len()
+            );
+            let children = non_leaves
+                // .into_par_iter()
+                .into_iter()
+                .flat_map(|g| g.c.children())
+                .map(|c| (c, self.space.query_to_one(self.query, c.arg_center())))
+                .map(|(c, d)| Grain::new(c, d))
+                .collect::<Vec<_>>();
+
+            self.grains = leaves.into_iter().chain(children).collect();
+            log::debug!(
+                "Step {}: Got {} grains for the next refinement step ...",
+                step,
+                self.grains.len()
+            );
         }
+        self
     }
 
-    pub fn replace_with_child_clusters(mut self) -> Self {
-        (self.clusters, self.deltas_0, self.deltas_1, self.deltas_2) = self
-            .clusters
-            .into_iter()
-            .zip(self.deltas_0.into_iter())
-            .zip(self.deltas_1.into_iter())
-            .zip(self.deltas_2.into_iter())
-            .fold(
-                (vec![], vec![], vec![], vec![]),
-                |(mut c, mut d0, mut d1, mut d2), (((c_, d0_), d1_), d2_)| {
-                    if c_.is_leaf() {
-                        c.push(c_);
-                        d0.push(d0_);
-                        d1.push(d1_);
-                        d2.push(d2_);
-                    } else {
-                        let [l, r] = c_.children();
-                        c.extend_from_slice(&[l, r]);
-                        let l0 = Self::compute_delta0(l, self.query);
-                        let r0 = Self::compute_delta0(r, self.query);
-                        d0.extend_from_slice(&[l0, r0]);
-                        d1.extend_from_slice(&[Self::compute_delta1(l, l0), Self::compute_delta1(r, r0)]);
-                        d2.extend_from_slice(&[Self::compute_delta2(l, l0), Self::compute_delta2(r, r0)]);
-                    }
-                    (c, d0, d1, d2)
-                },
-            );
+    pub fn refined_extract(&self) -> Vec<usize> {
+        self.hits.iter().map(|(i, _)| *i).collect()
+    }
+
+    #[inline(never)]
+    pub fn inexact_descend(mut self, _counter: usize) -> Self {
+        // super::find_kth::find_kth(&mut self.grains, &mut self.cumulative_cardinalities, self.k);
+
+        self.grains.sort();
+        self.update_cumulative_cardinalities();
+
+        let index = self.cumulative_cardinalities.iter().position(|&c| c >= self.k).unwrap();
+        // log::info!(
+        //     "Step: {}, Partition index is {}/{} and cardinality is {}/{} ...",
+        //     _counter,
+        //     index,
+        //     self.grains.len(),
+        //     self.cumulative_cardinalities[index],
+        //     self.cumulative_cardinalities.last().unwrap()
+        // );
+        self.is_refined = self.cumulative_cardinalities[index] == self.k;
+        if self.is_refined {
+            self.grains.sort_by(|a, b| a.d_min.partial_cmp(&b.d_min).unwrap());
+            self.grains = self.grains[..index].to_vec();
+        } else {
+            let threshold = self.grains[index].d_max;
+            let _num_grains = self.grains.len();
+
+            let (leaves, non_leaves): (Vec<_>, Vec<_>) = self
+                .grains
+                .into_iter()
+                .filter(|g| !g.is_outside(threshold))
+                .partition(|g| g.c.is_leaf());
+            // log::info!(
+            //     "Step: {}, leaves: {}, non-leaves: {}, excluded: {} ...",
+            //     _counter,
+            //     leaves.len(),
+            //     non_leaves.len(),
+            //     _num_grains - leaves.len() - non_leaves.len()
+            // );
+
+            // self.is_refined = non_leaves.is_empty() && leaves.iter().all(|g| g.d_max <= threshold);
+            // self.is_refined = non_leaves.is_empty()
+            //     || ((index == self.cumulative_cardinalities.len() - 1) && non_leaves.iter().all(|g| g.is_inside(threshold)));
+
+            let (insiders, straddlers): (Vec<_>, Vec<_>) = non_leaves.into_iter().partition(|g| g.is_inside(threshold));
+            // log::info!(
+            //     "Step: {}, insiders: {}, straddlers: {} ...",
+            //     _counter,
+            //     insiders.len(),
+            //     straddlers.len()
+            // );
+
+            let children = straddlers.into_iter().flat_map(|g| g.c.children()).collect::<Vec<_>>();
+            let centers = children.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
+            let distances = self.space.query_to_many(self.query, &centers);
+            let children = children
+                .into_iter()
+                .zip(distances.into_iter())
+                .map(|(c, d)| Grain::new(c, d));
+
+            self.grains = leaves.into_iter().chain(insiders.into_iter()).chain(children).collect();
+        }
 
         self
     }
 
-    pub fn filter(mut self) -> Self {
-        let d1_k = self.find_kth(&Delta::Delta1);
-        let keep = self.deltas_2.iter().map(|d2| *d2 <= d1_k);
-
-        (self.clusters, self.deltas_0, self.deltas_1, self.deltas_2) = self
-            .clusters
-            .into_iter()
-            .zip(self.deltas_0.into_iter())
-            .zip(self.deltas_1.into_iter())
-            .zip(self.deltas_2.clone().into_iter())
-            .zip(keep)
-            .fold(
-                (vec![], vec![], vec![], vec![]),
-                |(mut c, mut d0, mut d1, mut d2), ((((c_, d0_), d1_), d2_), k_)| {
-                    if k_ {
-                        c.push(c_);
-                        d0.push(d0_);
-                        d1.push(d1_);
-                        d2.push(d2_);
-                    }
-                    (c, d0, d1, d2)
-                },
-            );
-
-        self.update_cumulative_cardinalities(0, self.clusters.len() - 1);
-        self
+    pub fn update_cumulative_cardinalities(&mut self) {
+        // TODO: Take l, r indices and only update in between them
+        self.cumulative_cardinalities = self
+            .grains
+            .iter()
+            .scan(0, |acc, g| {
+                *acc += g.c.cardinality();
+                Some(*acc)
+            })
+            .collect();
     }
 
-    pub fn are_all_leaves(&self) -> bool {
-        self.clusters.iter().all(|c| c.is_leaf())
+    pub fn update_guaranteed_cardinalities(&mut self) {
+        self.guaranteed_cardinalities = self
+            .grains
+            .iter()
+            .scan(0, |acc, g| {
+                if g.is_inside(self.threshold) {
+                    *acc += g.c.cardinality();
+                } else {
+                    *acc += 1;
+                }
+                Some(*acc)
+            })
+            .collect();
     }
 
     /// Returns `k` best hits from the sieve along with their distances from the
-    /// query. If this method is called when the `are_all_leaves` method
-    /// evaluates to `true`, the result will have the best recall. If the
-    /// `metric` in use obeys the triangle inequality, then the results will
-    /// have perfect recall. If this method is called before the sieve has been
-    /// filtered down to the leaves, the results may not have perfect recall.
-    pub fn extract(&self) -> Vec<(usize, U)> {
-        todo!()
+    /// query. If this method is called when the `is_refined` member is `true`,
+    /// the result will have the best recall. If the `metric` in use obeys the
+    /// triangle inequality, then the results will have perfect recall. If this
+    /// method is called before the sieve has been fully refined, the results
+    /// may have less than ideal recall.
+    pub fn naive_extract(&self) -> Vec<usize> {
+        self.grains.iter().flat_map(|g| g.c.indices()).collect()
     }
 
-    // fn filter(mut self, kth_delta1: U) -> Self{
-    //     self.clusters = self.clusters.into_iter().enumerate().filter(|(i, v)| self.deltas_0[*i] > kth_delta1).collect();
-
-    //     self
-    // // }
-
-    // fn knn_search(mut self) {
-    //     while self.clusters.len() < self.k {
-    //         self.replace_with_child_clusters()
-    //     }
-
-    //     let kth_delta1 = self.find_kth(&Delta::Delta1);
-    //     //filter clusters whose delta 2 greater than kth delta 1
-    //     self.filter();
+    // #[inline(never)]
+    // fn update_guaranteed_cardinalities(&mut self) {
+    //     // assumes that insiders and straddlers have been set.
     // }
-}
 
-// #[derive(Clone, Copy)]
-// pub struct OrderedNumber<U: Number>(U);
+    #[inline(never)]
+    fn select_threshold(&mut self) -> usize {
+        let kth_grain = if self.grains.len() < self.k {
+            find_kth::find_kth_d_max(&mut self.grains, &mut self.cumulative_cardinalities, self.k)
+        } else {
+            find_kth::find_kth_d_max(&mut self.grains, &mut self.guaranteed_cardinalities, self.k)
+        };
 
-// impl<U: Number> PartialEq for OrderedNumber<U> {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.0 == other.0
-//     }
-// }
+        self.update_guaranteed_cardinalities();
+        self.update_cumulative_cardinalities();
 
-// impl<U: Number> Eq for OrderedNumber<U> {}
+        assert!(self.cumulative_cardinalities.last().copied().unwrap() >= self.k);
+        self.threshold = kth_grain.0.d;
+        kth_grain.1
+    }
 
-// impl<U: Number> PartialOrd for OrderedNumber<U> {
-//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-//         self.0.partial_cmp(&other.0)
-//     }
-// }
+    #[inline(never)]
+    pub fn shrink(mut self) -> Self {
+        self.select_threshold();
+        // log::info!("Initial threshold: {} ...", self.threshold);
 
-// impl<U: Number> Ord for OrderedNumber<U> {
-//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-//         self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Greater)
-//     }
-// }
+        // let (mut insiders, mut straddlers) = (vec![], vec![]);
+        // let mut counter = 0;
 
-// type ClusterQueue<'a, T, U> = PriorityQueue<&'a Cluster<'a, T, U>, OrderedNumber<U>>;
-// type InstanceQueue<'a, U> = PriorityQueue<usize, OrderedNumber<U>>;
+        loop {
+            // log::info!("Shrink loop counter {} ...", counter);
 
-// pub struct KnnQueue<'a, T: Number, U: Number> {
-//     by_delta_0: ClusterQueue<'a, T, U>,
-//     by_delta_1: ClusterQueue<'a, T, U>,
-//     by_delta_2: ClusterQueue<'a, T, U>,
-//     hits: InstanceQueue<'a, U>,
-// }
+            let num_grains = self.grains.len();
+            let grains = self.grains;
+            self.grains = vec![];
+            [self.insiders, self.straddlers] = grain_filter(grains, self.threshold);
 
-// impl<'a, T: Number, U: Number> KnnQueue<'a, T, U> {
-//     pub fn new(clusters_distances: &'a [(&Cluster<T, U>, U)]) -> Self {
-//         let by_delta_0 = PriorityQueue::from_iter(clusters_distances.iter().map(|(c, d)| (*c, OrderedNumber(*d))));
+            // log::info!(
+            //     "Shrink step {}: before break check: num_grains: {}, num_insiders: {}, num_straddlers: {} ...",
+            //     counter,
+            //     num_grains,
+            //     self.insiders.len(),
+            //     self.straddlers.len()
+            // );
 
-//         let by_delta_1 = PriorityQueue::from_iter(
-//             clusters_distances
-//                 .iter()
-//                 .map(|(c, d)| (*c, OrderedNumber(c.radius() + *d))),
-//         );
+            if (self.insiders.len() + self.straddlers.len()) == num_grains {
+                if self.straddlers.is_empty() || self.straddlers.iter().all(|g| g.c.is_leaf()) {
+                    break;
+                }
 
-//         let by_delta_2 = PriorityQueue::from_iter(clusters_distances.iter().map(|(c, d)| {
-//             (
-//                 *c,
-//                 OrderedNumber(if c.radius() > *d { c.radius() - *d } else { U::zero() }),
-//             )
-//         }));
+                let children = self
+                    .straddlers
+                    .into_iter()
+                    .flat_map(|g| g.c.children())
+                    .collect::<Vec<_>>();
+                let centers = children.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
+                let distances = self.space.query_to_many(self.query, &centers);
+                let straddlers = children
+                    .into_iter()
+                    .zip(distances.into_iter())
+                    .map(|(c, d)| Grain::new(c, d))
+                    .collect();
+                let [mut insiders, straddlers] = grain_filter(straddlers, self.threshold);
 
-//         Self {
-//             by_delta_0,
-//             by_delta_1,
-//             by_delta_2,
-//             hits: PriorityQueue::new(),
-//         }
-//     }
+                self.insiders.append(&mut insiders);
+                self.straddlers = straddlers;
+            }
 
-//     pub fn by_delta_0(&self) -> Vec<&Cluster<T, U>> {
-//         self.by_delta_0.clone().into_sorted_iter().map(|(c, _)| c).collect()
-//     }
+            // log::info!(
+            //     "Shrink step {}: after break check: num_insiders: {}, num_straddlers: {} ...",
+            //     counter,
+            //     self.insiders.len(),
+            //     self.straddlers.len()
+            // );
 
-//     pub fn by_delta_1(&self) -> Vec<&Cluster<T, U>> {
-//         self.by_delta_1.clone().into_sorted_iter().map(|(c, _)| c).collect()
-//     }
+            self.grains = self.insiders.drain(..).chain(self.straddlers.drain(..)).collect();
+            if self.grains.len() < self.k {
+                self.grains.sort_by(|a, b| a.ord_by_d_max(b));
+            } else {
+                self.grains.sort_by(|a, b| a.ord_by_d(b));
+            }
 
-//     pub fn by_delta_2(&self) -> Vec<&Cluster<T, U>> {
-//         self.by_delta_2.clone().into_sorted_iter().map(|(c, _)| c).collect()
-//     }
+            self.update_guaranteed_cardinalities();
 
-//     pub fn hits(&self) -> Vec<usize> {
-//         self.hits.clone().into_sorted_vec()
-//     }
-// }
+            // let last = self.guaranteed_cardinalities.last().copied().unwrap_or(0);
+            // self.guaranteed_cardinalities
+            //     .extend(last..(last + self.straddlers.len()));
 
-#[cfg(test)]
-mod tests {
+            // let index = self.guaranteed_cardinalities.iter().position(|c| *c >= self.k).unwrap();
 
-    use super::*;
-    // use crate::prelude::*;
+            // let old_threshold = self.threshold;
+            self.select_threshold();
+            // let index = self.select_threshold();
+            // log::info!("Shrink step {}: threshold index {} ...", counter, index);
+            // assert!(old_threshold < self.threshold);
 
-    #[test]
-    fn find_2nd_delta0() {
-        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
-        let dataset = crate::Tabular::<f64>::new(&data, "test_cluster".to_string());
-        let metric = metric_from_name::<f64, f64>("euclideansq", false).unwrap();
-        let space = crate::TabularSpace::new(&dataset, metric.as_ref(), false);
-        let partition_criteria = crate::PartitionCriteria::new(true)
-            .with_max_depth(3)
-            .with_min_cardinality(1);
-        let cluster = Cluster::new_root(&space).build().partition(&partition_criteria, true);
+            // let threshold = if index < self.insiders.len() {
+            //     let d_maxs = self.insiders.iter().map(|g| g.d_max).collect::<Vec<_>>();
+            //     helpers::arg_max(&d_maxs).1
+            // } else {
+            //     self.straddlers[index - self.insiders.len()].d
+            // };
+            // self.threshold = threshold;
+            // log::info!("Step {}: new threshold {} ...", counter, self.threshold);
 
-        let flat_tree = cluster.subtree();
-        let mut sieve = KnnSieve::new(flat_tree, &data[0], 2).build();
+            // self.grains = self.insiders.drain(..).chain(self.straddlers.drain(..)).collect();
 
-        // let mut v: Vec<DeltaValues<f64>> = vec![
-        //     DeltaValues {
-        //         delta0: 523.,
-        //         delta1: 990.,
-        //         delta2: 431.,
-        //     },
-        //     DeltaValues {
-        //         delta0: 371.,
-        //         delta1: 499.,
-        //         delta2: 212.,
-        //     },
-        //     DeltaValues {
-        //         delta0: 490.,
-        //         delta1: 1097.,
-        //         delta2: 117.,
-        //     },
-        //     DeltaValues {
-        //         delta0: 242.,
-        //         delta1: 947.,
-        //         delta2: 198.,
-        //     },
-        //     DeltaValues {
-        //         delta0: 761.,
-        //         delta1: 866.,
-        //         delta2: 514.,
-        //     },
-        //     DeltaValues {
-        //         delta0: 241.,
-        //         delta1: 281.,
-        //         delta2: 131.,
-        //     },
-        //     DeltaValues {
-        //         delta0: 520.,
-        //         delta1: 824.,
-        //         delta2: 378.,
-        //     },
-        // ];
+            // log::info!(
+            //     "Shrink step {}: after resetting grains: num_grains: {} ...",
+            //     counter,
+            //     self.grains.len()
+            // );
+            // log::info!("");
 
-        // let r = v.len() - 1;
+            // counter += 1;
+        }
 
-        assert_eq!(sieve.find_kth(&Delta::Delta0), 3.);
+        self.is_refined = true;
+
+        self
+    }
+
+    #[inline(never)]
+    pub fn extract(&mut self) -> Vec<usize> {
+        let hits = self.insiders.iter().flat_map(|g| g.c.indices()).collect::<Vec<_>>();
+        let distances = self.space.query_to_many(self.query, &hits);
+
+        let mut pq = priority_queue::DoublePriorityQueue::new();
+        pq.extend(
+            hits.into_iter()
+                .zip(distances.into_iter())
+                .map(|(i, d)| (i, OrdNumber { number: d })),
+        );
+
+        while !self.straddlers.is_empty() {
+            let candidate = self.straddlers.pop().unwrap().c;
+            let indices = candidate.indices();
+            let distances = self.space.query_to_many(self.query, &indices);
+            pq.extend(
+                indices
+                    .into_iter()
+                    .zip(distances.into_iter())
+                    .map(|(i, d)| (i, OrdNumber { number: d })),
+            );
+
+            let mut potential_ties = vec![];
+            while pq.len() > self.k {
+                // pq.pop_max();
+                potential_ties.push(pq.pop_max().unwrap());
+            }
+
+            let threshold = pq.peek_max().unwrap().1.number;
+            pq.extend(potential_ties.into_iter().filter(|(_, d)| d.number <= threshold));
+
+            self.straddlers = self.straddlers.drain(..).filter(|g| !g.is_outside(threshold)).collect();
+        }
+
+        let mut potential_ties = vec![];
+        while pq.len() > self.k {
+            // pq.pop_max();
+            potential_ties.push(pq.pop_max().unwrap());
+        }
+
+        let threshold = pq.peek_max().unwrap().1.number;
+        pq.extend(potential_ties.into_iter().filter(|(_, d)| d.number <= threshold));
+
+        pq.into_iter().map(|(i, _)| i).collect()
     }
 }
