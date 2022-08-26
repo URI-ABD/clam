@@ -2,7 +2,7 @@
 //! functions.
 
 use num_traits::NumCast;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 
 use crate::Number;
 
@@ -15,29 +15,29 @@ pub trait Metric<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the distance between two instances.
     fn one_to_one(&self, x: &[T], y: &[T]) -> U;
 
-    fn one_to_many(&self, x: &[T], ys: &[Vec<T>]) -> Vec<U> {
+    fn one_to_many(&self, x: &[T], ys: &[&[T]]) -> Vec<U> {
         ys.iter().map(|y| self.one_to_one(x, y)).collect()
     }
 
-    fn par_one_to_many(&self, x: &[T], ys: &[Vec<T>]) -> Vec<U> {
-        ys.par_iter().map(|y| self.one_to_one(x, y)).collect()
-    }
+    // fn par_one_to_many(&self, x: &[T], ys: &[&[T]]) -> Vec<U> {
+    //     ys.par_iter().map(|y| self.one_to_one(x, y)).collect()
+    // }
 
-    fn many_to_many(&self, xs: &[Vec<T>], ys: &[Vec<T>]) -> Vec<Vec<U>> {
+    fn many_to_many(&self, xs: &[&[T]], ys: &[&[T]]) -> Vec<Vec<U>> {
         xs.iter().map(|x| self.one_to_many(x, ys)).collect()
     }
 
-    fn par_many_to_many(&self, xs: &[Vec<T>], ys: &[Vec<T>]) -> Vec<Vec<U>> {
-        xs.par_iter().map(|x| self.one_to_many(x, ys)).collect()
-    }
+    // fn par_many_to_many(&self, xs: &[&[T]], ys: &[&[T]]) -> Vec<Vec<U>> {
+    //     xs.par_iter().map(|x| self.one_to_many(x, ys)).collect()
+    // }
 
-    fn pairwise(&self, is: &[Vec<T>]) -> Vec<Vec<U>> {
+    fn pairwise(&self, is: &[&[T]]) -> Vec<Vec<U>> {
         self.many_to_many(is, is)
     }
 
-    fn par_pairwise(&self, is: &[Vec<T>]) -> Vec<Vec<U>> {
-        self.par_many_to_many(is, is)
-    }
+    // fn par_pairwise(&self, is: &[&[T]]) -> Vec<Vec<U>> {
+    //     self.par_many_to_many(is, is)
+    // }
 
     /// Whether the metric is expensive to compute.
     fn is_expensive(&self) -> bool;

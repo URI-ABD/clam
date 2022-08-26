@@ -183,5 +183,9 @@ data/greengenes*
 # Local files
 pyclam/explorations.py
 benches/*.txt
+flamegraph.svg
+*perf.*
+callgrind.*
+*.stacks
 
 .DS_Store

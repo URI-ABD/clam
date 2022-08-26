@@ -16,7 +16,7 @@ use crate::prelude::*;
 ///
 /// A `Dataset` and a `Metric` can be combined into a metric-`Space` for use in
 /// CLAM.
-pub trait Dataset<T: Number>: std::fmt::Debug + Send + Sync {
+pub trait Dataset<'a, T: Number>: std::fmt::Debug + Send + Sync {
     /// Ideally, the user will provide a different name for each dataset they
     /// initialize.
     fn name(&self) -> String;
@@ -34,7 +34,7 @@ pub trait Dataset<T: Number>: std::fmt::Debug + Send + Sync {
     /// # Arguments
     ///
     /// * `index` - of the instance to return from the dataset.
-    fn get(&self, index: usize) -> Vec<T>;
+    fn get(&self, index: usize) -> &'a [T];
 
     /// Returns a batch of indexed instances at once. The default implementation
     /// sequentially calls the `get` method. Users may have more efficient
@@ -43,7 +43,7 @@ pub trait Dataset<T: Number>: std::fmt::Debug + Send + Sync {
     /// # Arguments
     ///
     /// * `indices` - of instances to return from the dataset.
-    fn get_batch(&self, indices: &[usize]) -> Vec<Vec<T>> {
+    fn get_batch(&self, indices: &[usize]) -> Vec<&'a [T]> {
         indices.iter().map(|&index| self.get(index)).collect()
     }
 
@@ -106,7 +106,7 @@ impl<'a, T: Number> Tabular<'a, T> {
     }
 }
 
-impl<'a, T: Number> Dataset<T> for Tabular<'a, T> {
+impl<'a, T: Number> Dataset<'a, T> for Tabular<'a, T> {
     fn name(&self) -> String {
         self.name.clone()
     }
@@ -123,8 +123,8 @@ impl<'a, T: Number> Dataset<T> for Tabular<'a, T> {
         (0..self.cardinality()).collect()
     }
 
-    fn get(&self, index: usize) -> Vec<T> {
-        self.data[index].clone()
+    fn get(&self, index: usize) -> &'a [T] {
+        &self.data[index]
     }
 }
 

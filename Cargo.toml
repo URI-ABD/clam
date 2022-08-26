@@ -13,6 +13,14 @@ edition = "2021"
 # and update the release github action.
 publish = false
 
+# Remove this when not profiling
+[profile.release]
+debug = true
+# lto = true
+
+[profile.bench]
+debug = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -21,7 +29,9 @@ num-traits = "0.2"
 rayon = "1.5"
 libm = "0.2"
 rand = "0.8"
-# priority-queue = "1.2"
+priority-queue = "1.2"
+rand_chacha = "0.3"
+log = "0.4"
 # easy-cast = "0.4.4"
 # eval-metrics = "1.0.1"
 # ordered-float = "3.0"
@@ -29,11 +39,16 @@ rand = "0.8"
 # structopt = "0.3.23"
 # sysinfo = "0.23.5"
 
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
 [dev-dependencies]
 float-cmp = "0.9"
 ndarray-npy = "0.8"
 log = "0.4"
 env_logger = "0.9"
+rmp-serde = "1.1"
 
 [dev-dependencies.criterion]
 version = "0.3"
@@ -41,32 +56,45 @@ features = ["html_reports"]
 
 [dev-dependencies.ndarray]
 version = "0.15"
-features = ["rayon"]
+# features = ["rayon"]
 
 [dev-dependencies.hdf5]
 version = "0.8"
 features = ["lzf", "blosc"]
-
-[dev-dependencies.serde]
-version = "1.0"
-features = ["derive"]
 
 [dev-dependencies.serde_json]
 version = "1.0"
 features = ["alloc"]
 
 [[example]]
-name = "hdf5"
-path = "examples/hdf5/main.rs"
+name = "search_tiny"
+path = "examples/search_tiny/main.rs"
 
 [[example]]
-name = "search1b"
-path = "examples/search1b/main.rs"
+name = "search_small"
+path = "examples/search_small/main.rs"
+
+[[example]]
+name = "search_large"
+path = "examples/search_large/main.rs"
 
 [[bench]]
 name = "partition"
 harness = false
 
 [[bench]]
-name = "cakes"
+name = "rnn_search"
 harness = false
+
+[[bench]]
+name = "knn_search"
+harness = false
+
+[[bench]]
+name = "knn_vs_rnn"
+harness = false
+
+[[bench]]
+name = "find_kth"
+harness = false
+

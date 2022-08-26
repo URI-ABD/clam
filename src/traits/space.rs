@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use rand::seq::SliceRandom;
+use rand::prelude::*;
 use rayon::prelude::*;
 
 use crate::dataset::Tabular;
@@ -22,9 +22,9 @@ pub type Cache<U> = Arc<RwLock<HashMap<(usize, usize), U>>>;
 
 /// A `Space` represents the combination of a `Dataset` and a `Metric` into a
 /// metric space. CLAM is a manifold-mapping framework on such metric spaces.
-pub trait Space<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
+pub trait Space<'a, T: Number + 'a, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns a reference to the underlying dataset.
-    fn data(&self) -> &dyn Dataset<T>;
+    fn data(&self) -> &dyn Dataset<'a, T>;
 
     /// Returns a reference to the underlying metric.
     fn metric(&self) -> &dyn Metric<T, U>;
@@ -94,11 +94,33 @@ pub trait Space<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
 
     /// Two instances are considered equal if the distance between them is zero.
     fn are_instances_equal(&self, left: usize, right: usize) -> bool {
-        self.distance_one_to_one(left, right) == U::zero()
+        self.one_to_one(left, right) == U::zero()
+    }
+
+    #[inline(never)]
+    fn query_to_one(&self, query: &[T], index: usize) -> U {
+        self.metric().one_to_one(query, self.data().get(index))
+    }
+
+    // #[inline(never)]
+    fn query_to_many(&self, query: &[T], indices: &[usize]) -> Vec<U> {
+        if self.metric().is_expensive() || indices.len() > 1_000 {
+            indices
+                .par_iter()
+                .map(|&index| self.query_to_one(query, index))
+                .collect()
+        } else {
+            indices.iter().map(|&index| self.query_to_one(query, index)).collect()
+        }
+        // indices.iter().map(|&index| self.query_to_one(query, index)).collect()
+    }
+
+    fn _one_to_one(&self, left: usize, right: usize) -> U {
+        self.metric().one_to_one(self.data().get(left), self.data().get(right))
     }
 
     /// Computes/looks-up and returns the distance between two instances.
-    fn distance_one_to_one(&self, left: usize, right: usize) -> U {
+    fn one_to_one(&self, left: usize, right: usize) -> U {
         // TODO: Refactor to not repeat the distance computation in different if-else blocks.
         if left == right {
             U::zero()
@@ -106,35 +128,32 @@ pub trait Space<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
             if self.is_in_cache(left, right) {
                 self.get_from_cache(left, right)
             } else {
-                let left_instance = self.data().get(left);
-                let right_instance = self.data().get(right);
-                self.add_to_cache(left, right, self.metric().one_to_one(&left_instance, &right_instance))
+                self.add_to_cache(left, right, self._one_to_one(left, right))
             }
         } else {
-            let left_instance = self.data().get(left);
-            let right_instance = self.data().get(right);
-            self.metric().one_to_one(&left_instance, &right_instance)
+            self._one_to_one(left, right)
         }
     }
 
     /// Returns the distances from `left` to each indexed instance in `right`.
-    fn distance_one_to_many(&self, left: usize, right: &[usize]) -> Vec<U> {
+    fn one_to_many(&self, left: usize, right: &[usize]) -> Vec<U> {
         if self.metric().is_expensive() || right.len() > 10_000 {
-            right.par_iter().map(|&r| self.distance_one_to_one(left, r)).collect()
+            right.par_iter().map(|&r| self.one_to_one(left, r)).collect()
         } else {
-            right.iter().map(|&r| self.distance_one_to_one(left, r)).collect()
+            right.iter().map(|&r| self.one_to_one(left, r)).collect()
         }
+        // right.iter().map(|&r| self.one_to_one(left, r)).collect()
     }
 
     /// Returns the distances from each indexed instance in `left` to each
     /// indexed instance in `right`.
-    fn distance_many_to_many(&self, left: &[usize], right: &[usize]) -> Vec<Vec<U>> {
-        left.iter().map(|&l| self.distance_one_to_many(l, right)).collect()
+    fn many_to_many(&self, left: &[usize], right: &[usize]) -> Vec<Vec<U>> {
+        left.iter().map(|&l| self.one_to_many(l, right)).collect()
     }
 
     /// Returns the all-paris distances between the given indexed instances.
-    fn distance_pairwise(&self, indices: &[usize]) -> Vec<Vec<U>> {
-        self.distance_many_to_many(indices, indices)
+    fn pairwise(&self, indices: &[usize]) -> Vec<Vec<U>> {
+        self.many_to_many(indices, indices)
     }
 
     /// Chooses `n` unique instances from the given indices and returns their
@@ -149,7 +168,8 @@ pub trait Space<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
 
         let indices = {
             let mut indices = indices.to_vec();
-            indices.shuffle(&mut rand::thread_rng());
+            indices.shuffle(&mut rand_chacha::ChaCha8Rng::seed_from_u64(42));
+            // indices.shuffle(&mut rand::thread_rng());
             indices
         };
 
@@ -203,8 +223,8 @@ impl<'a, T: Number, U: Number> std::fmt::Debug for TabularSpace<'a, T, U> {
     }
 }
 
-impl<'a, T: Number, U: Number> Space<T, U> for TabularSpace<'a, T, U> {
-    fn data(&self) -> &dyn Dataset<T> {
+impl<'a, T: Number, U: Number> Space<'a, T, U> for TabularSpace<'a, T, U> {
+    fn data(&self) -> &dyn Dataset<'a, T> {
         self.data
     }
 
@@ -237,9 +257,9 @@ mod tests {
         let metric = metric_from_name("euclidean", false).unwrap();
         let space = TabularSpace::new(&dataset, metric.as_ref(), false);
 
-        approx_eq!(f64, space.distance_one_to_one(0, 0), 0.);
-        approx_eq!(f64, space.distance_one_to_one(0, 1), 3.);
-        approx_eq!(f64, space.distance_one_to_one(1, 0), 3.);
-        approx_eq!(f64, space.distance_one_to_one(1, 1), 0.);
+        approx_eq!(f64, space.one_to_one(0, 0), 0.);
+        approx_eq!(f64, space.one_to_one(0, 1), 3.);
+        approx_eq!(f64, space.one_to_one(1, 0), 3.);
+        approx_eq!(f64, space.one_to_one(1, 1), 0.);
     }
 }

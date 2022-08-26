@@ -25,8 +25,8 @@ impl<'a, Tr: h5number::H5Number, T: clam::Number, U: clam::Number> H5Space<'a, T
     }
 }
 
-impl<'a, Tr: h5number::H5Number, T: clam::Number, U: clam::Number> clam::Space<T, U> for H5Space<'a, Tr, T, U> {
-    fn data(&self) -> &dyn clam::Dataset<T> {
+impl<'a, Tr: h5number::H5Number, T: clam::Number, U: clam::Number> clam::Space<'a, T, U> for H5Space<'a, Tr, T, U> {
+    fn data(&self) -> &dyn clam::Dataset<'a, T> {
         self.data
     }
 
