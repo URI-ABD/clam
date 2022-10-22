@@ -226,6 +226,7 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         }
     }
 
+    #[allow(clippy::manual_retain)]
     pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, T, U>> {
         let mut components = Vec::new();
 
@@ -233,6 +234,8 @@ impl<'a, T: Number, U: Number> Graph<'a, T, U> {
         while !unvisited.is_empty() {
             let &start = unvisited.iter().next().unwrap();
             let (visited, _) = self.unchecked_traverse(start);
+
+            // TODO: bench this using `unvisited.retain(|c| !visited.contains(c))`
             unvisited = unvisited.into_iter().filter(|&c| !visited.contains(c)).collect();
 
             // TODO: Also grab adjacency map, distance matrix, and adjacency matrix
