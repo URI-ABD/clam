@@ -5,6 +5,7 @@ authors = [
     "Najib Ishaq <nishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
     "Noah Daniels <noah_daniels@uri.edu>",
+    "Isaac Chen <ijchen@uri.edu>",
 ]
 edition = "2021"
 
@@ -29,6 +30,12 @@ num-traits = "0.2"
 rayon = "1.5"
 libm = "0.2"
 rand = "0.8"
+smartcore = "0.2.1"
+# TODO This commit fixes an important bug but is not yet updated on crates.io
+# Replace once this commit is part of the stable release on crates
+automl = { git = "https://github.com/cmccomb/rust-automl", rev = "5ed332d" }
+ndarray = "0.15.4"
+ndarray-npy = "0.8.1"
 priority-queue = "1.2"
 rand_chacha = "0.3"
 log = "0.4"
