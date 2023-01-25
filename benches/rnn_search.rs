@@ -2,7 +2,6 @@ pub mod utils;
 
 use criterion::criterion_group;
 use criterion::criterion_main;
-use criterion::BenchmarkId;
 use criterion::Criterion;
 
 use clam::prelude::*;
@@ -17,6 +16,10 @@ fn cakes(c: &mut Criterion) {
         .sample_size(100);
 
     for &data_name in anomaly_readers::ANOMALY_DATASETS.iter() {
+        // if data_name < "smtp" {
+        //     continue;
+        // }
+
         let (features, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
 
         let dataset = clam::Tabular::new(&features, data_name.to_string());
@@ -41,12 +44,10 @@ fn cakes(c: &mut Criterion) {
             metric_name
         );
         for factor in radii_factors {
-            group.bench_with_input(BenchmarkId::new(&bench_name, factor), &factor, |b, &factor| {
+            let queries_radii = queries.iter().map(|&q| (q, radius / factor as f32)).collect::<Vec<_>>();
+            group.bench_function(&bench_name, |b| {
                 b.iter_with_large_drop(|| {
-                    queries
-                        .iter()
-                        .map(|&query| cakes.rnn_search(query, radius / (factor as f32)))
-                        .collect::<Vec<_>>()
+                    cakes.batch_rnn_search(&queries_radii)
                 })
             });
         }
