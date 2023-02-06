@@ -17,20 +17,30 @@ fn partition(c: &mut Criterion) {
 
     for &data_name in anomaly_readers::ANOMALY_DATASETS.iter() {
         let (features, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
-
-        let dataset = clam::Tabular::new(&features, data_name.to_string());
-        // if dataset.cardinality() > 50_000 {
+        // if features.len() > 50_000 {
         //     continue;
         // }
 
-        let euclidean = metric_from_name::<f32, f32>("euclidean", false).unwrap();
+        let dataset = clam::Tabular::new(&features, data_name.to_string());
         // let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
-        let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1);
+        let euclidean = clam::metric::Euclidean { is_expensive: false };
+        let space = clam::TabularSpace::<f32, f32>::new(&dataset, &euclidean, false);
+        let partition_criteria =
+            clam::PartitionCriteria::new(true).with_min_cardinality(1);
 
-        let bench_name = format!("{}-{}-{}", data_name, dataset.cardinality(), dataset.dimensionality());
-        group.bench_function(&bench_name, |b| {
-            let space = clam::TabularSpace::new(&dataset, euclidean.as_ref(), false);
-            b.iter_with_large_drop(|| Cluster::new_root(&space).build().partition(&partition_criteria, true))
+        let cardinality = dataset.cardinality();
+        let dimensionality = dataset.dimensionality();
+        println!("\nMaking tree on {data_name} data with {cardinality} cardinality and {dimensionality}");
+        let root = Cluster::new_root(&space).build().partition(&partition_criteria, true);
+        let subtree = root.subtree();
+        let num_clusters = subtree.len();
+        let max_leaf_depth = subtree.iter().map(|c| c.depth()).max().unwrap();
+        println!("Got a tree of depth {max_leaf_depth} with {num_clusters} total clusters.\n");
+
+        group.bench_function(data_name, |b| {
+            b.iter_with_large_drop(|| {
+                Cluster::new_root(&space).build().partition(&partition_criteria, true)
+            })
         });
     }
 

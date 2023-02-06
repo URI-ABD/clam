@@ -28,6 +28,7 @@ fn search(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), Str
 
     let start = std::time::Instant::now();
     let cakes = clam::CAKES::new(&space).build(&partition_criteria);
+    let diameter = cakes.diameter();
     let build_time = start.elapsed().as_secs_f64();
     log::info!(
         "Built tree to a depth of {} in {:.2e} seconds ...",
@@ -40,11 +41,17 @@ fn search(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), Str
         if k > dataset.cardinality() {
             continue;
         }
-        log::info!("Using k = {} ...", k);
+        let r = diameter / k as f32;
+        log::info!("Using {r:.12} ...");
+
+        let queries_radii = queries
+            .iter()
+            .map(|&q| (q, r))
+            .collect::<Vec<_>>();
 
         let start = std::time::Instant::now();
         (0..num_runs).for_each(|_| {
-            cakes.batch_knn_search(&queries, k);
+            cakes.batch_rnn_search(&queries_radii);
         });
         let time = start.elapsed().as_secs_f64() / (num_runs as f64);
         let mean_time = time / (num_queries as f64);
@@ -67,11 +74,11 @@ fn main() -> Result<(), String> {
         }
 
         for &data_name in readers::ANOMALY_DATASETS {
-            if data_name != "mnist" {
+            if data_name != "cover" {
                 continue;
             }
 
-            results.push(search(data_name, metric_name, 1));
+            results.push(search(data_name, metric_name, 10));
         }
     }
 
@@ -83,7 +90,7 @@ fn main() -> Result<(), String> {
     let failures = results.iter().filter(|v| v.is_err()).cloned().collect::<Vec<_>>();
     if !failures.is_empty() {
         println!("Failed for {}/{} datasets.", failures.len(), results.len());
-        failures.into_iter().for_each(|v| println!("{:?}\n", v));
+        failures.into_iter().for_each(|v| println!("{v:?}\n"));
     }
     Ok(())
 }

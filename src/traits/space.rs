@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use rand::prelude::*;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 
 use crate::dataset::Tabular;
 use crate::prelude::*;
@@ -102,17 +102,17 @@ pub trait Space<'a, T: Number + 'a, U: Number>: std::fmt::Debug + Send + Sync {
         self.metric().one_to_one(query, self.data().get(index))
     }
 
-    // #[inline(never)]
     fn query_to_many(&self, query: &[T], indices: &[usize]) -> Vec<U> {
-        if self.metric().is_expensive() || indices.len() > 1_000 {
-            indices
-                .par_iter()
-                .map(|&index| self.query_to_one(query, index))
-                .collect()
-        } else {
-            indices.iter().map(|&index| self.query_to_one(query, index)).collect()
-        }
-        // indices.iter().map(|&index| self.query_to_one(query, index)).collect()
+        // if self.metric().is_expensive() || indices.len() > 1_000 {
+        //     indices
+        //         // .par_iter()
+        //         .iter()
+        //         .map(|&index| self.query_to_one(query, index))
+        //         .collect()
+        // } else {
+        //     indices.iter().map(|&index| self.query_to_one(query, index)).collect()
+        // }
+        indices.iter().map(|&index| self.query_to_one(query, index)).collect()
     }
 
     fn _one_to_one(&self, left: usize, right: usize) -> U {
@@ -138,7 +138,8 @@ pub trait Space<'a, T: Number + 'a, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the distances from `left` to each indexed instance in `right`.
     fn one_to_many(&self, left: usize, right: &[usize]) -> Vec<U> {
         if self.metric().is_expensive() || right.len() > 10_000 {
-            right.par_iter().map(|&r| self.one_to_one(left, r)).collect()
+            // right.par_iter().map(|&r| self.one_to_one(left, r)).collect()
+            right.iter().map(|&r| self.one_to_one(left, r)).collect()
         } else {
             right.iter().map(|&r| self.one_to_one(left, r)).collect()
         }

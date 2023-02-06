@@ -9,16 +9,16 @@ use clam::prelude::*;
 use utils::anomaly_readers;
 
 fn cakes(c: &mut Criterion) {
-    let mut group = c.benchmark_group("rnn-search");
+    let mut group = c.benchmark_group("RnnSearch");
     group
         .significance_level(0.05)
         // .measurement_time(std::time::Duration::new(60, 0)); // 60 seconds
         .sample_size(100);
 
     for &data_name in anomaly_readers::ANOMALY_DATASETS.iter() {
-        // if data_name < "smtp" {
-        //     continue;
-        // }
+        if data_name != "cover" {
+            continue;
+        }
 
         let (features, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
 
@@ -27,28 +27,29 @@ fn cakes(c: &mut Criterion) {
             .map(|i| dataset.get(i % dataset.cardinality()))
             .collect::<Vec<_>>();
 
-        let metric_name = "euclidean";
-        let metric = metric_from_name::<f32, f32>(metric_name, false).unwrap();
-        let space = clam::TabularSpace::new(&dataset, metric.as_ref(), false);
+        let metric = clam::metric::Euclidean { is_expensive: false };
+        let space = clam::TabularSpace::<_, f64>::new(&dataset, &metric, false);
         let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = clam::CAKES::new(&space).build(&partition_criteria);
 
         let radius = cakes.radius();
         let radii_factors = (50..100).step_by(50);
 
-        let bench_name = format!(
-            "{}-{}-{}-{}",
-            data_name,
+        println!(
+            "Running rnn-search with {} queries on {data_name} under euclidean distance with {} cardinality and {} dimensionality.",
+            queries.len(),
             dataset.cardinality(),
-            dataset.dimensionality(),
-            metric_name
+            dataset.dimensionality()
         );
+
+        let bench_name = format!("{data_name}-euclidean");
         for factor in radii_factors {
-            let queries_radii = queries.iter().map(|&q| (q, radius / factor as f32)).collect::<Vec<_>>();
+            let queries_radii = queries
+                .iter()
+                .map(|&q| (q, radius / factor.as_f64()))
+                .collect::<Vec<_>>();
             group.bench_function(&bench_name, |b| {
-                b.iter_with_large_drop(|| {
-                    cakes.batch_rnn_search(&queries_radii)
-                })
+                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries_radii))
             });
         }
     }
