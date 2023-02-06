@@ -8,34 +8,34 @@ use crate::Number;
 
 /// A `Metric` is a function that takes two instances (over a `Number` T) from a
 /// `Dataset` and deterministically produces a non-negative `Number` U.
-pub trait Metric<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
+pub trait Metric<T: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the name of the `Metric` as a String.
     fn name(&self) -> String;
 
     /// Returns the distance between two instances.
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U;
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64;
 
-    fn one_to_many(&self, x: &[T], ys: &[&[T]]) -> Vec<U> {
+    fn one_to_many(&self, x: &[T], ys: &[&[T]]) -> Vec<f64> {
         ys.iter().map(|y| self.one_to_one(x, y)).collect()
     }
 
-    // fn par_one_to_many(&self, x: &[T], ys: &[&[T]]) -> Vec<U> {
+    // fn par_one_to_many(&self, x: &[T], ys: &[&[T]]) -> Vec<f64> {
     //     ys.par_iter().map(|y| self.one_to_one(x, y)).collect()
     // }
 
-    fn many_to_many(&self, xs: &[&[T]], ys: &[&[T]]) -> Vec<Vec<U>> {
+    fn many_to_many(&self, xs: &[&[T]], ys: &[&[T]]) -> Vec<Vec<f64>> {
         xs.iter().map(|x| self.one_to_many(x, ys)).collect()
     }
 
-    // fn par_many_to_many(&self, xs: &[&[T]], ys: &[&[T]]) -> Vec<Vec<U>> {
+    // fn par_many_to_many(&self, xs: &[&[T]], ys: &[&[T]]) -> Vec<Vec<f64>> {
     //     xs.par_iter().map(|x| self.one_to_many(x, ys)).collect()
     // }
 
-    fn pairwise(&self, is: &[&[T]]) -> Vec<Vec<U>> {
+    fn pairwise(&self, is: &[&[T]]) -> Vec<Vec<f64>> {
         self.many_to_many(is, is)
     }
 
-    // fn par_pairwise(&self, is: &[&[T]]) -> Vec<Vec<U>> {
+    // fn par_pairwise(&self, is: &[&[T]]) -> Vec<Vec<f64>> {
     //     self.par_many_to_many(is, is)
     // }
 
@@ -64,7 +64,7 @@ pub trait Metric<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
 /// distributions (will be usable with images)
 /// - "tanamoto": Jaccard distance between the Maximal-Common-Subgraph of two
 /// molecular structures.
-pub fn metric_from_name<T: Number, U: Number>(name: &str, is_expensive: bool) -> Result<Box<dyn Metric<T, U>>, String> {
+pub fn metric_from_name<T: Number>(name: &str, is_expensive: bool) -> Result<Box<dyn Metric<T>>, String> {
     match name {
         "euclidean" => Ok(Box::new(Euclidean { is_expensive })),
         "euclideansq" => Ok(Box::new(EuclideanSq { is_expensive })),
@@ -72,7 +72,7 @@ pub fn metric_from_name<T: Number, U: Number>(name: &str, is_expensive: bool) ->
         "cosine" => Ok(Box::new(Cosine { is_expensive })),
         "hamming" => Ok(Box::new(Hamming { is_expensive })),
         "jaccard" => Ok(Box::new(Jaccard { is_expensive })),
-        _ => Err(format!("{} is not defined as a metric.", name)),
+        _ => Err(format!("{name} is not defined as a metric.")),
     }
 }
 
@@ -82,15 +82,18 @@ pub struct Euclidean {
     pub is_expensive: bool,
 }
 
-impl<T: Number, U: Number> Metric<T, U> for Euclidean {
+impl<T: Number> Metric<T> for Euclidean {
     fn name(&self) -> String {
         "euclidean".to_string()
     }
 
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
-        let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
-        let d: f64 = NumCast::from(d).unwrap();
-        U::from(d.sqrt()).unwrap()
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64 {
+        x.iter()
+            .zip(y.iter())
+            .map(|(&a, &b)| (a - b))
+            .map(|v| (v * v).as_f64())
+            .sum::<f64>()
+            .sqrt()
     }
 
     fn is_expensive(&self) -> bool {
@@ -104,14 +107,17 @@ pub struct EuclideanSq {
     pub is_expensive: bool,
 }
 
-impl<T: Number, U: Number> Metric<T, U> for EuclideanSq {
+impl<T: Number> Metric<T> for EuclideanSq {
     fn name(&self) -> String {
         "euclideansq".to_string()
     }
 
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
-        let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| (a - b) * (a - b)).sum();
-        U::from(d).unwrap()
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64 {
+        x.iter()
+            .zip(y.iter())
+            .map(|(&a, &b)| (a - b))
+            .map(|v| (v * v).as_f64())
+            .sum()
     }
 
     fn is_expensive(&self) -> bool {
@@ -125,18 +131,17 @@ pub struct Manhattan {
     pub is_expensive: bool,
 }
 
-impl<T: Number, U: Number> Metric<T, U> for Manhattan {
+impl<T: Number> Metric<T> for Manhattan {
     fn name(&self) -> String {
         "manhattan".to_string()
     }
 
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
-        let d: T = x
-            .iter()
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64 {
+        x.iter()
             .zip(y.iter())
             .map(|(&a, &b)| if a > b { a - b } else { b - a })
-            .sum();
-        U::from(d).unwrap()
+            .map(|v| v.as_f64())
+            .sum()
     }
 
     fn is_expensive(&self) -> bool {
@@ -150,24 +155,26 @@ pub struct Cosine {
     pub is_expensive: bool,
 }
 
-impl<T: Number, U: Number> Metric<T, U> for Cosine {
+impl<T: Number> Metric<T> for Cosine {
     fn name(&self) -> String {
         "cosine".to_string()
     }
 
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64 {
         let (xx, yy, xy) = x
             .iter()
             .zip(y.iter())
-            .fold((T::zero(), T::zero(), T::zero()), |(xx, yy, xy), (&a, &b)| {
+            .map(|(a, b)| (a.as_f64(), b.as_f64()))
+            .fold((0., 0., 0.), |(xx, yy, xy), (a, b)| {
                 (xx + a * a, yy + b * b, xy + a * b)
             });
 
-        if xx == T::zero() || yy == T::zero() || xy <= T::zero() {
-            return U::one();
+        if xx == 0. || yy == 0. || xy <= 0. {
+            1.
+        } else {
+            // TODO: Try using inverse-reciprocal-sqrt method
+            1. - xy / (xx * yy).sqrt()
         }
-
-        U::from(1. - xy.as_f64() / (xx * yy).as_f64().sqrt()).unwrap()
     }
 
     fn is_expensive(&self) -> bool {
@@ -182,14 +189,13 @@ pub struct Hamming {
     pub is_expensive: bool,
 }
 
-impl<T: Number, U: Number> Metric<T, U> for Hamming {
+impl<T: Number> Metric<T> for Hamming {
     fn name(&self) -> String {
         "hamming".to_string()
     }
 
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
-        let d = x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count();
-        U::from(d).unwrap()
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64 {
+        x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count().as_f64()
     }
 
     fn is_expensive(&self) -> bool {
@@ -205,28 +211,27 @@ pub struct Jaccard {
     pub is_expensive: bool,
 }
 
-impl<T: Number, U: Number> Metric<T, U> for Jaccard {
+impl<T: Number> Metric<T> for Jaccard {
     fn name(&self) -> String {
         "jaccard".to_string()
     }
 
-    fn one_to_one(&self, x: &[T], y: &[T]) -> U {
+    fn one_to_one(&self, x: &[T], y: &[T]) -> f64 {
         if x.is_empty() || y.is_empty() {
-            return U::one();
+            1.
+        } else {
+            let x = std::collections::HashSet::<u64>::from_iter(x.iter().map(|&a| NumCast::from(a).unwrap()));
+            let y = std::collections::HashSet::from_iter(y.iter().map(|&a| NumCast::from(a).unwrap()));
+
+            let intersection = x.intersection(&y).count();
+
+            if intersection == x.len() && intersection == y.len() {
+                1.
+            } else {
+                let union = x.union(&y).count();
+                1. - intersection.as_f64() / union.as_f64()
+            }
         }
-
-        let x = std::collections::HashSet::<u64>::from_iter(x.iter().map(|&a| NumCast::from(a).unwrap()));
-        let y = std::collections::HashSet::from_iter(y.iter().map(|&a| NumCast::from(a).unwrap()));
-
-        let intersection = x.intersection(&y).count();
-
-        if intersection == x.len() && intersection == y.len() {
-            return U::zero();
-        }
-
-        let union = x.union(&y).count();
-
-        U::one() - U::from(intersection as f64 / union as f64).unwrap()
     }
 
     fn is_expensive(&self) -> bool {
@@ -261,6 +266,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_panic() {
-        let _ = metric_from_name::<f32, f32>("aloha", false).unwrap();
+        let _ = metric_from_name::<f32>("aloha", false).unwrap();
     }
 }

@@ -2,48 +2,32 @@ use super::chunked_data::ChunkedTabular;
 
 use clam::prelude::*;
 
-pub struct ChunkedTabularSpace<'a, T: Number, U: Number> {
+pub struct ChunkedTabularSpace<'a, T: Number> {
     data: &'a ChunkedTabular<'a, T>,
-    metric: &'a dyn clam::Metric<T, U>,
-    uses_cache: bool,
-    cache: clam::Cache<U>,
+    metric: &'a dyn clam::Metric<T>,
 }
 
-impl<'a, T: clam::Number, U: clam::Number> ChunkedTabularSpace<'a, T, U> {
-    pub fn new(data: &'a ChunkedTabular<T>, metric: &'a dyn clam::Metric<T, U>, use_cache: bool) -> Self {
-        ChunkedTabularSpace {
-            data,
-            metric,
-            uses_cache: use_cache,
-            cache: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        }
+impl<'a, T: clam::Number> ChunkedTabularSpace<'a, T> {
+    pub fn new(data: &'a ChunkedTabular<T>, metric: &'a dyn clam::Metric<T>) -> Self {
+        ChunkedTabularSpace { data, metric }
     }
 }
 
-impl<'a, T: clam::Number, U: clam::Number> std::fmt::Debug for ChunkedTabularSpace<'a, T, U> {
+impl<'a, T: clam::Number> std::fmt::Debug for ChunkedTabularSpace<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("Tabular Space")
             .field("data", &self.data.name())
             .field("metric", &self.metric.name())
-            .field("uses_cache", &self.uses_cache)
             .finish()
     }
 }
 
-impl<'a, T: Number, U: Number> Space<'a, T, U> for ChunkedTabularSpace<'a, T, U> {
+impl<'a, T: Number> Space<'a, T> for ChunkedTabularSpace<'a, T> {
     fn data(&self) -> &dyn Dataset<'a, T> {
         self.data
     }
 
-    fn metric(&self) -> &dyn Metric<T, U> {
+    fn metric(&self) -> &dyn Metric<T> {
         self.metric
-    }
-
-    fn uses_cache(&self) -> bool {
-        self.uses_cache
-    }
-
-    fn cache(&self) -> clam::Cache<U> {
-        self.cache.clone()
     }
 }

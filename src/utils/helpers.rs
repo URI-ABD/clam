@@ -1,3 +1,6 @@
+use rand::distributions::Distribution;
+use rand::SeedableRng;
+
 use crate::prelude::*;
 
 pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
@@ -51,18 +54,20 @@ pub fn normalize_1d(values: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-// pub fn normalize_2d(values: Array2<f64>, on_rows: bool) -> Array2<f64> {
-//     let shape = (values.nrows(), values.ncols());
-//     let axis = Axis(if on_rows { 0 } else { 1 });
-//     let values: Vec<_> = values
-//         .axis_iter(axis)
-//         .into_par_iter()
-//         .flat_map(|values| normalize_1d(&values.to_vec()))
-//         .collect(); // this is now in col-major order.
-//     let values = (0..shape.0)
-//         .map(|r| values.iter().skip(r))
-//         .flat_map(|row| row.step_by(shape.0))
-//         .cloned()
-//         .collect();
-//     Array2::from_shape_vec(shape, values).unwrap()
-// }
+pub fn gen_data(seed: u64, [n_rows, n_cols]: [usize; 2]) -> Vec<Vec<f64>> {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+    let distribution = rand::distributions::Uniform::new_inclusive(-10., 10.);
+    (0..n_rows)
+        .map(|_| (0..n_cols).map(|_| distribution.sample(&mut rng)).collect())
+        .collect()
+}
+
+pub fn get_lfd(max: f64, radial_distances: &[f64]) -> f64 {
+    let half_max = max / 2.;
+    let half_count = radial_distances.iter().filter(|&&d| d <= half_max).count();
+    if half_count > 0 {
+        (radial_distances.len().as_f64() / half_count.as_f64()).log2()
+    } else {
+        1.
+    }
+}

@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// A sub-trait of `Metric` that allows us to encode one instance in terms of
 /// another and decode an instance from a reference and an encoding.
-pub trait CodecMetric<T: Number, U: Number>: Metric<T, U> {
+pub trait CodecMetric<T: Number>: Metric<T> {
     /// Encodes the target instance in terms of the reference and produces the
     /// encoding as a vec of bytes.
     fn encode(&self, reference: &[T], target: &[T]) -> Vec<u8>;
@@ -11,7 +11,7 @@ pub trait CodecMetric<T: Number, U: Number>: Metric<T, U> {
     fn decode(&self, reference: &[T], encoding: &[u8]) -> Result<Vec<T>, String>;
 }
 
-impl<T: Number, U: Number> CodecMetric<T, U> for crate::metric::Hamming {
+impl<T: Number> CodecMetric<T> for crate::metric::Hamming {
     fn encode(&self, x: &[T], y: &[T]) -> Vec<u8> {
         x.iter()
             .zip(y.iter())

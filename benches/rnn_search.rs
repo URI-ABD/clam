@@ -28,7 +28,7 @@ fn cakes(c: &mut Criterion) {
             .collect::<Vec<_>>();
 
         let metric = clam::metric::Euclidean { is_expensive: false };
-        let space = clam::TabularSpace::<_, f64>::new(&dataset, &metric, false);
+        let space = clam::TabularSpace::new(&dataset, &metric);
         let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = clam::CAKES::new(&space).build(&partition_criteria);
 

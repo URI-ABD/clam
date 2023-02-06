@@ -13,14 +13,14 @@ pub enum Delta {
 }
 
 #[derive(Debug, Clone)]
-pub struct Grain<'a, T: Number, U: Number> {
-    pub c: &'a Cluster<'a, T, U>,
-    pub d: U,
-    pub d_min: U,
-    pub d_max: U,
+pub struct Grain<'a, T: Number> {
+    pub c: &'a Cluster<'a, T>,
+    pub d: f64,
+    pub d_min: f64,
+    pub d_max: f64,
 }
 
-impl<'a, T: Number, U: Number> std::fmt::Display for Grain<'a, T, U> {
+impl<'a, T: Number> std::fmt::Display for Grain<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -33,42 +33,42 @@ impl<'a, T: Number, U: Number> std::fmt::Display for Grain<'a, T, U> {
     }
 }
 
-impl<'a, T: Number, U: Number> PartialEq for Grain<'a, T, U> {
+impl<'a, T: Number> PartialEq for Grain<'a, T> {
     fn eq(&self, other: &Self) -> bool {
         self.d_max == other.d_max
     }
 }
 
-impl<'a, T: Number, U: Number> Eq for Grain<'a, T, U> {}
+impl<'a, T: Number> Eq for Grain<'a, T> {}
 
-impl<'a, T: Number, U: Number> PartialOrd for Grain<'a, T, U> {
+impl<'a, T: Number> PartialOrd for Grain<'a, T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.d_max.partial_cmp(&other.d_max)
     }
 }
 
-impl<'a, T: Number, U: Number> Ord for Grain<'a, T, U> {
+impl<'a, T: Number> Ord for Grain<'a, T> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl<'a, T: Number, U: Number> Grain<'a, T, U> {
-    pub fn new(c: &'a Cluster<'a, T, U>, d: U) -> Self {
-        let d_min = if d > c.radius() { d - c.radius() } else { U::zero() };
+impl<'a, T: Number> Grain<'a, T> {
+    pub fn new(c: &'a Cluster<'a, T>, d: f64) -> Self {
+        let d_min = if d > c.radius() { d - c.radius() } else { 0. };
         let d_max = d + c.radius();
         Self { c, d, d_min, d_max }
     }
 
-    pub fn is_inside(&self, threshold: U) -> bool {
+    pub fn is_inside(&self, threshold: f64) -> bool {
         self.d_max <= threshold
     }
 
-    pub fn is_outside(&self, threshold: U) -> bool {
+    pub fn is_outside(&self, threshold: f64) -> bool {
         self.d_min > threshold
     }
 
-    pub fn is_straddling(&self, threshold: U) -> bool {
+    pub fn is_straddling(&self, threshold: f64) -> bool {
         !(self.is_inside(threshold) || self.is_outside(threshold))
     }
 
@@ -85,26 +85,27 @@ impl<'a, T: Number, U: Number> Grain<'a, T, U> {
     }
 }
 
+// TODO: Use crate for ord-float instead
 #[derive(Debug)]
-pub struct OrdNumber<U: Number> {
-    pub number: U,
+pub struct OrdNumber {
+    pub number: f64,
 }
 
-impl<U: Number> PartialEq for OrdNumber<U> {
+impl PartialEq for OrdNumber {
     fn eq(&self, other: &Self) -> bool {
         self.number == other.number
     }
 }
 
-impl<U: Number> Eq for OrdNumber<U> {}
+impl Eq for OrdNumber {}
 
-impl<U: Number> PartialOrd for OrdNumber<U> {
+impl PartialOrd for OrdNumber {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.number.partial_cmp(&other.number)
     }
 }
 
-impl<U: Number> Ord for OrdNumber<U> {
+impl Ord for OrdNumber {
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap()
     }
@@ -115,21 +116,21 @@ impl<U: Number> Ord for OrdNumber<U> {
 /// The ith element of `cumulative_cardinalities` represents the sum of cardinalities of the 0th through ith Cluster in
 /// `clusters`.
 #[derive(Debug)]
-pub struct KnnSieve<'a, T: Number, U: Number> {
-    space: &'a dyn Space<'a, T, U>,
-    pub grains: Vec<Grain<'a, T, U>>,
+pub struct KnnSieve<'a, T: Number> {
+    space: &'a dyn Space<'a, T>,
+    pub grains: Vec<Grain<'a, T>>,
     query: &'a [T],
     pub k: usize,
     pub cumulative_cardinalities: Vec<usize>,
     pub is_refined: bool,
-    insiders: Vec<Grain<'a, T, U>>,
-    straddlers: Vec<Grain<'a, T, U>>,
+    insiders: Vec<Grain<'a, T>>,
+    straddlers: Vec<Grain<'a, T>>,
     pub guaranteed_cardinalities: Vec<usize>,
-    threshold: U,
-    pub hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
+    threshold: f64,
+    pub hits: priority_queue::DoublePriorityQueue<usize, OrdNumber>,
 }
 
-impl<'a, T: Number, U: Number> std::fmt::Display for KnnSieve<'a, T, U> {
+impl<'a, T: Number> std::fmt::Display for KnnSieve<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -139,14 +140,14 @@ impl<'a, T: Number, U: Number> std::fmt::Display for KnnSieve<'a, T, U> {
                 .iter()
                 .zip(self.cumulative_cardinalities.iter())
                 .enumerate()
-                .map(|(i, (g, c))| format!("i: {}, car: {}, grain: {}", i, c, g))
+                .map(|(i, (g, c))| format!("i: {i}, cardinality: {c}, grain: {g}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
         )
     }
 }
 
-fn grain_filter<T: Number, U: Number>(mut grains: Vec<Grain<T, U>>, threshold: U) -> [Vec<Grain<T, U>>; 2] {
+fn grain_filter<T: Number>(mut grains: Vec<Grain<T>>, threshold: f64) -> [Vec<Grain<T>>; 2] {
     let (insiders, straddlers) = grains
         .drain(..)
         .filter(|g| !g.is_outside(threshold))
@@ -155,8 +156,8 @@ fn grain_filter<T: Number, U: Number>(mut grains: Vec<Grain<T, U>>, threshold: U
     [insiders, straddlers]
 }
 
-impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
-    pub fn new(clusters: Vec<&'a Cluster<'a, T, U>>, query: &'a [T], k: usize) -> Self {
+impl<'a, T: Number> KnnSieve<'a, T> {
+    pub fn new(clusters: Vec<&'a Cluster<'a, T>>, query: &'a [T], k: usize) -> Self {
         let space = clusters.first().unwrap().space();
         let grains = clusters
             .iter()
@@ -179,7 +180,7 @@ impl<'a, T: Number, U: Number> KnnSieve<'a, T, U> {
             insiders: vec![],
             straddlers: vec![],
             guaranteed_cardinalities: vec![],
-            threshold: U::zero(),
+            threshold: 0.,
             hits: priority_queue::DoublePriorityQueue::new(),
         }
     }

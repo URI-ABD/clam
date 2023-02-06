@@ -1,16 +1,19 @@
 import pathlib
 import typing
 import seaborn
-import pandas as pd
+import pandas
 import math
-import numpy as np
+import numpy 
 from matplotlib import pyplot
 
 
 import reports
 
 
-def insert_empty_bins(bins: np.ndarray, grouped_data: pd.Series):
+#Attempt at refactoring this module to be a little easier to read. The attempt is not going well. 
+
+
+def insert_empty_bins(bins: numpy.ndarray, grouped_data: pandas.Series):
     values = list(grouped_data.values)
     for i in range(len(bins)):
         if round(bins[i], 3) not in [key.left for key in grouped_data.keys()]:
@@ -18,58 +21,99 @@ def insert_empty_bins(bins: np.ndarray, grouped_data: pd.Series):
     return values
 
 
-def _violin_lfd(
+
+def _violin_parent_child_ratio(
     clusters_by_depth: list[list[reports.ClusterReport]],
     ax: pyplot.Axes,
-) -> pyplot.Axes:
+    pc_ratio_index: int,
+):
     ax.violinplot(
-        dataset=[[c.lfd for c in clusters] for clusters in clusters_by_depth],
+        dataset=[
+            [c.ratios[pc_ratio_index] for c in clusters] for clusters in clusters_by_depth
+        ],
         positions=list(range(len(clusters_by_depth))),
     )
+
     return ax
 
 
-def _line_radius_by_depth(
+
+def _violin(
+    clusters_by_depth: list[list[reports.ClusterReport]],
+    ax: pyplot.Axes,
+    dependent_variable: typing.Literal[
+        "old_radius", "new_radius", "radii_ratio", "lfd"
+    ],
+    x_label: str, 
+    clamping_function: typing.Literal[
+        "None", "radii_comparison", "max"
+    ] = "None",
+):
+    if dependent_variable == "radii_ratio": 
+        dataset = [ [c.radii_ratio for c in clusters if c.radii_ratio != 1.0] for clusters in clusters_by_depth],
+
+    elif dependent_variable == "new_radius": 
+        dataset = [[c.radius for c in clusters] for clusters in clusters_by_depth]
+
+    elif dependent_variable == "old_radius": 
+        dataset = [[c.old_radius for c in clusters] for clusters in clusters_by_depth] 
+    
+    elif dependent_variable == "lfd": 
+        dataset = [[c.lfd for c in clusters] for clusters in clusters_by_depth]
+
+        
+    ax.violinplot(
+        dataset,
+        positions=list(range(len(clusters_by_depth))),
+    )
+
+    _set_violin_labels(clusters_by_depth, ax, x_label, dependent_variable, dataset, clamping_function)
+
+    return ax
+
+def _line_radius_comparison(
     clusters_by_depth: list[list[reports.ClusterReport]],
     ax: pyplot.Axes,
 ) -> pyplot.Axes:
+
     ax.plot(
-        list(range(len(clusters_by_depth))),
-        [np.mean([c.radius for c in clusters]) for clusters in clusters_by_depth],
-        label="new_radius",
+        list(range(len(clusters_by_depth))), 
+        [numpy.mean([c.radius for c in clusters]) for clusters in clusters_by_depth],
+        label = "new radius",
     )
+
     ax.plot(
-        list(range(len(clusters_by_depth))),
-        [np.mean([c.naive_radius for c in clusters]) for clusters in clusters_by_depth],
-        label="naive_radius",
-    )
-    ax.plot(
-        list(range(len(clusters_by_depth))),
-        [np.mean([c.scaled_radius for c in clusters]) for clusters in clusters_by_depth],
-        label="scaled_radius",
-    )
+        list(range(len(clusters_by_depth))), 
+        [numpy.mean([c.old_radius for c in clusters]) for clusters in clusters_by_depth],
+        label = "old radius",
+    )   
+
     return ax
 
 
-def _line_ratio_by_depth(
+def _line(
     clusters_by_depth: list[list[reports.ClusterReport]],
     ax: pyplot.Axes,
-) -> pyplot.Axes:
-    ax.plot(
-        list(range(len(clusters_by_depth))),
-        [np.mean([(c.radius / c.naive_radius) if c.naive_radius > 0. else 1. for c in clusters]) for clusters in clusters_by_depth],
-        label="radius vs naive",
+    dependent_variable: typing.Literal[
+        "radii_ratio", "lfd"
+    ],
+    x_label: str, 
+    clamping_function: typing.Literal[
+        "None", "radii_comparison", "max"
+    ] = "None",)  -> pyplot.Axes:
+
+    if dependent_variable == "radii_ratio": 
+        dataset = [numpy.mean([c.radii_ratio for c in clusters]) for clusters in clusters_by_depth]
+    
+    elif dependent_variable == "lfd": 
+        dataset = [numpy.mean([c.lfd for c in clusters]) for clusters in clusters_by_depth]
+
+    ax.plot(list(range(len(clusters_by_depth))), 
+        dataset,
     )
-    ax.plot(
-        list(range(len(clusters_by_depth))),
-        [np.mean([(c.radius / c.scaled_radius) if c.scaled_radius > 0. else 1. for c in clusters]) for clusters in clusters_by_depth],
-        label="radius vs scaled",
-    )
-    ax.plot(
-        list(range(len(clusters_by_depth))),
-        [np.mean([(c.scaled_radius / c.naive_radius) if c.naive_radius > 0. else 1. for c in clusters]) for clusters in clusters_by_depth],
-        label="scaled vs naive",
-    )
+
+    _set_line_labels(clusters_by_depth, ax, x_label, dependent_variable, dataset, clamping_function)
+
     return ax
 
 
@@ -79,8 +123,7 @@ def _scatter_radii_ratio_by_cardinality(
 ) -> pyplot.Axes:
     ax.scatter(
         x=[c.cardinality for clusters in clusters_by_depth for c in clusters][10:],
-        y=[(c.radius / c.naive_radius) if c.naive_radius > 0. else 1. for clusters in clusters_by_depth for c in clusters][10:],
-        s=0.25,
+        y = [c.radii_ratio for clusters in clusters_by_depth for c in clusters][10:]
     )
     return ax
 
@@ -121,7 +164,7 @@ def _heat_lfd(
     # Creates list of bins for lfd based on desired number of lfd buckets and the max
     # lfd across all clusters in the tree
     max_lfd = max([lfd for depth in bucketed_lfds_by_depth for lfd in depth])
-    bins = np.arange(0, max_lfd + max_lfd / num_lfd_buckets, max_lfd / num_lfd_buckets)
+    bins = numpy.arange(0, max_lfd + max_lfd / num_lfd_buckets, max_lfd / num_lfd_buckets)
 
     # .cut() segments each sublist in bucketed_lfds_by_depth by lfd bucket and value_counts()
     # counts how many clusters within a particular depth sublist fall into each lfd category
@@ -129,20 +172,20 @@ def _heat_lfd(
     # the y axes in heatmaps.
     # The array also needs to be transposed in order to get lfd on the y axis.
     if normalization_type == "cluster":
-        data = np.transpose(
+        data = numpy.transpose(
             [
-                (pd.cut(lfds_set, bins=bins).value_counts() / len(lfds_set))[
+                (pandas.cut(lfds_set, bins=bins).value_counts() / len(lfds_set))[
                     ::-1
                 ].to_list()
                 for lfds_set in bucketed_lfds_by_depth
             ]
         )
     else:
-        data = np.transpose(
+        data = numpy.transpose(
             [
                 insert_empty_bins(
                     bins,
-                    pd.Series(cards_set, index=pd.cut(lfds_set, bins).to_list())
+                    pandas.Series(cards_set, index=pandas.cut(lfds_set, bins).to_list())
                     .groupby(level=0)
                     .sum()
                     / sum(cards_set),
@@ -168,178 +211,87 @@ def _heat_lfd(
     )
 
 
-def _heat_radius(
+def _set_violin_labels(
     clusters_by_depth: list[list[reports.ClusterReport]],
     ax: pyplot.Axes,
-    radius_type: typing.Literal["old_radius", "new_radius"],
-    normalization_type: typing.Literal["cluster", "cardinality"] = "cardinality",
-    depth_bucket_step: int = 2,
-) -> pyplot.Axes:
-
-    # Regroups clusters_by_depth based on desired size of depth buckets and
-    # replaes each cluster with its lfd s.t. the ith sublist in bucketed_lfds_by_depth
-    # contains lfds of all clusters whose depth is between i*depth_bucket_step
-    # and (i+1)*depth_bucket_step
-
-    bucketed_radii_by_depth = (
-        [
-            [
-                cluster.radius
-                for depth in clusters_by_depth
-                for cluster in depth
-                if clusters_by_depth.index(depth) // depth_bucket_step == d
-            ]
-            for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))
-        ]
-        if radius_type == "new_radius"
-        else [
-            [
-                cluster.naive_radius
-                for depth in clusters_by_depth
-                for cluster in depth
-                if clusters_by_depth.index(depth) // depth_bucket_step == d
-            ]
-            for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))
-        ]
-    )
-
-    if normalization_type == "cardinality":
-        bucketed_cardinalities_by_depth = [
-            [
-                cluster.cardinality
-                for depth in clusters_by_depth
-                for cluster in depth
-                if clusters_by_depth.index(depth) // depth_bucket_step == d
-            ]
-            for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))
-        ]
-
-    # Creates list of bins for radius based on desired number of radius buckets and the max
-    # radius across all clusters in the tree
-    max_radius = max_radius = max(
-        clusters_by_depth[0][0].naive_radius, clusters_by_depth[0][0].radius
-    )
-    num_buckets = int(len(clusters_by_depth) / depth_bucket_step)
-    bins = np.arange(
-        0, int(max_radius + max_radius / num_buckets), int(max_radius / num_buckets)
-    )
-
-    # .cut() segments each sublist in bucketed_lfds_by_depth by lfd bucket and value_counts()
-    # counts how many clusters within a particular depth sublist fall into each lfd category
-    # Thse lists need to be reversed with [::-1] to correct the fact that seaborn likes to invert
-    # the y axes in heatmaps.
-    # The array also needs to be transposed in order to get lfd on the y axis.
-    if normalization_type == "cluster":
-        data = np.transpose(
-            [
-                (pd.cut(radii_set, bins=bins).value_counts() / len(radii_set))[
-                    ::-1
-                ].to_list()
-                for radii_set in bucketed_radii_by_depth
-            ]
-        )
-    else:
-        data = np.transpose(
-            [
-                insert_empty_bins(
-                    bins,
-                    pd.Series(cards_set, index=pd.cut(radii_set, bins).to_list())
-                    .groupby(level=0)
-                    .sum()
-                    / sum(cards_set),
-                )[::-1]
-                for radii_set, cards_set in zip(
-                    bucketed_radii_by_depth, bucketed_cardinalities_by_depth
-                )
-            ]
-        )
-
-    # vmax currently clamped to 0.5. May cause issues with datasets whose lfd is more consistent
-    # across clusters in the same depth. Setting to 1 makes it difficult to see color variation; allowing
-    # it to be automatic makes it difficult to compare heatmaps for different datasets.
-    return seaborn.heatmap(
-        data=data,
-        vmin=0,
-        vmax=0.5,
-        cmap="Reds",
-        annot=False,
-        linewidths=0.75,
-        linecolor="white",
-        ax=ax,
-    )
-
-
-def _set_violin_lfd_labels(
-    clusters_by_depth: list[list[reports.ClusterReport]], ax: pyplot.Axes
-):
-    ax.set_xlabel("depth - num_clusters")
-    ax.set_ylabel("local fractal dimension")
+    x_label: str, 
+    y_label: str, 
+    dataset: list[list[float]],
+    clamping_function: typing.Literal[
+        "None", "radii_comparison", "max"
+    ] = "None",
+): 
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
 
     ax.set_xticks(
-        [d for d in range(len(clusters_by_depth))],
-        [f"{d}-{len(clusters)}" for d, clusters in enumerate(clusters_by_depth)],
+        [d for d in range(len(dataset))],
+        [f"{d}" for d in range(len(dataset))],
         rotation=270,
     )
+
+    if clamping_function == "radii_comparison": 
+        _clamp_radii_comparison(clusters_by_depth, ax)
+    elif clamping_function == "max": 
+        _clamp_to_max(dataset, ax)
 
     return
 
 
-def _set_heat_lfd_labels(
+def _set_line_labels(
     clusters_by_depth: list[list[reports.ClusterReport]],
     ax: pyplot.Axes,
-    num_lfd_buckets: int = 50,
-    depth_bucket_step: int = 2,
-):
-    ax.set_xlabel("depth")
-    ax.set_ylabel("local fractal dimension")
+    x_label: str, 
+    y_label: str, 
+    dataset: list[list[float]],
+    clamping_function: typing.Literal[
+        "None", "radii_comparison", "max"
+    ] = "None",
+): 
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
 
     ax.set_xticks(
-        [d for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))],
-        [
-            f"{depth_bucket_step*d}"
-            for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))
-        ],
+        [d for d in range(len(dataset))],
+        [f"{d}" for d in range(len(dataset))],
         rotation=270,
     )
 
-    max_lfd = max([cluster.lfd for depth in clusters_by_depth for cluster in depth])
-    lfd_step = round(max_lfd / num_lfd_buckets, 1)
-
-    ax.set_yticks(
-        [d for d in range(num_lfd_buckets)],
-        [f"{round(lfd_step*d, 2)}" for d in range(num_lfd_buckets, 0, -1)],
-    )
+    if clamping_function == "radii_comparison": 
+        _clamp_radii_comparison(ax, dataset)
+    elif clamping_function == "max": 
+        _clamp_to_max(ax, dataset)
 
     return
 
 
-def _set_heat_radius_labels(
-    clusters_by_depth: list[list[reports.ClusterReport]],
-    ax: pyplot.Axes,
-    depth_bucket_step: int = 2,
-):
-    ax.set_xlabel("depth")
-    ax.set_ylabel("radius")
+def _clamp_radii_comparison(clusters_by_depth: list[list[reports.ClusterReport]],
+    ax: pyplot.Axes, 
+    buffer: int = 1):
 
-    ax.set_xticks(
-        [d for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))],
-        [
-            f"{depth_bucket_step*d}"
-            for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))
-        ],
-        rotation=270,
+    max_radius = max(clusters_by_depth[0][0].old_radius, clusters_by_depth[0][0].radius)
+    high_value = int(math.ceil(max_radius / 1000.0)) * 1000 
+
+    step = int(high_value / 10) 
+    ax.set_yticks(
+        [d for d in range(0, high_value + buffer, step)],
+        [f"{d}" for d in  range(0, high_value + buffer, step)],
     )
+    return
 
-    num_buckets = int(len(clusters_by_depth) / depth_bucket_step)
+def _clamp_to_max(dataset:  list[list[float]],
+    ax: pyplot.Axes,
+    buffer: int = 1, 
+    num_buckets: int = 10):
 
-    max_lfd = max([cluster.lfd for depth in clusters_by_depth for cluster in depth])
-    lfd_step = round(max_lfd / num_buckets, 1)
+    high_value = max([datum for depth in dataset for datum in depth]) 
+    step = int(max / num_buckets)
 
     ax.set_yticks(
-        [d for d in range(num_buckets)],
-        [f"{round(lfd_step*d, 2)}" for d in range(num_buckets, 0, -1)],
+        [d for d in range(0, high_value + buffer, step)],
+        [f"{d}" for d in  range(0, high_value + buffer, step)],
     )
-
+    
     return
 
 
@@ -362,14 +314,27 @@ def plot_lfd_vs_depth(
     )
     figure.suptitle(title)
 
-    ax = (_violin_lfd if mode == "violin" else _heat_lfd)(
-        clusters_by_depth,
+    if mode == "violin": 
+        ax = _violin(clusters_by_depth,
         pyplot.axes((0.05, 0.1, 0.9, 0.85)),
-    )
+        "lfd")
+    else: 
+        ax = _heat_lfd(clusters_by_depth,
+        pyplot.axes((0.05, 0.1, 0.9, 0.85)),)
 
-    (_set_violin_lfd_labels if mode == "violin" else _set_heat_lfd_labels)(
-        clusters_by_depth, ax
-    )
+    # ax = (_violin_lfd if mode == "violin" else _heat_lfd)(
+    #     clusters_by_depth,
+    #     pyplot.axes((0.05, 0.1, 0.9, 0.85)),
+    # )
+
+    if mode == "violin":
+        _set_violin_labels(clusters_by_depth, ax, "depth", "lfd")
+    else:
+        _set_heat_lfd_labels( clusters_by_depth, ax)
+
+    # (_set_violin_lfd_labels if mode == "violin" else _set_heat_lfd_labels)(
+    #     clusters_by_depth, ax
+    # )
 
     if show:
         pyplot.show()
@@ -383,51 +348,9 @@ def plot_lfd_vs_depth(
     return
 
 
-def _violin_parent_child_ratio(
-    clusters_by_depth: list[list[reports.ClusterReport]],
-    ax: pyplot.Axes,
-    ratio_index: int,
-):
-    ax.violinplot(
-        dataset=[
-            [c.ratios[ratio_index] for c in clusters] for clusters in clusters_by_depth
-        ],
-        positions=list(range(len(clusters_by_depth))),
-    )
-    return ax
 
 
-# Mostly redundant function. Useful when you do not calculate all ratios and just want
-# to deal with radius. Should be deleted once issues with ratios are resolved
-def _violin_radius(
-    clusters_by_depth: list[list[reports.ClusterReport]],
-    ax: pyplot.Axes,
-    radius_type: typing.Literal["old_radius", "new_radius"],
-):
-    dataset = (
-        [[c.radius for c in clusters] for clusters in clusters_by_depth]
-        if radius_type == "new_radius"
-        else [[c.naive_radius for c in clusters] for clusters in clusters_by_depth]
-    )
-    ax.violinplot(
-        dataset=dataset,
-        positions=list(range(len(clusters_by_depth))),
-    )
-    return ax
 
-
-def _violin_radii_ratio(
-    clusters_by_depth: list[list[reports.ClusterReport]],
-    ax: pyplot.Axes,
-):
-    ax.violinplot(
-        dataset=[
-            [c.naive_radius for c in clusters if c.naive_radius != 1.0]
-            for clusters in clusters_by_depth
-        ],
-        positions=list(range(len(clusters_by_depth))),
-    )
-    return ax
 
 
 def _heat_parent_child_ratio(
@@ -461,25 +384,25 @@ def _heat_parent_child_ratio(
         ]
 
     max_ratio = max([ratio for depth in bucketed_ratios_by_depth for ratio in depth])
-    bins = np.arange(
+    bins = numpy.arange(
         0, max_ratio + max_ratio / num_ratio_buckets, max_ratio / num_ratio_buckets
     )
 
     if normalization_type == "cluster":
-        data = np.transpose(
+        data = numpy.transpose(
             [
-                (pd.cut(ratios_set, bins=bins).value_counts() / len(ratios_set))[
+                (pandas.cut(ratios_set, bins=bins).value_counts() / len(ratios_set))[
                     ::-1
                 ].to_list()
                 for ratios_set in bucketed_ratios_by_depth
             ]
         )
     else:
-        data = np.transpose(
+        data = numpy.transpose(
             [
                 insert_empty_bins(
                     bins,
-                    pd.Series(cards_set, index=pd.cut(ratios_set, bins).to_list())
+                    pandas.Series(cards_set, index=pandas.cut(ratios_set, bins).to_list())
                     .groupby(level=0)
                     .sum()
                     / sum(cards_set),
@@ -533,25 +456,25 @@ def _heat_parent_child_ratio(
 #         ]
 
 #     max_ratio = max([ratio for depth in bucketed_ratios_by_depth for ratio in depth])
-#     bins = np.arange(
+#     bins = numpy.arange(
 #         0, max_ratio + max_ratio / num_ratio_buckets, max_ratio / num_ratio_buckets
 #     )
 
 #     if normalization_type == "cluster":
-#         data = np.transpose(
+#         data = numpy.transpose(
 #             [
-#                 (pd.cut(ratios_set, bins=bins).value_counts() / len(ratios_set))[
+#                 (pandas.cut(ratios_set, bins=bins).value_counts() / len(ratios_set))[
 #                     ::-1
 #                 ].to_list()
 #                 for ratios_set in bucketed_ratios_by_depth
 #             ]
 #         )
 #     else:
-#         data = np.transpose(
+#         data = numpy.transpose(
 #             [
 #                 insert_empty_bins(
 #                     bins,
-#                     pd.Series(cards_set, index=pd.cut(ratios_set, bins).to_list())
+#                     pandas.Series(cards_set, index=pandas.cut(ratios_set, bins).to_list())
 #                     .groupby(level=0)
 #                     .sum()
 #                     / sum(cards_set),
@@ -574,67 +497,31 @@ def _heat_parent_child_ratio(
 #     )
 
 
-def _set_violin_parent_child_ratio_labels(
+
+def _set_heat_lfd_labels(
     clusters_by_depth: list[list[reports.ClusterReport]],
     ax: pyplot.Axes,
-    ratio_name: typing.Literal[
-        "cardinality",
-        "radius",
-        "lfd",
-        "cardinality_ema",
-        "radius_ema",
-        "lfd_ema",
-        "new radius",
-        "old radius",
-    ],
-):
-    ax.set_xlabel("depth - num_clusters")
-    ax.set_ylabel(f"{ratio_name}")
-
-    ax.set_xticks(
-        [d for d in range(len(clusters_by_depth))],
-        [f"{d}" for d, clusters in enumerate(clusters_by_depth)],
-        rotation=270,
-    )
-
-    return
-
-
-def _set_violin_radius_labels(
-    clusters_by_depth: list[list[reports.ClusterReport]],
-    ax: pyplot.Axes,
-    radius_type: typing.Literal["new_radius", "old_radius"],
-):
-    ax.set_xlabel("depth - num_clusters")
-    ax.set_ylabel(f"{radius_type}")
-
-    ax.set_xticks(
-        [d for d in range(len(clusters_by_depth))],
-        [f"{d}" for d, clusters in enumerate(clusters_by_depth)],
-        rotation=270,
-    )
-
-    max_radius = max(clusters_by_depth[0][0].naive_radius, clusters_by_depth[0][0].radius)
-    y_high = int(math.ceil(max_radius / 1000.0)) * 1000
-    ax.set_yticks(
-        [d for d in range(0, y_high + 1, 500)],
-        [f"{d}" for d in range(0, y_high + 1, 500)],
-    )
-
-    return
-
-
-def _set_violin_radii_ratio_labels(
-    clusters_by_depth: list[list[reports.ClusterReport]],
-    ax: pyplot.Axes,
+    num_lfd_buckets: int = 50,
+    depth_bucket_step: int = 2,
 ):
     ax.set_xlabel("depth")
-    ax.set_ylabel(f"radii ratio")
+    ax.set_ylabel("local fractal dimension")
 
     ax.set_xticks(
-        [d for d in range(len(clusters_by_depth))],
-        [f"{d}" for d, clusters in enumerate(clusters_by_depth)],
+        [d for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))],
+        [
+            f"{depth_bucket_step*d}"
+            for d in range(math.ceil(len(clusters_by_depth) / depth_bucket_step))
+        ],
         rotation=270,
+    )
+
+    max_lfd = max([cluster.lfd for depth in clusters_by_depth for cluster in depth])
+    lfd_step = round(max_lfd / num_lfd_buckets, 1)
+
+    ax.set_yticks(
+        [d for d in range(num_lfd_buckets)],
+        [f"{round(lfd_step*d, 2)}" for d in range(num_lfd_buckets, 0, -1)],
     )
 
     return
@@ -710,18 +597,20 @@ def plot_parent_child_ratios_vs_depth(
         "lfd_ema": 5,
     }
 
-    ax = (_violin_parent_child_ratio if mode == "violin" else _heat_parent_child_ratio)(
+    ax = (_violin_parent_child_ratio if mode == "violin" else _heat_ratio)(
         clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), ratios[ratio_name]
     )
 
     if mode == "violin":
-        _set_violin_parent_child_ratio_labels(
+        ax = _violin_parent_child_ratio(clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), ratios[ratio_name])
+        _set_violin_labels(
             clusters_by_depth,
             ax,
-            ratio_name,
-        )
+            "depth",
+            f"{ratio_name}" )
     else:
-        _set_heat_parent_child_ratio_labels(
+        ax = _heat_ratio(clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), ratios[ratio_name])
+        _set_heat_ratio_labels(
             clusters_by_depth, ax, ratio_name, ratios[ratio_name], 50, 2
         )
 
@@ -745,7 +634,8 @@ def plot_radius_vs_depth(
     clusters_by_depth: list[list[reports.ClusterReport]],
     show: bool,
     output_dir: pathlib.Path,
-    radius_type: typing.Literal["old_radius", "new_radius"],
+    radius_type: typing.Literal[
+   "old_radius", "new_radius"],
 ):
     figure: pyplot.Figure = pyplot.figure(figsize=(16, 10), dpi=300)
     title = ", ".join(
@@ -755,23 +645,30 @@ def plot_radius_vs_depth(
             f"cardinality = {tree.cardinality}",
             f"dimensionality = {tree.dimensionality}",
             f"build_time = {tree.build_time:3.2e} (sec)",
-            radius_type,
+            f"{radius_type} radius",
         ]
     )
     figure.suptitle(title)
 
-    ax = (_violin_radius if mode == "violin" else _heat_radius)(
-        clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), radius_type
-    )
+
+    # ax = (_violin_radius if mode == "violin" else _heat_ratio)(
+    #     clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), radius_type
+    # )
 
     if mode == "violin":
-        _set_violin_radius_labels(
+        ax = _violin(clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), radius_type)
+        _set_violin_labels(
             clusters_by_depth,
             ax,
-            radius_type,
+            "depth"
+            f"{radius_type} radius",
+            clamp_y = True, 
+            clamping_function = "radii_comparison"
         )
-    else:
-        _set_heat_radius_labels(clusters_by_depth, ax)
+    # else:
+    #     _set_heat_ratio_labels(
+    #         clusters_by_depth, ax, ratio_name, ratios[ratio_name], 50, 2
+    #     )
 
     if show:
         pyplot.show()
@@ -786,9 +683,8 @@ def plot_radius_vs_depth(
 
     return
 
-
 def plot_radii_ratio_vs_depth(
-    mode: typing.Literal["violin", "heat"],
+    mode: typing.Literal["violin", "heat", "line"],
     tree: reports.TreeReport,
     clusters_by_depth: list[list[reports.ClusterReport]],
     show: bool,
@@ -807,17 +703,9 @@ def plot_radii_ratio_vs_depth(
     )
     figure.suptitle(title)
 
-    ax = _violin_radii_ratio(clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)))
-
-    if mode == "violin":
-        _set_violin_radii_ratio_labels(
-            clusters_by_depth,
-            ax,
-        )
-    # else:
-    #     _set_heat_ratio_labels(
-    #         clusters_by_depth, ax, ratio_name, ratios[ratio_name], 50, 2
-    #     )
+    (_violin if mode == "violin" else _line )(
+        clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)), "radii_ratio", "depth", "max"
+    )
 
     if show:
         pyplot.show()
@@ -833,10 +721,10 @@ def plot_radii_ratio_vs_depth(
     return
 
 
+
 def plot_mean_radius_vs_depth(
     tree: reports.TreeReport,
     clusters_by_depth: list[list[reports.ClusterReport]],
-    y_scale: typing.Literal["linear", "log"],
     show: bool,
     output_dir: pathlib.Path,
 ):
@@ -853,20 +741,12 @@ def plot_mean_radius_vs_depth(
     )
     figure.suptitle(title)
 
-    ax = _line_radius_by_depth(clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)))
 
-    ax.set_yscale(y_scale)
-    ax.set_xlabel("depth")
-    ax.set_ylabel("radius")
-
-    ax.set_xticks(
-        [d for d in range(len(clusters_by_depth))],
-        [f"{d}" for d, clusters in enumerate(clusters_by_depth)],
-        rotation=270,
+    ax = _line_radius_comparison (
+        clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85))
     )
 
-    if y_scale == "linear":
-        ax.set_ylim(bottom=0)
+    _set_line_labels(clusters_by_depth, ax, "depth", "radius")
 
     ax.legend()
 
@@ -883,8 +763,7 @@ def plot_mean_radius_vs_depth(
 
     return
 
-
-def plot_mean_ratio_vs_depth(
+def plot_ratio_vs_depth(
     tree: reports.TreeReport,
     clusters_by_depth: list[list[reports.ClusterReport]],
     show: bool,
@@ -903,7 +782,10 @@ def plot_mean_ratio_vs_depth(
     )
     figure.suptitle(title)
 
-    ax = _line_ratio_by_depth(clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85)))
+
+    ax = _line (
+        clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85))
+    )
 
     ax.set_xlabel("depth")
     ax.set_ylabel("radii ratio")
@@ -948,14 +830,27 @@ def plot_scatter_radii_ratio_vs_cardinality(
     )
     figure.suptitle(title)
 
+
     ax = _scatter_radii_ratio_by_cardinality(
         clusters_by_depth, pyplot.axes((0.05, 0.1, 0.9, 0.85))
     )
 
-    ax.set_xscale("log")
+    # ax.set_xlabel("cardinality")
+    # ax.set_ylabel("radius")
 
-    ax.set_xlabel("cardinality")
-    ax.set_ylabel("radius")
+    # x_high = clusters_by_depth[0][0].cardinality
+    # max_radius = max(clusters_by_depth[0][0].old_radius, clusters_by_depth[0][0].radius)
+    # y_high = int(math.ceil(max_radius / 1000.0)) * 1000 
+
+    # ax.set_xticks(
+    #     [d for d in range(0, x_high+1, 2000)],
+    #     [f"{d}" for d in  range(0, y_high+1, 2000)],
+    # )
+
+    # ax.set_yticks(
+    #     [d for d in range(0, y_high+1, 500)],
+    #     [f"{d}" for d in  range(0, y_high+1, 500)],
+    # )
 
     if show:
         pyplot.show()

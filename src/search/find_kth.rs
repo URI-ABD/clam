@@ -4,11 +4,11 @@ use super::knn_sieve;
 
 use crate::prelude::*;
 
-pub fn find_kth_d<'a, T: Number, U: Number>(
-    grains: &mut [knn_sieve::Grain<'a, T, U>],
+pub fn find_kth_d<'a, T: Number>(
+    grains: &mut [knn_sieve::Grain<'a, T>],
     cumulative_cardinalities: &mut [usize],
     k: usize,
-) -> (knn_sieve::Grain<'a, T, U>, usize) {
+) -> (knn_sieve::Grain<'a, T>, usize) {
     assert_eq!(grains.len(), cumulative_cardinalities.len());
     _find_kth(
         grains,
@@ -20,11 +20,11 @@ pub fn find_kth_d<'a, T: Number, U: Number>(
     )
 }
 
-pub fn find_kth_d_max<'a, T: Number, U: Number>(
-    grains: &mut [knn_sieve::Grain<'a, T, U>],
+pub fn find_kth_d_max<'a, T: Number>(
+    grains: &mut [knn_sieve::Grain<'a, T>],
     cumulative_cardinalities: &mut [usize],
     k: usize,
-) -> (knn_sieve::Grain<'a, T, U>, usize) {
+) -> (knn_sieve::Grain<'a, T>, usize) {
     assert_eq!(grains.len(), cumulative_cardinalities.len());
     _find_kth(
         grains,
@@ -36,11 +36,11 @@ pub fn find_kth_d_max<'a, T: Number, U: Number>(
     )
 }
 
-pub fn find_kth_d_min<'a, T: Number, U: Number>(
-    grains: &mut [knn_sieve::Grain<'a, T, U>],
+pub fn find_kth_d_min<'a, T: Number>(
+    grains: &mut [knn_sieve::Grain<'a, T>],
     cumulative_cardinalities: &mut [usize],
     k: usize,
-) -> (knn_sieve::Grain<'a, T, U>, usize) {
+) -> (knn_sieve::Grain<'a, T>, usize) {
     assert_eq!(grains.len(), cumulative_cardinalities.len());
     _find_kth(
         grains,
@@ -52,14 +52,14 @@ pub fn find_kth_d_min<'a, T: Number, U: Number>(
     )
 }
 
-pub fn _find_kth<'a, T: Number, U: Number>(
-    grains: &mut [knn_sieve::Grain<'a, T, U>],
+pub fn _find_kth<'a, T: Number>(
+    grains: &mut [knn_sieve::Grain<'a, T>],
     cumulative_cardinalities: &mut [usize],
     k: usize,
     l: usize,
     r: usize,
     delta: &knn_sieve::Delta,
-) -> (knn_sieve::Grain<'a, T, U>, usize) {
+) -> (knn_sieve::Grain<'a, T>, usize) {
     let mut cardinalities = (0..1)
         .chain(cumulative_cardinalities.iter().copied())
         .zip(cumulative_cardinalities.iter().copied())
@@ -159,8 +159,8 @@ pub fn partition_threshold<U: Number>(thresholds: &mut [(U, usize)], l: usize, r
     a
 }
 
-fn partition<'a, T: Number, U: Number>(
-    grains: &mut [knn_sieve::Grain<'a, T, U>],
+fn partition<T: Number>(
+    grains: &mut [knn_sieve::Grain<T>],
     cardinalities: &mut [usize],
     l: usize,
     r: usize,
@@ -206,8 +206,8 @@ mod tests {
             .map(|_| (0..5).map(|_| rng.gen_range(0.0..10.0)).collect())
             .collect();
         let dataset = crate::Tabular::<f64>::new(&data, "test_cluster".to_string());
-        let metric = metric_from_name::<f64, f64>("euclideansq", false).unwrap();
-        let space = crate::TabularSpace::new(&dataset, metric.as_ref(), false);
+        let metric = metric_from_name::<f64>("euclideansq", false).unwrap();
+        let space = crate::TabularSpace::new(&dataset, metric.as_ref());
 
         let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
         let partition_criteria = crate::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);
@@ -241,8 +241,8 @@ mod tests {
             .map(|_| (0..5).map(|_| rng.gen_range(0.0..10.0)).collect())
             .collect();
         let dataset = crate::Tabular::<f64>::new(&data, "test_cluster".to_string());
-        let metric = metric_from_name::<f64, f64>("euclideansq", false).unwrap();
-        let space = crate::TabularSpace::new(&dataset, metric.as_ref(), false);
+        let metric = metric_from_name::<f64>("euclideansq", false).unwrap();
+        let space = crate::TabularSpace::new(&dataset, metric.as_ref());
 
         let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
         let partition_criteria = crate::PartitionCriteria::new(true).with_min_cardinality(1 + log_cardinality);

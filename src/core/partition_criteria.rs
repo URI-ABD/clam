@@ -2,17 +2,29 @@
 
 use crate::prelude::*;
 
-pub trait PartitionCriterion<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
-    fn check(&self, c: &Cluster<T, U>) -> bool;
+pub trait PartitionCriterion<'a, T, S>: std::fmt::Debug + Send + Sync
+where
+    T: Number + 'a,
+    S: Space<'a, T> + 'a,
+{
+    fn check(&self, c: &Cluster<'a, T, S>) -> bool;
 }
 
 #[derive(Debug)]
-pub struct PartitionCriteria<T: Number, U: Number> {
-    criteria: Vec<Box<dyn PartitionCriterion<T, U>>>,
+pub struct PartitionCriteria<'a, T, S>
+where
+    T: Number + 'a,
+    S: Space<'a, T> + 'a,
+{
+    criteria: Vec<Box<dyn PartitionCriterion<'a, T, S>>>,
     check_all: bool,
 }
 
-impl<T: Number, U: Number> PartitionCriteria<T, U> {
+impl<'a, T, S> PartitionCriteria<'a, T, S>
+where
+    T: Number + 'a,
+    S: Space<'a, T> + 'a,
+{
     pub fn new(check_all: bool) -> Self {
         Self {
             criteria: Vec::new(),
@@ -30,12 +42,12 @@ impl<T: Number, U: Number> PartitionCriteria<T, U> {
         self
     }
 
-    pub fn with_custom(mut self, c: Box<dyn PartitionCriterion<T, U>>) -> Self {
+    pub fn with_custom(mut self, c: Box<dyn PartitionCriterion<'a, T, S>>) -> Self {
         self.criteria.push(c);
         self
     }
 
-    pub fn check(&self, cluster: &Cluster<T, U>) -> bool {
+    pub fn check(&self, cluster: &Cluster<'a, T, S>) -> bool {
         !cluster.is_singleton()
             && if self.check_all {
                 self.criteria.iter().all(|c| c.check(cluster))
@@ -48,8 +60,12 @@ impl<T: Number, U: Number> PartitionCriteria<T, U> {
 #[derive(Debug, Clone)]
 struct MaxDepth(usize);
 
-impl<T: Number, U: Number> PartitionCriterion<T, U> for MaxDepth {
-    fn check(&self, c: &Cluster<T, U>) -> bool {
+impl<'a, T, S> PartitionCriterion<'a, T, S> for MaxDepth
+where
+    T: Number + 'a,
+    S: Space<'a, T> + 'a,
+{
+    fn check(&self, c: &Cluster<'a, T, S>) -> bool {
         c.depth() < self.0
     }
 }
@@ -57,8 +73,12 @@ impl<T: Number, U: Number> PartitionCriterion<T, U> for MaxDepth {
 #[derive(Debug, Clone)]
 struct MinCardinality(usize);
 
-impl<T: Number, U: Number> PartitionCriterion<T, U> for MinCardinality {
-    fn check(&self, c: &Cluster<T, U>) -> bool {
+impl<'a, T, S> PartitionCriterion<'a, T, S> for MinCardinality
+where
+    T: Number + 'a,
+    S: Space<'a, T> + 'a,
+{
+    fn check(&self, c: &Cluster<'a, T, S>) -> bool {
         c.cardinality() > self.0
     }
 }

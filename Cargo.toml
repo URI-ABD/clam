@@ -56,6 +56,7 @@ ndarray-npy = "0.8"
 log = "0.4"
 env_logger = "0.9"
 rmp-serde = "1.1"
+itertools = "0.10.5"
 
 [dev-dependencies.criterion]
 version = "0.3"
@@ -78,12 +79,24 @@ name = "search_tiny"
 path = "examples/search_tiny/main.rs"
 
 [[example]]
+name = "hdf5"
+path = "examples/hdf5/main.rs"
+
+[[example]]
 name = "search_small"
 path = "examples/search_small/main.rs"
 
 [[example]]
 name = "search_large"
 path = "examples/search_large/main.rs"
+
+[[example]]
+name = "triangle"
+path = "examples/triangle.rs"
+
+[[example]]
+name = "tetrahedron"
+path = "examples/tetrahedron.rs"
 
 [[bench]]
 name = "partition"
@@ -101,7 +114,14 @@ harness = false
 name = "knn_vs_rnn"
 harness = false
 
+# [[bench]]
+# name = "find_kth"
+# harness = false
+
 [[bench]]
-name = "find_kth"
+name = "triangle"
 harness = false
 
+[[bench]]
+name = "tetrahedron"
+harness = false

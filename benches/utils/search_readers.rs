@@ -20,13 +20,13 @@ pub static SEARCH_DATASETS: &[(&str, &str)] = &[
 fn make_path(dir: &std::path::Path, name: &str, variant: &str) -> std::path::PathBuf {
     let mut path = dir.to_path_buf();
     path.push("as_npy");
-    path.push(format!("{}_{}.npy", name, variant));
-    assert!(path.exists(), "Path not found: {:?}", path);
+    path.push(format!("{name}_{variant}.npy"));
+    assert!(path.exists(), "Path not found: {path:?}");
     path
 }
 
 fn read_npy(path: &std::path::PathBuf) -> Result<Vec<Vec<f32>>, String> {
-    let data: Array2<f32> = ndarray_npy::read_npy(&path).map_err(|error| {
+    let data: Array2<f32> = ndarray_npy::read_npy(path).map_err(|error| {
         format!(
             "Error: Failed to read your dataset at {}. {:}",
             path.to_str().unwrap(),
@@ -43,7 +43,7 @@ pub fn read_search_data(name: &str) -> Result<TrainTest<f32>, String> {
     data_dir.push("data");
     data_dir.push("search_small");
 
-    assert!(data_dir.exists(), "Path not found: {:?}", data_dir);
+    assert!(data_dir.exists(), "Path not found: {data_dir:?}");
 
     let train_data = read_npy(&make_path(&data_dir, name, "train"))?;
 
