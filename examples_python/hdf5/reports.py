@@ -18,15 +18,16 @@ class TreeReport(pydantic.BaseModel):
 
 class ClusterReport(pydantic.BaseModel):
     cardinality: int
-    indices: typing.Union[list[int], None]
+    depth: int
     name: str
-    arg_center: int
-    arg_radius: int
+    variant: str
     radius: float
     lfd: float
-    left_child: typing.Union[str, None]
-    right_child: typing.Union[str, None]
-    # ratios: list[float]
+    indices: typing.Optional[list[int]]
+    children: typing.Optional[list[str]]
+    ratios: list[float]
+    naive_radius: float
+    scaled_radius: float
 
 
 def load_tree(base_path: pathlib.Path) -> list[ClusterReport]:
@@ -37,6 +38,7 @@ def load_tree(base_path: pathlib.Path) -> list[ClusterReport]:
     ]
 
 
+# TODO: Update after changes are done in Rust
 class RnnReport(pydantic.BaseModel):
     data_name: str
     metric_name: str
@@ -70,6 +72,7 @@ class RnnReport(pydantic.BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
+    # noinspection DuplicatedCode
     def is_valid(self):
         reasons: list[str] = list()
 
@@ -95,6 +98,7 @@ class RnnReport(pydantic.BaseModel):
     def output_sizes(self) -> numpy.ndarray:
         return numpy.asarray(list(map(len, self.outputs)))
 
+    # noinspection PyMethodMayBeStatic
     def _plot_xy(self, ax: pyplot.Axes, x: numpy.ndarray, y: numpy.ndarray):
         ax.scatter(x, y, s=0.2)
         return
@@ -131,6 +135,7 @@ class RnnReport(pydantic.BaseModel):
         ax.set_ylabel('Recall')
         return ax
 
+    # noinspection DuplicatedCode
     def plot(
             self,
             show: bool,

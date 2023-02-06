@@ -32,8 +32,8 @@ fn cakes(c: &mut Criterion) {
             .collect::<Vec<_>>();
 
         let metric_name = "euclidean";
-        let metric = metric_from_name::<f32, f32>(metric_name, false).unwrap();
-        let space = clam::TabularSpace::new(&dataset, metric.as_ref(), false);
+        let metric = metric_from_name::<f32>(metric_name, false).unwrap();
+        let space = clam::TabularSpace::new(&dataset, metric.as_ref());
         let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = clam::CAKES::new(&space).build(&partition_criteria);
 
@@ -52,14 +52,19 @@ fn cakes(c: &mut Criterion) {
             }
 
             queries.iter().for_each(|&query| {
-                let indices = cakes.knn_search(query, k);
+                // let indices = cakes.knn_search(query, k);
+                let indices = cakes
+                    .knn_by_rnn(query, k)
+                    .into_iter()
+                    .map(|(i, _)| i)
+                    .collect::<Vec<_>>();
                 assert!(indices.len() >= k, "{} vs {}", indices.len(), k);
                 if indices.len() > k {
                     let mut distances = space.query_to_many(query, &indices);
                     distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
                     let kth = distances[k - 1];
                     assert!(
-                        distances[k..].iter().all(|d| approx_eq!(f32, *d, kth)),
+                        distances[k..].iter().all(|d| approx_eq!(f64, *d, kth)),
                         "{:?}",
                         &distances
                     );
@@ -70,7 +75,8 @@ fn cakes(c: &mut Criterion) {
                 b.iter_with_large_drop(|| {
                     queries
                         .iter()
-                        .map(|&query| cakes.knn_search(query, k))
+                        // .map(|&query| cakes.knn_search(query, k))
+                        .map(|&query| cakes.knn_by_rnn(query, k))
                         .collect::<Vec<_>>()
                 })
             });

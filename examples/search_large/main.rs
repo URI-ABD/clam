@@ -41,7 +41,7 @@ fn main() {
     let dataset = chunked_data::ChunkedTabular::new(&location, cardinality, 100, 1_000_000, data.folder);
 
     let metric = clam::metric::Euclidean { is_expensive: false };
-    let space = chunked_space::ChunkedTabularSpace::<i8, f32>::new(&dataset, &metric, false);
+    let space = chunked_space::ChunkedTabularSpace::<i8>::new(&dataset, &metric);
 
     let criteria = clam::PartitionCriteria::new(true).with_min_cardinality(10);
     let cakes = clam::CAKES::new(&space).build(&criteria);

@@ -17,7 +17,7 @@ pub struct BigAnnPaths<'a> {
 
 pub fn make_dir(path: &std::path::Path) -> Result<(), String> {
     if !path.exists() {
-        std::fs::create_dir(&path).map_err(|reason| format!("Could not create directory {:?} because {}.", path, reason))
+        std::fs::create_dir(path).map_err(|reason| format!("Could not create directory {path:?} because {reason}."))
     } else {
         Ok(())
     }
@@ -28,13 +28,12 @@ fn read_row<R: std::io::Read>(reader: &mut R, row_size: usize) -> Result<Vec<u8>
     let mut chunk = reader.take(row_size as u64);
     let n = chunk
         .read_to_end(&mut buffer)
-        .map_err(|reason| format!("Could not read chunk from reader because {}.", reason))?;
+        .map_err(|reason| format!("Could not read chunk from reader because {reason}."))?;
     if n == row_size {
         Ok(buffer)
     } else {
         Err(format!(
-            "Could not read the correct number of bytes. Expected {} but got {}.",
-            row_size, n
+            "Could not read the correct number of bytes. Expected {row_size} but got {n}."
         ))
     }
 }
@@ -58,7 +57,7 @@ fn read_table<T: clam::Number, R: std::io::Read>(
 
 pub fn open_reader(path: &std::path::Path) -> Result<Reader, String> {
     let reader = std::io::BufReader::new(
-        std::fs::File::open(path).map_err(|reason| format!("Could not open file {:?} because {}", path, reason))?,
+        std::fs::File::open(path).map_err(|reason| format!("Could not open file {path:?} because {reason}"))?,
     );
     Ok(reader)
 }
@@ -90,8 +89,8 @@ fn transform_train<T: clam::Number>(in_path: &std::path::Path, out_dir: &std::pa
         let mut buffer = vec![];
         chunk.serialize(&mut rmp_serde::Serializer::new(&mut buffer)).unwrap();
 
-        std::fs::write(out_dir.join(format!("chunk_{}_{}", chunk_index, num_rows)), buffer)
-            .map_err(|reason| format!("Could not write point {} because {}.", chunk_index, reason))?
+        std::fs::write(out_dir.join(format!("chunk_{chunk_index}_{num_rows}")), buffer)
+            .map_err(|reason| format!("Could not write point {chunk_index} because {reason}."))?
     }
 
     Ok(())

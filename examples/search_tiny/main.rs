@@ -8,22 +8,18 @@ fn search(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), Str
 
     let (features, _) = readers::read_anomaly_data(data_name, true)?;
     let dataset = clam::Tabular::new(&features, data_name.to_string());
+    let run_name = format!("{data_name}__{metric_name}");
+    let shape_name = format!("({}, {})", dataset.cardinality(), dataset.dimensionality());
 
-    let queries = (0..1000)
+    let num_queries = 1000;
+    let queries = (0..num_queries)
         .map(|i| dataset.get(i % dataset.cardinality()))
         .collect::<Vec<_>>();
     let num_queries = queries.len();
-    log::info!(
-        "Running {}-{} data with shape ({}, {}) and {} queries ...",
-        data_name,
-        metric_name,
-        dataset.cardinality(),
-        dataset.dimensionality(),
-        num_queries,
-    );
+    log::info!("Running {run_name} data with shape {shape_name} and {num_queries} queries ...");
 
-    let metric = metric_from_name::<f32, f32>(metric_name, false).unwrap();
-    let space = clam::TabularSpace::new(&dataset, metric.as_ref(), false);
+    let metric = metric_from_name::<f32>(metric_name, false).unwrap();
+    let space = clam::TabularSpace::new(&dataset, metric.as_ref());
     let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1);
 
     let start = std::time::Instant::now();
@@ -31,9 +27,8 @@ fn search(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), Str
     let diameter = cakes.diameter();
     let build_time = start.elapsed().as_secs_f64();
     log::info!(
-        "Built tree to a depth of {} in {:.2e} seconds ...",
-        cakes.depth(),
-        build_time
+        "Built tree to a depth of {} in {build_time:.2e} seconds ...",
+        cakes.depth()
     );
 
     // for k in [1, 10, 100] {
@@ -41,13 +36,10 @@ fn search(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), Str
         if k > dataset.cardinality() {
             continue;
         }
-        let r = diameter / k as f32;
-        log::info!("Using {r:.12} ...");
+        let r = diameter / k as f64;
+        log::info!("Using radius: {r:.12} ...");
 
-        let queries_radii = queries
-            .iter()
-            .map(|&q| (q, r))
-            .collect::<Vec<_>>();
+        let queries_radii = queries.iter().map(|&q| (q, r)).collect::<Vec<_>>();
 
         let start = std::time::Instant::now();
         (0..num_runs).for_each(|_| {
@@ -56,7 +48,7 @@ fn search(data_name: &str, metric_name: &str, num_runs: usize) -> Result<(), Str
         let time = start.elapsed().as_secs_f64() / (num_runs as f64);
         let mean_time = time / (num_queries as f64);
 
-        log::info!("knn-search time: {:.2e} seconds per query ...", mean_time);
+        log::info!("knn-search time: {mean_time:.2e} seconds per query for {num_queries} queries ...");
     }
     log::info!("Moving on ...");
     log::info!("");
@@ -89,8 +81,8 @@ fn main() -> Result<(), String> {
     );
     let failures = results.iter().filter(|v| v.is_err()).cloned().collect::<Vec<_>>();
     if !failures.is_empty() {
-        println!("Failed for {}/{} datasets.", failures.len(), results.len());
-        failures.into_iter().for_each(|v| println!("{v:?}\n"));
+        log::info!("Failed for {}/{} datasets.", failures.len(), results.len());
+        failures.into_iter().for_each(|v| log::info!("{v:?}\n"));
     }
     Ok(())
 }

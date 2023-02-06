@@ -24,23 +24,21 @@ fn partition(c: &mut Criterion) {
         let dataset = clam::Tabular::new(&features, data_name.to_string());
         // let log_cardinality = (dataset.cardinality() as f64).log2() as usize;
         let euclidean = clam::metric::Euclidean { is_expensive: false };
-        let space = clam::TabularSpace::<f32, f32>::new(&dataset, &euclidean, false);
+        let space = clam::TabularSpace::new(&dataset, &euclidean);
         let partition_criteria =
-            clam::PartitionCriteria::new(true).with_min_cardinality(1);
+            clam::PartitionCriteria::<f32, clam::TabularSpace<f32>>::new(true).with_min_cardinality(1);
 
         let cardinality = dataset.cardinality();
         let dimensionality = dataset.dimensionality();
         println!("\nMaking tree on {data_name} data with {cardinality} cardinality and {dimensionality}");
-        let root = Cluster::new_root(&space).build().partition(&partition_criteria, true);
+        let root = Cluster::new_root(&space).partition(&partition_criteria, true);
         let subtree = root.subtree();
         let num_clusters = subtree.len();
         let max_leaf_depth = subtree.iter().map(|c| c.depth()).max().unwrap();
         println!("Got a tree of depth {max_leaf_depth} with {num_clusters} total clusters.\n");
 
         group.bench_function(data_name, |b| {
-            b.iter_with_large_drop(|| {
-                Cluster::new_root(&space).build().partition(&partition_criteria, true)
-            })
+            b.iter_with_large_drop(|| Cluster::new_root(&space).partition(&partition_criteria, true))
         });
     }
 

@@ -30,7 +30,7 @@ fn cakes(c: &mut Criterion) {
         if data_name == "fashion-mnist" {
             continue;
         }
-        
+
         let data = search_readers::read_search_data(data_name);
         if data.is_err() {
             log::info!("Could not read {} data. Moving on ...", data_name);
@@ -43,13 +43,13 @@ fn cakes(c: &mut Criterion) {
             continue;
         }
 
-        let queries = clam::Tabular::new(&queries, format!("{}-queries", data_name));
+        let queries = clam::Tabular::new(&queries, format!("{data_name}-queries"));
         let queries = (0..100)
             .map(|i| queries.get(i % dataset.cardinality()))
             .collect::<Vec<_>>();
 
-        let metric = metric_from_name::<f32, f32>(metric_name, false).unwrap();
-        let space = clam::TabularSpace::new(&dataset, metric.as_ref(), false);
+        let metric = metric_from_name::<f32>(metric_name, false).unwrap();
+        let space = clam::TabularSpace::new(&dataset, metric.as_ref());
         let partition_criteria = clam::PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = clam::CAKES::new(&space).build(&partition_criteria);
 
@@ -92,10 +92,10 @@ fn cakes(c: &mut Criterion) {
             //     .zip(rnn_hits.iter())
             //     .for_each(|(knn, rnn)| assert!(check_recall(knn, rnn)));
 
-            let knn_name = format!("{}-knn", &bench_name);
-            group.bench_with_input(BenchmarkId::new(&knn_name, k), &k, |b, &k| {
-                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k))
-            });
+            // let knn_name = format!("{}-knn", &bench_name);
+            // group.bench_with_input(BenchmarkId::new(&knn_name, k), &k, |b, &k| {
+            //     b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k))
+            // });
 
             let rnn_name = format!("{}-rnn", &bench_name);
             group.bench_with_input(BenchmarkId::new(&rnn_name, k), &k, |b, _| {

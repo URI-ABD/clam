@@ -75,7 +75,7 @@ impl<'a, T: clam::Number> ChunkedTabular<'a, T> {
         } else {
             self.chunk_size
         };
-        let name = format!("chunk_{}_{}", chunk_id, chunk_size);
+        let name = format!("chunk_{chunk_id}_{chunk_size}");
         let path = self.location.join(name);
 
         let chunk = {

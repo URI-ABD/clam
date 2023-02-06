@@ -1,12 +1,12 @@
 #[allow(dead_code)]
-pub struct H5Data<Tr: crate::h5number::H5Number> {
+pub struct H5Data<H: crate::h5number::H5Number> {
     data: hdf5::Dataset,
     name: String,
     shape: (usize, usize),
-    zero: Tr,
+    zero: H,
 }
 
-impl<Tr: crate::h5number::H5Number> H5Data<Tr> {
+impl<H: crate::h5number::H5Number> H5Data<H> {
     pub fn new(file: &hdf5::File, member_name: &str, name: String) -> Result<Self, String> {
         let data = file
             .dataset(member_name)
@@ -16,7 +16,7 @@ impl<Tr: crate::h5number::H5Number> H5Data<Tr> {
             data,
             name,
             shape: (shape[0], shape[1]),
-            zero: Tr::zero(),
+            zero: H::zero(),
         })
     }
 
@@ -24,10 +24,10 @@ impl<Tr: crate::h5number::H5Number> H5Data<Tr> {
     where
         T: clam::Number,
     {
-        let data: ndarray::Array2<Tr> = self
+        let data: ndarray::Array2<H> = self
             .data
             .read_2d()
-            .map_err(|reason| format!("Could not convert from HDF% to Tabular because {reason}"))?;
+            .map_err(|reason| format!("Could not convert from HDF5 to Tabular because {reason}"))?;
 
         Ok(data
             .outer_iter()
@@ -36,7 +36,7 @@ impl<Tr: crate::h5number::H5Number> H5Data<Tr> {
     }
 }
 
-impl<Tr: crate::h5number::H5Number> std::fmt::Debug for H5Data<Tr> {
+impl<H: crate::h5number::H5Number> std::fmt::Debug for H5Data<H> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("Tabular Dataset")
             .field("name", &self.name)
@@ -46,7 +46,7 @@ impl<Tr: crate::h5number::H5Number> std::fmt::Debug for H5Data<Tr> {
     }
 }
 
-impl<'a, Tr: crate::h5number::H5Number, T: clam::Number> clam::Dataset<'a, T> for H5Data<Tr> {
+impl<'a, H: crate::h5number::H5Number, T: clam::Number> clam::Dataset<'a, T> for H5Data<H> {
     fn name(&self) -> String {
         self.name.clone()
     }
