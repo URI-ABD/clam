@@ -1,7 +1,7 @@
 //! Provides the `Space` trait and a struct `TabularSpace` implementing it.
 
 use rand::prelude::*;
-// use rayon::prelude::*;
+use rayon::prelude::*;
 
 use crate::dataset::Tabular;
 use crate::prelude::*;

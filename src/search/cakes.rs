@@ -95,10 +95,7 @@ where
             indices.into_iter().zip(distances.into_iter())
         });
 
-        let straddlers = straddlers
-            .into_iter()
-            .flat_map(|(c, _)| c.indices())
-            .collect();
+        let straddlers = straddlers.into_iter().flat_map(|(c, _)| c.indices()).collect();
         hits.chain(self.linear_search(query, radius, Some(straddlers)).into_iter())
             .collect()
     }
