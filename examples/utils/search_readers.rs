@@ -10,11 +10,11 @@ pub static SEARCH_DATASETS: &[(&str, &str)] = &[
     ("glove-50", "cosine"),         // 4
     ("glove-100", "cosine"),        // 5
     ("glove-200", "cosine"),        // 6
-    // ("kosarak", "jaccard"),         // 7
-    ("mnist", "euclidean"), // 8
-    // ("nytimes", "cosine"),          // 9
-    ("sift", "euclidean"), // 10
-                           // ("lastfm", "cosine"),           // 11
+    ("kosarak", "jaccard"),         // 7
+    ("mnist", "euclidean"),         // 8
+    ("nytimes", "cosine"),          // 9
+    ("sift", "euclidean"),          // 10
+    ("lastfm", "cosine"),           // 11
 ];
 
 fn make_path(dir: &std::path::Path, name: &str, variant: &str) -> std::path::PathBuf {
