@@ -8,6 +8,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Update
+      run: rustup update
+
     - name: Install HDF5
       run: sudo apt-get install hdf5-tools libhdf5-dev
 
