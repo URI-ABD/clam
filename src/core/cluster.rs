@@ -273,14 +273,14 @@ impl<'a, T: Number, U: Number> Cluster<'a, T, U> {
             let [left, right] = self.partition_once();
 
             let (left, right) = if recursive {
-                // (
-                //     left.partition(partition_criteria, recursive),
-                //     right.partition(partition_criteria, recursive),
-                // )
-                rayon::join(
-                    || left.partition(partition_criteria, recursive),
-                    || right.partition(partition_criteria, recursive),
+                (
+                    left.partition(partition_criteria, recursive),
+                    right.partition(partition_criteria, recursive),
                 )
+                // rayon::join(
+                //     || left.partition(partition_criteria, recursive),
+                //     || right.partition(partition_criteria, recursive),
+                // )
             } else {
                 (left, right)
             };

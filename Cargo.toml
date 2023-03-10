@@ -27,7 +27,7 @@ debug = true
 [dependencies]
 bitvec = "1.0"
 num-traits = "0.2"
-rayon = "1.5"
+# rayon = "1.5"
 libm = "0.2"
 rand = "0.8"
 smartcore = "0.2.1"
