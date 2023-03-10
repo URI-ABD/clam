@@ -8,7 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
+      - name: Update
+        run: rustup update
+
       - name: Install
         run: rustup component add clippy
+
       - name: Run
         run: cargo clippy -- -D warnings
