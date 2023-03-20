@@ -80,6 +80,23 @@ features = ["alloc"]
 version = "34.0.0"
 features = ["ipc"]
 
+[dev-dependencies.polars]
+version = "0.27.2"
+features = [
+    "lazy",
+    "dtype-full",
+    "streaming",
+    "random",
+    "ndarray",
+    "strings",
+    "parquet",
+    "ipc",
+    "rows",
+    "fmt",
+    "describe",
+    "lazy_regex",
+]
+
 [[example]]
 name = "reports"
 path = "examples/reports.rs"
@@ -87,6 +104,10 @@ path = "examples/reports.rs"
 [[example]]
 name = "knn-search"
 path = "examples/knn-search.rs"
+
+[[example]]
+name = "rxrx"
+path = "examples/rxrx.rs"
 
 # [[example]]
 # name = "search_small"
