@@ -127,13 +127,13 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> Cluster<'a, T, U, D> {
     /// * `indices`: The indices of instances from the `dataset` that are
     /// contained in the `Cluster`.
     /// * `name`: `BitVec` name for the `Cluster`.
-    pub fn new(data: &'a D, indices: Vec<usize>, name: BitVec) -> Self {
+    pub fn new(data: &'a D, indices: Vec<usize>, history: BitVec) -> Self {
         Cluster {
             t: Default::default(),
             data,
             cardinality: indices.len(),
             contents: Contents::Indices(indices),
-            history: name,
+            history,
             arg_center: None,
             arg_radius: None,
             radius: None,

@@ -29,7 +29,7 @@ fn main() {
     let reports_root = get_reports_root();
 
     for &(data_name, metric_name) in search_readers::SEARCH_DATASETS {
-        if data_name != "gist" {
+        if data_name != "fashion-mnist" {
             continue;
         }
         if ["deep-image", "nytimes", "lastfm"].contains(&data_name) {
