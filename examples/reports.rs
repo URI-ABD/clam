@@ -29,9 +29,9 @@ fn main() {
     let reports_root = get_reports_root();
 
     for &(data_name, metric_name) in search_readers::SEARCH_DATASETS {
-        if data_name != "fashion-mnist" {
-            continue;
-        }
+        // if data_name != "sift" {
+        //     continue;
+        // }
         if ["deep-image", "nytimes", "lastfm"].contains(&data_name) {
             continue;
         }
@@ -245,7 +245,7 @@ fn report_linear(data: &VecVec<f32, f32>, queries: &[Vec<f32>], out_dir: &Path, 
     for (i, batch) in indices.chunks(batch_size).enumerate() {
         let n = i + 1;
         let mut pb = tqdm!(total = queries.len(), desc = format!("Linear Batch {n}/{num_batches}"));
-        let mut array = Array2::<f32>::default((queries.len(), batch.len()));
+        let mut array = Array2::<f32>::default((0, batch.len()));
 
         for query in queries.iter() {
             let start = Instant::now();
