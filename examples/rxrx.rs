@@ -9,10 +9,7 @@ fn main() {
     let metadata_df = {
         let mut path = data_dir.clone();
         path.push("metadata_rxrx3.csv");
-        assert!(
-            path.exists(),
-            "Metadata path not found: {path:?}",
-        );
+        assert!(path.exists(), "Metadata path not found: {path:?}",);
         CsvReader::from_path(path).unwrap().finish().unwrap()
     };
     /*
@@ -62,14 +59,8 @@ fn get_data_root() -> PathBuf {
     path.push("data");
     path.push("rxrx3");
 
-    assert!(
-        path.exists(),
-        "Data path not found: {path:?}",
-    );
-    assert!(
-        path.is_dir(),
-        "Data path not a directory: {path:?}",
-    );
+    assert!(path.exists(), "Data path not found: {path:?}",);
+    assert!(path.is_dir(), "Data path not a directory: {path:?}",);
 
     path
 }
