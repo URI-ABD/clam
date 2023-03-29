@@ -12,6 +12,16 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     fn one_to_one(&self, left: usize, right: usize) -> U;
     fn query_to_one(&self, query: &[T], index: usize) -> U;
 
+    /// Swaps the values at two given indices in the dataset.
+    ///
+    /// Note: It is acceptable for this function to panic if `i` or `j` are not valid indices in the
+    /// dataset.
+    ///
+    /// # Arguments
+    /// `i` - An index in the dataset
+    /// `j` - An index in the dataset
+    fn swap(&mut self, i: usize, j: usize);
+
     fn are_instances_equal(&self, left: usize, right: usize) -> bool {
         self.one_to_one(left, right) == U::zero()
     }
@@ -69,6 +79,48 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
 
         chosen
     }
+
+    /// Reorders the internal dataset by a given permutation of indices
+    ///
+    /// # Arguments
+    /// `indices` - A permutation of indices that will be applied to the dataset
+    fn reorder(&mut self, indices: &[usize]) {
+        let n = indices.len();
+
+        // TODO: We'll need to support reordering only a subset (i.e. batch)
+        // of indices at some point, so this assert will change in the future.
+        assert!(n == self.cardinality());
+
+        // The "source index" represents the index that we hope to swap to
+        let mut source_index: usize;
+
+        // INVARIANT: After each iteration of the loop, the elements of the
+        // subarray [0..i] are in the correct position.
+        for i in 0..n-1 {
+            source_index = indices[i];
+
+            // If the element at is already at the correct position, we can
+            // just skip.
+            if source_index != i {
+                // Here we're essentially following the cycle. We *know* by
+                // the invariant that all elements to the left of i are in
+                // the correct position, so what we're doing is following
+                // the cycle until we find an index to the right of i. Which,
+                // because we followed the position changes, is the correct
+                // index to swap.
+                while source_index < i {
+                    source_index = indices[source_index];
+                }
+
+                // We swap to the correct index. Importantly, this index is always
+                // to the right of i, we do not modify any index to the left of i.
+                // Thus, because we followed the cycle to the correct index to swap,
+                // we know that the element at i, after this swap, is in the correct
+                // position.
+                self.swap(source_index, i);
+            }
+        }
+    }
 }
 
 pub struct VecVec<T: Number, U: Number> {
@@ -125,13 +177,17 @@ impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
     fn query_to_one(&self, query: &[T], index: usize) -> U {
         (self.metric)(query, &self.data[index])
     }
+
+    fn swap(&mut self, i: usize, j: usize) {
+        self.data.swap(i, j);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use float_cmp::approx_eq;
-
     use crate::utils::distances;
+    use rand::Rng;
 
     use super::*;
 
@@ -146,5 +202,30 @@ mod tests {
         approx_eq!(f32, dataset.one_to_one(0, 1), 3.);
         approx_eq!(f32, dataset.one_to_one(1, 0), 3.);
         approx_eq!(f32, dataset.one_to_one(1, 1), 0.);
+    }
+
+    #[test]
+    fn test_reordering() {
+        let mut rng = rand::thread_rng();
+        let name = "test".to_string();
+
+        for length in [100, 1_000, 10_000, 100_000] {
+            let reference_data: Vec<Vec<f32>> = (0..length).map(|_| {
+                vec![
+                    rng.gen_range(0.0..1000.0),
+                    rng.gen_range(0.0..1000.0),
+                    rng.gen_range(0.0..1000.0)
+                ]
+            }).collect();
+
+            let mut dataset = VecVec::new(reference_data.clone(), distances::euclidean::<f32, f32>, name.clone(), false);
+            let mut new_indices = dataset.indices();
+            new_indices.shuffle(&mut rng);
+
+            dataset.reorder(&new_indices);
+            for i in 0..length {
+                assert_eq!(dataset.data[i], reference_data[new_indices[i]]);
+            }
+        }
     }
 }
