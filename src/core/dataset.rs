@@ -17,6 +17,9 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     /// Note: It is acceptable for this function to panic if `i` or `j` are not valid indices in the
     /// dataset.
     ///
+    /// # Panics
+    /// Implementations of this function may panic if `i` or `j` are not valid indices.
+    ///
     /// # Arguments
     /// `i` - An index in the dataset
     /// `j` - An index in the dataset
@@ -120,6 +123,34 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
                 self.swap(source_index, i);
             }
         }
+    }
+    /// Calculates the geometric median of a set of indexed instances. Returns
+    /// a value from the set of indices that is the index of the median in the
+    /// dataset.
+    ///
+    /// Note: This default implementation does not scale well to arbitrarily large inputs.
+    ///
+    /// # Panics
+    /// This function will panic if given a zero-length slice.
+    ///
+    /// # Arguments
+    /// `indices` - A subset of indices from the dataset
+    ///
+    /// # Returns
+    /// The index of the geometric median of the set of indexed points
+    fn median(&self, indices: &[usize]) -> usize {
+        // TODO: Refactor this to scale for arbitrarily large n
+        indices[
+            self.pairwise(indices)
+            .into_iter()
+            // TODO: Bench using .max instead of .sum
+            // .map(|v| v.into_iter().max_by(|l, r| l.partial_cmp(r).unwrap()).unwrap())
+            .map(|v| v.into_iter().sum::<U>())
+            .enumerate()
+            .min_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap())
+            .unwrap()
+            .0]
+
     }
 }
 

@@ -166,17 +166,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> Cluster<'a, T, U, D> {
             self.data.choose_unique(n, indices, self.seed)
         };
 
-        let arg_center = arg_samples[self
-            .data
-            .pairwise(&arg_samples)
-            .into_iter()
-            // TODO: Bench using .max instead of .sum
-            // .map(|v| v.into_iter().max_by(|l, r| l.partial_cmp(r).unwrap()).unwrap())
-            .map(|v| v.into_iter().sum::<U>())
-            .enumerate()
-            .min_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap())
-            .unwrap()
-            .0];
+        let arg_center = self.data.median(&arg_samples);
 
         let center_distances = self.data.one_to_many(arg_center, indices);
         let (arg_radius, radius) = helpers::arg_max(&center_distances);
