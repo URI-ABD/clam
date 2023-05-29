@@ -2,38 +2,48 @@ use std::f64::EPSILON;
 
 use rayon::prelude::*;
 
-use crate::core::cluster::Cluster;
+use crate::core::cluster::{Tree, Cluster};
 use crate::core::cluster_criteria::PartitionCriteria;
 use crate::core::dataset::Dataset;
 use crate::core::number::Number;
 use crate::utils::helpers;
 
 #[derive(Debug)]
-pub struct CAKES<'a, T: Number, U: Number, D: Dataset<T, U>> {
-    dataset: &'a D,
-    root: Cluster<'a, T, U, D>,
+pub struct CAKES<T: Number, U: Number, D: Dataset<T, U>> {
+    tree: Tree<T, U, D>,
     depth: usize,
 }
 
-impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
-    pub fn new(dataset: &'a D, seed: Option<u64>) -> Self {
-        let root = if let Some(seed) = seed {
-            Cluster::new_root(dataset).with_seed(seed)
+impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
+    pub fn new(dataset: D, seed: Option<u64>) -> Self {
+        let tree = if let Some(seed) = seed {
+            Tree::new(dataset).with_seed(seed)
         } else {
-            Cluster::new_root(dataset)
-        };
+            Tree::new(dataset)
+        }.build();
+
         let depth = 0;
-        CAKES { dataset, root, depth }
+
+        CAKES { tree, depth }
     }
 
-    pub fn build(mut self, criteria: &PartitionCriteria<T, U, D>) -> Self {
-        self.root = self.root.par_partition(criteria, true);
-        self.depth = self.root.max_leaf_depth();
+    pub fn build(mut self, criteria: &PartitionCriteria<U>) -> Self {
+        self.tree = self.tree.par_partition(criteria, true);
+        self.depth = self.tree.root().max_leaf_depth();
         self
     }
 
-    pub fn root(&self) -> &Cluster<'a, T, U, D> {
-        &self.root
+    //TODO: OWM Keep this for within crate? i.e. pub(crate)
+    //pub fn root(&self) -> &Cluster<U> {
+    //    &self.tree.root()
+    //}
+
+    pub fn tree(&self) -> &Tree<T, U, D> {
+        &self.tree
+    }
+
+    pub fn dataset(&self) -> &D {
+        self.tree.dataset()
     }
 
     pub fn depth(&self) -> usize {
@@ -41,11 +51,11 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
     }
 
     pub fn radius(&self) -> U {
-        self.root.radius()
+        self.tree.radius()
     }
 
     pub fn diameter(&self) -> U {
-        self.root.radius() * U::from(2).unwrap()
+        self.tree.radius() * U::from(2).unwrap()
     }
 
     #[inline(never)]
@@ -66,13 +76,13 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
         let [confirmed, straddlers] = {
             let mut confirmed = Vec::new();
             let mut straddlers = Vec::new();
-            let mut candidates = vec![self.root()];
+            let mut candidates = vec![self.tree.root()];
 
             let (mut terminal, mut non_terminal): (Vec<_>, Vec<_>);
             while !candidates.is_empty() {
                 (terminal, non_terminal) = candidates
                     .drain(..)
-                    .map(|c| (c, self.dataset.query_to_one(query, c.arg_center())))
+                    .map(|c| (c, self.dataset().query_to_one(query, c.arg_center())))
                     .filter(|&(c, d)| d <= (c.radius() + radius))
                     .partition(|&(c, d)| (c.radius() + d) <= radius);
                 confirmed.append(&mut terminal);
@@ -84,7 +94,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
                     .drain(..)
                     .flat_map(|(c, d)| {
                         if d < c.radius() {
-                            c.overlapping_children(query, radius)
+                            c.overlapping_children(self.dataset(), query, radius)
                         } else {
                             c.children().unwrap().to_vec()
                         }
@@ -102,15 +112,16 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
                 let distances = if c.is_leaf() {
                     vec![d; c.cardinality()]
                 } else {
-                    self.dataset.query_to_many(query, &c.indices())
+                    self.dataset().query_to_many(query, c.indices(self.dataset()))
                 };
-                c.indices().into_iter().zip(distances.into_iter())
+                c.indices(self.dataset()).iter().copied().zip(distances.into_iter())
             })
             .chain(straddlers.into_iter().flat_map(|(c, _)| {
-                let indices = c.indices();
-                let distances = self.dataset.query_to_many(query, &indices);
+                let indices = c.indices(self.dataset());
+                let distances = self.dataset().query_to_many(query, indices);
                 indices
-                    .into_iter()
+                    .iter()
+                    .copied()
                     .zip(distances.into_iter())
                     .filter(|&(_, d)| d <= radius)
             }))
@@ -121,16 +132,16 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
     pub fn batch_knn_search(&self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
         queries.iter().map(|&query| self.knn_search(query, k)).collect()
     }
-
-    #[inline(never)]
-    pub fn par_batch_knn_search(&self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
-    }
-
+//
+//    #[inline(never)]
+//    pub fn par_batch_knn_search(&'a self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
+//        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
+//    }
+//
     pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
-        let mut candidates = priority_queue::PriorityQueue::<&Cluster<T, U, D>, RevNumber<U>>::new();
-        let d = self.root.distance_to_instance(query);
-        candidates.push(&self.root, RevNumber(self.d_min(&self.root, d)));
+        let mut candidates = priority_queue::PriorityQueue::<&Cluster<U>, RevNumber<U>>::new();
+        let d = self.tree.root().distance_to_instance(self.dataset(), query);
+        candidates.push(&self.tree.root(), RevNumber(self.d_min(&self.tree.root(), d)));
 
         let mut hits = priority_queue::PriorityQueue::<usize, OrdNumber<U>>::new();
         // let mut count = 0;
@@ -151,7 +162,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
     }
 
     #[inline(always)]
-    fn d_min(&self, c: &Cluster<T, U, D>, d: U) -> U {
+    fn d_min(&self, c: &Cluster<U>, d: U) -> U {
         if d < c.radius() {
             U::zero()
         } else {
@@ -163,11 +174,11 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
     fn pop_till_leaf(
         &self,
         query: &[T],
-        candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U, D>, RevNumber<U>>,
+        candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
     ) {
         while !candidates.peek().unwrap().0.is_leaf() {
             let [l, r] = candidates.pop().unwrap().0.children().unwrap();
-            let [dl, dr] = [l.distance_to_instance(query), r.distance_to_instance(query)];
+            let [dl, dr] = [l.distance_to_instance(self.dataset(), query), r.distance_to_instance(self.dataset(), query)];
             candidates.push(l, RevNumber(self.d_min(l, dl)));
             candidates.push(r, RevNumber(self.d_min(r, dr)));
         }
@@ -178,16 +189,16 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
         &self,
         query: &[T],
         hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>,
-        candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U, D>, RevNumber<U>>,
+        candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
     ) {
         let (leaf, RevNumber(d)) = candidates.pop().unwrap();
-        let is = leaf.indices();
+        let is = leaf.indices(self.dataset());
         let ds = if leaf.is_singleton() {
             vec![d; is.len()]
         } else {
-            self.dataset.query_to_many(query, &is)
+            self.dataset().query_to_many(query, is)
         };
-        is.into_iter().zip(ds.into_iter()).for_each(|(i, d)| {
+        is.iter().zip(ds.into_iter()).for_each(|(&i, d)| {
             hits.push(i, OrdNumber(d));
         });
     }
@@ -216,7 +227,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
     // }
 
     #[inline(never)]
-    pub fn batch_knn_by_rnn(&'a self, queries: &[&[T]], k: usize) -> Vec<Vec<(usize, U)>> {
+    pub fn batch_knn_by_rnn(&self, queries: &[&[T]], k: usize) -> Vec<Vec<(usize, U)>> {
         queries
             // .par_iter()
             .iter()
@@ -224,8 +235,8 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
             .collect()
     }
 
-    pub fn knn_by_rnn(&'a self, query: &[T], k: usize) -> Vec<(usize, U)> {
-        let mut radius = EPSILON + self.root.radius().as_f64() / self.root.cardinality().as_f64();
+    pub fn knn_by_rnn(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
+        let mut radius = EPSILON + self.tree.root().radius().as_f64() / self.tree.root().cardinality().as_f64();
         let mut hits = self.rnn_search(query, U::from(radius).unwrap());
 
         while hits.is_empty() {
@@ -257,9 +268,9 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> CAKES<'a, T, U, D> {
     }
 
     // TODO: Add knn version
-    pub fn linear_search(&self, query: &[T], radius: U, indices: Option<Vec<usize>>) -> Vec<(usize, U)> {
-        let indices = indices.unwrap_or_else(|| self.root.indices());
-        let distances = self.dataset.query_to_many(query, &indices);
+    pub fn linear_search(&self, query: &[T], radius: U, indices: Option<&[usize]>) -> Vec<(usize, U)> {
+        let indices = indices.unwrap_or_else(|| self.tree.root().indices(self.dataset()));
+        let distances = self.dataset().query_to_many(query, indices);
         indices
             .iter()
             .copied()
@@ -316,18 +327,18 @@ impl<T: Number> Ord for RevNumber<T> {
 #[cfg(test)]
 mod tests {
     use crate::core::dataset::VecVec;
-    use crate::distances::lp_norms::euclidean;
+    use crate::distances;
 
     use super::*;
 
     #[test]
     fn test_search() {
         let data = vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]];
-        let metric = euclidean::<f32, f32>;
+        let metric = distances::f32::euclidean;
         let name = "test".to_string();
         let dataset = VecVec::new(data, metric, name, false);
         let criteria = PartitionCriteria::new(true);
-        let cakes = CAKES::new(&dataset, None).build(&criteria);
+        let cakes = CAKES::new(dataset, None).build(&criteria);
 
         let query = &[0., 1.];
         let (results, _): (Vec<_>, Vec<_>) = cakes.rnn_search(query, 1.5).into_iter().unzip();

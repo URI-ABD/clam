@@ -8,7 +8,7 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     fn cardinality(&self) -> usize;
     fn dimensionality(&self) -> usize;
     fn is_metric_expensive(&self) -> bool;
-    fn indices(&self) -> Vec<usize>;
+    fn indices(&self) -> &[usize];
     fn one_to_one(&self, left: usize, right: usize) -> U;
     fn query_to_one(&self, query: &[T], index: usize) -> U;
 
@@ -123,7 +123,10 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
                 self.swap(source_index, i);
             }
         }
+        // Inverse mapping
+        self.set_reordered_indices(indices);
     }
+
     /// Calculates the geometric median of a set of indexed instances. Returns
     /// a value from the set of indices that is the index of the median in the
     /// dataset.
@@ -151,6 +154,11 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
             .unwrap()
             .0]
     }
+
+    // TODO: Clean up the names on these
+    fn set_reordered_indices(&mut self, indices: &[usize]);
+    // This method will fail if an `reorder` has not been called.
+    fn get_reordered_index(&self, i: usize) -> usize;
 }
 
 pub struct VecVec<T: Number, U: Number> {
@@ -158,17 +166,22 @@ pub struct VecVec<T: Number, U: Number> {
     data: Vec<Vec<T>>,
     metric: fn(&[T], &[T]) -> U,
     is_expensive: bool,
+    indices: Vec<usize>,
+    reordering: Option<Vec<usize>>,
 }
 
 impl<T: Number, U: Number> VecVec<T, U> {
     pub fn new(data: Vec<Vec<T>>, metric: fn(&[T], &[T]) -> U, name: String, is_expensive: bool) -> Self {
         assert_ne!(data.len(), 0, "Must have some instances in the data.");
         assert_ne!(data[0].len(), 0, "Must have some numbers in the instances.");
+        let indices = (0..data.len()).collect();
         Self {
             name,
             data,
             metric,
             is_expensive,
+            indices,
+            reordering: None,
         }
     }
 }
@@ -196,8 +209,8 @@ impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
         self.is_expensive
     }
 
-    fn indices(&self) -> Vec<usize> {
-        (0..self.data.len()).collect()
+    fn indices(&self) -> &[usize] {
+        &self.indices
     }
 
     fn one_to_one(&self, left: usize, right: usize) -> U {
@@ -211,11 +224,19 @@ impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
     fn swap(&mut self, i: usize, j: usize) {
         self.data.swap(i, j);
     }
+
+    fn set_reordered_indices(&mut self, indices: &[usize]) {
+        self.reordering = Some(indices.iter().map(|&i| indices[i]).collect());
+    }
+
+    fn get_reordered_index(&self, i: usize) -> usize {
+        self.reordering.as_ref().map(|indices| indices[i]).unwrap()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::distances::lp_norms::euclidean;
+    use crate::distances;
     use float_cmp::approx_eq;
     use rand::Rng;
 
@@ -224,7 +245,7 @@ mod tests {
     #[test]
     fn test_space() {
         let data = vec![vec![1_f32, 2., 3.], vec![3., 3., 1.]];
-        let metric = euclidean::<f32, f32>;
+        let metric = distances::f32::euclidean;
         let name = "test".to_string();
         let dataset = VecVec::new(data, metric, name, false);
 
@@ -250,8 +271,13 @@ mod tests {
                 })
                 .collect();
 
-            let mut dataset = VecVec::new(reference_data.clone(), euclidean::<f32, f32>, name.clone(), false);
-            let mut new_indices = dataset.indices();
+            let mut dataset = VecVec::new(
+                reference_data.clone(),
+                distances::f32::euclidean,
+                name.clone(),
+                false,
+            );
+            let mut new_indices = dataset.indices().to_vec();
             new_indices.shuffle(&mut rng);
 
             dataset.reorder(&new_indices);
@@ -259,5 +285,38 @@ mod tests {
                 assert_eq!(dataset.data[i], reference_data[new_indices[i]]);
             }
         }
+    }
+
+    #[test]
+    fn test_inverse_map() {
+        let data: Vec<Vec<f32>> = (1..7).map(|x| vec![(x * 2) as f32]).collect();
+        let permutation = vec![1, 3, 4, 0, 5, 2];
+
+        let mut dataset = VecVec::new(data, distances::f32::euclidean, "test".to_string(), false);
+
+        dataset.reorder(&permutation);
+
+        assert_eq!(
+            dataset.data,
+            vec![vec![4.0], vec![8.0], vec![10.0], vec![2.0], vec![12.0], vec![6.0],]
+        );
+
+        assert_eq!(dataset.get_reordered_index(0), 3);
+        assert_eq!(dataset.data[dataset.get_reordered_index(0)], vec![2.]);
+
+        assert_eq!(dataset.get_reordered_index(1), 0);
+        assert_eq!(dataset.data[dataset.get_reordered_index(1)], vec![4.]);
+
+        assert_eq!(dataset.get_reordered_index(2), 5);
+        assert_eq!(dataset.data[dataset.get_reordered_index(2)], vec![6.]);
+
+        assert_eq!(dataset.get_reordered_index(3), 1);
+        assert_eq!(dataset.data[dataset.get_reordered_index(3)], vec![8.]);
+
+        assert_eq!(dataset.get_reordered_index(4), 2);
+        assert_eq!(dataset.data[dataset.get_reordered_index(4)], vec![10.]);
+
+        assert_eq!(dataset.get_reordered_index(5), 4);
+        assert_eq!(dataset.data[dataset.get_reordered_index(5)], vec![12.]);
     }
 }

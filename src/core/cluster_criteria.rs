@@ -1,20 +1,22 @@
 //! Criteria used for partitioning `Cluster`s.
 
 use super::cluster::Cluster;
-use super::dataset::Dataset;
 use super::number::Number;
 
-pub trait PartitionCriterion<T: Number, U: Number, D: Dataset<T, U>>: std::fmt::Debug + Send + Sync {
-    fn check(&self, c: &Cluster<T, U, D>) -> bool;
+// TODO: OWM: This needs to be thought about way more. The issue here is that
+// Cluster is getting leaked but I don't know enough about PartitionCriteria to
+// say if we need it to be or not
+pub (crate)trait PartitionCriterion<U: Number>: std::fmt::Debug + Send + Sync {
+    fn check(&self, c: &Cluster<U>) -> bool;
 }
 
 #[derive(Debug)]
-pub struct PartitionCriteria<T: Number, U: Number, D: Dataset<T, U>> {
-    criteria: Vec<Box<dyn PartitionCriterion<T, U, D>>>,
+pub struct PartitionCriteria<U: Number> {
+    criteria: Vec<Box<dyn PartitionCriterion<U>>>,
     check_all: bool,
 }
 
-impl<'a, T: Number, U: Number, D: Dataset<T, U>> PartitionCriteria<T, U, D> {
+impl<U: Number> PartitionCriteria<U> {
     pub fn new(check_all: bool) -> Self {
         Self {
             criteria: Vec::new(),
@@ -32,12 +34,12 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> PartitionCriteria<T, U, D> {
         self
     }
 
-    pub fn with_custom(mut self, c: Box<dyn PartitionCriterion<T, U, D>>) -> Self {
+    pub(crate) fn with_custom(mut self, c: Box<dyn PartitionCriterion<U>>) -> Self {
         self.criteria.push(c);
         self
     }
 
-    pub fn check(&self, cluster: &Cluster<'a, T, U, D>) -> bool {
+    pub (crate) fn check(&self, cluster: &Cluster<U>) -> bool {
         !cluster.is_singleton()
             && if self.check_all {
                 self.criteria.iter().all(|c| c.check(cluster))
@@ -50,8 +52,8 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> PartitionCriteria<T, U, D> {
 #[derive(Debug, Clone)]
 struct MaxDepth(usize);
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for MaxDepth {
-    fn check(&self, c: &Cluster<T, U, D>) -> bool {
+impl<U: Number> PartitionCriterion<U> for MaxDepth {
+    fn check(&self, c: &Cluster<U>) -> bool {
         c.depth() < self.0
     }
 }
@@ -59,8 +61,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for Max
 #[derive(Debug, Clone)]
 struct MinCardinality(usize);
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for MinCardinality {
-    fn check(&self, c: &Cluster<T, U, D>) -> bool {
+impl<U: Number> PartitionCriterion<U> for MinCardinality {
+    fn check(&self, c: &Cluster<U>) -> bool {
         c.cardinality() > self.0
     }
 }
