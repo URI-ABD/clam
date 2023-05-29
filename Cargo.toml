@@ -1,38 +1,129 @@
 [package]
 name = "clam"
-version = "0.7.0"
-authors = ["Najib Ishaq <nishaq@zoho.com>", "Tom Howard <info@tomhoward.codes>", "Noah Daniels <noah_daniels@uri.edu>"]
+version = "0.8.0"
+authors = [
+    "Najib Ishaq <najib_ishaq@zoho.com>",
+    "Tom Howard <info@tomhoward.codes>",
+    "Noah Daniels <noah_daniels@uri.edu>",
+    "Morgan Prior <morgan_prior@uri.edu>",
+    "Isaac Chen <ijchen@uri.edu>",
+    "Oliver McLaughlin <olwmcjp@gmail.com>",
+]
 edition = "2021"
+rust-version = "1.68"
 
 # Publishing lock.
 # When you're ready to start publishing, set publish to true
 # and update the release github action.
 publish = false
 
+# Remove this when not profiling
+[profile.release]
+debug = true
+
+[profile.bench]
+debug = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bitvec = "1.0.0"
-dashmap = "5.1.0"
-easy-cast = "0.4.4"
-eval-metrics = "1.0.1"
-log = "0.4.14"
-ndarray = { version = "0.15.3", features = ["rayon"] }
-ndarray-npy = "0.8.0"
-num-traits = "0.2.14"
-ordered-float = "2.10.0"
-rand = "0.8.4"
-rayon = "1.5.1"
-serde_json = "1.0.67"
-simplelog = "0.11.1"
-statrs = "0.15.0"
-structopt = "0.3.23"
-sysinfo = "0.23.5"
+bitvec = "1.0"
+num-traits = "0.2"
+rayon = "1.5"
+libm = "0.2"
+rand = "0.8"
+smartcore = "0.2.1"
+automl = "0.2.7"
+ndarray = "0.15.4"
+ndarray-npy = "0.8.1"
+priority-queue = "1.2"
+rand_chacha = "0.3"
+# easy-cast = "0.4.4"
+# eval-metrics = "1.0.1"
+# ordered-float = "3.0"
+# simplelog = "0.11.1"
+# structopt = "0.3.23"
+# sysinfo = "0.23.5"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
 
 [dev-dependencies]
-criterion =  { version = "0.3.5", features = ["html_reports"] }
-float-cmp = "0.9.0"
+float-cmp = "0.9"
+ndarray-npy = "0.8"
+log = "0.4"
+env_logger = "0.10.0"
+rmp-serde = "1.1"
+num-format = "0.4.4"
+kdam = "0.3.0"
+
+[dev-dependencies.criterion]
+version = "0.4"
+features = ["html_reports"]
+
+[dev-dependencies.ndarray]
+version = "0.15"
+# features = ["rayon"]
+
+[dev-dependencies.serde_json]
+version = "1.0"
+features = ["alloc"]
+
+[dev-dependencies.arrow]
+version = "35.0.0"
+features = ["ipc"]
+
+# [dev-dependencies.polars]
+# version = "0.27.2"
+# features = [
+#     "lazy",
+#     "dtype-full",
+#     "streaming",
+#     "random",
+#     "ndarray",
+#     "strings",
+#     "parquet",
+#     "ipc",
+#     "rows",
+#     "fmt",
+#     "describe",
+#     "lazy_regex",
+# ]
+
+[[example]]
+name = "reports"
+path = "examples/reports.rs"
+
+[[example]]
+name = "knn-search"
+path = "examples/knn-search.rs"
+
+# [[example]]
+# name = "search_small"
+# path = "examples/search_small/main.rs"
+
+# [[example]]
+# name = "search_large"
+# path = "examples/search_large/main.rs"
 
 [[bench]]
-name = "cakes"
+name = "partition"
 harness = false
+
+[[bench]]
+name = "rnn-search"
+harness = false
+
+[[bench]]
+name = "knn-search"
+harness = false
+
+# [[bench]]
+# name = "knn_vs_rnn"
+# harness = false
+
+# [[bench]]
+# name = "find_kth"
+# harness = false
+

@@ -28,7 +28,7 @@ docker run clam --help
 from pyclam import criterion
 from pyclam import Manifold
 from pyclam.search import CAKES
-from pyclam.utils import synthetic_datasets
+from tests import synthetic_datasets
 
 # Get the data.
 data, _ = synthetic_datasets.bullseye()
@@ -44,10 +44,10 @@ search.build(max_depth=10)
 # This method can be called again with a higher depth, if needed.
 
 query, radius = data[0], 0.5
-rnn_results = search.rnn(query, radius)
+rnn_results = search.rnn_search(query, radius)
 # This is how we perform rho-nearest neighbors search with radius 0.5 around the query.
 
-knn_results = search.knn(query, 10)
+knn_results = search.knn_search(query, 10)
 # This is how to perform k-nearest neighbors search for the 10 nearest neighbors of query.
 
 # TODO: Provide snippets for using CHAODA

@@ -1,180 +1,123 @@
+import math
 import unittest
 
-import numpy as np
+import numpy
 
-from pyclam import Cluster
-from pyclam import criterion
-from pyclam import Manifold
-from pyclam.utils import constants
-from pyclam.utils import synthetic_datasets
+import pyclam
+from pyclam import cluster_criteria
+from pyclam import dataset
+from pyclam import metric
+from pyclam import space
 
 
 class TestCluster(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        data = np.random.randn(1_000, 100)
-        cls.data = data
-        cls.manifold = Manifold(data, 'euclidean')
-        return
 
-    def setUp(self) -> None:
-        self.cluster = Cluster(self.manifold, self.manifold.argpoints, '')
-        self.children = list(self.cluster.partition())
+    def setUp(self):
+        self.data = dataset.TabularDataset(numpy.random.randn(1_000, 100), name=f'{__name__}.data')
+        self.distance_metric = metric.ScipyMetric('euclidean')
+        self.metric_space = space.TabularSpace(self.data, self.distance_metric, False)
+        self.root = pyclam.Cluster.new_root(self.metric_space).build().partition([cluster_criteria.MaxDepth(5)])
         return
 
     def test_init(self):
-        Cluster(self.manifold, self.manifold.argpoints, '')
+        pyclam.Cluster(
+            self.metric_space,
+            indices=list(range(self.data.cardinality)),
+            name=f'{__name__}.init_cluster',
+            parent=None,
+        )
         with self.assertRaises(ValueError):
-            Cluster(self.manifold, [], '')
+            pyclam.Cluster(
+                self.metric_space,
+                indices=list(),
+                name=f'{__name__}.faulty_cluster',
+                parent=None,
+            )
         return
 
     def test_eq(self):
-        self.assertEqual(self.cluster, self.cluster)
-        self.assertNotEqual(self.cluster, self.children[0])
-        self.assertNotEqual(self.children[0], self.children[1])
+        self.assertEqual(self.root, self.root)
+        self.assertNotEqual(self.root, self.root.left_child)
+        self.assertNotEqual(self.root.left_child, self.root.right_child)
         return
 
-    def test_bool(self):
-        self.assertTrue(self.cluster)
-
     def test_hash(self):
-        self.assertIsInstance(hash(self.cluster), int)
+        self.assertIsInstance(hash(self.root), int)
         return
 
     def test_str(self):
-        self.assertEqual('root', str(self.cluster))
-        self.assertSetEqual({'0', '01'}, {str(c) for c in self.children})
+        self.assertEqual('1', str(self.root))
+        self.assertEqual('10', str(self.root.left_child))
+        self.assertEqual('11', str(self.root.right_child))
         return
 
     def test_repr(self):
-        self.assertIsInstance(repr(self.cluster), str)
-        return
-
-    def test_iter(self):
-        self.assertEqual(
-            (int(np.ceil(self.data.shape[0] / constants.BATCH_SIZE)), min(constants.BATCH_SIZE, self.data.shape[0]), self.data.shape[1]),
-            np.array(list(self.cluster.points)).shape
-        )
-        return
-
-    def test_contains(self):
-        self.assertIn(self.data[0], self.cluster)
-        return
-
-    def test_metric(self):
-        self.assertEqual(self.manifold.metric, self.cluster.metric)
+        self.assertEqual(repr(self.root), f'{self.metric_space} :: Cluster 1')
+        self.assertEqual(repr(self.root.left_child), f'{self.metric_space} :: Cluster 10')
+        self.assertEqual(repr(self.root.right_child), f'{self.metric_space} :: Cluster 11')
         return
 
     def test_depth(self):
-        self.assertEqual(0, self.cluster.depth)
-        self.assertEqual(1, self.children[0].depth)
+        self.assertEqual(0, self.root.depth)
+        self.assertEqual(1, self.root.left_child.depth)
         return
 
     def test_points(self):
-        self.assertTrue(np.array_equal(
-            self.manifold.data,
-            np.array(list(self.cluster.points)).reshape(self.data.shape)
-        ))
-        return
-
-    def test_argpoints(self):
         self.assertSetEqual(
-            set(self.manifold.argpoints),
-            set(self.cluster.argpoints)
+            set(range(self.data.cardinality)),
+            set(self.root.indices),
+        )
+        self.assertSetEqual(
+            set(range(self.data.cardinality)),
+            set(self.root.left_child.indices + self.root.right_child.indices),
         )
         return
 
-    def test_samples(self):
-        self.assertEqual((self.cluster.nsamples, self.data.shape[-1]), self.cluster.samples.shape)
+    def test_num_samples(self):
+        self.assertEqual(len(self.root.arg_samples), int(math.sqrt(self.data.cardinality)))
         return
 
-    def test_argsamples(self):
-        data = np.zeros((100, 100))
-        for i in range(10):
-            data = np.concatenate([data, np.ones((1, 100)) * i], axis=0)
-            manifold = Manifold(data, 'euclidean')
-            cluster = Cluster(manifold, manifold.argpoints, '')
-            self.assertLessEqual(i + 1, len(cluster.argsamples))
+    def test_arg_center(self):
+        self.assertTrue(0 <= self.root.arg_center < self.data.cardinality)
         return
 
-    def test_nsamples(self):
-        self.assertEqual(
-            int(np.sqrt(len(self.data))),
-            self.cluster.nsamples
-        )
+    def test_center(self):
+        self.assertTrue(numpy.all(self.data[self.root.arg_center] == self.root.center))
         return
 
-    def test_centroid(self):
-        self.assertEqual((self.data.shape[-1],), self.cluster.centroid.shape)
-        self.assertFalse(np.any(self.cluster.centroid == self.data))
-        return
-
-    def test_medoid(self):
-        self.assertEqual((self.data.shape[-1],), self.cluster.medoid.shape)
-        self.assertTrue(np.any(self.cluster.medoid == self.data))
-        return
-
-    def test_argmedoid(self):
-        self.assertIn(self.cluster.argmedoid, self.cluster.argpoints)
+    def test_arg_radius(self):
+        self.assertTrue(0 <= self.root.arg_radius < self.data.cardinality)
         return
 
     def test_radius(self):
-        self.assertGreaterEqual(self.cluster.radius, 0.0)
-        return
-
-    def test_argradius(self):
-        self.assertIn(self.cluster.argradius, self.cluster.argpoints)
+        self.assertGreaterEqual(self.root.radius, 0.)
         return
 
     def test_local_fractal_dimension(self):
-        self.assertGreaterEqual(self.cluster.local_fractal_dimension, 0)
-        return
-
-    def test_clear_cache(self):
-        self.cluster.clear_cache()
-        self.assertNotIn('argsamples', self.cluster.cache)
+        self.assertGreaterEqual(self.root.lfd, 0.)
         return
 
     def test_partition(self):
-        manifold = Manifold(synthetic_datasets.xor()[0], 'euclidean')
-        cluster = manifold.select('')
-        children = list(cluster.partition())
-        self.assertGreater(len(children), 1)
+        self.assertFalse(self.root.is_leaf)
+        self.assertEqual(self.root.max_leaf_depth, 5)
         return
 
-    def test_distance(self):
-        self.assertGreater(self.children[0].distance_from([self.children[1].argmedoid]), 0)
+    def test_iterative_partition(self):
+        self.root = self.root.iterative_partition(criteria=[cluster_criteria.MaxDepth(5)])
+        self.test_partition()
         return
 
-    def test_overlaps(self):
-        point = np.ones((100,))
-        self.assertTrue(self.cluster.overlaps(point, 1.))
+    def test_ancestry(self):
+        self.assertEqual(len(self.root.ancestry), 0)
+
+        true_ancestry = [
+            self.root,
+            self.root.left_child,
+            self.root.left_child.left_child,
+            self.root.left_child.left_child.left_child,
+            self.root.left_child.left_child.left_child.left_child,
+        ]
+        ancestry = self.root.left_child.left_child.left_child.left_child.left_child.ancestry
+        self.assertEqual(true_ancestry, ancestry)
+
         return
-
-    def test_to_json(self):
-        data = self.cluster.json()
-        self.assertFalse(data['argpoints'])
-        self.assertTrue(data['children'])
-        data = self.children[0].json()
-        self.assertTrue(data['argpoints'])
-        self.assertFalse(data['children'])
-        return
-
-    def test_from_json(self):
-        c = Cluster.from_json(self.manifold, self.cluster.json())
-        self.assertEqual(self.cluster, c)
-        return
-
-    def test_jaccard(self):
-        manifold: Manifold = Manifold(self.data, 'euclidean').build(criterion.MaxDepth(4))
-
-        for i, left in enumerate(manifold.layers[-1].clusters):
-            self.assertEqual(1, left.jaccard(left), 'identical clusters should have a jaccard index of 1.')
-            for j, right in enumerate(manifold.layers[-1].clusters):
-                if i != j:
-                    self.assertEqual(0, left.jaccard(right), f'different clusters should have a jaccard index of 0.')
-            self.assertEqual(
-                left.cardinality / left.parent.cardinality,
-                left.jaccard(left.parent),
-                f'jaccard index with parent should be equal to child/parent cardinality ratio.',
-            )

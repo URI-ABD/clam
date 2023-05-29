@@ -1,93 +1,83 @@
-import random
+import operator
 import unittest
 
-import numpy
-from scipy.spatial.distance import cdist
-
-from pyclam.search import CAKES
-from pyclam.utils import synthetic_datasets
+from pyclam import dataset
+from pyclam import metric
+from pyclam import search
+from pyclam import space
+from . import synthetic_datasets
 
 
 class TestSearch(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        numpy.random.seed(42), random.seed(42)
 
-        cls.data, _ = synthetic_datasets.bullseye(n=1000, num_rings=3)
-        cls.query, cls.metric = cls.data[0], 'euclidean'
-        cls.distances: dict[int, float] = {
-            point: distance
-            for point, distance in zip(
-                range(cls.data.shape[0]),
-                cdist(numpy.asarray([cls.query]), cls.data, cls.metric)[0]
-            )
-        }
+    def setUp(self):
+
+        self.data = dataset.TabularDataset(synthetic_datasets.bullseye(n=100, num_rings=3)[0], name=f'{__name__}.data')
+        self.indices = list(range(self.data.cardinality))
+        self.distance_metric = metric.ScipyMetric('euclidean')
+        self.metric_space = space.TabularSpace(self.data, self.distance_metric, False)
+        self.max_depth = 10
+        self.cakes = search.CAKES(self.metric_space).build(max_depth=self.max_depth)
+
+        self.search_radii = [(self.cakes.root.radius / i) for i in range(200, 100, -20)]
+        self.query = self.data[0]
+        self.distances = self.metric_space.distance_pairwise(self.indices)
+
         return
 
     def test_init(self):
-        search = CAKES(self.data, 'euclidean')
-        self.assertEqual(0, search.depth, f'tree depth should be 0')
-
-        search = search.build(max_depth=5)
-        self.assertGreaterEqual(5, search.depth, f'tree depth should be 5')
-
-        search = search.build(max_depth=8)
-        self.assertGreaterEqual(8, search.depth, f'tree depth should be 8')
+        self.assertTrue(isinstance(self.cakes, search.CAKES))
+        _ = self.cakes.metric_space
+        _ = self.cakes.root
+        self.assertLessEqual(self.cakes.depth, self.max_depth)
         return
 
-    def test_rnn(self):
-        search = CAKES(self.data, self.metric).build(max_depth=10)
+    def test_rnn_search(self):
+        self.assertEqual(1, len(self.cakes.rnn_search(self.query, 0.)))
+        self.assertLessEqual(1, len(self.cakes.rnn_search(self.query, 1.)))
 
-        self.assertEqual(1, len(search.rnn(self.query, 0)))
-        self.assertLessEqual(1, len(search.rnn(self.query, 1)))
+        for i in self.indices:
+            for radius in self.search_radii:
+                naive_results: dict[int, float] = {
+                    j: d for j, d in zip(self.indices, self.distances[i, :])
+                    if d <= radius
+                }
+                rnn_results: dict[int, float] = self.cakes.rnn_search(self.data[i], radius)
 
-        for radius in [0.25, 0.5, 1.0, 2.0, 5.0]:
-            naive_results: dict[int, float] = {point: distance for point, distance in self.distances.items() if distance <= radius}
-            rnn_results: list[int] = list(search.rnn(self.query, radius).keys())
-            self.assertEqual(len(naive_results), len(rnn_results), f'expected the same number of results from naive and rnn searches.')
-            self.assertSetEqual(set(naive_results.keys()), set(rnn_results), f'expected the same set of results from naive and rnn searches.')
+                self.assertEqual(len(naive_results), len(rnn_results), f'expected the same number of results from naive and rnn searches.')
+                self.assertSetEqual(set(naive_results.keys()), set(rnn_results.keys()), f'expected the same set of results from naive and rnn searches.')
 
-            sorted_naive = list(sorted([(d, p) for p, d in naive_results.items()]))
-            naive_points = self.data[[p for _, p in sorted_naive]]
-            rnn_points = search.rnn_points(self.query, radius)
-            self.assertEqual(naive_points.shape, rnn_points.shape, f'found mismatch between shapes of points returned')
-            for left, right in zip(naive_points, rnn_points):
-                self.assertEqual(list(left), list(right), f'found mismatch between arrays of points returned')
         return
 
-    def test_knn(self):
-        search = CAKES(self.data, self.metric).build(max_depth=10)
-        points: list[tuple[float, int]] = list(sorted([(distance, point) for point, distance in self.distances.items()]))
-        points: list[int] = [p for _, p in points]
+    def test_knn_search(self):
+        distances = {i: d for i, d in zip(self.indices, self.distances[0, :])}
+        points: list[int] = [p for p, _ in sorted(distances.items(), key=operator.itemgetter(1))]
 
-        ks: list[int] = list(range(1, 10))
-        ks.extend(range(10, self.data.shape[0], 1000))
+        ks = list(range(1, 10))
+        ks.extend(range(10, self.data.cardinality, 1000))
         for k in ks:
-            naive_results: list[int] = points[:k]
-            knn_results: list[int] = list(search.knn(self.query, k).keys())
+            naive_results = points[:k]
+            knn_results: list[int] = list(self.cakes.knn_search(self.query, k).keys())
             self.assertEqual(len(naive_results), len(knn_results), f'expected the same number of results from naive and knn searches.')
             self.assertSetEqual(set(naive_results), set(knn_results), f'expected the same set of results from naive and knn searches.')
 
-            naive_points = self.data[naive_results]
-            knn_points = search.knn_points(self.query, k)
-            self.assertEqual(naive_points.shape, knn_points.shape, f'found mismatch between shapes of points returned')
-            for left, right in zip(naive_points, knn_points):
-                self.assertEqual(list(left), list(right), f'found mismatch between arrays of points returned')
         return
 
     def test_tree_search_history(self):
-        search = CAKES(self.data, self.metric).build(max_depth=10)
-        radius: float = search.root.radius / 10
-        history, hits = search.tree_search_history(self.query, radius)
+        radius: float = self.cakes.root.radius / 10
+        history, hits = self.cakes.tree_search_history(self.query, radius)
 
-        for hit in hits:
-            self.assertTrue(hit in history, f'The hit {str(hit)} was not found in history.')
+        for c in hits:
+            self.assertTrue(c in history, f'The hit {str(c)} was not found in history.')
         self.assertLessEqual(len(hits), len(history), f'history should have at least a many members as hits.')
 
-        for cluster in history:
-            if cluster not in hits:
-                self.assertGreater(len(cluster.children), 0, f'A non-hit member of history must have had children.')
+        for c in history:
+            if c not in hits:
+                self.assertFalse(c.is_leaf, f'A non-hit member of history must have had children.')
 
         depths: set[int] = {cluster.depth for cluster in history}
-        for d in range(len(depths)):
-            self.assertIn(d, depths, f'history should contain clusters from every depth. Did not contain: {d}')
+        depth_range: set[int] = set(range(len(depths)))
+        missing_depths = depths.union(depth_range) - depths.intersection(depth_range)
+        self.assertEqual(0, len(missing_depths), f'history should contain clusters from every depth. Did not contain: {missing_depths}')
+
+        return

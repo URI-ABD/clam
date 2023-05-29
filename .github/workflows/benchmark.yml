@@ -11,5 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
+      - name: Install HDF5
+        run: sudo apt-get install hdf5-tools libhdf5-dev
+
+      - name: Update
+        run: rustup update
+
       - name: run
         run: cargo bench
