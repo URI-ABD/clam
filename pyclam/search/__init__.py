@@ -1,1 +1,1 @@
-from .cakes import CAKES
+from .cakes import CAKES as CAKES

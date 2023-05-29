@@ -2,403 +2,382 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::sync::Arc;
-use std::sync::RwLock;
 
-use dashmap::DashMap;
-use ndarray::prelude::*;
-use rayon::prelude::*;
+use super::cluster::Cluster;
+use super::dataset::Dataset;
+use super::number::Number;
 
-use crate::prelude::*;
+type ClusterSet<'a, T, U, D> = HashSet<&'a Cluster<'a, T, U, D>>;
+type EdgeSet<'a, T, U, D> = HashSet<&'a Edge<'a, T, U, D>>;
+type AdjacencyMap<'a, T, U, D> = HashMap<&'a Cluster<'a, T, U, D>, ClusterSet<'a, T, U, D>>;
+type FrontierSizes<'a, T, U, D> = HashMap<&'a Cluster<'a, T, U, D>, Vec<usize>>;
 
-type ClusterSet<T, U> = HashSet<Arc<Cluster<T, U>>>;
-type ClusterVec<T, U> = Vec<Arc<Cluster<T, U>>>;
-type EdgeSet<T, U> = HashSet<Arc<Edge<T, U>>>;
-type Components<T, U> = Arc<RwLock<Option<Vec<Arc<Graph<T, U>>>>>>;
-
-type EdgesMap<T, U> = HashMap<Arc<Cluster<T, U>>, EdgeSet<T, U>>;
-
-/// A HashMap where the value is a HashSet of clusters that are subsumed by the key cluster.
-pub type Subsumed<T, U> = HashMap<Arc<Cluster<T, U>>, ClusterSet<T, U>>;
-
-/// Two clusters have an edge between them if the distance between their centers is less than or equal to the sum of their radii.
-#[derive(Debug)]
-pub struct Edge<T: Number, U: Number> {
-    pub left: Arc<Cluster<T, U>>,
-    pub right: Arc<Cluster<T, U>>,
-    pub distance: U,
+/// Two `Cluster`s have an `Edge` between them if they have overlapping volumes.
+///
+/// In CLAM, all `Edge`s are bi-directional.
+#[derive(Debug, Clone)]
+pub struct Edge<'a, T: Number, U: Number, D: Dataset<T, U>> {
+    left: &'a Cluster<'a, T, U, D>,
+    right: &'a Cluster<'a, T, U, D>,
+    distance: U,
 }
 
-/// Two edges are the same if they connect the same two clusters.
-impl<T: Number, U: Number> PartialEq for Edge<T, U> {
+impl<'a, T: Number, U: Number, D: Dataset<T, U>> PartialEq for Edge<'a, T, U, D> {
     fn eq(&self, other: &Self) -> bool {
         (self.left == other.left) && (self.right == other.right)
     }
 }
 
-impl<T: Number, U: Number> Eq for Edge<T, U> {}
+/// Two `Edge`s are equal if they connect the same two `Cluster`s.
+impl<'a, T: Number, U: Number, D: Dataset<T, U>> Eq for Edge<'a, T, U, D> {}
 
-/// This may be used for creating dot files for graphviz, or for hashing an edge.
-impl<T: Number, U: Number> std::fmt::Display for Edge<T, U> {
+impl<'a, T: Number, U: Number, D: Dataset<T, U>> std::fmt::Display for Edge<'a, T, U, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:} -- {:}, {:}", self.left.name, self.right.name, self.distance)
+        write!(f, "{:} -- {:}", self.left, self.right)
     }
 }
 
-impl<T: Number, U: Number> Hash for Edge<T, U> {
+impl<'a, T: Number, U: Number, D: Dataset<T, U>> Hash for Edge<'a, T, U, D> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        format!("{:}", self).hash(state)
+        format!("{self}").hash(state)
     }
 }
 
-impl<T: Number, U: Number> Edge<T, U> {
-    /// Create a new edge between two clusters. It is the user's responsibility to check the distance between the cluster centers.
-    pub fn new(left: Arc<Cluster<T, U>>, right: Arc<Cluster<T, U>>, distance: U) -> Arc<Self> {
-        let edge = if format!("{}", left) < format!("{}", right) {
-            Edge { left, right, distance }
+impl<'a, T: Number, U: Number, D: Dataset<T, U>> Edge<'a, T, U, D> {
+    /// Creates a new `Edge` from the given `Cluster`s and the distance between
+    /// them.
+    ///
+    /// It is upon the user to verify that the two `Cluster`s are close enough
+    /// to have an edge between them.
+    pub fn new(left: &'a Cluster<'a, T, U, D>, right: &'a Cluster<'a, T, U, D>, distance: U) -> Self {
+        if left < right {
+            Self { left, right, distance }
         } else {
-            Edge { right, left, distance }
-        };
-        Arc::new(edge)
+            Self {
+                left: right,
+                right: left,
+                distance,
+            }
+        }
     }
 
-    /// Returns whether the edge is from a cluster to itself.
-    pub fn to_self(&self) -> bool {
-        (self.distance == U::zero()) || (self.left == self.right)
+    /// Whether this edge has the given `Cluster` at one of its ends.
+    pub fn contains(&self, c: &Cluster<'a, T, U, D>) -> bool {
+        c == self.left || c == self.right
     }
 
-    /// Returns whether the given cluster is one of the end points of the edge.
-    pub fn contains(&self, cluster: &Arc<Cluster<T, U>>) -> bool {
-        cluster == &self.left || cluster == &self.right
+    /// A 2-slice of the `Cluster`s in this `Edge`.
+    pub fn clusters(&self) -> [&Cluster<'a, T, U, D>; 2] {
+        [self.left, self.right]
     }
 
-    /// Given one of the clusters in the edge, returns the other cluster.
-    /// Returns an Err if the given cluster is not contained in the edge.
-    pub fn neighbor(&self, cluster: &Arc<Cluster<T, U>>) -> Result<&Arc<Cluster<T, U>>, String> {
-        if cluster == &self.left {
-            Ok(&self.right)
-        } else if cluster == &self.right {
-            Ok(&self.left)
+    /// A reference to the `Cluster` at the `left` end of the `Edge`.
+    pub fn left(&self) -> &Cluster<'a, T, U, D> {
+        self.left
+    }
+
+    /// A reference to the `Cluster` at the `right` end of the `Edge`.
+    pub fn right(&self) -> &Cluster<'a, T, U, D> {
+        self.right
+    }
+
+    /// The distance between the two `Cluster`s connected by this `Edge`.
+    pub fn distance(&self) -> U {
+        self.distance
+    }
+
+    /// Whether this is an edge from a `Cluster` to itself.
+    pub fn is_circular(&self) -> bool {
+        self.left == self.right
+    }
+
+    /// Returns the neighbor of the given `Cluster` in this `Edge`.
+    ///
+    /// Err:
+    ///
+    /// * If `c` is not one of the `Cluster`s connected by this `Edge`.
+    pub fn neighbor(&self, c: &Cluster<'a, T, U, D>) -> Result<&Cluster<'a, T, U, D>, String> {
+        if c == self.left {
+            Ok(self.right)
+        } else if c == self.right {
+            Ok(self.left)
         } else {
-            let message = format!("Cluster {:} is not in this edge.", cluster.name);
-            Err(message)
+            Err(format!("Cluster {c} is not in this edge {self}."))
         }
     }
 }
 
-/// A Graph can be induced from a collection of clusters by having a one-to-one correspondence with vertices, and adding an edge between any two clusters whose volumes overlap with each other.
-/// 
-/// TODO: Implement Display in dot-file format.
-#[derive(Debug)]
-pub struct Graph<T: Number, U: Number> {
-    // TODO: Measure performance difference for using a Vec instead of a HashSet.
-    // TODO: Improve performance of hashing and lookup of the expensive properties of the graph, e.g. edges-dict, components, eccentricities, etc.
-    
-    /// A HashSet of clusters/vertices in the graph.
-    pub clusters: ClusterSet<T, U>,
-
-    /// A HashSet of edges in the graph.
-    pub edges: EdgeSet<T, U>,
-
-    /// The number of clusters/vertices in the graph.
-    pub cardinality: usize,
-
-    /// The sum of cardinalities of all clusters/vertices in the graph.
-    pub population: usize,
-
-    /// The maximum tree-depth of any cluster/vertex in the graph.
-    pub depth: usize,
-
-    /// The minimum tree-depth of any cluster/vertex in the graph.
-    pub min_depth: usize,
-
-    /// A HashMap from a cluster to all edges of that cluster.
-    pub edges_dict: EdgesMap<T, U>,
-
-    /// A collection of all connected components of the graph. Each component is itself a graph.
-    components: Components<T, U>,
-
-    /// A HashMap of clusters and their eccentricities.
-    eccentricities: DashMap<Arc<Cluster<T, U>>, usize>,
-
-    /// Name of the distance metric used in the dataset.
-    pub metric_name: String,
-}
-// TODO: Implement Display, perhaps using Dot-String format
-
-/// Two graphs are the same if they have the same set of clusters.
-impl<T: Number, U: Number> PartialEq for Graph<T, U> {
-    fn eq(&self, other: &Self) -> bool {
-        self.clusters == other.clusters
-    }
+/// A `Graph` represents a collection of `Cluster`s and `Edge`s, i.e.
+/// connections between overlapping `Cluster`s.
+///
+/// TODO: Add more info on what graphs we useful for.
+#[derive(Debug, Clone)]
+pub struct Graph<'a, T: Number, U: Number, D: Dataset<T, U>> {
+    clusters: ClusterSet<'a, T, U, D>,
+    edges: EdgeSet<'a, T, U, D>,
+    adjacency_map: AdjacencyMap<'a, T, U, D>,
+    population: usize,
+    min_depth: usize,
+    max_depth: usize,
+    ordered_clusters: Vec<&'a Cluster<'a, T, U, D>>,
+    distance_matrix: Option<Vec<Vec<U>>>,
+    adjacency_matrix: Option<Vec<Vec<bool>>>,
+    frontier_sizes: Option<FrontierSizes<'a, T, U, D>>, // TODO: Bench when replacing with DashMap
 }
 
-impl<T: Number, U: Number> Eq for Graph<T, U> {}
+impl<'a, T: Number, U: Number, D: Dataset<T, U>> Graph<'a, T, U, D> {
+    /// Create a new `Graph` from the given `clusters` and `edges`. The easiest
+    /// and most efficient way to construct a graph is from methods in
+    /// `Manifold`.
+    ///
+    /// # Arguments:
+    ///
+    /// * `clusters`: The set of `Cluster`s with which to build the `Graph`.
+    /// * `edges`: The set of `Edge`s with which to build the `Graph`.
+    pub fn new(clusters: ClusterSet<'a, T, U, D>, edges: EdgeSet<'a, T, U, D>) -> Self {
+        assert!(!clusters.is_empty());
 
-impl<T: Number, U: Number> Graph<T, U> {
-    /// Creates a new graph.
-    /// 
-    /// TODO: Lazily compute the graph properties.
-    pub fn new(clusters: HashSet<Arc<Cluster<T, U>>>, edges: EdgeSet<T, U>) -> Self {
-        assert!(!clusters.is_empty(), "Must have at least one cluster to make a graph.");
-        let metric_name = clusters.iter().next().unwrap().clone().dataset.metric().name();
-        let mut graph = Graph {
+        let (population, min_depth, max_depth) =
+            clusters
+                .iter()
+                .fold((0, usize::MAX, 0), |(population, min_depth, max_depth), &c| {
+                    (
+                        population + c.cardinality(),
+                        std::cmp::min(min_depth, c.depth()),
+                        std::cmp::max(max_depth, c.depth()),
+                    )
+                });
+
+        let adjacency_map = {
+            let mut adjacency_map: AdjacencyMap<T, U, D> = clusters.iter().map(|&c| (c, HashSet::new())).collect();
+            edges.iter().for_each(|&e| {
+                adjacency_map.get_mut(e.left()).unwrap().insert(e.right());
+                adjacency_map.get_mut(e.right()).unwrap().insert(e.left());
+            });
+            adjacency_map
+        };
+
+        Self {
+            ordered_clusters: clusters.iter().copied().collect(),
             clusters,
             edges,
-            cardinality: 0,
-            population: 0,
-            depth: 0,
-            min_depth: 0,
-            edges_dict: HashMap::new(),
-            components: Arc::new(RwLock::new(None)),
-            eccentricities: DashMap::new(),
-            metric_name,
-        };
-        graph.cardinality = graph.cardinality();
-        graph.population = graph.population();
-        graph.depth = graph.depth();
-        graph.min_depth = graph.min_depth();
-        graph.edges_dict = graph.edges_dict();
-        graph
+            adjacency_map,
+            population,
+            min_depth,
+            max_depth,
+            distance_matrix: None,
+            adjacency_matrix: None,
+            frontier_sizes: None,
+        }
     }
 
-    fn cardinality(&self) -> usize {
+    fn compute_distance_matrix(&self) -> Vec<Vec<U>> {
+        let indices: HashMap<_, _> = self.ordered_clusters.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+        let mut matrix: Vec<Vec<U>> = vec![vec![U::zero(); self.vertex_cardinality()]; self.vertex_cardinality()];
+        self.edges.iter().for_each(|&e| {
+            let i = *indices.get(e.left()).unwrap();
+            let j = *indices.get(e.right()).unwrap();
+            matrix[i][j] = e.distance();
+            matrix[j][i] = e.distance();
+        });
+        matrix
+    }
+
+    /// Computes the distance matrix for the `Graph` and stores it as an
+    /// internal property.
+    pub fn with_distance_matrix(mut self) -> Self {
+        self.distance_matrix = Some(self.compute_distance_matrix());
+        self
+    }
+
+    /// Computes the adjacency matrix for the `Graph` and stores it as an
+    /// internal property.
+    ///
+    /// # Panics:
+    ///
+    /// * If called before calling `with_distance_matrix`.
+    pub fn with_adjacency_matrix(mut self) -> Self {
+        self.adjacency_matrix = Some(
+            self.distance_matrix()
+                .iter()
+                .map(|row| row.iter().map(|v| !v.is_zero()).collect())
+                .collect(),
+        );
+        self
+    }
+
+    pub fn with_eccentricities(&'a self) -> Self {
+        let frontier_sizes = Some(
+            self.clusters
+                .iter()
+                .map(|&c| (c, self.unchecked_traverse(c).1))
+                .collect(),
+        );
+
+        Self {
+            clusters: self.clusters.clone(),
+            edges: self.edges.clone(),
+            adjacency_map: self.adjacency_map.clone(),
+            population: self.population,
+            min_depth: self.min_depth,
+            max_depth: self.max_depth,
+            ordered_clusters: self.ordered_clusters.clone(),
+            distance_matrix: self.distance_matrix.clone(),
+            adjacency_matrix: self.adjacency_matrix.clone(),
+            frontier_sizes,
+        }
+    }
+
+    #[allow(clippy::manual_retain)]
+    pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, T, U, D>> {
+        let mut components = Vec::new();
+
+        let mut unvisited = self.clusters.clone();
+        while !unvisited.is_empty() {
+            let &start = unvisited.iter().next().unwrap();
+            let (visited, _) = self.unchecked_traverse(start);
+
+            // TODO: bench this using `unvisited.retain(|c| !visited.contains(c))`
+            unvisited = unvisited.into_iter().filter(|&c| !visited.contains(c)).collect();
+
+            // TODO: Also grab adjacency map, distance matrix, and adjacency matrix
+            components.push(visited);
+        }
+
+        components
+    }
+
+    pub fn clusters(&self) -> &ClusterSet<'a, T, U, D> {
+        &self.clusters
+    }
+
+    pub fn edges(&self) -> &EdgeSet<'a, T, U, D> {
+        &self.edges
+    }
+
+    pub fn vertex_cardinality(&self) -> usize {
         self.clusters.len()
     }
 
-    fn population(&self) -> usize {
-        self.clusters.par_iter().map(|cluster| cluster.cardinality).sum()
+    pub fn edge_cardinality(&self) -> usize {
+        self.edges.len()
     }
 
-    fn depth(&self) -> usize {
-        self.clusters.par_iter().map(|cluster| cluster.depth()).max().unwrap()
+    pub fn population(&self) -> usize {
+        self.population
     }
 
-    fn min_depth(&self) -> usize {
-        self.clusters.par_iter().map(|cluster| cluster.depth()).min().unwrap()
+    pub fn min_depth(&self) -> usize {
+        self.min_depth
     }
 
-    /// Returns the minimum and maximum tree-depths of the clusters in the graph.
+    pub fn max_depth(&self) -> usize {
+        self.max_depth
+    }
+
     pub fn depth_range(&self) -> (usize, usize) {
-        (self.min_depth, self.depth)
+        (self.min_depth, self.max_depth)
     }
 
-    fn edges_dict(&self) -> EdgesMap<T, U> {
+    pub fn adjacency_map(&'a self) -> &AdjacencyMap<T, U, D> {
+        &self.adjacency_map
+    }
+
+    pub fn ordered_clusters(&self) -> &[&Cluster<'a, T, U, D>] {
+        &self.ordered_clusters
+    }
+
+    pub fn distance_matrix(&self) -> &[Vec<U>] {
+        self.distance_matrix
+            .as_ref()
+            .expect("Please call `with_distance_matrix` on the Graph before using `distance_matrix`.")
+    }
+
+    pub fn adjacency_matrix(&self) -> &[Vec<bool>] {
+        self.adjacency_matrix
+            .as_ref()
+            .expect("Please call `with_adjacency_matrix` on the Graph before using `adjacency_matrix`.")
+    }
+
+    pub fn diameter(&'a self) -> usize {
         self.clusters
-            .par_iter()
-            .map(|cluster| {
-                (
-                    Arc::clone(cluster),
-                    self.edges
-                        .par_iter()
-                        .filter(|&edge| edge.contains(cluster))
-                        .map(Arc::clone)
-                        .collect(),
-                )
-            })
-            .collect()
-    }
-
-    fn assert_contains(&self, cluster: &Arc<Cluster<T, U>>) -> Result<(), String> {
-        if self.clusters.contains(cluster) {
-            Ok(())
-        } else {
-            Err(format!("This Graph does not contain the Cluster {}.", cluster.name))
-        }
-    }
-
-    /// Returns a HashSet of edges from the given cluster.
-    pub fn edges_from(&self, cluster: &Arc<Cluster<T, U>>) -> Result<&EdgeSet<T, U>, String> {
-        self.assert_contains(cluster)?;
-        Ok(self.edges_dict.get(cluster).unwrap())
-    }
-
-    /// Returns the neighbors of the given cluster.
-    pub fn neighbors(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Vec<Arc<Cluster<T, U>>>, String> {
-        Ok((self.edges_from(cluster)?)
-            .par_iter()
-            .map(|edge| edge.neighbor(cluster).unwrap())
-            .map(Arc::clone)
-            .collect())
-    }
-
-    /// Returns the distances to each neighbor of the given cluster.
-    pub fn distances(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Vec<U>, String> {
-        Ok((self.edges_from(cluster)?)
-            .par_iter()
-            .map(|edge| edge.distance)
-            .collect())
-    }
-
-    /// Returns the subgraph of the given subset of clusters.
-    pub fn subgraph(&self, cluster_subset: HashSet<Arc<Cluster<T, U>>>) -> Result<Self, String> {
-        for cluster in cluster_subset.iter() {
-            self.assert_contains(cluster)?;
-        }
-
-        let edges = self
-            .edges
-            .par_iter()
-            .filter(|&edge| cluster_subset.contains(&edge.left) && cluster_subset.contains(&edge.right))
-            .map(Arc::clone)
-            .collect();
-
-        Ok(Graph::new(cluster_subset, edges))
-    }
-
-    /// Perform a graph traversal (in an arbitrary order) starting at the given cluster.
-    /// 
-    /// Returns the set of visited clusters and the eccentricity of the strating cluster.
-    fn traverse(&self, start: &Arc<Cluster<T, U>>) -> (ClusterSet<T, U>, usize) {
-        let mut visited = HashSet::new();
-
-        let mut frontier = HashSet::new();
-        frontier.insert(Arc::clone(start));
-
-        let mut eccentricity = 0;
-
-        while !frontier.is_empty() {
-            let new_frontier = frontier
-                .par_iter()
-                .map(|c| {
-                    self.neighbors(c)
-                        .unwrap()
-                        .par_iter()
-                        .filter(|&n| !visited.contains(n) && !frontier.contains(n))
-                        .map(Arc::clone)
-                        .collect::<Vec<Arc<Cluster<T, U>>>>()
-                })
-                .flatten()
-                .collect();
-
-            visited.extend(frontier);
-            frontier = new_frontier;
-            eccentricity += 1;
-        }
-
-        (visited, eccentricity)
-    }
-
-    /// Returns the connected components of the graph.
-    pub fn find_components(&self) -> Vec<Arc<Self>> {
-        let components: Option<Vec<Arc<Self>>> = self.components.read().unwrap().clone();
-        if components.is_none() {
-            let mut components = Vec::new();
-            let mut unvisited = self.clusters.clone();
-
-            while !unvisited.is_empty() {
-                let start = Arc::clone(unvisited.iter().next().unwrap());
-                let (component, _) = self.traverse(&start);
-                component
-                    .iter()
-                    .map(|cluster_item| unvisited.remove(cluster_item))
-                    .count();
-                components.push(self.subgraph(component).unwrap());
-            }
-
-            let components = components.into_iter().map(Arc::new).collect();
-            *self.components.write().unwrap() = Some(components);
-        }
-
-        self.components.read().unwrap().clone().unwrap()
-    }
-
-    /// Returns the eccentricity of a cluster, i.e. the maximum length of all paths starting at the cluster.
-    pub fn eccentricity(&self, cluster: &Arc<Cluster<T, U>>) -> Result<usize, String> {
-        self.assert_contains(cluster)?;
-
-        if !self.eccentricities.contains_key(cluster) {
-            let (_, eccentricity) = self.traverse(cluster);
-            self.eccentricities.insert(Arc::clone(cluster), eccentricity);
-        }
-
-        Ok(*self.eccentricities.get(cluster).unwrap().value())
-    }
-
-    /// Returns the graph diameter, i.e. the maximum eccentricity of any cluster in the graph.
-    pub fn diameter(&self) -> usize {
-        self.clusters
-            .par_iter()
-            .map(|cluster_item| self.eccentricity(cluster_item).unwrap())
+            .iter()
+            .map(|&c| self.unchecked_eccentricity(c))
             .max()
             .unwrap()
     }
 
-    /// Returns a vec of the clusters in the graph and a matrix of pairwise distances between the clsuter centers.
-    /// The rows and columns of the matrix are ordered by the vec of clusters.
-    pub fn distance_matrix(&self) -> (ClusterVec<T, U>, Array2<U>) {
-        let clusters: Vec<_> = self.clusters.par_iter().map(Arc::clone).collect();
-        let indices: HashMap<_, _> = clusters
-            .par_iter()
-            .map(Arc::clone)
-            .enumerate()
-            .map(|(i, cluster)| (cluster, i))
-            .collect();
-        let mut matrix = Array2::zeros((self.cardinality, self.cardinality));
-        for edge in self.edges.iter() {
-            let (&i, &j) = (indices.get(&edge.left).unwrap(), indices.get(&edge.right).unwrap());
-            matrix[[i, j]] = edge.distance;
-            matrix[[j, i]] = edge.distance;
+    fn assert_contains(&self, c: &Cluster<'a, T, U, D>) -> Result<(), String> {
+        if self.clusters.contains(&c) {
+            Ok(())
+        } else {
+            Err(format!("Cluster {c} is not in this graph."))
         }
-        (clusters, matrix)
     }
 
-    /// Returns the adhjacency matrix for the graph, along with a vec of clsuters in the same order.
-    pub fn adjacency_matrix(&self) -> (ClusterVec<T, U>, Array2<bool>) {
-        let (clusters, distances) = self.distance_matrix();
-        (clusters, distances.mapv(|v| v > U::zero()))
+    pub fn unchecked_vertex_degree(&'a self, c: &Cluster<'a, T, U, D>) -> usize {
+        self.unchecked_neighbors_of(c).len()
     }
 
-    /// Returns a pruned subgraph, i.e. after removing all subsumed clusters, along with HashMap noting all subsumed clusters.
-    /// 
-    /// A cluster is said to be subsumed by another cluster if its volume liex completely inside the others volume.
-    pub fn pruned_graph(&self) -> (Arc<Self>, Subsumed<T, U>) {
-        let subsumed_clusters: HashSet<_> = self
-            .edges
-            .par_iter()
-            .flat_map(|edge| {
-                if edge.distance + edge.left.radius < edge.right.radius {
-                    vec![Arc::clone(&edge.left)]
-                } else if edge.distance + edge.right.radius < edge.left.radius {
-                    vec![Arc::clone(&edge.right)]
-                } else {
-                    vec![]
-                }
-            })
-            .collect();
-
-        let pruned_clusters: HashSet<_> = self
-            .clusters
-            .par_iter()
-            .filter(|&cluster| !subsumed_clusters.contains(cluster))
-            .map(Arc::clone)
-            .collect();
-
-        let subsumed_neighbors = pruned_clusters
-            .par_iter()
-            .map(|cluster| {
-                let neighbors = self
-                    .neighbors(cluster)
-                    .unwrap()
-                    .into_par_iter()
-                    .filter(|neighbor| !pruned_clusters.contains(neighbor))
-                    .collect();
-                (Arc::clone(cluster), neighbors)
-            })
-            .collect();
-
-        let pruned_graph = Arc::new(self.subgraph(pruned_clusters).unwrap());
-
-        (pruned_graph, subsumed_neighbors)
+    pub fn vertex_degree(&'a self, c: &Cluster<'a, T, U, D>) -> Result<usize, String> {
+        self.assert_contains(c)?;
+        Ok(self.unchecked_vertex_degree(c))
     }
 
-    /// Returns the connected component containing the given cluster.
-    pub fn component_containing(&self, cluster: &Arc<Cluster<T, U>>) -> Result<Arc<Self>, String> {
-        self.assert_contains(cluster)?;
-        Ok(self
-            .find_components()
-            .into_par_iter()
-            .find_any(|component| component.clusters.contains(cluster))
-            .unwrap())
+    pub fn unchecked_neighbors_of(&'a self, c: &Cluster<'a, T, U, D>) -> &ClusterSet<T, U, D> {
+        self.adjacency_map.get(c).unwrap()
+    }
+
+    pub fn neighbors_of(&'a self, c: &Cluster<'a, T, U, D>) -> Result<&ClusterSet<T, U, D>, String> {
+        self.assert_contains(c)?;
+        Ok(self.unchecked_neighbors_of(c))
+    }
+
+    pub fn unchecked_traverse(&'a self, start: &'a Cluster<'a, T, U, D>) -> (ClusterSet<T, U, D>, Vec<usize>) {
+        let mut visited: HashSet<&Cluster<T, U, D>> = HashSet::new();
+        let mut frontier: HashSet<&Cluster<T, U, D>> = HashSet::new();
+        frontier.insert(start);
+        let mut frontier_sizes: Vec<usize> = Vec::new();
+
+        while !frontier.is_empty() {
+            visited.extend(frontier.iter().copied());
+            frontier = frontier
+                .iter()
+                .flat_map(|&c| self.unchecked_neighbors_of(c))
+                .filter(|&n| !((visited.contains(n)) || (frontier.contains(n))))
+                .copied()
+                .collect();
+            frontier_sizes.push(frontier.len());
+        }
+
+        (visited, frontier_sizes)
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn traverse(&'a self, start: &'a Cluster<'a, T, U, D>) -> Result<(ClusterSet<T, U, D>, Vec<usize>), String> {
+        self.assert_contains(start)?;
+        Ok(self.unchecked_traverse(start))
+    }
+
+    pub fn unchecked_frontier_sizes(&'a self, c: &'a Cluster<'a, T, U, D>) -> &[usize] {
+        self.frontier_sizes
+            .as_ref()
+            .expect("Please call `with_eccentricities` before using this method.")
+            .get(c)
+            .unwrap()
+    }
+
+    pub fn frontier_sizes(&'a self, c: &'a Cluster<'a, T, U, D>) -> Result<&[usize], String> {
+        self.assert_contains(c)?;
+        Ok(self.unchecked_frontier_sizes(c))
+    }
+
+    pub fn unchecked_eccentricity(&'a self, c: &'a Cluster<'a, T, U, D>) -> usize {
+        self.unchecked_frontier_sizes(c).len()
+    }
+
+    pub fn eccentricity(&'a self, c: &'a Cluster<'a, T, U, D>) -> Result<usize, String> {
+        self.assert_contains(c)?;
+        Ok(self.unchecked_eccentricity(c))
     }
 }

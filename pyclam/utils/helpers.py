@@ -1,24 +1,40 @@
+import logging
+import typing
+
 import numpy
 from scipy.special import erf
 
 from . import constants
 
-
-def catch_normalization_mode(mode: str) -> None:
-    """ Make sure that the normalization mode is allowed. """
-    modes: list[str] = ['linear', 'gaussian', 'sigmoid']
-    if mode not in modes:
-        raise ValueError(f'Normalization method {mode} is undefined. Must by one of {modes}.')
-    else:
-        return
+NormalizationMode = typing.Literal[
+    'linear',
+    'gaussian',
+    'sigmoid',
+]
 
 
-def normalize(values, mode: str):
+def make_logger(name: str):
+    logger = logging.getLogger(name)
+    logger.setLevel(constants.LOG_LEVEL)
+    return logger
+
+
+def next_ema(ratio: float, ema: float) -> float:
+    return constants.EMA_ALPHA * ratio + (1 - constants.EMA_ALPHA) * ema
+
+
+def normalize(values: numpy.ndarray, mode: NormalizationMode):
     """ Normalizes each column in values into a [0, 1] range.
 
-    :param values: A 1-d or 2-d array of values to normalize.
-    :param mode: Normalization mode to use. Must be one of 'linear', 'gaussian', or 'sigmoid'.
-    :return: array of normalized values.
+    Args:
+        values: A 1-d or 2-d array of values to normalize.
+        mode: Normalization mode to use. Must be one of:
+         - 'linear',
+         - 'gaussian', or
+         - 'sigmoid'.
+
+    Returns:
+        array of normalized values.
     """
     squeeze = False
     if len(values.shape) == 1:
@@ -27,23 +43,14 @@ def normalize(values, mode: str):
 
     if mode == 'linear':
         min_v, max_v = numpy.min(values, axis=0), numpy.max(values, axis=0)
-        for i in range(values.shape[1]):
-            if min_v[i] == max_v[i]:
-                max_v[i] += 1
-                values[:, i] = min_v[i] + 0.5
-        values = (values - min_v) / (max_v - min_v)
+        values = (values - min_v) / (max_v - min_v + constants.EPSILON)
     else:
-        mu = numpy.mean(values, axis=0)
-        sigma = numpy.std(values, axis=0)
-
-        for i in range(values.shape[1]):
-            if sigma[i] < constants.EPSILON:
-                values[:, i] = 0.5
-            else:
-                if mode == 'gaussian':
-                    values[:, i] = (1 + erf((values[:, i] - mu[i]) / (sigma[i] * numpy.sqrt(2)))) / 2
-                else:
-                    values[:, i] = 1 / (1 + numpy.exp(-(values[:, i] - mu[i]) / sigma[i]))
+        means = numpy.mean(values, axis=0)
+        sds = numpy.std(values, axis=0) + constants.EPSILON
+        if mode == 'gaussian':
+            values = (1 + erf((values - means) / (sds * numpy.sqrt(2)))) / 2
+        else:
+            values = 1 / (1 + numpy.exp(-(values - means) / sds))
 
     values = values.clip(constants.EPSILON, 1)
     if squeeze:

@@ -1,13 +1,8 @@
-mod cluster;
-mod graph;
-mod manifold;
-
-pub mod criteria;
-
-pub use cluster::Cluster;
-pub use graph::Edge;
-pub use graph::Graph;
-pub use manifold::Manifold;
-
-pub use graph::Subsumed;
-pub use manifold::Ratios;
+pub mod cluster;
+pub mod cluster_criteria;
+pub mod dataset;
+pub mod graph;
+pub mod graph_criteria;
+pub mod instance;
+pub mod manifold;
+pub mod number;
