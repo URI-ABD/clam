@@ -17,9 +17,15 @@ rust-version = "1.68"
 # and update the release github action.
 publish = false
 
-# Remove this when not profiling
+[profile.test]
+debug = 1
+opt-level = 3
+
 [profile.release]
-debug = true
+strip = true
+lto = true
+codegen-units = 1
+overflow-checks = true
 
 [profile.bench]
 debug = true
@@ -59,37 +65,20 @@ num-format = "0.4.4"
 kdam = "0.3.0"
 
 [dev-dependencies.criterion]
-version = "0.4"
+version = "0.5.1"
 features = ["html_reports"]
 
 [dev-dependencies.ndarray]
 version = "0.15"
-# features = ["rayon"]
+features = ["rayon"]
 
 [dev-dependencies.serde_json]
 version = "1.0"
 features = ["alloc"]
 
 [dev-dependencies.arrow]
-version = "35.0.0"
+version = "40.0.0"
 features = ["ipc"]
-
-# [dev-dependencies.polars]
-# version = "0.27.2"
-# features = [
-#     "lazy",
-#     "dtype-full",
-#     "streaming",
-#     "random",
-#     "ndarray",
-#     "strings",
-#     "parquet",
-#     "ipc",
-#     "rows",
-#     "fmt",
-#     "describe",
-#     "lazy_regex",
-# ]
 
 [[example]]
 name = "reports"
@@ -98,14 +87,6 @@ path = "examples/reports.rs"
 [[example]]
 name = "knn-search"
 path = "examples/knn-search.rs"
-
-# [[example]]
-# name = "search_small"
-# path = "examples/search_small/main.rs"
-
-# [[example]]
-# name = "search_large"
-# path = "examples/search_large/main.rs"
 
 [[bench]]
 name = "partition"
@@ -118,12 +99,3 @@ harness = false
 [[bench]]
 name = "knn-search"
 harness = false
-
-# [[bench]]
-# name = "knn_vs_rnn"
-# harness = false
-
-# [[bench]]
-# name = "find_kth"
-# harness = false
-
