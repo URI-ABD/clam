@@ -14,7 +14,6 @@ use crate::utils::helpers;
 
 pub type Ratios = [f64; 6];
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
     data: D,
@@ -22,12 +21,12 @@ pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
     t: std::marker::PhantomData<T>,
 }
 
-impl <T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
+impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     pub fn new(dataset: D) -> Self {
         Tree {
             root: Cluster::new_root(dataset.indices().to_owned()),
             data: dataset,
-            t: std::marker::PhantomData::<T>
+            t: std::marker::PhantomData::<T>,
         }
     }
 
@@ -38,6 +37,10 @@ impl <T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
 
     pub fn dataset(&self) -> &D {
         &self.data
+    }
+
+    pub fn cardinality(&self) -> usize {
+        self.root.cardinality()
     }
 
     pub fn radius(&self) -> U {
@@ -64,7 +67,14 @@ impl <T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
         self
     }
 
+    pub fn indices(&self) -> &[usize] {
+        &self.root.indices(&self.data)
+    }
+
     pub fn depth_first_reorder(mut self) -> Self {
+        // TODO (OWM): Is there a way to get around cloning here?
+        let leaf_indices = self.root.leaf_indices();
+        self.data.reorder(&leaf_indices);
         self.root.dfr(&self.data, 0);
         self
     }
@@ -313,7 +323,12 @@ impl<U: Number> Cluster<U> {
     /// # Panics:
     ///
     /// * If called before calling `build`.
-    pub fn partition<T: Number, D: Dataset<T, U>>(mut self, data: &D, criteria: &PartitionCriteria<U>, recursive: bool) -> Self {
+    pub fn partition<T: Number, D: Dataset<T, U>>(
+        mut self,
+        data: &D,
+        criteria: &PartitionCriteria<U>,
+        recursive: bool,
+    ) -> Self {
         if criteria.check(&self) {
             let ([(left_pole, left), (right_pole, right)], polar_distance) = self.partition_once(data);
 
@@ -336,7 +351,12 @@ impl<U: Number> Cluster<U> {
     }
 
     #[allow(unused)]
-    pub fn par_partition<'a, T: Number, D: Dataset<T,U>>(mut self, data: &'a D, criteria: &PartitionCriteria<U>, recursive: bool) -> Self {
+    pub fn par_partition<'a, T: Number, D: Dataset<T, U>>(
+        mut self,
+        data: &'a D,
+        criteria: &PartitionCriteria<U>,
+        recursive: bool,
+    ) -> Self {
         if criteria.check(&self) {
             let ([(left_pole, left), (right_pole, right)], polar_distance) = self.partition_once(data);
 
@@ -489,7 +509,7 @@ impl<U: Number> Cluster<U> {
     /// Indices are only stored at leaf `Cluster`s. Calling this method on a
     /// non-leaf `Cluster` will have to perform a tree traversal, returning the
     /// indices in depth-first order.
-    pub fn indices<'a, T: Number, D: Dataset<T,U>>(&'a self, data: &'a D) -> &[usize] {
+    pub fn indices<'a, T: Number, D: Dataset<T, U>>(&'a self, data: &'a D) -> &[usize] {
         match &self.index {
             Index::Indices(indices) => indices,
             Index::Offset(o) => {
@@ -497,15 +517,24 @@ impl<U: Number> Cluster<U> {
                 &data.indices()[start..start + self.cardinality]
             }
             Index::Empty => panic!("Cannot call indices from parent clusters")
-            // Index::Empty => match &self.children {
-            //     Some(([(_, left), (_, right)], _)) => {
-            //         let indices = left.indices().iter().chain(right.indices().iter()).copied().collect::<Vec<usize>>();
-            //         &indices
-            //     }
+        }
+    }
 
-            //     // TODO: Cleanup this error message
-            //     None => panic!("Structural invariant invalidated. Node with no contents and no children"),
-            // },
+    // OWM: Solely for depth first traversal
+    pub fn leaf_indices(&self) -> Vec<usize> {
+        match &self.index {
+            Index::Empty => match &self.children {
+                Some(([(_, left), (_, right)], _)) => {
+                    left.leaf_indices().iter().chain(right.leaf_indices().iter()).copied().collect()
+                }
+
+                // TODO: Cleanup this error message
+                None => panic!("Structural invariant invalidated. Node with no contents and no children"),
+            },
+            Index::Indices(indices) => indices.clone(),
+            Index::Offset(_) => {
+                panic!("Cannot get leaf indices once tree has been reordered!");
+            }
         }
     }
 
@@ -660,24 +689,29 @@ impl<U: Number> Cluster<U> {
     }
 
     /// Distance from the `center` to the given indexed instance.
-    pub fn distance_to_indexed_instance<'a, T: Number, D: Dataset<T,U>>(&self, data: &'a D, index: usize) -> U {
+    pub fn distance_to_indexed_instance<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, index: usize) -> U {
         data.one_to_one(index, self.arg_center())
     }
 
     /// Distance from the `center` to the given instance.
-    pub fn distance_to_instance<'a, T: Number, D: Dataset<T,U>>(&self, data: &'a D, instance: &[T]) -> U {
+    pub fn distance_to_instance<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, instance: &[T]) -> U {
         data.query_to_one(instance, self.arg_center())
     }
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
-    pub fn distance_to_other<'a, T: Number, D: Dataset<T,U>>(&self, data: &'a D, other: &Self) -> U {
+    pub fn distance_to_other<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, other: &Self) -> U {
         self.distance_to_indexed_instance(data, other.arg_center())
     }
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
-    pub fn overlapping_children<'a, T: Number, D: Dataset<T,U>>(&self, data: &'a D, query: &[T], radius: U) -> Vec<&Self> {
+    pub fn overlapping_children<'a, T: Number, D: Dataset<T, U>>(
+        &self,
+        data: &'a D,
+        query: &[T],
+        radius: U,
+    ) -> Vec<&Self> {
         let (l, left, r, right, lr) = match &self.children {
             None => panic!("Can only be called on non-leaf clusters."),
             Some(([(l, left), (r, right)], lr)) => (*l, left.as_ref(), *r, right.as_ref(), *lr),
@@ -697,16 +731,15 @@ impl<U: Number> Cluster<U> {
         }
     }
 
-    pub fn depth_first_reorder<'a, T: Number, D: Dataset<T,U>>(&mut self, data: &'a D) {
+    pub fn depth_first_reorder<'a, T: Number, D: Dataset<T, U>>(&mut self, data: &'a D) {
         if self.depth() != 0 {
             panic!("Cannot call this method except from the root.")
         }
 
-        // self.data.reorder(&self.indices());
         self.dfr(data, 0);
     }
 
-    fn dfr<'a, T: Number, D: Dataset<T,U>>(&mut self, data: &'a D, offset: usize) {
+    fn dfr<'a, T: Number, D: Dataset<T, U>>(&mut self, data: &'a D, offset: usize) {
         self.index = Index::Offset(offset);
 
         // TODO: Cleanup
@@ -722,7 +755,7 @@ impl<U: Number> Cluster<U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::cluster::Cluster;
+    use crate::core::cluster::{Cluster, Tree};
     use crate::core::cluster_criteria::PartitionCriteria;
 
     #[allow(unused_imports)]
@@ -737,7 +770,9 @@ mod tests {
         let data = VecVec::new(data, metric, name, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let cluster = Cluster::new_root(indices).build(&data).partition(&data, &partition_criteria, true);
+        let cluster = Cluster::new_root(indices)
+            .build(&data)
+            .partition(&data, &partition_criteria, true);
 
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality(), 4);
@@ -758,7 +793,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "WIP"]
     fn test_reordering() {
         let data = vec![
             vec![10.],
@@ -774,13 +808,40 @@ mod tests {
         let name = "test".to_string();
         let data = VecVec::new(data, metric, name, false);
         let indices = data.indices().to_vec();
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let mut cluster = Cluster::new_root(indices).build(&data).partition(&data, &partition_criteria, true);
+        let partition_criteria: PartitionCriteria<f32> =
+            PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
-        // space.reorder(cluster.indices());
-        cluster.depth_first_reorder(&data);
+        let tree = Tree::new(data).build().partition(&partition_criteria, true).depth_first_reorder();
 
         // Assert that the tree's indices have been reordered in depth-first order
-        assert_eq!((0..cluster.cardinality()).collect::<Vec<usize>>(), cluster.indices(&data));
+        assert_eq!((0..tree.cardinality()).collect::<Vec<usize>>(), tree.indices());
+    }
+
+    #[test]
+    fn test_leaf_indices() {
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
+        let metric = distances::f32::euclidean;
+        let name = "test".to_string();
+        let data = VecVec::new(data, metric, name, false);
+        let indices = data.indices().to_vec();
+        let partition_criteria: PartitionCriteria<f32> =
+            PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+
+
+        let tree = Tree::new(data).build().partition(&partition_criteria, true);
+
+        let mut leaf_indices = tree.root().leaf_indices();
+        leaf_indices.sort();
+
+        assert_eq!(leaf_indices, tree.dataset().indices());
     }
 }

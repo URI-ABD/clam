@@ -271,12 +271,7 @@ mod tests {
                 })
                 .collect();
 
-            let mut dataset = VecVec::new(
-                reference_data.clone(),
-                distances::f32::euclidean,
-                name.clone(),
-                false,
-            );
+            let mut dataset = VecVec::new(reference_data.clone(), distances::f32::euclidean, name.clone(), false);
             let mut new_indices = dataset.indices().to_vec();
             new_indices.shuffle(&mut rng);
 
