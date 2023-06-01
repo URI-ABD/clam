@@ -142,7 +142,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
         let mut candidates = priority_queue::PriorityQueue::<&Cluster<U>, RevNumber<U>>::new();
         let d = self.tree.root().distance_to_instance(self.dataset(), query);
-        candidates.push(&self.tree.root(), RevNumber(self.d_min(&self.tree.root(), d)));
+        candidates.push(self.tree.root(), RevNumber(self.d_min(self.tree.root(), d)));
 
         let mut hits = priority_queue::PriorityQueue::<usize, OrdNumber<U>>::new();
         // let mut count = 0;

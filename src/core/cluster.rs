@@ -110,7 +110,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
 
     /// Returns the indices of the root cluster.
     pub fn indices(&self) -> &[usize] {
-        &self.root.indices(&self.data)
+        self.root.indices(&self.data)
     }
 
     /// Reorders the `Tree`'s underlying dataset based off of a depth first traversal of a
@@ -294,7 +294,7 @@ impl<U: Number> Cluster<U> {
 
     /// Returns two new `Cluster`s that are the left and right children of this
     /// `Cluster`.
-    fn partition_once<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D) -> ([(usize, Self); 2], U) {
+    fn partition_once<T: Number, D: Dataset<T, U>>(&self, data: &D) -> ([(usize, Self); 2], U) {
         let indices = match &self.index {
             Index::Indices(indices) => indices,
             _ => panic!("`build` can only be called once per cluster."),
@@ -395,9 +395,9 @@ impl<U: Number> Cluster<U> {
     }
 
     #[allow(unused)]
-    pub fn par_partition<'a, T: Number, D: Dataset<T, U>>(
+    pub fn par_partition<T: Number, D: Dataset<T, U>>(
         mut self,
-        data: &'a D,
+        data: &D,
         criteria: &PartitionCriteria<U>,
         recursive: bool,
     ) -> Self {
@@ -745,27 +745,27 @@ impl<U: Number> Cluster<U> {
 
     /// Distance from the `center` to the given indexed instance.
     #[allow(dead_code)]
-    pub fn distance_to_indexed_instance<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, index: usize) -> U {
+    pub fn distance_to_indexed_instance<T: Number, D: Dataset<T, U>>(&self, data: &D, index: usize) -> U {
         data.one_to_one(index, self.arg_center())
     }
 
     /// Distance from the `center` to the given instance.
-    pub fn distance_to_instance<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, instance: &[T]) -> U {
+    pub fn distance_to_instance<T: Number, D: Dataset<T, U>>(&self, data: &D, instance: &[T]) -> U {
         data.query_to_one(instance, self.arg_center())
     }
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
     #[allow(dead_code)]
-    pub fn distance_to_other<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, other: &Self) -> U {
+    pub fn distance_to_other<T: Number, D: Dataset<T, U>>(&self, data: &D, other: &Self) -> U {
         self.distance_to_indexed_instance(data, other.arg_center())
     }
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
-    pub fn overlapping_children<'a, T: Number, D: Dataset<T, U>>(
+    pub fn overlapping_children<T: Number, D: Dataset<T, U>>(
         &self,
-        data: &'a D,
+        data: &D,
         query: &[T],
         radius: U,
     ) -> Vec<&Self> {
@@ -790,7 +790,7 @@ impl<U: Number> Cluster<U> {
 
     #[allow(dead_code)]
     // OWM: Do we need this anymore?
-    pub fn depth_first_reorder<'a, T: Number, D: Dataset<T, U>>(&mut self, data: &'a D) {
+    pub fn depth_first_reorder<T: Number, D: Dataset<T, U>>(&mut self, data: &D) {
         if self.depth() != 0 {
             panic!("Cannot call this method except from the root.")
         }
@@ -798,7 +798,7 @@ impl<U: Number> Cluster<U> {
         self.dfr(data, 0);
     }
 
-    fn dfr<'a, T: Number, D: Dataset<T, U>>(&mut self, data: &'a D, offset: usize) {
+    fn dfr<T: Number, D: Dataset<T, U>>(&mut self, data: &D, offset: usize) {
         self.index = Index::Offset(offset);
 
         // TODO: Cleanup
