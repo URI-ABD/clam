@@ -75,7 +75,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
 }
 
 #[allow(dead_code)]
-struct Grain<'a, T: Number, U: Number, /*D: Dataset<T, U>*/> {
+struct Grain<'a, T: Number, U: Number /*D: Dataset<T, U>*/> {
     t: std::marker::PhantomData<T>,
     c: &'a Cluster<U>,
     d: U,

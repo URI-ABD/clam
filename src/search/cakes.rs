@@ -2,7 +2,7 @@ use std::f64::EPSILON;
 
 use rayon::prelude::*;
 
-use crate::core::cluster::{Tree, Cluster};
+use crate::core::cluster::{Cluster, Tree};
 use crate::core::cluster_criteria::PartitionCriteria;
 use crate::core::dataset::Dataset;
 use crate::core::number::Number;
@@ -20,7 +20,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
             Tree::new(dataset).with_seed(seed)
         } else {
             Tree::new(dataset)
-        }.build();
+        }
+        .build();
 
         let depth = 0;
 
@@ -132,12 +133,12 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     pub fn batch_knn_search(&self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
         queries.iter().map(|&query| self.knn_search(query, k)).collect()
     }
-//
-//    #[inline(never)]
-//    pub fn par_batch_knn_search(&'a self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
-//        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
-//    }
-//
+    //
+    //    #[inline(never)]
+    //    pub fn par_batch_knn_search(&'a self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
+    //        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
+    //    }
+    //
     pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
         let mut candidates = priority_queue::PriorityQueue::<&Cluster<U>, RevNumber<U>>::new();
         let d = self.tree.root().distance_to_instance(self.dataset(), query);
@@ -171,14 +172,13 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     }
 
     // pop from the top of `candidates` until the top candiadte is a leaf cluster.
-    fn pop_till_leaf(
-        &self,
-        query: &[T],
-        candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
-    ) {
+    fn pop_till_leaf(&self, query: &[T], candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>) {
         while !candidates.peek().unwrap().0.is_leaf() {
             let [l, r] = candidates.pop().unwrap().0.children().unwrap();
-            let [dl, dr] = [l.distance_to_instance(self.dataset(), query), r.distance_to_instance(self.dataset(), query)];
+            let [dl, dr] = [
+                l.distance_to_instance(self.dataset(), query),
+                r.distance_to_instance(self.dataset(), query),
+            ];
             candidates.push(l, RevNumber(self.d_min(l, dl)));
             candidates.push(r, RevNumber(self.d_min(r, dr)));
         }

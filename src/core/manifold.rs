@@ -4,7 +4,7 @@ use super::number::Number;
 
 #[allow(dead_code)]
 pub struct Manifold<T: Number, U: Number, D: Dataset<T, U>> {
-    root: Tree<T, U, D>
+    root: Tree<T, U, D>,
 }
 
 // pub type CandidateNeighbors<T, U> = Vec<(Box<Cluster<T, U>>, U)>;

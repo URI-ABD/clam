@@ -560,7 +560,7 @@ impl<U: Number> Cluster<U> {
                 let start = *o;
                 &data.indices()[start..start + self.cardinality]
             }
-            Index::Empty => panic!("Cannot call indices from parent clusters")
+            Index::Empty => panic!("Cannot call indices from parent clusters"),
         }
     }
 
@@ -568,9 +568,12 @@ impl<U: Number> Cluster<U> {
     pub fn leaf_indices(&self) -> Vec<usize> {
         match &self.index {
             Index::Empty => match &self.children {
-                Some(([(_, left), (_, right)], _)) => {
-                    left.leaf_indices().iter().chain(right.leaf_indices().iter()).copied().collect()
-                }
+                Some(([(_, left), (_, right)], _)) => left
+                    .leaf_indices()
+                    .iter()
+                    .chain(right.leaf_indices().iter())
+                    .copied()
+                    .collect(),
 
                 // TODO: Cleanup this error message
                 None => panic!("Structural invariant invalidated. Node with no contents and no children"),
@@ -866,7 +869,10 @@ mod tests {
         let partition_criteria: PartitionCriteria<f32> =
             PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
-        let tree = Tree::new(data).build().partition(&partition_criteria, true).depth_first_reorder();
+        let tree = Tree::new(data)
+            .build()
+            .partition(&partition_criteria, true)
+            .depth_first_reorder();
 
         // Assert that the tree's indices have been reordered in depth-first order
         assert_eq!((0..tree.cardinality()).collect::<Vec<usize>>(), tree.indices());

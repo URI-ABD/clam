@@ -6,7 +6,7 @@ use super::number::Number;
 // TODO: OWM: This needs to be thought about way more. The issue here is that
 // Cluster is getting leaked but I don't know enough about PartitionCriteria to
 // say if we need it to be or not
-pub (crate)trait PartitionCriterion<U: Number>: std::fmt::Debug + Send + Sync {
+pub(crate) trait PartitionCriterion<U: Number>: std::fmt::Debug + Send + Sync {
     fn check(&self, c: &Cluster<U>) -> bool;
 }
 
@@ -40,7 +40,7 @@ impl<U: Number> PartitionCriteria<U> {
         self
     }
 
-    pub (crate) fn check(&self, cluster: &Cluster<U>) -> bool {
+    pub(crate) fn check(&self, cluster: &Cluster<U>) -> bool {
         !cluster.is_singleton()
             && if self.check_all {
                 self.criteria.iter().all(|c| c.check(cluster))
