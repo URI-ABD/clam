@@ -18,7 +18,7 @@ pub type Ratios = [f64; 6];
 /// a specific dataset.
 ///
 /// Mirroring `Cluster`, typically one will chain calls to `new`, `build`,
-/// and finally `partition` to construct a tree.
+/// and finally `partition` to construct a fully realized `Tree`.
 #[derive(Debug)]
 pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
     data: D,
@@ -39,9 +39,11 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
             data: dataset,
             t: std::marker::PhantomData::<T>,
         }
+        // OWM: Should this call `build`, and `partition` by default?
     }
 
-    /// Returns a reference to the root `Cluster` of the tree
+    /// # Returns
+    /// A reference to the root `Cluster` of the tree
     pub(crate) fn root(&self) -> &Cluster<U> {
         &self.root
     }
@@ -51,12 +53,14 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
         &self.data
     }
 
-    /// Returns the cardinality of the `Tree`'s root `Cluster`
+    /// # Returns
+    /// The cardinality of the `Tree`'s root `Cluster`
     pub fn cardinality(&self) -> usize {
         self.root.cardinality()
     }
 
-    /// Returns the radius of the `Tree`'s root `Cluster`
+    /// # Returns
+    /// The radius of the `Tree`'s root `Cluster`
     pub fn radius(&self) -> U {
         self.root.radius()
     }

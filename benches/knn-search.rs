@@ -26,7 +26,7 @@ fn cakes(c: &mut Criterion) {
 
         let dataset = VecVec::new(data, metric, "100k-10".to_string(), false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = CAKES::new(&dataset, Some(seed)).build(&criteria);
+        let cakes = CAKES::new(dataset, Some(seed)).build(&criteria);
 
         for k in [1, 10, 100] {
             let id = BenchmarkId::new("100k-10", k);
