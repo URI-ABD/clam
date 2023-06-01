@@ -14,6 +14,11 @@ use crate::utils::helpers;
 
 pub type Ratios = [f64; 6];
 
+/// A `Tree` represents a hierarchy of `Cluster` instances coupled with
+/// a specific dataset.
+///
+/// Mirroring `Cluster`, typically one will chain calls to `new`, `build`,
+/// and finally `partition` to construct a tree.
 #[derive(Debug)]
 pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
     data: D,
@@ -22,6 +27,12 @@ pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
 }
 
 impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
+    /// Constructs a new `Tree` for a given dataset. Importantly,
+    /// this does not build nor partition the underlying `Cluster`
+    /// tree.
+    ///
+    /// # Arguments
+    /// dataset: A dataset to couple to the `Cluster` tree
     pub fn new(dataset: D) -> Self {
         Tree {
             root: Cluster::new_root(dataset.indices().to_owned()),
@@ -30,47 +41,80 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
         }
     }
 
-    // This is only public to the crate so that we don't leak Cluster
+    /// Returns a reference to the root `Cluster` of the tree
     pub(crate) fn root(&self) -> &Cluster<U> {
         &self.root
     }
 
+    /// Returns a reference to dataset associated with the tree
     pub fn dataset(&self) -> &D {
         &self.data
     }
 
+    /// Returns the cardinality of the `Tree`'s root `Cluster`
     pub fn cardinality(&self) -> usize {
         self.root.cardinality()
     }
 
+    /// Returns the radius of the `Tree`'s root `Cluster`
     pub fn radius(&self) -> U {
         self.root.radius()
     }
 
+    /// Sets a seed for the root cluster, returning a new `Tree` with
+    /// the new seed associated with its root.
+    ///
+    /// # Arguments
+    /// seed: A given seed
+    ///
+    /// # Returns
+    /// A mutated tree instance with the new root having the given seed
+    /// applied to it.
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.root = self.root.with_seed(seed);
         self
     }
 
+    /// Aliases `Cluster::par_partition` for the `Tree`'s root and dataset.
+    ///
+    /// # Arguments
+    /// criteria: A `PartitionCriteria` through which the `Tree`'s root will be partitioned.
+    ///
+    /// # Returns
+    /// A new `Tree` with a partitioned root.
     pub fn par_partition(mut self, criteria: &PartitionCriteria<U>, recursive: bool) -> Self {
         self.root = self.root.par_partition(&self.data, criteria, recursive);
         self
     }
 
+    /// Aliases `Cluster::partition` for `Tree`'s root and dataset.
+    ///
+    /// # Arguments
+    /// criteria: A `PartitionCriteria` through which the `Tree`'s root will be partitioned.
+    ///
+    /// # Returns
+    /// A new `Tree` with a partitioned root.
     pub fn partition(mut self, criteria: &PartitionCriteria<U>, recursive: bool) -> Self {
         self.root = self.root.partition(&self.data, criteria, recursive);
         self
     }
 
+    /// Aliases `Cluster::build` and builds the underlying root of the `Tree`.
+    ///
+    /// # Returns
+    /// A `Tree` with a modified root that has gone through building.
     pub fn build(mut self) -> Self {
         self.root = self.root.build(&self.data);
         self
     }
 
+    /// Returns the indices of the root cluster.
     pub fn indices(&self) -> &[usize] {
         &self.root.indices(&self.data)
     }
 
+    /// Reorders the `Tree`'s underlying dataset based off of a depth first traversal of a
+    /// tree and reformats the `Cluster` hierarchy to use offset and cardinality based indices.
     pub fn depth_first_reorder(mut self) -> Self {
         // TODO (OWM): Is there a way to get around cloning here?
         let leaf_indices = self.root.leaf_indices();
@@ -394,7 +438,7 @@ impl<U: Number> Cluster<U> {
     ///
     /// * If called on a non-root `Cluster`, i.e. a `Cluster` with depth > 0.
     /// * If called before `build` and `partition`.
-    #[allow(unused_mut, unused_variables)]
+    #[allow(unused_mut, unused_variables, dead_code)]
     pub fn with_ratios(mut self, normalized: bool) -> Self {
         todo!()
         // if !self.is_root() {
@@ -539,6 +583,7 @@ impl<U: Number> Cluster<U> {
     }
 
     /// The `history` of the `Cluster` as a bool vector.
+    #[allow(dead_code)]
     pub fn history(&self) -> Vec<bool> {
         self.history.iter().map(|v| *v).collect()
     }
@@ -566,6 +611,7 @@ impl<U: Number> Cluster<U> {
     /// Whether the `Cluster` is the root of the tree.
     ///
     /// The root `Cluster` has a depth of 0.
+    #[allow(dead_code)]
     pub fn is_root(&self) -> bool {
         self.depth() == 0
     }
@@ -608,11 +654,13 @@ impl<U: Number> Cluster<U> {
 
     /// The local fractal dimension of the `Cluster` at the length scales of the
     /// `radius` and half that `radius`.
+    #[allow(dead_code)]
     pub fn lfd(&self) -> f64 {
         self.lfd
             .expect("Please call `build` on this cluster before using this method.")
     }
 
+    #[allow(dead_code)]
     pub fn polar_distance(&self) -> Option<U> {
         self.children.as_ref().map(|(_, lr)| *lr)
     }
@@ -634,6 +682,7 @@ impl<U: Number> Cluster<U> {
     /// # Panics:
     ///
     /// * If called before calling `with_ratios` on the root.
+    #[allow(dead_code)]
     pub fn ratios(&self) -> Ratios {
         self.ratios
             .expect("Please call `with_ratios` before using this method.")
@@ -652,11 +701,13 @@ impl<U: Number> Cluster<U> {
     }
 
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
+    #[allow(dead_code)]
     pub fn is_ancestor_of(&self, other: &Self) -> bool {
         self.depth() < other.depth() && self.history.iter().zip(other.history.iter()).all(|(l, r)| *l == *r)
     }
 
     /// Whether this `Cluster` is an descendant of the `other` `Cluster`.
+    #[allow(dead_code)]
     pub fn is_descendant_of(&self, other: &Self) -> bool {
         other.is_ancestor_of(self)
     }
@@ -679,6 +730,7 @@ impl<U: Number> Cluster<U> {
     }
 
     /// The number of descendants of this `Cluster`, excluding itself.
+    #[allow(dead_code)]
     pub fn num_descendants(&self) -> usize {
         self.subtree().len() - 1
     }
@@ -689,6 +741,7 @@ impl<U: Number> Cluster<U> {
     }
 
     /// Distance from the `center` to the given indexed instance.
+    #[allow(dead_code)]
     pub fn distance_to_indexed_instance<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, index: usize) -> U {
         data.one_to_one(index, self.arg_center())
     }
@@ -700,6 +753,7 @@ impl<U: Number> Cluster<U> {
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
+    #[allow(dead_code)]
     pub fn distance_to_other<'a, T: Number, D: Dataset<T, U>>(&self, data: &'a D, other: &Self) -> U {
         self.distance_to_indexed_instance(data, other.arg_center())
     }
@@ -731,6 +785,8 @@ impl<U: Number> Cluster<U> {
         }
     }
 
+    #[allow(dead_code)]
+    // OWM: Do we need this anymore?
     pub fn depth_first_reorder<'a, T: Number, D: Dataset<T, U>>(&mut self, data: &'a D) {
         if self.depth() != 0 {
             panic!("Cannot call this method except from the root.")
@@ -807,7 +863,6 @@ mod tests {
         let metric = distances::f32::euclidean;
         let name = "test".to_string();
         let data = VecVec::new(data, metric, name, false);
-        let indices = data.indices().to_vec();
         let partition_criteria: PartitionCriteria<f32> =
             PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
@@ -832,10 +887,8 @@ mod tests {
         let metric = distances::f32::euclidean;
         let name = "test".to_string();
         let data = VecVec::new(data, metric, name, false);
-        let indices = data.indices().to_vec();
         let partition_criteria: PartitionCriteria<f32> =
             PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-
 
         let tree = Tree::new(data).build().partition(&partition_criteria, true);
 

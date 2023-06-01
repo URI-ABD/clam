@@ -34,6 +34,7 @@ impl<U: Number> PartitionCriteria<U> {
         self
     }
 
+    #[allow(dead_code)]
     pub(crate) fn with_custom(mut self, c: Box<dyn PartitionCriterion<U>>) -> Self {
         self.criteria.push(c);
         self
