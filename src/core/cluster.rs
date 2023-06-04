@@ -14,8 +14,8 @@ use crate::utils::helpers;
 
 pub type Ratios = [f64; 6];
 
-/// A `Tree` represents a hierarchy of `Cluster` instances coupled with
-/// a specific dataset.
+/// A `Tree` is an abstraction over a `Cluster` hierarchy and their
+/// associated data set.
 ///
 /// Mirroring `Cluster`, typically one will chain calls to `new`, `build`,
 /// and finally `partition` to construct a fully realized `Tree`.

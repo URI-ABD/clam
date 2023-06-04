@@ -1,6 +1,6 @@
 use criterion::*;
 
-use clam::core::cluster::Cluster;
+use clam::core::cluster::Tree;
 use clam::core::cluster_criteria::PartitionCriteria;
 use clam::core::dataset::VecVec;
 use clam::distances;
@@ -25,13 +25,13 @@ fn partition_car(c: &mut Criterion) {
         if n < 250 {
             let id = BenchmarkId::new("100-euclidean", n);
             group.bench_with_input(id, &n, |b, _| {
-                b.iter_with_large_drop(|| Cluster::new_root(&data).with_seed(42).partition(&criteria, true));
+                b.iter_with_large_drop(|| Tree::new(data).with_seed(42).partition(&criteria, true));//Cluster::new_root(&data).with_seed(42).partition(&criteria, true));
             });
         }
 
         let id = BenchmarkId::new("par-100-euclidean", n);
         group.bench_with_input(id, &n, |b, _| {
-            b.iter_with_large_drop(|| Cluster::new_root(&data).with_seed(42).par_partition(&criteria, true));
+            b.iter_with_large_drop(|| Tree::new(data).with_seed(42).par_partition(&criteria, true));//Cluster::new_root(&data).with_seed(42).par_partition(&criteria, true));
         });
     }
     group.finish();
@@ -56,13 +56,13 @@ fn partition_dim(c: &mut Criterion) {
         if n < 250 {
             let id = BenchmarkId::new("100k-euclidean", n);
             group.bench_with_input(id, &n, |b, _| {
-                b.iter_with_large_drop(|| Cluster::new_root(&data).with_seed(42).partition(&criteria, true));
+                b.iter_with_large_drop(|| Tree::new(data).with_seed(42).partition(&criteria, true));//Cluster::new_root(&data).with_seed(42).partition(&criteria, true));
             });
         }
 
         let id = BenchmarkId::new("par-100k-euclidean", n);
         group.bench_with_input(id, &n, |b, _| {
-            b.iter_with_large_drop(|| Cluster::new_root(&data).with_seed(42).par_partition(&criteria, true));
+            b.iter_with_large_drop(|| Tree::new(data).with_seed(42).par_partition(&criteria, true));//Cluster::new_root(&data).with_seed(42).par_partition(&criteria, true));
         });
     }
     group.finish();
@@ -83,12 +83,12 @@ fn partition_met(c: &mut Criterion) {
 
         let id = BenchmarkId::new("100k-100", metric_name);
         group.bench_with_input(id, &metric, |b, _| {
-            b.iter_with_large_drop(|| Cluster::new_root(&data).with_seed(42).partition(&criteria, true));
+            b.iter_with_large_drop(|| Tree::new(data).with_seed(42).partition(&criteria, true));//Cluster::new_root(&data).with_seed(42).partition(&criteria, true));
         });
 
         let id = BenchmarkId::new("par-100k-100", metric_name);
         group.bench_with_input(id, &metric, |b, _| {
-            b.iter_with_large_drop(|| Cluster::new_root(&data).with_seed(42).par_partition(&criteria, true));
+            b.iter_with_large_drop(|| Tree::new(data).with_seed(42).par_partition(&criteria, true));//Cluster::new_root(&data).with_seed(42).par_partition(&criteria, true));
         });
     }
     group.finish();

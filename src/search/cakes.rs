@@ -133,12 +133,12 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     pub fn batch_knn_search(&self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
         queries.iter().map(|&query| self.knn_search(query, k)).collect()
     }
-    //
-    //    #[inline(never)]
-    //    pub fn par_batch_knn_search(&'a self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
-    //        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
-    //    }
-    //
+
+    #[inline(never)]
+    pub fn par_batch_knn_search(&self, queries: &[&Vec<T>], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
+    }
+
     pub fn knn_search(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
         let mut candidates = priority_queue::PriorityQueue::<&Cluster<U>, RevNumber<U>>::new();
         let d = self.tree.root().distance_to_instance(self.dataset(), query);
