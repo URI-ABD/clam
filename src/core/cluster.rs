@@ -250,7 +250,7 @@ impl<U: Number> Cluster<U> {
             children: None,
             history,
             arg_center: 0,
-            arg_radius: 0 ,
+            arg_radius: 0,
             radius: U::zero(),
             lfd: 0.0,
             ratios: None,
@@ -763,12 +763,7 @@ impl<U: Number> Cluster<U> {
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
-    pub fn overlapping_children<T: Number, D: Dataset<T, U>>(
-        &self,
-        data: &D,
-        query: &[T],
-        radius: U,
-    ) -> Vec<&Self> {
+    pub fn overlapping_children<T: Number, D: Dataset<T, U>>(&self, data: &D, query: &[T], radius: U) -> Vec<&Self> {
         let (l, left, r, right, lr) = match &self.children {
             None => panic!("Can only be called on non-leaf clusters."),
             Some(([(l, left), (r, right)], lr)) => (*l, left.as_ref(), *r, right.as_ref(), *lr),
