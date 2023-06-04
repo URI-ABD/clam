@@ -149,10 +149,10 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
 pub(crate) struct Cluster<U: Number> {
     cardinality: usize,
     history: BitVec,
-    arg_center: Option<usize>,
-    arg_radius: Option<usize>,
-    radius: Option<U>,
-    lfd: Option<f64>,
+    arg_center: usize,
+    arg_radius: usize,
+    radius: U,
+    lfd: f64,
     ratios: Option<Ratios>,
     seed: Option<u64>,
 
@@ -249,10 +249,10 @@ impl<U: Number> Cluster<U> {
             index: Index::Indices(indices),
             children: None,
             history,
-            arg_center: None,
-            arg_radius: None,
-            radius: None,
-            lfd: None,
+            arg_center: 0,
+            arg_radius: 0 ,
+            radius: U::zero(),
+            lfd: 0.0,
             ratios: None,
             seed: None,
         }
@@ -288,10 +288,10 @@ impl<U: Number> Cluster<U> {
         let (arg_radius, radius) = helpers::arg_max(&center_distances);
         let arg_radius = indices[arg_radius];
 
-        self.arg_center = Some(arg_center);
-        self.arg_radius = Some(arg_radius);
-        self.radius = Some(radius);
-        self.lfd = Some(helpers::compute_lfd(radius, &center_distances));
+        self.arg_center = arg_center;
+        self.arg_radius = arg_radius;
+        self.radius = radius;
+        self.lfd = helpers::compute_lfd(radius, &center_distances);
 
         self
     }
@@ -637,20 +637,17 @@ impl<U: Number> Cluster<U> {
     /// sqrt(3) approximation based on some work in computational geometry.
     pub fn arg_center(&self) -> usize {
         self.arg_center
-            .expect("Please call `build` on this cluster before using this method.")
     }
 
     /// The index of the instance that is farthest from the `center`.
     pub fn arg_radius(&self) -> usize {
         self.arg_radius
-            .expect("Please call `build` on this cluster before using this method.")
     }
 
     /// The distance between the `center` and the instance farthest from the
     /// `center`.
     pub fn radius(&self) -> U {
         self.radius
-            .expect("Please call `build` on this cluster before using this method.")
     }
 
     /// Whether the `Cluster` contains only one instance or only identical
@@ -664,7 +661,6 @@ impl<U: Number> Cluster<U> {
     #[allow(dead_code)]
     pub fn lfd(&self) -> f64 {
         self.lfd
-            .expect("Please call `build` on this cluster before using this method.")
     }
 
     #[allow(dead_code)]
@@ -806,8 +802,8 @@ impl<U: Number> Cluster<U> {
         self.index = Index::Offset(offset);
 
         // TODO: Cleanup
-        self.arg_center = Some(data.get_reordered_index(self.arg_center.unwrap()));
-        self.arg_radius = Some(data.get_reordered_index(self.arg_radius.unwrap()));
+        self.arg_center = data.get_reordered_index(self.arg_center);
+        self.arg_radius = data.get_reordered_index(self.arg_radius);
 
         if let Some(([(_, left), (_, right)], _)) = self.children.as_mut() {
             left.dfr(data, offset);
