@@ -11,12 +11,6 @@ jobs:
     - name: Update
       run: rustup update
 
-    - name: Install HDF5
-      run: sudo apt-get install hdf5-tools libhdf5-dev
-
-    - name: Build
-      run: cargo build --release
-
     - name: Run tests
       run: cargo test --release
   
