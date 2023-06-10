@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use rayon::prelude::*;
 
-use clam::core::dataset::Dataset;
-use clam::core::number::Number;
+use clam::dataset::Dataset;
+use clam::number::Number;
 use clam::search::cakes::CAKES;
 use clam::utils::helpers;
 

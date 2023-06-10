@@ -2,8 +2,8 @@ use std::f64::EPSILON;
 
 use rayon::prelude::*;
 
-use crate::core::cluster::{Cluster, Tree};
-use crate::core::cluster_criteria::PartitionCriteria;
+use crate::cluster::PartitionCriteria;
+use crate::cluster::{Cluster, Tree};
 use crate::core::dataset::Dataset;
 use crate::core::number::Number;
 use crate::utils::helpers;
@@ -16,9 +16,9 @@ pub struct CAKES<T: Number, U: Number, D: Dataset<T, U>> {
 
 impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     pub fn new(data: D, seed: Option<u64>) -> Self {
-        Self { 
+        Self {
             tree: Tree::new(data, seed),
-            depth: 0
+            depth: 0,
         }
     }
 
@@ -161,7 +161,11 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     }
 
     // pop from the top of `candidates` until the top candiadte is a leaf cluster.
-    fn pop_till_leaf(&self, query: &[T], candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U, D>, RevNumber<U>>) {
+    fn pop_till_leaf(
+        &self,
+        query: &[T],
+        candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U, D>, RevNumber<U>>,
+    ) {
         while !candidates.peek().unwrap().0.is_leaf() {
             let [l, r] = candidates.pop().unwrap().0.children().unwrap();
             let [dl, dr] = [
