@@ -14,7 +14,7 @@ use ndarray_npy::write_npy;
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
-use clam::core::cluster::Cluster;
+use clam::core::cluster::Tree;
 use clam::core::cluster_criteria::PartitionCriteria;
 use clam::core::dataset::Dataset;
 use clam::core::dataset::VecVec;
@@ -72,14 +72,15 @@ fn main() {
 
             let start = Instant::now();
             let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-            let cakes = CAKES::new(&data, Some(42)).build(&criteria);
+            let cakes = CAKES::new(data, Some(42)).build(&criteria);
             let build_time = start.elapsed().as_secs_f32();
             println!("Built CAKES on {data_name} with {metric_name} in {build_time:.3} seconds ...");
 
-            report_tree(cakes.root(), &out_dir);
+            // report_tree(cakes.root(), &out_dir);
 
+            let data = cakes.data();
             let batch_size = 500_000;
-            let linear_time = report_linear(&data, &queries, &out_dir, batch_size);
+            let linear_time = report_linear(data, &queries, &out_dir, batch_size);
 
             let time = CakesTime {
                 data_name,
@@ -120,114 +121,114 @@ fn get_reports_root() -> PathBuf {
     path
 }
 
-fn report_tree(root: &Cluster<f32, f32, VecVec<f32, f32>>, out_dir: &Path) {
-    let clusters = root.subtree();
-    let tree_array = {
-        let names: ArrayRef = {
-            let names = clusters.iter().map(|c| Some(c.name()));
-            Arc::new(StringArray::from_iter(names))
-        };
+// fn report_tree(root: &Cluster<f32, f32, VecVec<f32, f32>>, out_dir: &Path) {
+//     let clusters = root.subtree();
+//     let tree_array = {
+//         let names: ArrayRef = {
+//             let names = clusters.iter().map(|c| Some(c.name()));
+//             Arc::new(StringArray::from_iter(names))
+//         };
 
-        let depths = {
-            let depths = clusters.iter().map(|c| Some(c.depth() as u64));
-            Arc::new(UInt64Array::from_iter(depths))
-        };
+//         let depths = {
+//             let depths = clusters.iter().map(|c| Some(c.depth() as u64));
+//             Arc::new(UInt64Array::from_iter(depths))
+//         };
 
-        let (lefts, rights) = {
-            let (lefts, rights): (Vec<_>, Vec<_>) = clusters
-                .iter()
-                .map(|c| match c.children() {
-                    Some([left, right]) => (Some(left.name()), Some(right.name())),
-                    None => (None, None),
-                })
-                .unzip();
-            (
-                Arc::new(StringArray::from_iter(lefts)),
-                Arc::new(StringArray::from_iter(rights)),
-            )
-        };
+//         let (lefts, rights) = {
+//             let (lefts, rights): (Vec<_>, Vec<_>) = clusters
+//                 .iter()
+//                 .map(|c| match c.children() {
+//                     Some([left, right]) => (Some(left.name()), Some(right.name())),
+//                     None => (None, None),
+//                 })
+//                 .unzip();
+//             (
+//                 Arc::new(StringArray::from_iter(lefts)),
+//                 Arc::new(StringArray::from_iter(rights)),
+//             )
+//         };
 
-        let cardinalities = {
-            let cardinalities = clusters.iter().map(|c| Some(c.cardinality() as u64));
-            Arc::new(UInt64Array::from_iter(cardinalities))
-        };
+//         let cardinalities = {
+//             let cardinalities = clusters.iter().map(|c| Some(c.cardinality() as u64));
+//             Arc::new(UInt64Array::from_iter(cardinalities))
+//         };
 
-        let arg_centers = {
-            let arg_centers = clusters.iter().map(|c| Some(c.arg_center() as u64));
-            Arc::new(UInt64Array::from_iter(arg_centers))
-        };
+//         let arg_centers = {
+//             let arg_centers = clusters.iter().map(|c| Some(c.arg_center() as u64));
+//             Arc::new(UInt64Array::from_iter(arg_centers))
+//         };
 
-        let arg_radii = {
-            let arg_radii = clusters.iter().map(|c| Some(c.arg_radius() as u64));
-            Arc::new(UInt64Array::from_iter(arg_radii))
-        };
+//         let arg_radii = {
+//             let arg_radii = clusters.iter().map(|c| Some(c.arg_radius() as u64));
+//             Arc::new(UInt64Array::from_iter(arg_radii))
+//         };
 
-        let radii = {
-            let radii = clusters.iter().map(|c| Some(c.radius()));
-            Arc::new(Float32Array::from_iter(radii))
-        };
+//         let radii = {
+//             let radii = clusters.iter().map(|c| Some(c.radius()));
+//             Arc::new(Float32Array::from_iter(radii))
+//         };
 
-        let lfds = {
-            let lfds = clusters.iter().map(|c| Some(c.lfd() as f32));
-            Arc::new(Float32Array::from_iter(lfds))
-        };
+//         let lfds = {
+//             let lfds = clusters.iter().map(|c| Some(c.lfd() as f32));
+//             Arc::new(Float32Array::from_iter(lfds))
+//         };
 
-        let polar_distances = {
-            let polar_distances = clusters.iter().map(|c| c.polar_distance());
-            Arc::new(Float32Array::from_iter(polar_distances))
-        };
+//         let polar_distances = {
+//             let polar_distances = clusters.iter().map(|c| c.polar_distance());
+//             Arc::new(Float32Array::from_iter(polar_distances))
+//         };
 
-        RecordBatch::try_from_iter_with_nullable(vec![
-            ("name", names, false),
-            ("depth", depths, false),
-            ("left", lefts, true),
-            ("right", rights, true),
-            ("cardinality", cardinalities, false),
-            ("arg_center", arg_centers, false),
-            ("arg_radius", arg_radii, false),
-            ("radius", radii, false),
-            ("lfd", lfds, false),
-            ("polar_distance", polar_distances, true),
-        ])
-        .unwrap()
-    };
+//         RecordBatch::try_from_iter_with_nullable(vec![
+//             ("name", names, false),
+//             ("depth", depths, false),
+//             ("left", lefts, true),
+//             ("right", rights, true),
+//             ("cardinality", cardinalities, false),
+//             ("arg_center", arg_centers, false),
+//             ("arg_radius", arg_radii, false),
+//             ("radius", radii, false),
+//             ("lfd", lfds, false),
+//             ("polar_distance", polar_distances, true),
+//         ])
+//         .unwrap()
+//     };
 
-    let tree_file = {
-        let mut path = out_dir.to_path_buf();
-        path.push("tree.arrow");
-        std::fs::File::create(path).unwrap()
-    };
-    let mut writer = FileWriter::try_new(tree_file, tree_array.schema().as_ref()).unwrap();
-    writer.write(&tree_array).unwrap();
-    writer.finish().unwrap();
-    println!("Wrote tree report ...");
+//     let tree_file = {
+//         let mut path = out_dir.to_path_buf();
+//         path.push("tree.arrow");
+//         std::fs::File::create(path).unwrap()
+//     };
+//     let mut writer = FileWriter::try_new(tree_file, tree_array.schema().as_ref()).unwrap();
+//     writer.write(&tree_array).unwrap();
+//     writer.finish().unwrap();
+//     println!("Wrote tree report ...");
 
-    let leaves = clusters.into_iter().filter(|c| c.is_leaf()).collect::<Vec<_>>();
-    let leaves_array = {
-        let names: ArrayRef = {
-            let names = leaves.iter().map(|c| Some(c.name()));
-            Arc::new(StringArray::from_iter(names))
-        };
-        let indices = {
-            let indices = leaves
-                .iter()
-                .map(|c| c.indices().into_iter().map(|i| Some(i as u64)).collect::<Vec<_>>())
-                .map(Some);
-            Arc::new(LargeListArray::from_iter_primitive::<UInt64Type, _, _>(indices))
-        };
+//     let leaves = clusters.into_iter().filter(|c| c.is_leaf()).collect::<Vec<_>>();
+//     let leaves_array = {
+//         let names: ArrayRef = {
+//             let names = leaves.iter().map(|c| Some(c.name()));
+//             Arc::new(StringArray::from_iter(names))
+//         };
+//         let indices = {
+//             let indices = leaves
+//                 .iter()
+//                 .map(|c| c.indices().into_iter().map(|i| Some(i as u64)).collect::<Vec<_>>())
+//                 .map(Some);
+//             Arc::new(LargeListArray::from_iter_primitive::<UInt64Type, _, _>(indices))
+//         };
 
-        RecordBatch::try_from_iter_with_nullable(vec![("name", names, false), ("indices", indices, false)]).unwrap()
-    };
-    let leaves_file = {
-        let mut path = out_dir.to_path_buf();
-        path.push("leaves.arrow");
-        std::fs::File::create(path).unwrap()
-    };
-    let mut writer = FileWriter::try_new(leaves_file, leaves_array.schema().as_ref()).unwrap();
-    writer.write(&leaves_array).unwrap();
-    writer.finish().unwrap();
-    println!("Wrote leaves report ...");
-}
+//         RecordBatch::try_from_iter_with_nullable(vec![("name", names, false), ("indices", indices, false)]).unwrap()
+//     };
+//     let leaves_file = {
+//         let mut path = out_dir.to_path_buf();
+//         path.push("leaves.arrow");
+//         std::fs::File::create(path).unwrap()
+//     };
+//     let mut writer = FileWriter::try_new(leaves_file, leaves_array.schema().as_ref()).unwrap();
+//     writer.write(&leaves_array).unwrap();
+//     writer.finish().unwrap();
+//     println!("Wrote leaves report ...");
+// }
 
 fn report_linear(data: &VecVec<f32, f32>, queries: &[Vec<f32>], out_dir: &Path, batch_size: usize) -> f32 {
     let indices = data.indices();

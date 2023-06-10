@@ -37,6 +37,22 @@ pub fn gen_data_f64(cardinality: usize, dimensionality: usize, min_val: f64, max
         .collect()
 }
 
+/// Generate a randomized tabular dataset for use in benchmarks and tests.
+///
+/// # Arguments:
+///
+/// * `cardinality`: number of points to generate.
+/// * `dimensionality`: dimensionality of points to generate.
+/// * `min_val`: of each axis in the hypercube
+/// * `max_val`: of each axis in the hypercube
+/// * `seed`: for the random number generator
+pub fn gen_data_u32(cardinality: usize, dimensionality: usize, min_val: u32, max_val: u32, seed: u64) -> Vec<Vec<u32>> {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+    (0..cardinality)
+        .map(|_| (0..dimensionality).map(|_| rng.gen_range(min_val..=max_val)).collect())
+        .collect()
+}
+
 /// Return the index and value of the minimum value in the given slice of values.
 pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     let (i, v) = values
