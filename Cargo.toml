@@ -42,6 +42,7 @@ smartcore = "0.2.1"
 automl = "0.2.7"
 ndarray = "0.15.4"
 ndarray-npy = "0.8.1"
+py_literal = "0.4.0"
 priority-queue = "1.2"
 rand_chacha = "0.3"
 # easy-cast = "0.4.4"
@@ -50,6 +51,10 @@ rand_chacha = "0.3"
 # simplelog = "0.11.1"
 # structopt = "0.3.23"
 # sysinfo = "0.23.5"
+
+[dependencies.arrow]
+version = "40.0.0"
+features = ["ipc"]
 
 [dependencies.serde]
 version = "1.0"
@@ -75,10 +80,6 @@ features = ["rayon"]
 [dev-dependencies.serde_json]
 version = "1.0"
 features = ["alloc"]
-
-[dev-dependencies.arrow]
-version = "40.0.0"
-features = ["ipc"]
 
 [[example]]
 name = "reports"

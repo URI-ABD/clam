@@ -1,7 +1,7 @@
 use rand::prelude::*;
 use rayon::prelude::*;
 
-use crate::core::number::Number;
+use super::number::Number;
 
 pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
     fn name(&self) -> String;

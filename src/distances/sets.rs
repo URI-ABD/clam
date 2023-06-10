@@ -14,6 +14,6 @@ pub fn jaccard<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
         U::zero()
     } else {
         let union = x.union(&y).count();
-        U::from(1. - intersection.as_f64() / union.as_f64()).unwrap()
+        U::from(1. - intersection as f64 / union as f64).unwrap()
     }
 }

@@ -75,7 +75,7 @@ pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
 
 /// Return the mean value of the given slice of values.
 pub fn mean<T: Number>(values: &[T]) -> f64 {
-    values.iter().copied().sum::<T>().as_f64() / values.len().as_f64()
+    values.iter().copied().sum::<T>().as_f64() / values.len() as f64
 }
 
 /// Return the standard deviation value of the given slice of values.
@@ -87,7 +87,7 @@ pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
         .map(|v| v.powi(2))
         .sum::<f64>()
         .sqrt()
-        / values.len().as_f64()
+        / values.len() as f64
 }
 
 /// Apply Gaussian normalization to the given values.
@@ -110,7 +110,7 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
         let r_2 = radius.as_f64() / 2.;
         let half_count = distances.iter().filter(|&&d| d.as_f64() <= r_2).count();
         if half_count > 0 {
-            (distances.len().as_f64() / half_count.as_f64()).log2()
+            (distances.len() as f64 / half_count as f64).log2()
         } else {
             1.
         }

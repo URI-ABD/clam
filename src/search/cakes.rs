@@ -225,7 +225,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
     }
 
     pub fn knn_by_rnn(&self, query: &[T], k: usize) -> Vec<(usize, U)> {
-        let mut radius = EPSILON + self.tree.root().radius().as_f64() / self.tree.root().cardinality().as_f64();
+        let mut radius = EPSILON + self.tree.root().radius().as_f64() / self.tree.root().cardinality() as f64;
         let mut hits = self.rnn_search(query, U::from(radius).unwrap());
 
         while hits.is_empty() {
@@ -236,7 +236,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> CAKES<T, U, D> {
         while hits.len() < k {
             let distances = hits.iter().map(|(_, d)| *d).collect::<Vec<_>>();
             let lfd = helpers::compute_lfd(U::from(radius).unwrap(), &distances);
-            let factor = (k.as_f64() / hits.len().as_f64()).powf(1. / (lfd + EPSILON));
+            let factor = (k as f64 / hits.len() as f64).powf(1. / (lfd + EPSILON));
             assert!(factor > 1.);
             radius *= factor;
             hits = self.rnn_search(query, U::from(radius).unwrap());
