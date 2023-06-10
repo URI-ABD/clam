@@ -76,3 +76,8 @@ harness = false
 [[bench]]
 name = "knn-search"
 harness = false
+
+[[bench]]
+name = "needleman-wunsch"
+harness = false
+
