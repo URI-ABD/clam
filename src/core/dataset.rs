@@ -235,9 +235,9 @@ impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::distances;
     use float_cmp::approx_eq;
-    use rand::Rng;
+
+    use crate::distances;
     use crate::utils::helpers::{gen_data_u32, gen_data_f32};
 
     use super::*;

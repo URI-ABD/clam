@@ -126,7 +126,9 @@ pub(crate) struct Cluster<T: Number, U: Number, D: Dataset<T, U>> {
     arg_center: usize,
     arg_radius: usize,
     radius: U,
+    #[allow(dead_code)]
     lfd: f64,
+    #[allow(dead_code)]
     ratios: Option<Ratios>,
     seed: Option<u64>,
 
@@ -220,12 +222,12 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
             indices.to_vec()
         } else {
             let n = ((indices.len() as f64).sqrt()) as usize;
-            data.choose_unique(n, &indices, seed)
+            data.choose_unique(n, indices, seed)
         };
 
         let arg_center = data.median(&arg_samples);
 
-        let center_distances = data.one_to_many(arg_center, &indices);
+        let center_distances = data.one_to_many(arg_center, indices);
         let (arg_radius, radius) = helpers::arg_max(&center_distances);
         let arg_radius = indices[arg_radius];
 
@@ -559,6 +561,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     }
 
     /// The `history` of the `Cluster` as a bool vector.
+    #[allow(dead_code)]
     pub fn history(&self) -> Vec<bool> {
         self.history.iter().map(|v| *v).collect()
     }
@@ -586,6 +589,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     /// Whether the `Cluster` is the root of the tree.
     ///
     /// The root `Cluster` has a depth of 0.
+    #[allow(dead_code)]
     pub fn is_root(&self) -> bool {
         self.depth() == 0
     }
@@ -625,10 +629,12 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
 
     /// The local fractal dimension of the `Cluster` at the length scales of the
     /// `radius` and half that `radius`.
+    #[allow(dead_code)]
     pub fn lfd(&self) -> f64 {
         self.lfd
     }
 
+    #[allow(dead_code)]
     pub fn polar_distance(&self) -> Option<U> {
         self.children.as_ref().map(|(_, lr)| *lr)
     }
@@ -650,6 +656,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     /// # Panics:
     ///
     /// * If called before calling `with_ratios` on the root.
+    #[allow(dead_code)]
     pub fn ratios(&self) -> Ratios {
         self.ratios
             .expect("Please call `with_ratios` before using this method.")
@@ -668,11 +675,13 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     }
 
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
+    #[allow(dead_code)]
     pub fn is_ancestor_of(&self, other: &Self) -> bool {
         self.depth() < other.depth() && self.history.iter().zip(other.history.iter()).all(|(l, r)| *l == *r)
     }
 
     /// Whether this `Cluster` is an descendant of the `other` `Cluster`.
+    #[allow(dead_code)]
     pub fn is_descendant_of(&self, other: &Self) -> bool {
         other.is_ancestor_of(self)
     }
@@ -697,6 +706,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     }
 
     /// The number of descendants of this `Cluster`, excluding itself.
+    #[allow(dead_code)]
     pub fn num_descendants(&self) -> usize {
         self.subtree().len() - 1
     }
@@ -707,6 +717,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     }
 
     /// Distance from the `center` to the given indexed instance.
+    #[allow(dead_code)]
     pub fn distance_to_indexed_instance(&self, data: &D, index: usize) -> U {
         data.one_to_one(index, self.arg_center())
     }
@@ -718,6 +729,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
+    #[allow(dead_code)]
     pub fn distance_to_other(&self, data: &D, other: &Self) -> U {
         self.distance_to_indexed_instance(data, other.arg_center())
     }
@@ -744,6 +756,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
         }
     }
 
+    #[allow(dead_code)]
     pub fn depth_first_reorder(&mut self, data: &D) {
         if self.depth() != 0 {
             panic!("Cannot call this method except from the root.")
