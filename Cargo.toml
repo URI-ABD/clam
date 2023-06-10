@@ -88,9 +88,9 @@ path = "examples/reports.rs"
 name = "knn-search"
 path = "examples/knn-search.rs"
 
-[[bench]]
-name = "partition"
-harness = false
+# [[bench]]
+# name = "partition"
+# harness = false
 
 [[bench]]
 name = "rnn-search"

@@ -6,7 +6,7 @@
 //! - [CHAODA](https://arxiv.org/abs/2103.11774)
 //!
 
-pub mod anomaly;
+//pub mod anomaly;
 pub mod core;
 pub mod distances;
 pub mod search;

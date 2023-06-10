@@ -36,7 +36,7 @@ fn main() {
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let start = Instant::now();
-        let cakes = CAKES::new(&data, Some(42)).build(&criteria);
+        let cakes = CAKES::new(data, Some(42)).build(&criteria);
         let duration = start.elapsed().as_secs_f32();
         println!("Built the tree in {duration:.3} seconds ...");
 
