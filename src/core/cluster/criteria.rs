@@ -1,11 +1,14 @@
 //! Criteria used for partitioning `Cluster`s.
 
-use super::cluster::Cluster;
-use super::dataset::Dataset;
-use super::number::Number;
+use crate::dataset::Dataset;
+use crate::number::Number;
+
+use super::Cluster;
 
 // Note (OWM): This leaks cluster if we allow it to be public. Getting this to make sense is a TODO
-pub(crate) trait PartitionCriterion<T: Number, U: Number, D: Dataset<T, U>>: std::fmt::Debug + Send + Sync {
+pub(crate) trait PartitionCriterion<T: Number, U: Number, D: Dataset<T, U>>:
+    std::fmt::Debug + Send + Sync
+{
     // TODO (Najib): figure out how not to lean Cluster here
     fn check(&self, c: &Cluster<T, U, D>) -> bool;
 }

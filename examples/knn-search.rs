@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use num_format::{Locale, ToFormattedString};
 
-use clam::core::cluster_criteria::PartitionCriteria;
-use clam::core::dataset::VecVec;
+use clam::cluster::PartitionCriteria;
+use clam::dataset::VecVec;
 use clam::search::cakes::CAKES;
 
 pub mod utils;

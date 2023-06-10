@@ -7,98 +7,12 @@ use std::hash::Hasher;
 
 use bitvec::prelude::*;
 
-use super::cluster_criteria::PartitionCriteria;
-use super::dataset::Dataset;
-use super::number::Number;
+use super::PartitionCriteria;
+use crate::dataset::Dataset;
+use crate::number::Number;
 use crate::utils::helpers;
 
 pub type Ratios = [f64; 6];
-
-/// A `Tree` represents a hierarchy of "similar" instances from a
-/// metric-`Space`.
-///
-/// Typically one will chain calls to `new`, `build`, and finally
-/// `partition` to construct a fully realized `Tree`.
-#[derive(Debug)]
-pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
-    data: D,
-    root: Cluster<T, U, D>,
-    _t: std::marker::PhantomData<T>,
-}
-
-impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
-    /// Constructs a new `Tree` for a given dataset. Importantly,
-    /// this does not build nor partition the tree.
-    ///
-    /// # Arguments
-    /// dataset: The dataset from which the tree will be built
-    pub fn new(data: D, seed: Option<u64>) -> Self {
-        Tree {
-            root: Cluster::new_root(&data, data.indices(), seed),
-            data,
-            _t: Default::default(),
-        }
-    }
-
-    /// # Returns
-    /// A reference to the root `Cluster` of the tree
-    pub(crate) fn root(&self) -> &Cluster<T, U, D> {
-        &self.root
-    }
-
-    /// Returns a reference to dataset associated with the tree
-    pub fn data(&self) -> &D {
-        &self.data
-    }
-
-    /// # Returns
-    /// The cardinality of the `Tree`
-    pub fn cardinality(&self) -> usize {
-        self.root.cardinality()
-    }
-
-    /// # Returns
-    /// The radius of the `Tree`
-    pub fn radius(&self) -> U {
-        self.root.radius()
-    }
-
-    /// # Arguments
-    /// criteria: A `PartitionCriteria` through which the `Tree`'s root will be partitioned.
-    ///
-    /// # Returns
-    /// A new `Tree` with a partitioned root.
-    pub fn par_partition(mut self, criteria: &PartitionCriteria<T, U, D>, recursive: bool) -> Self {
-        self.root = self.root.par_partition(&self.data, criteria, recursive);
-        self
-    }
-
-    /// Partitions the `Tree` based off of a given criteria
-    ///
-    /// # Arguments
-    /// criteria: A `PartitionCriteria` through which the `Tree`'s root will be partitioned.
-    ///
-    /// # Returns
-    /// A new `Tree` with a partitioned root.
-    pub fn partition(mut self, criteria: &PartitionCriteria<T, U, D>, recursive: bool) -> Self {
-        self.root = self.root.partition(&self.data, criteria, recursive);
-        self
-    }
-
-    /// Returns the indices contained in the root of the `Tree`.
-    pub fn indices(&self) -> &[usize] {
-        self.root.indices(&self.data)
-    }
-
-    /// Reorders the `Tree`'s underlying dataset based off of a depth first traversal of a
-    /// tree and reformats the tree to reflect the reordering.
-    pub fn depth_first_reorder(mut self) -> Self {
-        let leaf_indices = self.root.leaf_indices();
-        self.data.reorder(&leaf_indices);
-        self.root.dfr(&self.data, 0);
-        self
-    }
-}
 
 /// A `Cluster` represents a collection of "similar" instances from a
 /// metric-`Space`.
@@ -196,7 +110,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> std::fmt::Display for Cluster<T, U,
     }
 }
 
-impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new root `Cluster` for the metric space.
+impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
+    /// Creates a new root `Cluster` for the metric space.
     ///
     /// # Arguments
     ///
@@ -325,12 +240,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     /// # Panics:
     ///
     /// * If called before calling `build`.
-    pub fn partition(
-        mut self,
-        data: &D,
-        criteria: &PartitionCriteria<T, U, D>,
-        recursive: bool,
-    ) -> Self {
+    pub fn partition(mut self, data: &D, criteria: &PartitionCriteria<T, U, D>, recursive: bool) -> Self {
         if criteria.check(&self) {
             let ([(left_pole, left_indices, left_name), (right_pole, right_indices, right_name)], polar_distance) =
                 self.partition_once(data);
@@ -349,23 +259,16 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
                 (left, right)
             };
 
-            self.children = Some(
-                (
-                    [(left_pole, Box::new(left)), (right_pole, Box::new(right))],
-                    polar_distance,
-                )
-            );
+            self.children = Some((
+                [(left_pole, Box::new(left)), (right_pole, Box::new(right))],
+                polar_distance,
+            ));
             self.index = Index::Empty;
         }
         self
     }
 
-    pub fn par_partition(
-        mut self,
-        data: &D,
-        criteria: &PartitionCriteria<T, U, D>,
-        recursive: bool,
-    ) -> Self {
+    pub fn par_partition(mut self, data: &D, criteria: &PartitionCriteria<T, U, D>, recursive: bool) -> Self {
         if criteria.check(&self) {
             let ([(left_pole, left_indices, left_name), (right_pole, right_indices, right_name)], polar_distance) =
                 self.partition_once(data);
@@ -539,8 +442,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
     /// the children of a given cluster. This function is distingushed from `indices`
     /// in that it creates a `Vec` that has all of the incides for a given cluster
     /// hierarchy instead of returning a reference to a given cluster's indices.
-    /// 
-    fn leaf_indices(&self) -> Vec<usize> {
+    ///
+    pub fn leaf_indices(&self) -> Vec<usize> {
         match &self.index {
             Index::Empty => match &self.children {
                 Some(([(_, left), (_, right)], _)) => left
@@ -765,7 +668,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
         self.dfr(data, 0);
     }
 
-    fn dfr(&mut self, data: &D, offset: usize) {
+    pub fn dfr(&mut self, data: &D, offset: usize) {
         self.index = Index::Offset(offset);
 
         // TODO: Cleanup
@@ -781,10 +684,11 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {/// Creates a new
 
 #[cfg(test)]
 mod tests {
-    use crate::core::cluster::{Cluster, Index, Tree};
-    use crate::core::cluster_criteria::PartitionCriteria;
-    use crate::core::dataset::{Dataset, VecVec};
+    use crate::cluster::Tree;
+    use crate::dataset::{Dataset, VecVec};
     use crate::distances;
+
+    use super::*;
 
     #[test]
     fn test_cluster() {
@@ -794,8 +698,7 @@ mod tests {
         let data = VecVec::new(data, metric, name, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let cluster = Cluster::new_root(&data, &indices, Some(42))
-            .partition(&data, &partition_criteria, true);
+        let cluster = Cluster::new_root(&data, &indices, Some(42)).partition(&data, &partition_criteria, true);
 
         assert_eq!(cluster.depth(), 0);
         assert_eq!(cluster.cardinality(), 4);
@@ -830,8 +733,7 @@ mod tests {
         let metric = distances::f32::euclidean;
         let name = "test".to_string();
         let data = VecVec::new(data, metric, name, false);
-        let partition_criteria =
-            PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria, true);
 
@@ -859,8 +761,7 @@ mod tests {
             let metric = distances::f32::euclidean;
             let name = "test".to_string();
             let data = VecVec::new(data, metric, name, false);
-            let partition_criteria =
-                PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+            let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
             let tree = Tree::new(data, Some(42))
                 .partition(&partition_criteria, true)
@@ -890,17 +791,15 @@ mod tests {
             let metric = distances::f32::euclidean;
             let name = "test".to_string();
             let data = VecVec::new(data, metric, name, false);
-            let partition_criteria =
-                PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+            let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
-            let tree = Tree::new(data, Some(42))
-                .partition(&partition_criteria, true);
+            let tree = Tree::new(data, Some(42)).partition(&partition_criteria, true);
 
-            assert!(matches!(tree.root.index, Index::Empty));
+            assert!(matches!(tree.root().index, Index::Empty));
 
             let tree = tree.depth_first_reorder();
 
-            assert!(matches!(tree.root.index, Index::Offset(0)));
+            assert!(matches!(tree.root().index, Index::Offset(0)));
 
             // Assert that the tree's indices have been reordered in depth-first order
             assert_eq!((0..tree.cardinality()).collect::<Vec<usize>>(), tree.indices());
