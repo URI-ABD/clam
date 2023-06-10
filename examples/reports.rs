@@ -1,23 +1,16 @@
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Instant;
 
-use arrow::array::{ArrayRef, Float32Array, LargeListArray, StringArray, UInt64Array};
-use arrow::datatypes::UInt64Type;
-use arrow::ipc::writer::FileWriter;
-use arrow::record_batch::RecordBatch;
 use kdam::{tqdm, BarExt};
 use ndarray::{Array1, Array2};
 use ndarray_npy::write_npy;
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
-use clam::core::cluster::Tree;
 use clam::core::cluster_criteria::PartitionCriteria;
-use clam::core::dataset::Dataset;
-use clam::core::dataset::VecVec;
+use clam::core::dataset::{Dataset, VecVec};
 use clam::search::cakes::CAKES;
 
 pub mod utils;
