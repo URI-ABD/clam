@@ -1,12 +1,6 @@
 use super::Number;
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    PartialOrd,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct NumBool<T: Number>(T);
 
 impl<T: Number> NumBool<T> {
