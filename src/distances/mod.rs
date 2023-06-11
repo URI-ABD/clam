@@ -1,4 +1,4 @@
-pub mod alignment_helpers;
+pub(crate) mod alignment_helpers;
 pub mod f32;
 pub mod lp_norms;
 pub mod misc;

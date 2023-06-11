@@ -19,13 +19,16 @@ pub fn compute_nw_table<T: Number>(x: &[T], y: &[T]) -> Vec<Vec<(usize, Directio
     let gap_penalty = 1;
 
     // Initialize top row and left column distance values
+    #[allow(clippy::needless_range_loop)]
     for row in 0..(len_y + 1) {
-        table[row][0] = (gap_penalty * row, Direction::None);
+        table[row][0] = (gap_penalty * row, Direction::Up);
     }
 
     for column in 0..(len_x + 1) {
-        table[0][column] = (gap_penalty * column, Direction::None);
+        table[0][column] = (gap_penalty * column, Direction::Left);
     }
+
+    table[0][0] = (0, Direction::None);
 
     // Set values for the body of the table
     for row in 1..(len_y + 1) {
@@ -60,7 +63,7 @@ pub enum Edit<T: Number> {
 
 // Given an alignement of two sequences, returns the set of edits needed to turn sequence
 // x into sequence y
-pub fn alignment_to_edits<T: Number>(aligned_x: &Vec<T>, aligned_y: &Vec<T>) -> Vec<Edit<T>> {
+pub fn alignment_to_edits<T: Number>(aligned_x: &[T], aligned_y: &[T]) -> Vec<Edit<T>> {
     aligned_x
         .iter()
         .zip(aligned_y.iter())
@@ -93,19 +96,19 @@ pub fn traceback_iterative<T: Number>(
     while direction != Direction::None {
         match direction {
             Direction::Diagonal => {
-                aligned_x.insert(0, unaligned_x[column_index - 1]);
-                aligned_y.insert(0, unaligned_y[row_index - 1]);
+                aligned_x.push(unaligned_x[column_index - 1]);
+                aligned_y.push(unaligned_y[row_index - 1]);
                 row_index -= 1;
                 column_index -= 1;
             }
             Direction::Left => {
-                aligned_x.insert(0, unaligned_x[column_index - 1]);
-                aligned_y.insert(0, T::from(b'-').unwrap());
+                aligned_x.push(unaligned_x[column_index - 1]);
+                aligned_y.push(T::from(b'-').unwrap());
                 column_index -= 1;
             }
             Direction::Up => {
-                aligned_x.insert(0, T::from(b'-').unwrap());
-                aligned_y.insert(0, unaligned_y[row_index - 1]);
+                aligned_x.push(T::from(b'-').unwrap());
+                aligned_y.push(unaligned_y[row_index - 1]);
                 row_index -= 1;
             }
             Direction::None => {}
@@ -113,6 +116,9 @@ pub fn traceback_iterative<T: Number>(
 
         direction = table[row_index][column_index].1;
     }
+
+    aligned_x.reverse();
+    aligned_y.reverse();
 
     (aligned_x, aligned_y)
 }
@@ -124,9 +130,12 @@ pub fn traceback_recursive<T: Number>(
 ) -> (Vec<T>, Vec<T>) {
     let indices = (table.len() - 1, table[0].len() - 1);
 
-    let alignment = _traceback_recursive(table, indices, unaligned_seqs, (Vec::new(), Vec::new()));
+    let mut aligned_x: Vec<T> = Vec::new();
+    let mut aligned_y: Vec<T> = Vec::new();
 
-    alignment
+    _traceback_recursive(table, indices, unaligned_seqs, (&mut aligned_x, &mut aligned_y));
+
+    (aligned_x, aligned_y)
 }
 
 // Private traceback recursive function. Returns a single alignment (disregards ties for best-scoring alignment)
@@ -134,10 +143,14 @@ fn _traceback_recursive<T: Number>(
     table: &Vec<Vec<(usize, Direction)>>,
     indices: (usize, usize),
     unaligned_seqs: (&[T], &[T]),
-    aligned_seqs: (Vec<T>, Vec<T>),
-) -> (Vec<T>, Vec<T>) {
+    aligned_seqs: (&mut Vec<T>, &mut Vec<T>),
+) {
+    /* This function is likely slow because this is a clone happening because an
+    immutable thing is now being made mutable. Instead, you should try initializing
+    the vectors in the outer function, pass in mutable references to this function,
+    and not have this function return anything. */
     let (unaligned_x, unaligned_y) = unaligned_seqs;
-    let (mut aligned_x, mut aligned_y) = aligned_seqs;
+    let (aligned_x, aligned_y) = aligned_seqs;
 
     let (mut row_index, mut column_index) = indices;
 
@@ -145,22 +158,27 @@ fn _traceback_recursive<T: Number>(
 
     match direction {
         Direction::Diagonal => {
-            aligned_x.insert(0, unaligned_x[column_index - 1]);
-            aligned_y.insert(0, unaligned_y[row_index - 1]);
+            aligned_x.push(unaligned_x[column_index - 1]);
+            aligned_y.push(unaligned_y[row_index - 1]);
             row_index -= 1;
             column_index -= 1;
         }
         Direction::Left => {
-            aligned_x.insert(0, unaligned_x[column_index - 1]);
-            aligned_y.insert(0, T::from(b'-').unwrap());
+            aligned_x.push(unaligned_x[column_index - 1]);
+            aligned_y.push(T::from(b'-').unwrap());
             column_index -= 1;
         }
         Direction::Up => {
-            aligned_x.insert(0, T::from(b'-').unwrap());
-            aligned_y.insert(0, unaligned_y[row_index - 1]);
+            aligned_x.push(T::from(b'-').unwrap());
+            aligned_y.push(unaligned_y[row_index - 1]);
             row_index -= 1;
         }
-        Direction::None => return (aligned_x, aligned_y),
+        Direction::None => {
+            aligned_x.reverse();
+            aligned_y.reverse();
+
+            return;
+        }
     };
 
     _traceback_recursive(
@@ -170,8 +188,6 @@ fn _traceback_recursive<T: Number>(
         (aligned_x, aligned_y),
     )
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -190,25 +206,25 @@ mod tests {
             [
                 [
                     (0, Direction::None),
-                    (1, Direction::None),
-                    (2, Direction::None),
-                    (3, Direction::None),
-                    (4, Direction::None),
-                    (5, Direction::None),
-                    (6, Direction::None),
-                    (7, Direction::None),
-                    (8, Direction::None),
-                    (9, Direction::None),
-                    (10, Direction::None),
-                    (11, Direction::None),
-                    (12, Direction::None),
-                    (13, Direction::None),
-                    (14, Direction::None),
-                    (15, Direction::None),
-                    (16, Direction::None)
+                    (1, Direction::Left),
+                    (2, Direction::Left),
+                    (3, Direction::Left),
+                    (4, Direction::Left),
+                    (5, Direction::Left),
+                    (6, Direction::Left),
+                    (7, Direction::Left),
+                    (8, Direction::Left),
+                    (9, Direction::Left),
+                    (10, Direction::Left),
+                    (11, Direction::Left),
+                    (12, Direction::Left),
+                    (13, Direction::Left),
+                    (14, Direction::Left),
+                    (15, Direction::Left),
+                    (16, Direction::Left)
                 ],
                 [
-                    (1, Direction::None),
+                    (1, Direction::Up),
                     (0, Direction::Diagonal),
                     (1, Direction::Left),
                     (2, Direction::Left),
@@ -227,7 +243,7 @@ mod tests {
                     (15, Direction::Left)
                 ],
                 [
-                    (2, Direction::None),
+                    (2, Direction::Up),
                     (1, Direction::Up),
                     (0, Direction::Diagonal),
                     (1, Direction::Left),
@@ -246,7 +262,7 @@ mod tests {
                     (14, Direction::Left)
                 ],
                 [
-                    (3, Direction::None),
+                    (3, Direction::Up),
                     (2, Direction::Up),
                     (1, Direction::Up),
                     (0, Direction::Diagonal),
@@ -265,7 +281,7 @@ mod tests {
                     (13, Direction::Left)
                 ],
                 [
-                    (4, Direction::None),
+                    (4, Direction::Up),
                     (3, Direction::Up),
                     (2, Direction::Up),
                     (1, Direction::Up),
@@ -284,7 +300,7 @@ mod tests {
                     (12, Direction::Left)
                 ],
                 [
-                    (5, Direction::None),
+                    (5, Direction::Up),
                     (4, Direction::Up),
                     (3, Direction::Up),
                     (2, Direction::Up),
@@ -303,7 +319,7 @@ mod tests {
                     (11, Direction::Left)
                 ],
                 [
-                    (6, Direction::None),
+                    (6, Direction::Up),
                     (5, Direction::Up),
                     (4, Direction::Up),
                     (3, Direction::Up),
@@ -322,7 +338,7 @@ mod tests {
                     (10, Direction::Left)
                 ],
                 [
-                    (7, Direction::None),
+                    (7, Direction::Up),
                     (6, Direction::Up),
                     (5, Direction::Diagonal),
                     (4, Direction::Up),
@@ -341,7 +357,7 @@ mod tests {
                     (9, Direction::Left)
                 ],
                 [
-                    (8, Direction::None),
+                    (8, Direction::Up),
                     (7, Direction::Up),
                     (6, Direction::Up),
                     (5, Direction::Up),
@@ -360,7 +376,7 @@ mod tests {
                     (8, Direction::Left)
                 ],
                 [
-                    (9, Direction::None),
+                    (9, Direction::Up),
                     (8, Direction::Up),
                     (7, Direction::Up),
                     (6, Direction::Up),
@@ -379,7 +395,7 @@ mod tests {
                     (7, Direction::Diagonal)
                 ],
                 [
-                    (10, Direction::None),
+                    (10, Direction::Up),
                     (9, Direction::Up),
                     (8, Direction::Up),
                     (7, Direction::Up),
@@ -398,7 +414,7 @@ mod tests {
                     (8, Direction::Up)
                 ],
                 [
-                    (11, Direction::None),
+                    (11, Direction::Up),
                     (10, Direction::Up),
                     (9, Direction::Up),
                     (8, Direction::Up),
@@ -417,7 +433,7 @@ mod tests {
                     (9, Direction::Diagonal)
                 ],
                 [
-                    (12, Direction::None),
+                    (12, Direction::Up),
                     (11, Direction::Up),
                     (10, Direction::Up),
                     (9, Direction::Up),
@@ -436,7 +452,7 @@ mod tests {
                     (9, Direction::Diagonal)
                 ],
                 [
-                    (13, Direction::None),
+                    (13, Direction::Up),
                     (12, Direction::Up),
                     (11, Direction::Up),
                     (10, Direction::Up),
@@ -455,7 +471,7 @@ mod tests {
                     (9, Direction::Diagonal)
                 ],
                 [
-                    (14, Direction::None),
+                    (14, Direction::Up),
                     (13, Direction::Up),
                     (12, Direction::Up),
                     (11, Direction::Up),
@@ -474,7 +490,7 @@ mod tests {
                     (9, Direction::Diagonal)
                 ],
                 [
-                    (15, Direction::None),
+                    (15, Direction::Up),
                     (14, Direction::Up),
                     (13, Direction::Up),
                     (12, Direction::Up),
@@ -493,7 +509,7 @@ mod tests {
                     (9, Direction::Diagonal)
                 ],
                 [
-                    (16, Direction::None),
+                    (16, Direction::Up),
                     (15, Direction::Up),
                     (14, Direction::Up),
                     (13, Direction::Up),
@@ -517,28 +533,44 @@ mod tests {
 
     #[test]
     fn test_traceback_recursive() {
-        let x_u8 = "NAJIBPEPPERSEATS".as_bytes();
-        let y_u8 = "NAJIBEATSPEPPERS".as_bytes();
-        let table1: Vec<Vec<(usize, Direction)>> = compute_nw_table(x_u8, y_u8);
-        let nw_u8 = traceback_recursive(&table1, (x_u8, y_u8));
+        let peppers_x = "NAJIBPEPPERSEATS".as_bytes();
+        let peppers_y = "NAJIBEATSPEPPERS".as_bytes();
+        let peppers_table: Vec<Vec<(usize, Direction)>> = compute_nw_table(peppers_x, peppers_y);
+        let (aligned_x, aligned_y) = traceback_recursive(&peppers_table, (peppers_x, peppers_y));
+
         assert_eq!(
-            nw_u8,
+            (aligned_x.clone(), aligned_y.clone()),
             (
                 [78, 65, 74, 73, 66, 45, 80, 69, 80, 80, 69, 82, 83, 69, 65, 84, 83].to_vec(),
                 [78, 65, 74, 73, 66, 69, 65, 84, 83, 80, 69, 80, 80, 69, 45, 82, 83].to_vec()
             )
         );
 
-        let x = "NOTGUILTY".as_bytes();
-        let y = "NOTGUILTY".as_bytes();
-        let table2: Vec<Vec<(usize, Direction)>> = compute_nw_table(x, y);
-        let nw = traceback_recursive(&table2, (x, y));
         assert_eq!(
-            nw,
+            (
+                std::str::from_utf8(&aligned_x).unwrap(),
+                std::str::from_utf8(&aligned_y).unwrap()
+            ),
+            ("NAJIB-PEPPERSEATS", "NAJIBEATSPEPPE-RS")
+        );
+
+        let guilty_x = "NOTGUILTY".as_bytes();
+        let guilty_y = "NOTGUILTY".as_bytes();
+        let guilty_table: Vec<Vec<(usize, Direction)>> = compute_nw_table(guilty_x, guilty_y);
+        let (aligned_x, aligned_y) = traceback_recursive(&guilty_table, (guilty_x, guilty_y));
+        assert_eq!(
+            (aligned_x.clone(), aligned_y.clone()),
             (
                 [78, 79, 84, 71, 85, 73, 76, 84, 89].to_vec(),
                 [78, 79, 84, 71, 85, 73, 76, 84, 89].to_vec()
             )
+        );
+        assert_eq!(
+            (
+                std::str::from_utf8(&aligned_x).unwrap(),
+                std::str::from_utf8(&aligned_y).unwrap()
+            ),
+            ("NOTGUILTY", "NOTGUILTY")
         );
     }
 
