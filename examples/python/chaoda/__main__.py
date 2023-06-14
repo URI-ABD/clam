@@ -3,7 +3,7 @@ import logging
 import os
 import pathlib
 
-from pyclam.utils import helpers
+from abd_clam.utils import helpers
 
 from . import download
 from . import inference

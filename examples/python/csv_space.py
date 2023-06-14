@@ -5,11 +5,11 @@ import datatable
 import numpy
 from scipy.special import erf
 
-from pyclam import dataset
-from pyclam import metric
-from pyclam import space
-from pyclam.utils import constants
-from pyclam.utils import helpers
+from abd_clam import dataset
+from abd_clam import metric
+from abd_clam import space
+from abd_clam.utils import constants
+from abd_clam.utils import helpers
 
 logger = helpers.make_logger(__name__)
 

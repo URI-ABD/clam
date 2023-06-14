@@ -1,7 +1,7 @@
 use criterion::*;
 
-use clam::distances::strings;
-use clam::utils::helpers;
+use abd_clam::distances::strings;
+use abd_clam::utils::helpers;
 
 fn needleman_wunsch_recursive_dim(c: &mut Criterion) {
     let mut group = c.benchmark_group("needleman-wunsch-recursive-dim");

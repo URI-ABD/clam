@@ -1,14 +1,14 @@
 import unittest
 
-from pyclam import Edge
-from pyclam import Graph
-from pyclam import cluster
-from pyclam import cluster_criteria
-from pyclam import dataset
-from pyclam import graph
-from pyclam import graph_criteria
-from pyclam import metric
-from pyclam import space
+from abd_clam import Edge
+from abd_clam import Graph
+from abd_clam import cluster
+from abd_clam import cluster_criteria
+from abd_clam import dataset
+from abd_clam import graph
+from abd_clam import graph_criteria
+from abd_clam import metric
+from abd_clam import space
 
 from . import synthetic_datasets
 

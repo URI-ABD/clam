@@ -9,9 +9,9 @@ use ndarray_npy::write_npy;
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
-use clam::cluster::PartitionCriteria;
-use clam::dataset::{Dataset, VecVec};
-use clam::search::cakes::CAKES;
+use abd_clam::cluster::PartitionCriteria;
+use abd_clam::dataset::{Dataset, VecVec};
+use abd_clam::search::cakes::CAKES;
 
 pub mod utils;
 

@@ -4,3 +4,5 @@ from . import core
 from . import search
 from . import utils
 from .core import *
+
+__version__ = "0.9.0-dev5"

@@ -6,11 +6,11 @@ from sklearn.datasets import load_digits
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
-from pyclam import dataset
-from pyclam import metric
-from pyclam import space
-from pyclam.classification import Classifier
-from pyclam.utils import helpers
+from abd_clam import dataset
+from abd_clam import metric
+from abd_clam import space
+from abd_clam.classification import Classifier
+from abd_clam.utils import helpers
 
 from . import synthetic_datasets
 

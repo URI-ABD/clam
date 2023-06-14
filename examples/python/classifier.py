@@ -8,9 +8,9 @@ import numpy
 from sklearn.metrics import accuracy_score
 from utils import paths
 
-from pyclam import metric
-from pyclam.classification import classifier
-from pyclam.tests import synthetic_datasets
+from abd_clam import metric
+from abd_clam.classification import classifier
+from abd_clam.tests import synthetic_datasets
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s",

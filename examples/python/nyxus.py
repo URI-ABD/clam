@@ -11,9 +11,9 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from utils import nyxus_metadata
 
-from pyclam import metric
-from pyclam.classification import classifier
-from pyclam.core import cluster_criteria
+from abd_clam import metric
+from abd_clam.classification import classifier
+from abd_clam.core import cluster_criteria
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s",
