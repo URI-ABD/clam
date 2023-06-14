@@ -2,28 +2,28 @@ import logging
 import pathlib
 import time
 
+import csv_space
 import datatable
 import numpy
 from sklearn.metrics import accuracy_score
+from utils import paths
 
-import csv_space
 from pyclam import metric
 from pyclam.classification import classifier
 from pyclam.tests import synthetic_datasets
-from utils import paths
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s",
-    datefmt='%d-%b-%y %H:%M:%S',
+    datefmt="%d-%b-%y %H:%M:%S",
 )
 
-SYNTHETIC_DATA_DIR = paths.DATA_ROOT.joinpath('synthetic_data')
+SYNTHETIC_DATA_DIR = paths.DATA_ROOT.joinpath("synthetic_data")
 SYNTHETIC_DATA_DIR.mkdir(exist_ok=True)
 
-BULLSEYE_TRAIN_PATH = SYNTHETIC_DATA_DIR.joinpath('bullseye_train.csv')
-BULLSEYE_TEST_PATH = SYNTHETIC_DATA_DIR.joinpath('bullseye_test.csv')
-FEATURE_COLUMNS = ['x', 'y']
-LABEL_COLUMN = 'label'
+BULLSEYE_TRAIN_PATH = SYNTHETIC_DATA_DIR.joinpath("bullseye_train.csv")
+BULLSEYE_TEST_PATH = SYNTHETIC_DATA_DIR.joinpath("bullseye_test.csv")
+FEATURE_COLUMNS = ["x", "y"]
+LABEL_COLUMN = "label"
 
 
 def make_bullseye(path: pathlib.Path, n: int, force: bool = False):
@@ -35,7 +35,7 @@ def make_bullseye(path: pathlib.Path, n: int, force: bool = False):
     y = data[:, 1].astype(numpy.float32)
     labels = numpy.asarray(labels, dtype=numpy.int8)
 
-    full = datatable.Frame({'x': x, 'y': y, 'label': labels})
+    full = datatable.Frame({"x": x, "y": y, "label": labels})
     full.to_csv(str(path))
 
     return
@@ -45,12 +45,12 @@ def make_bullseye(path: pathlib.Path, n: int, force: bool = False):
 def main():
     bullseye_train = csv_space.CsvDataset(
         BULLSEYE_TRAIN_PATH,
-        'bullseye_train',
+        "bullseye_train",
         labels=LABEL_COLUMN,
     )
     bullseye_spaces = [
-        csv_space.CsvSpace(bullseye_train, metric.ScipyMetric('euclidean'), False),
-        csv_space.CsvSpace(bullseye_train, metric.ScipyMetric('cityblock'), False),
+        csv_space.CsvSpace(bullseye_train, metric.ScipyMetric("euclidean"), False),
+        csv_space.CsvSpace(bullseye_train, metric.ScipyMetric("cityblock"), False),
     ]
 
     start = time.perf_counter()
@@ -63,7 +63,7 @@ def main():
 
     bullseye_test = csv_space.CsvDataset(
         BULLSEYE_TEST_PATH,
-        'bullseye_test',
+        "bullseye_test",
         labels=LABEL_COLUMN,
     )
 
@@ -74,16 +74,16 @@ def main():
 
     score = accuracy_score(bullseye_test.labels, predicted_labels)
 
-    print(f'Building the classifier for:')
-    print(f'\t{bullseye_train.cardinality} instances and')
-    print(f'\t{bullseye_classifier.unique_labels} unique labels')
-    print(f'\ttook {build_time:.2e} seconds.')
+    print("Building the classifier for:")
+    print(f"\t{bullseye_train.cardinality} instances and")
+    print(f"\t{bullseye_classifier.unique_labels} unique labels")
+    print(f"\ttook {build_time:.2e} seconds.")
 
-    print(f'Predicting from the classifier for:')
-    print(f'\t{bullseye_test.cardinality} instances took')
-    print(f'\ttook {prediction_time:.2e} seconds.')
+    print("Predicting from the classifier for:")
+    print(f"\t{bullseye_test.cardinality} instances took")
+    print(f"\ttook {prediction_time:.2e} seconds.")
 
-    print(f'The accuracy score was {score:.3f}')
+    print(f"The accuracy score was {score:.3f}")
 
     # Desktop   non-cached, cached
     # build,    152,        154
@@ -95,10 +95,8 @@ def main():
     # search,   48.4,       48.7
     # accuracy, 0.999,      0.999
 
-    return
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     make_bullseye(BULLSEYE_TRAIN_PATH, n=1000, force=True)
     make_bullseye(BULLSEYE_TEST_PATH, n=200, force=True)
     main()

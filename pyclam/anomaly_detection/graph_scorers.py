@@ -17,11 +17,11 @@ InstanceScores = dict[int, float]
 
 
 class GraphScorer(abc.ABC):
-
     def __call__(self, g: core.Graph) -> tuple[ClusterScores, numpy.ndarray]:
-        """ Use this scorer to generate normalized anomaly scores.
-        """
-        logger.info(f'Running method {self.name} on a graph with {g.vertex_cardinality} clusters.')
+        """Use this scorer to generate normalized anomaly scores."""
+        logger.info(
+            f"Running method {self.name} on a graph with {g.vertex_cardinality} clusters.",
+        )
 
         cluster_scores = self.score_graph(g)
         if self.normalize_on_clusters:
@@ -36,41 +36,36 @@ class GraphScorer(abc.ABC):
 
     @abc.abstractmethod
     def __hash__(self):
-        """ A way to uniquely identify each `GraphScorer` object.
-        """
+        """A way to uniquely identify each `GraphScorer` object."""
         pass
 
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """ Full name of the algorithm.
-        """
+        """Full name of the algorithm."""
         pass
 
     @property
     @abc.abstractmethod
     def short_name(self) -> str:
-        """ Abbreviated name of the algorithm.
-        """
+        """Abbreviated name of the algorithm."""
         pass
 
     @property
     @abc.abstractmethod
     def normalize_on_clusters(self) -> bool:
-        """ Whether to normalize scores for clusters or for instances.
-        """
+        """Whether to normalize scores for clusters or for instances."""
         pass
 
     @property
     @abc.abstractmethod
     def normalization_mode(self) -> helpers.NormalizationMode:
-        """ What normalization method to use.
-        """
+        """What normalization method to use."""
         pass
 
     @abc.abstractmethod
     def score_graph(self, g: core.Graph) -> ClusterScores:
-        """ The method with which to assign anomaly scores to `Clusters` in the
+        """The method with which to assign anomaly scores to `Clusters` in the
         `Graph`. This should return a dictionary whose keys are `Clusters` in
         the `Graph` and whose values are the pre-normalization anomaly scores.
         """
@@ -78,18 +73,21 @@ class GraphScorer(abc.ABC):
 
     @abc.abstractmethod
     def should_be_fast(self, g: core.Graph) -> bool:
-        """ Whether this algorithm is expected to run in a reasonably short
+        """Whether this algorithm is expected to run in a reasonably short
         time on the given `Graph`. This method should make a quick estimate.
         """
         pass
 
     def __normalize_scores(
-            self,
-            scores: typing.Union[ClusterScores, InstanceScores],
+        self,
+        scores: typing.Union[ClusterScores, InstanceScores],
     ) -> typing.Union[ClusterScores, InstanceScores]:
         [keys, scores] = list(zip(*scores.items()))
-        scores = helpers.normalize(numpy.asarray(scores, dtype=numpy.float32), mode=self.normalization_mode)
-        return {c: s for c, s in zip(keys, map(float, scores))}
+        scores = helpers.normalize(
+            numpy.asarray(scores, dtype=numpy.float32),
+            mode=self.normalization_mode,
+        )
+        return dict(zip(keys, map(float, scores)))
 
     @staticmethod
     def inherit_scores(scores: ClusterScores) -> InstanceScores:
@@ -103,17 +101,16 @@ class GraphScorer(abc.ABC):
 
 
 class ClusterCardinality(GraphScorer):
-
     def __hash__(self):
         return hash(self.name)
 
     @property
     def name(self) -> str:
-        return 'cluster_cardinality'
+        return "cluster_cardinality"
 
     @property
     def short_name(self) -> str:
-        return 'cc'
+        return "cc"
 
     @property
     def normalize_on_clusters(self) -> bool:
@@ -121,7 +118,7 @@ class ClusterCardinality(GraphScorer):
 
     @property
     def normalization_mode(self) -> helpers.NormalizationMode:
-        return 'gaussian'
+        return "gaussian"
 
     def should_be_fast(self, _) -> bool:
         return True
@@ -131,17 +128,16 @@ class ClusterCardinality(GraphScorer):
 
 
 class ComponentCardinality(GraphScorer):
-
     def __hash__(self):
         return hash(self.name)
 
     @property
     def name(self) -> str:
-        return 'component_cardinality'
+        return "component_cardinality"
 
     @property
     def short_name(self) -> str:
-        return 'sc'
+        return "sc"
 
     @property
     def normalize_on_clusters(self) -> bool:
@@ -149,7 +145,7 @@ class ComponentCardinality(GraphScorer):
 
     @property
     def normalization_mode(self) -> helpers.NormalizationMode:
-        return 'gaussian'
+        return "gaussian"
 
     def should_be_fast(self, _) -> bool:
         return True
@@ -163,17 +159,16 @@ class ComponentCardinality(GraphScorer):
 
 
 class VertexDegree(GraphScorer):
-
     def __hash__(self):
         return hash(self.name)
 
     @property
     def name(self) -> str:
-        return 'vertex_degree'
+        return "vertex_degree"
 
     @property
     def short_name(self) -> str:
-        return 'vd'
+        return "vd"
 
     @property
     def normalize_on_clusters(self) -> bool:
@@ -181,7 +176,7 @@ class VertexDegree(GraphScorer):
 
     @property
     def normalization_mode(self) -> helpers.NormalizationMode:
-        return 'gaussian'
+        return "gaussian"
 
     def should_be_fast(self, _) -> bool:
         return True
@@ -191,8 +186,7 @@ class VertexDegree(GraphScorer):
 
 
 class ParentCardinality(GraphScorer):
-
-    def __init__(self, depth_weight: typing.Callable[[int], float]):
+    def __init__(self, depth_weight: typing.Callable[[int], float]) -> None:
         self.weight = depth_weight
 
     def __hash__(self):
@@ -200,11 +194,11 @@ class ParentCardinality(GraphScorer):
 
     @property
     def name(self) -> str:
-        return 'parent_cardinality'
+        return "parent_cardinality"
 
     @property
     def short_name(self) -> str:
-        return 'pc'
+        return "pc"
 
     @property
     def normalize_on_clusters(self) -> bool:
@@ -212,28 +206,33 @@ class ParentCardinality(GraphScorer):
 
     @property
     def normalization_mode(self) -> helpers.NormalizationMode:
-        return 'gaussian'
+        return "gaussian"
 
     def should_be_fast(self, _) -> bool:
         return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
-
         scores = {c: 0 for c in g.clusters}
 
         for c in g.clusters:
             ancestry = c.ancestry
             for i in range(1, len(ancestry)):
-                scores[c] += (self.weight(i) * ancestry[i - 1].cardinality / ancestry[i].cardinality)
+                scores[c] += (
+                    self.weight(i)
+                    * ancestry[i - 1].cardinality
+                    / ancestry[i].cardinality
+                )
 
         return {c: scores[c] for c in g.clusters}
 
 
 class GraphNeighborhood(GraphScorer):
-
-    def __init__(self, eccentricity_fraction: float):
+    def __init__(self, eccentricity_fraction: float) -> None:
         if not (0 < eccentricity_fraction <= 1):
-            raise ValueError(f'eccentricity fraction must be in the (0, 1] range. Got {eccentricity_fraction:.2e} instead.')
+            msg = f"eccentricity fraction must be in the (0, 1] range. Got {eccentricity_fraction:.2e} instead."
+            raise ValueError(
+                msg,
+            )
 
         self.eccentricity_fraction = eccentricity_fraction
 
@@ -242,11 +241,11 @@ class GraphNeighborhood(GraphScorer):
 
     @property
     def name(self) -> str:
-        return 'graph_neighborhood'
+        return "graph_neighborhood"
 
     @property
     def short_name(self) -> str:
-        return 'gn'
+        return "gn"
 
     @property
     def normalize_on_clusters(self) -> bool:
@@ -254,7 +253,7 @@ class GraphNeighborhood(GraphScorer):
 
     @property
     def normalization_mode(self) -> helpers.NormalizationMode:
-        return 'gaussian'
+        return "gaussian"
 
     def should_be_fast(self, g: core.Graph) -> bool:
         return g.vertex_cardinality < 256
@@ -263,10 +262,8 @@ class GraphNeighborhood(GraphScorer):
         return int(g.eccentricity(c) * self.eccentricity_fraction) + 1
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
-
         step_sizes: dict[core.Cluster, list[int]] = {
-            c: g.frontier_sizes(c)[:self.num_steps(g, c)]
-            for c in g.clusters
+            c: g.frontier_sizes(c)[: self.num_steps(g, c)] for c in g.clusters
         }
         scores = {c: -float(sum(sizes)) for c, sizes in step_sizes.items()}
 
@@ -274,8 +271,7 @@ class GraphNeighborhood(GraphScorer):
 
 
 class StationaryProbabilities(GraphScorer):
-
-    def __init__(self, steps: int):
+    def __init__(self, steps: int) -> None:
         self.steps = steps
 
     def __hash__(self):
@@ -283,11 +279,11 @@ class StationaryProbabilities(GraphScorer):
 
     @property
     def name(self) -> str:
-        return 'stationary_probabilities'
+        return "stationary_probabilities"
 
     @property
     def short_name(self) -> str:
-        return 'sp'
+        return "sp"
 
     @property
     def normalize_on_clusters(self) -> bool:
@@ -295,17 +291,15 @@ class StationaryProbabilities(GraphScorer):
 
     @property
     def normalization_mode(self) -> helpers.NormalizationMode:
-        return 'gaussian'
+        return "gaussian"
 
     def should_be_fast(self, g: core.Graph) -> bool:
         return True
 
     def score_graph(self, g: core.Graph) -> ClusterScores:
-
-        scores = dict()
+        scores = {}
 
         for component in g.components:
-
             if component.vertex_cardinality > 1:
                 clusters, matrix = component.distance_matrix
 
@@ -315,7 +309,9 @@ class StationaryProbabilities(GraphScorer):
                 for _ in range(self.steps):
                     matrix = numpy.linalg.matrix_power(matrix, 2)
 
-                scores.update({c: s for c, s in zip(clusters, numpy.sum(matrix, axis=0))})
+                scores.update(
+                    dict(zip(clusters, numpy.sum(matrix, axis=0))),
+                )
 
             else:  # Component with only one Cluster means that the Cluster is anomalous.
                 scores.update({c: 0 for c in component.clusters})
@@ -326,13 +322,13 @@ class StationaryProbabilities(GraphScorer):
 
 
 __all__ = [
-    'ClusterScores',
-    'InstanceScores',
-    'GraphScorer',
-    'ClusterCardinality',
-    'ComponentCardinality',
-    'VertexDegree',
-    'ParentCardinality',
-    'GraphNeighborhood',
-    'StationaryProbabilities',
+    "ClusterScores",
+    "InstanceScores",
+    "GraphScorer",
+    "ClusterCardinality",
+    "ComponentCardinality",
+    "VertexDegree",
+    "ParentCardinality",
+    "GraphNeighborhood",
+    "StationaryProbabilities",
 ]

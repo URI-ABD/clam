@@ -1,15 +1,15 @@
-from . import cluster as cluster
-from . import cluster_criteria as cluster_criteria
-from . import dataset as dataset
-from . import graph as graph
-from . import graph_criteria as graph_criteria
-from . import metric as metric
-from . import space as space
-from .cluster import Cluster as Cluster
-from .cluster_criteria import ClusterCriterion as ClusterCriterion
-from .dataset import Dataset as Dataset
-from .graph import Edge as Edge
-from .graph import Graph as Graph
-from .graph_criteria import GraphCriterion as GraphCriterion
-from .metric import Metric as Metric
-from .space import Space as Space
+from . import cluster
+from . import cluster_criteria
+from . import dataset
+from . import graph
+from . import graph_criteria
+from . import metric
+from . import space
+from .cluster import Cluster
+from .cluster_criteria import ClusterCriterion
+from .dataset import Dataset
+from .graph import Edge
+from .graph import Graph
+from .graph_criteria import GraphCriterion
+from .metric import Metric
+from .space import Space

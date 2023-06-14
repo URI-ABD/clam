@@ -7,7 +7,6 @@ from .. import core
 
 
 class AnomalyDataset(core.Dataset):
-
     @property
     @abc.abstractmethod
     def labels(self) -> numpy.ndarray:
@@ -15,8 +14,7 @@ class AnomalyDataset(core.Dataset):
 
 
 class AnomalyTabular(AnomalyDataset):
-
-    def __init__(self, data: numpy.ndarray, scores: numpy.ndarray, name: str):
+    def __init__(self, data: numpy.ndarray, scores: numpy.ndarray, name: str) -> None:
         self.__name = name
         self.__data = data
         self.__scores = scores
@@ -38,7 +36,7 @@ class AnomalyTabular(AnomalyDataset):
     def indices(self) -> numpy.ndarray:
         return self.__indices
 
-    def __eq__(self, other: 'AnomalyTabular') -> bool:
+    def __eq__(self, other: "AnomalyTabular") -> bool:
         return self.__name == other.__name
 
     @property
@@ -53,16 +51,19 @@ class AnomalyTabular(AnomalyDataset):
         scores_size = self.cardinality * self.__scores.itemsize
         return data_size + scores_size
 
-    def __getitem__(self, item: typing.Union[int, typing.Iterable[int]]) -> numpy.ndarray:
+    def __getitem__(
+        self,
+        item: typing.Union[int, typing.Iterable[int]],
+    ) -> numpy.ndarray:
         return self.__data[item]
 
-    def subset(self, indices: list[int], subset_name: str) -> 'AnomalyTabular':
+    def subset(self, indices: list[int], subset_name: str) -> "AnomalyTabular":
         data = self.__data[indices, :]
         scores = self.__scores[indices]
         return AnomalyTabular(data, scores, subset_name)
 
 
 __all__ = [
-    'AnomalyDataset',
-    'AnomalyTabular',
+    "AnomalyDataset",
+    "AnomalyTabular",
 ]

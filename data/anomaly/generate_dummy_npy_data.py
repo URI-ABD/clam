@@ -8,9 +8,9 @@ def main():
 
     # Generate and save features
     with open(features_file_name, "wb") as f:
-        features = numpy.array([
-            [float(i) for i in range(6)] for _ in range(samples)
-        ]).reshape(samples, 6)
+        features = numpy.array(
+            [[float(i) for i in range(6)] for _ in range(samples)],
+        ).reshape(samples, 6)
         numpy.save(f, features)
 
     # Generate and save targets

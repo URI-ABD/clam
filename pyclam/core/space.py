@@ -9,7 +9,7 @@ from . import metric
 
 
 class Space(abc.ABC):
-    """ This class combines a `Dataset` and a `Metric` into a `MetricSpace`. We
+    """This class combines a `Dataset` and a `Metric` into a `MetricSpace`. We
     build `Cluster`s and `Graph`s over a `MetricSpace`. This class provides
     access to the underlying `Dataset` and `Metric`. Subclasses should
     implement the methods to compute distances between indexed instances using
@@ -21,18 +21,17 @@ class Space(abc.ABC):
     set the `use_cache` parameter to True when instantiating a metric space.
     """
 
-    def __init__(self, use_cache: bool):
+    def __init__(self, use_cache: bool) -> None:
         self.__use_cache = use_cache
-        self.__cache: dict[tuple[int, int], float] = dict()
+        self.__cache: dict[tuple[int, int], float] = {}
 
     @property
     def name(self) -> str:
-        return f'{self.data.name}__{self.distance_metric.name}'
-    
+        return f"{self.data.name}__{self.distance_metric.name}"
+
     @property
     def uses_cache(self) -> bool:
-        """ Whether the object distance values.
-        """
+        """Whether the object distance values."""
         return self.__use_cache
 
     @property
@@ -47,22 +46,21 @@ class Space(abc.ABC):
 
     @abc.abstractmethod
     def are_instances_equal(self, left: int, right: int) -> bool:
-        """ Given two indices, returns whether the corresponding instances are
+        """Given two indices, returns whether the corresponding instances are
         equal. Usually, this will rely on using a `Metric`. Two equal instances
         should have a distance of zero between them. The default implementation
         relies on this.
         """
-        return self.distance_one_to_one(left, right) == 0.
+        return self.distance_one_to_one(left, right) == 0.0
 
     @abc.abstractmethod
-    def subset(self, indices: list[int], subset_data_name: str) -> 'Space':
-        """ See the `Dataset.subset`
-        """
+    def subset(self, indices: list[int], subset_data_name: str) -> "Space":
+        """See the `Dataset.subset`."""
         pass
 
     @abc.abstractmethod
     def distance_one_to_one(self, left: int, right: int) -> float:
-        """ See the `Dataset.one_to_one`. The default implementation uses the
+        """See the `Dataset.one_to_one`. The default implementation uses the
         cache.
         """
         if not self.is_in_cache(left, right):
@@ -72,7 +70,7 @@ class Space(abc.ABC):
 
     @abc.abstractmethod
     def distance_one_to_many(self, left: int, right: list[int]) -> numpy.ndarray:
-        """ See the `Dataset.one_to_many`. The default implementation uses the
+        """See the `Dataset.one_to_many`. The default implementation uses the
         cache.
         """
         distances = [self.distance_one_to_one(left, r) for r in right]
@@ -80,7 +78,7 @@ class Space(abc.ABC):
 
     @abc.abstractmethod
     def distance_many_to_many(self, left: list[int], right: list[int]) -> numpy.ndarray:
-        """ See the `Dataset.many_to_many`. The default implementation uses the
+        """See the `Dataset.many_to_many`. The default implementation uses the
         cache.
         """
         distances = [self.distance_one_to_many(l, right) for l in left]
@@ -88,44 +86,41 @@ class Space(abc.ABC):
 
     @abc.abstractmethod
     def distance_pairwise(self, indices: list[int]) -> numpy.ndarray:
-        """ See the `Dataset.pairwise`. The default implementation uses the
+        """See the `Dataset.pairwise`. The default implementation uses the
         cache.
         """
         return self.distance_many_to_many(indices, indices)
 
     @staticmethod
     def __cache_key(i: int, j: int) -> tuple[int, int]:
-        """ This works because of the `symmetry` property of a `Metric`.
-        """
+        """This works because of the `symmetry` property of a `Metric`."""
         return (i, j) if i < j else (j, i)
 
     def is_in_cache(self, i: int, j: int) -> bool:
-        """ Checks whether the distance between the instances indexed by `i` and
+        """Checks whether the distance between the instances indexed by `i` and
         `j` is in the cache.
         """
         return self.__cache_key(i, j) in self.__cache
 
     def get_from_cache(self, i: int, j: int) -> float:
-        """ Returns the distance between the instances indexed by `i` and `j`
+        """Returns the distance between the instances indexed by `i` and `j`
         from the cache. Raises a KeyError if the distance value is not in the
         cache.
         """
         return self.__cache[self.__cache_key(i, j)]
 
     def add_to_cache(self, i: int, j: int, distance: float):
-        """ Adds the given `distance` to the cache.
-        """
+        """Adds the given `distance` to the cache."""
         self.__cache[self.__cache_key(i, j)] = distance
-        return
 
     def remove_from_cache(self, i: int, j: int) -> float:
-        """ Removes the distance between the instances indexed by `i` and `j`
+        """Removes the distance between the instances indexed by `i` and `j`
         from the cache.
         """
-        return self.__cache.pop(self.__cache_key(i, j), default=0.)
+        return self.__cache.pop(self.__cache_key(i, j), default=0.0)
 
     def clear_cache(self) -> int:
-        """ Empty the cache and return the number of items that were in the
+        """Empty the cache and return the number of items that were in the
         cache.
         """
         num_items = len(self.__cache)
@@ -133,7 +128,7 @@ class Space(abc.ABC):
         return num_items
 
     def choose_unique(self, n: int, indices: list[int] = None) -> list[int]:
-        """ Randomly chooses `n` unique instances from the dataset.
+        """Randomly chooses `n` unique instances from the dataset.
 
         Args:
             n: The number of unique instances to choose.
@@ -145,7 +140,10 @@ class Space(abc.ABC):
         indices = indices or list(range(self.data.cardinality))
 
         if not (0 < n <= len(indices)):
-            raise ValueError(f'`n` must be a positive integer no larger than the length of `indices` ({len(indices)}). Got {n} instead.')
+            msg = f"`n` must be a positive integer no larger than the length of `indices` ({len(indices)}). Got {n} instead."
+            raise ValueError(
+                msg,
+            )
 
         randomized_indices = indices.copy()
         random.shuffle(randomized_indices)
@@ -153,7 +151,7 @@ class Space(abc.ABC):
         if n == len(randomized_indices):
             return randomized_indices
 
-        chosen: list[int] = list()
+        chosen: list[int] = []
         for i in randomized_indices:
             for o in chosen:
                 if self.are_instances_equal(i, o):
@@ -167,16 +165,16 @@ class Space(abc.ABC):
 
 
 class TabularSpace(Space):
-    """ This wraps a `Metric` and either a `TabularDataset` or a `TabularMMap`
+    """This wraps a `Metric` and either a `TabularDataset` or a `TabularMMap`
     into a `MetricSpace`.
     """
 
     def __init__(
-            self,
-            data: typing.Union[dataset.TabularDataset, dataset.TabularMMap],
-            distance_metric: metric.Metric,
-            use_cache: bool,
-    ):
+        self,
+        data: typing.Union[dataset.TabularDataset, dataset.TabularMMap],
+        distance_metric: metric.Metric,
+        use_cache: bool,
+    ) -> None:
         self.__data = data
         self.__distance_metric = distance_metric
         super().__init__(use_cache)
@@ -190,7 +188,7 @@ class TabularSpace(Space):
         return self.__distance_metric
 
     def are_instances_equal(self, left: int, right: int) -> bool:
-        return self.distance_one_to_one(left, right) == 0.
+        return self.distance_one_to_one(left, right) == 0.0
 
     def distance_one_to_one(self, left: int, right: int) -> float:
         if self.uses_cache:
@@ -213,7 +211,7 @@ class TabularSpace(Space):
     def distance_pairwise(self, indices: list[int]) -> numpy.ndarray:
         return self.distance_metric.pairwise(self.data[indices])
 
-    def subset(self, indices: list[int], subset_data_name: str) -> 'TabularSpace':
+    def subset(self, indices: list[int], subset_data_name: str) -> "TabularSpace":
         return TabularSpace(
             self.data.subset(indices, subset_data_name),
             self.distance_metric,
@@ -222,6 +220,6 @@ class TabularSpace(Space):
 
 
 __all__ = [
-    'Space',
-    'TabularSpace',
+    "Space",
+    "TabularSpace",
 ]

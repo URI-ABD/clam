@@ -1,11 +1,12 @@
 import math
 import pathlib
 
-from . import anomaly_data
 from pyclam import anomaly_detection
 from pyclam import metric
 from pyclam.anomaly_detection import graph_scorers
 from pyclam.core import cluster_criteria
+
+from . import anomaly_data
 
 
 def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
@@ -17,14 +18,14 @@ def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
         anomaly_detection.anomaly_dataset.AnomalyTabular(
             data=data.normalized_features,
             scores=data.scores,
-            name=name
+            name=name,
         )
         for name, data in zip(anomaly_data.TRAINING_SET, raw_datasets)
     ]
 
     metrics = [
-        metric.ScipyMetric('euclidean'),
-        metric.ScipyMetric('cityblock'),
+        metric.ScipyMetric("euclidean"),
+        metric.ScipyMetric("cityblock"),
     ]
 
     spaces = [
@@ -38,15 +39,15 @@ def default_training(data_dir: pathlib.Path, output_dir: pathlib.Path):
     ]
 
     models_kwargs = [
-        (anomaly_detection.meta_ml.MetaDT, dict()),
-        (anomaly_detection.meta_ml.MetaLR, dict()),
+        (anomaly_detection.meta_ml.MetaDT, {}),
+        (anomaly_detection.meta_ml.MetaLR, {}),
     ]
 
     scorers = [
         graph_scorers.ClusterCardinality(),
         graph_scorers.ComponentCardinality(),
         graph_scorers.VertexDegree(),
-        graph_scorers.ParentCardinality(depth_weight=lambda d: 1 / (d ** 0.5)),
+        graph_scorers.ParentCardinality(depth_weight=lambda d: 1 / (d**0.5)),
         graph_scorers.GraphNeighborhood(eccentricity_fraction=0.25),
         graph_scorers.StationaryProbabilities(steps=16),
     ]

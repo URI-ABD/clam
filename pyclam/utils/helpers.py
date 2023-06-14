@@ -7,9 +7,9 @@ from scipy.special import erf
 from . import constants
 
 NormalizationMode = typing.Literal[
-    'linear',
-    'gaussian',
-    'sigmoid',
+    "linear",
+    "gaussian",
+    "sigmoid",
 ]
 
 
@@ -24,7 +24,7 @@ def next_ema(ratio: float, ema: float) -> float:
 
 
 def normalize(values: numpy.ndarray, mode: NormalizationMode):
-    """ Normalizes each column in values into a [0, 1] range.
+    """Normalizes each column in values into a [0, 1] range.
 
     Args:
         values: A 1-d or 2-d array of values to normalize.
@@ -41,13 +41,13 @@ def normalize(values: numpy.ndarray, mode: NormalizationMode):
         squeeze = True
         values = numpy.expand_dims(values, axis=1)
 
-    if mode == 'linear':
+    if mode == "linear":
         min_v, max_v = numpy.min(values, axis=0), numpy.max(values, axis=0)
         values = (values - min_v) / (max_v - min_v + constants.EPSILON)
     else:
         means = numpy.mean(values, axis=0)
         sds = numpy.std(values, axis=0) + constants.EPSILON
-        if mode == 'gaussian':
+        if mode == "gaussian":
             values = (1 + erf((values - means) / (sds * numpy.sqrt(2)))) / 2
         else:
             values = 1 / (1 + numpy.exp(-(values - means) / sds))
