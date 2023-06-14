@@ -5,6 +5,7 @@ import typing
 
 import h5py
 import numpy
+from utils import paths
 
 from pyclam import cluster_criteria
 from pyclam import dataset
@@ -12,22 +13,25 @@ from pyclam import metric
 from pyclam import space
 from pyclam.search import cakes
 from pyclam.utils import helpers
-from utils import paths
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s",
-    datefmt='%d-%b-%y %H:%M:%S',
+    datefmt="%d-%b-%y %H:%M:%S",
 )
 logger = helpers.make_logger(__name__)
 
 
-SEARCH_DATA_DIR = paths.DATA_ROOT.joinpath('search_data')
+SEARCH_DATA_DIR = paths.DATA_ROOT.joinpath("search_data")
 assert SEARCH_DATA_DIR.exists()
 
 
 class HDF5Dataset(dataset.Dataset):
-
-    def __init__(self, data: h5py.Dataset, name: str, indices: list[int] = None):
+    def __init__(
+        self,
+        data: h5py.Dataset,
+        name: str,
+        indices: list[int] = None,
+    ) -> None:
         super().__init__()
         self.__data = data
         self.__name = name
@@ -41,7 +45,7 @@ class HDF5Dataset(dataset.Dataset):
     def data(self) -> h5py.Dataset:
         return self.__data
 
-    def __eq__(self, other: 'HDF5Dataset') -> bool:
+    def __eq__(self, other: "HDF5Dataset") -> bool:
         return self.name == other.name
 
     @property
@@ -71,13 +75,12 @@ class HDF5Dataset(dataset.Dataset):
 
             return instances
 
-    def subset(self, indices: list[int], subset_name: str) -> 'HDF5Dataset':
+    def subset(self, indices: list[int], subset_name: str) -> "HDF5Dataset":
         return HDF5Dataset(self.data, subset_name, indices)
 
 
 class HDF5Space(space.Space):
-
-    def __init__(self, data: HDF5Dataset, distance_metric: metric.Metric):
+    def __init__(self, data: HDF5Dataset, distance_metric: metric.Metric) -> None:
         super().__init__(True)
         self.__data = data
         self.__distance_metric = distance_metric
@@ -91,12 +94,12 @@ class HDF5Space(space.Space):
         return self.__distance_metric
 
     def are_instances_equal(self, left: int, right: int) -> bool:
-        return self.distance_one_to_one(left, right) == 0.
+        return self.distance_one_to_one(left, right) == 0.0
 
-    def subset(self, indices: list[int], subset_data_name: str) -> 'HDF5Space':
+    def subset(self, indices: list[int], subset_data_name: str) -> "HDF5Space":
         return HDF5Space(
             HDF5Dataset(self.data, subset_data_name, indices),
-            self.distance_metric
+            self.distance_metric,
         )
 
     def distance_one_to_one(self, left: int, right: int) -> float:
@@ -113,29 +116,31 @@ class HDF5Space(space.Space):
 
 
 def bench_sift():
-    data_path = SEARCH_DATA_DIR.joinpath('as_hdf5').joinpath('sift.hdf5')
+    data_path = SEARCH_DATA_DIR.joinpath("as_hdf5").joinpath("sift.hdf5")
 
-    with h5py.File(data_path, 'r') as reader:
-        distance_metric = metric.ScipyMetric(reader.attrs['distance'])
-        train_data = HDF5Dataset(reader['train'], 'sift_train')
-        test_data = HDF5Dataset(reader['test'], 'sift_test')
-        neighbors_data = HDF5Dataset(reader['neighbors'], 'sift_neighbors')
-        distances_data = HDF5Dataset(reader['distances'], 'sift_distances')
+    with h5py.File(data_path, "r") as reader:
+        distance_metric = metric.ScipyMetric(reader.attrs["distance"])
+        train_data = HDF5Dataset(reader["train"], "sift_train")
+        test_data = HDF5Dataset(reader["test"], "sift_test")
+        neighbors_data = HDF5Dataset(reader["neighbors"], "sift_neighbors")
+        distances_data = HDF5Dataset(reader["distances"], "sift_distances")
 
         train_space = HDF5Space(train_data, distance_metric)
 
         start = time.perf_counter()
         searcher = cakes.CAKES(train_space).build(
             max_depth=None,
-            additional_criteria=[cluster_criteria.MinPoints(int(math.log2(train_data.cardinality)))]
+            additional_criteria=[
+                cluster_criteria.MinPoints(int(math.log2(train_data.cardinality))),
+            ],
         )
         end = time.perf_counter()
         build_time = end - start
 
-        times = list()
-        accuracies = list()
+        times = []
+        accuracies = []
         for i in range(test_data.cardinality):
-            logger.info(f'Searching query {i} ...')
+            logger.info(f"Searching query {i} ...")
 
             start = time.perf_counter()
             results = searcher.knn_search(test_data[i], k=100)
@@ -149,28 +154,33 @@ def bench_sift():
     mean_search_time = sum(times) / len(times)
     mean_search_accuracy = sum(accuracies) / len(accuracies)
 
-    print(f'Building CAKES took {build_time:.2e} seconds with {train_data.cardinality} instances.')
-    print(f'Mean search time was {mean_search_time:.2e} seconds.')
-    print(f'Mean search accuracy was {mean_search_accuracy:.3f}')
+    print(
+        f"Building CAKES took {build_time:.2e} seconds with {train_data.cardinality} instances.",
+    )
+    print(f"Mean search time was {mean_search_time:.2e} seconds.")
+    print(f"Mean search accuracy was {mean_search_accuracy:.3f}")
 
     return distance_metric, train_data, test_data, neighbors_data, distances_data
 
 
 def convert_to_npy():
-    hdf5_root = SEARCH_DATA_DIR.joinpath('as_hdf5')
-    npy_root = SEARCH_DATA_DIR.joinpath('as_npy')
+    hdf5_root = SEARCH_DATA_DIR.joinpath("as_hdf5")
+    npy_root = SEARCH_DATA_DIR.joinpath("as_npy")
 
     for hdf5_path in hdf5_root.iterdir():
-        name = hdf5_path.name.split('.')[0]
+        name = hdf5_path.name.split(".")[0]
 
-        with h5py.File(hdf5_path, 'r') as reader:
-            for subset in ['train', 'test', 'neighbors', 'distances']:
+        with h5py.File(hdf5_path, "r") as reader:
+            for subset in ["train", "test", "neighbors", "distances"]:
                 data = numpy.asarray(reader[subset])
-                print(f'{name}, {subset} {data.shape}, {data.dtype}')
-                numpy.save(npy_root.joinpath(f'{name}_{subset}.npy'), data, allow_pickle=False, fix_imports=False)
+                print(f"{name}, {subset} {data.shape}, {data.dtype}")
+                numpy.save(
+                    npy_root.joinpath(f"{name}_{subset}.npy"),
+                    data,
+                    allow_pickle=False,
+                    fix_imports=False,
+                )
 
-    return
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     convert_to_npy()

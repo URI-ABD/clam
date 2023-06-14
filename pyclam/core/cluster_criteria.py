@@ -1,13 +1,13 @@
 import abc
 
-from . import cluster
 from ..utils import helpers
+from . import cluster
 
 logger = helpers.make_logger(__name__)
 
 
 class ClusterCriterion(abc.ABC):
-    """ A rule to decide when a cluster can be partitioned. Subclasses must
+    """A rule to decide when a cluster can be partitioned. Subclasses must
     implement the `__call__` method to take a single `Cluster` and return a
     `bool` to indicate whether that cluster can be partitioned.
 
@@ -16,43 +16,41 @@ class ClusterCriterion(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(self, c: 'cluster.Cluster') -> bool:
+    def __call__(self, c: "cluster.Cluster") -> bool:
         pass
 
 
 class MaxDepth(ClusterCriterion):
-    """ Clusters with `depth` less than `max_depth` may be partitioned.
-    """
+    """Clusters with `depth` less than `max_depth` may be partitioned."""
 
-    def __init__(self, max_depth: int):
+    def __init__(self, max_depth: int) -> None:
         self.max_depth = max_depth
 
-    def __call__(self, c: 'cluster.Cluster') -> bool:
+    def __call__(self, c: "cluster.Cluster") -> bool:
         return c.depth < self.max_depth
 
 
 class MinPoints(ClusterCriterion):
-    """ Clusters with `cardinality` greater than `min_points` may be
+    """Clusters with `cardinality` greater than `min_points` may be
     partitioned.
     """
 
-    def __init__(self, min_points: int):
+    def __init__(self, min_points: int) -> None:
         self.min_points = min_points
 
-    def __call__(self, c: 'cluster.Cluster') -> bool:
+    def __call__(self, c: "cluster.Cluster") -> bool:
         return c.cardinality > self.min_points
 
 
 class NotSingleton(ClusterCriterion):
-    """ Clusters can be partitioned so long as they are not singletons.
-    """
+    """Clusters can be partitioned so long as they are not singletons."""
 
-    def __call__(self, c: 'cluster.Cluster') -> bool:
+    def __call__(self, c: "cluster.Cluster") -> bool:
         return not c.is_singleton
 
 
 __all__ = [
-    'ClusterCriterion',
-    'MaxDepth',
-    'MinPoints',
+    "ClusterCriterion",
+    "MaxDepth",
+    "MinPoints",
 ]

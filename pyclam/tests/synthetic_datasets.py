@@ -35,7 +35,7 @@ def bullseye(n: int = 2_000, num_rings: int = 3, noise: float = 0.05) -> Data:
     numpy.random.seed(42)
 
     data = numpy.ndarray(shape=(0, 2))
-    labels = list()
+    labels = []
     for i, r in enumerate(range(1, 2 * num_rings, 2)):
         ring: numpy.ndarray = ring_data(n=n * r, radius=r, noise=noise)
         labels.extend([i for _ in range(n * r)])
@@ -43,7 +43,7 @@ def bullseye(n: int = 2_000, num_rings: int = 3, noise: float = 0.05) -> Data:
     return numpy.asarray(data, dtype=numpy.float64), labels
 
 
-def line(n: int = 5_000, m: float = 1, c: float = 0., noise: float = 0.05) -> Data:
+def line(n: int = 5_000, m: float = 1, c: float = 0.0, noise: float = 0.05) -> Data:
     numpy.random.seed(42)
 
     x = numpy.random.rand(n)
@@ -80,19 +80,27 @@ def spiral_2d(n: int = 5_000, noise: float = 0.1) -> Data:
     return numpy.asarray(data, dtype=numpy.float64), labels
 
 
-def generate_torus(n: int, r_torus: float, noise: float) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
+def generate_torus(
+    n: int,
+    r_torus: float,
+    noise: float,
+) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
     numpy.random.seed(42)
 
     r_tube: float = r_torus / 5
     u, v = numpy.random.rand(n), numpy.random.rand(n)
     u, v = u * 2 * numpy.pi, v * 2 * numpy.pi
-    x = (r_torus + r_tube * numpy.cos(v)) * numpy.cos(u) + (numpy.random.randn(n) * noise)
-    y = (r_torus + r_tube * numpy.cos(v)) * numpy.sin(u) + (numpy.random.randn(n) * noise)
+    x = (r_torus + r_tube * numpy.cos(v)) * numpy.cos(u) + (
+        numpy.random.randn(n) * noise
+    )
+    y = (r_torus + r_tube * numpy.cos(v)) * numpy.sin(u) + (
+        numpy.random.randn(n) * noise
+    )
     z = r_tube * numpy.sin(v) + (numpy.random.randn(n) * noise)
     return x, y, z
 
 
-def tori(n: int = 10_000, noise: float = 0.015, r_torus: float = 1.) -> Data:
+def tori(n: int = 10_000, noise: float = 0.015, r_torus: float = 1.0) -> Data:
     numpy.random.seed(42)
 
     x, y, z = generate_torus(n=n // 2, r_torus=r_torus, noise=noise)
@@ -107,13 +115,21 @@ def tori(n: int = 10_000, noise: float = 0.015, r_torus: float = 1.) -> Data:
     return numpy.asarray(data, dtype=numpy.float64), labels
 
 
-def spiral_3d(n: int, radius: float, height: float, num_turns: int, noise: float) -> numpy.ndarray:
+def spiral_3d(
+    n: int,
+    radius: float,
+    height: float,
+    num_turns: int,
+    noise: float,
+) -> numpy.ndarray:
     numpy.random.seed(42)
 
     theta: numpy.ndarray = 2 * numpy.pi * numpy.random.rand(n) * num_turns
     x: numpy.ndarray = radius * numpy.cos(theta) + noise * numpy.random.randn(n)
     y: numpy.ndarray = radius * numpy.sin(theta) + noise * numpy.random.randn(n)
-    z: numpy.ndarray = height * theta / (2 * numpy.pi * num_turns) + noise * numpy.random.randn(n)
+    z: numpy.ndarray = height * theta / (
+        2 * numpy.pi * num_turns
+    ) + noise * numpy.random.randn(n)
     return numpy.stack([x, y, z], axis=1)
 
 
@@ -127,11 +143,11 @@ def line_3d(n: int, height: float, noise: float) -> numpy.ndarray:
 
 
 def skewer(
-        n: int = 10_000,
-        radius: float = 3.,
-        height: float = 6.,
-        num_turns: int = 2,
-        noise: float = 0.05
+    n: int = 10_000,
+    radius: float = 3.0,
+    height: float = 6.0,
+    num_turns: int = 2,
+    noise: float = 0.05,
 ) -> Data:
     numpy.random.seed(42)
 

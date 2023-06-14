@@ -1,2 +1,2 @@
-from . import paths as paths
-from . import reports as reports
+from . import paths
+from . import reports

@@ -3,12 +3,12 @@ import typing
 
 import numpy
 
-from . import anomaly_space
-from . import graph_scorers
-from . import meta_ml
 from .. import core
 from ..core import graph_criteria
 from ..utils import helpers
+from . import anomaly_space
+from . import graph_scorers
+from . import meta_ml
 
 logger = helpers.make_logger(__name__)
 
@@ -20,10 +20,10 @@ ScorerData = dict[str, dict[graph_scorers.GraphScorer, numpy.ndarray]]
 
 
 def data_from_graph(
-        cluster_scores: graph_scorers.ClusterScores,
-        labels: numpy.ndarray,
+    cluster_scores: graph_scorers.ClusterScores,
+    labels: numpy.ndarray,
 ) -> tuple[numpy.ndarray, numpy.ndarray]:
-    """ Extracts data from scored clusters to use for training meta-ml models.
+    """Extracts data from scored clusters to use for training meta-ml models.
 
     Args:
         cluster_scores: The dict of cluster scores obtained by running a scorer
@@ -46,16 +46,18 @@ def data_from_graph(
 
         y_true = numpy.asarray(labels[cluster.indices], dtype=numpy.float32)
 
-        loss = float(numpy.sqrt(numpy.mean(numpy.square(score - y_true)))) / cluster.cardinality
+        loss = (
+            float(numpy.sqrt(numpy.mean(numpy.square(score - y_true))))
+            / cluster.cardinality
+        )
 
-        train_y[i] = 1. - loss
+        train_y[i] = 1.0 - loss
 
     return train_x, train_y
 
 
 def save_models(path: pathlib.Path, meta_models: ModelsDict):
-    """ Saves the models in the given file.
-    """
+    """Saves the models in the given file."""
     # list of tuples whose elements are:
     # - list of import lines
     # - code for function
@@ -67,32 +69,31 @@ def save_models(path: pathlib.Path, meta_models: ModelsDict):
     ]
 
     [import_lines_list, function_codes] = list(zip(*model_codes))
-    import_lines: list[str] = list(set(
-        lines for import_lines in import_lines_list
-        for lines in import_lines
-    ))
+    import_lines: list[str] = list(
+        {lines for import_lines in import_lines_list for lines in import_lines},
+    )
 
-    with open(path, 'w') as writer:
+    with open(path, "w") as writer:
         writer.writelines(import_lines)
-        writer.write('\n')
+        writer.write("\n")
 
         for code in function_codes:
-            writer.write(f'\n\n{code}\n')
-
-    return
+            writer.write(f"\n\n{code}\n")
 
 
 def train_meta_ml(
-        *,
-        spaces_criteria: list[tuple[anomaly_space.AnomalySpace, list[core.ClusterCriterion]]],
-        models_kwargs: list[tuple[typing.Type[meta_ml.MetaMLModel], dict[str, typing.Any]]],
-        scorers: list[graph_scorers.GraphScorer],  # Should all have unique names.
-        out_dir: pathlib.Path,
-        num_epochs: int = 10,
-        save_frequency: int = 1,
-        only_train_fast_scorers: bool = False,
+    *,
+    spaces_criteria: list[
+        tuple[anomaly_space.AnomalySpace, list[core.ClusterCriterion]]
+    ],
+    models_kwargs: list[tuple[type[meta_ml.MetaMLModel], dict[str, typing.Any]]],
+    scorers: list[graph_scorers.GraphScorer],  # Should all have unique names.
+    out_dir: pathlib.Path,
+    num_epochs: int = 10,
+    save_frequency: int = 1,
+    only_train_fast_scorers: bool = False,
 ) -> pathlib.Path:
-    """ Trains meta-ml models for CHAODA. See examples/chaoda_training.py for
+    """Trains meta-ml models for CHAODA. See examples/chaoda_training.py for
     usage.
 
     Training for CHAODA takes the following steps:
@@ -150,15 +151,19 @@ def train_meta_ml(
     Returns:
         Path to file where the final models were saved.
     """
-
-    roots = list()
+    roots = []
     for space, criteria in spaces_criteria:
-        logger.info(f'Building root cluster for {space.name} ...')
+        logger.info(f"Building root cluster for {space.name} ...")
 
-        root = core.Cluster.new_root(space).build().iterative_partition(criteria).normalize_ratios('gaussian')
+        root = (
+            core.Cluster.new_root(space)
+            .build()
+            .iterative_partition(criteria)
+            .normalize_ratios("gaussian")
+        )
         roots.append(root)
 
-    metric_names = list(set(s.distance_metric.name for s, _ in spaces_criteria))
+    metric_names = list({s.distance_metric.name for s, _ in spaces_criteria})
 
     meta_models: ModelsDict = {
         metric_name: {
@@ -178,11 +183,11 @@ def train_meta_ml(
     }
 
     for epoch in range(1, num_epochs + 1):
-        logger.info(f'Starting Epoch {epoch}/{num_epochs} ...')
+        logger.info(f"Starting Epoch {epoch}/{num_epochs} ...")
 
         for root, (space, _) in zip(roots, spaces_criteria):
             root_name = root.metric_space.name
-            logger.info(f'Epoch {epoch}/{num_epochs}: Using root {root_name} ...')
+            logger.info(f"Epoch {epoch}/{num_epochs}: Using root {root_name} ...")
 
             metric_name = space.distance_metric.name
             labels = space.data.labels
@@ -193,28 +198,28 @@ def train_meta_ml(
                     core.Graph(graph_criteria.Layer(d)(root)).build()
                     for d in range(5, root.max_leaf_depth, 5)
                 ]
-                graphs = {
-                    scorer: graphs_list
-                    for scorer in scorers
-                }
+                graphs = {scorer: graphs_list for scorer in scorers}
             else:
                 graphs = {
-                     scorer: [
-                         core.Graph(graph_criteria.MetaMLSelect(
-                             lambda ratios: model.predict(ratios[None, :]),
-                             name=model.name,
-                         )(root)).build()
-                         for model in models
-                     ]
-                     for scorer, models in meta_models[metric_name].items()
+                    scorer: [
+                        core.Graph(
+                            graph_criteria.MetaMLSelect(
+                                lambda ratios: model.predict(ratios[None, :]),
+                                name=model.name,
+                            )(root),
+                        ).build()
+                        for model in models
+                    ]
+                    for scorer, models in meta_models[metric_name].items()
                 }
 
             for scorer in scorers:
-                logger.info(f'Epoch {epoch}/{num_epochs}: Using root '
-                            f'{root_name} and scorer {scorer.name} ...')
+                logger.info(
+                    f"Epoch {epoch}/{num_epochs}: Using root "
+                    f"{root_name} and scorer {scorer.name} ...",
+                )
 
                 for graph in graphs[scorer]:
-
                     if only_train_fast_scorers and (not scorer.should_be_fast(graph)):
                         continue
 
@@ -234,27 +239,31 @@ def train_meta_ml(
                             axis=0,
                         )
 
-                new_models = list()
+                new_models = []
                 for model in meta_models[metric_name][scorer]:
-                    logger.info(f'Epoch {epoch}/{num_epochs}: Fitting model '
-                                f'{model.name}, scorer {scorer.name} with root '
-                                f'{root_name} and scorer {scorer.name} ...')
-                    new_models.append(model.fit(
-                        full_train_x[metric_name][scorer],
-                        full_train_y[metric_name][scorer],
-                    ))
+                    logger.info(
+                        f"Epoch {epoch}/{num_epochs}: Fitting model "
+                        f"{model.name}, scorer {scorer.name} with root "
+                        f"{root_name} and scorer {scorer.name} ...",
+                    )
+                    new_models.append(
+                        model.fit(
+                            full_train_x[metric_name][scorer],
+                            full_train_y[metric_name][scorer],
+                        ),
+                    )
                 meta_models[metric_name][scorer] = new_models
 
         if epoch % save_frequency == 0:
-            logger.info(f'Saving models after epoch {epoch}/{num_epochs} ...')
-            save_models(out_dir.joinpath(f'models_epoch_{epoch}.py'), meta_models)
+            logger.info(f"Saving models after epoch {epoch}/{num_epochs} ...")
+            save_models(out_dir.joinpath(f"models_epoch_{epoch}.py"), meta_models)
 
-    final_path = out_dir.joinpath(f'models_final.py')
+    final_path = out_dir.joinpath("models_final.py")
     save_models(final_path, meta_models)
 
     return final_path
 
 
 __all__ = [
-    'train_meta_ml',
+    "train_meta_ml",
 ]

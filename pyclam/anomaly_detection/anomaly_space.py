@@ -2,32 +2,29 @@ import abc
 
 import numpy
 
-from . import anomaly_dataset
 from .. import core
+from . import anomaly_dataset
 
 
 class AnomalySpace(core.Space):
-
     @property
     @abc.abstractmethod
     def data(self) -> anomaly_dataset.AnomalyDataset:
         pass
 
     @abc.abstractmethod
-    def subset(self, indices: list[int], subset_data_name: str) -> 'AnomalySpace':
-        """ See the `Dataset.subset`
-        """
+    def subset(self, indices: list[int], subset_data_name: str) -> "AnomalySpace":
+        """See the `Dataset.subset`."""
         pass
 
 
 class AnomalyTabularSpace(AnomalySpace):
-
     def __init__(
-            self,
-            data: anomaly_dataset.AnomalyDataset,
-            distance_metric: core.Metric,
-            use_cache: bool,
-    ):
+        self,
+        data: anomaly_dataset.AnomalyDataset,
+        distance_metric: core.Metric,
+        use_cache: bool,
+    ) -> None:
         self.__data = data
         self.__distance_metric = distance_metric
         super().__init__(use_cache)
@@ -36,7 +33,11 @@ class AnomalyTabularSpace(AnomalySpace):
     def data(self) -> anomaly_dataset.AnomalyDataset:
         return self.__data
 
-    def subset(self, indices: list[int], subset_data_name: str) -> 'AnomalyTabularSpace':
+    def subset(
+        self,
+        indices: list[int],
+        subset_data_name: str,
+    ) -> "AnomalyTabularSpace":
         return AnomalyTabularSpace(
             self.data.subset(indices, subset_data_name),
             self.distance_metric,
@@ -48,7 +49,7 @@ class AnomalyTabularSpace(AnomalySpace):
         return self.__distance_metric
 
     def are_instances_equal(self, left: int, right: int) -> bool:
-        return self.distance_one_to_one(left, right) == 0.
+        return self.distance_one_to_one(left, right) == 0.0
 
     def distance_one_to_one(self, left: int, right: int) -> float:
         if self.uses_cache:
@@ -73,6 +74,6 @@ class AnomalyTabularSpace(AnomalySpace):
 
 
 __all__ = [
-    'AnomalySpace',
-    'AnomalyTabularSpace',
+    "AnomalySpace",
+    "AnomalyTabularSpace",
 ]

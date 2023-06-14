@@ -16,56 +16,72 @@ logger = helpers.make_logger(__name__)
 
 class CsvDataset(dataset.Dataset):
     def __init__(
-            self,
-            path: pathlib.Path,
-            name: str,
-            labels: typing.Union[str, list[int], numpy.ndarray],
-            *,
-            full_data: typing.Optional[datatable.Frame] = None,
-            non_feature_columns: list[str] = None,
-            indices: list[int] = None,
-            normalize: bool = True,
-            means: numpy.ndarray = None,
-            sds: numpy.ndarray = None,
-    ):
-        self.full_data: datatable.Frame = datatable.fread(str(path)) if full_data is None else full_data
+        self,
+        path: pathlib.Path,
+        name: str,
+        labels: typing.Union[str, list[int], numpy.ndarray],
+        *,
+        full_data: typing.Optional[datatable.Frame] = None,
+        non_feature_columns: list[str] = None,
+        indices: list[int] = None,
+        normalize: bool = True,
+        means: numpy.ndarray = None,
+        sds: numpy.ndarray = None,
+    ) -> None:
+        self.full_data: datatable.Frame = (
+            datatable.fread(str(path)) if full_data is None else full_data
+        )
         column_names = set(self.full_data.names)
 
         self.__path = path
         self.__name = name
 
-        non_feature_columns = non_feature_columns or list()
+        non_feature_columns = non_feature_columns or []
 
         if isinstance(labels, str):
-            assert labels in column_names, f'label_column "{labels}" not found in set of column names.'
+            assert (
+                labels in column_names
+            ), f'label_column "{labels}" not found in set of column names.'
             non_feature_columns.append(labels)
-            self.__labels: numpy.ndarray = numpy.asarray(self.full_data[:, labels]).astype(numpy.uint).squeeze()
+            self.__labels: numpy.ndarray = (
+                numpy.asarray(self.full_data[:, labels]).astype(numpy.uint).squeeze()
+            )
         else:
             self.__labels: numpy.ndarray = numpy.asarray(labels, dtype=numpy.uint)
 
-        self.__non_feature_columns: list[str] = non_feature_columns or list()
+        self.__non_feature_columns: list[str] = non_feature_columns or []
         for nfc in self.__non_feature_columns:
-            assert nfc in column_names, f'non_feature_column "{nfc}" not found in set of column names.'
+            assert (
+                nfc in column_names
+            ), f'non_feature_column "{nfc}" not found in set of column names.'
 
         self.__feature_columns = list(column_names - set(self.__non_feature_columns))
-        self.__indices = numpy.asarray(list(range(self.full_data.nrows))) if indices is None else numpy.asarray(indices)
+        self.__indices = (
+            numpy.asarray(list(range(self.full_data.nrows)))
+            if indices is None
+            else numpy.asarray(indices)
+        )
         self.__features: datatable.Frame = self.full_data[:, self.__feature_columns]
         self.__normalize = normalize
 
         means = self.__features.mean() if means is None else means
-        sds = (self.__features.sd() * numpy.sqrt(2) + constants.EPSILON) if sds is None else sds
-
-        fill_kwargs = dict(
-            nan=constants.EPSILON,
-            posinf=constants.EPSILON,
-            neginf=constants.EPSILON,
+        sds = (
+            (self.__features.sd() * numpy.sqrt(2) + constants.EPSILON)
+            if sds is None
+            else sds
         )
+
+        fill_kwargs = {
+            "nan": constants.EPSILON,
+            "posinf": constants.EPSILON,
+            "neginf": constants.EPSILON,
+        }
         self.__means = numpy.nan_to_num(means, **fill_kwargs)
         self.__sds = numpy.nan_to_num(sds, **fill_kwargs)
 
         self.__shape = self.__indices.shape[0], len(self.__feature_columns)
 
-        logger.info(f'Created CsvDataset {name} with shape {self.__shape}.')
+        logger.info(f"Created CsvDataset {name} with shape {self.__shape}.")
 
     @property
     def name(self) -> str:
@@ -87,7 +103,7 @@ class CsvDataset(dataset.Dataset):
     def labels(self) -> numpy.ndarray:
         return self.__labels
 
-    def __eq__(self, other: 'CsvDataset') -> bool:
+    def __eq__(self, other: "CsvDataset") -> bool:
         return self.__name == other.__name
 
     @property
@@ -112,7 +128,7 @@ class CsvDataset(dataset.Dataset):
 
         return rows[0] if isinstance(item, int) else rows
 
-    def subset(self, indices: list[int], subset_name: str, labels=None) -> 'CsvDataset':
+    def subset(self, indices: list[int], subset_name: str, labels=None) -> "CsvDataset":
         return CsvDataset(
             self.__path,
             subset_name,
@@ -127,8 +143,12 @@ class CsvDataset(dataset.Dataset):
 
 
 class CsvSpace(space.Space):
-
-    def __init__(self, data: CsvDataset, distance_metric: metric.Metric, use_cache: bool):
+    def __init__(
+        self,
+        data: CsvDataset,
+        distance_metric: metric.Metric,
+        use_cache: bool,
+    ) -> None:
         super().__init__(use_cache)
         self.__data = data
         self.__distance_metric = distance_metric
@@ -142,9 +162,9 @@ class CsvSpace(space.Space):
         return self.__distance_metric
 
     def are_instances_equal(self, left: int, right: int) -> bool:
-        return self.distance_one_to_one(left, right) == 0.
+        return self.distance_one_to_one(left, right) == 0.0
 
-    def subset(self, indices: list[int], subset_data_name: str) -> 'CsvSpace':
+    def subset(self, indices: list[int], subset_data_name: str) -> "CsvSpace":
         return CsvSpace(
             self.data.subset(indices, subset_data_name),
             self.distance_metric,

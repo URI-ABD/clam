@@ -1,1 +1,1 @@
-from .classifier import Classifier as Classifier
+from .classifier import Classifier

@@ -16,17 +16,16 @@ IndexedHits = dict[int, float]
 
 
 class CAKES:
-    """ CLAM Augmented K-nearest neighbors Entropy-scaling Search
-    """
+    """CLAM Augmented K-nearest neighbors Entropy-scaling Search."""
 
-    def __init__(self, metric_space: space.Space):
+    def __init__(self, metric_space: space.Space) -> None:
         self.__metric_space = metric_space
         self.__root = cluster.Cluster.new_root(metric_space)
 
         self.__depth = self.__root.max_leaf_depth
 
     @classmethod
-    def from_root(cls, root: cluster.Cluster) -> 'CAKES':
+    def from_root(cls, root: cluster.Cluster) -> "CAKES":
         cakes = super().__new__(cls)
         cakes.__metric_space = root.metric_space
         cakes.__root = root
@@ -35,8 +34,7 @@ class CAKES:
 
     @property
     def depth(self) -> int:
-        """ Depth of the search tree.
-        """
+        """Depth of the search tree."""
         return self.__depth
 
     @property
@@ -56,11 +54,13 @@ class CAKES:
         return self.__metric_space.distance_metric
 
     def build(
-            self,
-            max_depth: typing.Optional[int] = None,
-            additional_criteria: typing.Optional[list[cluster_criteria.ClusterCriterion]] = None,
-    ) -> 'CAKES':
-        """ Builds the search tree upto singleton leaves, or an optional maximum
+        self,
+        max_depth: typing.Optional[int] = None,
+        additional_criteria: typing.Optional[
+            list[cluster_criteria.ClusterCriterion]
+        ] = None,
+    ) -> "CAKES":
+        """Builds the search tree upto singleton leaves, or an optional maximum
         depth.
 
         Args:
@@ -71,10 +71,18 @@ class CAKES:
         Returns:
             the modified CAKES object.
         """
-        logger.info(f'Building search tree to ' + 'leaves' if max_depth is None else f'max_depth {max_depth} ...')
+        logger.info(
+            "Building search tree to " + "leaves"
+            if max_depth is None
+            else f"max_depth {max_depth} ...",
+        )
 
-        depth_criterion = cluster_criteria.NotSingleton() if max_depth is None else cluster_criteria.MaxDepth(max_depth)
-        criteria = [depth_criterion] + (additional_criteria or list())
+        depth_criterion = (
+            cluster_criteria.NotSingleton()
+            if max_depth is None
+            else cluster_criteria.MaxDepth(max_depth)
+        )
+        criteria = [depth_criterion] + (additional_criteria or [])
         self.__root = self.root.build().iterative_partition(criteria)
 
         self.__depth = self.__root.max_leaf_depth
@@ -82,7 +90,7 @@ class CAKES:
         return self
 
     def rnn_search(self, query_instance, search_radius: float) -> IndexedHits:
-        """ Performs rho-nearest neighbors search around query with given radius.
+        """Performs rho-nearest neighbors search around query with given radius.
 
         Args:
             query_instance: instance around which to search.
@@ -92,15 +100,18 @@ class CAKES:
         Returns:
             dictionary of index-of-neighbor -> distance-to-neighbor.
         """
-        candidate_clusters: list[cluster.Cluster] = self.tree_search(query_instance, search_radius)
+        candidate_clusters: list[cluster.Cluster] = self.tree_search(
+            query_instance,
+            search_radius,
+        )
 
         if len(candidate_clusters) == 0:
-            return dict()
+            return {}
 
         return self.leaf_search(query_instance, search_radius, candidate_clusters)
 
     def knn_search(self, query_instance, k: int) -> IndexedHits:
-        """ Performs k-nearest neighbors search around query.
+        """Performs k-nearest neighbors search around query.
 
         Args:
             query_instance: instance around which to search.
@@ -110,41 +121,56 @@ class CAKES:
             dictionary of index-of-neighbor -> distance-to-neighbor.
         """
         if k < 1:
-            raise ValueError(f'k must be a positive integer. Got {k} instead.')
+            msg = f"k must be a positive integer. Got {k} instead."
+            raise ValueError(msg)
 
         search_radius = (k / self.__root.cardinality) * self.__root.radius
-        assert search_radius > 0., f'expected a positive value for search_radius. Got {search_radius:.2e} instead.'
+        assert (
+            search_radius > 0.0
+        ), f"expected a positive value for search_radius. Got {search_radius:.2e} instead."
 
         hits = self.rnn_search(query_instance, search_radius)
         while len(hits) == 0:  # make sure to have non-zero hits
-            search_radius *= 2.
+            search_radius *= 2.0
             hits = self.rnn_search(query_instance, search_radius)
 
         while len(hits) < k:  # make sure to have more at least k hits
             # calculate lfd in ball around query
             if len(hits) == 1:
-                lfd = 1.
+                lfd = 1.0
             else:
-                half_count = len([point for point, distance in hits.items() if distance <= search_radius / 2])
-                lfd = 1. if half_count == 0 else math.log2(len(hits) / half_count)
+                half_count = len(
+                    [
+                        point
+                        for point, distance in hits.items()
+                        if distance <= search_radius / 2
+                    ],
+                )
+                lfd = 1.0 if half_count == 0 else math.log2(len(hits) / half_count)
 
             # increase radius as guided by lfd
             if lfd < 1e-3:
                 factor = 2
             else:
-                factor = (k / len(hits)) ** (1. / (lfd + constants.EPSILON))
-            assert factor > 1, f'expected factor to be greater than 1. Got {factor:.2e} instead.'
+                factor = (k / len(hits)) ** (1.0 / (lfd + constants.EPSILON))
+            assert (
+                factor > 1
+            ), f"expected factor to be greater than 1. Got {factor:.2e} instead."
             search_radius *= factor
 
             # rerun rnn search
             hits = self.rnn_search(query_instance, search_radius)
 
         # sort hits in non-decreasing order of distance to query
-        results = list(sorted([(distance, point) for point, distance in hits.items()]))
+        results = sorted([(distance, point) for point, distance in hits.items()])
         return {point: distance for distance, point in results[:k]}
 
-    def tree_search(self, query_instance, search_radius: float) -> list[cluster.Cluster]:
-        """ Performs tree-search for the query, starting at the root.
+    def tree_search(
+        self,
+        query_instance,
+        search_radius: float,
+    ) -> list[cluster.Cluster]:
+        """Performs tree-search for the query, starting at the root.
 
         Consider the sphere centered at `query_instance` with the given
         `search_radius`. This method performs a breadth-first search over the
@@ -161,39 +187,52 @@ class CAKES:
         """
         return self.tree_search_history(query_instance, search_radius)[1]
 
-    def tree_search_history(self, query_instance, search_radius: float) -> tuple[ClusterHits, list[cluster.Cluster]]:
-        """ Same as `tree_search`, except that it also returns the history of
+    def tree_search_history(
+        self,
+        query_instance,
+        search_radius: float,
+    ) -> tuple[ClusterHits, list[cluster.Cluster]]:
+        """Same as `tree_search`, except that it also returns the history of
         candidate clusters at each depth.
         """
-
-        history: ClusterHits = dict()
-        hits: list[cluster.Cluster] = list()
+        history: ClusterHits = {}
+        hits: list[cluster.Cluster] = []
         candidates = [self.root]
 
         while len(candidates) > 0:
-            logger.debug(f'Searching tree at depth {candidates[0].depth} ...')
+            logger.debug(f"Searching tree at depth {candidates[0].depth} ...")
             centers = [self.data[c.arg_center] for c in candidates]
-            distances = list(map(float, self.distance_metric.one_to_many(query_instance, centers)))
+            distances = list(
+                map(float, self.distance_metric.one_to_many(query_instance, centers)),
+            )
             close_enough: ClusterHits = {
-                c: d for c, d in zip(candidates, distances)
+                c: d
+                for c, d in zip(candidates, distances)
                 if d <= (c.radius + search_radius)
             }
             history.update(close_enough)
             terminal = {
-                c for c, d in close_enough.items()
+                c
+                for c, d in close_enough.items()
                 if c.is_leaf or (c.radius + d) <= search_radius
             }
             hits.extend(terminal)
             candidates = [
-                child for c in close_enough.keys()
+                child
+                for c in close_enough.keys()
                 if c not in terminal
                 for child in c.children
             ]
 
         return history, hits
 
-    def leaf_search(self, query_instance, search_radius: float, candidate_clusters: list[cluster.Cluster]) -> IndexedHits:
-        """ Performs leaf search for query on given clusters.
+    def leaf_search(
+        self,
+        query_instance,
+        search_radius: float,
+        candidate_clusters: list[cluster.Cluster],
+    ) -> IndexedHits:
+        """Performs leaf search for query on given clusters.
 
         Args:
             query_instance: around which to look.
@@ -204,19 +243,20 @@ class CAKES:
         Returns:
             dictionary of index-of-hit-instance -> distance-to-hit.
         """
-
         # get indices of all points in candidate clusters
         indices = [i for c in candidate_clusters for i in c.indices]
-        logger.debug(f'Performing leaf-search over {len(indices)} instances.')
+        logger.debug(f"Performing leaf-search over {len(indices)} instances.")
 
         # get distances from query to candidate points
         instances = [self.data[i] for i in indices]
-        distances = list(map(float, self.distance_metric.one_to_many(query_instance, instances)))
+        distances = list(
+            map(float, self.distance_metric.one_to_many(query_instance, instances)),
+        )
 
         # Filter hits with points within radius of query
         return {i: d for i, d in zip(indices, distances) if d <= search_radius}
 
 
 __all__ = [
-    'CAKES',
+    "CAKES",
 ]

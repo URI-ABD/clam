@@ -2,10 +2,22 @@ import numpy
 
 
 def lr_cityblock_cluster_cardinality(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[1.228800e-01, 1.227127e-01, 7.808845e-02, 4.154137e-02, 5.657729e-02, 3.525646e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    1.228800e-01,
+                    1.227127e-01,
+                    7.808845e-02,
+                    4.154137e-02,
+                    5.657729e-02,
+                    3.525646e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_cityblock_cluster_cardinality(ratios: numpy.array) -> float:
@@ -35,10 +47,22 @@ def dt_cityblock_cluster_cardinality(ratios: numpy.array) -> float:
 
 
 def lr_cityblock_component_cardinality(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[1.429870e-02, -1.323484e-02, -1.150261e-02, 3.896381e-02, 4.082664e-02, -1.364604e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    1.429870e-02,
+                    -1.323484e-02,
+                    -1.150261e-02,
+                    3.896381e-02,
+                    4.082664e-02,
+                    -1.364604e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_cityblock_component_cardinality(ratios: numpy.array) -> float:
@@ -59,10 +83,22 @@ def dt_cityblock_component_cardinality(ratios: numpy.array) -> float:
 
 
 def lr_cityblock_graph_neighborhood(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[8.262898e-03, 1.537685e-02, 9.422306e-03, 3.740549e-02, 3.891843e-02, -1.250707e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    8.262898e-03,
+                    1.537685e-02,
+                    9.422306e-03,
+                    3.740549e-02,
+                    3.891843e-02,
+                    -1.250707e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_cityblock_graph_neighborhood(ratios: numpy.array) -> float:
@@ -86,10 +122,22 @@ def dt_cityblock_graph_neighborhood(ratios: numpy.array) -> float:
 
 
 def lr_cityblock_parent_cardinality(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[8.433946e-02, 6.050625e-02, 5.882554e-02, 3.593437e-03, 4.128473e-02, -4.736846e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    8.433946e-02,
+                    6.050625e-02,
+                    5.882554e-02,
+                    3.593437e-03,
+                    4.128473e-02,
+                    -4.736846e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_cityblock_parent_cardinality(ratios: numpy.array) -> float:
@@ -119,10 +167,22 @@ def dt_cityblock_parent_cardinality(ratios: numpy.array) -> float:
 
 
 def lr_cityblock_stationary_probabilities(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[4.659433e-02, -5.014006e-02, -6.017402e-02, 5.812719e-02, 1.466290e-01, 1.266893e-03],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    4.659433e-02,
+                    -5.014006e-02,
+                    -6.017402e-02,
+                    5.812719e-02,
+                    1.466290e-01,
+                    1.266893e-03,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_cityblock_stationary_probabilities(ratios: numpy.array) -> float:
@@ -149,10 +209,22 @@ def dt_cityblock_stationary_probabilities(ratios: numpy.array) -> float:
 
 
 def lr_cityblock_vertex_degree(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[1.032663e-01, 1.232432e-01, 7.317461e-02, 1.084027e-02, 9.541312e-02, 1.760110e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    1.032663e-01,
+                    1.232432e-01,
+                    7.317461e-02,
+                    1.084027e-02,
+                    9.541312e-02,
+                    1.760110e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_cityblock_vertex_degree(ratios: numpy.array) -> float:
@@ -182,10 +254,22 @@ def dt_cityblock_vertex_degree(ratios: numpy.array) -> float:
 
 
 def lr_euclidean_cluster_cardinality(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[1.313924e-01, 1.326884e-01, 9.136274e-02, 2.134787e-02, 3.100747e-02, 3.298891e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    1.313924e-01,
+                    1.326884e-01,
+                    9.136274e-02,
+                    2.134787e-02,
+                    3.100747e-02,
+                    3.298891e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_euclidean_cluster_cardinality(ratios: numpy.array) -> float:
@@ -215,10 +299,22 @@ def dt_euclidean_cluster_cardinality(ratios: numpy.array) -> float:
 
 
 def lr_euclidean_component_cardinality(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[5.582536e-02, 2.442987e-02, 8.037801e-03, 1.539072e-02, 3.654952e-02, 1.429881e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    5.582536e-02,
+                    2.442987e-02,
+                    8.037801e-03,
+                    1.539072e-02,
+                    3.654952e-02,
+                    1.429881e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_euclidean_component_cardinality(ratios: numpy.array) -> float:
@@ -242,10 +338,22 @@ def dt_euclidean_component_cardinality(ratios: numpy.array) -> float:
 
 
 def lr_euclidean_graph_neighborhood(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[9.585250e-02, 6.025230e-02, 3.753800e-02, -3.118970e-03, 7.559676e-02, 1.875789e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    9.585250e-02,
+                    6.025230e-02,
+                    3.753800e-02,
+                    -3.118970e-03,
+                    7.559676e-02,
+                    1.875789e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_euclidean_graph_neighborhood(ratios: numpy.array) -> float:
@@ -272,10 +380,22 @@ def dt_euclidean_graph_neighborhood(ratios: numpy.array) -> float:
 
 
 def lr_euclidean_parent_cardinality(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[9.211533e-02, 7.063269e-02, 2.331588e-02, 7.911250e-04, 1.672235e-02, 3.891130e-03],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    9.211533e-02,
+                    7.063269e-02,
+                    2.331588e-02,
+                    7.911250e-04,
+                    1.672235e-02,
+                    3.891130e-03,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_euclidean_parent_cardinality(ratios: numpy.array) -> float:
@@ -305,10 +425,22 @@ def dt_euclidean_parent_cardinality(ratios: numpy.array) -> float:
 
 
 def lr_euclidean_stationary_probabilities(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[8.131170e-02, 1.629200e-02, -4.917042e-02, 3.507954e-02, -1.800446e-03, -5.963697e-03],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    8.131170e-02,
+                    1.629200e-02,
+                    -4.917042e-02,
+                    3.507954e-02,
+                    -1.800446e-03,
+                    -5.963697e-03,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_euclidean_stationary_probabilities(ratios: numpy.array) -> float:
@@ -338,10 +470,22 @@ def dt_euclidean_stationary_probabilities(ratios: numpy.array) -> float:
 
 
 def lr_euclidean_vertex_degree(ratios: numpy.array) -> float:
-    return float(numpy.dot(numpy.asarray(
-        a=[1.096380e-01, 1.658747e-01, 1.045492e-01, -1.207694e-03, 6.186889e-02, 2.726535e-02],
-        dtype=float,
-    ), ratios))
+    return float(
+        numpy.dot(
+            numpy.asarray(
+                a=[
+                    1.096380e-01,
+                    1.658747e-01,
+                    1.045492e-01,
+                    -1.207694e-03,
+                    6.186889e-02,
+                    2.726535e-02,
+                ],
+                dtype=float,
+            ),
+            ratios,
+        ),
+    )
 
 
 def dt_euclidean_vertex_degree(ratios: numpy.array) -> float:
