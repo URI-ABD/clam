@@ -3,11 +3,11 @@ import unittest
 
 import numpy
 
-import pyclam
-from pyclam import cluster_criteria
-from pyclam import dataset
-from pyclam import metric
-from pyclam import space
+import abd_clam
+from abd_clam import cluster_criteria
+from abd_clam import dataset
+from abd_clam import metric
+from abd_clam import space
 
 
 class TestCluster(unittest.TestCase):
@@ -19,20 +19,20 @@ class TestCluster(unittest.TestCase):
         self.distance_metric = metric.ScipyMetric("euclidean")
         self.metric_space = space.TabularSpace(self.data, self.distance_metric, False)
         self.root = (
-            pyclam.Cluster.new_root(self.metric_space)
+            abd_clam.Cluster.new_root(self.metric_space)
             .build()
             .partition([cluster_criteria.MaxDepth(5)])
         )
 
     def test_init(self):
-        pyclam.Cluster(
+        abd_clam.Cluster(
             self.metric_space,
             indices=list(range(self.data.cardinality)),
             name=f"{__name__}.init_cluster",
             parent=None,
         )
         with self.assertRaises(ValueError):
-            pyclam.Cluster(
+            abd_clam.Cluster(
                 self.metric_space,
                 indices=[],
                 name=f"{__name__}.faulty_cluster",

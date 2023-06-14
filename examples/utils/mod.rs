@@ -2,10 +2,10 @@ use std::collections::HashSet;
 
 use rayon::prelude::*;
 
-use clam::dataset::Dataset;
-use clam::number::Number;
-use clam::search::cakes::CAKES;
-use clam::utils::helpers;
+use abd_clam::dataset::Dataset;
+use abd_clam::number::Number;
+use abd_clam::search::cakes::CAKES;
+use abd_clam::utils::helpers;
 
 pub mod anomaly_readers;
 pub mod distances;

@@ -20,7 +20,7 @@
 // //!
 // //! [`git`]: https://git-scm.com/
 //
-// use clam::prelude::*;
+// use abd_clam::prelude::*;
 // use eval_metrics::classification::RocCurve;
 // use log::*;
 // use serde_json::json;

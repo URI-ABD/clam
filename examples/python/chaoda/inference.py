@@ -5,26 +5,26 @@ import time
 
 import sklearn
 
-import pyclam
+import abd_clam
 
 from . import anomaly_data
 
-logger = pyclam.utils.helpers.make_logger(__name__)
+logger = abd_clam.utils.helpers.make_logger(__name__)
 
 
 def run_one_dataset(
     data_dir: pathlib.Path,
     name: str,
-    metrics: list[pyclam.Metric],
+    metrics: list[abd_clam.Metric],
     output_dir: pathlib.Path,
 ):
     raw_data = anomaly_data.AnomalyData.load(data_dir, name)
-    dataset = pyclam.dataset.TabularDataset(
+    dataset = abd_clam.dataset.TabularDataset(
         data=raw_data.normalized_features,
         name=name,
     )
 
-    spaces = [pyclam.space.TabularSpace(dataset, metric, False) for metric in metrics]
+    spaces = [abd_clam.space.TabularSpace(dataset, metric, False) for metric in metrics]
 
     min_cardinality: int = 1 + int(math.log2(dataset.cardinality))
     # if dataset.cardinality < 10_000:
@@ -34,10 +34,10 @@ def run_one_dataset(
     # else:
     #     min_cardinality = 1 + int(math.sqrt(dataset.cardinality))
 
-    criteria = [pyclam.cluster_criteria.MinPoints(min_cardinality)]
+    criteria = [abd_clam.cluster_criteria.MinPoints(min_cardinality)]
 
     start = time.perf_counter()
-    chaoda = pyclam.anomaly_detection.CHAODA(
+    chaoda = abd_clam.anomaly_detection.CHAODA(
         spaces,
         partition_criteria=criteria,
     )
@@ -76,8 +76,8 @@ def compile_results(output_dir: pathlib.Path):
 
 def run_inference(data_dir: pathlib.Path, output_dir: pathlib.Path):
     metrics = [
-        pyclam.metric.ScipyMetric("euclidean"),
-        pyclam.metric.ScipyMetric("cityblock"),
+        abd_clam.metric.ScipyMetric("euclidean"),
+        abd_clam.metric.ScipyMetric("cityblock"),
     ]
 
     for name in anomaly_data.INFERENCE_SET:

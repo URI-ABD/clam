@@ -7,8 +7,8 @@ import h5py
 import numpy
 import scipy.io
 
-from pyclam.core import dataset
-from pyclam.utils import helpers
+from abd_clam.core import dataset
+from abd_clam.utils import helpers
 
 logger = helpers.make_logger(__name__)
 

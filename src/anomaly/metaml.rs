@@ -17,7 +17,7 @@ pub trait MetaMLModel {
     ///
     /// # Examples
     /// ```
-    /// use clam::anomaly::metaml::{MetaMLDataset, MetaMLModel};
+    /// use abd_clam::anomaly::metaml::{MetaMLDataset, MetaMLModel};
     /// use ndarray::{Array1, Array2, arr1, arr2};
     /// use std::path::Path;
     ///
@@ -56,7 +56,7 @@ pub trait MetaMLModel {
     ///
     /// # Examples
     /// ```
-    /// # use clam::anomaly::metaml::{MetaMLDataset, MetaMLModel};
+    /// # use abd_clam::anomaly::metaml::{MetaMLDataset, MetaMLModel};
     /// # use ndarray::{Array1, Array2, arr1, arr2};
     /// # use std::path::Path;
     /// #
@@ -107,8 +107,8 @@ pub trait MetaMLModel {
     /// # //   1. Its primary purpose is to read a file from disk
     /// # //   2. The precise format of the file on disk is entirely up to the
     /// # //      implementor of this trait
-    /// # use clam::anomaly::metaml::MetaMLDataset;
-    /// # use clam::anomaly::metaml::MetaMLModel;
+    /// # use abd_clam::anomaly::metaml::MetaMLDataset;
+    /// # use abd_clam::anomaly::metaml::MetaMLModel;
     /// # use std::path::Path;
     /// #
     /// # struct ExampleModel {};
@@ -143,8 +143,8 @@ pub trait MetaMLModel {
     /// # //   2. The precise output written to disk is entirely up to the
     /// # //      implementor of this trait
     /// #
-    /// # use clam::anomaly::metaml::MetaMLDataset;
-    /// # use clam::anomaly::metaml::MetaMLModel;
+    /// # use abd_clam::anomaly::metaml::MetaMLDataset;
+    /// # use abd_clam::anomaly::metaml::MetaMLModel;
     /// # use std::path::Path;
     /// #
     /// # struct ExampleModel {};
@@ -190,7 +190,7 @@ impl MetaMLDataset {
     /// # Examples
     /// ```
     /// use ndarray::{Array1, Array2, arr1, arr2};
-    /// use clam::anomaly::metaml::MetaMLDataset;
+    /// use abd_clam::anomaly::metaml::MetaMLDataset;
     ///
     /// let n = 10;
     /// let features = vec![[0.; 6]; n];
@@ -227,7 +227,7 @@ impl MetaMLDataset {
     ///
     /// # Examples
     /// ```
-    /// use clam::anomaly::metaml::MetaMLDataset;
+    /// use abd_clam::anomaly::metaml::MetaMLDataset;
     /// use std::path::Path;
     ///
     /// // File paths to training data in the numpy .npy file format

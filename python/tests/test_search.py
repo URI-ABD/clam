@@ -1,10 +1,10 @@
 import operator
 import unittest
 
-from pyclam import dataset
-from pyclam import metric
-from pyclam import search
-from pyclam import space
+from abd_clam import dataset
+from abd_clam import metric
+from abd_clam import search
+from abd_clam import space
 
 from . import synthetic_datasets
 

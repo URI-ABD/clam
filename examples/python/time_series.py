@@ -1,7 +1,7 @@
 import numpy
 from dtaidistance import dtw
 
-from pyclam import metric
+from abd_clam import metric
 
 
 class DTWMetric(metric.Metric):

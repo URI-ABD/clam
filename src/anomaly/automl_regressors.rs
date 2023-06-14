@@ -20,7 +20,7 @@ impl LinearRegressor {
     ///
     /// # Examples
     /// ```
-    /// # use clam::anomaly::automl_regressors::LinearRegressor;
+    /// # use abd_clam::anomaly::automl_regressors::LinearRegressor;
     /// #
     /// // Construct a new LinearRegressor
     /// let regressor = LinearRegressor::new();
@@ -83,7 +83,7 @@ impl DecisionTreeRegressor {
     ///
     /// # Examples
     /// ```
-    /// # use clam::anomaly::automl_regressors::DecisionTreeRegressor;
+    /// # use abd_clam::anomaly::automl_regressors::DecisionTreeRegressor;
     /// #
     /// // Construct a new DecisionTreeRegressor
     /// let regressor = DecisionTreeRegressor::new();

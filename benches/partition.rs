@@ -1,10 +1,10 @@
 // use criterion::*;
 
-// use clam::core::cluster::Tree;
-// use clam::core::cluster_criteria::PartitionCriteria;
-// use clam::core::dataset::VecVec;
-// use clam::distances;
-// use clam::utils::helpers;
+// use abd_clam::core::cluster::Tree;
+// use abd_clam::core::cluster_criteria::PartitionCriteria;
+// use abd_clam::core::dataset::VecVec;
+// use abd_clam::distances;
+// use abd_clam::utils::helpers;
 
 // fn partition_car(c: &mut Criterion) {
 //     let mut group = c.benchmark_group("partition-car");

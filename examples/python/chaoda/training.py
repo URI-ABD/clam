@@ -1,10 +1,10 @@
 import math
 import pathlib
 
-from pyclam import anomaly_detection
-from pyclam import metric
-from pyclam.anomaly_detection import graph_scorers
-from pyclam.core import cluster_criteria
+from abd_clam import anomaly_detection
+from abd_clam import metric
+from abd_clam.anomaly_detection import graph_scorers
+from abd_clam.core import cluster_criteria
 
 from . import anomaly_data
 

@@ -7,12 +7,12 @@ import h5py
 import numpy
 from utils import paths
 
-from pyclam import cluster_criteria
-from pyclam import dataset
-from pyclam import metric
-from pyclam import space
-from pyclam.search import cakes
-from pyclam.utils import helpers
+from abd_clam import cluster_criteria
+from abd_clam import dataset
+from abd_clam import metric
+from abd_clam import space
+from abd_clam.search import cakes
+from abd_clam.utils import helpers
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s",

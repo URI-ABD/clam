@@ -1,10 +1,10 @@
 use criterion::*;
 
-use clam::cluster::PartitionCriteria;
-use clam::dataset::VecVec;
-use clam::distances::f32::METRICS;
-use clam::search::cakes::CAKES;
-use clam::utils::helpers;
+use abd_clam::cluster::PartitionCriteria;
+use abd_clam::dataset::VecVec;
+use abd_clam::distances::f32::METRICS;
+use abd_clam::search::cakes::CAKES;
+use abd_clam::utils::helpers;
 
 fn cakes(c: &mut Criterion) {
     for (metric_name, metric) in METRICS {
