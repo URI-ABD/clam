@@ -9,8 +9,7 @@ from abd_clam import graph
 from abd_clam import graph_criteria
 from abd_clam import metric
 from abd_clam import space
-
-from . import synthetic_datasets
+from abd_clam.utils import synthetic_datasets
 
 
 class TestGraph(unittest.TestCase):

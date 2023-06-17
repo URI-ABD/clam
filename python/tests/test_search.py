@@ -5,8 +5,7 @@ from abd_clam import dataset
 from abd_clam import metric
 from abd_clam import search
 from abd_clam import space
-
-from . import synthetic_datasets
+from abd_clam.utils import synthetic_datasets
 
 
 class TestSearch(unittest.TestCase):
