@@ -11,8 +11,7 @@ from abd_clam import metric
 from abd_clam import space
 from abd_clam.classification import Classifier
 from abd_clam.utils import helpers
-
-from . import synthetic_datasets
+from abd_clam.utils import synthetic_datasets
 
 
 class TestSearch(unittest.TestCase):
