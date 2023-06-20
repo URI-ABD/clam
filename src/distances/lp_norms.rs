@@ -18,6 +18,7 @@ pub fn manhattan<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
     U::from(d).unwrap()
 }
 
+/// Lebesgue L3 norm
 pub fn l3_norm<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
     let d: T = x.iter().zip(y.iter()).map(|(&a, &b)| a - b).map(|v| v * v * v).sum();
     let d = d.as_f64().abs().cbrt();
