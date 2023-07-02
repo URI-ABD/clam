@@ -1,9 +1,8 @@
 import math
 import unittest
 
-import numpy
-
 import abd_clam
+import numpy
 from abd_clam import cluster_criteria
 from abd_clam import dataset
 from abd_clam import metric

@@ -1,3 +1,5 @@
+"""CAKES: CLAM Augmented K-nearest neighbors Entropy-scaling Search."""
+
 import math
 import typing
 
@@ -19,6 +21,7 @@ class CAKES:
     """CLAM Augmented K-nearest neighbors Entropy-scaling Search."""
 
     def __init__(self, metric_space: space.Space) -> None:
+        """Initialize a CAKES object."""
         self.__metric_space = metric_space
         self.__root = cluster.Cluster.new_root(metric_space)
 
@@ -26,6 +29,7 @@ class CAKES:
 
     @classmethod
     def from_root(cls, root: cluster.Cluster) -> "CAKES":
+        """Creates a CAKES object from a given root cluster."""
         cakes = super().__new__(cls)
         cakes.__metric_space = root.metric_space
         cakes.__root = root
@@ -34,23 +38,27 @@ class CAKES:
 
     @property
     def depth(self) -> int:
-        """Depth of the search tree."""
+        """Return the depth of the search tree."""
         return self.__depth
 
     @property
     def root(self) -> cluster.Cluster:
+        """Return the root cluster."""
         return self.__root
 
     @property
     def metric_space(self) -> space.Space:
+        """Return the metric space."""
         return self.__metric_space
 
     @property
     def data(self) -> dataset.Dataset:
+        """Return the dataset."""
         return self.__metric_space.data
 
     @property
     def distance_metric(self) -> metric.Metric:
+        """Return the distance metric."""
         return self.__metric_space.distance_metric
 
     def build(
@@ -60,8 +68,7 @@ class CAKES:
             list[cluster_criteria.ClusterCriterion]
         ] = None,
     ) -> "CAKES":
-        """Builds the search tree upto singleton leaves, or an optional maximum
-        depth.
+        """Builds the search tree upto singleton leaves, or an optional maximum depth.
 
         Args:
             max_depth: Optional. maximum depth of search tree.
@@ -89,7 +96,11 @@ class CAKES:
 
         return self
 
-    def rnn_search(self, query_instance, search_radius: float) -> IndexedHits:
+    def rnn_search(
+        self,
+        query_instance: typing.Any,  # noqa: ANN401
+        search_radius: float,
+    ) -> IndexedHits:
         """Performs rho-nearest neighbors search around query with given radius.
 
         Args:
@@ -110,7 +121,11 @@ class CAKES:
 
         return self.leaf_search(query_instance, search_radius, candidate_clusters)
 
-    def knn_search(self, query_instance, k: int) -> IndexedHits:
+    def knn_search(
+        self,
+        query_instance: typing.Any,  # noqa: ANN401
+        k: int,
+    ) -> IndexedHits:
         """Performs k-nearest neighbors search around query.
 
         Args:
@@ -125,9 +140,9 @@ class CAKES:
             raise ValueError(msg)
 
         search_radius = (k / self.__root.cardinality) * self.__root.radius
-        assert (
-            search_radius > 0.0
-        ), f"expected a positive value for search_radius. Got {search_radius:.2e} instead."
+        if search_radius <= 0.0:
+            msg = f"Expected positive search_radius. Got {search_radius:.2e} instead."
+            raise ValueError(msg)
 
         hits = self.rnn_search(query_instance, search_radius)
         while len(hits) == 0:  # make sure to have non-zero hits
@@ -153,9 +168,10 @@ class CAKES:
                 factor = 2
             else:
                 factor = (k / len(hits)) ** (1.0 / (lfd + constants.EPSILON))
-            assert (
-                factor > 1
-            ), f"expected factor to be greater than 1. Got {factor:.2e} instead."
+            if factor <= 1.0:
+                msg = f"expected factor to be greater than 1. Got {factor:.2e} instead."
+                raise ValueError(msg)
+
             search_radius *= factor
 
             # rerun rnn search
@@ -167,7 +183,7 @@ class CAKES:
 
     def tree_search(
         self,
-        query_instance,
+        query_instance: typing.Any,  # noqa: ANN401
         search_radius: float,
     ) -> list[cluster.Cluster]:
         """Performs tree-search for the query, starting at the root.
@@ -189,11 +205,12 @@ class CAKES:
 
     def tree_search_history(
         self,
-        query_instance,
+        query_instance: typing.Any,  # noqa: ANN401
         search_radius: float,
     ) -> tuple[ClusterHits, list[cluster.Cluster]]:
-        """Same as `tree_search`, except that it also returns the history of
-        candidate clusters at each depth.
+        """Performs tree-search for the query, starting at the root.
+
+        Also returns the full history.
         """
         history: ClusterHits = {}
         hits: list[cluster.Cluster] = []
@@ -219,16 +236,16 @@ class CAKES:
             hits.extend(terminal)
             candidates = [
                 child
-                for c in close_enough.keys()
+                for c in close_enough
                 if c not in terminal
-                for child in c.children
+                for child in c.children  # type: ignore[union-attr]
             ]
 
         return history, hits
 
     def leaf_search(
         self,
-        query_instance,
+        query_instance: typing.Any,  # noqa: ANN401
         search_radius: float,
         candidate_clusters: list[cluster.Cluster],
     ) -> IndexedHits:

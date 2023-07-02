@@ -1,3 +1,5 @@
+"""Helper functions for the package."""
+
 import logging
 import typing
 
@@ -13,17 +15,19 @@ NormalizationMode = typing.Literal[
 ]
 
 
-def make_logger(name: str):
+def make_logger(name: str) -> logging.Logger:
+    """Create a logger with the given name."""
     logger = logging.getLogger(name)
     logger.setLevel(constants.LOG_LEVEL)
     return logger
 
 
 def next_ema(ratio: float, ema: float) -> float:
+    """Computes the next exponential moving average."""
     return constants.EMA_ALPHA * ratio + (1 - constants.EMA_ALPHA) * ema
 
 
-def normalize(values: numpy.ndarray, mode: NormalizationMode):
+def normalize(values: numpy.ndarray, mode: NormalizationMode) -> numpy.ndarray:
     """Normalizes each column in values into a [0, 1] range.
 
     Args:

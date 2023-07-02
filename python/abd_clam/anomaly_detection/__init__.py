@@ -1,3 +1,5 @@
+"""CHAODA: Clustered Hierarchical Anomaly and Outlier Detection Algorithms."""
+
 from . import anomaly_dataset
 from . import anomaly_space
 from . import chaoda

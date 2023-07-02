@@ -1,3 +1,5 @@
+"""Utilities for training CHAODA."""
+
 import pathlib
 import typing
 
@@ -56,7 +58,7 @@ def data_from_graph(
     return train_x, train_y
 
 
-def save_models(path: pathlib.Path, meta_models: ModelsDict):
+def save_models(path: pathlib.Path, meta_models: ModelsDict) -> None:
     """Saves the models in the given file."""
     # list of tuples whose elements are:
     # - list of import lines
@@ -73,7 +75,7 @@ def save_models(path: pathlib.Path, meta_models: ModelsDict):
         {lines for import_lines in import_lines_list for lines in import_lines},
     )
 
-    with open(path, "w") as writer:
+    with path.open("w") as writer:
         writer.writelines(import_lines)
         writer.write("\n")
 
@@ -81,20 +83,21 @@ def save_models(path: pathlib.Path, meta_models: ModelsDict):
             writer.write(f"\n\n{code}\n")
 
 
-def train_meta_ml(
+def train_meta_ml(  # noqa: PLR0913
     *,
-    spaces_criteria: list[
-        tuple[anomaly_space.AnomalySpace, list[core.ClusterCriterion]]
+    spaces_criteria: typing.Sequence[
+        tuple[anomaly_space.AnomalySpace, typing.Sequence[core.ClusterCriterion]]
     ],
-    models_kwargs: list[tuple[type[meta_ml.MetaMLModel], dict[str, typing.Any]]],
-    scorers: list[graph_scorers.GraphScorer],  # Should all have unique names.
+    models_kwargs: typing.Sequence[
+        tuple[type[meta_ml.MetaMLModel], dict[str, typing.Any]]
+    ],
+    scorers: typing.Sequence[graph_scorers.GraphScorer],
     out_dir: pathlib.Path,
     num_epochs: int = 10,
     save_frequency: int = 1,
     only_train_fast_scorers: bool = False,
 ) -> pathlib.Path:
-    """Trains meta-ml models for CHAODA. See examples/chaoda_training.py for
-    usage.
+    """Trains meta-ml models for CHAODA. See examples/chaoda_training.py for usage.
 
     Training for CHAODA takes the following steps:
 
@@ -204,7 +207,9 @@ def train_meta_ml(
                     scorer: [
                         core.Graph(
                             graph_criteria.MetaMLSelect(
-                                lambda ratios: model.predict(ratios[None, :]),
+                                lambda ratios: model.predict(  # noqa: B023
+                                    ratios[None, :],
+                                ),
                                 name=model.name,
                             )(root),
                         ).build()
