@@ -33,10 +33,10 @@ class TestGraph(unittest.TestCase):
             [c.arg_center for c in self.clusters2],
         )
         self.edges2: set[Edge] = {
-            Edge(l, r, pdist2[i, j])
-            for i, l in enumerate(self.clusters2)
-            for j, r in enumerate(self.clusters2)
-            if (i != j) and (pdist2[i, j] <= l.radius + r.radius)
+            Edge(left, right, pdist2[i, j])
+            for i, left in enumerate(self.clusters2)
+            for j, right in enumerate(self.clusters2)
+            if (i != j) and (pdist2[i, j] <= left.radius + right.radius)
         }
         self.graph2 = Graph(self.clusters2, self.edges2).build()
         self.graph2b = Graph(self.clusters2).build()
@@ -68,54 +68,3 @@ class TestGraph(unittest.TestCase):
         self.assertEqual(self.graph2.jaccard(self.graph2), 1.0)
         self.assertEqual(self.graph2.jaccard(self.graph2b), 1.0)
         self.assertEqual(self.graph2.jaccard(self.graph5), 1.0)
-
-    @unittest.skip
-    def test_replace(self):
-        # manifold = Manifold(self.data, distance_metric.ScipyMetric('euclidean')).build(
-        #     criterion.MaxDepth(12),
-        #     criterion.PropertyThreshold('lfd', 50, 'above'),
-        # )
-        # graph = manifold.layers[-1].build_edges()
-        #
-        # for i in range(10):
-        #     clusters: dict[int, Cluster] = {c: cluster for c, cluster in zip(range(graph.cardinality), graph.clusters)}
-        #     if len(clusters) < 10:
-        #         break
-        #     sample_size = len(clusters) // 10
-        #     samples: list[int] = list(map(int, numpy.random.choice(graph.cardinality, size=sample_size, replace=False)))
-        #     removals: set[Cluster] = {clusters[c] for c in samples if clusters[c].children}
-        #     additions: set[Cluster] = set()
-        #     [additions.update(cluster.children) for cluster in removals]
-        #
-        #     graph.replace_clusters(
-        #         removals=removals,
-        #         additions=additions,
-        #     )
-        #
-        #     clusters: set[Cluster] = set(graph.clusters)
-        #
-        #     self.assertEqual(0, len(removals.intersection(clusters)), f'\n1. Some removals clusters were still in the graph. iter {i}')
-        #     self.assertTrue(additions.issubset(clusters), f'\n2. Some additions clusters were not in the graph. iter {i}')
-        #
-        #     removal_edges: set[Edge] = {edge for cluster in removals for edge in graph.edges if cluster in edge}
-        #     self.assertEqual(0, len(removal_edges), f'\n3. Some removals clusters were still found among edges. iter {i}')
-        #
-        #     self.assertEqual(0, len(graph.cache), f'\n4. Graph cache had some elements. {[k for k in graph.cache.keys()]}. iter {i}')
-        return
-
-    @unittest.skip
-    def test_dot_file(self):
-        # manifold: Manifold = Manifold(self.data, distance_metric.ScipyMetric('euclidean')).build(criterion.MinRadius(0.2), criterion.Layer(7))
-        # graph: Graph = manifold.graphs[0]
-        # old_clusters: set[Cluster] = {cluster for cluster in graph.clusters}
-        # old_edges: set[Edge] = {edge for edge in graph.edges}
-        #
-        # dot_string = manifold.graphs[0].as_dot_string('bullseye_d7')
-        #
-        # graph = graph.from_dot_string(dot_string)
-        # new_clusters: set[Cluster] = {cluster for cluster in graph.clusters}
-        # new_edges: set[Edge] = {edge for edge in graph.edges}
-        #
-        # self.assertEqual(old_clusters, new_clusters, f'Found mismatch between old and new clusters.')
-        # self.assertEqual(old_edges, new_edges, f'Found mismatch between old and new edges.')
-        return

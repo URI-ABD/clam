@@ -1,3 +1,5 @@
+"""Graph criteria for selecting clusters from a tree to make graphs."""
+
 import abc
 import heapq
 import typing
@@ -11,7 +13,9 @@ logger = helpers.make_logger(__name__)
 
 
 class GraphCriterion(abc.ABC):
-    """A `GraphCriterion` can be called on the `root` cluster of a tree to
+    """Criterion for selecting clusters from a tree to make graphs.
+
+    A `GraphCriterion` can be called on the `root` cluster of a tree to
     select a set of clusters from the tree. These clusters can be used to
     create a `Graph`. Subclasses much implement the `select` method. The
     abstract `GraphCriterion` will verify that the set of selected clusters
@@ -22,14 +26,17 @@ class GraphCriterion(abc.ABC):
     @property
     @abc.abstractmethod
     def name(self) -> str:
+        """Returns the name of the criterion."""
         pass
 
     @abc.abstractmethod
     def select(self, root: cluster.Cluster) -> set[cluster.Cluster]:
+        """Selects a set of clusters from the tree rooted at `root`."""
         pass
 
     @staticmethod
-    def assert_invariant(root: cluster.Cluster, selected: set[cluster.Cluster]):
+    def assert_invariant(root: cluster.Cluster, selected: set[cluster.Cluster]) -> None:
+        """Verifies that the set of selected clusters obey the graph invariant."""
         for c in selected:
             if any(c.is_ancestor_of(other) for other in selected):
                 msg = "A cluster and its ancestor were both selected."
@@ -38,12 +45,15 @@ class GraphCriterion(abc.ABC):
         indices = {i for c in selected for i in c.indices}
 
         if len(indices) != root.cardinality:
-            msg = f"There was a mis-match in the number of instances that were selected. The selected clusters have {len(indices)} instance but the root has {root.cardinality}."
-            raise ValueError(
-                msg,
+            msg = (
+                f"There was a mis-match in the number of instances that were selected. "
+                f"The selected clusters have {len(indices)} instance but the "
+                f"root has {root.cardinality}."
             )
+            raise ValueError(msg)
 
     def __call__(self, root: cluster.Cluster) -> set[cluster.Cluster]:
+        """Selects a set of clusters from the tree rooted at `root`."""
         selected = self.select(root)
         self.assert_invariant(root, selected)
         return selected
@@ -53,6 +63,7 @@ class Layer(GraphCriterion):
     """Selects the layer at the specified depth, -1 means go to leaves."""
 
     def __init__(self, depth: int) -> None:
+        """Initializes a `Layer` criterion."""
         if depth < -1:
             msg = f"expected a '-1' or a non-negative depth. got: {depth}"
             raise ValueError(msg)
@@ -60,25 +71,24 @@ class Layer(GraphCriterion):
 
     @property
     def name(self) -> str:
+        """Returns the name of the criterion."""
         return f"Layer_{self.depth}"
 
     def select(self, root: cluster.Cluster) -> set[cluster.Cluster]:
+        """Selects the layer at the specified depth, -1 means go to leaves."""
         if self.depth == -1:
             return {c for layer in root.subtree for c in layer if c.is_leaf}
 
-        else:
-            selected = {
-                c for layer in root.subtree[: self.depth] for c in layer if c.is_leaf
-            }
-            selected.update(root.subtree[self.depth])
+        selected = {
+            c for layer in root.subtree[: self.depth] for c in layer if c.is_leaf
+        }
+        selected.update(root.subtree[self.depth])
 
-            return selected
+        return selected
 
 
 class PropertyThreshold(GraphCriterion):
-    """Selects clusters when the given property crosses the given
-    percentile.
-    """
+    """Selects clusters when the given property crosses the given percentile."""
 
     def __init__(
         self,
@@ -86,7 +96,9 @@ class PropertyThreshold(GraphCriterion):
         percentile: float,
         mode: typing.Literal["above", "below"],
     ) -> None:
-        """During a BFT of the tree, this keeps track of the given cluster
+        """Initializes a `PropertyThreshold` criterion.
+
+        During a BFT of the tree, this keeps track of the given cluster
         property. A cluster is selected if any of the following is true:
             - it is a leaf, or
             - it qualifies by `mode`, or
@@ -106,10 +118,11 @@ class PropertyThreshold(GraphCriterion):
         if 0.0 < percentile < 100.0:
             self.percentile: float = percentile
         else:
-            msg = f"percentile must be in the (0, 100) range. Got {percentile:.2f} instead."
-            raise ValueError(
-                msg,
+            msg = (
+                f"percentile must be in the (0, 100) range. "
+                f"Got {percentile:.2f} instead."
             )
+            raise ValueError(msg)
 
         self.value = value
 
@@ -123,9 +136,11 @@ class PropertyThreshold(GraphCriterion):
 
     @property
     def name(self) -> str:
+        """Returns the name of the criterion."""
         return f"PropertyThreshold_{self.value}_{self.name}_{self.percentile:.2f}"
 
     def select(self, root: cluster.Cluster) -> set[cluster.Cluster]:
+        """Selects clusters when the given property crosses the given threshold."""
         threshold = float(
             numpy.percentile(
                 [
@@ -151,14 +166,12 @@ class PropertyThreshold(GraphCriterion):
             ):
                 selected.add(c)
             else:  # add children to frontier
-                frontier.update(c.children)
+                frontier.update(c.children)  # type: ignore[arg-type]
         return selected
 
 
 class MetaMLSelect(GraphCriterion):
-    """Uses the scoring function from a trained meta-ml model to select
-    clusters.
-    """
+    """Uses the scoring function from a trained meta-ml model to select clusters."""
 
     def __init__(
         self,
@@ -166,12 +179,15 @@ class MetaMLSelect(GraphCriterion):
         name: typing.Optional[str] = None,
         min_depth: int = 4,
     ) -> None:
-        """Args:
-        scorer: A function that takes the ratios of a cluster and returns
-        its predicted score. Higher scoring clusters are considered
-        better than lower scoring clusters.
-        min_depth: The minimum depth in the tree for a cluster to be
-        selected.
+        """Initializes a `MetaMLSelect` criterion.
+
+        Args:
+            scorer: A function that takes the ratios of a cluster and returns
+            its predicted score. Higher scoring clusters are considered
+            better than lower scoring clusters.
+            name: The name of the criterion.
+            min_depth: The minimum depth in the tree for a cluster to be
+            selected.
         """
         if min_depth < 1:
             msg = "min-depth must be a positive integer."
@@ -183,9 +199,11 @@ class MetaMLSelect(GraphCriterion):
 
     @property
     def name(self) -> str:
+        """Returns the name of the criterion."""
         return self.__name
 
     def select(self, root: cluster.Cluster) -> set[cluster.Cluster]:
+        """Selects clusters using the scoring function."""
         tree = [c for layer in root.subtree for c in layer]
 
         candidate_clusters = [c for c in tree if c.depth >= self.min_depth]
@@ -210,9 +228,8 @@ class MetaMLSelect(GraphCriterion):
 
             if len(selected_indices.intersection(set(c.indices))) > 0:
                 continue
-            else:
-                selected.add(c)
-                selected_indices.update(set(c.indices))
+            selected.add(c)
+            selected_indices.update(set(c.indices))
 
         return selected
 

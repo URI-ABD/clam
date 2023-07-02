@@ -1,27 +1,37 @@
+"""Provides the Meta-ML models for CHAODA."""
+
 import abc
+import typing
 
 import numpy
 from sklearn import linear_model
 from sklearn import tree
 
-from ..utils import constants
+from ..core import cluster
 from ..utils import helpers
 
 logger = helpers.make_logger(__name__)
 
 
 class MetaMLModel(abc.ABC):
-    def __init__(self, model_class, **kwargs) -> None:
+    """A wrapper around a machine learning model."""
+
+    def __init__(
+        self,
+        model_class: typing.Any,  # noqa: ANN401
+        **kwargs,  # noqa: ANN003
+    ) -> None:
         """Creates a model and initializes it with the given key-word arguments."""
         self.model = model_class(**kwargs)
 
     @property
     @abc.abstractmethod
     def name(self) -> str:
+        """Returns the name of the model."""
         pass
 
     @abc.abstractmethod
-    def fit(self, *args, **kwargs) -> "MetaMLModel":
+    def fit(self, *args, **kwargs) -> "MetaMLModel":  # noqa: ANN002,ANN003
         """Fits the model."""
         pass
 
@@ -31,7 +41,11 @@ class MetaMLModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def extract_python(self, *args, **kwargs) -> tuple[list[str], str]:
+    def extract_python(
+        self,
+        *args,  # noqa: ANN002
+        **kwargs,  # noqa: ANN003
+    ) -> tuple[list[str], str]:
         """Extracts the scoring function as a string which can be written to disk.
 
         The scoring function should have the following signature:
@@ -52,14 +66,19 @@ class MetaMLModel(abc.ABC):
 
 
 class MetaDT(MetaMLModel):
+    """A decision tree regressor with a maximum depth of 3."""
+
     def __init__(self) -> None:
+        """Creates a decision tree regressor with a maximum depth of 3."""
         super().__init__(tree.DecisionTreeRegressor, max_depth=3)
 
     @property
     def name(self) -> str:
+        """Returns the name of the model."""
         return "dt"
 
     def fit(self, data: numpy.ndarray, scores: numpy.ndarray) -> "MetaDT":
+        """Fits the model."""
         logger.info(
             f"Fitting meta-model {self.name} on data with shape {data.shape} ...",
         )
@@ -67,14 +86,19 @@ class MetaDT(MetaMLModel):
         return self
 
     def predict(self, ratios: numpy.ndarray) -> float:
+        """Predicts a score using the ratios of a Cluster."""
         return self.model.predict(ratios)
 
     def extract_python(self, metric: str, method: str) -> tuple[list[str], str]:
+        """Extracts the scoring function as a string which can be written to disk.
+
+        The string can be written to disk as a Python file.
+        """
         # noinspection PyProtectedMember
         undefined_feature = tree._tree.TREE_UNDEFINED
 
         feature_names = [
-            constants.RATIO_NAMES[i] if i != undefined_feature else "undefined!"
+            cluster.RATIO_NAMES[i] if i != undefined_feature else "undefined!"
             for i in self.model.tree_.feature
         ]
 
@@ -82,10 +106,10 @@ class MetaDT(MetaMLModel):
         function_name = f"{self.name}_{metric}_{method}"
         code_lines: list[str] = [
             f"def {function_name}(ratios: numpy.ndarray) -> float:",
-            f'    {", ".join(constants.RATIO_NAMES)} = tuple(ratios)',
+            f'    {", ".join(cluster.RATIO_NAMES)} = tuple(ratios)',
         ]
 
-        def extract_lines(node_index: int, indent: str):
+        def _extract_lines(node_index: int, indent: str) -> None:
             if (
                 self.model.tree_.feature[node_index] != undefined_feature
             ):  # internal node
@@ -96,18 +120,17 @@ class MetaDT(MetaMLModel):
 
                 # if block
                 code_lines.append(f"{indent}if {feature} <= {threshold:.6e}:")
-                extract_lines(left_index, indent + "    ")
+                _extract_lines(left_index, indent + "    ")
 
                 # else block
                 code_lines.append(f"{indent}else:")
-                extract_lines(right_index, indent + "    ")
+                _extract_lines(right_index, indent + "    ")
 
             else:  # leaf node
-                # return
                 value: float = self.model.tree_.value[node_index][0][0]
                 code_lines.append(f"{indent}return {value:.6e}")
 
-        extract_lines(0, "    ")
+        _extract_lines(0, "    ")
         code = "\n".join(code_lines)
 
         imports = ["import numpy"]
@@ -116,14 +139,19 @@ class MetaDT(MetaMLModel):
 
 
 class MetaLR(MetaMLModel):
+    """A linear regression model without an intercept."""
+
     def __init__(self) -> None:
+        """Creates a linear regression model without an intercept."""
         super().__init__(linear_model.LinearRegression, fit_intercept=False)
 
     @property
     def name(self) -> str:
+        """Returns the name of the model."""
         return "lr"
 
     def fit(self, data: numpy.ndarray, scores: numpy.ndarray) -> "MetaLR":
+        """Fits the model."""
         logger.info(
             f"Fitting meta-model {self.name} on data with shape {data.shape} ...",
         )
@@ -131,9 +159,14 @@ class MetaLR(MetaMLModel):
         return self
 
     def predict(self, ratios: numpy.ndarray) -> float:
+        """Predicts a score using the ratios of a Cluster."""
         return self.model.predict(ratios)
 
     def extract_python(self, metric: str, method: str) -> tuple[list[str], str]:
+        """Extracts the scoring function as a string which can be written to disk.
+
+        The string can be written to disk as a Python file.
+        """
         imports = ["import numpy"]
 
         function_name = f"{self.name}_{metric}_{method}"

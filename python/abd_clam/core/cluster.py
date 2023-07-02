@@ -1,9 +1,10 @@
+"""This module contains the `Cluster` class."""
+
 import math
 import typing
 
 import numpy
 
-from .. import utils
 from ..utils import constants
 from ..utils import helpers
 from . import cluster_criteria
@@ -11,13 +12,19 @@ from . import space
 
 logger = helpers.make_logger(__name__)
 
+Ratios = tuple[float, float, float, float, float, float]
+RATIO_NAMES = ["cardinality", "radius", "lfd"]
+RATIO_NAMES.extend([f"{name}_ema" for name in RATIO_NAMES])
+
+
 # TODO: Figure out a theoretically sound way to have this as part of the Dataset class.
 SUB_SAMPLE_LIMIT = 100
 
 
 class Cluster:
-    """A `Cluster` represents a collection of `"nearby"` instances in a metric
-    space. A `Cluster` is a node in a binary tree we call the `Cluster Tree`.
+    """A `Cluster` represents a collection of `"nearby"` instances in a metric space.
+
+    A `Cluster` is a node in a binary tree we call the `Cluster Tree`.
 
     Ideally, a user will instantiate a `Cluster` using the `new_root` method and
     chain calls to the `build` and `partition` methods to create the full tree.
@@ -49,16 +56,13 @@ class Cluster:
 
     @staticmethod
     def new_root(metric_space: space.Space) -> "Cluster":
-        """Creates a new root Cluster on the `metric_space`. Most users should
-        never need to interact with a non-root cluster.
-        """
-        root = Cluster(
+        """Creates a new root cluster for the given metric space."""
+        return Cluster(
             metric_space,
             indices=list(range(metric_space.data.cardinality)),
             name="1",
             parent=None,
         )
-        return root
 
     def __init__(
         self,
@@ -68,6 +72,7 @@ class Cluster:
         name: str,
         parent: typing.Optional["Cluster"],
     ) -> None:
+        """Initializes a new Cluster."""
         if len(indices) == 0:
             msg = "Cannot instantiate a cluster with an empty list of `indices`."
             raise ValueError(
@@ -79,59 +84,71 @@ class Cluster:
         self.__name = name
         self.__parent: typing.Optional["Cluster"] = parent
 
-        self.__arg_samples: typing.Union[list[int], utils.Unset] = constants.UNSET
-        self.__arg_center: typing.Union[int, utils.Unset] = constants.UNSET
-        self.__arg_radius: typing.Union[int, utils.Unset] = constants.UNSET
-        self.__radius: typing.Union[float, utils.Unset] = constants.UNSET
-        self.__lfd: typing.Union[float, utils.Unset] = constants.UNSET
-        self.__ratios: typing.Union[utils.Ratios, utils.Unset] = constants.UNSET
+        self.__arg_samples: typing.Union[list[int], constants.Unset] = constants.UNSET
+        self.__arg_center: typing.Union[int, constants.Unset] = constants.UNSET
+        self.__arg_radius: typing.Union[int, constants.Unset] = constants.UNSET
+        self.__radius: typing.Union[float, constants.Unset] = constants.UNSET
+        self.__lfd: typing.Union[float, constants.Unset] = constants.UNSET
+        self.__ratios: typing.Union[Ratios, constants.Unset] = constants.UNSET
         self.__children: typing.Optional[tuple["Cluster", "Cluster"]] = None
-        self.__ancestry: typing.Union[list["Cluster"], utils.Unset] = constants.UNSET
+        self.__ancestry: typing.Union[
+            list["Cluster"],
+            constants.Unset,
+        ] = constants.UNSET
         self.__subtree: typing.Union[
             list[list["Cluster"]],
-            utils.Unset,
+            constants.Unset,
         ] = constants.UNSET
         self.__candidate_neighbors: typing.Union[
             dict["Cluster", float],
-            utils.Unset,
+            constants.Unset,
         ] = constants.UNSET
 
-    def __eq__(self, other: "Cluster") -> bool:
+    def __eq__(self, other: "Cluster") -> bool:  # type: ignore[override]
+        """Clusters are equal if they have the same name."""
         return self.__name == other.__name
 
     def __lt__(self, other: "Cluster") -> bool:
+        """Clusters are ordered by depth and then by name."""
         if self.depth == other.depth:
             return self.__name < other.__name
-        else:
-            return self.depth < other.depth
+        return self.depth < other.depth
 
     def __str__(self) -> str:
+        """Returns a string representation of the cluster."""
         return self.__name
 
     def __repr__(self) -> str:
+        """Returns a string representation of the cluster."""
         return f"{self.metric_space} :: Cluster {self.__name}"
 
-    def __hash__(self):
+    def __hash__(self) -> int:
+        """Hash the name of the cluster."""
         return hash(repr(self.__name))
 
     @property
     def metric_space(self) -> space.Space:
+        """The metric space in which the cluster exists."""
         return self.__metric_space
 
     @property
     def indices(self) -> list[int]:
+        """The indices of instances in the cluster."""
         return self.__indices
 
     @property
     def name(self) -> str:
+        """The name (i.e. location) of the cluster in the tree."""
         return self.__name
 
     @property
     def depth(self) -> int:
+        """The depth of the cluster in the tree."""
         return len(self.__name) - 1
 
     @property
     def cardinality(self) -> int:
+        """The number of instances in the cluster."""
         return len(self.__indices)
 
     @property
@@ -142,7 +159,7 @@ class Cluster:
             raise ValueError(
                 msg,
             )
-        return self.__arg_samples
+        return self.__arg_samples  # type: ignore[return-value]
 
     @property
     def arg_center(self) -> int:
@@ -152,29 +169,27 @@ class Cluster:
             raise ValueError(
                 msg,
             )
-        return self.__arg_center
+        return self.__arg_center  # type: ignore[return-value]
 
     @property
-    def center(self):
+    def center(self) -> typing.Any:  # noqa: ANN401
         """The (approximate) geometric median of the cluster."""
         if self.__arg_center is constants.UNSET:
             msg = "Please call `build` on the cluster before using this property."
             raise ValueError(
                 msg,
             )
-        return self.__metric_space.data[self.__arg_center]
+        return self.__metric_space.data[self.__arg_center]  # type: ignore[index]
 
     @property
     def arg_radius(self) -> int:
-        """Index of the instance in the cluster that is farthest from the
-        center.
-        """
+        """Index of the farthest instance from the center."""
         if self.__arg_radius is constants.UNSET:
             msg = "Please call `build` on the cluster before using this property."
             raise ValueError(
                 msg,
             )
-        return self.__arg_radius
+        return self.__arg_radius  # type: ignore[return-value]
 
     @property
     def radius(self) -> float:
@@ -184,13 +199,13 @@ class Cluster:
             raise ValueError(
                 msg,
             )
-        return self.__radius
+        return self.__radius  # type: ignore[return-value]
 
     @property
     def is_singleton(self) -> bool:
-        """Returns true if the cluster contains only one instance or if all
-        instances in the cluster are equal to each other. This works because of
-        the `identity` property of a `Metric`.
+        """Returns `True` if the cluster has zero radius.
+
+        i.e. if the cluster has only one instance or all instances are identical.
         """
         if self.__radius is constants.UNSET:
             msg = "Please call `build` on the cluster before using this property."
@@ -201,23 +216,23 @@ class Cluster:
 
     @property
     def lfd(self) -> float:
-        """A discrete approximation of fractal dimension in the vicinity of
-        this cluster.
-        """
+        """The local fractal dimension of the cluster."""
         if self.__lfd is constants.UNSET:
             msg = "Please call `build` on the cluster before using this property."
             raise ValueError(
                 msg,
             )
-        return self.__lfd
+        return self.__lfd  # type: ignore[return-value]
 
     @property
     def parent(self) -> typing.Optional["Cluster"]:
+        """The parent of this cluster in the tree."""
         return self.__parent
 
     @property
-    def ratios(self) -> utils.Ratios:
+    def ratios(self) -> Ratios:
         """The six cluster ratios used for mata machine learning in CHAODA.
+
         To build a correct set of ratios, the user need to call the
         `normalize_ratios` method on the root of a tree.
         """
@@ -226,14 +241,16 @@ class Cluster:
             raise ValueError(
                 msg,
             )
-        return self.__ratios
+        return self.__ratios  # type: ignore[return-value]
 
     @property
     def is_leaf(self) -> bool:
+        """Returns `True` if this cluster is a leaf in the tree."""
         return self.__children is None
 
     @property
     def children(self) -> typing.Optional[tuple["Cluster", "Cluster"]]:
+        """The two children of this cluster."""
         return self.__children
 
     @property
@@ -243,23 +260,26 @@ class Cluster:
 
     @property
     def left_child(self) -> "Cluster":
+        """The left child of this cluster."""
         if self.__children is None:
             msg = "This Cluster is a leaf and has no children."
             raise ValueError(msg)
-        return self.children[0]
+        return self.children[0]  # type: ignore[index]
 
     @property
     def right_child(self) -> "Cluster":
+        """The right child of this cluster."""
         if self.__children is None:
             msg = "This Cluster is a leaf and has no children."
             raise ValueError(msg)
-        return self.children[1]
+        return self.children[1]  # type: ignore[index]
 
     @property
     def subtree(self) -> list[list["Cluster"]]:
-        """Returns a list of lists of all clusters in the subtree of this
-        cluster. Each inner list contains clusters at the same depth. The
-        subtree includes the cluster itself.
+        """Returns a list of lists of all clusters in the subtree of this cluster.
+
+        Each inner list contains clusters at the same depth.
+        The subtree includes the cluster itself.
         """
         if self.__subtree is constants.UNSET:
             if self.is_leaf:
@@ -283,33 +303,38 @@ class Cluster:
                     for left_layer, right_layer in zip(left_subtree, right_subtree)
                 ]
 
-        self.__subtree = [layer for layer in self.__subtree if len(layer) > 0]
+        self.__subtree = [
+            layer
+            for layer in self.__subtree  # type: ignore[union-attr]
+            if len(layer) > 0
+        ]
 
         return self.__subtree
 
     @property
-    def num_descendents(self) -> int:
+    def num_descendants(self) -> int:
         """Returns the number of Clusters in the subtree of this Cluster."""
-        return sum(len(l) for l in self.subtree)
+        return sum(len(_c) for _c in self.subtree)
 
     @property
     def ancestry(self) -> list["Cluster"]:
-        """Returns the list of clusters in the branch of the tree starting at
-        the root and ending at the parent of this cluster.
-        """
+        """Returns the path through the tree from the root to this Cluster."""
         if self.__ancestry is constants.UNSET:
             if self.__parent is None:
                 self.__ancestry = []
             else:
                 self.__ancestry = [*self.__parent.ancestry, self.__parent]
-        return self.__ancestry
+        return self.__ancestry  # type: ignore[return-value]
 
     @property
     def candidate_neighbors(self) -> dict["Cluster", float]:
-        """Find clusters in the tree that could be neighbors, or whose
-        descendents could be neighbors, of this cluster or of its descendents
-        if any subset of them were selected to build a `Graph`. This property
-        helps optimize the process of finding edges when building `Graph`s.
+        """Find clusters in the tree that could be neighbors.
+
+        Or whose descendants could be neighbors, of this cluster or of its
+        descendants if any subset of them were selected to build a `Graph`.
+
+        This property helps optimize the process of finding edges when building
+        `Graph`s.
         """
         if self.__candidate_neighbors is constants.UNSET:
             if self.__parent is None:
@@ -318,10 +343,12 @@ class Cluster:
                 candidates = self.__parent.candidate_neighbors
                 radius = max(self.radius, candidates[self.__parent])
 
-                non_leaf_candidates = [c for c in candidates.keys() if not c.is_leaf]
+                non_leaf_candidates = [c for c in candidates if not c.is_leaf]
                 if len(non_leaf_candidates) > 0:
                     children = [
-                        child for c in non_leaf_candidates for child in c.children
+                        child
+                        for c in non_leaf_candidates
+                        for child in c.children  # type: ignore[union-attr]
                     ]
                     arg_centers = [c.arg_center for c in children]
                     distances = list(
@@ -344,19 +371,22 @@ class Cluster:
                 candidates[self] = radius
                 self.__candidate_neighbors = candidates
 
-        return self.__candidate_neighbors
+        return self.__candidate_neighbors  # type: ignore[return-value]
 
     def is_ancestor_of(self, other: "Cluster") -> bool:
+        """Returns `True` if this cluster is an ancestor of `other`."""
         return (self.depth < other.depth) and (
             self.__name == other.__name[: len(self.__name)]
         )
 
     def is_descendent_of(self, other: "Cluster") -> bool:
+        """Returns `True` if this cluster is a descendent of `other`."""
         return other.is_ancestor_of(self)
 
     def build(self) -> "Cluster":
-        """Calculates and sets important properties of the Cluster. These
-        include:
+        """Calculates and sets important properties of the Cluster.
+
+        These include:
             - arg_samples
             - arg_center
             - center
@@ -383,7 +413,7 @@ class Cluster:
         self.__arg_center = self.__arg_samples[numpy.argmin(sample_distances)]
 
         center_distances = self.__metric_space.distance_one_to_many(
-            self.__arg_center,
+            self.__arg_center,  # type: ignore[arg-type]
             self.__indices,
         )
         farthest = numpy.argmax(center_distances)
@@ -394,7 +424,9 @@ class Cluster:
             self.__lfd = 1
         else:
             half_count = sum(d <= (self.__radius / 2) for d in center_distances)
-            assert half_count > 0, "half_count for non-singleton cluster was zero."
+            if half_count == 0:
+                msg = "half_count for singleton cluster was zero."
+                raise ValueError(msg)
             if half_count == 1:
                 self.__lfd = self.cardinality
             else:
@@ -406,7 +438,7 @@ class Cluster:
         else:
             c = self.cardinality / self.parent.cardinality
             r = self.__radius / self.parent.radius
-            l = self.__lfd / self.parent.lfd
+            l = self.__lfd / self.parent.lfd  # noqa: E741
 
             _, _, _, pc_, pr_, pl_ = self.parent.ratios
             c_ = helpers.next_ema(c, pc_)
@@ -419,26 +451,31 @@ class Cluster:
 
     def distance_to_other(self, other: "Cluster") -> float:
         """Compute the distance between the centers of the two Clusters."""
-        return self.distance_to_indexed_instance(other.__arg_center)
+        return self.distance_to_indexed_instance(
+            other.__arg_center,  # type: ignore[arg-type]
+        )
 
     def distance_to_indexed_instance(self, index: int) -> float:
-        """Compute the distance between the center of the Cluster to the given
-        indexed instance in the metric space.
-        """
-        return self.__metric_space.distance_one_to_one(self.__arg_center, index)
+        """Compute the distance from the center of the Cluster to the instance."""
+        return self.__metric_space.distance_one_to_one(
+            self.__arg_center,  # type: ignore[arg-type]
+            index,
+        )
 
-    def distance_to_instance(self, instance) -> float:
-        """Compute the distance between the center of the Cluster to the given
-        instance.
-        """
+    def distance_to_instance(self, instance: typing.Any) -> float:  # noqa: ANN401
+        """Compute the distance from the center of the Cluster to the instance."""
         return self.__metric_space.distance_metric.one_to_one(self.center, instance)
 
     def __can_be_partitioned(
         self,
-        criteria: list[cluster_criteria.ClusterCriterion],
+        criteria: typing.Sequence[cluster_criteria.ClusterCriterion],
     ) -> bool:
-        if isinstance(self.__arg_samples, utils.Unset):
-            msg = "Please call `build` on this Cluster before calling `partition` or `iterative_partition`."
+        """Returns `True` if the cluster can be partitioned."""
+        if isinstance(self.__arg_samples, constants.Unset):
+            msg = (
+                "Please call `build` on this Cluster before calling "
+                "`partition` or `iterative_partition`."
+            )
             raise ValueError(
                 msg,
             )
@@ -449,11 +486,12 @@ class Cluster:
 
     def iterative_partition(
         self,
-        criteria: list[cluster_criteria.ClusterCriterion],
+        criteria: typing.Sequence[cluster_criteria.ClusterCriterion],
     ) -> "Cluster":
-        """Iteratively partitions the cluster to leaves. This iteratively
-        builds the tree in a breadth-first manner, helping avoid the
-        inefficiencies of recursion in Python.
+        """Iteratively partitions the cluster to leaves.
+
+        This iteratively builds the tree in a breadth-first manner, avoiding
+        the inefficiencies of recursion in Python.
         """
         if not self.__can_be_partitioned(criteria):
             return self
@@ -466,11 +504,18 @@ class Cluster:
                 break
 
             logger.info(
-                f"Partitioning {len(partitionable)} clusters at depth {partitionable[0].depth} ...",
+                f"Partitioning {len(partitionable)} clusters at depth "
+                f"{partitionable[0].depth} ...",
             )
 
             [c.partition(criteria, recursive=False) for c in partitionable]
-            layers.append([child for c in partitionable for child in c.children])
+            layers.append(
+                [
+                    child
+                    for c in partitionable
+                    for child in c.children  # type: ignore[union-attr]
+                ],
+            )
 
         self.__subtree = layers
 
@@ -478,12 +523,13 @@ class Cluster:
 
     def partition(
         self,
-        criteria: list[cluster_criteria.ClusterCriterion],
+        criteria: typing.Sequence[cluster_criteria.ClusterCriterion],
         recursive: bool = True,
     ) -> "Cluster":
-        """Tries to partition this cluster into two child clusters. If the
-        cluster gets partitioned, then the `children` property will be assigned
-        as a tuple of the left and right child clusters.
+        """Tries to partition this cluster into two child clusters.
+
+        If the cluster gets partitioned, then the `children` property will be
+        assigned as a tuple of the left and right child clusters.
 
         `partition` starts by selecting two highly separated instances from the
         cluster. These are the left and right poles. The remaining instances
@@ -520,7 +566,7 @@ class Cluster:
         if len(remaining_indices) > 1:
             remaining_indices = [i for i in remaining_indices if i != right_pole]
 
-            # For every instance that is not a pole, we compute its distance to each pole.
+            # For every instance that is not a pole, compute its distance to each pole.
             left_distances = numpy.asarray(
                 [d for i, d in enumerate(left_distances) if i != arg_right],
                 dtype=left_distances.dtype,
@@ -531,10 +577,10 @@ class Cluster:
             )
 
             is_closer_to_left_pole = [
-                l <= d for l, d in zip(left_distances, right_distances)
+                ld <= rd for ld, rd in zip(left_distances, right_distances)
             ]
 
-            # The remaining instances are then split into two lists by proximity to either pole.
+            # The remaining instances are split by proximity to either pole.
             left_indices = [left_pole] + [
                 i for i, b in zip(remaining_indices, is_closer_to_left_pole) if b
             ]
@@ -546,7 +592,8 @@ class Cluster:
             left_indices = [i for i in self.__indices if i != right_pole]
             right_indices = [right_pole]
 
-        # The children will be biased so that the cardinality of the left child is no smaller than that of the right child.
+        # The children will be biased so that the cardinality of the left child
+        # is no smaller than that of the right child.
         left_indices, right_indices = (
             (left_indices, right_indices)
             if len(left_indices) > len(right_indices)
@@ -580,9 +627,10 @@ class Cluster:
         self,
         mode: helpers.NormalizationMode = "gaussian",
     ) -> "Cluster":
-        """Normalize the cluster ratios in the `subtree` of this cluster. This
-        method is intended to only be called once and only on the root. The
-        user is responsible for this contract.
+        """Normalize the cluster ratios in the `subtree` of this cluster.
+
+        This method is intended to only be called once and only on the root.
+        The user is responsible for this contract.
 
         Args:
             mode: Normalization method to use. Must be one of:
@@ -595,18 +643,27 @@ class Cluster:
         """
         clusters = [c for layer in self.subtree for c in layer]
         ratios_array = numpy.asarray([c.ratios for c in clusters], dtype=numpy.float32)
-        assert ratios_array.shape == (len(clusters), len(constants.RATIO_NAMES))
+        if ratios_array.shape != (len(clusters), len(RATIO_NAMES)):
+            msg = (
+                f"Expected ratios array to have shape "
+                f"{len(clusters), len(RATIO_NAMES)}. "
+                f"Got {ratios_array.shape} instead."
+            )
+            raise ValueError(msg)
 
         ratios_array = helpers.normalize(ratios_array, mode)
 
         for i, c in enumerate(clusters):
-            c.__ratios = tuple(map(float, ratios_array[i, :]))
+            c.__ratios = tuple(  # type: ignore[assignment]
+                map(float, ratios_array[i, :]),
+            )
 
         return self
 
     def add_instance(self, index: int) -> list["Cluster"]:
-        """Add an instance to the tree after having added it to the metric
-        space. This method may only be called on a root cluster. The primary use
+        """Add an instance to the tree after having added it to the metric space.
+
+        This method may only be called on a root cluster. The primary use
         of this method is when the full dataset does not fit in memory. In such
         a case, the user can create a tree on a subset of the full data.
         Instances in the complement of the subset can then be added to the tree.
@@ -633,8 +690,9 @@ class Cluster:
         return sorted(self.__add_instance(index))
 
     def __add_instance(self, index: int) -> list["Cluster"]:
-        """Recursively add the indexed instance to the tree. Appends `index` to
-        `__indices` after addition.
+        """Recursively add the indexed instance to the tree.
+
+        Appends `index` to `__indices` after addition.
         """
         result = [self]
 

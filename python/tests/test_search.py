@@ -9,7 +9,7 @@ from abd_clam.utils import synthetic_data
 
 
 class TestSearch(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.data = dataset.TabularDataset(
             synthetic_data.bullseye(n=100, num_rings=3)[0],
             name=f"{__name__}.data",
@@ -24,13 +24,13 @@ class TestSearch(unittest.TestCase):
         self.query = self.data[0]
         self.distances = self.metric_space.distance_pairwise(self.indices)
 
-    def test_init(self):
+    def test_init(self) -> None:
         self.assertTrue(isinstance(self.cakes, search.CAKES))
         _ = self.cakes.metric_space
         _ = self.cakes.root
         self.assertLessEqual(self.cakes.depth, self.max_depth)
 
-    def test_rnn_search(self):
+    def test_rnn_search(self) -> None:
         self.assertEqual(1, len(self.cakes.rnn_search(self.query, 0.0)))
         self.assertLessEqual(1, len(self.cakes.rnn_search(self.query, 1.0)))
 
@@ -57,7 +57,7 @@ class TestSearch(unittest.TestCase):
                     "expected the same set of results from naive and rnn searches.",
                 )
 
-    def test_knn_search(self):
+    def test_knn_search(self) -> None:
         distances = dict(zip(self.indices, self.distances[0, :]))
         points: list[int] = [
             p for p, _ in sorted(distances.items(), key=operator.itemgetter(1))
@@ -79,7 +79,7 @@ class TestSearch(unittest.TestCase):
                 "expected the same set of results from naive and knn searches.",
             )
 
-    def test_tree_search_history(self):
+    def test_tree_search_history(self) -> None:
         radius: float = self.cakes.root.radius / 10
         history, hits = self.cakes.tree_search_history(self.query, radius)
 
@@ -98,11 +98,12 @@ class TestSearch(unittest.TestCase):
                     "A non-hit member of history must have had children.",
                 )
 
-        depths: set[int] = {cluster.depth for cluster in history}
-        depth_range: set[int] = set(range(len(depths)))
+        depths = {cluster.depth for cluster in history}
+        depth_range = set(range(len(depths)))
         missing_depths = depths.union(depth_range) - depths.intersection(depth_range)
         self.assertEqual(
             0,
             len(missing_depths),
-            f"history should contain clusters from every depth. Did not contain: {missing_depths}",
+            f"history should contain clusters from every depth. "
+            f"Did not contain: {missing_depths}",
         )

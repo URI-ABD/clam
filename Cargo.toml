@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.12.4"
+version = "0.13.0"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -43,7 +43,8 @@ rand = "0.8.5"
 bitvec = "1.0.1"
 priority-queue = "1.3.2"
 rayon = "1.7.0"
-automl = { git = "https://github.com/nishaq503/rust-automl", branch = "updates/dependencies" }
+automl = "0.2.7"
+# automl = { git = "https://github.com/nishaq503/rust-automl", branch = "updates/dependencies" }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
