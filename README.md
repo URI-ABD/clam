@@ -1,60 +1,67 @@
-# CLAM: Clustered Learning of Approximate Manifolds (v0.11.1)
+# CLAM: Clustered Learning of Approximate Manifolds (v0.12.3)
 
 CLAM is a Rust/Python library for learning approximate manifolds from data.
 It is designed to be fast, memory-efficient, easy to use, and scalable for big data applications.
 
 CLAM provides utilities for fast search (CAKES) and anomaly detection (CHAODA).
 
-## Installation
-
-### Python
-
-```shell
-> python3 -m pip install abd_clam
-```
-
-### Rust
-
-```shell
-> cargo add abd_clam
-```
+As of writing this document, the project is still in a pre-1.0 state.
+This means that the API is not yet stable and breaking changes may occur frequently.
 
 ## Usage
 
-### Python
+CLAM is a library crate so you can add it to your crate using:
 
-```python
-from abd_clam.search import CAKES
-from abd_clam.utils import synthetic_datasets
-
-# Get the data.
-data, _ = synthetic_datasets.bullseye()
-# data is a numpy.ndarray in this case but it could just as easily be a numpy.memmap if your data do fit in RAM.
-# We used numpy memmaps for the research, though they impose file-IO costs.
-
-model = CAKES(data, 'euclidean')
-# The Search class provides the functionality described in our [CHESS paper](https://arxiv.org/abs/1908.08551).
-
-model.build(max_depth=50)
-# Build the search tree to depth of 50.
-# This method can be called again with a higher depth, if needed.
-
-query, radius = data[0], 0.5
-
-rnn_results = model.rnn_search(query, radius)
-# This is how we perform ranged nearest neighbors search with radius 0.5 around the query.
-# The results are returned as a dictionary whose keys are indices into the data array and whose values are the distance to the query.
-
-knn_results = model.knn_search(query, 10)
-# This is how we perform k-nearest neighbors search for the 10 nearest neighbors of query.
-
-# TODO: Provide snippets for using CHAODA
+```shell
+> cargo add abd_clam@0.12.3
 ```
 
-## Contributing
+Here is a simple example of how to use CLAM to perform nearest neighbors search:
 
-Pull requests and bug reports are welcome.
-For major changes, please open an issue to discuss what you would like to change.
+```rust
+use abd_clam::cluster::PartitionCriteria;
+use abd_clam::dataset::VecVec;
+use abd_clam::cakes::CAKES;
+use abd_clam::utils::synthetic_data;
+
+fn euclidean(x: &[f32], y: &[f32]) -> f32 {
+    x.iter()
+        .zip(y.iter())
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f32>()
+        .sqrt()
+}
+
+fn search() {
+    // Get the data and queries.
+    let seed = 42;
+    let data: Vec<Vec<f32>> = synthetic_data::random_f32(100_000, 10, 0., 1., seed);
+    let queries: Vec<Vec<f32>> = synthetic_data::random_f32(1_000, 10, 0., 1., 0);
+
+    let dataset = VecVec::new(data, euclidean, "demo".to_string(), false);
+    let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
+    let model = CAKES::new(dataset, Some(seed)).build(&criteria);
+    // The CAKES struct provides the functionality described in our
+    // [CHESS paper](https://arxiv.org/abs/1908.08551).
+
+    let (query, radius, k) = (&queries[0], 0.05, 10);
+
+    let rnn_results: Vec<(usize, f32)> = model.rnn_search(query, radius);
+    // This is how we perform ranged nearest neighbors search with radius 0.05
+    // around the query.
+
+    let knn_results: Vec<(usize, f32)> = model.knn_search(query, 10);
+    // This is how we perform k-nearest neighbors search for the 10 nearest
+    // neighbors of query.
+
+    // Both results are a Vec of 2-tuples where each tuple is the index and
+    // distance to points in the data.
+
+    todo!()
+}
+```
+
+<!-- TODO: Provide snippets for using CHAODA -->
 
 ## License
 

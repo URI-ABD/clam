@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use abd_clam::dataset::Dataset;
 use abd_clam::number::Number;
 use abd_clam::search::cakes::CAKES;
-use abd_clam::utils::helpers;
+use abd_clam::utils::synthetic_data;
 
 pub mod anomaly_readers;
 pub mod distances;
@@ -15,8 +15,8 @@ pub mod search_readers;
 pub fn make_data(n: usize, d: usize, q: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>, String) {
     let min_val = 0.;
     let max_val = 1.;
-    let data = helpers::gen_data_f32(n * 1_000, d, min_val, max_val, 42);
-    let queries = helpers::gen_data_f32(q, d, min_val, max_val, 0);
+    let data = synthetic_data::random_f32(n * 1_000, d, min_val, max_val, 42);
+    let queries = synthetic_data::random_f32(q, d, min_val, max_val, 0);
     let name = format!("{n}k-{d}");
 
     (data, queries, name)

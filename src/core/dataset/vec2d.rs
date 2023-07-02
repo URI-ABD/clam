@@ -81,7 +81,7 @@ mod tests {
     use rand::prelude::*;
 
     use crate::distances;
-    use crate::utils::helpers::{gen_data_f32, gen_data_u32};
+    use crate::utils::synthetic_data;
 
     use super::*;
 
@@ -106,7 +106,7 @@ mod tests {
         let cardinality = 10_000;
 
         for i in 0..10 {
-            let reference_data: Vec<Vec<u32>> = gen_data_u32(cardinality, 10, 0, 100_000, i);
+            let reference_data = synthetic_data::random_u32(cardinality, 10, 0, 100_000, i);
             for _ in 0..10 {
                 let mut dataset = VecVec::new(reference_data.clone(), distances::u32::euclidean, name.clone(), false);
                 let mut new_indices = dataset.indices().to_vec();
@@ -128,7 +128,7 @@ mod tests {
         let cardinality = 10_000;
 
         for i in 0..10 {
-            let reference_data: Vec<Vec<f32>> = gen_data_f32(cardinality, 10, 0., 100_000., i);
+            let reference_data = synthetic_data::random_f32(cardinality, 10, 0., 100_000., i);
             for _ in 0..10 {
                 let mut dataset = VecVec::new(reference_data.clone(), distances::f32::euclidean, name.clone(), false);
                 let mut new_indices = dataset.indices().to_vec();

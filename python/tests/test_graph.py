@@ -9,13 +9,13 @@ from abd_clam import graph
 from abd_clam import graph_criteria
 from abd_clam import metric
 from abd_clam import space
-from abd_clam.utils import synthetic_datasets
+from abd_clam.utils import synthetic_data
 
 
 class TestGraph(unittest.TestCase):
     def setUp(self) -> None:
         self.data = dataset.TabularDataset(
-            synthetic_datasets.bullseye(n=1000, num_rings=2)[0],
+            synthetic_data.bullseye(n=1000, num_rings=2)[0],
             name=f"{__name__}.bullseye",
         )
         self.distance_metric = metric.ScipyMetric("euclidean")
