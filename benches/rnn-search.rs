@@ -4,7 +4,7 @@ use abd_clam::cluster::PartitionCriteria;
 use abd_clam::dataset::VecVec;
 use abd_clam::distances::f32::METRICS;
 use abd_clam::search::cakes::CAKES;
-use abd_clam::utils::helpers;
+use abd_clam::utils::synthetic_data;
 
 fn cakes(c: &mut Criterion) {
     for (metric_name, metric) in METRICS {
@@ -20,8 +20,8 @@ fn cakes(c: &mut Criterion) {
         group.throughput(Throughput::Elements(num_queries as u64));
 
         let seed = 42;
-        let data = helpers::gen_data_f32(100_000, 10, 0., 1., seed);
-        let queries = helpers::gen_data_f32(num_queries, 10, 0., 1., seed);
+        let data = synthetic_data::random_f32(100_000, 10, 0., 1., seed);
+        let queries = synthetic_data::random_f32(num_queries, 10, 0., 1., seed);
         let queries = queries.iter().collect::<Vec<_>>();
 
         let dataset = VecVec::new(data, metric, "100k-10".to_string(), false);

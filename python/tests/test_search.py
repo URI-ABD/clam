@@ -5,13 +5,13 @@ from abd_clam import dataset
 from abd_clam import metric
 from abd_clam import search
 from abd_clam import space
-from abd_clam.utils import synthetic_datasets
+from abd_clam.utils import synthetic_data
 
 
 class TestSearch(unittest.TestCase):
     def setUp(self):
         self.data = dataset.TabularDataset(
-            synthetic_datasets.bullseye(n=100, num_rings=3)[0],
+            synthetic_data.bullseye(n=100, num_rings=3)[0],
             name=f"{__name__}.data",
         )
         self.indices = list(range(self.data.cardinality))

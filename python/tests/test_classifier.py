@@ -11,7 +11,7 @@ from abd_clam import metric
 from abd_clam import space
 from abd_clam.classification import Classifier
 from abd_clam.utils import helpers
-from abd_clam.utils import synthetic_datasets
+from abd_clam.utils import synthetic_data
 
 
 class TestSearch(unittest.TestCase):
@@ -47,7 +47,7 @@ class TestSearch(unittest.TestCase):
         self.assertGreaterEqual(score, 0.75, "score on digits dataset was too low.")
 
     def test_bullseye(self):
-        full_x, full_y = synthetic_datasets.bullseye(n=256, num_rings=3)
+        full_x, full_y = synthetic_data.bullseye(n=256, num_rings=3)
         full_x = helpers.normalize(full_x, mode="gaussian")
         full_y = numpy.asarray(full_y).astype(numpy.uint)
 
@@ -57,7 +57,7 @@ class TestSearch(unittest.TestCase):
         self.assertGreaterEqual(score, 0.75, "score on bullseye dataset was too low.")
 
     def test_cached(self):
-        full_x, full_y = synthetic_datasets.bullseye(n=200, num_rings=3)
+        full_x, full_y = synthetic_data.bullseye(n=200, num_rings=3)
         full_x = helpers.normalize(full_x, mode="gaussian")
         full_y = numpy.asarray(full_y).astype(numpy.uint)
 
