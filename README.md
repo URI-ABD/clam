@@ -1,2 +1,3 @@
-# SyntheticData
-Generating synthetic data for testing.
+# SyMaGen
+
+Synthetic manifold generation.
