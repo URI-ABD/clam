@@ -17,6 +17,8 @@ use rand::Rng;
 use std::cmp::Ordering;
 use std::io;
 
+pub mod random_data;
+
 /// The version of the crate.
 pub const VERSION: &str = "0.1.1-dev0";
 
