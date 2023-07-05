@@ -1,9 +1,9 @@
 [package]
 name = "symagen"
-version = "0.1.0"
+version = "0.1.1-dev0"
 authors = [
-    "Morgan Prior <meprior424@gmail.com>", 
-    "Najib Ishaq <najib_ishaq@zoho.com>", 
+    "Morgan Prior <meprior424@gmail.com>",
+    "Najib Ishaq <najib_ishaq@zoho.com>",
 ]
 edition = "2021"
 description = "Synthetic manifold generation."
@@ -26,6 +26,3 @@ rand = "0.8.4"
 [dependencies.pyo3]
 version = "0.19.1"
 features = ["abi3-py39", "extension-module", "generate-import-lib"]
-
-
-

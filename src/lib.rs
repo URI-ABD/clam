@@ -1,10 +1,31 @@
+#![deny(clippy::correctness)]
+#![warn(
+    missing_docs,
+    clippy::all,
+    clippy::suspicious,
+    clippy::complexity,
+    clippy::perf,
+    clippy::style,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::missing_docs_in_private_items
+)]
+#![doc = include_str!("../README.md")]
+
 use pyo3::prelude::*;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::io;
 
+/// The version of the crate.
+pub const VERSION: &str = "0.1.1-dev0";
+
+/// Guess the number game.
+///
+/// This is a demo function for the Python module.
 #[pyfunction]
-fn guess_the_number() {
+#[allow(clippy::redundant_pub_crate)]
+pub fn guess_the_number() {
     println!("Guess the number!");
 
     let secret_number = rand::thread_rng().gen_range(1..101);
@@ -14,16 +35,14 @@ fn guess_the_number() {
 
         let mut guess = String::new();
 
-        io::stdin()
-            .read_line(&mut guess)
-            .expect("Failed to read line");
+        io::stdin().read_line(&mut guess).expect("Failed to read line");
 
         let guess: u32 = match guess.trim().parse() {
             Ok(num) => num,
             Err(_) => continue,
         };
 
-        println!("You guessed: {}", guess);
+        println!("You guessed: {guess}");
 
         match guess.cmp(&secret_number) {
             Ordering::Less => println!("Too small!"),
@@ -36,11 +55,12 @@ fn guess_the_number() {
     }
 }
 
-/// A Python module implemented in Rust. The name of this function must match
-/// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
-/// import the module.
+/// A Python module implemented in Rust.
+///
+/// The name of this function must match the `lib.name` setting in the `Cargo.toml`,
+/// else Python will not be able to import the module.
 #[pymodule]
-fn symagen(_py: Python, m: &PyModule) -> PyResult<()> {
+pub fn symagen(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(guess_the_number, m)?)?;
 
     Ok(())
