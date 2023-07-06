@@ -1,22 +1,52 @@
 [package]
 name = "distances"
-description = "a crate focusing on distance computations"
-repository = "https://github.com/URI-ABD/distance"
+version = "1.0.0"
+authors = [
+    "Najib Ishaq <najib_ishaq@zoho.com>",
+    "Noah Daniels <noah_daniels@uri.edu>",
+    "Tom Howard <info@tomhoward.codes>",
+]
+edition = "2021"
+description = "Fast and generic distance functions for high-dimensional data."
 license = "MIT"
-version = "0.1.1"
-authors = ["Noah Daniels <ndaniels@mac.com>"]
-edition = "2018"
+readme = "README.md"
+
+# Publishing lock.
+# When you're ready to start publishing, set publish to true
+# and update the release github action.
+publish = true
+
+[profile.test]
+debug = 1
+opt-level = 3
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+overflow-checks = true
+
+[profile.bench]
+debug = true
 
 [dependencies]
-rayon = "^1.3.0"
-num = "^0.2.1"
-float-cmp = "^0.6.0"
-time = "^0.2.7"
-lazy_static = "^1.4.0"
+# libm = "0.2.7"  # no-std
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { version = "0.5.1", features = ["html_reports"] }
+float-cmp = "^0.9.0"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+symagen = { git = "https://github.com/morganprior/SyMaGen", branch = "feat/random-data" }
 
 [[bench]]
-name = "big-euclidean-bench"
+name = "inv-sqrt"
+harness = false
+
+[[bench]]
+name = "big-vectors"
+harness = false
+
+[[bench]]
+name = "big-strings"
 harness = false

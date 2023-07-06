@@ -3,10 +3,37 @@ name: Tests
 on: [push]
 
 jobs:
-  test:
-    name: Test
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Update rust toolchain
+        run: rustup update
+      - uses: actions/setup-python@v3
+        with:
+          python-version: 3.9
+      - uses: pre-commit/action@v3.0.0
+
+  cargo:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+
+    - name: Update
+      run: rustup update
+
     - name: Run tests
-      run: cargo test
+      run: cargo test --release
+
+  # unittest:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - uses: actions/setup-python@v3
+  #       with:
+  #         python-version: 3.9
+  #     - name: Dependencies
+  #       run: |
+  #         pip install --user poetry && poetry install
+  #     - name: Run
+  #       run: poetry run python -m unittest discover python
