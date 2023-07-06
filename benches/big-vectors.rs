@@ -23,11 +23,11 @@ fn sq_l2_norm(x: &[f32], y: &[f32]) -> f32 {
 }
 
 fn big_minkowski(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Minkowski");
+    let mut group = c.benchmark_group("Vectors");
 
     let (cardinality, min_val, max_val) = (2, -10.0, 10.0);
 
-    for d in 0..=10 {
+    for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
         let vecs = random_data::random_f32(cardinality, dimensionality, min_val, max_val, d as u64);
 
@@ -56,11 +56,6 @@ fn big_minkowski(c: &mut Criterion) {
             b.iter(|| black_box(euclidean_sq::<f32, f32>(&vecs[0], &vecs[1])))
         });
 
-        let id = BenchmarkId::new("Cosine", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(cosine::<f32, f32>(&vecs[0], &vecs[1])))
-        });
-
         let id = BenchmarkId::new("SQ_L2-mono", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
             b.iter(|| black_box(sq_l2_norm(&vecs[0], &vecs[1])))
@@ -77,6 +72,11 @@ fn big_minkowski(c: &mut Criterion) {
                 b.iter(|| black_box(l4_norm::<f32, f32>(&vecs[0], &vecs[1])))
             });
         }
+
+        let id = BenchmarkId::new("Cosine", dimensionality);
+        group.bench_with_input(id, &dimensionality, |b, _| {
+            b.iter(|| black_box(cosine::<f32, f32>(&vecs[0], &vecs[1])))
+        });
     }
     group.finish();
 }
