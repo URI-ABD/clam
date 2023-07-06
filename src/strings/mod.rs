@@ -50,10 +50,6 @@ use crate::number::UInt;
 /// # References
 ///
 /// * [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance)
-///
-/// # Panics
-///
-/// * If the distance between `a` and `b` is too large to be represented by `U`.
 #[must_use]
 pub fn levenshtein<U: UInt>(a: &str, b: &str) -> U {
     let (len_a, len_b) = (a.chars().count(), b.chars().count());
@@ -136,10 +132,6 @@ pub fn levenshtein<U: UInt>(a: &str, b: &str) -> U {
 ///
 /// * [Hamming distance](https://en.wikipedia.org/wiki/Hamming_distance)
 /// * [Hamming's paper](https://doi.org/10.1002/j.1538-7305.1950.tb00463.x)
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `U`.
 #[must_use]
 pub fn hamming<U: UInt>(x: &str, y: &str) -> U {
     U::from(x.chars().zip(y.chars()).filter(|(a, b)| a != b).count())

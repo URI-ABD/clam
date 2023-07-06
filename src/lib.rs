@@ -3,12 +3,16 @@
     missing_docs,
     clippy::all,
     clippy::suspicious,
+    clippy::style,
     clippy::complexity,
     clippy::perf,
-    clippy::style,
     clippy::pedantic,
     clippy::nursery,
-    clippy::missing_docs_in_private_items
+    clippy::missing_docs_in_private_items,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::cast_lossless
 )]
 #![doc = include_str!("../README.md")]
 // #![no_std]  // TODO: re-enable as an optional feature

@@ -34,10 +34,6 @@ use crate::{
 /// # References
 ///
 /// * [Cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity)
-///
-/// # Panics
-///
-/// * If the distance is too large to be represented by type `U`.
 pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     let [xx, yy, xy] = x
         .iter()
@@ -92,10 +88,6 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// # References
 ///
 /// * [Hamming distance](https://en.wikipedia.org/wiki/Hamming_distance)
-///
-/// # Panics
-///
-/// * If the distance is too large to be represented by type `U`.
 pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
     U::from(x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count())
 }
@@ -127,10 +119,6 @@ pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
 /// # References
 ///
 /// * [Canberra distance](https://en.wikipedia.org/wiki/Canberra_distance)
-///
-/// # Panics
-///
-/// * If any pairwise difference is too large to be represented by type `U`.
 pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     U::from(
         x.iter()

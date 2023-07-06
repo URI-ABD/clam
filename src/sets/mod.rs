@@ -28,10 +28,6 @@ use crate::number::{Float, Int};
 ///
 /// assert!((distance - 0.5).abs() < f32::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between two sets would not fit in the return type.
 pub fn jaccard<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     if x.is_empty() || y.is_empty() {
         return U::one();

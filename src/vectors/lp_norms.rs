@@ -1,5 +1,7 @@
 //! Provides functions for calculating Lp-norms between two vectors.
 
+use core::cmp::Ordering;
+
 use crate::{number::Float, Number};
 
 use super::utils::abs_diff_iter;
@@ -27,10 +29,6 @@ use super::utils::abs_diff_iter;
 ///
 /// assert!((distance - (27.0_f64).sqrt()).abs() <= f64::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `U`.
 pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     euclidean_sq::<T, U>(x, y).sqrt()
 }
@@ -58,10 +56,6 @@ pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - 27.0).abs() <= f64::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `U`.
 pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
     U::from(abs_diff_iter(x, y).map(|v| v.powi(2)).sum::<T>())
 }
@@ -89,10 +83,6 @@ pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - 9.0).abs() <= f64::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `T`.
 pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
     abs_diff_iter(x, y).sum()
 }
@@ -119,10 +109,6 @@ pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
 ///
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= f64::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `U`.
 pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     U::from(abs_diff_iter(x, y).map(|v| v.powi(3)).sum::<T>()).cbrt()
 }
@@ -149,10 +135,6 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - (243.0_f64).sqrt().sqrt()).abs() <= f64::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `U`.
 pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     U::from(abs_diff_iter(x, y).map(|v| v.powi(4)).sum::<T>()).powf(U::from(0.25))
 }
@@ -179,14 +161,8 @@ pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - 5.0).abs() <= f64::EPSILON);
 /// ```
-///
-/// # Panics
-///
-/// * If the distance between `x` and `y` is too large to be represented by `T`.
-/// * If any value in `x` or `y` cannot be fully ordered.
-/// * If either of `x` and `y` is empty.
 pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
     abs_diff_iter(x, y)
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap()
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less))
+        .unwrap_or_else(T::zero)
 }

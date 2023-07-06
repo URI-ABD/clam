@@ -45,19 +45,19 @@ pub trait Number:
     /// Replaces `self` with `self + a * b`.
     fn mul_add_assign(&mut self, a: Self, b: Self);
 
-    /// Casts a number to `Self`.
+    /// Casts a number to `Self`. This may be a lossy conversion.
     fn from<T: Number>(n: T) -> Self;
 
-    /// Returns the number as a `f32`.
+    /// Returns the number as a `f32`. This may be a lossy conversion.
     fn as_f32(self) -> f32;
 
-    /// Returns the number as a `f64`.
+    /// Returns the number as a `f64`. This may be a lossy conversion.
     fn as_f64(self) -> f64;
 
-    /// Returns the number as a `u64`.
+    /// Returns the number as a `u64`. This may be a lossy conversion.
     fn as_u64(self) -> u64;
 
-    /// Returns the number as a `i64`.
+    /// Returns the number as a `i64`. This may be a lossy conversion.
     fn as_i64(self) -> i64;
 
     /// Returns the absolute value of a `Number`.
