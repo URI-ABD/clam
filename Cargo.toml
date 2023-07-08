@@ -1,6 +1,6 @@
 [package]
 name = "distances"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Noah Daniels <noah_daniels@uri.edu>",
