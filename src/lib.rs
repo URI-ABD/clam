@@ -14,4 +14,4 @@ pub mod utils;
 
 pub use crate::core::{cluster, dataset};
 
-pub const VERSION: &str = "0.15.0";
+pub const VERSION: &str = "0.16.0";
