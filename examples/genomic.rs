@@ -3,7 +3,7 @@ use std::time::Instant;
 use distances::strings::levenshtein;
 use symagen::random_data;
 
-use abd_clam::{cluster::PartitionCriteria, dataset::VecVec, search::cakes::CAKES};
+use abd_clam::{cakes::CAKES, cluster::PartitionCriteria, dataset::VecVec};
 
 fn main() {
     let seed = 42;

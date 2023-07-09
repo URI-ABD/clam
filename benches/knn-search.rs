@@ -2,7 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{cluster::PartitionCriteria, dataset::VecVec, search::cakes::CAKES, utils::METRICS};
+use abd_clam::{cakes::CAKES, cluster::PartitionCriteria, dataset::VecVec, utils::METRICS};
 
 fn cakes(c: &mut Criterion) {
     for &(metric_name, metric) in METRICS {

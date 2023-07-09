@@ -6,12 +6,12 @@
 //! - [CHAODA](https://arxiv.org/abs/2103.11774)
 //!
 
-// pub mod anomaly;
+// pub mod chaoda;
+pub mod cakes;
 mod core;
 pub mod needleman_wunch;
-pub mod search;
 pub mod utils;
 
 pub use crate::core::{cluster, dataset, graph};
 
-pub const VERSION: &str = "0.14.0";
+pub const VERSION: &str = "0.15.0";

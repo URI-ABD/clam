@@ -3,7 +3,7 @@ use criterion::*;
 use distances::strings::levenshtein;
 use symagen::random_data;
 
-use abd_clam::{cluster::PartitionCriteria, dataset::VecVec, needleman_wunch::nw_distance, search::cakes::CAKES};
+use abd_clam::{cakes::CAKES, cluster::PartitionCriteria, dataset::VecVec, needleman_wunch::nw_distance};
 
 fn genomic(c: &mut Criterion) {
     let mut group = c.benchmark_group("genomic".to_string());

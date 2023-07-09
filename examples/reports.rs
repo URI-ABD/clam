@@ -10,9 +10,9 @@ use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
 use abd_clam::{
+    cakes::CAKES,
     cluster::PartitionCriteria,
     dataset::{Dataset, VecVec},
-    search::cakes::CAKES,
     utils::METRICS,
 };
 
