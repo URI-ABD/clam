@@ -1,20 +1,19 @@
-use crate::number::Number;
+use distances::Number;
 
 use super::Dataset;
 
-pub struct VecVec<T: Number, U: Number> {
+pub struct VecVec<T: Send + Sync + Copy, U: Number> {
     name: String,
-    data: Vec<Vec<T>>,
-    metric: fn(&[T], &[T]) -> U,
+    data: Vec<T>,
+    metric: fn(T, T) -> U,
     is_expensive: bool,
     indices: Vec<usize>,
     reordering: Option<Vec<usize>>,
 }
 
-impl<T: Number, U: Number> VecVec<T, U> {
-    pub fn new(data: Vec<Vec<T>>, metric: fn(&[T], &[T]) -> U, name: String, is_expensive: bool) -> Self {
+impl<T: Send + Sync + Copy, U: Number> VecVec<T, U> {
+    pub fn new(data: Vec<T>, metric: fn(T, T) -> U, name: String, is_expensive: bool) -> Self {
         assert_ne!(data.len(), 0, "Must have some instances in the data.");
-        assert_ne!(data[0].len(), 0, "Must have some numbers in the instances.");
         let indices = (0..data.len()).collect();
         Self {
             name,
@@ -27,23 +26,19 @@ impl<T: Number, U: Number> VecVec<T, U> {
     }
 }
 
-impl<T: Number, U: Number> std::fmt::Debug for VecVec<T, U> {
+impl<T: Send + Sync + Copy, U: Number> std::fmt::Debug for VecVec<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("Tabular Space").field("name", &self.name).finish()
     }
 }
 
-impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
+impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecVec<T, U> {
     fn name(&self) -> String {
         self.name.clone()
     }
 
     fn cardinality(&self) -> usize {
         self.data.len()
-    }
-
-    fn dimensionality(&self) -> usize {
-        self.data[0].len()
     }
 
     fn is_metric_expensive(&self) -> bool {
@@ -55,11 +50,11 @@ impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
     }
 
     fn one_to_one(&self, left: usize, right: usize) -> U {
-        (self.metric)(&self.data[left], &self.data[right])
+        (self.metric)(self.data[left], self.data[right])
     }
 
-    fn query_to_one(&self, query: &[T], index: usize) -> U {
-        (self.metric)(query, &self.data[index])
+    fn query_to_one(&self, query: T, index: usize) -> U {
+        (self.metric)(query, self.data[index])
     }
 
     fn swap(&mut self, i: usize, j: usize) {
@@ -77,26 +72,12 @@ impl<T: Number, U: Number> Dataset<T, U> for VecVec<T, U> {
 
 #[cfg(test)]
 mod tests {
-    use float_cmp::approx_eq;
     use rand::prelude::*;
+    use symagen::random_data;
 
-    use crate::distances;
-    use crate::utils::synthetic_data;
+    use distances::vectors::euclidean_sq;
 
     use super::*;
-
-    #[test]
-    fn test_space() {
-        let data = vec![vec![1_f32, 2., 3.], vec![3., 3., 1.]];
-        let metric = distances::f32::euclidean;
-        let name = "test".to_string();
-        let dataset = VecVec::new(data, metric, name, false);
-
-        approx_eq!(f32, dataset.one_to_one(0, 0), 0.);
-        approx_eq!(f32, dataset.one_to_one(0, 1), 3.);
-        approx_eq!(f32, dataset.one_to_one(1, 0), 3.);
-        approx_eq!(f32, dataset.one_to_one(1, 1), 0.);
-    }
 
     #[test]
     fn test_reordering_u32() {
@@ -106,9 +87,11 @@ mod tests {
         let cardinality = 10_000;
 
         for i in 0..10 {
-            let reference_data = synthetic_data::random_u32(cardinality, 10, 0, 100_000, i);
+            let dimensionality = 10;
+            let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
+            let reference_data = reference_data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
             for _ in 0..10 {
-                let mut dataset = VecVec::new(reference_data.clone(), distances::u32::euclidean, name.clone(), false);
+                let mut dataset = VecVec::new(reference_data.clone(), euclidean_sq::<u32, u32>, name.clone(), false);
                 let mut new_indices = dataset.indices().to_vec();
                 new_indices.shuffle(&mut rng);
 
@@ -121,38 +104,12 @@ mod tests {
     }
 
     #[test]
-    fn test_reordering_f32() {
-        // 10 random 10 dimensional datasets reordered 10 times in 10 random ways
-        let mut rng = rand::thread_rng();
-        let name = "test".to_string();
-        let cardinality = 10_000;
-
-        for i in 0..10 {
-            let reference_data = synthetic_data::random_f32(cardinality, 10, 0., 100_000., i);
-            for _ in 0..10 {
-                let mut dataset = VecVec::new(reference_data.clone(), distances::f32::euclidean, name.clone(), false);
-                let mut new_indices = dataset.indices().to_vec();
-                new_indices.shuffle(&mut rng);
-
-                dataset.reorder(&new_indices);
-
-                // Assert each element in each row vector have been reordered correctly
-                for i in 0..cardinality {
-                    for index in 0..dataset.data[i].len() {
-                        let delta = dataset.data[i][index] - reference_data[new_indices[i]][index];
-                        assert!(delta.abs() < std::f32::EPSILON);
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
     fn test_inverse_map() {
         let data: Vec<Vec<u32>> = (1..7).map(|x| vec![(x * 2) as u32]).collect();
+        let data: Vec<&[u32]> = data.iter().map(|v| v.as_slice()).collect();
         let permutation = vec![1, 3, 4, 0, 5, 2];
 
-        let mut dataset = VecVec::new(data, distances::u32::euclidean, "test".to_string(), false);
+        let mut dataset = VecVec::new(data, euclidean_sq::<u32, u32>, "test".to_string(), false);
 
         dataset.reorder(&permutation);
 

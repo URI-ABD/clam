@@ -1,7 +1,6 @@
-use std::f64::consts::SQRT_2;
-use std::f64::EPSILON;
+use core::f64::{consts::SQRT_2, EPSILON};
 
-use crate::core::number::Number;
+use distances::Number;
 
 /// Return the index and value of the minimum value in the given slice of values.
 pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {

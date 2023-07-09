@@ -9,13 +9,15 @@ use ndarray_npy::write_npy;
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
-use abd_clam::cluster::PartitionCriteria;
-use abd_clam::dataset::{Dataset, VecVec};
-use abd_clam::search::cakes::CAKES;
+use abd_clam::{
+    cluster::PartitionCriteria,
+    dataset::{Dataset, VecVec},
+    search::cakes::CAKES,
+    utils::METRICS,
+};
 
 pub mod utils;
 
-use utils::distances;
 use utils::search_readers;
 
 fn main() {
@@ -42,7 +44,7 @@ fn main() {
             path
         };
 
-        for &(metric_name, metric) in distances::METRICS {
+        for &(metric_name, metric) in METRICS {
             let out_dir = {
                 let mut path = data_dir.clone();
                 path.push(metric_name);
@@ -57,15 +59,19 @@ fn main() {
             println!("Making reports on {data_name} with {metric_name} ...");
 
             let (data, queries) = search_readers::read_search_data(data_name).unwrap();
+            let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+            let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+            let dimensionality = data[0].len();
+
             let data = VecVec::new(data, metric, data_name.to_string(), false);
 
             let car = data.cardinality().to_formatted_string(&Locale::en);
-            let dim = data.dimensionality().to_formatted_string(&Locale::en);
+            let dim = dimensionality.to_formatted_string(&Locale::en);
             println!("Got data with shape ({car} x {dim}) ...");
 
             let start = Instant::now();
             let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-            let cakes = CAKES::new(data, Some(42)).build(&criteria);
+            let cakes = CAKES::new(data, Some(42)).build(criteria);
             let build_time = start.elapsed().as_secs_f32();
             println!("Built CAKES on {data_name} with {metric_name} in {build_time:.3} seconds ...");
 
@@ -79,7 +85,7 @@ fn main() {
                 data_name,
                 metric_name,
                 cardinality: data.cardinality(),
-                dimensionality: data.dimensionality(),
+                dimensionality,
                 build_time,
                 num_queries: queries.len(),
                 linear_time,
@@ -223,7 +229,12 @@ fn get_reports_root() -> PathBuf {
 //     println!("Wrote leaves report ...");
 // }
 
-fn report_linear(data: &VecVec<f32, f32>, queries: &[Vec<f32>], out_dir: &Path, batch_size: usize) -> f32 {
+fn report_linear<'a>(
+    data: &'a VecVec<&'a [f32], f32>,
+    queries: &'a [&'a [f32]],
+    out_dir: &Path,
+    batch_size: usize,
+) -> f32 {
     let indices = data.indices();
 
     let num_batches = {
@@ -241,7 +252,7 @@ fn report_linear(data: &VecVec<f32, f32>, queries: &[Vec<f32>], out_dir: &Path, 
         let mut pb = tqdm!(total = queries.len(), desc = format!("Linear Batch {n}/{num_batches}"));
         let mut array = Array2::<f32>::default((0, batch.len()));
 
-        for query in queries.iter() {
+        for &query in queries.iter() {
             let start = Instant::now();
             let distances = data.query_to_many(query, batch);
             time += start.elapsed().as_secs_f32();

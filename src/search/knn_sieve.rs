@@ -1,12 +1,14 @@
-use crate::core::cluster::{Cluster, Tree};
-use crate::core::dataset::Dataset;
-use crate::core::number::Number;
+use distances::Number;
+
+use crate::{
+    cluster::{Cluster, Tree},
+    dataset::Dataset,
+};
 
 #[allow(dead_code)]
-pub struct KnnSieve<'a, T: Number, U: Number, D: Dataset<T, U>> {
-    //dataset: &'a D,
+pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     tree: &'a Tree<T, U, D>,
-    query: &'a [T],
+    query: T,
     k: usize,
     layer: Vec<&'a Cluster<T, U, D>>,
     leaves: Vec<Grain<'a, T, U, D>>,
@@ -14,9 +16,8 @@ pub struct KnnSieve<'a, T: Number, U: Number, D: Dataset<T, U>> {
     hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
 }
 
-impl<'a, T: Number, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
-    //pub fn new(root: &'a Cluster<U>, query: &'a [T], k: usize) -> Self {
-    pub fn new(tree: &'a Tree<T, U, D>, query: &'a [T], k: usize) -> Self {
+impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
+    pub fn new(tree: &'a Tree<T, U, D>, query: T, k: usize) -> Self {
         Self {
             layer: vec![tree.root()],
             tree,
@@ -75,14 +76,14 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
 }
 
 #[allow(dead_code)]
-struct Grain<'a, T: Number, U: Number, D: Dataset<T, U>> {
+struct Grain<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     t: std::marker::PhantomData<T>,
     c: &'a Cluster<T, U, D>,
     d: U,
     multiplicity: usize,
 }
 
-impl<'a, T: Number, U: Number, D: Dataset<T, U>> Grain<'a, T, U, D> {
+impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Grain<'a, T, U, D> {
     fn new(c: &'a Cluster<T, U, D>, d: U, multiplicity: usize) -> Self {
         let t = Default::default();
         Self { t, c, d, multiplicity }

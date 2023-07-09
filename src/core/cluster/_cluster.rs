@@ -2,15 +2,13 @@
 //! divisive hierarchical cluster of arbitrary datasets in arbitrary metric
 //! spaces.
 
-use std::hash::Hash;
-use std::hash::Hasher;
+use core::hash::{Hash, Hasher};
 
-use bitvec::prelude::*;
+// use bitvec::prelude::*;
+use distances::Number;
 
 use super::PartitionCriteria;
-use crate::dataset::Dataset;
-use crate::number::Number;
-use crate::utils::helpers;
+use crate::{dataset::Dataset, utils::helpers};
 
 pub type Ratios = [f64; 6];
 
@@ -32,11 +30,11 @@ pub type Ratios = [f64; 6];
 /// For now, `Cluster` names are unique within a single tree. We plan on adding
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug)]
-pub(crate) struct Cluster<T: Number, U: Number, D: Dataset<T, U>> {
+pub(crate) struct Cluster<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     _t: std::marker::PhantomData<T>,
     _d: std::marker::PhantomData<D>,
     cardinality: usize,
-    history: BitVec,
+    history: Vec<bool>,
     arg_center: usize,
     arg_radius: usize,
     radius: U,
@@ -64,7 +62,7 @@ enum Index {
     Empty,
 }
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartialEq for Cluster<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> PartialEq for Cluster<T, U, D> {
     fn eq(&self, other: &Self) -> bool {
         self.history == other.history
     }
@@ -72,12 +70,22 @@ impl<T: Number, U: Number, D: Dataset<T, U>> PartialEq for Cluster<T, U, D> {
 
 /// Two clusters are equal if they have the same name. This only holds, for
 /// now, for clusters in the same tree.
-impl<T: Number, U: Number, D: Dataset<T, U>> Eq for Cluster<T, U, D> {}
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Eq for Cluster<T, U, D> {}
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartialOrd for Cluster<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> PartialOrd for Cluster<T, U, D> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.depth() == other.depth() {
-            self.history.partial_cmp(&other.history)
+            self.history
+                .iter()
+                .zip(other.history.iter())
+                .find(|(&l, &r)| l != r)
+                .map(|(&l, _)| {
+                    if l {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        std::cmp::Ordering::Less
+                    }
+                })
         } else {
             self.depth().partial_cmp(&other.depth())
         }
@@ -87,7 +95,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> PartialOrd for Cluster<T, U, D> {
 /// `Cluster`s can be sorted based on their name. `Cluster`s are sorted by
 /// non-decreasing depths and then by their names. Sorting a tree of `Cluster`s
 /// will leave them in the order of a breadth-first traversal.
-impl<T: Number, U: Number, D: Dataset<T, U>> Ord for Cluster<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Ord for Cluster<T, U, D> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
@@ -98,26 +106,26 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Ord for Cluster<T, U, D> {
 ///
 /// TODO: Add a tree-based prefix to the cluster names when we need to hash
 /// clusters from different trees into the same collection.
-impl<T: Number, U: Number, D: Dataset<T, U>> Hash for Cluster<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Hash for Cluster<T, U, D> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name().hash(state)
     }
 }
 
-impl<T: Number, U: Number, D: Dataset<T, U>> std::fmt::Display for Cluster<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> std::fmt::Display for Cluster<T, U, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
     /// Creates a new root `Cluster` for the metric space.
     ///
     /// # Arguments
     ///
     /// * `dataset`: on which to create the `Cluster`.
     pub fn new_root(data: &D, indices: &[usize], seed: Option<u64>) -> Self {
-        let name = bitvec![1];
+        let name = vec![true];
         Cluster::new(data, indices, name, seed)
     }
 
@@ -129,7 +137,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
     /// * `indices`: The indices of instances from the `dataset` that are
     /// contained in the `Cluster`.
     /// * `name`: `BitVec` name for the `Cluster`.
-    pub fn new(data: &D, indices: &[usize], history: BitVec, seed: Option<u64>) -> Self {
+    pub fn new(data: &D, indices: &[usize], history: Vec<bool>, seed: Option<u64>) -> Self {
         let cardinality = indices.len();
 
         // TODO: Explore with different values for the threshold e.g. 10, 100, 1000, etc.
@@ -164,7 +172,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
 
     /// Returns two new `Cluster`s that are the left and right children of this
     /// `Cluster`.
-    fn partition_once(&self, data: &D) -> ([(usize, Vec<usize>, BitVec); 2], U) {
+    #[allow(clippy::type_complexity)]
+    fn partition_once(&self, data: &D) -> ([(usize, Vec<usize>, Vec<bool>); 2], U) {
         let indices = match &self.index {
             Index::Indices(indices) => indices,
             _ => panic!("`build` can only be called once per cluster."),
@@ -465,8 +474,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
 
     /// The `history` of the `Cluster` as a bool vector.
     #[allow(dead_code)]
-    pub fn history(&self) -> Vec<bool> {
-        self.history.iter().map(|v| *v).collect()
+    pub fn history(&self) -> &[bool] {
+        &self.history
     }
 
     /// The `name` of the `Cluster` as a hex-String.
@@ -475,7 +484,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
         let padding = if d % 4 == 0 { 0 } else { 4 - d % 4 };
         let bin_name = (0..padding)
             .map(|_| "0")
-            .chain(self.history.iter().map(|b| if *b { "1" } else { "0" }))
+            .chain(self.history.iter().map(|&b| if b { "1" } else { "0" }))
             .collect::<Vec<_>>();
         bin_name
             .chunks_exact(4)
@@ -580,7 +589,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
     #[allow(dead_code)]
     pub fn is_ancestor_of(&self, other: &Self) -> bool {
-        self.depth() < other.depth() && self.history.iter().zip(other.history.iter()).all(|(l, r)| *l == *r)
+        self.depth() < other.depth() && self.history.iter().zip(other.history.iter()).all(|(&l, &r)| l == r)
     }
 
     /// Whether this `Cluster` is an descendant of the `other` `Cluster`.
@@ -626,7 +635,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
     }
 
     /// Distance from the `center` to the given instance.
-    pub fn distance_to_instance(&self, data: &D, instance: &[T]) -> U {
+    pub fn distance_to_instance(&self, data: &D, instance: T) -> U {
         data.query_to_one(instance, self.arg_center())
     }
 
@@ -639,7 +648,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
-    pub fn overlapping_children(&self, data: &D, query: &[T], radius: U) -> Vec<&Self> {
+    pub fn overlapping_children(&self, data: &D, query: T, radius: U) -> Vec<&Self> {
         let (l, left, r, right, lr) = match &self.children {
             None => panic!("Can only be called on non-leaf clusters."),
             Some(([(l, left), (r, right)], lr)) => (*l, left.as_ref(), *r, right.as_ref(), *lr),
@@ -650,7 +659,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
         let swap = ql < qr;
         let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
 
-        if (ql + qr) * (ql - qr) <= U::from(2).unwrap() * lr * radius {
+        if (ql + qr) * (ql - qr) <= U::from(2) * lr * radius {
             vec![left, right]
         } else if swap {
             vec![left]
@@ -684,18 +693,20 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
 
 #[cfg(test)]
 mod tests {
-    use crate::cluster::Tree;
-    use crate::dataset::{Dataset, VecVec};
-    use crate::distances;
+    use distances::vectors::euclidean;
+
+    use crate::{
+        cluster::Tree,
+        dataset::{Dataset, VecVec},
+    };
 
     use super::*;
 
     #[test]
     fn test_cluster() {
-        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
-        let metric = distances::f32::euclidean;
+        let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
         let name = "test".to_string();
-        let data = VecVec::new(data, metric, name, false);
+        let data = VecVec::new(data, euclidean::<f32, f32>, name, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
         let cluster = Cluster::new_root(&data, &indices, Some(42)).partition(&data, &partition_criteria, true);
@@ -720,22 +731,12 @@ mod tests {
 
     #[test]
     fn test_leaf_indices() {
-        let data = vec![
-            vec![10.],
-            vec![1.],
-            vec![-5.],
-            vec![8.],
-            vec![3.],
-            vec![2.],
-            vec![0.5],
-            vec![0.],
-        ];
-        let metric = distances::f32::euclidean;
+        let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
         let name = "test".to_string();
-        let data = VecVec::new(data, metric, name, false);
+        let data = VecVec::new(data, euclidean::<f32, f32>, name, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
-        let tree = Tree::new(data, Some(42)).partition(&partition_criteria, true);
+        let tree = Tree::new(data, Some(42)).partition(partition_criteria, true);
 
         let mut leaf_indices = tree.root().leaf_indices();
         leaf_indices.sort();
@@ -748,23 +749,13 @@ mod tests {
 
         #[test]
         fn test_end_to_end_reordering() {
-            let data = vec![
-                vec![10.],
-                vec![1.],
-                vec![-5.],
-                vec![8.],
-                vec![3.],
-                vec![2.],
-                vec![0.5],
-                vec![0.],
-            ];
-            let metric = distances::f32::euclidean;
+            let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
             let name = "test".to_string();
-            let data = VecVec::new(data, metric, name, false);
+            let data = VecVec::new(data, euclidean::<f32, f32>, name, false);
             let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
             let tree = Tree::new(data, Some(42))
-                .partition(&partition_criteria, true)
+                .partition(partition_criteria, true)
                 .depth_first_reorder();
 
             // Assert that the root's indices actually cover the whole dataset.
@@ -778,22 +769,12 @@ mod tests {
         fn test_tree_transformation_before_after_reordering() {
             // Test that assures the pre and post reorder Index assignment works
             // as expected.
-            let data = vec![
-                vec![10.],
-                vec![1.],
-                vec![-5.],
-                vec![8.],
-                vec![3.],
-                vec![2.],
-                vec![0.5],
-                vec![0.],
-            ];
-            let metric = distances::f32::euclidean;
+            let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
             let name = "test".to_string();
-            let data = VecVec::new(data, metric, name, false);
+            let data = VecVec::new(data, euclidean::<f32, f32>, name, false);
             let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
-            let tree = Tree::new(data, Some(42)).partition(&partition_criteria, true);
+            let tree = Tree::new(data, Some(42)).partition(partition_criteria, true);
 
             assert!(matches!(tree.root().index, Index::Empty));
 

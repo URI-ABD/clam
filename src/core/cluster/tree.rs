@@ -1,5 +1,6 @@
+use distances::Number;
+
 use crate::dataset::Dataset;
-use crate::number::Number;
 
 use super::{Cluster, PartitionCriteria};
 
@@ -9,13 +10,13 @@ use super::{Cluster, PartitionCriteria};
 /// Typically one will chain calls to `new`, `build`, and finally
 /// `partition` to construct a fully realized `Tree`.
 #[derive(Debug)]
-pub struct Tree<T: Number, U: Number, D: Dataset<T, U>> {
+pub struct Tree<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     data: D,
     root: Cluster<T, U, D>,
     _t: std::marker::PhantomData<T>,
 }
 
-impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     /// Constructs a new `Tree` for a given dataset. Importantly,
     /// this does not build nor partition the tree.
     ///
@@ -57,8 +58,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     ///
     /// # Returns
     /// A new `Tree` with a partitioned root.
-    pub fn par_partition(mut self, criteria: &PartitionCriteria<T, U, D>, recursive: bool) -> Self {
-        self.root = self.root.par_partition(&self.data, criteria, recursive);
+    pub fn par_partition(mut self, criteria: PartitionCriteria<T, U, D>, recursive: bool) -> Self {
+        self.root = self.root.par_partition(&self.data, &criteria, recursive);
         self
     }
 
@@ -69,8 +70,8 @@ impl<T: Number, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     ///
     /// # Returns
     /// A new `Tree` with a partitioned root.
-    pub fn partition(mut self, criteria: &PartitionCriteria<T, U, D>, recursive: bool) -> Self {
-        self.root = self.root.partition(&self.data, criteria, recursive);
+    pub fn partition(mut self, criteria: PartitionCriteria<T, U, D>, recursive: bool) -> Self {
+        self.root = self.root.partition(&self.data, &criteria, recursive);
         self
     }
 
