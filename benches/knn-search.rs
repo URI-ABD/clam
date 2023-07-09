@@ -1,13 +1,11 @@
 use criterion::*;
 
-use abd_clam::cluster::PartitionCriteria;
-use abd_clam::dataset::VecVec;
-use abd_clam::distances::f32::METRICS;
-use abd_clam::search::cakes::CAKES;
-use abd_clam::utils::synthetic_data;
+use symagen::random_data;
+
+use abd_clam::{cluster::PartitionCriteria, dataset::VecVec, search::cakes::CAKES, utils::METRICS};
 
 fn cakes(c: &mut Criterion) {
-    for (metric_name, metric) in METRICS {
+    for &(metric_name, metric) in METRICS {
         let mut group = c.benchmark_group(format!("knn-{metric_name}"));
         group.significance_level(0.025).sample_size(10);
 
@@ -20,13 +18,15 @@ fn cakes(c: &mut Criterion) {
         group.throughput(Throughput::Elements(num_queries as u64));
 
         let seed = 42;
-        let data = synthetic_data::random_f32(100_000, 10, 0., 1., seed);
-        let queries = synthetic_data::random_f32(num_queries, 10, 0., 1., seed);
-        let queries = queries.iter().collect::<Vec<_>>();
+        let (dimensionality, min_val, max_val) = (10, 0., 1.);
+        let data = random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
+        let queries = random_data::random_f32(num_queries, dimensionality, min_val, max_val, seed);
+        let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+        let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
 
         let dataset = VecVec::new(data, metric, "100k-10".to_string(), false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = CAKES::new(dataset, Some(seed)).build(&criteria);
+        let cakes = CAKES::new(dataset, Some(seed)).build(criteria);
 
         for k in [1, 10, 100] {
             let id = BenchmarkId::new("100k-10", k);

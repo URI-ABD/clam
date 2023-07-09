@@ -2,13 +2,10 @@ use std::time::Instant;
 
 use num_format::{Locale, ToFormattedString};
 
-use abd_clam::cluster::PartitionCriteria;
-use abd_clam::dataset::VecVec;
-use abd_clam::search::cakes::CAKES;
+use abd_clam::{cluster::PartitionCriteria, dataset::VecVec, search::cakes::CAKES};
 
 pub mod utils;
 
-use utils::distances;
 use utils::search_readers;
 
 fn main() {
@@ -28,20 +25,21 @@ fn main() {
         println!();
         println!("Running knn-search on {data_name} ...");
 
-        let metric = distances::from_name("euclidean_sq");
+        let metric = distances::vectors::euclidean_sq::<f32, f32>;
 
         let (data, queries) = search_readers::read_search_data(data_name).unwrap();
+        let data = data.iter().map(|v| v.as_slice()).collect();
+        let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+
         let data = VecVec::new(data, metric, data_name.to_string(), false);
-        // let data = VecVec::new(data, distances::euclidean_sq, data_name.to_string(), false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let start = Instant::now();
-        let cakes = CAKES::new(data, Some(42)).build(&criteria);
+        let cakes = CAKES::new(data, Some(42)).build(criteria);
         let duration = start.elapsed().as_secs_f32();
         println!("Built the tree in {duration:.3} seconds ...");
 
         let num_queries = queries.len();
-        let queries = queries.iter().collect::<Vec<_>>();
 
         for f in [10, 25, 50, 100].into_iter().rev() {
             // for k in [1, 10, 100] {

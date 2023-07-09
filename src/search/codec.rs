@@ -1,7 +1,8 @@
 //! Implements Compression and Decompression for `Datasets` and `Clusters`.
 
-use crate::core::dataset::Dataset;
-use crate::core::number::Number;
+use distances::Number;
+
+use crate::dataset::Dataset;
 
 pub trait CodecDataset<T: Number, U: Number>: Dataset<T, U> {
     /// Encodes the target instance in terms of the reference and produces the

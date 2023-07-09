@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::hash::Hash;
-use std::hash::Hasher;
+use core::hash::{Hash, Hasher};
 
-use crate::cluster::Cluster;
-use crate::dataset::Dataset;
-use crate::number::Number;
+use std::collections::{HashMap, HashSet};
+
+use distances::Number;
+
+use crate::{cluster::Cluster, dataset::Dataset};
 
 type ClusterSet<'a, T, U, D> = HashSet<&'a Cluster<T, U, D>>;
 type EdgeSet<'a, T, U, D> = HashSet<&'a Edge<'a, T, U, D>>;
@@ -213,7 +212,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> Graph<'a, T, U, D> {
         self.adjacency_matrix = Some(
             self.distance_matrix()
                 .iter()
-                .map(|row| row.iter().map(|v| !v.is_zero()).collect())
+                .map(|row| row.iter().map(|&v| v != U::zero()).collect())
                 .collect(),
         );
         self

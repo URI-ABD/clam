@@ -1,16 +1,15 @@
 use rand::prelude::*;
 use rayon::prelude::*;
 
-use crate::number::Number;
+use distances::Number;
 
-pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
+pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
     fn name(&self) -> String;
     fn cardinality(&self) -> usize;
-    fn dimensionality(&self) -> usize;
     fn is_metric_expensive(&self) -> bool;
     fn indices(&self) -> &[usize];
     fn one_to_one(&self, left: usize, right: usize) -> U;
-    fn query_to_one(&self, query: &[T], index: usize) -> U;
+    fn query_to_one(&self, query: T, index: usize) -> U;
 
     /// Swaps the values at two given indices in the dataset.
     ///
@@ -45,7 +44,7 @@ pub trait Dataset<T: Number, U: Number>: std::fmt::Debug + Send + Sync {
         self.many_to_many(indices, indices)
     }
 
-    fn query_to_many(&self, query: &[T], indices: &[usize]) -> Vec<U> {
+    fn query_to_many(&self, query: T, indices: &[usize]) -> Vec<U> {
         if self.is_metric_expensive() || indices.len() > 1_000 {
             indices
                 .par_iter()

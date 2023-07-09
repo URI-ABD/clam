@@ -1,12 +1,13 @@
 //! Criteria used for partitioning `Cluster`s.
 
+use distances::Number;
+
 use crate::dataset::Dataset;
-use crate::number::Number;
 
 use super::Cluster;
 
 // Note (OWM): This leaks cluster if we allow it to be public. Getting this to make sense is a TODO
-pub(crate) trait PartitionCriterion<T: Number, U: Number, D: Dataset<T, U>>:
+pub(crate) trait PartitionCriterion<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>:
     std::fmt::Debug + Send + Sync
 {
     // TODO (Najib): figure out how not to lean Cluster here
@@ -14,12 +15,12 @@ pub(crate) trait PartitionCriterion<T: Number, U: Number, D: Dataset<T, U>>:
 }
 
 #[derive(Debug)]
-pub struct PartitionCriteria<T: Number, U: Number, D: Dataset<T, U>> {
+pub struct PartitionCriteria<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     criteria: Vec<Box<dyn PartitionCriterion<T, U, D>>>,
     check_all: bool,
 }
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriteria<T, U, D> {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> PartitionCriteria<T, U, D> {
     pub fn new(check_all: bool) -> Self {
         Self {
             criteria: Vec::new(),
@@ -56,7 +57,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriteria<T, U, D> {
 #[derive(Debug, Clone)]
 struct MaxDepth(usize);
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for MaxDepth {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for MaxDepth {
     fn check(&self, c: &Cluster<T, U, D>) -> bool {
         c.depth() < self.0
     }
@@ -65,7 +66,7 @@ impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for Max
 #[derive(Debug, Clone)]
 struct MinCardinality(usize);
 
-impl<T: Number, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for MinCardinality {
+impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> PartitionCriterion<T, U, D> for MinCardinality {
     fn check(&self, c: &Cluster<T, U, D>) -> bool {
         c.cardinality() > self.0
     }

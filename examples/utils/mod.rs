@@ -2,27 +2,26 @@ use std::collections::HashSet;
 
 use rayon::prelude::*;
 
-use abd_clam::dataset::Dataset;
-use abd_clam::number::Number;
-use abd_clam::search::cakes::CAKES;
-use abd_clam::utils::synthetic_data;
+use distances::Number;
+use symagen::random_data;
+
+use abd_clam::{dataset::Dataset, search::cakes::CAKES};
 
 pub mod anomaly_readers;
-pub mod distances;
 pub mod search_readers;
 
 #[allow(clippy::type_complexity)]
 pub fn make_data(n: usize, d: usize, q: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>, String) {
     let min_val = 0.;
     let max_val = 1.;
-    let data = synthetic_data::random_f32(n * 1_000, d, min_val, max_val, 42);
-    let queries = synthetic_data::random_f32(q, d, min_val, max_val, 0);
+    let data = random_data::random_f32(n * 1_000, d, min_val, max_val, 42);
+    let queries = random_data::random_f32(q, d, min_val, max_val, 0);
     let name = format!("{n}k-{d}");
 
     (data, queries, name)
 }
 
-pub fn check_search<T: Number, U: Number, D: Dataset<T, U>>(queries: &[&Vec<T>], cakes: &CAKES<T, U, D>, r: U) {
+pub fn check_search<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(queries: &[T], cakes: &CAKES<T, U, D>, r: U) {
     let iqp = queries
         .par_iter()
         .enumerate()

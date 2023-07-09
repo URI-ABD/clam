@@ -8,10 +8,10 @@
 
 // pub mod anomaly;
 mod core;
-pub mod distances;
+pub mod needleman_wunch;
 pub mod search;
 pub mod utils;
 
-pub use crate::core::{cluster, dataset, graph, number};
+pub use crate::core::{cluster, dataset, graph};
 
-pub const VERSION: &str = "0.13.0";
+pub const VERSION: &str = "0.14.0";
