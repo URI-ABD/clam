@@ -12,7 +12,7 @@ use super::{Cluster, PartitionCriteria};
 #[derive(Debug)]
 pub struct Tree<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     data: D,
-    root: Cluster<T, U, D>,
+    root: Cluster<T, U>,
     _t: std::marker::PhantomData<T>,
 }
 
@@ -32,7 +32,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
 
     /// # Returns
     /// A reference to the root `Cluster` of the tree
-    pub(crate) fn root(&self) -> &Cluster<T, U, D> {
+    pub(crate) fn root(&self) -> &Cluster<T, U> {
         &self.root
     }
 
@@ -44,23 +44,13 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     /// # Returns
     /// The cardinality of the `Tree`
     pub fn cardinality(&self) -> usize {
-        self.root.cardinality()
+        self.root.cardinality
     }
 
     /// # Returns
     /// The radius of the `Tree`
     pub fn radius(&self) -> U {
-        self.root.radius()
-    }
-
-    /// # Arguments
-    /// criteria: A `PartitionCriteria` through which the `Tree`'s root will be partitioned.
-    ///
-    /// # Returns
-    /// A new `Tree` with a partitioned root.
-    pub fn par_partition(mut self, criteria: PartitionCriteria<T, U, D>, recursive: bool) -> Self {
-        self.root = self.root.par_partition(&self.data, &criteria, recursive);
-        self
+        self.root.radius
     }
 
     /// Partitions the `Tree` based off of a given criteria
@@ -70,22 +60,13 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     ///
     /// # Returns
     /// A new `Tree` with a partitioned root.
-    pub fn partition(mut self, criteria: PartitionCriteria<T, U, D>, recursive: bool) -> Self {
-        self.root = self.root.partition(&self.data, &criteria, recursive);
+    pub fn partition(mut self, criteria: &PartitionCriteria<T, U>) -> Self {
+        self.root = self.root.partition(&mut self.data, criteria);
         self
     }
 
     /// Returns the indices contained in the root of the `Tree`.
     pub fn indices(&self) -> &[usize] {
-        self.root.indices(&self.data)
-    }
-
-    /// Reorders the `Tree`'s underlying dataset based off of a depth first traversal of a
-    /// tree and reformats the tree to reflect the reordering.
-    pub fn depth_first_reorder(mut self) -> Self {
-        let leaf_indices = self.root.leaf_indices();
-        self.data.reorder(&leaf_indices);
-        self.root.dfr(&self.data, 0);
-        self
+        self.data.indices()
     }
 }

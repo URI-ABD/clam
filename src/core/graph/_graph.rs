@@ -151,7 +151,7 @@ impl<'a, T: Number, U: Number, D: Dataset<T, U>> Graph<'a, T, U, D> {
                 .iter()
                 .fold((0, usize::MAX, 0), |(population, min_depth, max_depth), &c| {
                     (
-                        population + c.cardinality(),
+                        population + c.cardinality,
                         std::cmp::min(min_depth, c.depth()),
                         std::cmp::max(max_depth, c.depth()),
                     )
