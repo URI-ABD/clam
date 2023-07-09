@@ -2,13 +2,14 @@ use distances::Number;
 
 use super::Dataset;
 
+// TODO: Remove pub from fields
 pub struct VecVec<T: Send + Sync + Copy, U: Number> {
-    name: String,
-    data: Vec<T>,
-    metric: fn(T, T) -> U,
-    is_expensive: bool,
-    indices: Vec<usize>,
-    reordering: Option<Vec<usize>>,
+    pub name: String,
+    pub data: Vec<T>,
+    pub metric: fn(T, T) -> U,
+    pub is_expensive: bool,
+    pub indices: Vec<usize>,
+    pub reordering: Option<Vec<usize>>,
 }
 
 impl<T: Send + Sync + Copy, U: Number> VecVec<T, U> {
@@ -33,8 +34,8 @@ impl<T: Send + Sync + Copy, U: Number> std::fmt::Debug for VecVec<T, U> {
 }
 
 impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecVec<T, U> {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn cardinality(&self) -> usize {
@@ -49,12 +50,12 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecVec<T, U> {
         &self.indices
     }
 
-    fn one_to_one(&self, left: usize, right: usize) -> U {
-        (self.metric)(self.data[left], self.data[right])
+    fn get(&self, index: usize) -> T {
+        self.data[index]
     }
 
-    fn query_to_one(&self, query: T, index: usize) -> U {
-        (self.metric)(query, self.data[index])
+    fn metric(&self) -> fn(T, T) -> U {
+        self.metric
     }
 
     fn swap(&mut self, i: usize, j: usize) {

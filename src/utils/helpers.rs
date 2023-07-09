@@ -65,3 +65,7 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
         }
     }
 }
+
+pub fn find_index<T: PartialEq>(values: &[T], value: &T) -> usize {
+    values.iter().position(|v| v == value).unwrap()
+}
