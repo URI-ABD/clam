@@ -10,8 +10,8 @@ pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     tree: &'a Tree<T, U, D>,
     query: T,
     k: usize,
-    layer: Vec<&'a Cluster<T, U, D>>,
-    leaves: Vec<Grain<'a, T, U, D>>,
+    layer: Vec<&'a Cluster<T, U>>,
+    leaves: Vec<Grain<'a, T, U>>,
     is_refined: bool,
     hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
 }
@@ -34,8 +34,12 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
     }
 
     pub fn refine_step(&mut self) {
-        let centers = self.layer.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
-        let distances = self.tree.data().query_to_many(self.query, &centers);
+        let data = self.tree.data();
+        let distances = self
+            .layer
+            .iter()
+            .map(|c| c.distance_to_instance(data, self.query))
+            .collect::<Vec<_>>();
 
         let mut grains = self
             .layer
@@ -43,10 +47,10 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
             .zip(distances.iter())
             .flat_map(|(c, &d)| {
                 if c.is_singleton() {
-                    vec![Grain::new(c, d, c.cardinality())]
+                    vec![Grain::new(c, d, c.cardinality)]
                 } else {
                     let g = Grain::new(c, d, 1);
-                    let g_max = Grain::new(c, d + c.radius(), c.cardinality() - 1);
+                    let g_max = Grain::new(c, d + c.radius, c.cardinality - 1);
                     vec![g, g_max]
                 }
             })
@@ -76,15 +80,15 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
 }
 
 #[allow(dead_code)]
-struct Grain<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+struct Grain<'a, T: Send + Sync + Copy, U: Number> {
     t: std::marker::PhantomData<T>,
-    c: &'a Cluster<T, U, D>,
+    c: &'a Cluster<T, U>,
     d: U,
     multiplicity: usize,
 }
 
-impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Grain<'a, T, U, D> {
-    fn new(c: &'a Cluster<T, U, D>, d: U, multiplicity: usize) -> Self {
+impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
+    fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
         let t = Default::default();
         Self { t, c, d, multiplicity }
     }

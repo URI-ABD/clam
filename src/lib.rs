@@ -12,6 +12,6 @@ mod core;
 pub mod needleman_wunch;
 pub mod utils;
 
-pub use crate::core::{cluster, dataset, graph};
+pub use crate::core::{cluster, dataset};
 
 pub const VERSION: &str = "0.15.0";
