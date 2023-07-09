@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use distances::Number;
 use symagen::random_data;
 
-use abd_clam::{dataset::Dataset, search::cakes::CAKES};
+use abd_clam::{cakes::CAKES, dataset::Dataset};
 
 pub mod anomaly_readers;
 pub mod search_readers;

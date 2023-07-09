@@ -21,4 +21,4 @@ from .core import graph_criteria
 from .core import metric
 from .core import space
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
