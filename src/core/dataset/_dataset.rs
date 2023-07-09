@@ -4,12 +4,12 @@ use rayon::prelude::*;
 use distances::Number;
 
 pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
     fn cardinality(&self) -> usize;
     fn is_metric_expensive(&self) -> bool;
     fn indices(&self) -> &[usize];
-    fn one_to_one(&self, left: usize, right: usize) -> U;
-    fn query_to_one(&self, query: T, index: usize) -> U;
+    fn get(&self, index: usize) -> T;
+    fn metric(&self) -> fn(T, T) -> U;
 
     /// Swaps the values at two given indices in the dataset.
     ///
@@ -23,6 +23,19 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// `i` - An index in the dataset
     /// `j` - An index in the dataset
     fn swap(&mut self, i: usize, j: usize);
+
+    // TODO: Clean up the names on these
+    fn set_reordered_indices(&mut self, indices: &[usize]);
+    // This method will fail if an `reorder` has not been called.
+    fn get_reordered_index(&self, i: usize) -> usize;
+
+    fn one_to_one(&self, left: usize, right: usize) -> U {
+        (self.metric())(self.get(left), self.get(right))
+    }
+
+    fn query_to_one(&self, query: T, index: usize) -> U {
+        (self.metric())(query, self.get(index))
+    }
 
     fn are_instances_equal(&self, left: usize, right: usize) -> bool {
         self.one_to_one(left, right) == U::zero()
@@ -41,6 +54,8 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     }
 
     fn pairwise(&self, indices: &[usize]) -> Vec<Vec<U>> {
+        // TODO: Don't repeat the work of having to calculate the metric twice
+        // for each pair.
         self.many_to_many(indices, indices)
     }
 
@@ -152,9 +167,4 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
             .unwrap()
             .0]
     }
-
-    // TODO: Clean up the names on these
-    fn set_reordered_indices(&mut self, indices: &[usize]);
-    // This method will fail if an `reorder` has not been called.
-    fn get_reordered_index(&self, i: usize) -> usize;
 }
