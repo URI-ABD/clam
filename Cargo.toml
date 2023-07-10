@@ -17,6 +17,7 @@ readme = "README.md"
 publish = true
 
 [dependencies]
+simd_euclidean = { git = "https://github.com/nishaq503/simd-euclidean" }
 # libm = "0.2.7"  # no-std
 
 [dev-dependencies]
@@ -42,4 +43,8 @@ harness = false
 
 [[bench]]
 name = "needleman-wunsch"
+harness = false
+
+[[bench]]
+name = "simd-euclidean"
 harness = false

@@ -24,6 +24,7 @@ pub mod number;
 pub use number::Number;
 
 pub mod sets;
+pub mod simd;
 pub mod strings;
 pub mod vectors;
 
