@@ -2,10 +2,7 @@
 # Local files and folders
 ################################################################################
 /*.csv
-/flamegraph.svg
-/*perf.*
-/callgrind.*
-/*.stacks
+/profile.json
 .DS_Store
 
 
