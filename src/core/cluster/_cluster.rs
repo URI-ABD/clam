@@ -35,10 +35,8 @@ pub(crate) struct Cluster<T: Send + Sync + Copy, U: Number> {
     pub offset: usize,
     pub cardinality: usize,
     pub center: T,
-    #[allow(dead_code)]
     pub radial: T,
     pub radius: U,
-    pub arg_radius: usize,
     #[allow(dead_code)]
     pub lfd: f64,
     pub children: Option<Children<T, U>>,
@@ -159,7 +157,6 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             center,
             radial,
             radius,
-            arg_radius,
             lfd,
             children: None,
             ratios: None,
@@ -170,7 +167,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         assert_eq!(self.depth(), 0, "This method may only be called on a root cluster.");
 
         let mut indices = data.indices().to_vec();
-        (self, indices) = self._partition(data, criteria, 0, indices);
+        (self, indices) = self._partition(data, criteria, indices);
         data.reorder(&indices);
 
         self
@@ -180,22 +177,21 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         mut self,
         data: &D,
         criteria: &PartitionCriteria<T, U>,
-        offset: usize,
         mut indices: Vec<usize>,
     ) -> (Self, Vec<usize>) {
         if criteria.check(&self) {
             let ([(l_pole, l_indices), (r_pole, r_indices)], polar_distance) = self.partition_once(data, indices);
 
-            let (l_offset, r_offset) = (offset, offset + l_indices.len());
+            let r_offset = self.offset + l_indices.len();
 
             let ((left, l_indices), (right, r_indices)) = rayon::join(
                 || {
-                    Cluster::new(data, self.seed, self.child_history(false), l_offset, &l_indices)
-                        ._partition(data, criteria, l_offset, l_indices)
+                    Cluster::new(data, self.seed, self.child_history(false), self.offset, &l_indices)
+                        ._partition(data, criteria, l_indices)
                 },
                 || {
                     Cluster::new(data, self.seed, self.child_history(true), r_offset, &r_indices)
-                        ._partition(data, criteria, r_offset, r_indices)
+                        ._partition(data, criteria, r_indices)
                 },
             );
 
@@ -215,37 +211,30 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(T, Vec<usize>); 2], U) {
-        let l_pole = self.arg_radius;
-        let l_distances = data.one_to_many(l_pole, &indices);
+        let l_distances = data.query_to_many(self.radial, &indices);
 
         let (arg_r, polar_distance) = helpers::arg_max(&l_distances);
-        let r_pole = indices[arg_r];
-        let r_distances = data.one_to_many(r_pole, &indices);
+        let r_pole = data.get(indices[arg_r]);
+        let r_distances = data.query_to_many(r_pole, &indices);
 
-        let (l, r) = indices
+        let (l_indices, r_indices) = indices
             .into_iter()
             .zip(l_distances.into_iter())
             .zip(r_distances.into_iter())
-            .filter(|&((i, _), _)| i != l_pole && i != r_pole)
             .partition::<Vec<_>, _>(|&((_, l), r)| l <= r);
 
-        let l_indices = l
-            .into_iter()
-            .map(|((i, _), _)| i)
-            .chain([l_pole].into_iter())
-            .collect::<Vec<_>>();
-        let r_indices = r
-            .into_iter()
-            .map(|((i, _), _)| i)
-            .chain([r_pole].into_iter())
-            .collect::<Vec<_>>();
+        let l_indices = Self::drop_distances(l_indices);
+        let r_indices = Self::drop_distances(r_indices);
 
-        let (l_pole, r_pole) = (data.get(l_pole), data.get(r_pole));
         if l_indices.len() < r_indices.len() {
-            ([(r_pole, r_indices), (l_pole, l_indices)], polar_distance)
+            ([(r_pole, r_indices), (self.radial, l_indices)], polar_distance)
         } else {
-            ([(l_pole, l_indices), (r_pole, r_indices)], polar_distance)
+            ([(self.radial, l_indices), (r_pole, r_indices)], polar_distance)
         }
+    }
+
+    fn drop_distances(indices: Vec<((usize, U), U)>) -> Vec<usize> {
+        indices.into_iter().map(|((i, _), _)| i).collect()
     }
 
     fn child_history(&self, right: bool) -> Vec<bool> {
@@ -490,7 +479,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
     #[allow(dead_code)]
     pub fn is_ancestor_of(&self, other: &Self) -> bool {
-        self.depth() < other.depth() && self.history.iter().zip(other.history.iter()).all(|(&l, &r)| l == r)
+        self.depth() < other.depth() && self.history.as_slice() == &other.history[..self.history.len()]
     }
 
     /// Whether this `Cluster` is an descendant of the `other` `Cluster`.
