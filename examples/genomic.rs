@@ -3,7 +3,11 @@ use std::time::Instant;
 use distances::strings::levenshtein;
 use symagen::random_data;
 
-use abd_clam::{cakes::CAKES, cluster::PartitionCriteria, dataset::VecVec};
+use abd_clam::{
+    cakes::{RnnAlgorithm, CAKES},
+    cluster::PartitionCriteria,
+    dataset::VecVec,
+};
 
 fn main() {
     let seed = 42;
@@ -17,13 +21,13 @@ fn main() {
     let data = VecVec::new(data, metric, "genomic".to_string(), true);
 
     let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-    let model = CAKES::new(data, Some(42)).build(criteria);
+    let model = CAKES::new(data, Some(42), criteria);
 
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
     let queries = queries.iter().map(|v| v.as_str()).collect::<Vec<_>>();
     for radius in [10, 25, 50, 60] {
         let start = Instant::now();
-        let results = model.par_batch_rnn_search(&queries, radius);
+        let results = model.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered);
         let duration = start.elapsed().as_secs_f32();
 
         let num_results = results.into_iter().map(|v| v.len()).sum::<usize>();
