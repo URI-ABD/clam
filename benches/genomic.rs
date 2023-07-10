@@ -1,13 +1,12 @@
 use criterion::*;
 
-use distances::strings::levenshtein;
 use symagen::random_data;
 
 use abd_clam::{
     cakes::{RnnAlgorithm, CAKES},
     cluster::PartitionCriteria,
     dataset::VecVec,
-    needleman_wunch::nw_distance,
+    COMMON_METRICS_STR,
 };
 
 fn genomic(c: &mut Criterion) {
@@ -35,10 +34,7 @@ fn genomic(c: &mut Criterion) {
     let data = data.iter().map(|v| v.as_str()).collect::<Vec<_>>();
     let queries = queries.iter().map(|v| v.as_str()).collect::<Vec<_>>();
 
-    #[allow(clippy::type_complexity)]
-    let metrics: [(&str, fn(&str, &str) -> u16); 2] = [("levenshtein", levenshtein), ("needleman_wunsch", nw_distance)];
-
-    for (metric_name, metric) in metrics {
+    for &(metric_name, metric) in COMMON_METRICS_STR {
         println!("Building cakes for {} ...", metric_name);
         let name = format!("{}-{}", metric_name, cardinality);
         let dataset = VecVec::new(data.clone(), metric, name, true);

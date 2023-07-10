@@ -1,13 +1,17 @@
-use core::f64::{consts::SQRT_2, EPSILON};
+use core::{
+    cmp::Ordering,
+    f64::{consts::SQRT_2, EPSILON},
+};
 
 use distances::Number;
 
 /// Return the index and value of the minimum value in the given slice of values.
+#[allow(dead_code)]
 pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     let (i, v) = values
         .iter()
         .enumerate()
-        .min_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap())
+        .min_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Less))
         .unwrap();
     (i, *v)
 }
@@ -17,17 +21,19 @@ pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
     let (i, v) = values
         .iter()
         .enumerate()
-        .max_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap())
+        .max_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Less))
         .unwrap();
     (i, *v)
 }
 
 /// Return the mean value of the given slice of values.
+#[allow(dead_code)]
 pub fn mean<T: Number>(values: &[T]) -> f64 {
     values.iter().copied().sum::<T>().as_f64() / values.len().as_f64()
 }
 
 /// Return the standard deviation value of the given slice of values.
+#[allow(dead_code)]
 pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
     values
         .iter()
@@ -40,6 +46,7 @@ pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
 }
 
 /// Apply Gaussian normalization to the given values.
+#[allow(dead_code)]
 pub fn normalize_1d(values: &[f64]) -> Vec<f64> {
     let mean = mean(values);
     let std = (EPSILON + sd(values, mean)) * SQRT_2;
@@ -64,8 +71,4 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
             1.
         }
     }
-}
-
-pub fn find_index<T: PartialEq>(values: &[T], value: &T) -> usize {
-    values.iter().position(|v| v == value).unwrap()
 }
