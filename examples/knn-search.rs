@@ -2,7 +2,11 @@ use std::time::Instant;
 
 use num_format::{Locale, ToFormattedString};
 
-use abd_clam::{cakes::CAKES, cluster::PartitionCriteria, dataset::VecVec};
+use abd_clam::{
+    cakes::{RnnAlgorithm, CAKES},
+    cluster::PartitionCriteria,
+    dataset::VecVec,
+};
 
 pub mod utils;
 
@@ -35,7 +39,7 @@ fn main() {
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let start = Instant::now();
-        let cakes = CAKES::new(data, Some(42)).build(criteria);
+        let cakes = CAKES::new(data, Some(42), criteria);
         let duration = start.elapsed().as_secs_f32();
         println!("Built the tree in {duration:.3} seconds ...");
 
@@ -47,7 +51,7 @@ fn main() {
             let radius = cakes.radius() / f as f32;
 
             let start = Instant::now();
-            let results = cakes.par_batch_rnn_search(&queries, radius);
+            let results = cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered);
             let duration = start.elapsed().as_secs_f32();
 
             let num_results = results.into_iter().map(|v| v.len()).sum::<usize>();

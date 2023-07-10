@@ -5,7 +5,10 @@ use rayon::prelude::*;
 use distances::Number;
 use symagen::random_data;
 
-use abd_clam::{cakes::CAKES, dataset::Dataset};
+use abd_clam::{
+    cakes::{RnnAlgorithm, CAKES},
+    dataset::Dataset,
+};
 
 pub mod anomaly_readers;
 pub mod search_readers;
@@ -27,12 +30,12 @@ pub fn check_search<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(queries:
         .enumerate()
         .map(|(i, &query)| {
             let naive = cakes
-                .linear_search(query, r, None)
+                .rnn_search(query, r, RnnAlgorithm::Linear)
                 .into_iter()
                 .map(|(i, _)| i)
                 .collect::<Vec<_>>();
             let rnn = cakes
-                .rnn_search(query, r)
+                .rnn_search(query, r, RnnAlgorithm::Clustered)
                 .into_iter()
                 .map(|(i, _)| i)
                 .collect::<Vec<_>>();

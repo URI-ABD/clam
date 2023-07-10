@@ -3,7 +3,12 @@ use criterion::*;
 use distances::strings::levenshtein;
 use symagen::random_data;
 
-use abd_clam::{cakes::CAKES, cluster::PartitionCriteria, dataset::VecVec, needleman_wunch::nw_distance};
+use abd_clam::{
+    cakes::{RnnAlgorithm, CAKES},
+    cluster::PartitionCriteria,
+    dataset::VecVec,
+    needleman_wunch::nw_distance,
+};
 
 fn genomic(c: &mut Criterion) {
     let mut group = c.benchmark_group("genomic".to_string());
@@ -17,6 +22,7 @@ fn genomic(c: &mut Criterion) {
     let num_queries = 10;
     group.throughput(Throughput::Elements(num_queries as u64));
 
+    println!("Generating data ...");
     let seed = 42;
     let cardinality = 1_000;
     let (min_len, max_len) = (100, 120);
@@ -24,6 +30,8 @@ fn genomic(c: &mut Criterion) {
 
     let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
+
+    println!("Building dataset ...");
     let data = data.iter().map(|v| v.as_str()).collect::<Vec<_>>();
     let queries = queries.iter().map(|v| v.as_str()).collect::<Vec<_>>();
 
@@ -31,20 +39,17 @@ fn genomic(c: &mut Criterion) {
     let metrics: [(&str, fn(&str, &str) -> u16); 2] = [("levenshtein", levenshtein), ("needleman_wunsch", nw_distance)];
 
     for (metric_name, metric) in metrics {
+        println!("Building cakes for {} ...", metric_name);
         let name = format!("{}-{}", metric_name, cardinality);
         let dataset = VecVec::new(data.clone(), metric, name, true);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = CAKES::new(dataset, Some(seed)).build(criteria);
+        let cakes = CAKES::new(dataset, Some(seed), criteria);
 
+        println!("Running benchmark for {} ...", metric_name);
         for radius in [10, 25, 50, 60] {
             let id = BenchmarkId::new(metric_name.to_string(), radius);
             group.bench_with_input(id, &radius, |b, &radius| {
-                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius));
-            });
-
-            let id = BenchmarkId::new(format!("par-{}", metric_name), radius);
-            group.bench_with_input(id, &radius, |b, &radius| {
-                b.iter_with_large_drop(|| cakes.par_batch_rnn_search(&queries, radius));
+                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered));
             });
         }
     }

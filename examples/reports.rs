@@ -71,7 +71,7 @@ fn main() {
 
             let start = Instant::now();
             let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-            let cakes = CAKES::new(data, Some(42)).build(criteria);
+            let cakes = CAKES::new(data, Some(42), criteria);
             let build_time = start.elapsed().as_secs_f32();
             println!("Built CAKES on {data_name} with {metric_name} in {build_time:.3} seconds ...");
 
