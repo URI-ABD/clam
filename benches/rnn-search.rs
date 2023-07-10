@@ -6,11 +6,11 @@ use abd_clam::{
     cakes::{RnnAlgorithm, CAKES},
     cluster::PartitionCriteria,
     dataset::VecVec,
-    utils::METRICS,
+    COMMON_METRICS_F32,
 };
 
 fn cakes(c: &mut Criterion) {
-    for &(metric_name, metric) in METRICS {
+    for &(metric_name, metric) in COMMON_METRICS_F32 {
         let mut group = c.benchmark_group(format!("rnn-{metric_name}"));
         group.significance_level(0.025).sample_size(10);
 

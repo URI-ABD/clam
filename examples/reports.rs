@@ -13,7 +13,7 @@ use abd_clam::{
     cakes::CAKES,
     cluster::PartitionCriteria,
     dataset::{Dataset, VecVec},
-    utils::METRICS,
+    COMMON_METRICS_F32,
 };
 
 pub mod utils;
@@ -44,7 +44,7 @@ fn main() {
             path
         };
 
-        for &(metric_name, metric) in METRICS {
+        for &(metric_name, metric) in COMMON_METRICS_F32 {
             let out_dir = {
                 let mut path = data_dir.clone();
                 path.push(metric_name);
