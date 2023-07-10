@@ -73,8 +73,8 @@ name = "reports"
 path = "examples/reports.rs"
 
 [[example]]
-name = "knn-search"
-path = "examples/knn-search.rs"
+name = "rnn-search"
+path = "examples/rnn-search.rs"
 
 # [[bench]]
 # name = "partition"
