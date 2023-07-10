@@ -1,10 +1,4 @@
-//! CLAM is a library around learning manifolds in a Banach space defined by a distance metric.
-//!
-//! # Papers
-//!
-//! - [CHESS](https://arxiv.org/abs/1908.08551)
-//! - [CHAODA](https://arxiv.org/abs/2103.11774)
-//!
+#![doc = include_str!("../README.md")]
 
 // pub mod chaoda;
 pub mod cakes;
