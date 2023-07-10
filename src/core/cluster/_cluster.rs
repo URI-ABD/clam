@@ -188,12 +188,15 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
             let (l_offset, r_offset) = (offset, offset + l_indices.len());
 
-            // TODO: Insert parallelism here
-            let ((left, l_indices), (right, r_indices)) = (
-                Cluster::new(data, self.seed, self.child_history(false), l_offset, &l_indices)
-                    ._partition(data, criteria, l_offset, l_indices),
-                Cluster::new(data, self.seed, self.child_history(true), r_offset, &r_indices)
-                    ._partition(data, criteria, r_offset, r_indices),
+            let ((left, l_indices), (right, r_indices)) = rayon::join(
+                || {
+                    Cluster::new(data, self.seed, self.child_history(false), l_offset, &l_indices)
+                        ._partition(data, criteria, l_offset, l_indices)
+                },
+                || {
+                    Cluster::new(data, self.seed, self.child_history(true), r_offset, &r_indices)
+                        ._partition(data, criteria, r_offset, r_indices)
+                },
             );
 
             let (left, right) = (Box::new(left), Box::new(right));
