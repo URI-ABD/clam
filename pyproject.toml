@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "abd-clam"
-version = "0.16.1"
+version = "0.17.0"
 description = "Clustered Learning of Approximate Manifolds"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",

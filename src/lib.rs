@@ -8,7 +8,7 @@ pub(crate) mod utils;
 
 pub use crate::core::{cluster, dataset};
 
-pub const VERSION: &str = "0.16.1";
+pub const VERSION: &str = "0.17.0";
 
 #[allow(clippy::type_complexity)]
 pub const COMMON_METRICS_F32: &[(&str, fn(&[f32], &[f32]) -> f32)] = &[
