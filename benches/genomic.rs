@@ -10,46 +10,53 @@ use abd_clam::{
 };
 
 fn genomic(c: &mut Criterion) {
-    let mut group = c.benchmark_group("genomic".to_string());
-    group.significance_level(0.025).sample_size(10);
-
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Linear);
-    group.plot_config(plot_config);
-
-    group.sampling_mode(SamplingMode::Flat);
-
-    let num_queries = 10;
-    group.throughput(Throughput::Elements(num_queries as u64));
-
-    println!("Generating data ...");
     let seed = 42;
-    let cardinality = 1_000;
-    let (min_len, max_len) = (100, 120);
+    let cardinality = 10_000;
+    let min_len = 1000;
+    let max_len = 1000;
     let alphabet = "ACGT";
-
-    let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
-    let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
+    let num_queries = 10;
 
     println!("Building dataset ...");
+    let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
     let data = data.iter().map(|v| v.as_str()).collect::<Vec<_>>();
+
+    let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
     let queries = queries.iter().map(|v| v.as_str()).collect::<Vec<_>>();
 
-    for &(metric_name, metric) in COMMON_METRICS_STR {
-        println!("Building cakes for {} ...", metric_name);
-        let name = format!("{}-{}", metric_name, cardinality);
-        let dataset = VecVec::new(data.clone(), metric, name, true);
+    for &(metric_name, metric) in &COMMON_METRICS_STR[..1] {
+        let mut group = c.benchmark_group(format!("genomic-{metric_name}"));
+
+        let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Linear);
+        group.plot_config(plot_config);
+
+        group.sampling_mode(SamplingMode::Flat);
+
+        group.throughput(Throughput::Elements(num_queries as u64));
+
+        println!("Building cakes for {metric_name} ...");
+        let data_name = format!("{metric_name}-{cardinality}");
+        let dataset = VecVec::new(data.clone(), metric, data_name, true);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = CAKES::new(dataset, Some(seed), criteria);
 
-        println!("Running benchmark for {} ...", metric_name);
-        for radius in [10, 25, 50, 60] {
-            let id = BenchmarkId::new(metric_name.to_string(), radius);
+        let radii = [50, 25, 10, 1];
+        println!("Running benchmark for {metric_name} ...");
+        for radius in radii {
+            let id = BenchmarkId::new("Clustered", radius);
             group.bench_with_input(id, &radius, |b, &radius| {
                 b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered));
             });
         }
+
+        group.sample_size(10);
+        let id = BenchmarkId::new("Linear", radii[0]);
+        group.bench_with_input(id, &radii[0], |b, _| {
+            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radii[0], RnnAlgorithm::Linear));
+        });
+
+        group.finish();
     }
-    group.finish();
 }
 
 criterion_group!(benches, genomic);
