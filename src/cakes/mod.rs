@@ -2,7 +2,6 @@
 
 pub mod codec;
 pub mod knn;
-pub mod knn_sieve;
 pub mod rnn;
 
 use distances::Number;
