@@ -1,3 +1,10 @@
+//! K-Nearest Neighbor search algorithms.
+//!
+//! The stable algorithms are `Linear` and `RepeatedRnn`, with the default being
+//! `RepeatedRnn`. We will experiment with other algorithms in the future, and they
+//! will be added to this module as they are being implemented. They should not be
+//! considered stable until they are documented as such.
+
 use core::{cmp::Ordering, f64::EPSILON};
 
 use distances::Number;
@@ -5,12 +12,18 @@ use distances::Number;
 use super::RnnAlgorithm;
 use crate::{cluster::Tree, dataset::Dataset, utils::helpers};
 
+/// The multiplier to use for increasing the radius in the repeated RNN algorithm.
 const MULTIPLIER: f64 = 2.0;
 
+/// The algorithm to use for K-Nearest Neighbor search.
+///
+/// The default is `RepeatedRnn`, as determined by the benchmarks in the crate.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, Debug)]
 pub enum KnnAlgorithm {
+    /// Use linear search on the entire dataset.
     Linear,
+    /// Use a repeated RNN search, increasing the radius until enough neighbors are found.
     RepeatedRnn,
 }
 
@@ -21,6 +34,18 @@ impl Default for KnnAlgorithm {
 }
 
 impl KnnAlgorithm {
+    /// Searches for the nearest neighbors of a query.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The query to search around.
+    /// * `k` - The number of neighbors to search for.
+    /// * `tree` - The tree to search.
+    ///
+    /// # Returns
+    ///
+    /// A vector of 2-tuples, where the first element is the index of the instance
+    /// and the second element is the distance from the query to the instance.
     pub fn search<T, U, D>(&self, query: T, k: usize, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
@@ -33,6 +58,19 @@ impl KnnAlgorithm {
         }
     }
 
+    /// Linear search for the nearest neighbors of a query.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The dataset to search.
+    /// * `query` - The query to search around.
+    /// * `k` - The number of neighbors to search for.
+    /// * `indices` - The indices to search.
+    ///
+    /// # Returns
+    ///
+    /// A vector of 2-tuples, where the first element is the index of the instance
+    /// and the second element is the distance from the query to the instance.
     pub(crate) fn linear_search<T, U, D>(data: &D, query: T, k: usize, indices: &[usize]) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
@@ -45,6 +83,26 @@ impl KnnAlgorithm {
         hits[..k].to_vec()
     }
 
+    /// K-Nearest Neighbor search using a repeated RNN search.
+    ///
+    /// Search starts with a radius equal to the radius of the tree divided by the
+    /// cardinality of the dataset. If no neighbors are found, the radius is increased
+    /// by a factor of 2 until at least one neighbor is found. Then, the radius is
+    /// increased by a factor determined by the lfd of the neighbors found until
+    /// enough neighbors are found. This factor is capped at 2. Once enough neighbors
+    /// are found, the neighbors are sorted by distance and the first `k` neighbors
+    /// are returned. Ties are broken arbitrarily.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree to search.
+    /// * `query` - The query to search around.
+    /// * `k` - The number of neighbors to search for.
+    ///
+    /// # Returns
+    ///
+    /// A vector of 2-tuples, where the first element is the index of the instance
+    /// and the second element is the distance from the query to the instance.
     pub(crate) fn knn_by_rnn<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,

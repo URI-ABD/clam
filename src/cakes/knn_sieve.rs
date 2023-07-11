@@ -1,7 +1,10 @@
+#![allow(missing_docs, clippy::missing_docs_in_private_items)]
+
 use core::marker::PhantomData;
 
 use distances::Number;
 
+/// A priority queue for the k-nearest neighbors.
 type KnnQueue<U> = priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>;
 
 use crate::{

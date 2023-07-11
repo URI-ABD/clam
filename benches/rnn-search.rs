@@ -5,7 +5,7 @@ use symagen::random_data;
 use abd_clam::{
     cakes::{RnnAlgorithm, CAKES},
     cluster::PartitionCriteria,
-    dataset::VecVec,
+    dataset::VecDataset,
     COMMON_METRICS_F32,
 };
 
@@ -31,7 +31,7 @@ fn cakes(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(num_queries as u64));
 
-        let dataset = VecVec::new(data.clone(), metric, "rnn".to_string(), false);
+        let dataset = VecDataset::new(data.clone(), metric, "rnn".to_string(), false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = CAKES::new(dataset, Some(seed), criteria);
 

@@ -1,18 +1,29 @@
+//! A dataset of a Vec of instances.
+
 use distances::Number;
 
 use super::Dataset;
 
-// TODO: Remove pub from fields
-pub struct VecVec<T: Send + Sync + Copy, U: Number> {
-    pub name: String,
-    pub data: Vec<T>,
-    pub metric: fn(T, T) -> U,
-    pub is_expensive: bool,
-    pub indices: Vec<usize>,
-    pub reordering: Option<Vec<usize>>,
+/// A dataset of a Vec of instances.
+///
+/// This may be used for any data that can fit in memory. It is not recommended for large datasets.
+pub struct VecDataset<T: Send + Sync + Copy, U: Number> {
+    /// The name of the dataset.
+    pub(crate) name: String,
+    /// The data of the dataset.
+    pub(crate) data: Vec<T>,
+    /// The metric of the dataset.
+    pub(crate) metric: fn(T, T) -> U,
+    /// Whether the metric is expensive to compute.
+    pub(crate) is_expensive: bool,
+    /// The indices of the dataset.
+    pub(crate) indices: Vec<usize>,
+    /// The reordering of the dataset after building the tree.
+    pub(crate) reordering: Option<Vec<usize>>,
 }
 
-impl<T: Send + Sync + Copy, U: Number> VecVec<T, U> {
+impl<T: Send + Sync + Copy, U: Number> VecDataset<T, U> {
+    /// Creates a new dataset.
     pub fn new(data: Vec<T>, metric: fn(T, T) -> U, name: String, is_expensive: bool) -> Self {
         let indices = (0..data.len()).collect();
         Self {
@@ -26,13 +37,13 @@ impl<T: Send + Sync + Copy, U: Number> VecVec<T, U> {
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> std::fmt::Debug for VecVec<T, U> {
+impl<T: Send + Sync + Copy, U: Number> std::fmt::Debug for VecDataset<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("Tabular Space").field("name", &self.name).finish()
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecVec<T, U> {
+impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -91,7 +102,7 @@ mod tests {
             let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
             let reference_data = reference_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
             for _ in 0..10 {
-                let mut dataset = VecVec::new(reference_data.clone(), euclidean_sq::<u32, u32>, name.clone(), false);
+                let mut dataset = VecDataset::new(reference_data.clone(), euclidean_sq::<u32, u32>, name.clone(), false);
                 let mut new_indices = dataset.indices().to_vec();
                 new_indices.shuffle(&mut rng);
 
@@ -109,7 +120,7 @@ mod tests {
         let data: Vec<&[u32]> = data.iter().map(Vec::as_slice).collect();
         let permutation = vec![1, 3, 4, 0, 5, 2];
 
-        let mut dataset = VecVec::new(data, euclidean_sq::<u32, u32>, "test".to_string(), false);
+        let mut dataset = VecDataset::new(data, euclidean_sq::<u32, u32>, "test".to_string(), false);
 
         dataset.reorder(&permutation);
 

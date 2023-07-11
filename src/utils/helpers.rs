@@ -1,3 +1,5 @@
+//! Helper functions for the crate.
+
 use core::{
     cmp::Ordering,
     f64::{consts::SQRT_2, EPSILON},
@@ -59,6 +61,15 @@ pub fn normalize_1d(values: &[f64]) -> Vec<f64> {
         .collect()
 }
 
+/// Compute the local fractal dimension of the given distances using the given radius.
+///
+/// The local fractal dimension is computed as the log2 of the ratio of the number of
+/// distances less than or equal to half the radius to the total number of distances.
+///
+/// # Arguments
+///
+/// * `radius` - The radius used to compute the distances.
+/// * `distances` - The distances to compute the local fractal dimension of.
 pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
     if radius == T::zero() {
         1.
@@ -73,6 +84,16 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
     }
 }
 
+/// Compute the next exponential moving average of the given ratio and parent EMA.
+///
+/// The EMA is computed as `alpha * ratio + (1 - alpha) * parent_ema`, where `alpha`
+/// is a constant value of `2 / 11`. This value was chosen because it gave the best
+/// experimental results in the CHAODA paper.
+///
+/// # Arguments
+///
+/// * `ratio` - The ratio to compute the EMA of.
+/// * `parent_ema` - The parent EMA to use.
 #[allow(dead_code)]
 pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?

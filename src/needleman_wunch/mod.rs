@@ -1,3 +1,5 @@
+//! Needleman-Wunsch algorithm for global alignment of two sequences.
+
 pub(crate) mod alignment_helpers;
 
 use distances::Number;

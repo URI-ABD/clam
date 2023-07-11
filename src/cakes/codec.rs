@@ -1,4 +1,4 @@
-//! Implements Compression and Decompression for `Datasets` and `Clusters`.
+#![allow(missing_docs, clippy::missing_docs_in_private_items)]
 
 use distances::Number;
 
