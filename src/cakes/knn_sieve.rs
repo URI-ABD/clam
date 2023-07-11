@@ -1,4 +1,4 @@
-#![allow(missing_docs, clippy::missing_docs_in_private_items)]
+#![allow(dead_code, missing_docs, clippy::missing_docs_in_private_items)]
 
 use core::marker::PhantomData;
 
@@ -8,8 +8,7 @@ use distances::Number;
 type KnnQueue<U> = priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>;
 
 use crate::{
-    cluster::{Cluster, Tree},
-    dataset::Dataset,
+    Dataset, {Cluster, Tree},
 };
 
 #[allow(dead_code)]

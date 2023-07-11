@@ -1,4 +1,4 @@
-//! Helper functions for the crate.
+//! Utility functions for the crate.
 
 use core::{
     cmp::Ordering,

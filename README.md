@@ -18,47 +18,63 @@ Here is a simple example of how to use CLAM to perform nearest neighbors search:
 use symagen::random_data;
 
 use abd_clam::{
-    cakes::{KnnAlgorithm, RnnAlgorithm, CAKES},
-    cluster::PartitionCriteria,
-    dataset::VecVec,
+    KnnAlgorithm, RnnAlgorithm, CAKES,
+    PartitionCriteria,
+    VecDataset,
 };
 
+/// Euclidean distance function.
+///
+/// This function is used to compute the distance between two points for the purposes
+/// of this demo. You can use your own distance function instead. The required
+/// signature is `fn(T, T) -> U` where `T` is the type of the points (must
+/// implement `Send`, `Sync` and `Copy`) and `U` is a `Number` type (e.g. `f32`)
+/// from the `distances` crate.
 fn euclidean(x: &[f32], y: &[f32]) -> f32 {
     x.iter()
         .zip(y.iter())
-        .map(|(a, b)| (a - b).powi(2))
+        .map(|(a, b)| a - b)
+        .map(|v| v * v)
         .sum::<f32>()
         .sqrt()
 }
 
-// Get the data and queries. We will generate some random data for this demo.
+// Some parameters for generating random data.
 let seed = 42;
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1., 1.);
 
+/// Generate some random data. You can use your own data here.
 let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
+
+// We will use the first point in data as our query, and we will perform
+let (query, radius, k) = (data[0].clone(), 0.05, 10);
+
+// We need the contents of data to be &[f32] instead of Vec<f32>. We will rectify this
+// in CLAM by extending the trait bounds of some types in CLAM.
 let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
 
-let dataset = VecVec::new(data.clone(), euclidean, "demo".to_string(), false);
-let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-let model = CAKES::new(dataset, Some(seed), criteria);
+// RNN search with a radius of 0.05 and KNN search for the 10 nearest neighbors.
+
+let data = VecDataset::new(data, euclidean, "demo".to_string(), false);
+
+// We will use the default partition criteria for this example. This will partition
+// the data until each Cluster contains a single unique point.
+let criteria = PartitionCriteria::default();
 
 // The CAKES struct provides the functionality described in the CHESS paper.
+let model = CAKES::new(data, Some(seed), criteria);
 
-let (query, radius, k) = (&data[0], 0.05, 10);
-
-let rnn_results: Vec<(usize, f32)> = model.rnn_search(query, radius, RnnAlgorithm::Clustered);
+// We can now perform RNN search on the model.
+let rnn_results: Vec<(usize, f32)> = model.rnn_search(&query, radius, RnnAlgorithm::Clustered);
 assert!(!rnn_results.is_empty());
-// This is how we perform ranged nearest neighbors search with radius 0.05
-// around the query.
 
-let knn_results: Vec<(usize, f32)> = model.knn_search(query, 10, KnnAlgorithm::RepeatedRnn);
+// We can also perform KNN search on the model.
+let knn_results: Vec<(usize, f32)> = model.knn_search(&query, 10, KnnAlgorithm::RepeatedRnn);
 assert!(knn_results.len() >= k);
-// This is how we perform k-nearest neighbors search for the 10 nearest
-// neighbors of query.
 
-// Both results are a Vec of 2-tuples where each tuple is the index and
-// distance to points in the data.
+// Both results are a Vec of 2-tuples where the first element is the index of the point
+// in the dataset and the second element is the distance from the query point.
 ```
 
 <!-- TODO: Provide snippets for using CHAODA -->

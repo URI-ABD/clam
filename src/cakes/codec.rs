@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::dataset::Dataset;
+use crate::Dataset;
 
 #[allow(clippy::module_name_repetitions)]
 pub trait CodecDataset<T: Number, U: Number>: Dataset<T, U> {

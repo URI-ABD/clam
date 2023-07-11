@@ -1,16 +1,15 @@
 //! CLAM-Accelerated K-nearest-neighbor Entropy-scaling Search.
 
 pub mod codec;
-pub(crate) mod knn;
+pub mod knn;
 pub mod knn_sieve;
-pub(crate) mod rnn;
+pub mod rnn;
 
 use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
-    cluster::{PartitionCriteria, Tree},
-    dataset::Dataset,
+    Dataset, {PartitionCriteria, Tree},
 };
 
 pub use knn::KnnAlgorithm;

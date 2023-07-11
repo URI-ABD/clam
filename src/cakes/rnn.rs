@@ -8,7 +8,7 @@
 
 use distances::Number;
 
-use crate::{cluster::Tree, dataset::Dataset};
+use crate::{Dataset, Tree};
 
 /// The algorithm to use for Ranged Nearest Neighbor search.
 ///

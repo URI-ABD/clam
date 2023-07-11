@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::dataset::Dataset;
+use crate::Dataset;
 
 use super::{Cluster, PartitionCriteria};
 
