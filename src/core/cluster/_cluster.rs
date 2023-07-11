@@ -6,7 +6,7 @@ use core::hash::{Hash, Hasher};
 
 use distances::Number;
 
-use super::PartitionCriteria;
+use super::{PartitionCriteria, PartitionCriterion};
 use crate::{utils, Dataset};
 
 /// Ratios are used for anomaly detection and related applications.
