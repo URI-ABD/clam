@@ -21,9 +21,19 @@ const MULTIPLIER: f64 = 2.0;
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, Debug)]
 pub enum KnnAlgorithm {
-    /// Use linear search on the entire dataset.
+    /// Use linear search on the entire dataset. This is a stable algorithm.
     Linear,
-    /// Use a repeated RNN search, increasing the radius until enough neighbors are found.
+    /// Use a repeated RNN search, increasing the radius until enough neighbors
+    /// are found. This is a stable algorithm.
+    ///
+    /// Search starts with a radius equal to the radius of the tree divided by
+    /// the cardinality of the dataset. If no neighbors are found, the radius is
+    /// increased by a factor of 2 until at least one neighbor is found. Then,
+    /// the radius is increased by a factor determined by the local fractal
+    /// dimension of the neighbors found until enough neighbors are found. This
+    /// factor is capped at 2. Once enough neighbors are found, the neighbors
+    /// are sorted by distance and the first `k` neighbors are returned. Ties
+    /// are broken arbitrarily.
     RepeatedRnn,
 }
 
@@ -46,7 +56,7 @@ impl KnnAlgorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn search<T, U, D>(&self, query: T, k: usize, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
+    pub(crate) fn search<T, U, D>(self, query: T, k: usize, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
         U: Number,
@@ -84,14 +94,6 @@ impl KnnAlgorithm {
     }
 
     /// K-Nearest Neighbor search using a repeated RNN search.
-    ///
-    /// Search starts with a radius equal to the radius of the tree divided by the
-    /// cardinality of the dataset. If no neighbors are found, the radius is increased
-    /// by a factor of 2 until at least one neighbor is found. Then, the radius is
-    /// increased by a factor determined by the lfd of the neighbors found until
-    /// enough neighbors are found. This factor is capped at 2. Once enough neighbors
-    /// are found, the neighbors are sorted by distance and the first `k` neighbors
-    /// are returned. Ties are broken arbitrarily.
     ///
     /// # Arguments
     ///

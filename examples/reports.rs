@@ -60,7 +60,7 @@ fn main() {
             let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
             let dimensionality = data[0].len();
 
-            let data = VecDataset::new(data, metric, data_name.to_string(), false);
+            let data = VecDataset::new(data_name.to_string(), data, metric, false);
 
             let car = data.cardinality().to_formatted_string(&Locale::en);
             let dim = dimensionality.to_formatted_string(&Locale::en);

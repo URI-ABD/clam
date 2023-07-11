@@ -26,7 +26,7 @@ pub(crate) use crate::core::cluster::Cluster;
 pub use crate::{
     cakes::{KnnAlgorithm, RnnAlgorithm, CAKES},
     core::{
-        cluster::{PartitionCriteria, Tree},
+        cluster::{PartitionCriteria, PartitionCriterion, Tree},
         dataset::{Dataset, VecDataset},
     },
 };

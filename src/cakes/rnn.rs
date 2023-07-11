@@ -16,9 +16,10 @@ use crate::{Dataset, Tree};
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, Debug)]
 pub enum RnnAlgorithm {
-    /// Use linear search on the entire dataset.
+    /// Use linear search on the entire dataset. This is a stable algorithm.
     Linear,
-    /// Use a clustered search.
+    /// Use a clustered search, as described in the CHESS paper. This is a
+    /// stable algorithm.
     Clustered,
 }
 
@@ -41,7 +42,7 @@ impl RnnAlgorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn search<T, U, D>(&self, query: T, radius: U, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
+    pub(crate) fn search<T, U, D>(self, query: T, radius: U, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
         U: Number,

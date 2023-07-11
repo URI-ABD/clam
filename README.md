@@ -48,15 +48,15 @@ let (min_val, max_val) = (-1., 1.);
 let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
 
 // We will use the first point in data as our query, and we will perform
+// RNN search with a radius of 0.05 and KNN search for the 10 nearest neighbors.
 let (query, radius, k) = (data[0].clone(), 0.05, 10);
 
 // We need the contents of data to be &[f32] instead of Vec<f32>. We will rectify this
 // in CLAM by extending the trait bounds of some types in CLAM.
 let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
 
-// RNN search with a radius of 0.05 and KNN search for the 10 nearest neighbors.
-
-let data = VecDataset::new(data, euclidean, "demo".to_string(), false);
+let name = "demo".to_string();
+let data = VecDataset::new(name, data, euclidean, false);
 
 // We will use the default partition criteria for this example. This will partition
 // the data until each Cluster contains a single unique point.
