@@ -6,10 +6,8 @@ use crate::Dataset;
 
 use super::{Cluster, PartitionCriteria};
 
-/// A `Tree` represents a hierarchy of "similar" instances from a metric-`Space`.
-///
-/// Typically one will chain calls to `new`, `build`, and finally
-/// `partition` to construct a fully realized `Tree`.
+/// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
+/// from a metric-`Space`.
 ///
 /// # Type Parameters
 ///
@@ -29,8 +27,8 @@ pub struct Tree<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
 }
 
 impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
-    /// Constructs a new `Tree` for a given dataset. Importantly,
-    /// this does not build nor partition the tree.
+    /// Constructs a new `Tree` for a given dataset. Importantly, this does not
+    /// partition the tree.
     ///
     /// # Arguments
     /// dataset: The dataset from which the tree will be built
@@ -46,52 +44,49 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
         }
     }
 
-    /// Returns a reference to dataset associated with the tree
-    pub const fn data(&self) -> &D {
-        &self.data
-    }
-
-    /// # Returns
-    /// A reference to the root `Cluster` of the tree
-    pub(crate) const fn root(&self) -> &Cluster<T, U> {
-        &self.root
-    }
-
-    /// # Returns
-    /// A reference to the root `Cluster` of the tree
-    pub(crate) const fn depth(&self) -> usize {
-        self.depth
-    }
-
-    /// # Returns
-    /// A reference to the root `Cluster` of the tree
-    pub(crate) const fn center(&self) -> T {
-        self.center
-    }
-
-    /// # Returns
-    /// The cardinality of the `Tree`
-    pub const fn cardinality(&self) -> usize {
-        self.root.cardinality
-    }
-
-    /// # Returns
-    /// The radius of the `Tree`
-    pub const fn radius(&self) -> U {
-        self.root.radius
-    }
-
-    /// Partitions the `Tree` based off of a given criteria
+    /// Recursively partitions the root `Cluster` using the given criteria.
     ///
     /// # Arguments
-    /// criteria: A `PartitionCriteria` through which the `Tree`'s root will be partitioned.
+    ///
+    /// * `criteria`: the criteria used to decide when to partition a `Cluster`.
     ///
     /// # Returns
-    /// A new `Tree` with a partitioned root.
+    ///
+    /// The `Tree` after partitioning.
     #[must_use]
     pub fn partition(mut self, criteria: &PartitionCriteria<T, U>) -> Self {
         self.root = self.root.partition(&mut self.data, criteria);
         self
+    }
+
+    /// Returns a reference to the data used to build the `Tree`.
+    pub const fn data(&self) -> &D {
+        &self.data
+    }
+
+    /// A reference to the root `Cluster` of the tree.
+    pub(crate) const fn root(&self) -> &Cluster<T, U> {
+        &self.root
+    }
+
+    /// The depth of the tree.
+    pub(crate) const fn depth(&self) -> usize {
+        self.depth
+    }
+
+    /// The center of the tree.
+    pub(crate) const fn center(&self) -> T {
+        self.center
+    }
+
+    /// The cardinality of the `Tree`, i.e. the number of instances in the data.
+    pub const fn cardinality(&self) -> usize {
+        self.root.cardinality
+    }
+
+    /// The radius of the root of the `Tree`.
+    pub const fn radius(&self) -> U {
+        self.root.radius
     }
 
     /// Returns the indices contained in the root of the `Tree`.

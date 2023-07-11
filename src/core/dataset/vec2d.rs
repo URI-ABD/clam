@@ -4,9 +4,14 @@ use distances::Number;
 
 use super::Dataset;
 
-/// A dataset of a Vec of instances.
+/// A `Dataset` of a `Vec` of instances.
 ///
 /// This may be used for any data that can fit in memory. It is not recommended for large datasets.
+///
+/// # Type Parameters
+///
+/// - `T`: The type of the instances in the `Dataset`.
+/// - `U`: The type of the distance values between instances.
 pub struct VecDataset<T: Send + Sync + Copy, U: Number> {
     /// The name of the dataset.
     pub(crate) name: String,
@@ -24,7 +29,14 @@ pub struct VecDataset<T: Send + Sync + Copy, U: Number> {
 
 impl<T: Send + Sync + Copy, U: Number> VecDataset<T, U> {
     /// Creates a new dataset.
-    pub fn new(data: Vec<T>, metric: fn(T, T) -> U, name: String, is_expensive: bool) -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// * `name`: The name of the dataset.
+    /// * `data`: The vector of instances.
+    /// * `metric`: The metric for computing distances between instances.
+    /// * `is_expensive`: Whether the metric is expensive to compute.
+    pub fn new(name: String, data: Vec<T>, metric: fn(T, T) -> U, is_expensive: bool) -> Self {
         let indices = (0..data.len()).collect();
         Self {
             name,
@@ -102,7 +114,7 @@ mod tests {
             let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
             let reference_data = reference_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
             for _ in 0..10 {
-                let mut dataset = VecDataset::new(reference_data.clone(), euclidean_sq::<u32, u32>, name.clone(), false);
+                let mut dataset = VecDataset::new(name.clone(), reference_data.clone(), euclidean_sq::<u32, u32>, false);
                 let mut new_indices = dataset.indices().to_vec();
                 new_indices.shuffle(&mut rng);
 
@@ -120,7 +132,7 @@ mod tests {
         let data: Vec<&[u32]> = data.iter().map(Vec::as_slice).collect();
         let permutation = vec![1, 3, 4, 0, 5, 2];
 
-        let mut dataset = VecDataset::new(data, euclidean_sq::<u32, u32>, "test".to_string(), false);
+        let mut dataset = VecDataset::new("test".to_string(), data, euclidean_sq::<u32, u32>, false);
 
         dataset.reorder(&permutation);
 

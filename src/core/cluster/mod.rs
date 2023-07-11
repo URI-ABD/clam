@@ -11,5 +11,5 @@ mod criteria;
 mod tree;
 
 pub use _cluster::Cluster;
-pub use criteria::PartitionCriteria;
+pub use criteria::{PartitionCriteria, PartitionCriterion};
 pub use tree::Tree;

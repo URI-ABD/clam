@@ -62,8 +62,8 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     ///
     /// # Arguments
     ///
-    /// `i` - An index in the dataset.
-    /// `j` - An index in the dataset.
+    /// * `i` - An index in the dataset.
+    /// * `j` - An index in the dataset.
     ///
     /// # Panics
     ///
@@ -213,6 +213,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     ///
     /// * `n` - The number of unique indices to choose.
     /// * `indices` - A slice of indices in the dataset from which to choose.
+    /// * `seed` - An optional seed for the random number generator.
     ///
     /// # Returns
     ///

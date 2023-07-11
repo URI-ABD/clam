@@ -31,7 +31,7 @@ fn genomic(c: &mut Criterion) {
 
         println!("Building cakes for {metric_name} ...");
         let data_name = format!("{metric_name}-{cardinality}");
-        let dataset = VecDataset::new(data.clone(), metric, data_name, true);
+        let dataset = VecDataset::new(data_name, data.clone(), metric, true);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = CAKES::new(dataset, Some(seed), criteria);
 

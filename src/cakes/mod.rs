@@ -155,7 +155,7 @@ mod tests {
         let data: Vec<&[f32]> = vec![&[0., 0.], &[1., 1.], &[2., 2.], &[3., 3.]];
 
         let name = "test".to_string();
-        let dataset = VecDataset::new(data, euclidean, name, false);
+        let dataset = VecDataset::new(name, data, euclidean, false);
         let criteria = PartitionCriteria::new(true);
         let cakes = CAKES::new(dataset, None, criteria);
 
@@ -187,7 +187,7 @@ mod tests {
     fn rnn_search() {
         let data = (-100..=100).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new(data, euclidean, "test".to_string(), false);
+        let data = VecDataset::new("test".to_string(), data, euclidean, false);
         let criteria = PartitionCriteria::new(true);
         let cakes = CAKES::new(data, Some(42), criteria);
 

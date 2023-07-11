@@ -14,7 +14,7 @@ fn main() {
     let data = data.iter().map(|v| v.as_str()).collect();
 
     let metric = levenshtein::<u16>;
-    let data = VecDataset::new(data, metric, "genomic".to_string(), true);
+    let data = VecDataset::new("genomic".to_string(), data, metric, true);
 
     let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
     let model = CAKES::new(data, Some(42), criteria);

@@ -1,4 +1,4 @@
-//! Needleman-Wunsch algorithm for global alignment of two sequences.
+//! This will soon be moved into the `distances` crate.
 
 pub(crate) mod alignment_helpers;
 

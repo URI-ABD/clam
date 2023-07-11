@@ -585,7 +585,7 @@ mod tests {
     fn test_cluster() {
         let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
         let name = "test".to_string();
-        let mut data = VecDataset::new(data, euclidean::<f32, f32>, name, false);
+        let mut data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
         let cluster = Cluster::new_root(&data, &indices, Some(42)).partition(&mut data, &partition_criteria);
@@ -612,7 +612,7 @@ mod tests {
     fn test_leaf_indices() {
         let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
         let name = "test".to_string();
-        let data = VecDataset::new(data, euclidean::<f32, f32>, name, false);
+        let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -627,7 +627,7 @@ mod tests {
     fn test_end_to_end_reordering() {
         let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
         let name = "test".to_string();
-        let data = VecDataset::new(data, euclidean::<f32, f32>, name, false);
+        let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -647,7 +647,7 @@ mod tests {
         let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let name = "test".to_string();
-        let mut data = VecDataset::<_, f32>::new(data, euclidean, name, false);
+        let mut data = VecDataset::<_, f32>::new(name, data, euclidean, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 

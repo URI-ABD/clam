@@ -25,7 +25,7 @@ fn cakes(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(num_queries as u64));
 
-        let dataset = VecDataset::new(data.clone(), metric, "knn".to_string(), false);
+        let dataset = VecDataset::new("knn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = CAKES::new(dataset, Some(seed), criteria);
 
