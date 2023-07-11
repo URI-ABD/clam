@@ -9,48 +9,57 @@ use distances::Number;
 use super::PartitionCriteria;
 use crate::{dataset::Dataset, utils::helpers};
 
+/// Ratios are used for anomaly detection and related applications.
 pub type Ratios = [f64; 6];
 
-/// A `Cluster` represents a collection of "similar" instances from a
-/// metric-`Space`.
+/// A `Cluster` represents a collection of "similar" instances from a metric-`Space`.
 ///
 /// `Cluster`s can be unwieldy to use directly unless one has a good grasp of
-/// the underlying invariants.
-/// We anticipate that most users' needs will be well met by the higher-level
-/// abstractions.
-///
-/// For most use-cases, one should chain calls to `new_root`, `build` and
-/// `partition` to construct a tree on the metric space.
-///
-/// Clusters are named in the same way as nodes in a Huffman tree. The `root` is
-/// named "1". A left child appends a "0" to the name of the parent and a right
-/// child appends a "1".
+/// the underlying invariants. We anticipate that most users' needs will be well
+/// met by the higher-level abstractions, e.g. `Tree`, `Graph`, `CAKES`, etc.
 ///
 /// For now, `Cluster` names are unique within a single tree. We plan on adding
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug)]
 pub struct Cluster<T: Send + Sync + Copy, U: Number> {
+    /// The `Cluster`'s history in the tree.
     pub history: Vec<bool>,
+    /// The seed used in the random number generator for this `Cluster`.
     pub seed: Option<u64>,
+    /// The offset of the indices of the `Cluster`'s instances in the dataset.
     pub offset: usize,
+    /// The number of instances in the `Cluster`.
     pub cardinality: usize,
+    /// The geometric mean of the `Cluster`.
     pub center: T,
+    /// The instance furthest from the `center` of the `Cluster`.
     pub radial: T,
+    /// The distance from the `center` to the `radial` instance.
     pub radius: U,
+    /// The local fractal dimension of the `Cluster`.
     #[allow(dead_code)]
     pub lfd: f64,
+    /// The children of the `Cluster`.
     pub children: Option<Children<T, U>>,
-
+    /// The six `Cluster` ratios used for anomaly detection and related applications.
     #[allow(dead_code)]
     pub ratios: Option<Ratios>,
 }
 
+/// The children of a `Cluster`.
 #[derive(Debug)]
 pub struct Children<T: Send + Sync + Copy, U: Number> {
+    /// The left child of the `Cluster`.
     pub left: Box<Cluster<T, U>>,
+    /// The right child of the `Cluster`.
     pub right: Box<Cluster<T, U>>,
+    /// The left pole of the `Cluster` (i.e. the instance used to identify
+    /// instances for the left child).
     pub l_pole: T,
+    /// The right pole of the `Cluster` (i.e. the instance used to identify
+    /// instances for the right child).
     pub r_pole: T,
+    /// The distance from the `l_pole` to the `r_pole` instance.
     pub polar_distance: U,
 }
 
@@ -60,8 +69,6 @@ impl<T: Send + Sync + Copy, U: Number> PartialEq for Cluster<T, U> {
     }
 }
 
-/// Two clusters are equal if they have the same name. This only holds, for
-/// now, for clusters in the same tree.
 impl<T: Send + Sync + Copy, U: Number> Eq for Cluster<T, U> {}
 
 impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
@@ -74,9 +81,6 @@ impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
     }
 }
 
-/// `Cluster`s can be sorted based on their name. `Cluster`s are sorted by
-/// non-decreasing depths and then by their names. Sorting a tree of `Cluster`s
-/// will leave them in the order of a breadth-first traversal.
 impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if self.depth() == other.depth() {
@@ -87,11 +91,6 @@ impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
     }
 }
 
-/// Clusters are hashed by their names. This means that a hash is only unique
-/// within a single tree.
-///
-/// TODO: Add a tree-based prefix to the cluster names when we need to hash
-/// clusters from different trees into the same collection.
 impl<T: Send + Sync + Copy, U: Number> Hash for Cluster<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.offset, self.cardinality).hash(state);
@@ -105,11 +104,13 @@ impl<T: Send + Sync + Copy, U: Number> std::fmt::Display for Cluster<T, U> {
 }
 
 impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
-    /// Creates a new root `Cluster` for the metric space.
+    /// Creates a new root `Cluster`.
     ///
     /// # Arguments
     ///
-    /// * `dataset`: on which to create the `Cluster`.
+    /// * `data`: on which to create the `Cluster`.
+    /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
+    /// * `seed`: The seed used in the random number generator for this `Cluster`.
     pub fn new_root<D: Dataset<T, U>>(data: &D, indices: &[usize], seed: Option<u64>) -> Self {
         Self::new(data, seed, vec![true], 0, indices)
     }
@@ -118,10 +119,11 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     ///
     /// # Arguments
     ///
-    /// * `dataset`: on which to create the `Cluster`.
-    /// * `indices`: The indices of instances from the `dataset` that are
-    /// contained in the `Cluster`.
-    /// * `name`: `BitVec` name for the `Cluster`.
+    /// * `data`: on which to create the `Cluster`.
+    /// * `seed`: The seed used in the random number generator for this `Cluster`.
+    /// * `history`: The `Cluster`'s history in the tree.
+    /// * `offset`: The offset of the indices of the `Cluster`'s instances in the dataset.
+    /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
     pub fn new<D: Dataset<T, U>>(
         data: &D,
         seed: Option<u64>,
@@ -164,9 +166,23 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         }
     }
 
+    /// Partitions the `Cluster` into two children if the `Cluster` meets the
+    /// given `PartitionCriteria`.
+    ///
+    /// This method should only be called on a root `Cluster`. It is user error
+    /// to call this method on a non-root `Cluster`.
+    ///
+    /// # Arguments
+    ///
+    /// * `data`: The `Dataset` for the `Cluster`.
+    /// * `criteria`: The `PartitionCriteria` to use for partitioning.
+    ///
+    /// # Returns
+    ///
+    /// * The `Cluster` on which the method was called after partitioning
+    /// recursively until the `PartitionCriteria` is no longer met on any of the
+    /// leaf `Cluster`s.
     pub fn partition<D: Dataset<T, U>>(mut self, data: &mut D, criteria: &PartitionCriteria<T, U>) -> Self {
-        assert_eq!(self.depth(), 0, "This method may only be called on a root cluster.");
-
         let mut indices = data.indices().to_vec();
         (self, indices) = self._partition(data, criteria, indices);
         data.reorder(&indices);
@@ -174,6 +190,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         self
     }
 
+    /// Recursive helper function for `partition`.
     fn _partition<D: Dataset<T, U>>(
         mut self,
         data: &D,
@@ -211,6 +228,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         (self, indices)
     }
 
+    /// Partitions the `Cluster` into two children once.
     fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(T, Vec<usize>); 2], U) {
         let l_distances = data.query_to_many(self.radial, &indices);
 
@@ -234,32 +252,36 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         }
     }
 
+    /// Drops the distances from a vector, returning only the indices.
     fn drop_distances(indices: Vec<((usize, U), U)>) -> Vec<usize> {
         indices.into_iter().map(|((i, _), _)| i).collect()
     }
 
+    /// The `history` of the child `Cluster`.
+    ///
+    /// # Arguments
+    ///
+    /// * `right`: Whether the child `Cluster` is the right child.
     fn child_history(&self, right: bool) -> Vec<bool> {
         let mut history = self.history.clone();
         history.push(right);
         history
     }
 
-    /// Computes and sets the `Ratios` for all `Cluster`s in the tree. These
-    /// ratios are used for selecting `Graph`s for anomaly detection and other
-    /// applications of CLAM.
+    /// Sets the `Cluster` ratios for anomaly detection and related applications.
     ///
-    /// This method may only be called on a root cluster after calling the `build`
-    /// and `partition` methods.
+    /// This method may only be called on the root `Cluster`. It is user error
+    /// to call this method on a non-root `Cluster`.
+    ///
+    /// This method should be called after calling `partition` on the root
+    /// `Cluster`. It is user error to call this method before calling
+    /// `partition` on the root `Cluster`.
     ///
     /// # Arguments
     ///
-    /// * `normalized`: Whether to normalize each ratio to a [0, 1] range based
-    /// on the distribution of values for all `Cluster`s in the tree.
-    ///
-    /// # Panics:
-    ///
-    /// * If called on a non-root `Cluster`, i.e. a `Cluster` with depth > 0.
-    /// * If called before `build` and `partition`.
+    /// * `normalized`: Whether to normalize the ratios. We use Gaussian error
+    /// functions to normalize the ratios, which is a common practice in
+    /// anomaly detection.
     #[allow(unused_mut, unused_variables, dead_code)]
     pub fn with_ratios(mut self, normalized: bool) -> Self {
         todo!()
@@ -305,6 +327,12 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         // self
     }
 
+    /// Sets the chile-parent `Cluster` ratios for anomaly detection and related
+    /// applications.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent_ratios`: The ratios for the parent `Cluster`.
     #[allow(unused_mut, unused_variables, dead_code)]
     fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
         todo!()
@@ -333,6 +361,13 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         // self
     }
 
+    /// Normalizes the `Cluster` ratios for anomaly detection and related
+    /// applications.
+    ///
+    /// # Arguments
+    ///
+    /// * `means`: The means of the `Cluster` ratios.
+    /// * `sds`: The standard deviations of the `Cluster` ratios.
     #[allow(unused_mut, unused_variables, dead_code)]
     fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
         todo!()
@@ -357,42 +392,30 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         // };
     }
 
+    /// The indices of the `Cluster`'s instances in the dataset.
     pub fn indices<'a, D: Dataset<T, U>>(&'a self, data: &'a D) -> &[usize] {
         &data.indices()[self.offset..(self.offset + self.cardinality)]
     }
 
-    // /// Returns a Vector of indices that corresponds to a depth-first traversal of
-    // /// the children of a given cluster. This function is distinguished from `indices`
-    // /// in that it creates a `Vec` that has all of the indices for a given cluster
-    // /// hierarchy instead of returning a reference to a given cluster's indices.
-    // ///
-    // pub fn leaf_indices(&self) -> Vec<usize> {
-    //     match &self.index {
-    //         Index::Empty => match &self.children {
-    //             Some(([(_, left), (_, right)], _)) => left
-    //                 .leaf_indices()
-    //                 .iter()
-    //                 .chain(right.leaf_indices().iter())
-    //                 .copied()
-    //                 .collect(),
-
-    //             // TODO: Cleanup this error message
-    //             None => panic!("Structural invariant invalidated. Node with no contents and no children"),
-    //         },
-    //         Index::Indices(indices) => indices.clone(),
-    //         Index::Offset(_) => {
-    //             panic!("Cannot get leaf indices once tree has been reordered!");
-    //         }
-    //     }
-    // }
-
     /// The `history` of the `Cluster` as a bool vector.
+    ///
+    /// The root `Cluster` has a `history` of length 1, being `vec![true]`. The
+    /// history of a left child is the history of its parent with a `false`
+    /// appended. The history of a right child is the history of its parent with
+    /// a `true` appended.
+    ///
+    /// The `history` of a `Cluster` is used to identify the `Cluster` in the
+    /// tree, and to compute the `Cluster`'s `name`.
     #[allow(dead_code)]
     pub fn history(&self) -> &[bool] {
         &self.history
     }
 
     /// The `name` of the `Cluster` as a hex-String.
+    ///
+    /// This is a human-readable representation of the `Cluster`'s `history`.
+    /// It may be used to store the `Cluster` in a database, or to identify the
+    /// `Cluster` in a visualization.
     #[allow(clippy::many_single_char_names)]
     pub fn name(&self) -> String {
         let d = self.history.len();
@@ -420,7 +443,10 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         self.depth() == 0
     }
 
-    /// The number of parent-child hops from the root `Cluster` to this one.
+    /// The depth of the `Cluster` in the tree.
+    ///
+    /// The root `Cluster` has a depth of 0. The depth of a child is the depth
+    /// of its parent plus 1.
     pub fn depth(&self) -> usize {
         self.history.len() - 1
     }
@@ -441,6 +467,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         self.children.as_ref().map(|v| [v.left.as_ref(), v.right.as_ref()])
     }
 
+    /// The distance between the poles of the `Cluster`.
     #[allow(dead_code)]
     pub fn polar_distance(&self) -> Option<U> {
         self.children.as_ref().map(|v| v.polar_distance)
@@ -454,15 +481,13 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * child-cardinality / parent-cardinality.
     /// * child-radius / parent-radius.
     /// * child-lfd / parent-lfd.
-    /// * exponential moving average of child-cardinality / parent-cardinality.
-    /// * exponential moving average of child-radius / parent-radius.
-    /// * exponential moving average of child-lfd / parent-lfd.
+    /// * EMA of child-cardinality / parent-cardinality.
+    /// * EMA of child-radius / parent-radius.
+    /// * EMA of child-lfd / parent-lfd.
     ///
     /// This method may only be called after calling `with_ratios` on the root.
-    ///
-    /// # Panics:
-    ///
-    /// * If called before calling `with_ratios` on the root.
+    /// It is user error to call this method before calling `with_ratios` on
+    /// the root.
     #[allow(dead_code)]
     pub fn ratios(&self) -> Ratios {
         self.ratios.unwrap_or([0.; 6])
@@ -482,8 +507,6 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
     /// A Vec of references to all `Cluster`s in the subtree of this `Cluster`,
     /// including this `Cluster`.
-    ///
-    /// Note: Calling this function is potentially expensive.
     pub fn subtree(&self) -> Vec<&Self> {
         let subtree = vec![self];
 
@@ -504,12 +527,6 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         self.subtree().into_iter().map(Self::depth).max().unwrap()
     }
 
-    /// Distance from the `center` to the given indexed instance.
-    #[allow(dead_code)]
-    pub fn distance_to_indexed_instance<D: Dataset<T, U>>(&self, data: &D, index: usize) -> U {
-        data.metric()(data.get(index), self.center)
-    }
-
     /// Distance from the `center` to the given instance.
     pub fn distance_to_instance<D: Dataset<T, U>>(&self, data: &D, instance: T) -> U {
         data.metric()(instance, self.center)
@@ -525,21 +542,30 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
     pub fn overlapping_children<D: Dataset<T, U>>(&self, data: &D, query: T, radius: U) -> Vec<&Self> {
-        self.children.as_ref().map_or_else(Vec::new, |children| {
-            let ql = data.metric()(query, children.l_pole);
-            let qr = data.metric()(query, children.r_pole);
+        self.children.as_ref().map_or_else(
+            Vec::new,
+            |Children {
+                 left,
+                 right,
+                 l_pole,
+                 r_pole,
+                 polar_distance,
+             }| {
+                let ql = data.metric()(query, *l_pole);
+                let qr = data.metric()(query, *r_pole);
 
-            let swap = ql < qr;
-            let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
+                let swap = ql < qr;
+                let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
 
-            if (ql + qr) * (ql - qr) <= U::from(2) * children.polar_distance * radius {
-                vec![children.left.as_ref(), children.right.as_ref()]
-            } else if swap {
-                vec![children.left.as_ref()]
-            } else {
-                vec![children.right.as_ref()]
-            }
-        })
+                if (ql + qr) * (ql - qr) <= U::from(2) * (*polar_distance) * radius {
+                    vec![left.as_ref(), right.as_ref()]
+                } else if swap {
+                    vec![left.as_ref()]
+                } else {
+                    vec![right.as_ref()]
+                }
+            },
+        )
     }
 }
 
@@ -551,7 +577,7 @@ mod tests {
 
     use crate::{
         cluster::Tree,
-        dataset::{Dataset, VecVec},
+        dataset::{Dataset, VecDataset},
     };
 
     use super::*;
@@ -560,7 +586,7 @@ mod tests {
     fn test_cluster() {
         let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
         let name = "test".to_string();
-        let mut data = VecVec::new(data, euclidean::<f32, f32>, name, false);
+        let mut data = VecDataset::new(data, euclidean::<f32, f32>, name, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
         let cluster = Cluster::new_root(&data, &indices, Some(42)).partition(&mut data, &partition_criteria);
@@ -587,7 +613,7 @@ mod tests {
     fn test_leaf_indices() {
         let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
         let name = "test".to_string();
-        let data = VecVec::new(data, euclidean::<f32, f32>, name, false);
+        let data = VecDataset::new(data, euclidean::<f32, f32>, name, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -602,7 +628,7 @@ mod tests {
     fn test_end_to_end_reordering() {
         let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
         let name = "test".to_string();
-        let data = VecVec::new(data, euclidean::<f32, f32>, name, false);
+        let data = VecDataset::new(data, euclidean::<f32, f32>, name, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -622,7 +648,7 @@ mod tests {
         let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let name = "test".to_string();
-        let mut data = VecVec::<_, f32>::new(data, euclidean, name, false);
+        let mut data = VecDataset::<_, f32>::new(data, euclidean, name, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 

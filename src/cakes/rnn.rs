@@ -1,11 +1,24 @@
+//! Algorithms for Ranged Nearest Neighbor search.
+//!
+//! The stable algorithms are `Linear` and `Clustered`, with the default being `Clustered`.
+//!
+//! We will experiment with other algorithms in the future, and they will be added to this
+//! module as they are being implemented. They should not be considered stable until they
+//! are documented as such.
+
 use distances::Number;
 
 use crate::{cluster::Tree, dataset::Dataset};
 
+/// The algorithm to use for Ranged Nearest Neighbor search.
+///
+/// The default is `Clustered`, as determined by the benchmarks in the crate.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, Debug)]
 pub enum RnnAlgorithm {
+    /// Use linear search on the entire dataset.
     Linear,
+    /// Use a clustered search.
     Clustered,
 }
 
@@ -16,6 +29,18 @@ impl Default for RnnAlgorithm {
 }
 
 impl RnnAlgorithm {
+    /// Searches for the nearest neighbors of a query.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The query to search around.
+    /// * `radius` - The radius to search within.
+    /// * `tree` - The tree to search.
+    ///
+    /// # Returns
+    ///
+    /// A vector of 2-tuples, where the first element is the index of the instance
+    /// and the second element is the distance from the query to the instance.
     pub fn search<T, U, D>(&self, query: T, radius: U, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
@@ -28,6 +53,19 @@ impl RnnAlgorithm {
         }
     }
 
+    /// Linear search for the nearest neighbors of a query.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The dataset to search.
+    /// * `query` - The query to search around.
+    /// * `radius` - The radius to search within.
+    /// * `indices` - The indices to search.
+    ///
+    /// # Returns
+    ///
+    /// A vector of 2-tuples, where the first element is the index of the instance
+    /// and the second element is the distance from the query to the instance.
     pub(crate) fn linear_search<T, U, D>(data: &D, query: T, radius: U, indices: &[usize]) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
@@ -43,6 +81,18 @@ impl RnnAlgorithm {
             .collect()
     }
 
+    /// Clustered search for the nearest neighbors of a query.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The tree to search.
+    /// * `query` - The query to search around.
+    /// * `radius` - The radius to search within.
+    ///
+    /// # Returns
+    ///
+    /// A vector of 2-tuples, where the first element is the index of the instance
+    /// and the second element is the distance from the query to the instance.
     pub(crate) fn clustered_search<T, U, D>(tree: &Tree<T, U, D>, query: T, radius: U) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,

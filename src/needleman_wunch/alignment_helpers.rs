@@ -1,11 +1,20 @@
+//! Helper functions for the Needleman-Wunsch algorithm.
+
+/// Enum representing the direction of best alignment at a given position in the dp table
+/// (used for traceback)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
+    /// Diagonal (Up and Left) for a match.
     Diagonal,
+    /// Up for a gap in the first sequence.
     Up,
+    /// Left for a gap in the second sequence.
     Left,
+    /// None for the start of the table.
     None,
 }
 
+/// Returns the minimum of two tuples of usize and Direction by comparing the usize values.
 const fn min2(a: (usize, Direction), b: (usize, Direction)) -> (usize, Direction) {
     if a.0 < b.0 {
         a
@@ -14,7 +23,21 @@ const fn min2(a: (usize, Direction), b: (usize, Direction)) -> (usize, Direction
     }
 }
 
-// New function to compute the distance and direction table using scoring scheme 0; 1; 1
+/// Computes the Needleman-Wunsch dynamic programming table for two sequences.
+///
+/// The penalty for a mismatch is 1, and the penalty for a gap is 1. There is no
+/// penalty for a match.
+///
+/// # Arguments
+///
+/// * `x` - The first sequence.
+/// * `y` - The second sequence.
+///
+/// # Returns
+///
+/// A 2D vector of tuples of usize and Direction, where the usize represents the
+/// edit distance at that position in the table, and the Direction represents the
+/// direction of the best alignment at that position.
 pub fn compute_table(x: &str, y: &str) -> Vec<Vec<(usize, Direction)>> {
     let len_x = x.len();
     let len_y = y.len();
@@ -55,14 +78,26 @@ pub fn compute_table(x: &str, y: &str) -> Vec<Vec<(usize, Direction)>> {
     table
 }
 
+/// Enum representing the type of edit needed to turn one sequence into another.
 pub enum Edit {
+    /// Deletion of a character at the given index.
     Deletion(usize),
+    /// Insertion of a character at the given index.
     Insertion(usize, char),
+    /// Substitution of a character at the given index.
     Substitution(usize, char),
 }
 
-// Given an alignment of two sequences, returns the set of edits needed to turn sequence
-// x into sequence y
+/// Converts two aligned sequences into a vector of edits.
+///
+/// # Arguments
+///
+/// * `aligned_x` - The first aligned sequence.
+/// * `aligned_y` - The second aligned sequence.
+///
+/// # Returns
+///
+/// A vector of `Edit`s needed to turn the first sequence into the second.
 #[allow(clippy::ptr_arg)]
 pub fn alignment_to_edits(aligned_x: &str, aligned_y: &str) -> Vec<Edit> {
     aligned_x
@@ -82,7 +117,20 @@ pub fn alignment_to_edits(aligned_x: &str, aligned_y: &str) -> Vec<Edit> {
         .collect()
 }
 
-// Iterative version of trace back function so we can benchmark both this and recursive option
+/// Iteratively traces back through the Needleman-Wunsch table to get the alignment of two sequences.
+///
+/// For now, we ignore ties in the paths that can be followed to get the best alignments.
+/// We break ties by always choosing the `Diagonal` path first, then the `Left`
+/// path, then the `Up` path.
+///
+/// # Arguments
+///
+/// * `table` - The Needleman-Wunsch table.
+/// * `unaligned_seqs` - A tuple of the two sequences to align.
+///
+/// # Returns
+///
+/// A tuple of the two aligned sequences.
 pub fn trace_back_iterative(table: &Vec<Vec<(usize, Direction)>>, unaligned_seqs: (&str, &str)) -> (String, String) {
     let (unaligned_x, unaligned_y) = unaligned_seqs;
     let unaligned_x = unaligned_x.as_bytes();
@@ -127,7 +175,20 @@ pub fn trace_back_iterative(table: &Vec<Vec<(usize, Direction)>>, unaligned_seqs
     (aligned_x, aligned_y)
 }
 
-// Public function for recursive trace back to get alignment and edit distance (ignores ties for now)
+/// Recursively traces back through the Needleman-Wunsch table to get the alignment of two sequences.
+///
+/// For now, we ignore ties in the paths that can be followed to get the best alignments.
+/// We break ties by always choosing the `Diagonal` path first, then the `Left`
+/// path, then the `Up` path.
+///
+/// # Arguments
+///
+/// * `table` - The Needleman-Wunsch table.
+/// * `unaligned_seqs` - A tuple of the two sequences to align.
+///
+/// # Returns
+///
+/// A tuple of the two aligned sequences.
 pub fn trace_back_recursive(table: &Vec<Vec<(usize, Direction)>>, unaligned_seqs: (&str, &str)) -> (String, String) {
     let (unaligned_x, unaligned_y) = unaligned_seqs;
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
@@ -145,7 +206,7 @@ pub fn trace_back_recursive(table: &Vec<Vec<(usize, Direction)>>, unaligned_seqs
     (aligned_x, aligned_y)
 }
 
-// Private trace back recursive function. Returns a single alignment (disregards ties for best-scoring alignment)
+/// Helper function for `trace_back_recursive`.
 fn _trace_back_recursive(
     table: &Vec<Vec<(usize, Direction)>>,
     (mut row_index, mut column_index): (usize, usize),

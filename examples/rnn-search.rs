@@ -5,7 +5,7 @@ use num_format::{Buffer, CustomFormat, Locale, ToFormattedString};
 use abd_clam::{
     cakes::{RnnAlgorithm, CAKES},
     cluster::PartitionCriteria,
-    dataset::VecVec,
+    dataset::VecDataset,
     COMMON_METRICS_F32,
 };
 
@@ -61,7 +61,7 @@ fn search(seed: Option<u64>, data_name: &str) -> Vec<String> {
         line_metric.push(metric_name.to_string());
 
         let name = format!("{data_name}-{metric_name}");
-        let data = VecVec::new(data.clone(), metric, name, false);
+        let data = VecDataset::new(data.clone(), metric, name, false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let start = Instant::now();

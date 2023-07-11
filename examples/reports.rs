@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use abd_clam::{
     cakes::CAKES,
     cluster::PartitionCriteria,
-    dataset::{Dataset, VecVec},
+    dataset::{Dataset, VecDataset},
     COMMON_METRICS_F32,
 };
 
@@ -63,7 +63,7 @@ fn main() {
             let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
             let dimensionality = data[0].len();
 
-            let data = VecVec::new(data, metric, data_name.to_string(), false);
+            let data = VecDataset::new(data, metric, data_name.to_string(), false);
 
             let car = data.cardinality().to_formatted_string(&Locale::en);
             let dim = dimensionality.to_formatted_string(&Locale::en);
@@ -230,7 +230,7 @@ fn get_reports_root() -> PathBuf {
 // }
 
 fn report_linear<'a>(
-    data: &'a VecVec<&'a [f32], f32>,
+    data: &'a VecDataset<&'a [f32], f32>,
     queries: &'a [&'a [f32]],
     out_dir: &Path,
     batch_size: usize,
