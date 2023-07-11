@@ -14,7 +14,6 @@ pub struct VecVec<T: Send + Sync + Copy, U: Number> {
 
 impl<T: Send + Sync + Copy, U: Number> VecVec<T, U> {
     pub fn new(data: Vec<T>, metric: fn(T, T) -> U, name: String, is_expensive: bool) -> Self {
-        assert_ne!(data.len(), 0, "Must have some instances in the data.");
         let indices = (0..data.len()).collect();
         Self {
             name,
@@ -90,7 +89,7 @@ mod tests {
         for i in 0..10 {
             let dimensionality = 10;
             let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
-            let reference_data = reference_data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+            let reference_data = reference_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
             for _ in 0..10 {
                 let mut dataset = VecVec::new(reference_data.clone(), euclidean_sq::<u32, u32>, name.clone(), false);
                 let mut new_indices = dataset.indices().to_vec();
@@ -106,8 +105,8 @@ mod tests {
 
     #[test]
     fn test_inverse_map() {
-        let data: Vec<Vec<u32>> = (1..7).map(|x| vec![(x * 2) as u32]).collect();
-        let data: Vec<&[u32]> = data.iter().map(|v| v.as_slice()).collect();
+        let data: Vec<Vec<u32>> = (1_u32..7).map(|x| vec![x * 2]).collect();
+        let data: Vec<&[u32]> = data.iter().map(Vec::as_slice).collect();
         let permutation = vec![1, 3, 4, 0, 5, 2];
 
         let mut dataset = VecVec::new(data, euclidean_sq::<u32, u32>, "test".to_string(), false);

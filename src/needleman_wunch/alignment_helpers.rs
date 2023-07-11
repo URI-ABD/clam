@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
     Diagonal,
     Up,
@@ -6,7 +6,7 @@ pub enum Direction {
     None,
 }
 
-fn min2(a: (usize, Direction), b: (usize, Direction)) -> (usize, Direction) {
+const fn min2(a: (usize, Direction), b: (usize, Direction)) -> (usize, Direction) {
     if a.0 < b.0 {
         a
     } else {
@@ -42,7 +42,7 @@ pub fn compute_table(x: &str, y: &str) -> Vec<Vec<(usize, Direction)>> {
             // Reason for subtraction is that NW considers an artificial gap at the start
             // of each sequence, so the dp tables' indices are 1 higher than that of
             // the actual sequences
-            let mismatch_penalty = if x_c == y_c { 0 } else { 1 };
+            let mismatch_penalty = usize::from(x_c != y_c);
 
             let d00 = (table[i][j].0 + mismatch_penalty, Direction::Diagonal);
             let d01 = (table[i][j + 1].0 + gap_penalty, Direction::Up);
@@ -184,7 +184,7 @@ fn _trace_back_recursive(
         (row_index, column_index),
         (unaligned_x, unaligned_y),
         (aligned_x, aligned_y),
-    )
+    );
 }
 
 #[cfg(test)]
@@ -195,6 +195,7 @@ mod tests {
     use super::Direction;
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn test_compute_table() {
         let x = "NAJIBPEPPERSEATS".to_string();
         let y = "NAJIBEATSPEPPERS".to_string();

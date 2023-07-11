@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use distances::Number;
 
 use crate::dataset::Dataset;
@@ -13,7 +15,7 @@ use super::{Cluster, PartitionCriteria};
 pub struct Tree<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     data: D,
     root: Cluster<T, U>,
-    _t: std::marker::PhantomData<T>,
+    _t: PhantomData<T>,
 }
 
 impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
@@ -23,33 +25,33 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     /// # Arguments
     /// dataset: The dataset from which the tree will be built
     pub fn new(data: D, seed: Option<u64>) -> Self {
-        Tree {
+        Self {
             root: Cluster::new_root(&data, data.indices(), seed),
             data,
-            _t: Default::default(),
+            _t: PhantomData::default(),
         }
     }
 
     /// # Returns
     /// A reference to the root `Cluster` of the tree
-    pub(crate) fn root(&self) -> &Cluster<T, U> {
+    pub(crate) const fn root(&self) -> &Cluster<T, U> {
         &self.root
     }
 
     /// Returns a reference to dataset associated with the tree
-    pub fn data(&self) -> &D {
+    pub const fn data(&self) -> &D {
         &self.data
     }
 
     /// # Returns
     /// The cardinality of the `Tree`
-    pub fn cardinality(&self) -> usize {
+    pub const fn cardinality(&self) -> usize {
         self.root.cardinality
     }
 
     /// # Returns
     /// The radius of the `Tree`
-    pub fn radius(&self) -> U {
+    pub const fn radius(&self) -> U {
         self.root.radius
     }
 
@@ -60,6 +62,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     ///
     /// # Returns
     /// A new `Tree` with a partitioned root.
+    #[must_use]
     pub fn partition(mut self, criteria: &PartitionCriteria<T, U>) -> Self {
         self.root = self.root.partition(&mut self.data, criteria);
         self

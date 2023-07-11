@@ -2,6 +2,7 @@ use distances::Number;
 
 use crate::{cluster::Tree, dataset::Dataset};
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, Debug)]
 pub enum RnnAlgorithm {
     Linear,
@@ -59,17 +60,17 @@ impl RnnAlgorithm {
             let (mut terminal, mut non_terminal): (Vec<_>, Vec<_>);
             while !candidates.is_empty() {
                 (terminal, non_terminal) = candidates
-                    .drain(..)
+                    .into_iter()
                     .map(|c| (c, c.distance_to_instance(data, query)))
                     .filter(|&(c, d)| d <= (c.radius + radius))
                     .partition(|&(c, d)| (c.radius + d) <= radius);
                 confirmed.append(&mut terminal);
 
-                (terminal, non_terminal) = non_terminal.drain(..).partition(|&(c, _)| c.is_leaf());
+                (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
                 straddlers.append(&mut terminal);
 
                 candidates = non_terminal
-                    .drain(..)
+                    .into_iter()
                     .flat_map(|(c, d)| {
                         if d < c.radius {
                             c.overlapping_children(data, query, radius)

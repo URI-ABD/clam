@@ -5,6 +5,9 @@ use distances::Number;
 use super::RnnAlgorithm;
 use crate::{cluster::Tree, dataset::Dataset, utils::helpers};
 
+const MULTIPLIER: f64 = 2.0;
+
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Copy, Debug)]
 pub enum KnnAlgorithm {
     Linear,
@@ -50,7 +53,6 @@ impl KnnAlgorithm {
     {
         let mut radius = EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
         let mut hits = RnnAlgorithm::clustered_search(tree, query, U::from(radius));
-        const MULTIPLIER: f64 = 2.0;
 
         while hits.is_empty() {
             radius *= MULTIPLIER;

@@ -72,3 +72,10 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
         }
     }
 }
+
+#[allow(dead_code)]
+pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
+    // TODO: Consider getting `alpha` from user. Perhaps via env vars?
+    let alpha = 2. / 11.;
+    alpha.mul_add(ratio, (1. - alpha) * parent_ema)
+}

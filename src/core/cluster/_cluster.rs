@@ -29,7 +29,7 @@ pub type Ratios = [f64; 6];
 /// For now, `Cluster` names are unique within a single tree. We plan on adding
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug)]
-pub(crate) struct Cluster<T: Send + Sync + Copy, U: Number> {
+pub struct Cluster<T: Send + Sync + Copy, U: Number> {
     pub history: Vec<bool>,
     pub seed: Option<u64>,
     pub offset: usize,
@@ -46,7 +46,7 @@ pub(crate) struct Cluster<T: Send + Sync + Copy, U: Number> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Children<T: Send + Sync + Copy, U: Number> {
+pub struct Children<T: Send + Sync + Copy, U: Number> {
     pub left: Box<Cluster<T, U>>,
     pub right: Box<Cluster<T, U>>,
     pub l_pole: T,
@@ -94,7 +94,7 @@ impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
 /// clusters from different trees into the same collection.
 impl<T: Send + Sync + Copy, U: Number> Hash for Cluster<T, U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        (self.offset, self.cardinality).hash(state)
+        (self.offset, self.cardinality).hash(state);
     }
 }
 
@@ -111,7 +111,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     ///
     /// * `dataset`: on which to create the `Cluster`.
     pub fn new_root<D: Dataset<T, U>>(data: &D, indices: &[usize], seed: Option<u64>) -> Self {
-        Cluster::new(data, seed, vec![true], 0, indices)
+        Self::new(data, seed, vec![true], 0, indices)
     }
 
     /// Creates a new `Cluster`.
@@ -135,7 +135,8 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         let arg_samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            let n = ((indices.len() as f64).sqrt()) as usize;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let n = (indices.len().as_f64().sqrt()) as usize;
             data.choose_unique(n, indices, seed)
         };
 
@@ -149,7 +150,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
         let lfd = helpers::compute_lfd(radius, &center_distances);
 
-        Cluster {
+        Self {
             history,
             seed,
             offset,
@@ -186,11 +187,11 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
             let ((left, l_indices), (right, r_indices)) = rayon::join(
                 || {
-                    Cluster::new(data, self.seed, self.child_history(false), self.offset, &l_indices)
+                    Self::new(data, self.seed, self.child_history(false), self.offset, &l_indices)
                         ._partition(data, criteria, l_indices)
                 },
                 || {
-                    Cluster::new(data, self.seed, self.child_history(true), r_offset, &r_indices)
+                    Self::new(data, self.seed, self.child_history(true), r_offset, &r_indices)
                         ._partition(data, criteria, r_indices)
                 },
             );
@@ -304,14 +305,6 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         // self
     }
 
-    #[inline(always)]
-    #[allow(dead_code)]
-    fn next_ema(&self, ratio: f64, parent_ema: f64) -> f64 {
-        // TODO: Consider getting `alpha` from user. Perhaps via env vars?
-        let alpha = 2. / 11.;
-        alpha * ratio + (1. - alpha) * parent_ema
-    }
-
     #[allow(unused_mut, unused_variables, dead_code)]
     fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
         todo!()
@@ -400,6 +393,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// The `name` of the `Cluster` as a hex-String.
+    #[allow(clippy::many_single_char_names)]
     pub fn name(&self) -> String {
         let d = self.history.len();
         let padding = if d % 4 == 0 { 0 } else { 4 - d % 4 };
@@ -415,8 +409,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
                 let s = u8::from_str_radix(&s, 2).unwrap();
                 format!("{s:01x}")
             })
-            .collect::<Vec<_>>()
-            .join("")
+            .collect()
     }
 
     /// Whether the `Cluster` is the root of the tree.
@@ -439,7 +432,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// Whether this cluster has no children.
-    pub fn is_leaf(&self) -> bool {
+    pub const fn is_leaf(&self) -> bool {
         self.children.is_none()
     }
 
@@ -472,8 +465,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * If called before calling `with_ratios` on the root.
     #[allow(dead_code)]
     pub fn ratios(&self) -> Ratios {
-        self.ratios
-            .expect("Please call `with_ratios` before using this method.")
+        self.ratios.unwrap_or([0.; 6])
     }
 
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
@@ -509,7 +501,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
     /// The maximum depth of any leaf in the subtree of this `Cluster`.
     pub fn max_leaf_depth(&self) -> usize {
-        self.subtree().into_iter().map(|c| c.depth()).max().unwrap()
+        self.subtree().into_iter().map(Self::depth).max().unwrap()
     }
 
     /// Distance from the `center` to the given indexed instance.
@@ -533,28 +525,28 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
     pub fn overlapping_children<D: Dataset<T, U>>(&self, data: &D, query: T, radius: U) -> Vec<&Self> {
-        let children = self
-            .children
-            .as_ref()
-            .expect("This method may only be called on non-leaf clusters.");
-        let ql = data.metric()(query, children.l_pole);
-        let qr = data.metric()(query, children.r_pole);
+        self.children.as_ref().map_or_else(Vec::new, |children| {
+            let ql = data.metric()(query, children.l_pole);
+            let qr = data.metric()(query, children.r_pole);
 
-        let swap = ql < qr;
-        let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
+            let swap = ql < qr;
+            let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
 
-        if (ql + qr) * (ql - qr) <= U::from(2) * children.polar_distance * radius {
-            vec![&children.left, &children.right]
-        } else if swap {
-            vec![&children.left]
-        } else {
-            vec![&children.right]
-        }
+            if (ql + qr) * (ql - qr) <= U::from(2) * children.polar_distance * radius {
+                vec![children.left.as_ref(), children.right.as_ref()]
+            } else if swap {
+                vec![children.left.as_ref()]
+            } else {
+                vec![children.right.as_ref()]
+            }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use core::f32::EPSILON;
+
     use distances::vectors::euclidean;
 
     use crate::{
@@ -601,7 +593,7 @@ mod tests {
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
         let mut leaf_indices = tree.root().indices(tree.data()).to_vec();
-        leaf_indices.sort();
+        leaf_indices.sort_unstable();
 
         assert_eq!(leaf_indices, tree.data().indices());
     }
@@ -628,7 +620,7 @@ mod tests {
         let seed = 42;
 
         let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let name = "test".to_string();
         let mut data = VecVec::<_, f32>::new(data, euclidean, name, false);
         let indices = data.indices().to_vec();
@@ -642,8 +634,8 @@ mod tests {
             assert!(c.lfd > 0., "LFD must be positive.");
 
             let radius = data.metric()(c.center, c.radial);
-            assert_eq!(
-                c.radius, radius,
+            assert!(
+                (c.radius - radius).abs() < EPSILON,
                 "Radius must be equal to the distance to the farthest instance."
             );
         }
