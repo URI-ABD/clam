@@ -22,6 +22,7 @@ mod core;
 pub mod needleman_wunch;
 pub(crate) mod utils;
 
+#[allow(unused_imports)]
 pub(crate) use crate::core::cluster::Cluster;
 pub use crate::{
     cakes::{KnnAlgorithm, RnnAlgorithm, CAKES},
