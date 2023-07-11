@@ -2,12 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{
-    cakes::{RnnAlgorithm, CAKES},
-    cluster::PartitionCriteria,
-    dataset::VecDataset,
-    COMMON_METRICS_F32,
-};
+use abd_clam::{PartitionCriteria, RnnAlgorithm, VecDataset, CAKES, COMMON_METRICS_F32};
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;

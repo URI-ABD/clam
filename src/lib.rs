@@ -17,12 +17,19 @@
 #![doc = include_str!("../README.md")]
 
 // pub mod chaoda;
-pub mod cakes;
+mod cakes;
 mod core;
 pub mod needleman_wunch;
 pub(crate) mod utils;
 
-pub use crate::core::{cluster, dataset};
+pub(crate) use crate::core::cluster::Cluster;
+pub use crate::{
+    cakes::{KnnAlgorithm, RnnAlgorithm, CAKES},
+    core::{
+        cluster::{PartitionCriteria, Tree},
+        dataset::{Dataset, VecDataset},
+    },
+};
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.17.0";

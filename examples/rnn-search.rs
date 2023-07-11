@@ -2,12 +2,7 @@ use std::{fs::File, io::prelude::*, time::Instant};
 
 use num_format::{Buffer, CustomFormat, Locale, ToFormattedString};
 
-use abd_clam::{
-    cakes::{RnnAlgorithm, CAKES},
-    cluster::PartitionCriteria,
-    dataset::VecDataset,
-    COMMON_METRICS_F32,
-};
+use abd_clam::{PartitionCriteria, RnnAlgorithm, VecDataset, CAKES, COMMON_METRICS_F32};
 
 pub mod utils;
 

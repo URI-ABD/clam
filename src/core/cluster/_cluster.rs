@@ -7,7 +7,7 @@ use core::hash::{Hash, Hasher};
 use distances::Number;
 
 use super::PartitionCriteria;
-use crate::{dataset::Dataset, utils::helpers};
+use crate::{utils, Dataset};
 
 /// Ratios are used for anomaly detection and related applications.
 pub type Ratios = [f64; 6];
@@ -146,11 +146,11 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         let center = data.get(arg_center);
 
         let center_distances = data.one_to_many(arg_center, indices);
-        let (arg_radius, radius) = helpers::arg_max(&center_distances);
+        let (arg_radius, radius) = utils::arg_max(&center_distances);
         let arg_radius = indices[arg_radius];
         let radial = data.get(arg_radius);
 
-        let lfd = helpers::compute_lfd(radius, &center_distances);
+        let lfd = utils::compute_lfd(radius, &center_distances);
 
         Self {
             history,
@@ -232,7 +232,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(T, Vec<usize>); 2], U) {
         let l_distances = data.query_to_many(self.radial, &indices);
 
-        let (arg_r, polar_distance) = helpers::arg_max(&l_distances);
+        let (arg_r, polar_distance) = utils::arg_max(&l_distances);
         let r_pole = data.get(indices[arg_r]);
         let r_distances = data.query_to_many(r_pole, &indices);
 
@@ -576,8 +576,7 @@ mod tests {
     use distances::vectors::euclidean;
 
     use crate::{
-        cluster::Tree,
-        dataset::{Dataset, VecDataset},
+        Tree, {Dataset, VecDataset},
     };
 
     use super::*;

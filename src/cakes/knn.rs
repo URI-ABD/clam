@@ -10,7 +10,7 @@ use core::{cmp::Ordering, f64::EPSILON};
 use distances::Number;
 
 use super::RnnAlgorithm;
-use crate::{cluster::Tree, dataset::Dataset, utils::helpers};
+use crate::{utils, Dataset, Tree};
 
 /// The multiplier to use for increasing the radius in the repeated RNN algorithm.
 const MULTIPLIER: f64 = 2.0;
@@ -119,7 +119,7 @@ impl KnnAlgorithm {
 
         while hits.len() < k {
             let distances = hits.iter().map(|(_, d)| *d).collect::<Vec<_>>();
-            let lfd = helpers::compute_lfd(U::from(radius), &distances);
+            let lfd = utils::compute_lfd(U::from(radius), &distances);
             let factor = (k.as_f64() / hits.len().as_f64()).powf(1. / (lfd + EPSILON));
             assert!(factor > 1.);
             radius *= if factor < MULTIPLIER { factor } else { MULTIPLIER };

@@ -5,10 +5,7 @@ use rayon::prelude::*;
 use distances::Number;
 use symagen::random_data;
 
-use abd_clam::{
-    cakes::{RnnAlgorithm, CAKES},
-    dataset::Dataset,
-};
+use abd_clam::{Dataset, RnnAlgorithm, CAKES};
 
 pub mod anomaly_readers;
 pub mod search_readers;

@@ -2,12 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{
-    cakes::{RnnAlgorithm, CAKES},
-    cluster::PartitionCriteria,
-    dataset::VecDataset,
-    COMMON_METRICS_STR,
-};
+use abd_clam::{PartitionCriteria, RnnAlgorithm, VecDataset, CAKES, COMMON_METRICS_STR};
 
 fn genomic(c: &mut Criterion) {
     let seed = 42;

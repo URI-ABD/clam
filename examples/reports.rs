@@ -10,10 +10,7 @@ use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
 use abd_clam::{
-    cakes::CAKES,
-    cluster::PartitionCriteria,
-    dataset::{Dataset, VecDataset},
-    COMMON_METRICS_F32,
+    PartitionCriteria, CAKES, COMMON_METRICS_F32, {Dataset, VecDataset},
 };
 
 pub mod utils;

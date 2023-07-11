@@ -27,6 +27,12 @@ pub struct PartitionCriteria<T: Send + Sync + Copy, U: Number> {
     check_all: bool,
 }
 
+impl<T: Send + Sync + Copy, U: Number> Default for PartitionCriteria<T, U> {
+    fn default() -> Self {
+        Self::new(true).with_min_cardinality(1)
+    }
+}
+
 impl<T: Send + Sync + Copy, U: Number> PartitionCriteria<T, U> {
     /// Create a new `PartitionCriteria` instance.
     ///
