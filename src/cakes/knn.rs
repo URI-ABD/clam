@@ -112,23 +112,59 @@ impl KnnAlgorithm {
         D: Dataset<T, U>,
     {
         let mut radius = EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
-        let mut hits = RnnAlgorithm::clustered_search(tree, query, U::from(radius));
+        let [mut confirmed, mut straddlers] =
+            RnnAlgorithm::tree_search(tree.data(), tree.root(), query, U::from(radius));
 
-        while hits.is_empty() {
+        let mut num_hits = confirmed
+            .iter()
+            .chain(straddlers.iter())
+            .map(|&(c, _)| c.cardinality)
+            .sum::<usize>();
+
+        while num_hits == 0 {
             radius *= MULTIPLIER;
-            hits = RnnAlgorithm::clustered_search(tree, query, U::from(radius));
+            [confirmed, straddlers] = RnnAlgorithm::tree_search(tree.data(), tree.root(), query, U::from(radius));
+            num_hits = confirmed
+                .iter()
+                .chain(straddlers.iter())
+                .map(|&(c, _)| c.cardinality)
+                .sum::<usize>();
         }
 
-        while hits.len() < k {
-            let distances = hits.iter().map(|(_, d)| *d).collect::<Vec<_>>();
-            let lfd = utils::compute_lfd(U::from(radius), &distances);
-            let factor = (k.as_f64() / hits.len().as_f64()).powf(1. / (lfd + EPSILON));
+        while num_hits < k {
+            let lfd = utils::mean(
+                &confirmed
+                    .iter()
+                    .chain(straddlers.iter())
+                    .map(|&(c, _)| c.lfd)
+                    .collect::<Vec<_>>(),
+            );
+            let factor = (k.as_f64() / num_hits.as_f64()).powf(1. / (lfd + EPSILON));
             assert!(factor > 1.);
             radius *= if factor < MULTIPLIER { factor } else { MULTIPLIER };
-            hits = RnnAlgorithm::clustered_search(tree, query, U::from(radius));
+            [confirmed, straddlers] = RnnAlgorithm::tree_search(tree.data(), tree.root(), query, U::from(radius));
+            num_hits = confirmed
+                .iter()
+                .chain(straddlers.iter())
+                .map(|&(c, _)| c.cardinality)
+                .sum::<usize>();
         }
 
-        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+        let mut hits = confirmed
+            .into_iter()
+            .chain(straddlers.into_iter())
+            .flat_map(|(c, d)| {
+                let indices = c.indices(tree.data());
+                let distances = if c.is_singleton() {
+                    vec![d; c.cardinality]
+                } else {
+                    tree.data().query_to_many(query, indices)
+                };
+                indices.iter().copied().zip(distances.into_iter())
+            })
+            .collect::<Vec<_>>();
+
+        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
         hits[..k].to_vec()
     }
 }
