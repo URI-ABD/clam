@@ -5,11 +5,12 @@ use distances::Number;
 use super::Cluster;
 
 // Note (OWM): This leaks cluster if we allow it to be public. Getting this to make sense is a TODO
-pub(crate) trait PartitionCriterion<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
+pub trait PartitionCriterion<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
     // TODO (Najib): figure out how not to lean Cluster here
     fn check(&self, c: &Cluster<T, U>) -> bool;
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct PartitionCriteria<T: Send + Sync + Copy, U: Number> {
     criteria: Vec<Box<dyn PartitionCriterion<T, U>>>,
@@ -17,6 +18,7 @@ pub struct PartitionCriteria<T: Send + Sync + Copy, U: Number> {
 }
 
 impl<T: Send + Sync + Copy, U: Number> PartitionCriteria<T, U> {
+    #[must_use]
     pub fn new(check_all: bool) -> Self {
         Self {
             criteria: Vec::new(),
@@ -24,11 +26,13 @@ impl<T: Send + Sync + Copy, U: Number> PartitionCriteria<T, U> {
         }
     }
 
+    #[must_use]
     pub fn with_max_depth(mut self, threshold: usize) -> Self {
         self.criteria.push(Box::new(MaxDepth(threshold)));
         self
     }
 
+    #[must_use]
     pub fn with_min_cardinality(mut self, threshold: usize) -> Self {
         self.criteria.push(Box::new(MinCardinality(threshold)));
         self

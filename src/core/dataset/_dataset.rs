@@ -84,7 +84,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
         };
 
         let mut chosen = Vec::new();
-        for &i in indices.iter() {
+        for i in indices {
             let is_old = chosen.iter().any(|&o| self.are_instances_equal(i, o));
             if !is_old {
                 chosen.push(i);

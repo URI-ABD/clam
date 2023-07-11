@@ -4,6 +4,7 @@ use distances::Number;
 
 use crate::dataset::Dataset;
 
+#[allow(clippy::module_name_repetitions)]
 pub trait CodecDataset<T: Number, U: Number>: Dataset<T, U> {
     /// Encodes the target instance in terms of the reference and produces the
     /// encoding as a vec of bytes.

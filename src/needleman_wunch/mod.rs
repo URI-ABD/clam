@@ -13,6 +13,7 @@ use distances::Number;
 ///
 /// * `x`: unaligned sequence represented as a `String`
 /// * `y`: unaligned sequence represented as a `String`
+#[must_use]
 pub fn nw_distance<U: Number>(x: &str, y: &str) -> U {
     let table = alignment_helpers::compute_table(x, y);
     let edit_distance: usize = table[table.len() - 1][table[0].len() - 1].0;
@@ -33,6 +34,7 @@ pub fn nw_distance<U: Number>(x: &str, y: &str) -> U {
 ///
 /// * `x`: unaligned sequence represented as a `String`
 /// * `y`: unaligned sequence represented as a `String`
+#[must_use]
 pub fn with_edits_recursive<U: Number>(x: &str, y: &str) -> ([Vec<alignment_helpers::Edit>; 2], U) {
     let table = alignment_helpers::compute_table(x, y);
     let (aligned_x, aligned_y) = alignment_helpers::trace_back_recursive(&table, (x, y));
@@ -58,6 +60,7 @@ pub fn with_edits_recursive<U: Number>(x: &str, y: &str) -> ([Vec<alignment_help
 ///
 /// * `x`: unaligned sequence represented as a `String`
 /// * `y`: unaligned sequence represented as a `String`
+#[must_use]
 pub fn with_edits_iterative<U: Number>(x: &str, y: &str) -> ([Vec<alignment_helpers::Edit>; 2], U) {
     let table = alignment_helpers::compute_table(x, y);
     let (aligned_x, aligned_y) = alignment_helpers::trace_back_iterative(&table, (x, y));

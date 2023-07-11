@@ -1,4 +1,8 @@
+use core::marker::PhantomData;
+
 use distances::Number;
+
+type KnnQueue<U> = priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>;
 
 use crate::{
     cluster::{Cluster, Tree},
@@ -13,7 +17,7 @@ pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     layer: Vec<&'a Cluster<T, U>>,
     leaves: Vec<Grain<'a, T, U>>,
     is_refined: bool,
-    hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
+    hits: KnnQueue<U>,
 }
 
 impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
@@ -25,14 +29,19 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
             k,
             leaves: Vec::new(),
             is_refined: false,
-            hits: Default::default(),
+            hits: KnnQueue::default(),
         }
     }
 
-    pub fn is_refined(&self) -> bool {
+    pub const fn is_refined(&self) -> bool {
         self.is_refined
     }
 
+    /// Refine the sieve by one step.
+    ///
+    /// # Panics
+    ///
+    /// If the number of guarantees is less than `k`.
     pub fn refine_step(&mut self) {
         let data = self.tree.data();
         let distances = self
@@ -74,6 +83,11 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
         todo!()
     }
 
+    /// Extract the `k` nearest neighbors.
+    ///
+    /// # Panics
+    ///
+    /// WIP
     pub fn extract(&self) -> Vec<(usize, U)> {
         todo!()
     }
@@ -81,7 +95,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
 
 #[allow(dead_code)]
 struct Grain<'a, T: Send + Sync + Copy, U: Number> {
-    t: std::marker::PhantomData<T>,
+    t: PhantomData<T>,
     c: &'a Cluster<T, U>,
     d: U,
     multiplicity: usize,
@@ -89,7 +103,7 @@ struct Grain<'a, T: Send + Sync + Copy, U: Number> {
 
 impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
-        let t = Default::default();
+        let t = PhantomData::default();
         Self { t, c, d, multiplicity }
     }
 
