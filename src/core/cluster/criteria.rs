@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use super::Cluster;
+use crate::Cluster;
 
 /// A criterion used to decide when to partition a `Cluster`.
 ///

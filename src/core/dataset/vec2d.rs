@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use super::Dataset;
+use crate::Dataset;
 
 /// A `Dataset` of a `Vec` of instances.
 ///

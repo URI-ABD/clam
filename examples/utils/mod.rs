@@ -5,12 +5,13 @@ use rayon::prelude::*;
 use distances::Number;
 use symagen::random_data;
 
-use abd_clam::{Dataset, RnnAlgorithm, CAKES};
+use abd_clam::{Cakes, Dataset, RnnAlgorithm};
 
 pub mod anomaly_readers;
 pub mod search_readers;
 
 #[allow(clippy::type_complexity)]
+#[must_use]
 pub fn make_data(n: usize, d: usize, q: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>, String) {
     let min_val = 0.;
     let max_val = 1.;
@@ -21,7 +22,7 @@ pub fn make_data(n: usize, d: usize, q: usize) -> (Vec<Vec<f32>>, Vec<Vec<f32>>,
     (data, queries, name)
 }
 
-pub fn check_search<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(queries: &[T], cakes: &CAKES<T, U, D>, r: U) {
+pub fn check_search<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(queries: &[T], cakes: &Cakes<T, U, D>, r: U) {
     let iqp = queries
         .par_iter()
         .enumerate()
@@ -54,7 +55,7 @@ fn check_exactness(naive: &[usize], cakes: &[usize]) -> Option<String> {
         ));
     }
 
-    let naive = HashSet::<usize>::from_iter(naive.iter().copied());
+    let naive = naive.iter().copied().collect::<HashSet<usize>>();
     if naive.len() != cakes.len() {
         return Some(format!(
             "Got duplicate indices in naive: {} vs {}",
@@ -63,7 +64,7 @@ fn check_exactness(naive: &[usize], cakes: &[usize]) -> Option<String> {
         ));
     }
 
-    let cakes = HashSet::<usize>::from_iter(cakes.iter().copied());
+    let cakes = cakes.iter().copied().collect::<HashSet<usize>>();
     if naive.len() != cakes.len() {
         return Some(format!(
             "Got duplicate indices in cakes: {} vs {}",
@@ -73,12 +74,12 @@ fn check_exactness(naive: &[usize], cakes: &[usize]) -> Option<String> {
     }
 
     let common = naive.intersection(&cakes).count();
-    if common != naive.len() {
+    if common == naive.len() {
+        None
+    } else {
         let recall = common.as_f64() / naive.len().as_f64();
         Some(format!(
             "Got a mismatch in results between naive and cakes: recall = {recall:.12}"
         ))
-    } else {
-        None
     }
 }

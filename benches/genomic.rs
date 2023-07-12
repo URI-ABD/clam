@@ -2,7 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{PartitionCriteria, RnnAlgorithm, VecDataset, CAKES, COMMON_METRICS_STR};
+use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_STR};
 
 fn genomic(c: &mut Criterion) {
     let seed = 42;
@@ -14,10 +14,10 @@ fn genomic(c: &mut Criterion) {
 
     println!("Building dataset ...");
     let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
-    let data = data.iter().map(|v| v.as_str()).collect::<Vec<_>>();
+    let data = data.iter().map(String::as_str).collect::<Vec<_>>();
 
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
-    let queries = queries.iter().map(|v| v.as_str()).collect::<Vec<_>>();
+    let queries = queries.iter().map(String::as_str).collect::<Vec<_>>();
 
     for &(metric_name, metric) in &COMMON_METRICS_STR[..1] {
         let mut group = c.benchmark_group(format!("genomic-{metric_name}"));
@@ -33,7 +33,7 @@ fn genomic(c: &mut Criterion) {
         let data_name = format!("{metric_name}-{cardinality}");
         let dataset = VecDataset::new(data_name, data.clone(), metric, true);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = CAKES::new(dataset, Some(seed), criteria);
+        let cakes = Cakes::new(dataset, Some(seed), criteria);
 
         let radii = [50, 25, 10, 1];
         println!("Running benchmark for {metric_name} ...");
