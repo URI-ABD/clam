@@ -140,7 +140,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{cmp::Ordering, collections::HashSet};
 
     use distances::vectors::euclidean;
     use symagen::random_data;
@@ -198,7 +198,7 @@ mod tests {
             for (i, query) in queries.iter().enumerate() {
                 let linear_hits = {
                     let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Linear);
-                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                     hits
                 };
                 assert_eq!(
@@ -209,7 +209,7 @@ mod tests {
 
                 let ranged_hits = {
                     let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Clustered);
-                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                     hits
                 };
                 let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
@@ -250,13 +250,13 @@ mod tests {
                 for (i, query) in queries.iter().enumerate() {
                     let linear_hits = {
                         let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Linear);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
 
                     let ranged_hits = {
                         let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Clustered);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
                     let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
@@ -299,13 +299,13 @@ mod tests {
                 for (i, query) in queries.iter().enumerate() {
                     let linear_hits = {
                         let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Linear);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
 
                     let ranged_hits = {
                         let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Clustered);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
                     let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();

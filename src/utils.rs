@@ -8,24 +8,30 @@ use core::{
 use distances::Number;
 
 /// Return the index and value of the minimum value in the given slice of values.
+///
+/// NAN values are ordered as greater than all other values.
+///
+/// This will return `None` if the given slice is empty.
 #[allow(dead_code)]
-pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
-    let (i, v) = values
+pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
+    values
         .iter()
         .enumerate()
-        .min_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Less))
-        .unwrap();
-    (i, *v)
+        .min_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Greater))
+        .map(|(i, v)| (i, *v))
 }
 
 /// Return the index and value of the maximum value in the given slice of values.
-pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> (usize, T) {
-    let (i, v) = values
+///
+/// NAN values are ordered as smaller than all other values.
+///
+/// This will return `None` if the given slice is empty.
+pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
+    values
         .iter()
         .enumerate()
         .max_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Less))
-        .unwrap();
-    (i, *v)
+        .map(|(i, v)| (i, *v))
 }
 
 /// Return the mean value of the given slice of values.

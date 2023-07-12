@@ -88,8 +88,8 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
         self.reordering = Some(indices.iter().map(|&i| indices[i]).collect());
     }
 
-    fn get_reordered_index(&self, i: usize) -> usize {
-        self.reordering.as_ref().map(|indices| indices[i]).unwrap()
+    fn get_reordered_index(&self, i: usize) -> Option<usize> {
+        self.reordering.as_ref().map(|indices| indices[i])
     }
 }
 
@@ -141,22 +141,40 @@ mod tests {
             vec![vec![4], vec![8], vec![10], vec![2], vec![12], vec![6],]
         );
 
-        assert_eq!(dataset.get_reordered_index(0), 3);
-        assert_eq!(dataset.data[dataset.get_reordered_index(0)], vec![2]);
+        assert_eq!(dataset.get_reordered_index(0), Some(3));
+        assert_eq!(
+            dataset.get_reordered_index(0).map(|i| dataset.data[i]),
+            Some([2].as_slice())
+        );
 
-        assert_eq!(dataset.get_reordered_index(1), 0);
-        assert_eq!(dataset.data[dataset.get_reordered_index(1)], vec![4]);
+        assert_eq!(dataset.get_reordered_index(1), Some(0));
+        assert_eq!(
+            dataset.get_reordered_index(1).map(|i| dataset.data[i]),
+            Some([4].as_slice())
+        );
 
-        assert_eq!(dataset.get_reordered_index(2), 5);
-        assert_eq!(dataset.data[dataset.get_reordered_index(2)], vec![6]);
+        assert_eq!(dataset.get_reordered_index(2), Some(5));
+        assert_eq!(
+            dataset.get_reordered_index(2).map(|i| dataset.data[i]),
+            Some([6].as_slice())
+        );
 
-        assert_eq!(dataset.get_reordered_index(3), 1);
-        assert_eq!(dataset.data[dataset.get_reordered_index(3)], vec![8]);
+        assert_eq!(dataset.get_reordered_index(3), Some(1));
+        assert_eq!(
+            dataset.get_reordered_index(3).map(|i| dataset.data[i]),
+            Some([8].as_slice())
+        );
 
-        assert_eq!(dataset.get_reordered_index(4), 2);
-        assert_eq!(dataset.data[dataset.get_reordered_index(4)], vec![10]);
+        assert_eq!(dataset.get_reordered_index(4), Some(2));
+        assert_eq!(
+            dataset.get_reordered_index(4).map(|i| dataset.data[i]),
+            Some([10].as_slice())
+        );
 
-        assert_eq!(dataset.get_reordered_index(5), 4);
-        assert_eq!(dataset.data[dataset.get_reordered_index(5)], vec![12]);
+        assert_eq!(dataset.get_reordered_index(5), Some(4));
+        assert_eq!(
+            dataset.get_reordered_index(5).map(|i| dataset.data[i]),
+            Some([12].as_slice())
+        );
     }
 }
