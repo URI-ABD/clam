@@ -9,7 +9,7 @@
     clippy::pedantic,
     clippy::nursery,
     clippy::missing_docs_in_private_items,
-    // clippy::unwrap_used,
+    clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
     clippy::cast_lossless

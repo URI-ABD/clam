@@ -2,13 +2,15 @@
 
 mod vec2d;
 
+#[allow(clippy::module_name_repetitions)]
+pub use vec2d::VecDataset;
+
+use core::cmp::Ordering;
+
 use rand::prelude::*;
 use rayon::prelude::*;
 
 use distances::Number;
-
-#[allow(clippy::module_name_repetitions)]
-pub use vec2d::VecDataset;
 
 /// A common interface for datasets used in CLAM.
 pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
@@ -86,13 +88,13 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     ///
     /// # Returns
     ///
-    /// The index of the instance at `i` after reordering.
+    /// * The index of the instance at `i` after reordering.
+    /// * `None` if the dataset has not been reordered.
     ///
     /// # Panics
     ///
     /// * If `i` is not a valid index in the dataset.
-    /// * If the dataset has not been reordered.
-    fn get_reordered_index(&self, i: usize) -> usize;
+    fn get_reordered_index(&self, i: usize) -> Option<usize>;
 
     /// Calculates the distance between two indexed instances in the dataset.
     ///
@@ -306,18 +308,17 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     ///
     /// # Returns
     ///
-    /// The index of the geometric median of the set of indexed points
-    fn median(&self, indices: &[usize]) -> usize {
+    /// * The index of the median in the dataset, if `indices` is not empty.
+    /// * `None`, if `indices` is empty.
+    fn median(&self, indices: &[usize]) -> Option<usize> {
         // TODO: Refactor this to scale for arbitrarily large n
-        indices[self
-            .pairwise(indices)
+        self.pairwise(indices)
             .into_iter()
             // TODO: Bench using .max instead of .sum
             // .map(|v| v.into_iter().max_by(|l, r| l.partial_cmp(r).unwrap()).unwrap())
             .map(|v| v.into_iter().sum::<U>())
             .enumerate()
-            .min_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap())
-            .unwrap()
-            .0]
+            .min_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Greater))
+            .map(|(i, _)| indices[i])
     }
 }

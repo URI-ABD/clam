@@ -169,8 +169,8 @@ pub fn trace_back_iterative(table: &Vec<Vec<(usize, Direction)>>, unaligned_seqs
     aligned_x.reverse();
     aligned_y.reverse();
 
-    let aligned_x = String::from_utf8(aligned_x).unwrap();
-    let aligned_y = String::from_utf8(aligned_y).unwrap();
+    let aligned_x = String::from_utf8(aligned_x).unwrap_or_else(|_| unreachable!("Invalid UTF-8"));
+    let aligned_y = String::from_utf8(aligned_y).unwrap_or_else(|_| unreachable!("Invalid UTF-8"));
 
     (aligned_x, aligned_y)
 }
@@ -200,8 +200,8 @@ pub fn trace_back_recursive(table: &Vec<Vec<(usize, Direction)>>, unaligned_seqs
         (&mut aligned_x, &mut aligned_y),
     );
 
-    let aligned_x = String::from_utf8(aligned_x).unwrap();
-    let aligned_y = String::from_utf8(aligned_y).unwrap();
+    let aligned_x = String::from_utf8(aligned_x).unwrap_or_else(|_| unreachable!("Invalid UTF-8"));
+    let aligned_y = String::from_utf8(aligned_y).unwrap_or_else(|_| unreachable!("Invalid UTF-8"));
 
     (aligned_x, aligned_y)
 }

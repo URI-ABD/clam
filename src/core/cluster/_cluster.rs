@@ -141,11 +141,11 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             data.choose_unique(n, indices, seed)
         };
 
-        let arg_center = data.median(&arg_samples);
+        let Some(arg_center) = data.median(&arg_samples) else { unreachable!("The cluster should have at least one instance.") };
         let center = data.get(arg_center);
 
         let center_distances = data.one_to_many(arg_center, indices);
-        let (arg_radius, radius) = utils::arg_max(&center_distances);
+        let Some((arg_radius, radius)) = utils::arg_max(&center_distances) else { unreachable!("The cluster should have at least one instance.") };
         let arg_radius = indices[arg_radius];
         let radial = data.get(arg_radius);
 
@@ -231,7 +231,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(T, Vec<usize>); 2], U) {
         let l_distances = data.query_to_many(self.radial, &indices);
 
-        let (arg_r, polar_distance) = utils::arg_max(&l_distances);
+        let Some((arg_r, polar_distance)) = utils::arg_max(&l_distances) else { unreachable!("The cluster should have at least one instance.") };
         let r_pole = data.get(indices[arg_r]);
         let r_distances = data.query_to_many(r_pole, &indices);
 
@@ -428,7 +428,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             .map(|s| {
                 let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
                 let s = format!("{a}{b}{c}{d}");
-                let s = u8::from_str_radix(&s, 2).unwrap();
+                let Ok(s) = u8::from_str_radix(&s, 2) else { unreachable!("We know the characters used are only \"0\" and \"1\".") };
                 format!("{s:01x}")
             })
             .collect()
@@ -523,7 +523,10 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
     /// The maximum depth of any leaf in the subtree of this `Cluster`.
     pub fn max_leaf_depth(&self) -> usize {
-        self.subtree().into_iter().map(Self::depth).max().unwrap()
+        self.subtree().into_iter().map(Self::depth).max().map_or_else(
+            || unreachable!("The subtree of a Cluster should have at least one element, i.e. the Cluster itself."),
+            |depth| depth,
+        )
     }
 
     /// Distance from the `center` to the given instance.
@@ -587,16 +590,19 @@ mod tests {
         let mut data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let cluster = Cluster::new_root(&data, &indices, Some(42)).partition(&mut data, &partition_criteria);
+        let root = Cluster::new_root(&data, &indices, Some(42)).partition(&mut data, &partition_criteria);
 
-        assert_eq!(cluster.depth(), 0);
-        assert_eq!(cluster.cardinality, 4);
-        assert_eq!(cluster.subtree().len(), 7);
-        assert!(cluster.radius > 0.);
+        assert!(!root.is_leaf());
+        assert!(root.children().is_some());
 
-        assert_eq!(format!("{cluster}"), "1");
+        assert_eq!(root.depth(), 0);
+        assert_eq!(root.cardinality, 4);
+        assert_eq!(root.subtree().len(), 7);
+        assert!(root.radius > 0.);
 
-        let [left, right] = cluster.children().unwrap();
+        assert_eq!(format!("{root}"), "1");
+
+        let Some([left, right]) = root.children() else { unreachable!("The root cluster has children.") };
         assert_eq!(format!("{left}"), "2");
         assert_eq!(format!("{right}"), "3");
 

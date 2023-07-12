@@ -153,7 +153,8 @@ impl RnnAlgorithm {
                     if d < c.radius {
                         c.overlapping_children(data, query, radius)
                     } else {
-                        c.children().unwrap().to_vec()
+                        c.children()
+                            .map_or_else(|| unreachable!("Non-leaf cluster without children"), |v| v.to_vec())
                     }
                 })
                 .collect();
