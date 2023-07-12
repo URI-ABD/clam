@@ -10,7 +10,7 @@ use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 
 use abd_clam::{
-    PartitionCriteria, CAKES, COMMON_METRICS_F32, {Dataset, VecDataset},
+    Cakes, PartitionCriteria, COMMON_METRICS_F32, {Dataset, VecDataset},
 };
 
 pub mod utils;
@@ -56,8 +56,8 @@ fn main() {
             println!("Making reports on {data_name} with {metric_name} ...");
 
             let (data, queries) = search_readers::read_search_data(data_name).unwrap();
-            let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
-            let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+            let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
             let dimensionality = data[0].len();
 
             let data = VecDataset::new(data_name.to_string(), data, metric, false);
@@ -68,7 +68,7 @@ fn main() {
 
             let start = Instant::now();
             let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-            let cakes = CAKES::new(data, Some(42), criteria);
+            let cakes = Cakes::new(data, Some(42), criteria);
             let build_time = start.elapsed().as_secs_f32();
             println!("Built CAKES on {data_name} with {metric_name} in {build_time:.3} seconds ...");
 

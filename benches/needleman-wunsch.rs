@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use criterion::*;
 
 use symagen::random_data;
@@ -110,8 +108,8 @@ fn needleman_wunsch_iterative_alphabet_size(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    // needleman_wunsch_recursive_dim,
-    // needleman_wunsch_iterative_dim,
+    needleman_wunsch_recursive_dim,
+    needleman_wunsch_iterative_dim,
     needleman_wunsch_recursive_alphabet_size,
     needleman_wunsch_iterative_alphabet_size
 );

@@ -2,7 +2,7 @@ use std::{fs::File, io::prelude::*, time::Instant};
 
 use num_format::{Buffer, CustomFormat, Locale, ToFormattedString};
 
-use abd_clam::{PartitionCriteria, RnnAlgorithm, VecDataset, CAKES, COMMON_METRICS_F32};
+use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_F32};
 
 pub mod utils;
 
@@ -36,7 +36,7 @@ fn search(seed: Option<u64>, data_name: &str) -> Vec<String> {
 
     // let (data, queries) = search_readers::read_search_data(data_name).unwrap();
     let (data, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
-    let data = data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+    let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
     // let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
     let num_queries = 10_000;
@@ -60,7 +60,7 @@ fn search(seed: Option<u64>, data_name: &str) -> Vec<String> {
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let start = Instant::now();
-        let cakes = CAKES::new(data, seed, criteria);
+        let cakes = Cakes::new(data, seed, criteria);
         line_metric.push(f32_to_string(start.elapsed().as_micros() as f32));
 
         let num_queries = queries.len();
@@ -77,7 +77,7 @@ fn search(seed: Option<u64>, data_name: &str) -> Vec<String> {
             let results = cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered);
             let duration = start.elapsed().as_secs_f32();
 
-            let num_results = results.iter().map(|v| v.len()).collect::<Vec<_>>();
+            let num_results = results.iter().map(Vec::len).collect::<Vec<_>>();
             let mean_result_size = num_results.iter().sum::<usize>() as f32 / num_queries as f32;
 
             line_factor.push(f32_to_string(num_queries as f32 / duration));

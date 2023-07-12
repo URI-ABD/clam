@@ -2,9 +2,7 @@
 
 use distances::Number;
 
-use crate::Dataset;
-
-use super::{Cluster, PartitionCriteria};
+use crate::{Cluster, Dataset, PartitionCriteria};
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.

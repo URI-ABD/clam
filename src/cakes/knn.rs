@@ -9,8 +9,7 @@ use core::{cmp::Ordering, f64::EPSILON};
 
 use distances::Number;
 
-use super::RnnAlgorithm;
-use crate::{utils, Dataset, Tree};
+use crate::{utils, Dataset, RnnAlgorithm, Tree};
 
 /// The multiplier to use for increasing the radius in the repeated RNN algorithm.
 const MULTIPLIER: f64 = 2.0;
