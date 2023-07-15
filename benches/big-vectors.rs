@@ -1,85 +1,81 @@
-use criterion::*;
+#![allow(dead_code)]
+
+use criterion::{measurement, *};
+
 use symagen::random_data;
 
-use distances::vectors::{cosine, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan};
+use distances::{
+    vectors::{cosine, euclidean, l3_norm, l4_norm, manhattan},
+    Number,
+};
 
-fn l1_norm(x: &[f32], y: &[f32]) -> f32 {
-    x.iter()
-        .zip(y.iter())
-        .map(|(x, y)| (x - y).abs())
-        .sum::<f32>()
+fn bench_one<'a, T: Number, U: Number>(
+    group: &mut BenchmarkGroup<'a, measurement::WallTime>,
+    id: BenchmarkId,
+    x: &[T],
+    y: &[T],
+    metric: fn(&[T], &[T]) -> U,
+) {
+    group.bench_with_input(id, &x.len(), |b, _| {
+        b.iter_with_large_drop(|| black_box(metric(x, y)))
+    });
 }
 
-fn l2_norm(x: &[f32], y: &[f32]) -> f32 {
-    x.iter()
-        .zip(y.iter())
-        .map(|(x, y)| (x - y).powi(2))
-        .sum::<f32>()
-        .sqrt()
-}
-
-fn sq_l2_norm(x: &[f32], y: &[f32]) -> f32 {
-    x.iter().zip(y.iter()).map(|(x, y)| (x - y).powi(2)).sum()
-}
-
-fn big_minkowski(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Vectors");
-
+fn big_f32(c: &mut Criterion) {
     let (cardinality, min_val, max_val) = (2, -10.0, 10.0);
 
-    for d in 0..=5 {
-        let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_f32(cardinality, dimensionality, min_val, max_val, d as u64);
+    let mut group = c.benchmark_group("VectorsF32");
+    group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
-        let id = BenchmarkId::new("L1", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(manhattan(&vecs[0], &vecs[1])))
-        });
+    #[allow(clippy::type_complexity)]
+    let metrics: &[(&str, fn(&[f32], &[f32]) -> f32)] = &[
+        ("L1", manhattan),
+        ("L2", euclidean),
+        ("L3", l3_norm),
+        ("L4", l4_norm),
+        ("Cosine", cosine),
+    ];
 
-        let id = BenchmarkId::new("L1-mono", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(l1_norm(&vecs[0], &vecs[1])))
-        });
+    for d in 2..=7 {
+        let dimensionality = 10_u32.pow(d) as usize;
+        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, d as u64);
 
-        let id = BenchmarkId::new("L2", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(euclidean::<f32, f32>(&vecs[0], &vecs[1])))
-        });
-
-        let id = BenchmarkId::new("L2-mono", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(l2_norm(&vecs[0], &vecs[1])))
-        });
-
-        let id = BenchmarkId::new("SQ_L2", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(euclidean_sq::<f32, f32>(&vecs[0], &vecs[1])))
-        });
-
-        let id = BenchmarkId::new("SQ_L2-mono", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(sq_l2_norm(&vecs[0], &vecs[1])))
-        });
-
-        if d < 4 {
-            let id = BenchmarkId::new("L3", dimensionality);
-            group.bench_with_input(id, &dimensionality, |b, _| {
-                b.iter(|| black_box(l3_norm::<f32, f32>(&vecs[0], &vecs[1])))
-            });
-
-            let id = BenchmarkId::new("L4", dimensionality);
-            group.bench_with_input(id, &dimensionality, |b, _| {
-                b.iter(|| black_box(l4_norm::<f32, f32>(&vecs[0], &vecs[1])))
-            });
+        for &(name, metric) in metrics {
+            let id = BenchmarkId::new(name, dimensionality);
+            bench_one(&mut group, id, &data[0], &data[1], metric);
         }
-
-        let id = BenchmarkId::new("Cosine", dimensionality);
-        group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(cosine::<f32, f32>(&vecs[0], &vecs[1])))
-        });
     }
     group.finish();
 }
 
-criterion_group!(benches, big_minkowski);
+fn big_u32(c: &mut Criterion) {
+    let (cardinality, min_val, max_val) = (2, 0, 10_000);
+
+    let mut group = c.benchmark_group("VectorsU32");
+    group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
+
+    #[allow(clippy::type_complexity)]
+    let metrics: &[(&str, fn(&[u32], &[u32]) -> f32)] = &[
+        ("L2", euclidean),
+        ("L3", l3_norm),
+        ("L4", l4_norm),
+        ("Cosine", cosine),
+    ];
+
+    for d in 2..=7 {
+        let dimensionality = 10_u32.pow(d) as usize;
+        let data = random_data::random_u32(cardinality, dimensionality, min_val, max_val, d as u64);
+
+        let id = BenchmarkId::new("L1", dimensionality);
+        bench_one(&mut group, id, &data[0], &data[1], manhattan);
+
+        for &(name, metric) in metrics {
+            let id = BenchmarkId::new(name, dimensionality);
+            bench_one(&mut group, id, &data[0], &data[1], metric);
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(benches, big_f32);
 criterion_main!(benches);
