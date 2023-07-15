@@ -17,17 +17,18 @@ readme = "README.md"
 publish = true
 
 [profile.test]
-debug = 1
 opt-level = 3
+debug = true
+overflow-checks = true
 
 [profile.release]
 strip = true
 lto = true
 codegen-units = 1
-overflow-checks = true
 
 [profile.bench]
 debug = true
+overflow-checks = true
 
 [dependencies]
 # libm = "0.2.7"  # no-std
@@ -46,6 +47,10 @@ harness = false
 
 [[bench]]
 name = "big-vectors"
+harness = false
+
+[[bench]]
+name = "big-lp"
 harness = false
 
 [[bench]]

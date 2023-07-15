@@ -40,8 +40,10 @@ assert!((distance - (27.0_f32).sqrt()).abs() < 1e-6);
   - [x] `squared_euclidean`
   - [x] `manhattan`
   - [x] `chebyshev`
-  - [ ] `minkowski`
-  - [ ] `minkowski_p`
+  - [x] `minkowski`
+    - General Lp-norm.
+  - [x] `minkowski_p`
+    - General Lp-norm to the `p`th power.
   - [x] `cosine`
   - [x] `hamming`
   - [x] `canberra`

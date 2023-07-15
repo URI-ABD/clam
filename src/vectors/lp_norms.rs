@@ -176,3 +176,57 @@ pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less))
         .unwrap_or_else(T::zero)
 }
+
+/// General (Lp-norm)^p between two vectors.
+///
+/// This is defined as the sum of the pth powers of the absolute differences
+/// between the corresponding elements of the two slices.
+///
+/// # Arguments
+///
+/// * `x` - The first slice of `Number`s.
+/// * `y` - The second slice of `Number`s.
+///
+/// # Examples
+///
+/// ```
+/// use distances::vectors::minkowski_p;
+///
+/// let metric = minkowski_p(3);
+///
+/// let x: Vec<f64> = vec![1., 2., 3.];
+/// let y: Vec<f64> = vec![4., 5., 6.];
+///
+/// let distance: f64 = metric(&x, &y);
+/// assert!((distance - 81.0).abs() <= 1e-12);
+/// ```
+pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
+    move |x: &[T], y: &[T]| abs_diff_iter(x, y).map(U::from).map(|v| v.powi(p)).sum()
+}
+
+/// General Lp-norm between two vectors.
+///
+/// The Lp-norm is defined as the pth root of the sum of the pth powers of
+/// the absolute differences between the corresponding elements of the two
+///
+/// # Arguments
+///
+/// * `x` - The first slice of `Number`s.
+/// * `y` - The second slice of `Number`s.
+///
+/// # Examples
+///
+/// ```
+/// use distances::vectors::minkowski;
+///
+/// let metric = minkowski(3);
+///
+/// let x: Vec<f64> = vec![1., 2., 3.];
+/// let y: Vec<f64> = vec![4., 5., 6.];
+///
+/// let distance: f64 = metric(&x, &y);
+/// assert!((distance - (81.0_f64).cbrt()).abs() <= 1e-12);
+/// ```
+pub fn minkowski<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
+    move |x: &[T], y: &[T]| minkowski_p::<T, U>(p)(x, y).powf(U::one() / U::from(p))
+}
