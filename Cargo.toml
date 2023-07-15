@@ -16,30 +16,12 @@ readme = "README.md"
 # and update the release github action.
 publish = true
 
-[profile.test]
-opt-level = 3
-debug = true
-overflow-checks = true
-
-[profile.release]
-strip = true
-lto = true
-codegen-units = 1
-
-[profile.bench]
-debug = true
-overflow-checks = true
-
 [dependencies]
 # libm = "0.2.7"  # no-std
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-rayon = "1.7.0"
-float-cmp = "^0.9.0"
-rand = "0.8.5"
-rand_chacha = "0.3.1"
-symagen = { git = "https://github.com/morganprior/SyMaGen", branch = "feat/random-data" }
+symagen = { path = "../SyMaGen" }
 
 [[bench]]
 name = "inv-sqrt"

@@ -13,7 +13,7 @@ fn big_levenshtein(c: &mut Criterion) {
 
         let id = BenchmarkId::new("Levenshtein", len);
         group.bench_with_input(id, &len, |b, _| {
-            b.iter(|| black_box(|| levenshtein::<u16>(x, y)))
+            b.iter(|| black_box(levenshtein::<u16>(x, y)))
         });
     }
     group.finish();
