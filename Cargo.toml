@@ -2,6 +2,10 @@
 members = [
     "abd-clam",
     # "py-clam",  # TODO: re-enable when py-clam uses maturin to bing to abd-clam
+    "distances",
+    "rust-automl",
+    "simd-euclidean",
+    "SyMaGen"
 ]
 
 [profile.test]
