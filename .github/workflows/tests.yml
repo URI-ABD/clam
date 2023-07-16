@@ -34,6 +34,6 @@ jobs:
           python-version: 3.9
       - name: Dependencies
         run: |
-          pip install --user poetry && poetry install
+          pip install --user --upgrade pip && pip install --user ./py-clam
       - name: Run
-        run: poetry run python -m unittest discover python
+        run: python -m unittest discover py-clam

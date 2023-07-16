@@ -25,8 +25,8 @@ repos:
     - id: ruff
       exclude: |
           (?x)(
-            test_[a-zA-Z0-9]+.py$|
-            ^python/abd_clam/anomaly_detection/pretrained_models.py$
+            ^py-clam/tests/[a-zA-Z0-9]+.py$|
+            ^py-clam/abd_clam/anomaly_detection/pretrained_models.py$
           )
       args: [--fix]
 - repo: https://github.com/pre-commit/mirrors-mypy
