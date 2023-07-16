@@ -45,26 +45,25 @@ class TestGraph(unittest.TestCase):
         self.graph5 = Graph(self.clusters5).build()
 
     def test_init(self):
-        self.assertTrue(isinstance(self.graph2, graph.Graph))
-        self.assertEqual(self.graph2.population, self.data.cardinality)
-        self.assertEqual(self.graph2.min_depth, min(c.depth for c in self.clusters2))
-        self.assertEqual(self.graph2.max_depth, max(c.depth for c in self.clusters2))
-        self.assertFalse(any(e.to_self for e in self.edges2))
+        assert isinstance(self.graph2, graph.Graph)
+        assert self.graph2.population == self.data.cardinality
+        assert self.graph2.min_depth == min(c.depth for c in self.clusters2)
+        assert self.graph2.max_depth == max(c.depth for c in self.clusters2)
+        assert not any(e.to_self for e in self.edges2)
 
         self.assertSetEqual(self.graph2.edges, self.graph2b.edges)
 
     def test_contains(self):
-        self.assertNotIn(self.root, self.graph2.clusters)
+        assert self.root not in self.graph2.clusters
 
     def test_components(self):
         components = self.graph2.components
         [self.assertIsInstance(component, Graph) for component in components]
-        self.assertEqual(
-            self.graph2.vertex_cardinality,
-            sum(component.vertex_cardinality for component in components),
+        assert self.graph2.vertex_cardinality == sum(
+            component.vertex_cardinality for component in components
         )
 
     def test_jaccard(self):
-        self.assertEqual(self.graph2.jaccard(self.graph2), 1.0)
-        self.assertEqual(self.graph2.jaccard(self.graph2b), 1.0)
-        self.assertEqual(self.graph2.jaccard(self.graph5), 1.0)
+        assert self.graph2.jaccard(self.graph2) == 1.0
+        assert self.graph2.jaccard(self.graph2b) == 1.0
+        assert self.graph2.jaccard(self.graph5) == 1.0

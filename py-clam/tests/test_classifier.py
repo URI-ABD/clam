@@ -2,15 +2,16 @@ import tempfile
 import unittest
 
 import numpy
+from sklearn.datasets import load_digits
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+
 from abd_clam import dataset
 from abd_clam import metric
 from abd_clam import space
 from abd_clam.classification import Classifier
 from abd_clam.utils import helpers
 from abd_clam.utils import synthetic_data
-from sklearn.metrics import accuracy_score
-from sklearn.datasets import load_digits
-from sklearn.model_selection import train_test_split
 
 
 class TestSearch(unittest.TestCase):
@@ -43,7 +44,7 @@ class TestSearch(unittest.TestCase):
         score = self.get_score(
             *train_test_split(full_x, full_y, test_size=100, random_state=42),
         )
-        self.assertGreaterEqual(score, 0.75, "score on digits dataset was too low.")
+        assert score >= 0.75, "score on digits dataset was too low."
 
     def test_bullseye(self):
         full_x, full_y = synthetic_data.bullseye(n=256, num_rings=3)
@@ -53,7 +54,7 @@ class TestSearch(unittest.TestCase):
         score = self.get_score(
             *train_test_split(full_x, full_y, test_size=100, random_state=42),
         )
-        self.assertGreaterEqual(score, 0.75, "score on bullseye dataset was too low.")
+        assert score >= 0.75, "score on bullseye dataset was too low."
 
     def test_cached(self):
         full_x, full_y = synthetic_data.bullseye(n=200, num_rings=3)
@@ -91,8 +92,4 @@ class TestSearch(unittest.TestCase):
         test_labels = list(map(int, test_y))
         score = accuracy_score(test_labels, predicted_labels)
 
-        self.assertGreaterEqual(
-            score,
-            0.75,
-            "score on cached bullseye dataset was too low.",
-        )
+        assert score >= 0.75, "score on cached bullseye dataset was too low."
