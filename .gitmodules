@@ -1,12 +1,12 @@
 [submodule "distances"]
 	path = distances
-	url = git@github.com:URI-ABD/distances.git
+	url = https://github.com/URI-ABD/distances.git
 [submodule "rust-automl"]
 	path = rust-automl
-	url = git@github.com:nishaq503/rust-automl.git
+	url = https://github.com/nishaq503/rust-automl.git
 [submodule "SyMaGen"]
 	path = SyMaGen
-	url = git@github.com:morganprior/SyMaGen.git
+	url = https://github.com/morganprior/SyMaGen.git
 [submodule "simd-euclidean"]
 	path = simd-euclidean
-	url = git@github.com:nishaq503/simd-euclidean.git
+	url = https://github.com/nishaq503/simd-euclidean.git
