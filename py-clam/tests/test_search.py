@@ -25,14 +25,14 @@ class TestSearch(unittest.TestCase):
         self.distances = self.metric_space.distance_pairwise(self.indices)
 
     def test_init(self) -> None:
-        self.assertTrue(isinstance(self.cakes, search.CAKES))
+        assert isinstance(self.cakes, search.CAKES)
         _ = self.cakes.metric_space
         _ = self.cakes.root
-        self.assertLessEqual(self.cakes.depth, self.max_depth)
+        assert self.cakes.depth <= self.max_depth
 
     def test_rnn_search(self) -> None:
-        self.assertEqual(1, len(self.cakes.rnn_search(self.query, 0.0)))
-        self.assertLessEqual(1, len(self.cakes.rnn_search(self.query, 1.0)))
+        assert len(self.cakes.rnn_search(self.query, 0.0)) == 1
+        assert len(self.cakes.rnn_search(self.query, 1.0)) >= 1
 
         for i in self.indices:
             for radius in self.search_radii:
@@ -46,11 +46,9 @@ class TestSearch(unittest.TestCase):
                     radius,
                 )
 
-                self.assertEqual(
-                    len(naive_results),
-                    len(rnn_results),
-                    "expected the same number of results from naive and rnn searches.",
-                )
+                assert len(naive_results) == len(
+                    rnn_results
+                ), "expected the same number of results from naive and rnn searches."
                 self.assertSetEqual(
                     set(naive_results.keys()),
                     set(rnn_results.keys()),
@@ -68,11 +66,9 @@ class TestSearch(unittest.TestCase):
         for k in ks:
             naive_results = points[:k]
             knn_results: list[int] = list(self.cakes.knn_search(self.query, k).keys())
-            self.assertEqual(
-                len(naive_results),
-                len(knn_results),
-                "expected the same number of results from naive and knn searches.",
-            )
+            assert len(naive_results) == len(
+                knn_results
+            ), "expected the same number of results from naive and knn searches."
             self.assertSetEqual(
                 set(naive_results),
                 set(knn_results),
@@ -84,26 +80,20 @@ class TestSearch(unittest.TestCase):
         history, hits = self.cakes.tree_search_history(self.query, radius)
 
         for c in hits:
-            self.assertTrue(c in history, f"The hit {c!s} was not found in history.")
-        self.assertLessEqual(
-            len(hits),
-            len(history),
-            "history should have at least a many members as hits.",
-        )
+            assert c in history, f"The hit {c!s} was not found in history."
+        assert len(hits) <= len(
+            history
+        ), "history should have at least a many members as hits."
 
         for c in history:
             if c not in hits:
-                self.assertFalse(
-                    c.is_leaf,
-                    "A non-hit member of history must have had children.",
-                )
+                assert (
+                    not c.is_leaf
+                ), "A non-hit member of history must have had children."
 
         depths = {cluster.depth for cluster in history}
         depth_range = set(range(len(depths)))
         missing_depths = depths.union(depth_range) - depths.intersection(depth_range)
-        self.assertEqual(
-            0,
-            len(missing_depths),
-            f"history should contain clusters from every depth. "
-            f"Did not contain: {missing_depths}",
-        )
+        assert (
+            len(missing_depths) == 0
+        ), f"history should contain clusters from every depth. Did not contain: {missing_depths}"

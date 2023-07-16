@@ -1,8 +1,9 @@
 import math
 import unittest
 
-import abd_clam
 import numpy
+
+import abd_clam
 from abd_clam import cluster_criteria
 from abd_clam import dataset
 from abd_clam import metric
@@ -39,32 +40,26 @@ class TestCluster(unittest.TestCase):
             )
 
     def test_eq(self):
-        self.assertEqual(self.root, self.root)
-        self.assertNotEqual(self.root, self.root.left_child)
-        self.assertNotEqual(self.root.left_child, self.root.right_child)
+        assert self.root == self.root
+        assert self.root != self.root.left_child
+        assert self.root.left_child != self.root.right_child
 
     def test_hash(self):
-        self.assertIsInstance(hash(self.root), int)
+        assert isinstance(hash(self.root), int)
 
     def test_str(self):
-        self.assertEqual("1", str(self.root))
-        self.assertEqual("10", str(self.root.left_child))
-        self.assertEqual("11", str(self.root.right_child))
+        assert str(self.root) == "1"
+        assert str(self.root.left_child) == "10"
+        assert str(self.root.right_child) == "11"
 
     def test_repr(self):
-        self.assertEqual(repr(self.root), f"{self.metric_space} :: Cluster 1")
-        self.assertEqual(
-            repr(self.root.left_child),
-            f"{self.metric_space} :: Cluster 10",
-        )
-        self.assertEqual(
-            repr(self.root.right_child),
-            f"{self.metric_space} :: Cluster 11",
-        )
+        assert repr(self.root) == f"{self.metric_space} :: Cluster 1"
+        assert repr(self.root.left_child) == f"{self.metric_space} :: Cluster 10"
+        assert repr(self.root.right_child) == f"{self.metric_space} :: Cluster 11"
 
     def test_depth(self):
-        self.assertEqual(0, self.root.depth)
-        self.assertEqual(1, self.root.left_child.depth)
+        assert self.root.depth == 0
+        assert self.root.left_child.depth == 1
 
     def test_points(self):
         self.assertSetEqual(
@@ -77,29 +72,26 @@ class TestCluster(unittest.TestCase):
         )
 
     def test_num_samples(self):
-        self.assertEqual(
-            len(self.root.arg_samples),
-            int(math.sqrt(self.data.cardinality)),
-        )
+        assert len(self.root.arg_samples) == int(math.sqrt(self.data.cardinality))
 
     def test_arg_center(self):
-        self.assertTrue(0 <= self.root.arg_center < self.data.cardinality)
+        assert 0 <= self.root.arg_center < self.data.cardinality
 
     def test_center(self):
-        self.assertTrue(numpy.all(self.data[self.root.arg_center] == self.root.center))
+        assert numpy.all(self.data[self.root.arg_center] == self.root.center)
 
     def test_arg_radius(self):
-        self.assertTrue(0 <= self.root.arg_radius < self.data.cardinality)
+        assert 0 <= self.root.arg_radius < self.data.cardinality
 
     def test_radius(self):
-        self.assertGreaterEqual(self.root.radius, 0.0)
+        assert self.root.radius >= 0.0
 
     def test_local_fractal_dimension(self):
-        self.assertGreaterEqual(self.root.lfd, 0.0)
+        assert self.root.lfd >= 0.0
 
     def test_partition(self):
-        self.assertFalse(self.root.is_leaf)
-        self.assertEqual(self.root.max_leaf_depth, 5)
+        assert not self.root.is_leaf
+        assert self.root.max_leaf_depth == 5
 
     def test_iterative_partition(self):
         self.root = self.root.iterative_partition(
@@ -108,7 +100,7 @@ class TestCluster(unittest.TestCase):
         self.test_partition()
 
     def test_ancestry(self):
-        self.assertEqual(len(self.root.ancestry), 0)
+        assert len(self.root.ancestry) == 0
 
         true_ancestry = [
             self.root,
@@ -120,4 +112,4 @@ class TestCluster(unittest.TestCase):
         ancestry = (
             self.root.left_child.left_child.left_child.left_child.left_child.ancestry
         )
-        self.assertEqual(true_ancestry, ancestry)
+        assert true_ancestry == ancestry
