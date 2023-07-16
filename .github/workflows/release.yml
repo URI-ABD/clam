@@ -13,7 +13,7 @@ jobs:
       - name: Update
         run: rustup update
       - name: Publish
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p abd-clam --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   pypi:
     runs-on: ubuntu-latest
@@ -24,7 +24,7 @@ jobs:
           python-version: 3.9
       - name: Dependencies
         run: |
-          pip install --user poetry && poetry install
+          pip install --user poetry  && cd py-clam && poetry install
       - name: Publish
         env:
           PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
