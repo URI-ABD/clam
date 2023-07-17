@@ -6,8 +6,8 @@ use distances::strings::levenshtein;
 fn big_levenshtein(c: &mut Criterion) {
     let mut group = c.benchmark_group("Strings");
 
-    for d in 1..=5 {
-        let len = d * 1_000;
+    for d in 0..=6 {
+        let len = 100 * 2_usize.pow(d);
         let vecs = random_data::random_string(2, len, len, "ATCG", 42);
         let (x, y) = (&vecs[0], &vecs[1]);
 
