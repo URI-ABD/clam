@@ -21,7 +21,8 @@ publish = true
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-symagen = { path = "../SyMaGen" }
+# symagen = { path = "../SyMaGen" }
+symagen = { git = "https://github.com/morganprior/SyMaGen", branch = "feat/random-data" }
 
 [[bench]]
 name = "inv-sqrt"
