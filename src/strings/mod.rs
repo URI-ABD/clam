@@ -52,45 +52,46 @@ use crate::number::UInt;
 /// * [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance)
 #[must_use]
 pub fn levenshtein<U: UInt>(a: &str, b: &str) -> U {
-    let (len_a, len_b) = (a.chars().count(), b.chars().count());
-
-    if len_a == 0 {
+    U::from(if a.is_empty() {
         // handle special case of 0 length
-        U::from(len_b)
-    } else if len_b == 0 {
+        b.len()
+    } else if b.is_empty() {
         // handle special case of 0 length
-        U::from(len_a)
-    } else if len_a < len_b {
-        // require len_a < len_b
-        levenshtein(b, a)
+        a.len()
+    } else if a.len() < b.len() {
+        // require tat a is no shorter than b
+        _levenshtein(b, a)
     } else {
-        let len_b = len_b + 1;
+        _levenshtein(a, b)
+    })
+}
 
-        // initialize DP table for string b
-        let mut cur: Vec<usize> = (0..len_b).collect();
+/// Helper for Levenshtein distance.
+fn _levenshtein(a: &str, b: &str) -> usize {
+    // initialize DP table for string b
+    let mut cur: Vec<usize> = (0..=b.len()).collect();
 
-        // calculate edit distance
-        for (i, ca) in a.chars().enumerate() {
-            // get first column for this row
-            let mut pre = cur[0];
-            cur[0] = i + 1;
-            for (j, cb) in b.chars().enumerate() {
-                let tmp = cur[j + 1];
-                cur[j + 1] = core::cmp::min(
-                    // deletion
-                    tmp + 1,
-                    core::cmp::min(
-                        // insertion
-                        cur[j] + 1,
-                        // match or substitution
-                        pre + usize::from(ca != cb),
-                    ),
-                );
-                pre = tmp;
-            }
+    // calculate edit distance
+    for (i, ca) in a.chars().enumerate() {
+        // get first column for this row
+        let mut pre = cur[0];
+        cur[0] = i + 1;
+        for (j, cb) in b.chars().enumerate() {
+            let tmp = cur[j + 1];
+            cur[j + 1] = core::cmp::min(
+                // deletion
+                tmp + 1,
+                core::cmp::min(
+                    // insertion
+                    cur[j] + 1,
+                    // match or substitution
+                    pre + usize::from(ca != cb),
+                ),
+            );
+            pre = tmp;
         }
-        U::from(cur[len_b - 1])
     }
+    cur[b.len()]
 }
 
 /// Computes the Hamming distance between two strings.
