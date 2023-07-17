@@ -34,6 +34,7 @@ debug = true
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
+rayon = "1.7.0"
 float-cmp = "^0.9.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"

@@ -57,7 +57,7 @@ pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// assert!((distance - 27.0).abs() <= f64::EPSILON);
 /// ```
 pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
-    U::from(abs_diff_iter(x, y).map(|v| v.powi(2)).sum::<T>())
+    abs_diff_iter(x, y).map(U::from).map(|v| v * v).sum()
 }
 
 /// Manhattan distance between two vectors.
@@ -110,7 +110,11 @@ pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= f64::EPSILON);
 /// ```
 pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    U::from(abs_diff_iter(x, y).map(|v| v.powi(3)).sum::<T>()).cbrt()
+    abs_diff_iter(x, y)
+        .map(U::from)
+        .map(|v| v * v * v)
+        .sum::<U>()
+        .cbrt()
 }
 
 /// L4-norm between two vectors.
@@ -136,7 +140,13 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// assert!((distance - (243.0_f64).sqrt().sqrt()).abs() <= f64::EPSILON);
 /// ```
 pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    U::from(abs_diff_iter(x, y).map(|v| v.powi(4)).sum::<T>()).powf(U::from(0.25))
+    abs_diff_iter(x, y)
+        .map(U::from)
+        .map(|v| v * v)
+        .map(|v| v * v)
+        .sum::<U>()
+        .sqrt()
+        .sqrt()
 }
 
 /// Chebyshev distance between two vectors.

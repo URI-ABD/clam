@@ -43,7 +43,7 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
         });
     let [xx, yy, xy] = [U::from(xx), U::from(yy), U::from(xy)];
 
-    if xx <= U::epsilon() || yy <= U::epsilon() || xy <= U::epsilon() {
+    if xx < U::epsilon() || yy < U::epsilon() || xy < U::epsilon() {
         U::one()
     } else {
         let d = U::one() - xy * (xx * yy).inv_sqrt();
@@ -120,10 +120,9 @@ pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
 ///
 /// * [Canberra distance](https://en.wikipedia.org/wiki/Canberra_distance)
 pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    U::from(
-        x.iter()
-            .zip(y.iter())
-            .map(|(&a, &b)| a.abs_diff(b) / (a.abs() + b.abs()))
-            .sum::<T>(),
-    )
+    x.iter()
+        .map(|&v| U::from(v))
+        .zip(y.iter().map(|&v| U::from(v)))
+        .map(|(a, b)| a.abs_diff(b) / (a.abs() + b.abs()))
+        .fold(U::zero(), |acc, v| acc + v)
 }
