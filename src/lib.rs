@@ -20,7 +20,7 @@ use std::io;
 pub mod random_data;
 
 /// The version of the crate.
-pub const VERSION: &str = "0.1.1-dev0";
+pub const VERSION: &str = "0.1.1";
 
 /// Guess the number game.
 ///
