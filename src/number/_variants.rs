@@ -73,111 +73,40 @@ pub trait Float: Number {
     /// Returns the machine epsilon for a `Float`.
     fn epsilon() -> Self;
 
-    /// Returns the inverse square root of a `Float`.
-    ///
-    /// This is equivalent to `1.0 / self.sqrt()`. It uses the fast quake inverse
-    /// square root algorithm. The implementations are adapted from those available
-    /// in [this crate](https://github.com/emkw/rust-fast_inv_sqrt).
-    ///
-    /// Benchmarks for this implementation can be found in benches/inv-sqrt.rs.
-    /// They show this implementation to be about ~4.5x faster than using
-    /// `1.0 / self.sqrt()` or `self.sqrt().recip()` and accurate to `1e-6` for
-    /// both `f32` and `f64`.
-    ///
-    /// # References
-    ///
-    /// - [Fast Inverse Square Root](https://en.wikipedia.org/wiki/Fast_inverse_square_root)
-    /// - [Quake III Arena Fast InvSqrt()](https://www.youtube.com/watch?v=p8u_k2LIZyo)
+    /// Returns the inverse square root of a `Float`, i.e. `1.0 / self.sqrt()`.
     #[must_use]
-    fn inv_sqrt(self) -> Self;
+    fn inv_sqrt(self) -> Self {
+        Self::one() / self.sqrt()
+    }
 
     /// Returns `self` raised to the power of `exp`.
     #[must_use]
     fn powf(self, exp: Self) -> Self;
 }
 
-impl Float for f32 {
-    fn sqrt(self) -> Self {
-        // libm::sqrtf(self)  // no-std
-        self.sqrt()
-    }
+/// Macro to implement `UIntNumber` for all unsigned integer types.
+macro_rules! impl_float {
+    ($($ty:ty),*) => {
+        $(
+            impl Float for $ty {
+                fn sqrt(self) -> Self {
+                    Self::sqrt(self)
+                }
 
-    fn cbrt(self) -> Self {
-        // libm::cbrtf(self)  // no-std
-        self.cbrt()
-    }
+                fn cbrt(self) -> Self {
+                    Self::cbrt(self)
+                }
 
-    fn epsilon() -> Self {
-        Self::EPSILON
-    }
+                fn epsilon() -> Self {
+                    Self::EPSILON
+                }
 
-    fn inv_sqrt(self) -> Self {
-        if self == 0.0 {
-            return Self::NAN;
-        } else if self == Self::INFINITY {
-            return 0.0;
-        } else if self < Self::MIN_POSITIVE {
-            return Self::INFINITY;
-        }
-
-        let x2 = self * 0.5;
-        let i = 0x5f_375_a86 - (self.to_bits() >> 1);
-
-        let mut y = Self::from_bits(i);
-
-        // More iterations can be added for higher precision.
-        // This achieves a precision of 1e-6 with no loss of speed.
-        y *= (x2 * y).mul_add(-y, 1.5);
-        y *= (x2 * y).mul_add(-y, 1.5);
-
-        y * (x2 * y).mul_add(-y, 1.5)
-    }
-
-    fn powf(self, exp: Self) -> Self {
-        // libm::powf(self, exp)  // no-std
-        self.powf(exp)
+                fn powf(self, exp: Self) -> Self {
+                    Self::powf(self, exp)
+                }
+            }
+        )*
     }
 }
 
-impl Float for f64 {
-    fn sqrt(self) -> Self {
-        // libm::sqrt(self)  // no-std
-        self.sqrt()
-    }
-
-    fn cbrt(self) -> Self {
-        // libm::cbrt(self)  // no-std
-        self.cbrt()
-    }
-
-    fn epsilon() -> Self {
-        Self::EPSILON
-    }
-
-    fn inv_sqrt(self) -> Self {
-        if self == 0.0 {
-            return Self::NAN;
-        } else if self == Self::INFINITY {
-            return 0.0;
-        } else if self < Self::MIN_POSITIVE {
-            return Self::INFINITY;
-        }
-
-        let x2 = self * 0.5;
-        let i = 0x5_fe6_eb5_0c7_b53_7a9 - (self.to_bits() >> 1);
-
-        let mut y = Self::from_bits(i);
-
-        // More iterations can be added for higher precision.
-        // This achieves a precision of 1e-6 with no loss of speed.
-        y *= (x2 * y).mul_add(-y, 1.5);
-        y *= (x2 * y).mul_add(-y, 1.5);
-
-        y * (x2 * y).mul_add(-y, 1.5)
-    }
-
-    fn powf(self, exp: Self) -> Self {
-        // libm::pow(self, exp)  // no-std
-        self.powf(exp)
-    }
-}
+impl_float!(f32, f64);
