@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "abd-clam"
-version = "0.19.0"
+version = "0.20.0"
 description = "Clustered Learning of Approximate Manifolds"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
@@ -8,8 +8,8 @@ authors = [
     "Noah Daniels <noah_daniels@uri.edu>",
 ]
 license = "MIT"
-readme = "python/README.md"
-packages = [{include = "abd_clam", from = "python"}]
+readme = "py-clam/README.md"
+packages = [{include = "abd_clam", from = "py-clam"}]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"

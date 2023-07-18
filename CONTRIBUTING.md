@@ -9,6 +9,8 @@ This means that the API is not yet stable and breaking changes may occur frequen
 ## Pull Requests
 
 1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
+   - After cloning from your fork, you should run the tests to make sure that all is well: `cargo test --release`.
+   - If you get an error from Cargo saying that a manifest path could not be read, you may need to update the git submodules in the repository. Run `git submodule update --init` and try the running the tests again.
 2. Install [poetry](https://python-poetry.org/docs/#installation) on your system.
    - `curl -sSL https://install.python-poetry.org | python3 -`
 3. Make a python virtual environment with python 3.9.x.
@@ -31,7 +33,7 @@ This means that the API is not yet stable and breaking changes may occur frequen
    - `bump2version --dry-run --verbose --allow-dirty release|minor|patch|dev` to see what will happen without actually changing anything.
 7. Commit and push your changes.
    - Work through the pre-commit checks.
-   - If you wish to save your work before the pre-commit checks are complete, use `git commit --no-verify`.
+   - If you wish to save your work before the pre-commit checks are complete, use `git commit --no-verify`. Note that we will not review a PR for which the CI checks fail.
    - Try to use commit messages that are descriptive and follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification.
 8. Open a pull request.
    - You must rebase your branch to the head of the `master` branch before opening a pull request.
