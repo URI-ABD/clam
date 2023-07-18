@@ -1,116 +1,141 @@
 use criterion::*;
-
 use symagen::random_data;
 
 use distances::strings::needleman_wunsch;
 
-fn needleman_wunsch_recursive_dim(c: &mut Criterion) {
-    let mut group = c.benchmark_group("needleman-wunsch-recursive-dim");
-    group.significance_level(0.025).sample_size(10);
+fn bench_with_edits(c: &mut Criterion) {
+    let mut group = c.benchmark_group("NW-with-edits");
+    // group.significance_level(0.025).sample_size(10);
 
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     group.plot_config(plot_config);
 
     group.sampling_mode(SamplingMode::Flat);
 
-    for n in [10, 25, 50, 100, 250, 500, 1000] {
-        let data = random_data::random_string(2, n, n, "ATCG", 42);
-        let x = &data[0];
-        let y = &data[1];
-        let id = BenchmarkId::new("nw", n);
-        group.bench_with_input(id, &n, |b, _| {
-            b.iter_with_large_drop(|| needleman_wunsch::with_edits_recursive::<u32>(x, y));
-        });
-    }
-
-    group.finish();
-}
-
-fn needleman_wunsch_iterative_dim(c: &mut Criterion) {
-    let mut group = c.benchmark_group("needleman-wunsch-iterative-dim");
-    group.significance_level(0.025).sample_size(10);
-
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    group.plot_config(plot_config);
-
-    group.sampling_mode(SamplingMode::Flat);
-
-    for n in [10, 25, 50, 100, 250, 500, 1000] {
-        let data = random_data::random_string(2, n, n, "ATCG", 42);
-        let x = &data[0];
-        let y = &data[1];
-        let id = BenchmarkId::new("nw", n);
-        group.bench_with_input(id, &n, |b, _| {
-            b.iter_with_large_drop(|| needleman_wunsch::with_edits_iterative::<u32>(x, y));
-        });
-    }
-
-    group.finish();
-}
-
-fn needleman_wunsch_recursive_alphabet_size(c: &mut Criterion) {
-    let mut group = c.benchmark_group("needleman-wunsch-recursive-alphabet-size");
-    group.significance_level(0.025).sample_size(10);
-
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    group.plot_config(plot_config);
-
-    group.sampling_mode(SamplingMode::Flat);
-
-    let all_alphabet = [
+    let seed = 42;
+    let cardinality = 10;
+    let seq_len = 100;
+    let alphabet = [
         "ACGT",                             // DNA
         "ACGTactg",                         // DNA with lowercase
         "ACGTURYSWKMBDHVN",                 // DNA with IUPAC
         "ACGTURYSWKMBDHVNacgturyswkmbdhvn", // DNA with IUPAC and lowercase
     ];
 
-    for alphabet in all_alphabet {
-        let data = random_data::random_string(2, 100, 100, alphabet, 42);
-        let x = &data[0];
-        let y = &data[1];
-        let id = BenchmarkId::new("nw", alphabet.len());
-        group.bench_with_input(id, &alphabet.len(), |b, _| {
-            b.iter_with_large_drop(|| needleman_wunsch::with_edits_recursive::<u32>(x, y));
+    group.throughput(Throughput::Elements((cardinality * cardinality) as u64));
+
+    for len in [10, 25, 50, 100, 250, 500, 1000] {
+        let sequences = random_data::random_string(cardinality, len, len, alphabet[0], seed);
+
+        let id = BenchmarkId::new("distance-len", len);
+        group.bench_with_input(id, &len, |b, _| {
+            b.iter_with_large_drop(|| {
+                black_box({
+                    sequences
+                        .iter()
+                        .map(|x| {
+                            sequences
+                                .iter()
+                                .map(|y| needleman_wunsch::nw_distance::<u32>(x, y))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+        });
+
+        let id = BenchmarkId::new("recursive-edits-len", len);
+        group.bench_with_input(id, &len, |b, _| {
+            b.iter_with_large_drop(|| {
+                black_box({
+                    sequences
+                        .iter()
+                        .map(|x| {
+                            sequences
+                                .iter()
+                                .map(|y| needleman_wunsch::with_edits_recursive::<u32>(x, y))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+        });
+
+        let id = BenchmarkId::new("iterative-edits-len", len);
+        group.bench_with_input(id, &len, |b, _| {
+            b.iter_with_large_drop(|| {
+                black_box({
+                    sequences
+                        .iter()
+                        .map(|x| {
+                            sequences
+                                .iter()
+                                .map(|y| needleman_wunsch::with_edits_iterative::<u32>(x, y))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+        });
+    }
+
+    for alf in alphabet {
+        let sequences = random_data::random_string(cardinality, seq_len, seq_len, alf, seed);
+
+        let id = BenchmarkId::new("distance-alf", alf.len());
+        group.bench_with_input(id, &alf.len(), |b, _| {
+            b.iter_with_large_drop(|| {
+                black_box({
+                    sequences
+                        .iter()
+                        .map(|x| {
+                            sequences
+                                .iter()
+                                .map(|y| needleman_wunsch::nw_distance::<u32>(x, y))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+        });
+
+        let id = BenchmarkId::new("recursive-edits-alf", alf.len());
+        group.bench_with_input(id, &alf.len(), |b, _| {
+            b.iter_with_large_drop(|| {
+                black_box({
+                    sequences
+                        .iter()
+                        .map(|x| {
+                            sequences
+                                .iter()
+                                .map(|y| needleman_wunsch::with_edits_recursive::<u32>(x, y))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+        });
+
+        let id = BenchmarkId::new("iterative-edits-alf", alf.len());
+        group.bench_with_input(id, &alf.len(), |b, _| {
+            b.iter_with_large_drop(|| {
+                black_box({
+                    sequences
+                        .iter()
+                        .map(|x| {
+                            sequences
+                                .iter()
+                                .map(|y| needleman_wunsch::with_edits_iterative::<u32>(x, y))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
         });
     }
 
     group.finish();
 }
 
-fn needleman_wunsch_iterative_alphabet_size(c: &mut Criterion) {
-    let mut group = c.benchmark_group("needleman-wunsch-iterative-alphabet-size");
-    group.significance_level(0.025).sample_size(10);
-
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    group.plot_config(plot_config);
-
-    group.sampling_mode(SamplingMode::Flat);
-
-    let all_alphabet = [
-        "ACGT",                             // DNA
-        "ACGTactg",                         // DNA with lowercase
-        "ACGTURYSWKMBDHVN",                 // DNA with IUPAC
-        "ACGTURYSWKMBDHVNacgturyswkmbdhvn", // DNA with IUPAC and lowercase
-    ];
-
-    for alphabet in all_alphabet {
-        let data = random_data::random_string(2, 100, 100, alphabet, 42);
-        let x = &data[0];
-        let y = &data[1];
-        let id = BenchmarkId::new("nw", alphabet.len());
-        group.bench_with_input(id, &alphabet.len(), |b, _| {
-            b.iter_with_large_drop(|| needleman_wunsch::with_edits_recursive::<u32>(x, y));
-        });
-    }
-
-    group.finish();
-}
-
-criterion_group!(
-    benches,
-    needleman_wunsch_recursive_dim,
-    needleman_wunsch_iterative_dim,
-    needleman_wunsch_recursive_alphabet_size,
-    needleman_wunsch_iterative_alphabet_size
-);
+criterion_group!(benches, bench_with_edits,);
 criterion_main!(benches);
