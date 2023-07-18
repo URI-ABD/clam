@@ -23,7 +23,8 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { path = "../distances" }
+# distances = { path = "../distances" }
+distances = "1.1.2"
 rayon = "1.7.0"
 
 # Only used for Dataset::choose_unique
