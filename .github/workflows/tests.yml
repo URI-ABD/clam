@@ -38,6 +38,6 @@ jobs:
         run: git submodule update --init
       - name: Dependencies
         run: |
-          pip install --user --upgrade pip && pip install --user ./py-clam
+          pip install --user poetry && poetry install
       - name: Run
-        run: python -m unittest discover py-clam
+        run: poetry run python -m unittest discover py-clam
