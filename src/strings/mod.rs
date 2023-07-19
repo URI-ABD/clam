@@ -47,9 +47,9 @@ impl<U: UInt> Penalties<U> {
 /// Creates a function to compute the Levenshtein distance between two strings
 /// using a custom set of penalties. The generated function will have the same
 /// signature as `levenshtein`.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `penalties`: the set of penalties to use
 pub fn levenshtein_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> U {
     move |x: &str, y: &str| {
@@ -136,7 +136,7 @@ fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> usize {
     // TODO(Noah): Please use the penalties struct. Modify the members if you
     // need to. Keep in mind that this struct is also used for Needleman-
     // Wunsch and will be used for the other distance metrics we implement.
-    
+
     // initialize DP table for string b
     let mut cur = (0..=y.len()).collect::<Vec<_>>();
 
