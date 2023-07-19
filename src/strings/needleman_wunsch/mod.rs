@@ -1,10 +1,66 @@
-//! This will soon be moved into the `distances` crate.
+//! Needleman-Wunsch edit-distance between two strings.
+//!
+//! This implementation should not be considered stable.
 
 mod helpers;
 
 use crate::number::UInt;
 
 use helpers::{compute_edits, compute_table, trace_back_iterative, trace_back_recursive, Edit};
+
+/// Penalties to use in the Needleman-Wunsch distance calculation.
+///
+/// Since we provide a distance implementation that is intended to be used as a
+/// metric that obeys the triangle inequality, the penalties should all be
+/// non-negative, thus the genericity over unsigned integers.
+#[derive(Clone, Copy, Debug)]
+pub struct Penalties<U: UInt> {
+    /// Penalty for a match.
+    pub match_: U,
+    /// Penalty for a mis-match.
+    pub mismatch: U,
+    /// Penalty for a gap.
+    pub gap: U,
+}
+
+impl<U: UInt> Default for Penalties<U> {
+    fn default() -> Self {
+        Self {
+            match_: U::zero(),
+            mismatch: U::one(),
+            gap: U::one(),
+        }
+    }
+}
+
+impl<U: UInt> Penalties<U> {
+    /// Create a set of penalties to use for the NW distance metric.
+    pub const fn new(match_: U, mismatch: U, gap: U) -> Self {
+        Self {
+            match_,
+            mismatch,
+            gap,
+        }
+    }
+}
+
+/// Use a custom set of penalties to create a function to that calculates the
+/// Needleman-Wunsch edit distance between two strings using the specified
+/// penalties.
+///
+/// * [Demo](https://bioboot.github.io/bimm143_W20/class-material/nw/)
+/// * [Wikipedia](https://en.wikipedia.org/wiki/Needleman%E2%80%93Wunsch_algorithm)
+///
+/// # Arguments:
+///
+/// * `penalties`: The penalties to use in the generated function.
+///
+/// # Returns:
+///
+/// A function with the same signature as `nw_distance`.
+pub fn nw_distance_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> U {
+    move |x: &str, y: &str| compute_table(x, y, penalties)[y.len()][x.len()].0
+}
 
 /// Calculate the edit distance between two strings using Needleman-Wunsch table.
 /// This function is only accurate with a scoring scheme for which all penalties
@@ -19,8 +75,31 @@ use helpers::{compute_edits, compute_table, trace_back_iterative, trace_back_rec
 /// * `y`: unaligned sequence represented as a `String`
 #[must_use]
 pub fn nw_distance<U: UInt>(x: &str, y: &str) -> U {
-    let table = compute_table(x, y);
-    table[table.len() - 1][table[0].len() - 1].0
+    compute_table(x, y, Penalties::default())[y.len()][x.len()].0
+}
+
+/// Use a custom set of penalties to create a function to that calculates the
+/// set of edits needed to turn one unaligned sequence into another, as well as
+/// the NW edit distance between the two sequences.
+///
+/// # Arguments:
+///
+/// * `penalties`: The penalties to use in the generated function.
+///
+/// # Returns:
+///
+/// A function with the same signature as `edits_recursive`.
+pub fn edits_recursive_custom<U: UInt>(
+    penalties: Penalties<U>,
+) -> impl Fn(&str, &str) -> ([Vec<Edit>; 2], U) {
+    move |x: &str, y: &str| {
+        let table = compute_table(x, y, penalties);
+        let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
+        (
+            compute_edits(&aligned_x, &aligned_y),
+            table[y.len()][x.len()].0,
+        )
+    }
 }
 
 /// Determine the set of edits needed to turn one unaligned sequence into
@@ -37,12 +116,36 @@ pub fn nw_distance<U: UInt>(x: &str, y: &str) -> U {
 /// * `y`: an unaligned sequence.
 #[must_use]
 pub fn edits_recursive<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
-    let table = compute_table(x, y);
+    let table = compute_table(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
     (
         compute_edits(&aligned_x, &aligned_y),
-        table[table.len() - 1][table[0].len() - 1].0,
+        table[y.len()][x.len()].0,
     )
+}
+
+/// Use a custom set of penalties to create a function to that calculates the
+/// set of edits needed to turn one unaligned sequence into another, as well as
+/// the NW edit distance between the two sequences.
+///
+/// # Arguments:
+///
+/// * `penalties`: The penalties to use in the generated function.
+///
+/// # Returns:
+///
+/// A function with the same signature as `edits_iterative`.
+pub fn edits_iterative_custom<U: UInt>(
+    penalties: Penalties<U>,
+) -> impl Fn(&str, &str) -> ([Vec<Edit>; 2], U) {
+    move |x: &str, y: &str| {
+        let table = compute_table(x, y, penalties);
+        let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+        (
+            compute_edits(&aligned_x, &aligned_y),
+            table[y.len()][x.len()].0,
+        )
+    }
 }
 
 /// Determine the set of edits needed to turn one unaligned sequence into
@@ -59,11 +162,11 @@ pub fn edits_recursive<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
 /// * `y`: an unaligned sequence.
 #[must_use]
 pub fn edits_iterative<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
-    let table = compute_table(x, y);
+    let table = compute_table(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
     (
         compute_edits(&aligned_x, &aligned_y),
-        table[table.len() - 1][table[0].len() - 1].0,
+        table[y.len()][x.len()].0,
     )
 }
 

@@ -1,5 +1,6 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
 
+use super::Penalties;
 use crate::number::UInt;
 
 /// The direction of best alignment at a given position in the DP table
@@ -30,43 +31,45 @@ pub enum Edit {
 ///
 /// # Arguments
 ///
-/// * `x` - The first sequence.
-/// * `y` - The second sequence.
+/// * `x`: The first sequence.
+/// * `y`: The second sequence.
 ///
 /// # Returns
 ///
 /// A nested vector of tuples of total-penalty and Direction, representing the
 /// best alignment at each position.
-pub fn compute_table<U: UInt>(x: &str, y: &str) -> Vec<Vec<(U, Dir)>> {
-    let gap_penalty = U::one();
-
+pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<Vec<(U, Dir)>> {
     // Initializing table; the inner vectors represent rows in the table.
     let mut table = vec![vec![(U::zero(), Dir::D); x.len() + 1]; y.len() + 1];
 
+    // The top-left cell starts with a total penalty of zero and no direction.
+    table[0][0] = (U::zero(), Dir::D);
+
     // Initialize left-most column of distance values.
     for (i, row) in table.iter_mut().enumerate().skip(1) {
-        row[0] = (gap_penalty * U::from(i), Dir::U);
+        row[0] = (penalties.gap * U::from(i), Dir::U);
     }
 
     // Initialize top row of distance values.
     for (j, cell) in table[0].iter_mut().enumerate().skip(1) {
-        *cell = (gap_penalty * U::from(j), Dir::L);
+        *cell = (penalties.gap * U::from(j), Dir::L);
     }
-
-    // The top-left cell starts with a total penalty of zero and no direction.
-    table[0][0] = (U::zero(), Dir::D);
 
     // Set values for the body of the table
     for (i, y_c) in y.chars().enumerate() {
         for (j, x_c) in x.chars().enumerate() {
             // Check if sequences match at position `i` in `x` and `j` in `y`.
-            let mismatch_penalty = if x_c == y_c { U::zero() } else { U::one() };
+            let mismatch_penalty = if x_c == y_c {
+                penalties.match_
+            } else {
+                penalties.mismatch
+            };
 
             // Compute the three possible penalties and use the minimum to set
             // the value for the next entry in the table.
             let d00 = (table[i][j].0 + mismatch_penalty, Dir::D);
-            let d01 = (table[i][j + 1].0 + gap_penalty, Dir::U);
-            let d10 = (table[i + 1][j].0 + gap_penalty, Dir::L);
+            let d01 = (table[i][j + 1].0 + penalties.gap, Dir::U);
+            let d10 = (table[i + 1][j].0 + penalties.gap, Dir::L);
 
             table[i + 1][j + 1] = min2(d00, min2(d01, d10));
         }
@@ -88,8 +91,8 @@ fn min2<U: UInt>(a: (U, Dir), b: (U, Dir)) -> (U, Dir) {
 ///
 /// # Arguments
 ///
-/// * `x` - The first aligned sequence.
-/// * `y` - The second aligned sequence.
+/// * `x`: The first aligned sequence.
+/// * `y`: The second aligned sequence.
 ///
 /// # Returns
 ///
@@ -125,8 +128,8 @@ fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
 ///
 /// # Arguments
 ///
-/// * `table` - The Needleman-Wunsch table.
-/// * `[x, y]` - The two sequences to align.
+/// * `table`: The Needleman-Wunsch table.
+/// * `[x, y]`: The two sequences to align.
 ///
 /// # Returns
 ///
@@ -137,7 +140,7 @@ pub fn trace_back_iterative<U: UInt>(
 ) -> (String, String) {
     let (x, y) = (x.as_bytes(), y.as_bytes());
 
-    let (mut row_i, mut col_i) = (table.len() - 1, table[0].len() - 1);
+    let (mut row_i, mut col_i) = (y.len(), x.len());
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
 
     while row_i > 0 && col_i > 0 {
@@ -180,8 +183,8 @@ pub fn trace_back_iterative<U: UInt>(
 ///
 /// # Arguments
 ///
-/// * `table` - The Needleman-Wunsch table.
-/// * `[x, y]` - The two sequences to align.
+/// * `table`: The Needleman-Wunsch table.
+/// * `[x, y]`: The two sequences to align.
 ///
 /// # Returns
 ///
@@ -194,7 +197,7 @@ pub fn trace_back_recursive<U: UInt>(
 
     _trace_back_recursive(
         table,
-        [table.len() - 1, table[0].len() - 1],
+        [y.len(), x.len()],
         [x.as_bytes(), y.as_bytes()],
         [&mut aligned_x, &mut aligned_y],
     );
@@ -214,10 +217,10 @@ pub fn trace_back_recursive<U: UInt>(
 ///
 /// # Arguments
 ///
-/// * `table` - The Needleman-Wunsch table.
-/// * `[row_i, col_i]` - mutable indices into the table.
-/// * `[x, y]` - The two sequences to align, passed as slices of bytes.
-/// * `[aligned_x, aligned_y]` - mutable aligned sequences that will be built
+/// * `table`: The Needleman-Wunsch table.
+/// * `[row_i, col_i]`: mutable indices into the table.
+/// * `[x, y]`: The two sequences to align, passed as slices of bytes.
+/// * `[aligned_x, aligned_y]`: mutable aligned sequences that will be built
 /// up from initially empty vectors.
 fn _trace_back_recursive<U: UInt>(
     table: &[Vec<(U, Dir)>],
@@ -256,7 +259,7 @@ mod tests {
     fn test_compute_table() {
         let x = "NAJIBPEPPERSEATS";
         let y = "NAJIBEATSPEPPERS";
-        let table = compute_table::<u16>(x, y);
+        let table = compute_table::<u16>(x, y, Penalties::default());
 
         #[rustfmt::skip]
         let true_table: [[(u16, Dir); 17]; 17] = [
@@ -286,7 +289,7 @@ mod tests {
     fn test_trace_back() {
         let peppers_x = "NAJIBPEPPERSEATS";
         let peppers_y = "NAJIBEATSPEPPERS";
-        let peppers_table = compute_table::<u16>(peppers_x, peppers_y);
+        let peppers_table = compute_table::<u16>(peppers_x, peppers_y, Penalties::default());
 
         let (aligned_x, aligned_y) = trace_back_recursive(&peppers_table, [peppers_x, peppers_y]);
         assert_eq!(aligned_x, "NAJIB-PEPPERSEATS");
@@ -298,7 +301,7 @@ mod tests {
 
         let guilty_x = "NOTGUILTY";
         let guilty_y = "NOTGUILTY";
-        let guilty_table = compute_table::<u16>(guilty_x, guilty_y);
+        let guilty_table = compute_table::<u16>(guilty_x, guilty_y, Penalties::default());
 
         let (aligned_x, aligned_y) = trace_back_recursive(&guilty_table, [guilty_x, guilty_y]);
         assert_eq!(aligned_x, "NOTGUILTY");
