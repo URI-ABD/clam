@@ -53,7 +53,7 @@ fn bench_with_edits(c: &mut Criterion) {
                         .map(|x| {
                             sequences
                                 .iter()
-                                .map(|y| needleman_wunsch::with_edits_recursive::<u32>(x, y))
+                                .map(|y| needleman_wunsch::edits_recursive::<u32>(x, y))
                                 .collect::<Vec<_>>()
                         })
                         .collect::<Vec<_>>()
@@ -70,7 +70,7 @@ fn bench_with_edits(c: &mut Criterion) {
                         .map(|x| {
                             sequences
                                 .iter()
-                                .map(|y| needleman_wunsch::with_edits_iterative::<u32>(x, y))
+                                .map(|y| needleman_wunsch::edits_iterative::<u32>(x, y))
                                 .collect::<Vec<_>>()
                         })
                         .collect::<Vec<_>>()
@@ -108,7 +108,7 @@ fn bench_with_edits(c: &mut Criterion) {
                         .map(|x| {
                             sequences
                                 .iter()
-                                .map(|y| needleman_wunsch::with_edits_recursive::<u32>(x, y))
+                                .map(|y| needleman_wunsch::edits_recursive::<u32>(x, y))
                                 .collect::<Vec<_>>()
                         })
                         .collect::<Vec<_>>()
@@ -125,7 +125,7 @@ fn bench_with_edits(c: &mut Criterion) {
                         .map(|x| {
                             sequences
                                 .iter()
-                                .map(|y| needleman_wunsch::with_edits_iterative::<u32>(x, y))
+                                .map(|y| needleman_wunsch::edits_iterative::<u32>(x, y))
                                 .collect::<Vec<_>>()
                         })
                         .collect::<Vec<_>>()

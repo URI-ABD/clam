@@ -1,8 +1,10 @@
 //! This will soon be moved into the `distances` crate.
 
-pub(crate) mod alignment_helpers;
+mod helpers;
 
-use crate::Number;
+use crate::number::UInt;
+
+use helpers::{compute_edits, compute_table, trace_back_iterative, trace_back_recursive, Edit};
 
 /// Calculate the edit distance between two strings using Needleman-Wunsch table.
 /// This function is only accurate with a scoring scheme for which all penalties
@@ -16,63 +18,53 @@ use crate::Number;
 /// * `x`: unaligned sequence represented as a `String`
 /// * `y`: unaligned sequence represented as a `String`
 #[must_use]
-pub fn nw_distance<U: Number>(x: &str, y: &str) -> U {
-    let table = alignment_helpers::compute_table(x, y);
-    let edit_distance: usize = table[table.len() - 1][table[0].len() - 1].0;
-
-    U::from(edit_distance)
+pub fn nw_distance<U: UInt>(x: &str, y: &str) -> U {
+    let table = compute_table(x, y);
+    table[table.len() - 1][table[0].len() - 1].0
 }
 
-/// Determine the set of edits needed to turn one unaligned sequence into another,
-/// as well as the edit distance between the two sequences.
+/// Determine the set of edits needed to turn one unaligned sequence into
+/// another, as well as the edit distance between the two sequences.
 ///
-/// Contrast to `with_edits_iterative`, which uses an iterative, as
-/// opposed to recursive, traceback function
+/// Contrast to `edits_iterative`, which uses the iterative trace back function.
 ///
-/// For now, in cases where there exist ties for the shortest edit distance, we only
-/// return one alignment.
+/// For now, in cases where there exist ties for the shortest edit distance, we
+/// only return one alignment.
 ///
 /// # Arguments:
 ///
-/// * `x`: unaligned sequence represented as a `String`
-/// * `y`: unaligned sequence represented as a `String`
+/// * `x`: an unaligned sequence.
+/// * `y`: an unaligned sequence.
 #[must_use]
-pub fn with_edits_recursive<U: Number>(x: &str, y: &str) -> ([Vec<alignment_helpers::Edit>; 2], U) {
-    let table = alignment_helpers::compute_table(x, y);
-    let (aligned_x, aligned_y) = alignment_helpers::trace_back_recursive(&table, (x, y));
-
-    let edit_x_into_y = alignment_helpers::alignment_to_edits(&aligned_x, &aligned_y);
-    let edit_y_into_x = alignment_helpers::alignment_to_edits(&aligned_y, &aligned_x);
-
-    let edit_distance: usize = table[table.len() - 1][table[0].len() - 1].0;
-
-    ([edit_x_into_y, edit_y_into_x], U::from(edit_distance))
+pub fn edits_recursive<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
+    let table = compute_table(x, y);
+    let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
+    (
+        compute_edits(&aligned_x, &aligned_y),
+        table[table.len() - 1][table[0].len() - 1].0,
+    )
 }
 
-/// Determine the set of edits needed to turn one unaligned sequence into another,
-/// as well as the edit distance between the two sequences.
+/// Determine the set of edits needed to turn one unaligned sequence into
+/// another, as well as the edit distance between the two sequences.
 ///
-/// Contrast to `with_edits_recursive`, which uses a recursive, as
-/// opposed to iterative, traceback function
+/// Contrast to `edits_recursive`, which uses the recursive, trace back function
 ///
-/// For now, in cases where there exist ties for the shortest edit distance, we only
-/// return one alignment.
+/// For now, in cases where there exist ties for the shortest edit distance, we
+/// only return one alignment.
 ///
 /// # Arguments:
 ///
-/// * `x`: unaligned sequence represented as a `String`
-/// * `y`: unaligned sequence represented as a `String`
+/// * `x`: an unaligned sequence.
+/// * `y`: an unaligned sequence.
 #[must_use]
-pub fn with_edits_iterative<U: Number>(x: &str, y: &str) -> ([Vec<alignment_helpers::Edit>; 2], U) {
-    let table = alignment_helpers::compute_table(x, y);
-    let (aligned_x, aligned_y) = alignment_helpers::trace_back_iterative(&table, (x, y));
-
-    let edit_x_into_y = alignment_helpers::alignment_to_edits(&aligned_x, &aligned_y);
-    let edit_y_into_x = alignment_helpers::alignment_to_edits(&aligned_y, &aligned_x);
-
-    let edit_distance: usize = table[table.len() - 1][table[0].len() - 1].0;
-
-    ([edit_x_into_y, edit_y_into_x], U::from(edit_distance))
+pub fn edits_iterative<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
+    let table = compute_table(x, y);
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+    (
+        compute_edits(&aligned_x, &aligned_y),
+        table[table.len() - 1][table[0].len() - 1].0,
+    )
 }
 
 #[cfg(test)]
@@ -80,7 +72,7 @@ mod tests {
     use super::nw_distance;
 
     #[test]
-    fn test_needleman_wunsch() {
+    fn distance() {
         let x = "NAJIBEATSPEPPERS".to_string();
         let y = "NAJIBPEPPERSEATS".to_string();
         let d: u8 = nw_distance(&x, &y);
