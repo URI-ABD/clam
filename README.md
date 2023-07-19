@@ -1,4 +1,4 @@
-# Distances (v1.1.4)
+# Distances (v1.2.0)
 
 Fast and generic distance functions for high-dimensional data.
 
@@ -7,7 +7,7 @@ Fast and generic distance functions for high-dimensional data.
 Add this to your project:
 
 ```shell
-> cargo add distances@1.1.4
+> cargo add distances@1.2.0
 ```
 
 Use it in your project:
