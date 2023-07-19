@@ -61,7 +61,7 @@ assert!((distance - (27.0_f32).sqrt()).abs() < 1e-6);
     - [Hellinger Distance](https://en.wikipedia.org/wiki/Hellinger_distance)
 - [ ] String data, e.g. for genomic sequences:
   - [x] `levenshtein`
-  - [ ] `needleman_wunsch`
+  - [x] `needleman_wunsch`
   - [ ] `smith_waterman`
   - [x] `hamming`
   - [ ] Normalized versions of the above.

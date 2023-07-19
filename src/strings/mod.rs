@@ -4,6 +4,10 @@
 
 use crate::number::UInt;
 
+pub mod needleman_wunsch;
+
+pub use needleman_wunsch::nw_distance;
+
 /// Computes the Levenshtein distance between two strings.
 ///
 /// The Levenshtein distance is defined as the minimum number of edits
