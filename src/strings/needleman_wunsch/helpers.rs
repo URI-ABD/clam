@@ -1,7 +1,6 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
 
-use super::Penalties;
-use crate::number::UInt;
+use crate::{number::UInt, strings::Penalties};
 
 /// The direction of best alignment at a given position in the DP table
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

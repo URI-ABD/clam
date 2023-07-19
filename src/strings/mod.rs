@@ -8,6 +8,66 @@ pub mod needleman_wunsch;
 
 pub use needleman_wunsch::nw_distance;
 
+/// Penalties to use in the Needleman-Wunsch distance calculation.
+///
+/// Since we provide a distance implementation that is intended to be used as a
+/// metric that obeys the triangle inequality, the penalties should all be
+/// non-negative, thus the genericity over unsigned integers.
+#[derive(Clone, Copy, Debug)]
+pub struct Penalties<U: UInt> {
+    /// Penalty for a match.
+    pub(crate) match_: U,
+    /// Penalty for a mis-match.
+    pub(crate) mismatch: U,
+    /// Penalty for a gap.
+    pub(crate) gap: U,
+}
+
+impl<U: UInt> Default for Penalties<U> {
+    fn default() -> Self {
+        Self {
+            match_: U::zero(),
+            mismatch: U::one(),
+            gap: U::one(),
+        }
+    }
+}
+
+impl<U: UInt> Penalties<U> {
+    /// Create a set of penalties to use for the NW distance metric.
+    pub const fn new(match_: U, mismatch: U, gap: U) -> Self {
+        Self {
+            match_,
+            mismatch,
+            gap,
+        }
+    }
+}
+
+/// Creates a function to compute the Levenshtein distance between two strings
+/// using a custom set of penalties. The generated function will have the same
+/// signature as `levenshtein`.
+/// 
+/// # Arguments
+/// 
+/// * `penalties`: the set of penalties to use
+pub fn levenshtein_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> U {
+    move |x: &str, y: &str| {
+        U::from(if x.is_empty() {
+            // handle special case of 0 length
+            y.len()
+        } else if y.is_empty() {
+            // handle special case of 0 length
+            x.len()
+        } else if x.len() < y.len() {
+            // require tat a is no shorter than b
+            _levenshtein(y, x, penalties)
+        } else {
+            _levenshtein(x, y, penalties)
+        })
+    }
+}
+
 /// Computes the Levenshtein distance between two strings.
 ///
 /// The Levenshtein distance is defined as the minimum number of edits
@@ -28,25 +88,25 @@ pub use needleman_wunsch::nw_distance;
 ///
 /// # Arguments
 ///
-/// * `a` - The first string.
-/// * `b` - The second string.
+/// * `x`: The first string.
+/// * `y`: The second string.
 ///
 /// # Examples
 ///
 /// ```
 /// use distances::strings::levenshtein;
 ///
-/// let a = "NAJIBEATSPEPPERS";
-/// let b = "NAJIBPEPPERSEATS";
+/// let x = "NAJIBEATSPEPPERS";
+/// let y = "NAJIBPEPPERSEATS";
 ///
-/// let distance: u16 = levenshtein(a, b);
+/// let distance: u16 = levenshtein(x, y);
 ///
 /// assert_eq!(distance, 8);
 ///
-/// let a = "TOMEATSWHATFOODEATS";
-/// let b = "FOODEATSWHATTOMEATS";
+/// let x = "TOMEATSWHATFOODEATS";
+/// let y = "FOODEATSWHATTOMEATS";
 ///
-/// let distance: u16 = levenshtein(a, b);
+/// let distance: u16 = levenshtein(x, y);
 ///
 /// assert_eq!(distance, 6);
 /// ```
@@ -55,32 +115,37 @@ pub use needleman_wunsch::nw_distance;
 ///
 /// * [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance)
 #[must_use]
-pub fn levenshtein<U: UInt>(a: &str, b: &str) -> U {
-    U::from(if a.is_empty() {
+pub fn levenshtein<U: UInt>(x: &str, y: &str) -> U {
+    U::from(if x.is_empty() {
         // handle special case of 0 length
-        b.len()
-    } else if b.is_empty() {
+        y.len()
+    } else if y.is_empty() {
         // handle special case of 0 length
-        a.len()
-    } else if a.len() < b.len() {
-        // require that a is no shorter than b
-        _levenshtein(b, a)
+        x.len()
+    } else if x.len() < y.len() {
+        // require tat a is no shorter than b
+        _levenshtein(y, x, Penalties::<U>::default())
     } else {
-        _levenshtein(a, b)
+        _levenshtein(x, y, Penalties::<U>::default())
     })
 }
 
 /// Helper for Levenshtein distance.
-fn _levenshtein(a: &str, b: &str) -> usize {
+#[allow(unused_variables)]
+fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> usize {
+    // TODO(Noah): Please use the penalties struct. Modify the members if you
+    // need to. Keep in mind that this struct is also used for Needleman-
+    // Wunsch and will be used for the other distance metrics we implement.
+    
     // initialize DP table for string b
-    let mut cur: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = (0..=y.len()).collect::<Vec<_>>();
 
     // calculate edit distance
-    for (i, ca) in a.chars().enumerate() {
+    for (i, c_x) in x.chars().enumerate() {
         // get first column for this row
         let mut pre = cur[0];
         cur[0] = i + 1;
-        for (j, cb) in b.chars().enumerate() {
+        for (j, c_y) in y.chars().enumerate() {
             let tmp = cur[j + 1];
             cur[j + 1] = core::cmp::min(
                 // deletion
@@ -89,13 +154,13 @@ fn _levenshtein(a: &str, b: &str) -> usize {
                     // insertion
                     cur[j] + 1,
                     // match or substitution
-                    pre + usize::from(ca != cb),
+                    pre + usize::from(c_x != c_y),
                 ),
             );
             pre = tmp;
         }
     }
-    cur[b.len()]
+    cur[y.len()]
 }
 
 /// Computes the Hamming distance between two strings.
@@ -110,8 +175,8 @@ fn _levenshtein(a: &str, b: &str) -> usize {
 ///
 /// # Arguments
 ///
-/// * `x` - The first string.
-/// * `y` - The second string.
+/// * `x`: The first string.
+/// * `y`: The second string.
 ///
 /// # Examples
 ///

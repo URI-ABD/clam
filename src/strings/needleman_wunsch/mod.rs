@@ -4,45 +4,10 @@
 
 mod helpers;
 
+use super::Penalties;
 use crate::number::UInt;
 
 use helpers::{compute_edits, compute_table, trace_back_iterative, trace_back_recursive, Edit};
-
-/// Penalties to use in the Needleman-Wunsch distance calculation.
-///
-/// Since we provide a distance implementation that is intended to be used as a
-/// metric that obeys the triangle inequality, the penalties should all be
-/// non-negative, thus the genericity over unsigned integers.
-#[derive(Clone, Copy, Debug)]
-pub struct Penalties<U: UInt> {
-    /// Penalty for a match.
-    pub match_: U,
-    /// Penalty for a mis-match.
-    pub mismatch: U,
-    /// Penalty for a gap.
-    pub gap: U,
-}
-
-impl<U: UInt> Default for Penalties<U> {
-    fn default() -> Self {
-        Self {
-            match_: U::zero(),
-            mismatch: U::one(),
-            gap: U::one(),
-        }
-    }
-}
-
-impl<U: UInt> Penalties<U> {
-    /// Create a set of penalties to use for the NW distance metric.
-    pub const fn new(match_: U, mismatch: U, gap: U) -> Self {
-        Self {
-            match_,
-            mismatch,
-            gap,
-        }
-    }
-}
 
 /// Use a custom set of penalties to create a function to that calculates the
 /// Needleman-Wunsch edit distance between two strings using the specified
