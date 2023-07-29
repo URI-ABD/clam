@@ -4,8 +4,8 @@ pub mod codec;
 pub mod knn;
 pub mod rnn;
 
-pub use knn::KnnAlgorithm;
-pub use rnn::RnnAlgorithm;
+pub use knn::_knn::KnnAlgorithm;
+pub use rnn::_rnn::RnnAlgorithm;
 
 use distances::Number;
 use rayon::prelude::*;
