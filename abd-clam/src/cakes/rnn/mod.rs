@@ -1,3 +1,6 @@
 //! Ranged-Nearest Neighbors (RNN) variants.
 
-pub mod _rnn;
+mod _rnn;
+
+#[allow(clippy::module_name_repetitions)]
+pub use _rnn::RnnAlgorithm;
