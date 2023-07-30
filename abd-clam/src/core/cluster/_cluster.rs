@@ -31,8 +31,12 @@ pub struct Cluster<T: Send + Sync + Copy, U: Number> {
     pub cardinality: usize,
     /// The geometric mean of the `Cluster`.
     pub center: T,
+    /// The index of the `center` instance in the dataset.
+    pub arg_center: usize,
     /// The instance furthest from the `center` of the `Cluster`.
     pub radial: T,
+    /// The index of the `radial` instance in the dataset.
+    pub arg_radial: usize,
     /// The distance from the `center` to the `radial` instance.
     pub radius: U,
     /// The local fractal dimension of the `Cluster`.
@@ -142,12 +146,13 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         };
 
         let Some(arg_center) = data.median(&arg_samples) else { unreachable!("The cluster should have at least one instance.") };
+
         let center = data.get(arg_center);
 
         let center_distances = data.one_to_many(arg_center, indices);
-        let Some((arg_radius, radius)) = utils::arg_max(&center_distances) else { unreachable!("The cluster should have at least one instance.") };
-        let arg_radius = indices[arg_radius];
-        let radial = data.get(arg_radius);
+        let Some((arg_radial, radius)) = utils::arg_max(&center_distances) else { unreachable!("The cluster should have at least one instance.") };
+        let arg_radial = indices[arg_radial];
+        let radial = data.get(arg_radial);
 
         let lfd = utils::compute_lfd(radius, &center_distances);
 
@@ -157,7 +162,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             offset,
             cardinality,
             center,
+            arg_center,
             radial,
+            arg_radial,
             radius,
             lfd,
             children: None,
@@ -224,6 +231,16 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
                 polar_distance,
             });
         }
+
+        // reset the indices to center and radial indices for data reordering
+        let (arg_center, _) = utils::pos_val(&indices, self.arg_center)
+            .unwrap_or_else(|| unreachable!("We know the center is in the indices."));
+        self.arg_center = self.offset + arg_center;
+
+        let (arg_radial, _) = utils::pos_val(&indices, self.arg_radial)
+            .unwrap_or_else(|| unreachable!("We know the radial is in the indices."));
+        self.arg_radial = self.offset + arg_radial;
+
         (self, indices)
     }
 
@@ -611,6 +628,33 @@ mod tests {
             assert_eq!(child.cardinality, 2);
             assert_eq!(child.subtree().len(), 3);
         }
+
+        let subtree = root.subtree();
+        assert_eq!(
+            subtree.len(),
+            7,
+            "The subtree of the root cluster should have 7 elements but had {}.",
+            subtree.len()
+        );
+        for c in root.subtree() {
+            let center_d = data.query_to_one(c.center, c.arg_center);
+            assert!(
+                center_d <= f32::EPSILON,
+                "Center must be the closest instance to itself. {c} had center {:?} and argcenter {} in data {:?}",
+                c.center,
+                c.arg_center,
+                data.data
+            );
+
+            let radial_d = data.query_to_one(c.radial, c.arg_radial);
+            assert!(
+                radial_d <= f32::EPSILON,
+                "Radial must be the closest instance to itself. {c} had radial {:?} but argradial {} in data {:?}",
+                c.radial,
+                c.arg_radial,
+                data.data
+            );
+        }
     }
 
     #[test]
@@ -667,6 +711,18 @@ mod tests {
             assert!(
                 (c.radius - radius).abs() < EPSILON,
                 "Radius must be equal to the distance to the farthest instance."
+            );
+
+            let center_d = data.query_to_one(c.center, c.arg_center);
+            assert!(
+                center_d <= f32::EPSILON,
+                "Center must be the closest instance to itself. {c} had {center_d}"
+            );
+
+            let radial_d = data.query_to_one(c.radial, c.arg_radial);
+            assert!(
+                radial_d <= f32::EPSILON,
+                "Radial must be the closest instance to itself. {c} had {radial_d}"
             );
         }
     }

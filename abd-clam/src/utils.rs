@@ -106,3 +106,8 @@ pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
     let alpha = 2. / 11.;
     alpha.mul_add(ratio, (1. - alpha) * parent_ema)
 }
+
+/// Return the position and value of the given value in the given slice of values.
+pub fn pos_val<T: Eq + Copy>(values: &[T], v: T) -> Option<(usize, T)> {
+    values.iter().copied().enumerate().find(|&(_, x)| x == v)
+}
