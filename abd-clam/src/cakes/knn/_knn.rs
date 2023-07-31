@@ -221,7 +221,7 @@ mod tests {
 
         #[allow(clippy::single_element_loop)]
         for k in [10] {
-            let mut jthresholds_nn = KnnAlgorithm::search(KnnAlgorithm::Thresholds, f32_query, k, f32_cakes.tree());
+            let mut thresholds_nn = KnnAlgorithm::search(KnnAlgorithm::Thresholds, f32_query, k, f32_cakes.tree());
             let linear_nn = KnnAlgorithm::search(KnnAlgorithm::Linear, f32_query, k, f32_cakes.tree());
 
             thresholds_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
