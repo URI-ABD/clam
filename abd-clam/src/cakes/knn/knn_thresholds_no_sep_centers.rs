@@ -149,8 +149,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
 
             self.is_refined = true;
         } else {
-            // self.grains = insiders.into_iter().chain(straddlers.into_iter()).collect();
-            self.grains = straddlers.into_iter().collect();
+            self.grains = insiders.into_iter().chain(straddlers.into_iter()).collect();
             let (leaves, non_leaves): (Vec<_>, Vec<_>) = self.grains.drain(..).partition(|g| g.c.is_leaf());
 
             let children = non_leaves
@@ -162,7 +161,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
                 .map(|c| (c, c.distance_to_instance(self.tree.data(), self.query)))
                 .map(|(c, d)| Grain::new(c, d, c.cardinality));
 
-            self.grains = leaves.into_iter().chain(children).chain(insiders).collect();
+            self.grains = leaves.into_iter().chain(children).collect();
         }
     }
     /// Returns the indices and distances to the query of the k nearest neighbors of the query.
