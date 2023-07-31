@@ -1,3 +1,5 @@
+//! Knn thresholds helper functions (for thresholds approach with no separate centers).
+
 use std::cmp::Ordering;
 
 use distances::Number;
@@ -6,14 +8,22 @@ use crate::core::cluster::{Cluster, Tree};
 use crate::core::dataset::Dataset;
 
 #[allow(dead_code)]
+
+/// Structure for facilitating Knn search with thresholds approach. 
 pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+    /// The cluster tree to search.
     tree: &'a Tree<T, U, D>,
+    /// The query point.
     query: T,
+    /// The number of neighbors to find.
     k: usize,
+    /// A vector of `Grains` which could still contain one of the k-nearest 
+    /// neighbors. A `Grain` is a cluster, a distance, and a multiplicty. 
     grains: Vec<Grain<'a, T, U>>,
+    /// Whether hits contains the k-nearest neighbors.
     is_refined: bool,
+    /// A priority queue of points which could be a nearest neighbor.
     hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
-    layer: Vec<&'a Cluster<T, U>>,
 }
 
 impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
@@ -25,7 +35,6 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
             grains: Vec::new(),
             is_refined: false,
             hits: Default::default(),
-            layer: vec![tree.root()],
         }
     }
 

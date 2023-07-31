@@ -7,8 +7,8 @@
 
 use core::{cmp::Ordering, f64::EPSILON};
 
-use distances::Number;
 use crate::cakes::knn::knn_thresholds_no_sep_centers;
+use distances::Number;
 
 use crate::{utils, Dataset, RnnAlgorithm, Tree};
 
@@ -36,13 +36,13 @@ pub enum KnnAlgorithm {
     /// are broken arbitrarily.
     RepeatedRnn,
     /// Use a thresholds approach to search. For each iteration of the search,
-    /// a threshold is calculated based on the distance from the query to the closest cluster 
-    /// such that no cluster further away than the threshold can contain one 
-    /// of the `k` nearest neighbors. 
-    /// 
-    /// This approach does not treat the center of a cluster separately from the rest 
+    /// a threshold is calculated based on the distance from the query to the closest cluster
+    /// such that no cluster further away than the threshold can contain one
+    /// of the `k` nearest neighbors.
+    ///
+    /// This approach does not treat the center of a cluster separately from the rest
     /// of the points in the cluster
-    Thresholds, 
+    Thresholds,
 }
 
 impl Default for KnnAlgorithm {
@@ -73,12 +73,11 @@ impl KnnAlgorithm {
         match self {
             Self::Linear => Self::linear_search(tree.data(), query, k, tree.indices()),
             Self::RepeatedRnn => Self::knn_by_rnn(tree, query, k),
-            Self::Thresholds => Self::knn_by_thresholds_no_separate_centers(tree, query, k)
+            Self::Thresholds => Self::knn_by_thresholds_no_separate_centers(tree, query, k),
         }
     }
 
     /// Linear search for the nearest neighbors of a query.
-    ///
     /// # Arguments
     ///
     /// * `data` - The dataset to search.
@@ -178,12 +177,17 @@ impl KnnAlgorithm {
     }
 
     /// K-Nearest Neighbor search using a thresholds approach with no separate centers.
-    
-    pub(crate) fn knn_by_thresholds_no_separate_centers<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)> 
+
+    pub(crate) fn knn_by_thresholds_no_separate_centers<T, U, D>(
+        tree: &Tree<T, U, D>,
+        query: T,
+        k: usize,
+    ) -> Vec<(usize, U)>
     where
         T: Send + Sync + Copy,
         U: Number,
-        D: Dataset<T, U>,{
+        D: Dataset<T, U>,
+    {
         let mut sieve = knn_thresholds_no_sep_centers::KnnSieve::new(tree, query, k);
         sieve.initialize_grains();
         while !sieve.is_refined() {
@@ -193,34 +197,36 @@ impl KnnAlgorithm {
     }
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 
-// mod tests {
-//     use super::*;
-//     use ::data::random_data;
-//     use distances::Number;
-//     use ::partition::PartitionCriteria;
-//     use ::trees::CAKES;
-//     use ::utils::VecVec;
-// #[test]
-// fn test_knn_by_thresholds_no_separate_centers() {
-//     let f32_data = random_data::random_f32(5000, 30, 0., 10., 42);
-//     let f32_data = f32_data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
-//     let f32_data = VecVec::new(f32_data, euclidean::<_, f32>, "f32_euclidean".to_string(), false);
-//     let f32_query = &random_data::random_f32(1, 30, 0., 1., 44)[0];
+mod tests {
 
-//     let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-//     let f32_cakes = CAKES::new(f32_data, Some(42)).build(criteria);
+    use crate::cakes::Cakes;
+    use crate::core::cluster::PartitionCriteria;
+    use crate::core::dataset::VecDataset;
+    use crate::KnnAlgorithm;
+    use distances::vectors::euclidean;
+    use symagen::random_data;
 
-//     #[allow(clippy::single_element_loop)]
-//     for k in [10] {
-//         let mut f32_thresholds_nn = f32_cakes.knn_by_thresholds_no_separate_centers(&f32_query, k);
-//         let f32_actual_nn = f32_cakes.linear_search_knn(&f32_query, k, None);
+    #[test]
+    fn test_knn_by_thresholds_no_separate_centers() {
+        let f32_data = random_data::random_f32(5000, 30, 0., 10., 42);
+        let f32_data = f32_data.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
+        let f32_data = VecDataset::new("f32_euclidean".to_string(), f32_data, euclidean::<_, f32>, false);
+        let f32_query = random_data::random_f32(1, 30, 0., 1., 44);
+        let f32_query = f32_query[0].as_slice();
 
-//         f32_thresholds_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+        let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
+        let f32_cakes = Cakes::new(f32_data, Some(42), criteria);
 
-//         assert_eq!(f32_actual_nn, f32_thresholds_nn);
-//     }
-// }
+        #[allow(clippy::single_element_loop)]
+        for k in [10] {
+            let mut jthresholds_nn = KnnAlgorithm::search(KnnAlgorithm::Thresholds, f32_query, k, f32_cakes.tree());
+            let linear_nn = KnnAlgorithm::search(KnnAlgorithm::Linear, f32_query, k, f32_cakes.tree());
 
-// }
+            thresholds_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+
+            assert_eq!(linear_nn, thresholds_nn);
+        }
+    }
+}
