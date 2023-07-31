@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 
 use distances::Number;
 
-use crate::cluster::{Cluster, Tree};
-use crate::dataset::Dataset;
+use crate::core::cluster::{Cluster, Tree};
+use crate::core::dataset::Dataset;
 
 #[allow(dead_code)]
 pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
@@ -80,7 +80,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
         // I want arg center again.
         // Right now instead of adding just the center to hits it adds everything in the cluster
         small_insiders.into_iter().for_each(|g| {
-            let new_hits = self.tree.indices_of(g.c).iter().map(|&i| {
+            let new_hits = g.c.indices(self.tree.data()).iter().map(|&i| {
                 (
                     i,
                     OrdNumber {
@@ -101,7 +101,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
         // If straddlers is not empty nor all leaves, partition non-leaves into children
         if straddlers.is_empty() || straddlers.iter().all(|g| g.c.is_leaf()) {
             insiders.drain(..).chain(straddlers.drain(..)).for_each(|g| {
-                let new_hits = self.tree.indices_of(g.c).iter().map(|&i| {
+                let new_hits = g.c.indices(self.tree.data()).iter().map(|&i| {
                     (
                         i,
                         OrdNumber {
