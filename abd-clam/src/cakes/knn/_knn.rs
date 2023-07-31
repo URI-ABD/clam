@@ -8,6 +8,7 @@
 use core::{cmp::Ordering, f64::EPSILON};
 
 use distances::Number;
+use crate::cakes::knn::knn_thresholds_no_sep_centers;
 
 use crate::{utils, Dataset, RnnAlgorithm, Tree};
 
@@ -34,6 +35,14 @@ pub enum KnnAlgorithm {
     /// are sorted by distance and the first `k` neighbors are returned. Ties
     /// are broken arbitrarily.
     RepeatedRnn,
+    /// Use a thresholds approach to search. For each iteration of the search,
+    /// a threshold is calculated based on the distance from the query to the closest cluster 
+    /// such that no cluster further away than the threshold can contain one 
+    /// of the `k` nearest neighbors. 
+    /// 
+    /// This approach does not treat the center of a cluster separately from the rest 
+    /// of the points in the cluster
+    Thresholds, 
 }
 
 impl Default for KnnAlgorithm {
@@ -64,6 +73,7 @@ impl KnnAlgorithm {
         match self {
             Self::Linear => Self::linear_search(tree.data(), query, k, tree.indices()),
             Self::RepeatedRnn => Self::knn_by_rnn(tree, query, k),
+            Self::Thresholds => Self::knn_by_thresholds_no_separate_centers(tree, query, k)
         }
     }
 
@@ -165,5 +175,20 @@ impl KnnAlgorithm {
 
         hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
         hits[..k].to_vec()
+    }
+
+    /// K-Nearest Neighbor search using a thresholds approach with no separate centers.
+    
+    pub(crate) fn knn_by_thresholds_no_separate_centers<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)> 
+    where
+        T: Send + Sync + Copy,
+        U: Number,
+        D: Dataset<T, U>,{
+        let mut sieve = knn_thresholds_no_sep_centers::KnnSieve::new(tree, query, k);
+        sieve.initialize_grains();
+        while !sieve.is_refined() {
+            sieve.refine_step();
+        }
+        sieve.extract()
     }
 }
