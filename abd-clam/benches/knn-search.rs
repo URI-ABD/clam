@@ -6,7 +6,7 @@ use abd_clam::{Cakes, KnnAlgorithm, PartitionCriteria, VecDataset, COMMON_METRIC
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
-    let (cardinality, dimensionality) = (10_000, 100);
+    let (cardinality, dimensionality) = (10_000, 10);
     let (min_val, max_val) = (-1., 1.);
     let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
     let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
@@ -35,13 +35,17 @@ fn cakes(c: &mut Criterion) {
             group.bench_with_input(id, &k, |b, _| {
                 b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, KnnAlgorithm::RepeatedRnn));
             });
-        }
 
-        group.sample_size(10);
-        let id = BenchmarkId::new("Linear", ks[0]);
-        group.bench_with_input(id, &ks[0], |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, ks[0], KnnAlgorithm::Linear));
-        });
+            let id = BenchmarkId::new("Linear", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, KnnAlgorithm::Linear));
+            });
+
+            let id = BenchmarkId::new("Thresholds", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, KnnAlgorithm::Thresholds));
+            });
+        }
 
         group.finish();
     }
