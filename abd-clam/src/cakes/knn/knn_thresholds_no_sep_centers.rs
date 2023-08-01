@@ -63,7 +63,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
         self.grains = layer
             .into_iter()
             .zip(distances.iter())
-            .map(|(c, &d)| Grain::new(c, d, c.cardinality))
+            .map(|(c, &d)| Grain::new(c, d + c.radius, c.cardinality))
             .collect::<Vec<_>>();
     }
 
@@ -80,7 +80,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
         // Threshold is the distance of the furthest point in the grain.
         let i = Grain::partition_kth(&mut self.grains, self.k);
         let ith_grain = &self.grains[i];
-        let threshold = ith_grain.d + ith_grain.c.radius;
+        let threshold = ith_grain.d;
 
         // Filters hits by being outside the threshold.
         // Ties are added to hits together; we will never remove too many instances here
@@ -136,21 +136,15 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
             });
 
             if self.hits.len() > self.k {
-                let mut potential_ties = vec![self.hits.pop_max().unwrap_or_else(|| unreachable!("Since we have k > 0 and the line above ensures hits.len() > k, hits is non-empty. Its cardinality is always finite, so it must have a maximum element."))];
-                while self.hits.len() >= self.k {
-                    let item = self.hits.pop_max().unwrap_or_else(|| unreachable!("Since we have k > 0 and the line above ensures hits.len() >= k, hits is non-empty. Its cardinality is always finite, so it must have a maximum element."));
-                    if item.1.number <= potential_ties.last().unwrap_or_else(|| unreachable!("Potential ties starts non-empty (as has already been verified, and an element is added to it for each iteration of the loop, so it will always have at least one element.")).1.number {
-                        potential_ties.clear();
-                    }
-                    potential_ties.push(item);
-                }
-                self.hits.extend(potential_ties.into_iter());
+                self.trim_hits();
             }
 
             self.is_refined = true;
         } else {
-            self.grains = insiders.into_iter().chain(straddlers.into_iter()).collect();
-            let (leaves, non_leaves): (Vec<_>, Vec<_>) = self.grains.drain(..).partition(|g| g.c.is_leaf());
+            let (leaves, non_leaves): (Vec<_>, Vec<_>) = insiders
+                .into_iter()
+                .chain(straddlers.into_iter())
+                .partition(|g| g.c.is_leaf());
 
             let children = non_leaves
                 .into_iter()
@@ -159,11 +153,25 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
                         .unwrap_or_else(|| unreachable!("This is only called on non-leaves."))
                 })
                 .map(|c| (c, c.distance_to_instance(self.tree.data(), self.query)))
-                .map(|(c, d)| Grain::new(c, d, c.cardinality));
+                .map(|(c, d)| Grain::new(c, d + c.radius, c.cardinality));
 
             self.grains = leaves.into_iter().chain(children).collect();
         }
     }
+
+    /// Trims hits to contain only the k-nearest neighbors, accounting for potential ties.
+    fn trim_hits(&mut self) {
+        let mut potential_ties = vec![self.hits.pop_max().unwrap_or_else(|| unreachable!("Since we have k > 0 and the line above ensures hits.len() > k, hits is non-empty. Its cardinality is always finite, so it must have a maximum element."))];
+        while self.hits.len() >= self.k {
+            let item = self.hits.pop_max().unwrap_or_else(|| unreachable!("Since we have k > 0 and the line above ensures hits.len() >= k, hits is non-empty. Its cardinality is always finite, so it must have a maximum element."));
+            if item.1.number < potential_ties.last().unwrap_or_else(|| unreachable!("Potential ties starts non-empty (as has already been verified, and an element is added to it for each iteration of the loop, so it will always have at least one element.")).1.number {
+                potential_ties.clear();
+            }
+            potential_ties.push(item);
+        }
+        self.hits.extend(potential_ties.into_iter());
+    }
+
     /// Returns the indices and distances to the query of the k nearest neighbors of the query.
     pub fn extract(&self) -> Vec<(usize, U)> {
         self.hits.iter().map(|(i, d)| (*i, d.number)).collect()
@@ -194,17 +202,17 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// A Grain is "inside" the threshold if the furthest, worst-case possible point is at most as far as
     /// threshold distance from the query.
     fn is_inside(&self, threshold: U) -> bool {
-        let d_max = self.d + self.c.radius;
-        d_max < threshold
+        self.d < threshold
     }
 
     /// A Grain is "outside" the threshold if the closest, best-case possible point is further than
     /// the threshold distance to the query.
     fn is_outside(&self, threshold: U) -> bool {
-        let d_min = if self.d < self.c.radius {
+        let radius = self.c.radius;
+        let d_min = if self.d < radius {
             U::zero()
         } else {
-            self.d - self.c.radius
+            self.d - radius - radius
         };
         d_min > threshold
     }
