@@ -22,8 +22,8 @@ use super::utils::abs_diff_iter;
 /// ```
 /// use distances::vectors::euclidean;
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = euclidean(&x, &y);
 ///
@@ -49,8 +49,8 @@ pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// ```
 /// use distances::vectors::euclidean_sq;
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = euclidean_sq(&x, &y);
 ///
@@ -76,8 +76,8 @@ pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
 /// ```
 /// use distances::vectors::manhattan;
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = manhattan(&x, &y);
 ///
@@ -102,8 +102,8 @@ pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
 /// ```
 /// use distances::vectors::l3_norm;
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = l3_norm(&x, &y);
 ///
@@ -132,8 +132,8 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// ```
 /// use distances::vectors::l4_norm;
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = l4_norm(&x, &y);
 ///
@@ -164,8 +164,8 @@ pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// ```
 /// use distances::vectors::chebyshev;
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![6., 5., 4.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![6.0, 5.0, 4.0];
 ///
 /// let distance: f64 = chebyshev(&x, &y);
 ///
@@ -194,8 +194,8 @@ pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
 ///
 /// let metric = minkowski_p(3);
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = metric(&x, &y);
 /// assert!((distance - 81.0).abs() <= 1e-12);
@@ -221,8 +221,8 @@ pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
 ///
 /// let metric = minkowski(3);
 ///
-/// let x: Vec<f64> = vec![1., 2., 3.];
-/// let y: Vec<f64> = vec![4., 5., 6.];
+/// let x: Vec<f64> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f64> = vec![4.0, 5.0, 6.0];
 ///
 /// let distance: f64 = metric(&x, &y);
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= 1e-12);
