@@ -41,7 +41,7 @@ pub enum KnnAlgorithm {
     /// of the `k` nearest neighbors.
     ///
     /// This approach does not treat the center of a cluster separately from the rest
-    /// of the points in the cluster
+    /// of the points in the cluster. This algorithm is not stable.
     Thresholds,
 }
 
