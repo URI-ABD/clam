@@ -32,7 +32,7 @@ pub use crate::{
 };
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.20.4-dev0";
+pub const VERSION: &str = "0.21.0-dev0";
 
 /// Common distance functions and their names for slices of `f32`.
 #[allow(clippy::type_complexity)]

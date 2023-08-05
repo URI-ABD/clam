@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.20.4-dev0"
+version = "0.21.0-dev0"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
