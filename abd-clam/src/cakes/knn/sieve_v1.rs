@@ -1,16 +1,41 @@
 //! Helper functions for Knn thresholds approach with no separate grains for
 //! cluster centers.
 
+use core::{cmp::Ordering, marker::PhantomData};
+
 use distances::Number;
 use priority_queue::DoublePriorityQueue;
-use std::marker::PhantomData;
 
-use std::cmp::Ordering;
+use crate::{Cluster, Dataset, Tree};
 
-use crate::core::cluster::{Cluster, Tree};
-use crate::core::dataset::Dataset;
+/// A type-alias for the priority queue of knn-hits.
+type Hits<U> = DoublePriorityQueue<usize, OrdNumber<U>>;
 
-#[allow(dead_code)]
+/// K-Nearest Neighbor search using a thresholds approach with no separate centers.
+///
+/// # Arguments
+///
+/// * `tree` - The tree to search.
+/// * `query` - The query to search around.
+/// * `k` - The number of neighbors to search for.
+///
+/// # Returns
+///
+/// A vector of 2-tuples, where the first element is the index of the instance
+/// and the second element is the distance from the query to the instance.
+pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+where
+    T: Send + Sync + Copy,
+    U: Number,
+    D: Dataset<T, U>,
+{
+    let mut sieve = SieveV1::new(tree, query, k);
+    sieve.initialize_grains();
+    while !sieve.is_refined() {
+        sieve.refine_step();
+    }
+    sieve.extract()
+}
 
 /// A `KnnSieve` is a data structure that is used to find the `k` nearest neighbors of a `query` point in a dataset.
 ///
@@ -22,7 +47,7 @@ use crate::core::dataset::Dataset;
 /// which could still contain one of the `k` nearest neighbors. `hits` is a priority queue of points which could
 /// be one of the `k` nearest neighbors. `is refined` is a boolean which is true if hits contains exactly `k` points
 /// and there are no more `Grain`s which can be partitioned.
-pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+pub struct SieveV1<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The cluster tree to search.
     tree: &'a Tree<T, U, D>,
     /// The query point.
@@ -35,10 +60,10 @@ pub struct KnnSieve<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// Whether hits contains the k-nearest neighbors.
     is_refined: bool,
     /// A priority queue of points which could be a nearest neighbor.
-    hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
+    hits: Hits<U>,
 }
 
-impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, D> {
+impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV1<'a, T, U, D> {
     /// Creates a new instance of a `KnnSieve`.
     pub fn new(tree: &'a Tree<T, U, D>, query: T, k: usize) -> Self {
         Self {
@@ -47,29 +72,21 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
             k,
             grains: Vec::new(),
             is_refined: false,
-            hits: DoublePriorityQueue::default(),
+            hits: Hits::default(),
         }
     }
 
     /// One-time computation of `grains.`
     pub fn initialize_grains(&mut self) {
-        let layer = vec![self.tree.root()];
-
-        let distances = layer
-            .iter()
-            .map(|c| c.distance_to_instance(self.tree.data(), self.query))
-            .collect::<Vec<_>>();
-
-        self.grains = layer
-            .into_iter()
-            .zip(distances.iter())
-            .map(|(c, &d)| Grain::new(c, d + c.radius, c.cardinality))
-            .collect::<Vec<_>>();
+        let root = self.tree.root();
+        let distance = root.distance_to_instance(self.tree.data(), self.query);
+        let grain = Grain::new(root, distance + root.radius, root.cardinality);
+        self.grains = vec![grain];
     }
 
     /// Returns whether search is complete, i.e., whether hits
     /// contains the k-nearest neighbors.
-    pub const fn is_refined(&self) -> bool {
+    const fn is_refined(&self) -> bool {
         self.is_refined
     }
 
@@ -85,8 +102,18 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
         // Filters hits by being outside the threshold.
         // Ties are added to hits together; we will never remove too many instances here
         // because our choice of threshold guarantees enough instances.
-        while !self.hits.is_empty() && self.hits.peek_max().unwrap_or_else(|| unreachable!("The first clause in this conjunction ensures that hits is not empty. Its cardinality is always finite, so it must have a maximum element.")).1.number > threshold {
-            self.hits.pop_max().unwrap_or_else(|| unreachable!("The first clause in this conjunction ensures that hits is not empty. Its cardinality is always finite, so it must have a maximum element."));
+        while !self.hits.is_empty()
+            && self
+                .hits
+                .peek_max()
+                .unwrap_or_else(|| unreachable!("`hits` is non-empty"))
+                .1
+                .number
+                > threshold
+        {
+            self.hits
+                .pop_max()
+                .unwrap_or_else(|| unreachable!("`hits` is non-empty"));
         }
 
         // Partition into insiders and straddlers
@@ -160,30 +187,25 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> KnnSieve<'a, T, U, 
     }
 
     /// Trims hits to contain only the k-nearest neighbors, accounting for potential ties.
-    fn trim_hits(&mut self) {
-        let mut potential_ties = vec![self.hits.pop_max().unwrap_or_else(|| unreachable!("Since we have k > 0 and the line above ensures hits.len() > k, hits is non-empty. Its cardinality is always finite, so it must have a maximum element."))];
-        while self.hits.len() >= self.k {
-            let item = self.hits.pop_max().unwrap_or_else(|| unreachable!("Since we have k > 0 and the line above ensures hits.len() >= k, hits is non-empty. Its cardinality is always finite, so it must have a maximum element."));
-            if item.1.number < potential_ties.last().unwrap_or_else(|| unreachable!("Potential ties starts non-empty (as has already been verified, and an element is added to it for each iteration of the loop, so it will always have at least one element.")).1.number {
-                potential_ties.clear();
-            }
-            potential_ties.push(item);
+    pub fn trim_hits(&mut self) {
+        while self.hits.len() > self.k {
+            self.hits
+                .pop_max()
+                .unwrap_or_else(|| unreachable!("`hits` is non-empty and has at least k elements."));
         }
-        self.hits.extend(potential_ties.into_iter());
     }
 
     /// Returns the indices and distances to the query of the k nearest neighbors of the query.
     pub fn extract(&self) -> Vec<(usize, U)> {
-        self.hits.iter().map(|(i, d)| (*i, d.number)).collect()
+        self.hits.iter().map(|(&i, &OrdNumber { number: d })| (i, d)).collect()
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
 /// A Grain is a structure which stores a cluster, a distance, and a multiplicity.
+#[derive(Debug, Clone)]
 struct Grain<'a, T: Send + Sync + Copy, U: Number> {
     /// Just something we have to do.
-    t: std::marker::PhantomData<T>,
+    t_: std::marker::PhantomData<T>,
     /// The cluster.
     c: &'a Cluster<T, U>,
     /// The distance of the cluster's center to the query.
@@ -194,20 +216,25 @@ struct Grain<'a, T: Send + Sync + Copy, U: Number> {
 
 impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// Creates a new instance of a Grain.
-    fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
+    pub fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
         let t = PhantomData::default();
-        Self { t, c, d, multiplicity }
+        Self {
+            t_: t,
+            c,
+            d,
+            multiplicity,
+        }
     }
 
     /// A Grain is "inside" the threshold if the furthest, worst-case possible point is at most as far as
     /// threshold distance from the query.
-    fn is_inside(&self, threshold: U) -> bool {
+    pub fn is_inside(&self, threshold: U) -> bool {
         self.d < threshold
     }
 
     /// A Grain is "outside" the threshold if the closest, best-case possible point is further than
     /// the threshold distance to the query.
-    fn is_outside(&self, threshold: U) -> bool {
+    pub fn is_outside(&self, threshold: U) -> bool {
         let radius = self.c.radius;
         let d_min = if self.d < radius {
             U::zero()
@@ -218,7 +245,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 
     /// Wrapper function for `_partition_kth`.
-    fn partition_kth(grains: &mut [Self], k: usize) -> usize {
+    pub fn partition_kth(grains: &mut [Self], k: usize) -> usize {
         let i = Self::_partition_kth(grains, k, 0, grains.len() - 1);
         let t = grains[i].d;
 
@@ -233,9 +260,10 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         b
     }
 
-    /// Finds the smallest index i such that all grains with distance closer to or equal to the distance of the grain at index i
-    /// have a multiplicity greater than or equal to k.
-    fn _partition_kth(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
+    /// Finds the smallest index i such that all grains with distance closer to or
+    /// equal to the distance of the grain at index i have a multiplicity greater
+    /// than or equal to k.
+    pub fn _partition_kth(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
         if l >= r {
             std::cmp::min(l, r)
         } else {
@@ -264,9 +292,10 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         }
     }
 
-    /// Changes pivot point and swaps elements around so that all
-    /// elements to left of pivot are less than or equal to pivot and all elements to right of pivot are greater than pivot.
-    fn _partition(grains: &mut [Self], l: usize, r: usize) -> usize {
+    /// Changes pivot point and swaps elements around so that all elements to left
+    /// of pivot are less than or equal to pivot and all elements to right of pivot
+    /// are greater than pivot.
+    pub fn _partition(grains: &mut [Self], l: usize, r: usize) -> usize {
         let pivot = (l + r) / 2;
         grains.swap(pivot, r);
 
@@ -285,12 +314,11 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 }
 
-#[derive(Debug)]
-
 /// Field by which we rank elements in priority queue of hits.
+#[derive(Debug)]
 pub struct OrdNumber<U: Number> {
     /// The number we use to rank elements (distance to query).
-    pub number: U,
+    number: U,
 }
 
 impl<U: Number> PartialEq for OrdNumber<U> {
@@ -316,5 +344,39 @@ impl<U: Number> Ord for OrdNumber<U> {
         query will be represented by the same type, we can always compare them."
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use distances::vectors::euclidean;
+    use symagen::random_data;
+
+    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+
+    #[test]
+    fn sieve_v1() {
+        let (cardinality, dimensionality) = (1_000, 10);
+        let (min_val, max_val) = (-1.0, 1.0);
+        let seed = 42;
+
+        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
+        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+
+        let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
+        let query = query[0].as_slice();
+
+        let criteria = PartitionCriteria::default();
+        let model = Cakes::new(data, Some(seed), criteria);
+        let tree = model.tree();
+
+        for k in [100, 10, 1] {
+            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
+            let sieve_nn = super::search(tree, query, k);
+
+            assert_eq!(linear_nn, sieve_nn);
+        }
     }
 }

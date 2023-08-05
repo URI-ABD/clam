@@ -2,7 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_F32};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_F32};
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
@@ -18,13 +18,11 @@ fn cakes(c: &mut Criterion) {
 
     for &(metric_name, metric) in &COMMON_METRICS_F32[..1] {
         let mut group = c.benchmark_group(format!("rnn-{metric_name}"));
-
-        let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-        group.plot_config(plot_config);
-
-        group.sampling_mode(SamplingMode::Flat);
-
-        group.throughput(Throughput::Elements(num_queries as u64));
+        group
+            .sample_size(10)
+            .sampling_mode(SamplingMode::Flat)
+            .throughput(Throughput::Elements(num_queries as u64))
+            .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
         let dataset = VecDataset::new("rnn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
@@ -35,14 +33,13 @@ fn cakes(c: &mut Criterion) {
             radius = (n as f32) / if metric_name == "cosine" { 10_000. } else { 1_000. };
             let id = BenchmarkId::new("Clustered", radius);
             group.bench_with_input(id, &radius, |b, _| {
-                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered));
+                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered));
             });
         }
 
-        group.sample_size(10);
         let id = BenchmarkId::new("Linear", radius);
         group.bench_with_input(id, &radius, |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Linear));
+            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Linear));
         });
 
         group.finish();

@@ -2,7 +2,7 @@ use std::{fs::File, io::prelude::*, time::Instant};
 
 use num_format::{Buffer, CustomFormat, Locale, ToFormattedString};
 
-use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_F32};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_F32};
 
 pub mod utils;
 
@@ -74,7 +74,7 @@ fn search(seed: Option<u64>, data_name: &str) -> Vec<String> {
             let radius = cakes.radius() / factor as f32;
 
             let start = Instant::now();
-            let results = cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered);
+            let results = cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered);
             let duration = start.elapsed().as_secs_f32();
 
             let num_results = results.iter().map(Vec::len).collect::<Vec<_>>();
