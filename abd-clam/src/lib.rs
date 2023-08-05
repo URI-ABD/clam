@@ -24,7 +24,7 @@ pub(crate) mod utils;
 
 pub(crate) use crate::core::cluster::Cluster;
 pub use crate::{
-    cakes::{Cakes, KnnAlgorithm, RnnAlgorithm},
+    cakes::{knn, rnn, Cakes},
     core::{
         cluster::{PartitionCriteria, PartitionCriterion, Tree},
         dataset::{Dataset, VecDataset},

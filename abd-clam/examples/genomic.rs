@@ -3,7 +3,7 @@ use std::time::Instant;
 use distances::strings::levenshtein;
 use symagen::random_data;
 
-use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
 
 fn main() {
     let seed = 42;
@@ -23,7 +23,7 @@ fn main() {
     let queries = queries.iter().map(String::as_str).collect::<Vec<_>>();
     for radius in [10, 25, 50, 60] {
         let start = Instant::now();
-        let results = model.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered);
+        let results = model.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered);
         let duration = start.elapsed().as_secs_f32();
 
         let num_results = results.into_iter().map(|v| v.len()).sum::<usize>();

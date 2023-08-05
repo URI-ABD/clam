@@ -4,9 +4,6 @@ pub mod codec;
 pub mod knn;
 pub mod rnn;
 
-pub use knn::KnnAlgorithm;
-pub use rnn::RnnAlgorithm;
-
 use distances::Number;
 use rayon::prelude::*;
 
@@ -79,7 +76,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of vectors of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn batch_rnn_search(&self, queries: &[T], radius: U, algorithm: RnnAlgorithm) -> Vec<Vec<(usize, U)>> {
+    pub fn batch_rnn_search(&self, queries: &[T], radius: U, algorithm: rnn::Algorithm) -> Vec<Vec<(usize, U)>> {
         queries
             .par_iter()
             .map(|&query| self.rnn_search(query, radius, algorithm))
@@ -98,7 +95,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn rnn_search(&self, query: T, radius: U, algorithm: RnnAlgorithm) -> Vec<(usize, U)> {
+    pub fn rnn_search(&self, query: T, radius: U, algorithm: rnn::Algorithm) -> Vec<(usize, U)> {
         algorithm.search(query, radius, &self.tree)
     }
 
@@ -114,7 +111,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of vectors of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn batch_knn_search(&self, queries: &[T], k: usize, algorithm: KnnAlgorithm) -> Vec<Vec<(usize, U)>> {
+    pub fn batch_knn_search(&self, queries: &[T], k: usize, algorithm: knn::Algorithm) -> Vec<Vec<(usize, U)>> {
         queries
             .par_iter()
             .map(|&query| self.knn_search(query, k, algorithm))
@@ -133,8 +130,8 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn knn_search(&self, query: T, k: usize, algorithm: KnnAlgorithm) -> Vec<(usize, U)> {
-        algorithm.search(query, k, &self.tree)
+    pub fn knn_search(&self, query: T, k: usize, algorithm: knn::Algorithm) -> Vec<(usize, U)> {
+        algorithm.search(&self.tree, query, k)
     }
 }
 
@@ -160,7 +157,7 @@ mod tests {
 
         let query = vec![0., 1.];
         let (results, _): (Vec<_>, Vec<_>) = cakes
-            .rnn_search(&query, 1.5, RnnAlgorithm::Clustered)
+            .rnn_search(&query, 1.5, rnn::Algorithm::Clustered)
             .into_iter()
             .unzip();
         assert_eq!(results.len(), 2);
@@ -171,7 +168,7 @@ mod tests {
 
         let query = vec![1., 1.];
         let (results, _): (Vec<_>, Vec<_>) = cakes
-            .rnn_search(&query, 0., RnnAlgorithm::Clustered)
+            .rnn_search(&query, 0., rnn::Algorithm::Clustered)
             .into_iter()
             .unzip();
         assert_eq!(results.len(), 1);
@@ -197,7 +194,7 @@ mod tests {
 
             for (i, query) in queries.iter().enumerate() {
                 let linear_hits = {
-                    let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Linear);
+                    let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
                     hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                     hits
                 };
@@ -208,7 +205,7 @@ mod tests {
                 );
 
                 let ranged_hits = {
-                    let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Clustered);
+                    let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
                     hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                     hits
                 };
@@ -249,13 +246,13 @@ mod tests {
             for radius in [0.0, 0.05, 0.1, 0.25, 0.5] {
                 for (i, query) in queries.iter().enumerate() {
                     let linear_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Linear);
+                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
                         hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
 
                     let ranged_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Clustered);
+                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
                         hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
@@ -298,13 +295,13 @@ mod tests {
             for radius in [1, 5, 10, 25] {
                 for (i, query) in queries.iter().enumerate() {
                     let linear_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Linear);
+                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
                         hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };
 
                     let ranged_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, RnnAlgorithm::Clustered);
+                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
                         hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                         hits
                     };

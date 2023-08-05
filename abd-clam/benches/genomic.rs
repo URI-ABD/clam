@@ -2,7 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_STR};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_STR};
 
 fn genomic(c: &mut Criterion) {
     let seed = 42;
@@ -19,15 +19,12 @@ fn genomic(c: &mut Criterion) {
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
     let queries = queries.iter().map(String::as_str).collect::<Vec<_>>();
 
-    for &(metric_name, metric) in &COMMON_METRICS_STR[..1] {
+    for &(metric_name, metric) in &COMMON_METRICS_STR[..2] {
         let mut group = c.benchmark_group(format!("genomic-{metric_name}"));
-
-        let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Linear);
-        group.plot_config(plot_config);
-
-        group.sampling_mode(SamplingMode::Flat);
-
-        group.throughput(Throughput::Elements(num_queries as u64));
+        group
+            .sampling_mode(SamplingMode::Flat)
+            .throughput(Throughput::Elements(num_queries as u64))
+            .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
 
         println!("Building cakes for {metric_name} ...");
         let data_name = format!("{metric_name}-{cardinality}");
@@ -40,14 +37,14 @@ fn genomic(c: &mut Criterion) {
         for radius in radii {
             let id = BenchmarkId::new("Clustered", radius);
             group.bench_with_input(id, &radius, |b, &radius| {
-                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, RnnAlgorithm::Clustered));
+                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered));
             });
         }
 
         group.sample_size(10);
         let id = BenchmarkId::new("Linear", radii[0]);
         group.bench_with_input(id, &radii[0], |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radii[0], RnnAlgorithm::Linear));
+            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radii[0], rnn::Algorithm::Linear));
         });
 
         group.finish();

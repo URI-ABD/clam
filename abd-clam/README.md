@@ -17,7 +17,7 @@ Here is a simple example of how to use CLAM to perform nearest neighbors search:
 ```rust
 use symagen::random_data;
 
-use abd_clam::{Cakes, KnnAlgorithm, PartitionCriteria, RnnAlgorithm, VecDataset};
+use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
 
 /// Euclidean distance function.
 ///
@@ -71,11 +71,11 @@ let model = Cakes::new(data, Some(seed), criteria);
 // just use the model we just created.
 
 // We can now perform RNN search on the model.
-let rnn_results: Vec<(usize, f32)> = model.rnn_search(&query, radius, RnnAlgorithm::Clustered);
+let rnn_results: Vec<(usize, f32)> = model.rnn_search(&query, radius, rnn::Algorithm::Clustered);
 assert!(!rnn_results.is_empty());
 
 // We can also perform KNN search on the model.
-let knn_results: Vec<(usize, f32)> = model.knn_search(&query, k, KnnAlgorithm::RepeatedRnn);
+let knn_results: Vec<(usize, f32)> = model.knn_search(&query, k, knn::Algorithm::RepeatedRnn);
 assert!(knn_results.len() >= k);
 
 // Both results are a Vec of 2-tuples where the first element is the index of the point
