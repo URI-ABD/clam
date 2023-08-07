@@ -37,7 +37,7 @@ where
     sieve.extract()
 }
 
-/// A `KnnSieve` is a data structure that is used to find the `k` nearest neighbors of a `query` point in a dataset.
+///  `SieveV1` is a data structure that is used to find the `k` nearest neighbors of a `query` point in a dataset.
 ///
 /// The `KnnSieve` is initialized with a `tree`, a `query` point, and a `k` value. `tree` contains a
 /// hierarchical clustering of the dataset. The `query`  is the point for which we want to find the `k` nearest
@@ -47,6 +47,8 @@ where
 /// which could still contain one of the `k` nearest neighbors. `hits` is a priority queue of points which could
 /// be one of the `k` nearest neighbors. `is refined` is a boolean which is true if hits contains exactly `k` points
 /// and there are no more `Grain`s which can be partitioned.
+/// 
+/// Contrast this to `SieveV2` which treats the center of a cluster separately from the rest of the points in the cluster.
 pub struct SieveV1<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The cluster tree to search.
     tree: &'a Tree<T, U, D>,
@@ -64,7 +66,7 @@ pub struct SieveV1<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
 }
 
 impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV1<'a, T, U, D> {
-    /// Creates a new instance of a `KnnSieve`.
+    /// Creates a new instance of a `Sieve V1`.
     pub fn new(tree: &'a Tree<T, U, D>, query: T, k: usize) -> Self {
         Self {
             tree,
@@ -100,8 +102,6 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV1<'a, T, U, D
         let threshold = ith_grain.d;
 
         // Filters hits by being outside the threshold.
-        // Ties are added to hits together; we will never remove too many instances here
-        // because our choice of threshold guarantees enough instances.
         while !self.hits.is_empty()
             && self
                 .hits
@@ -117,9 +117,6 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV1<'a, T, U, D
         }
 
         // Partition into insiders and straddlers
-        // where we filter for grains being outside the threshold could be made more
-        // efficient by leveraging the fact that partition already puts items on the correct
-        // side of the threshold element
         #[allow(clippy::iter_with_drain)] // clippy is wrong in this case
         let (mut insiders, straddlers): (Vec<_>, Vec<_>) = self
             .grains
@@ -146,7 +143,6 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV1<'a, T, U, D
             self.hits.extend(new_hits);
         }
 
-        // Descend into straddlers
         // If there are no straddlers or all of the straddlers are leaves, then the grains in insiders and straddlers
         // are added to hits. If there are more than k hits, we repeatedly remove the furthest instance in hits until
         // there are either k hits left or more than k hits with some ties

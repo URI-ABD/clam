@@ -7,3 +7,360 @@ use distances::Number;
 use priority_queue::DoublePriorityQueue;
 
 use crate::{Cluster, Dataset, Tree};
+
+use std::collections::HashSet;
+
+/// A type-alias for the priority queue of knn-hits.
+type Hits<U> = DoublePriorityQueue<usize, OrdNumber<U>>;
+
+/// K-Nearest Neighbor search using a thresholds approach with separate centers.
+///
+/// # Arguments
+///
+/// * `tree` - The tree to search.
+/// * `query` - The query to search around.
+/// * `k` - The number of neighbors to search for.
+///
+/// # Returns
+///
+/// A vector of 2-tuples, where the first element is the index of the instance
+/// and the second element is the distance from the query to the instance.
+pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+where
+    T: Send + Sync + Copy,
+    U: Number,
+    D: Dataset<T, U>,
+{
+    let mut sieve = SieveV2::new(tree, query, k);
+    sieve.initialize_grains();
+    while !sieve.is_refined() {
+        sieve.refine_step();
+    }
+    sieve.extract()
+}
+
+/// `SieveV2` is a data structure that is used to find the `k` nearest neighbors of a `query` point in a dataset.
+///
+/// The `KnnSieve` is initialized with a `tree`, a `query` point, and a `k` value. `tree` contains a
+/// hierarchical clustering of the dataset. The `query`  is the point for which we want to find the `k` nearest
+/// neighbors.
+///
+/// `grains` is a running list of `Grain`s (each grain consists of a cluster, a distance, and a multiplicity)
+/// which could still contain one of the `k` nearest neighbors. `hits` is a priority queue of points which could
+/// be one of the `k` nearest neighbors. `is refined` is a boolean which is true if hits contains exactly `k` points
+/// and there are no more `Grain`s which can be partitioned.
+/// 
+/// Contrast this to `SieveV1` which does not treat the center of a cluster separately from the rest of the points.
+pub struct SieveV2<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+    /// The cluster tree to search.
+    tree: &'a Tree<T, U, D>,
+    /// The query point.
+    query: T,
+    /// The number of neighbors to find. The algorithm requires k > 0.
+    k: usize,
+    /// A vector of `Grains` which could still contain one of the k-nearest
+    /// neighbors. A `Grain` is a cluster, a distance, and a multiplicity.
+    /// When a `Grain` represents only a center, multiplicity is 1. When 
+    /// a `Grain` represents all non-center points of a cluster, multiplicity 
+    /// is cardinality - 1. 
+    grains: Vec<Grain<'a, T, U>>,
+    /// Whether hits contains the k-nearest neighbors.
+    is_refined: bool,
+    /// A priority queue of points which could be a nearest neighbor.
+    hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
+    /// A vector of clusters which are currently being considered.
+    layer: Vec<&'a Cluster<T, U>>,
+}
+
+impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D> {
+    /// Creates a new instance of a `Sieve V2`.
+    pub fn new(tree: &'a Tree<T, U, D>, query: T, k: usize) -> Self {
+        Self {
+            tree,
+            query,
+            k,
+            grains: Vec::new(),
+            is_refined: false,
+            hits: Hits::default(),
+            layer: vec![tree.root()],
+        }
+    }
+
+    /// One-time computation of `grains.`
+    pub fn initialize_grains(&mut self) {
+        let distances = self
+            .layer
+            .iter()
+            .map(|c| c.distance_to_instance(self.tree.data(), self.query))
+            .collect::<Vec<_>>();
+
+        self.grains = self
+            .layer
+            .iter()
+            .zip(distances.iter())
+            .flat_map(|(c, &d)| [Grain::new(c, d, 1), Grain::new(c, d + c.radius, c.cardinality - 1)])
+            .collect::<Vec<_>>();
+    }
+
+    /// Returns whether search is complete, i.e., whether hits
+    /// contains the k-nearest neighbors.
+    const fn is_refined(&self) -> bool {
+        self.is_refined
+    }
+
+    /// One iteration of the refinement step.
+    pub fn refine_step(&mut self) {
+        // Determines the index of the grain such that if we only retain that grain
+        // and every closer grain, we are guaranteed to have at least k points.
+        // Threshold is the distance of the furthest point in the grain.
+        let i = Grain::partition_kth(&mut self.grains, self.k);
+        let ith_grain = &self.grains[i];
+        let threshold = ith_grain.d;
+
+        // Filters hits by being outside the threshold.
+        while !self.hits.is_empty()
+            && self
+                .hits
+                .peek_max()
+                .unwrap_or_else(|| unreachable!("`hits` is non-empty"))
+                .1
+                .number
+                > threshold
+        {
+            self.hits
+                .pop_max()
+                .unwrap_or_else(|| unreachable!("`hits` is non-empty"));
+        }
+
+        // Partition into insiders and straddlers
+        let (mut insiders, mut straddlers): (Vec<_>, Vec<_>) = self
+            .grains
+            .drain(..)
+            .filter(|g| !Grain::is_outside(g, threshold))
+            .partition(|g| Grain::is_inside(g, threshold));
+
+        // Distinguish between those insiders we won't partition further and those we will
+        // Add instances from insiders we won't further partition to hits
+        let (small_insiders, big_insiders): (Vec<_>, Vec<_>) = insiders
+            .drain(..)
+            .partition(|g| (g.c.cardinality <= self.k) || g.c.is_leaf()); // TODO: fix this so that only Grains with cluster CARDINALITY, not multiplicity <= k stay
+        insiders = big_insiders;
+
+        small_insiders.into_iter().for_each(|g| {
+            let new_hits = g.c.indices(self.tree.data()).iter().map(|&i| {
+                (
+                    i,
+                    OrdNumber {
+                        number: self.tree.data().query_to_one(self.query, i),
+                    },
+                )
+            });
+            self.hits.extend(new_hits);
+        });
+
+
+        // If there are no straddlers or all of the straddlers are leaves, then the grains in insiders and straddlers
+        // are added to hits. If there are more than k hits, we repeatedly remove the furthest instance in hits until
+        // there are either k hits left or more than k hits with some ties
+        // If straddlers is not empty nor all leaves, partition non-leaves into children
+        if straddlers.is_empty() || straddlers.iter().all(|g| g.c.is_leaf()) {
+            insiders.drain(..).chain(straddlers.drain(..)).for_each(|g| {
+                let new_hits = g.c.indices(self.tree.data()).iter().map(|&i| {
+                    (
+                        i,
+                        OrdNumber {
+                            number: self.tree.data().query_to_one(self.query, i),
+                        },
+                    )
+                });
+
+                self.hits.extend(new_hits);
+            });
+
+            if self.hits.len() > self.k {
+                self.trim_hits();
+            }
+
+            self.is_refined = true;
+        } else {
+            self.grains = insiders.drain(..).chain(straddlers.drain(..)).collect();
+            let (leaves, non_leaves): (Vec<_>, Vec<_>) = self.grains.drain(..).partition(|g| g.c.is_leaf());
+
+            let mut surviving_clusters = HashSet::new();
+
+            for g in non_leaves.iter() {
+                surviving_clusters.insert(g.c);
+            }
+
+            self.layer = surviving_clusters.into_iter().collect();
+
+            let children = self
+                .layer
+                .iter()
+                .flat_map(|c| c.children().unwrap())
+                .map(|c| (c, c.distance_to_instance(self.tree.data(), self.query)))
+                .flat_map(|(c, d)| [Grain::new(c, d, 1), Grain::new(c, d + c.radius, c.cardinality - 1)]);
+
+            self.grains = leaves.into_iter().chain(children).collect();
+        }
+    }
+
+    /// Trims hits to contain only the k-nearest neighbors, accounting for potential ties.
+    pub fn trim_hits(&mut self) {
+        while self.hits.len() > self.k {
+            self.hits
+                .pop_max()
+                .unwrap_or_else(|| unreachable!("`hits` is non-empty and has at least k elements."));
+        }
+    }
+
+    /// Returns the indices and distances to the query of the k nearest neighbors of the query.
+    pub fn extract(&self) -> Vec<(usize, U)> {
+        self.hits.iter().map(|(&i, &OrdNumber { number: d })| (i, d)).collect()
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+/// A Grain is a structure which stores a cluster, a distance, and a multiplicity.
+struct Grain<'a, T: Send + Sync + Copy, U: Number> {
+    /// Just something we have to do.
+    t: std::marker::PhantomData<T>,
+    /// The cluster.
+    c: &'a Cluster<T, U>,
+    /// The distance of the cluster's center to the query.
+    d: U,
+    /// The multiplicity of the cluster (in this version, multiplicity = 
+    /// 1 if the grain represents a cluster center and cardinality - 1 otherwise)
+    multiplicity: usize,
+}
+
+impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
+    /// Creates a new instance of a Grain.
+    fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
+        let t = PhantomData::default();
+        Self { t, c, d, multiplicity }
+    }
+
+    /// A Grain is "inside" the threshold if the furthest, worst-case possible point is at most as far as
+    /// threshold distance from the query.
+    fn is_inside(&self, threshold: U) -> bool {
+        if self.multiplicity == 1 {
+            return self.d + self.c.radius < threshold;
+        }
+        self.d < threshold
+    }
+
+    /// A Grain is "outside" the threshold if the closest, best-case possible point is further than
+    /// the threshold distance to the query.
+    fn is_outside(&self, threshold: U) -> bool {
+        if self.multiplicity == 1 {
+            self.d - self.c.radius > threshold
+        } else {
+            let d_min = if self.d < self.c.radius + self.c.radius {
+                U::zero()
+            } else {
+                self.d - self.c.radius - self.c.radius
+            };
+
+            d_min > threshold
+        }
+    }
+
+    /// Wrapper function for `_partition_kth`.
+    fn partition_kth(grains: &mut [Self], k: usize) -> usize {
+        let i = Self::_partition_kth(grains, k, 0, grains.len() - 1);
+        let t = grains[i].d;
+
+        let mut b = i;
+        for a in (i + 1)..(grains.len()) {
+            if grains[a].d == t {
+                b += 1;
+                grains.swap(a, b);
+            }
+        }
+
+        b
+    }
+
+    /// Finds the smallest index i such that all grains with distance closer to or
+    /// equal to the distance of the grain at index i have a multiplicity greater
+    /// than or equal to k.
+    fn _partition_kth(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
+        if l >= r {
+            std::cmp::min(l, r)
+        } else {
+            let p = Self::_partition(grains, l, r);
+            let guaranteed = grains
+                .iter()
+                .scan(0, |acc, g| {
+                    *acc += g.multiplicity;
+                    Some(*acc)
+                })
+                .collect::<Vec<_>>();
+
+            let num_g = guaranteed[p];
+
+            match num_g.cmp(&k) {
+                std::cmp::Ordering::Less => Self::_partition_kth(grains, k, p + 1, r),
+                std::cmp::Ordering::Equal => p,
+                std::cmp::Ordering::Greater => {
+                    if (p > 0) && (guaranteed[p - 1] > k) {
+                        Self::_partition_kth(grains, k, l, p - 1)
+                    } else {
+                        p
+                    }
+                }
+            }
+        }
+    }
+
+    /// Changes pivot point and swaps elements around so that all elements to left
+    /// of pivot are less than or equal to pivot and all elements to right of pivot
+    /// are greater than pivot.
+    fn _partition(grains: &mut [Self], l: usize, r: usize) -> usize {
+        let pivot = (l + r) / 2;
+        grains.swap(pivot, r);
+
+        let (mut a, mut b) = (l, l);
+        while b < r {
+            if grains[b].d <= grains[r].d {
+                grains.swap(a, b);
+                a += 1;
+            }
+            b += 1;
+        }
+
+        grains.swap(a, r);
+
+        a
+    }
+}
+
+/// Field by which we rank elements in priority queue of hits.
+#[derive(Debug)]
+
+pub struct OrdNumber<U: Number> {
+    /// The number we use to rank elements (distance to query).
+    pub number: U,
+}
+
+impl<U: Number> PartialEq for OrdNumber<U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number
+    }
+}
+
+impl<U: Number> Eq for OrdNumber<U> {}
+
+impl<U: Number> PartialOrd for OrdNumber<U> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.number.partial_cmp(&other.number)
+    }
+}
+
+impl<U: Number> Ord for OrdNumber<U> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}

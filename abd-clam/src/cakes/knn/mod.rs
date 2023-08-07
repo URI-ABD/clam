@@ -41,7 +41,7 @@ pub enum Algorithm {
     /// are broken arbitrarily.
     RepeatedRnn,
 
-    /// Use the knn-sieve, with no separate centers, to perform search.
+    /// Use the knn-sieve, with no separate grains for centers, to perform search.
     ///
     /// This algorithm is not stable.
     ///
@@ -53,6 +53,19 @@ pub enum Algorithm {
     /// This approach does not treat the center of a cluster separately from the rest
     /// of the points in the cluster.
     SieveV1,
+
+    /// Use the knn-sieve, with separate grains for centers, to perform search.
+    ///
+    /// This algorithm is not stable.
+    ///
+    /// For each iteration of the search, we calculate a threshold from the
+    /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
+    /// to be within the threshold. We then use this threshold to filter out
+    /// clusters that are too far away from the query.
+    ///
+    /// This approach treats the center of a cluster separately from the rest
+    /// of the points in the cluster.
+    SieveV2,
 }
 
 impl Default for Algorithm {
@@ -84,6 +97,7 @@ impl Algorithm {
             Self::Linear => linear::search(tree.data(), query, k, tree.indices()),
             Self::RepeatedRnn => repeated_rnn::search(tree, query, k),
             Self::SieveV1 => sieve_v1::search(tree, query, k),
+            Self::SieveV2 => sieve_v2::search(tree, query, k),
         }
     }
 }
