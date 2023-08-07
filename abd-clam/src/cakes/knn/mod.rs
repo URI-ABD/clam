@@ -14,6 +14,7 @@ use crate::{Dataset, Tree};
 pub(crate) mod linear;
 pub(crate) mod repeated_rnn;
 pub(crate) mod sieve_v1;
+pub(crate) mod sieve_v2;
 
 /// The algorithm to use for K-Nearest Neighbor search.
 ///
