@@ -370,7 +370,8 @@ mod tests {
 
         for k in [100, 10, 1] {
             let linear_nn = linear::search(tree.data(), query, k, tree.indices());
-            let sieve_nn = super::search(tree, query, k);
+            let mut sieve_nn = super::search(tree, query, k);
+            sieve_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
 
             assert_eq!(linear_nn, sieve_nn);
         }

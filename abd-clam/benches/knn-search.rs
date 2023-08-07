@@ -6,7 +6,7 @@ use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_F32};
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
-    let (cardinality, dimensionality) = (1_000_000, 10);
+    let (cardinality, dimensionality) = (100_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
     let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
@@ -43,6 +43,11 @@ fn cakes(c: &mut Criterion) {
             let id = BenchmarkId::new("SieveV1", k);
             group.bench_with_input(id, &k, |b, _| {
                 b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveV1));
+            });
+
+            let id = BenchmarkId::new("SieveV2", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveV2));
             });
         }
 
