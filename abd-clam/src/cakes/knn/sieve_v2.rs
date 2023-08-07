@@ -49,7 +49,7 @@ where
 /// which could still contain one of the `k` nearest neighbors. `hits` is a priority queue of points which could
 /// be one of the `k` nearest neighbors. `is refined` is a boolean which is true if hits contains exactly `k` points
 /// and there are no more `Grain`s which can be partitioned.
-/// 
+///
 /// Contrast this to `SieveV1` which does not treat the center of a cluster separately from the rest of the points.
 pub struct SieveV2<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The cluster tree to search.
@@ -60,9 +60,9 @@ pub struct SieveV2<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     k: usize,
     /// A vector of `Grains` which could still contain one of the k-nearest
     /// neighbors. A `Grain` is a cluster, a distance, and a multiplicity.
-    /// When a `Grain` represents only a center, multiplicity is 1. When 
-    /// a `Grain` represents all non-center points of a cluster, multiplicity 
-    /// is cardinality - 1. 
+    /// When a `Grain` represents only a center, multiplicity is 1. When
+    /// a `Grain` represents all non-center points of a cluster, multiplicity
+    /// is cardinality - 1.
     grains: Vec<Grain<'a, T, U>>,
     /// Whether hits contains the k-nearest neighbors.
     is_refined: bool,
@@ -133,7 +133,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
         }
 
         // Partition into insiders and straddlers
-        let (mut insiders, mut straddlers): (Vec<_>, Vec<_>) = self
+        let (mut insiders, straddlers): (Vec<_>, Vec<_>) = self
             .grains
             .drain(..)
             .filter(|g| !Grain::is_outside(g, threshold))
@@ -142,11 +142,11 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
         // Distinguish between those insiders we won't partition further and those we will
         // Add instances from insiders we won't further partition to hits
         let (small_insiders, big_insiders): (Vec<_>, Vec<_>) = insiders
-            .drain(..)
+            .into_iter()
             .partition(|g| (g.c.cardinality <= self.k) || g.c.is_leaf()); // TODO: fix this so that only Grains with cluster CARDINALITY, not multiplicity <= k stay
         insiders = big_insiders;
 
-        small_insiders.into_iter().for_each(|g| {
+        for g in small_insiders {
             let new_hits = g.c.indices(self.tree.data()).iter().map(|&i| {
                 (
                     i,
@@ -156,15 +156,14 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
                 )
             });
             self.hits.extend(new_hits);
-        });
-
+        }
 
         // If there are no straddlers or all of the straddlers are leaves, then the grains in insiders and straddlers
         // are added to hits. If there are more than k hits, we repeatedly remove the furthest instance in hits until
         // there are either k hits left or more than k hits with some ties
         // If straddlers is not empty nor all leaves, partition non-leaves into children
         if straddlers.is_empty() || straddlers.iter().all(|g| g.c.is_leaf()) {
-            insiders.drain(..).chain(straddlers.drain(..)).for_each(|g| {
+            insiders.into_iter().chain(straddlers.into_iter()).for_each(|g| {
                 let new_hits = g.c.indices(self.tree.data()).iter().map(|&i| {
                     (
                         i,
@@ -183,12 +182,12 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
 
             self.is_refined = true;
         } else {
-            self.grains = insiders.drain(..).chain(straddlers.drain(..)).collect();
+            self.grains = insiders.into_iter().chain(straddlers.into_iter()).collect();
             let (leaves, non_leaves): (Vec<_>, Vec<_>) = self.grains.drain(..).partition(|g| g.c.is_leaf());
 
             let mut surviving_clusters = HashSet::new();
 
-            for g in non_leaves.iter() {
+            for g in &non_leaves {
                 surviving_clusters.insert(g.c);
             }
 
@@ -197,7 +196,10 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
             let children = self
                 .layer
                 .iter()
-                .flat_map(|c| c.children().unwrap())
+                .flat_map(|c| {
+                    c.children()
+                        .unwrap_or_else(|| unreachable!("This is only called on non-leaves."))
+                })
                 .map(|c| (c, c.distance_to_instance(self.tree.data(), self.query)))
                 .flat_map(|(c, d)| [Grain::new(c, d, 1), Grain::new(c, d + c.radius, c.cardinality - 1)]);
 
@@ -225,21 +227,26 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
 /// A Grain is a structure which stores a cluster, a distance, and a multiplicity.
 struct Grain<'a, T: Send + Sync + Copy, U: Number> {
     /// Just something we have to do.
-    t: std::marker::PhantomData<T>,
+    t_: std::marker::PhantomData<T>,
     /// The cluster.
     c: &'a Cluster<T, U>,
     /// The distance of the cluster's center to the query.
     d: U,
-    /// The multiplicity of the cluster (in this version, multiplicity = 
+    /// The multiplicity of the cluster (in this version, multiplicity =
     /// 1 if the grain represents a cluster center and cardinality - 1 otherwise)
     multiplicity: usize,
 }
 
 impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// Creates a new instance of a Grain.
-    fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
-        let t = PhantomData::default();
-        Self { t, c, d, multiplicity }
+    const fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
+        let t = PhantomData;
+        Self {
+            t_: t,
+            c,
+            d,
+            multiplicity,
+        }
     }
 
     /// A Grain is "inside" the threshold if the furthest, worst-case possible point is at most as far as
@@ -361,6 +368,12 @@ impl<U: Number> PartialOrd for OrdNumber<U> {
 
 impl<U: Number> Ord for OrdNumber<U> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        self.partial_cmp(other).unwrap_or_else(|| {
+            unreachable!(
+                "All hits are instances, and
+        therefore each hit has a distance from the query. Since all hits' distances to the
+        query will be represented by the same type, we can always compare them."
+            )
+        })
     }
 }

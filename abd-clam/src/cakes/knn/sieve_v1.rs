@@ -47,7 +47,7 @@ where
 /// which could still contain one of the `k` nearest neighbors. `hits` is a priority queue of points which could
 /// be one of the `k` nearest neighbors. `is refined` is a boolean which is true if hits contains exactly `k` points
 /// and there are no more `Grain`s which can be partitioned.
-/// 
+///
 /// Contrast this to `SieveV2` which treats the center of a cluster separately from the rest of the points in the cluster.
 pub struct SieveV1<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The cluster tree to search.
@@ -212,8 +212,8 @@ struct Grain<'a, T: Send + Sync + Copy, U: Number> {
 
 impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// Creates a new instance of a Grain.
-    pub fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
-        let t = PhantomData::default();
+    const fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
+        let t = PhantomData;
         Self {
             t_: t,
             c,
