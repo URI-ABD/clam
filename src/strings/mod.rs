@@ -59,7 +59,7 @@ pub fn levenshtein<U: UInt>(a: &str, b: &str) -> U {
         // handle special case of 0 length
         a.len()
     } else if a.len() < b.len() {
-        // require tat a is no shorter than b
+        // require that a is no shorter than b
         _levenshtein(b, a)
     } else {
         _levenshtein(a, b)
