@@ -68,8 +68,6 @@ pub struct SieveV2<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     is_refined: bool,
     /// A priority queue of points which could be a nearest neighbor.
     hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
-    /// A vector of clusters which are currently being considered.
-    layer: Vec<&'a Cluster<T, U>>,
 }
 
 impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D> {
@@ -82,24 +80,16 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
             grains: Vec::new(),
             is_refined: false,
             hits: Hits::default(),
-            layer: vec![tree.root()],
         }
     }
 
     /// One-time computation of `grains.`
     pub fn initialize_grains(&mut self) {
-        let distances = self
-            .layer
-            .iter()
-            .map(|c| c.distance_to_instance(self.tree.data(), self.query))
-            .collect::<Vec<_>>();
-
-        self.grains = self
-            .layer
-            .iter()
-            .zip(distances.iter())
-            .flat_map(|(c, &d)| [Grain::new(c, d, 1), Grain::new(c, d + c.radius, c.cardinality - 1)])
-            .collect::<Vec<_>>();
+        let root = self.tree.root();
+        let distance = root.distance_to_instance(self.tree.data(), self.query);
+        let grain_cluster = Grain::new(root, distance + root.radius, root.cardinality - 1);
+        let grain_center = Grain::new(root, distance, 1);
+        self.grains = vec![grain_cluster, grain_center];
     }
 
     /// Returns whether search is complete, i.e., whether hits
@@ -143,7 +133,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
         // Add instances from insiders we won't further partition to hits
         let (small_insiders, big_insiders): (Vec<_>, Vec<_>) = insiders
             .into_iter()
-            .partition(|g| (g.c.cardinality <= self.k) || g.c.is_leaf()); // TODO: fix this so that only Grains with cluster CARDINALITY, not multiplicity <= k stay
+            .partition(|g| (g.c.cardinality <= self.k) || g.c.is_leaf());
         insiders = big_insiders;
 
         for g in small_insiders {
@@ -191,10 +181,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
                 surviving_clusters.insert(g.c);
             }
 
-            self.layer = surviving_clusters.into_iter().collect();
-
-            let children = self
-                .layer
+            let children = surviving_clusters
                 .iter()
                 .flat_map(|c| {
                     c.children()
@@ -375,5 +362,39 @@ impl<U: Number> Ord for OrdNumber<U> {
         query will be represented by the same type, we can always compare them."
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use distances::vectors::euclidean;
+    use symagen::random_data;
+
+    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+
+    #[test]
+    fn sieve_v2() {
+        let (cardinality, dimensionality) = (1_000, 10);
+        let (min_val, max_val) = (-1.0, 1.0);
+        let seed = 42;
+
+        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
+        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+
+        let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
+        let query = query[0].as_slice();
+
+        let criteria = PartitionCriteria::default();
+        let model = Cakes::new(data, Some(seed), criteria);
+        let tree = model.tree();
+
+        for k in [100, 10, 1] {
+            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
+            let mut sieve_nn = super::search(tree, query, k);
+            sieve_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+            assert_eq!(linear_nn, sieve_nn);
+        }
     }
 }
