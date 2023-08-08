@@ -106,24 +106,11 @@ fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
     });
 }
 
-/// Reduces hits down to k elements, including ties for the kth farthest element.
+/// Trims hits to contain only the k-nearest neighbors.
 fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>) {
-    if hits.len() > k {
-        let mut potential_ties = vec![hits.pop().unwrap_or_else(|| unreachable!("hits is non-empty"))];
-        while hits.len() >= k {
-            let item = hits.pop().unwrap_or_else(|| unreachable!("hits is non-empty"));
-            if item.1 .0
-                < potential_ties
-                    .last()
-                    .unwrap_or_else(|| unreachable!("potential ties is non-empty"))
-                    .1
-                     .0
-            {
-                potential_ties.clear();
-            }
-            potential_ties.push(item);
-        }
-        hits.extend(potential_ties.into_iter());
+    while hits.len() > k {
+        hits.pop()
+            .unwrap_or_else(|| unreachable!("`hits` is non-empty and has at least k elements."));
     }
 }
 
