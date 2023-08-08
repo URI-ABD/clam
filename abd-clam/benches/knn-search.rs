@@ -49,6 +49,11 @@ fn cakes(c: &mut Criterion) {
             group.bench_with_input(id, &k, |b, _| {
                 b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveV2));
             });
+
+            let id = BenchmarkId::new("ExpandingThreshold", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::ExpandingThreshold));
+            });
         }
 
         group.finish();

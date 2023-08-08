@@ -232,7 +232,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// the threshold distance to the query.
     pub fn is_outside(&self, threshold: U) -> bool {
         let radius = self.c.radius;
-        let d_min = if self.d < radius {
+        let d_min = if self.d < radius + radius {
             U::zero()
         } else {
             self.d - radius - radius
