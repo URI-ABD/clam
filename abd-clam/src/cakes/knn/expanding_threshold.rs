@@ -1,12 +1,23 @@
 //! Search function and helper functions for knn with expanding threshold.
 
-
-use core::cmp::Ordering;
-
 use distances::Number;
 
 use crate::{Cluster, Dataset, Tree};
 
+/// K-Nearest Neighbor search with expanding threshold.
+/// 
+/// /// # Arguments
+///
+/// * `tree` - The tree to search.
+/// * `query` - The query to search around.
+/// * `k` - The number of neighbors to search for.
+///
+/// # Returns
+///
+/// A vector of 2-tuples, where the first element is the index of the instance
+/// and the second element is the distance from the query to the instance.
+/// 
+/// Contrast this to `SieveV1` and `SieveV2`, which use a (mostly) decreasing threshold.
 pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
 where
     T: Send + Sync + Copy,
@@ -20,7 +31,7 @@ where
 
     // stop if we have enough hits and the farthest hit is closer than the closest cluster by delta_min.
     while !(hits.len() >= k
-        && (candidates.is_empty() || hits.peek().unwrap().1.0 < candidates.peek().unwrap().1 .0))
+        && (candidates.is_empty() || hits.peek().unwrap_or_else(|| unreachable!("`hits` is non-empty")).1.0 < candidates.peek().unwrap_or_else(|| unreachable!("`candidates` is non-empty")).1 .0))
     {
         pop_till_leaf(tree, query, &mut candidates);
         leaf_into_hits(tree, query, &mut hits, &mut candidates);
@@ -31,7 +42,8 @@ where
     hits.into_iter().map(|(i, OrdNumber(d))| (i, d)).collect()
 }
 
-
+/// Calculates the theoretical best case distance for a point in a cluster, i.e., 
+/// the closest a point in a given cluster could possibly be to the query.
 fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
     if d < c.radius {
         U::zero()
@@ -40,10 +52,10 @@ fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
     }
 }
 
-// pop from the top of `candidates` until the top candidate is a leaf cluster.
+/// Pops from the top of `candidates` until the top candidate is a leaf cluster.
 fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(tree: &Tree<T, U, D>, query: T, candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>) {
-    while !candidates.peek().unwrap().0.is_leaf() {
-        let [l, r] = candidates.pop().unwrap().0.children().unwrap();
+    while !candidates.peek().unwrap_or_else(|| unreachable!("`candidates` is non-empty")).0.is_leaf() {
+        let [l, r] = candidates.pop().unwrap().0.children().unwrap().as_slice() else {todo!()};
         let [dl, dr] = [
             l.distance_to_instance(tree.data(), query),
             r.distance_to_instance(tree.data(), query),
@@ -53,7 +65,7 @@ fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(tree: &Tree
     }
 }
 
-// pop a single leaf from the top of candidates and add those points to hits.
+/// Pops a single leaf from the top of candidates and add those points to hits.
 fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
     tree: &Tree<T, U, D>,
     query: T,
@@ -72,52 +84,65 @@ fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
     });
 }
 
-// reduce hits down to k elements, including ties for the kth farthest element.
+/// Reduces hits down to k elements, including ties for the kth farthest element.
 fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>) {
     if hits.len() > k {
-        let mut potential_ties = vec![hits.pop().unwrap()];
+        let mut potential_ties = vec![hits.pop().unwrap_or_else(|| unreachable!("hits is non-empty"))];
         while hits.len() >= k {
-            let item = hits.pop().unwrap();
-            if item.1< potential_ties.last().unwrap().1 {
+            let item = hits.pop().unwrap_or_else(|| unreachable!("hits is non-empty"));
+            if item.1.0< potential_ties.last().unwrap_or_else(|| unreachable!("potential ties is non-empty")).1.0 {
                 potential_ties.clear();
             }
             potential_ties.push(item);
         }
-        hits.extend(potential_ties.drain(..));
+        hits.extend(potential_ties.into_iter());
     }
 }
-
 
 
 /// Field by which we rank elements in priority queue of hits.
-#[derive(Debug)]
-pub struct OrdNumber<U: Number> {
-    /// The number we use to rank elements (distance to query).
-    number: U,
-}
+struct OrdNumber<T: Number>(T);
 
-impl<U: Number> PartialEq for OrdNumber<U> {
+impl<T: Number> PartialEq for OrdNumber<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.number == other.number
+        self.0 == other.0
     }
 }
 
-impl<U: Number> Eq for OrdNumber<U> {}
+impl<T: Number> Eq for OrdNumber<T> {}
 
-impl<U: Number> PartialOrd for OrdNumber<U> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.number.partial_cmp(&other.number)
+impl<T: Number> PartialOrd for OrdNumber<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
     }
 }
 
-impl<U: Number> Ord for OrdNumber<U> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or_else(|| {
-            unreachable!(
-                "All hits are instances, and
-        therefore each hit has a distance from the query. Since all hits' distances to the
-        query will be represented by the same type, we can always compare them."
-            )
-        })
+impl<T: Number> Ord for OrdNumber<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.partial_cmp(&other.0).unwrap_or_else(|| unreachable! ("hits are always comparable"))
+    }
+}
+
+/// Field which functions as the reverse of `OrdNumber`, for ranking elements 
+/// in the priority queue of candidates.
+struct RevNumber<T: Number>(T);
+
+impl<T: Number> PartialEq for RevNumber<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: Number> Eq for RevNumber<T> {}
+
+impl<T: Number> PartialOrd for RevNumber<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        other.0.partial_cmp(&self.0)
+    }
+}
+
+impl<T: Number> Ord for RevNumber<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.0.partial_cmp(&self.0).unwrap_or_else(|| unreachable! ("hits are always comparable"))
     }
 }

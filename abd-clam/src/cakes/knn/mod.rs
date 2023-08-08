@@ -11,11 +11,11 @@ use distances::Number;
 
 use crate::{Dataset, Tree};
 
+pub(crate) mod expanding_threshold;
 pub(crate) mod linear;
 pub(crate) mod repeated_rnn;
 pub(crate) mod sieve_v1;
 pub(crate) mod sieve_v2;
-pub(crate) mod expanding_threshold;
 
 /// The algorithm to use for K-Nearest Neighbor search.
 ///

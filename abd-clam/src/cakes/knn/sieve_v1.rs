@@ -37,7 +37,7 @@ where
     sieve.extract()
 }
 
-///  `SieveV1` is a data structure that is used to find the `k` nearest neighbors of a `query` point in a dataset.
+/// `SieveV1` is a data structure that is used to find the `k` nearest neighbors of a `query` point in a dataset.
 ///
 /// The `KnnSieve` is initialized with a `tree`, a `query` point, and a `k` value. `tree` contains a
 /// hierarchical clustering of the dataset. The `query`  is the point for which we want to find the `k` nearest
