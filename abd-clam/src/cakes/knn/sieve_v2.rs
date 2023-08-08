@@ -194,7 +194,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
         }
     }
 
-    /// Trims hits to contain only the k-nearest neighbors, accounting for potential ties.
+    /// Trims hits to contain only the k-nearest neighbors.
     pub fn trim_hits(&mut self) {
         while self.hits.len() > self.k {
             self.hits

@@ -68,11 +68,18 @@ pub enum Algorithm {
     /// of the points in the cluster.
     SieveV2,
 
-    /// Explain algorithm here.
+    /// Uses two priority queues and an increasing threshold to perform search.
     ///
-    /// This algorithm is stable.
+    /// This algorithm is not stable.
     ///
-    /// More explanation here.
+    /// Begins with first priority queue, called `candidates`, wherein the top priority
+    /// candidate is the one with the lowest d_min. We use d_min to express the
+    /// theoretical closest a point in a given cluster can be to the query. Replaces
+    /// the top priority candidate with its children until the top priority candidate
+    /// is a leaf. Then, adds all instances in the leaf to a second priority queue, `hits`,
+    /// wherein the top priority hit is the one with the highest distance to the query.
+    /// Hits are then removed from the queue until the queue has size k. Repeats these steps
+    /// until candidates is empty or the closest candidate is worse than the furthest hit.
     ExpandingThreshold,
 }
 
