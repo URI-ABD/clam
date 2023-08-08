@@ -248,13 +248,14 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// A Grain is "outside" the threshold if the closest, best-case possible point is further than
     /// the threshold distance to the query.
     fn is_outside(&self, threshold: U) -> bool {
+        let radius = self.c.radius;
         if self.multiplicity == 1 {
-            self.d - self.c.radius > threshold
+            self.d - radius > threshold
         } else {
-            let d_min = if self.d < self.c.radius + self.c.radius {
+            let d_min = if self.d < radius + radius {
                 U::zero()
             } else {
-                self.d - self.c.radius - self.c.radius
+                self.d - radius - radius
             };
 
             d_min > threshold

@@ -5,7 +5,7 @@ use distances::Number;
 use crate::{Cluster, Dataset, Tree};
 
 /// K-Nearest Neighbor search with expanding threshold.
-/// 
+///
 /// /// # Arguments
 ///
 /// * `tree` - The tree to search.
@@ -16,7 +16,7 @@ use crate::{Cluster, Dataset, Tree};
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-/// 
+///
 /// Contrast this to `SieveV1` and `SieveV2`, which use a (mostly) decreasing threshold.
 pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
 where
@@ -30,8 +30,14 @@ where
     candidates.push(tree.root(), RevNumber(d_min(tree.root(), d)));
 
     // stop if we have enough hits and the farthest hit is closer than the closest cluster by delta_min.
-    while !(hits.len() >= k
-        && (candidates.is_empty() || hits.peek().unwrap_or_else(|| unreachable!("`hits` is non-empty")).1.0 < candidates.peek().unwrap_or_else(|| unreachable!("`candidates` is non-empty")).1 .0))
+    while hits.len() < k
+        || (!candidates.is_empty()
+            && (hits.peek().unwrap_or_else(|| unreachable!("`hits` is non-empty")).1 .0
+                >= candidates
+                    .peek()
+                    .unwrap_or_else(|| unreachable!("`candidates` is non-empty"))
+                    .1
+                     .0))
     {
         pop_till_leaf(tree, query, &mut candidates);
         leaf_into_hits(tree, query, &mut hits, &mut candidates);
@@ -42,7 +48,7 @@ where
     hits.into_iter().map(|(i, OrdNumber(d))| (i, d)).collect()
 }
 
-/// Calculates the theoretical best case distance for a point in a cluster, i.e., 
+/// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
 fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
     if d < c.radius {
@@ -53,9 +59,23 @@ fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
 }
 
 /// Pops from the top of `candidates` until the top candidate is a leaf cluster.
-fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(tree: &Tree<T, U, D>, query: T, candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>) {
-    while !candidates.peek().unwrap_or_else(|| unreachable!("`candidates` is non-empty")).0.is_leaf() {
-        let [l, r] = candidates.pop().unwrap().0.children().unwrap().as_slice() else {todo!()};
+fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
+    tree: &Tree<T, U, D>,
+    query: T,
+    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>,
+) {
+    while !candidates
+        .peek()
+        .unwrap_or_else(|| unreachable!("`candidates` is non-empty"))
+        .0
+        .is_leaf()
+    {
+        let [l, r] = candidates
+            .pop()
+            .unwrap_or_else(|| unreachable!("`candidates` is non-empty"))
+            .0
+            .children()
+            .unwrap_or_else(|| unreachable!("elements are non-leaves"));
         let [dl, dr] = [
             l.distance_to_instance(tree.data(), query),
             r.distance_to_instance(tree.data(), query),
@@ -72,7 +92,9 @@ fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
     hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>,
     candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>,
 ) {
-    let (leaf, RevNumber(d)) = candidates.pop().unwrap();
+    let (leaf, RevNumber(d)) = candidates
+        .pop()
+        .unwrap_or_else(|| unreachable!("candidates is non-empty"));
     let is = leaf.indices(tree.data());
     let ds = if leaf.is_singleton() {
         vec![d; is.len()]
@@ -90,7 +112,13 @@ fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize
         let mut potential_ties = vec![hits.pop().unwrap_or_else(|| unreachable!("hits is non-empty"))];
         while hits.len() >= k {
             let item = hits.pop().unwrap_or_else(|| unreachable!("hits is non-empty"));
-            if item.1.0< potential_ties.last().unwrap_or_else(|| unreachable!("potential ties is non-empty")).1.0 {
+            if item.1 .0
+                < potential_ties
+                    .last()
+                    .unwrap_or_else(|| unreachable!("potential ties is non-empty"))
+                    .1
+                     .0
+            {
                 potential_ties.clear();
             }
             potential_ties.push(item);
@@ -98,7 +126,6 @@ fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize
         hits.extend(potential_ties.into_iter());
     }
 }
-
 
 /// Field by which we rank elements in priority queue of hits.
 struct OrdNumber<T: Number>(T);
@@ -119,11 +146,13 @@ impl<T: Number> PartialOrd for OrdNumber<T> {
 
 impl<T: Number> Ord for OrdNumber<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.partial_cmp(&other.0).unwrap_or_else(|| unreachable! ("hits are always comparable"))
+        self.0
+            .partial_cmp(&other.0)
+            .unwrap_or_else(|| unreachable!("elements are always comparable"))
     }
 }
 
-/// Field which functions as the reverse of `OrdNumber`, for ranking elements 
+/// Field which functions as the reverse of `OrdNumber`, for ranking elements
 /// in the priority queue of candidates.
 struct RevNumber<T: Number>(T);
 
@@ -143,6 +172,43 @@ impl<T: Number> PartialOrd for RevNumber<T> {
 
 impl<T: Number> Ord for RevNumber<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.0.partial_cmp(&self.0).unwrap_or_else(|| unreachable! ("hits are always comparable"))
+        other
+            .0
+            .partial_cmp(&self.0)
+            .unwrap_or_else(|| unreachable!("elements are always comparable"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use distances::vectors::euclidean;
+    use symagen::random_data;
+
+    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+
+    #[test]
+    fn expanding_thresholds() {
+        let (cardinality, dimensionality) = (1_000, 10);
+        let (min_val, max_val) = (-1.0, 1.0);
+        let seed = 42;
+
+        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
+        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+
+        let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
+        let query = query[0].as_slice();
+
+        let criteria = PartitionCriteria::default();
+        let model = Cakes::new(data, Some(seed), criteria);
+        let tree = model.tree();
+
+        for k in [100, 10, 1] {
+            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
+            let mut thresholds_nn = super::search(tree, query, k);
+            thresholds_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+            assert_eq!(linear_nn, thresholds_nn);
+        }
     }
 }
