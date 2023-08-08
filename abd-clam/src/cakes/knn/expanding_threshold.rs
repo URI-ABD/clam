@@ -1,4 +1,4 @@
-//! Search function and helper functions for knn with expanding threshold. 
+//! Search function and helper functions for knn with expanding threshold.
 
 
 use core::cmp::Ordering;

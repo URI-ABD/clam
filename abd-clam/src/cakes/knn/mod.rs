@@ -69,10 +69,10 @@ pub enum Algorithm {
     SieveV2,
 
     /// Explain algorithm here.
-    /// 
-    /// This algorithm is stable. 
-    /// 
-    /// More explanation here. 
+    ///
+    /// This algorithm is stable.
+    ///
+    /// More explanation here.
     ExpandingThreshold,
 }
 
