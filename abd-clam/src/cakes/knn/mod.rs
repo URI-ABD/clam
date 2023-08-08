@@ -15,6 +15,7 @@ pub(crate) mod linear;
 pub(crate) mod repeated_rnn;
 pub(crate) mod sieve_v1;
 pub(crate) mod sieve_v2;
+pub(crate) mod expanding_threshold;
 
 /// The algorithm to use for K-Nearest Neighbor search.
 ///
@@ -66,6 +67,13 @@ pub enum Algorithm {
     /// This approach treats the center of a cluster separately from the rest
     /// of the points in the cluster.
     SieveV2,
+
+    /// Explain algorithm here.
+    /// 
+    /// This algorithm is stable. 
+    /// 
+    /// More explanation here. 
+    ExpandingThreshold,
 }
 
 impl Default for Algorithm {
@@ -98,6 +106,7 @@ impl Algorithm {
             Self::RepeatedRnn => repeated_rnn::search(tree, query, k),
             Self::SieveV1 => sieve_v1::search(tree, query, k),
             Self::SieveV2 => sieve_v2::search(tree, query, k),
+            Self::ExpandingThreshold => expanding_threshold::search(tree, query, k),
         }
     }
 }
