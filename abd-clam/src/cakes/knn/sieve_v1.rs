@@ -1,4 +1,4 @@
-//! Helper functions for Knn thresholds approach with no separate grains for
+//! Search function and helper functions for Knn thresholds approach with no separate grains for
 //! cluster centers.
 
 use core::{cmp::Ordering, marker::PhantomData};
