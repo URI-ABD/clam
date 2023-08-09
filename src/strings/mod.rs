@@ -53,18 +53,18 @@ impl<U: UInt> Penalties<U> {
 /// * `penalties`: the set of penalties to use
 pub fn levenshtein_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> U {
     move |x: &str, y: &str| {
-        U::from(if x.is_empty() {
+        if x.is_empty() {
             // handle special case of 0 length
-            y.len()
+            U::from(y.len())
         } else if y.is_empty() {
             // handle special case of 0 length
-            x.len()
+            U::from(x.len())
         } else if x.len() < y.len() {
             // require tat a is no shorter than b
             _levenshtein(y, x, penalties)
         } else {
             _levenshtein(x, y, penalties)
-        })
+        }
     }
 }
 
@@ -116,45 +116,52 @@ pub fn levenshtein_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &st
 /// * [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance)
 #[must_use]
 pub fn levenshtein<U: UInt>(x: &str, y: &str) -> U {
-    U::from(if x.is_empty() {
+    if x.is_empty() {
         // handle special case of 0 length
-        y.len()
+        U::from(y.len())
     } else if y.is_empty() {
         // handle special case of 0 length
-        x.len()
+        U::from(x.len())
     } else if x.len() < y.len() {
         // require tat a is no shorter than b
         _levenshtein(y, x, Penalties::<U>::default())
     } else {
         _levenshtein(x, y, Penalties::<U>::default())
-    })
+    }
 }
 
 /// Helper for Levenshtein distance.
+/// This function actually performs the dynamic programming for the
+/// Levenshtein edit distance, using the `penalties` struct.
 #[allow(unused_variables)]
-fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> usize {
-    // TODO(Noah): Please use the penalties struct. Modify the members if you
-    // need to. Keep in mind that this struct is also used for Needleman-
-    // Wunsch and will be used for the other distance metrics we implement.
-
-    // initialize DP table for string b
-    let mut cur = (0..=y.len()).collect::<Vec<_>>();
+fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> U {
+    // initialize DP table for string y
+    // this is a bit ugly with the U casts
+    let mut cur = (0..=y.len())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|v| U::from(v))
+        .collect::<Vec<U>>();
 
     // calculate edit distance
     for (i, c_x) in x.chars().enumerate() {
         // get first column for this row
         let mut pre = cur[0];
-        cur[0] = i + 1;
+        cur[0] = U::from(i) + U::one();
         for (j, c_y) in y.chars().enumerate() {
             let tmp = cur[j + 1];
             cur[j + 1] = core::cmp::min(
                 // deletion
-                tmp + 1,
+                tmp + penalties.gap,
                 core::cmp::min(
                     // insertion
-                    cur[j] + 1,
+                    cur[j] + penalties.gap,
                     // match or substitution
-                    pre + usize::from(c_x != c_y),
+                    pre + if c_x == c_y {
+                        penalties.match_
+                    } else {
+                        penalties.mismatch
+                    },
                 ),
             );
             pre = tmp;
@@ -205,4 +212,22 @@ fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> usize {
 #[must_use]
 pub fn hamming<U: UInt>(x: &str, y: &str) -> U {
     U::from(x.chars().zip(y.chars()).filter(|(a, b)| a != b).count())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::strings::levenshtein;
+
+    #[test]
+    fn distance() {
+        let x = "TomEatsWhatFoodEats".to_string();
+        let y = "FoodEatsWhatTomEats".to_string();
+        let d: u8 = levenshtein(&x, &y);
+        assert_eq!(d, 6);
+
+        let x = "MeatIsFood".to_string();
+        let y = "MeatIsFood".to_string();
+        let d: u8 = levenshtein(&x, &y);
+        assert_eq!(d, 0);
+    }
 }
