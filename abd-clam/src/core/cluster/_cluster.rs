@@ -217,6 +217,15 @@ impl<T: Send + Sync, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
 
             indices = l_indices.into_iter().chain(r_indices.into_iter()).collect::<Vec<_>>();
 
+            let arg_l = self.offset
+                + utils::pos_val(&indices, arg_l)
+                    .unwrap_or_else(|| unreachable!("We know the left is in the indices."))
+                    .0;
+            let arg_r = self.offset
+                + utils::pos_val(&indices, arg_r)
+                    .unwrap_or_else(|| unreachable!("We know the right is in the indices."))
+                    .0;
+
             self.children = Some(Children {
                 left,
                 right,
