@@ -6,7 +6,7 @@ use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_F32};
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
-    let (cardinality, dimensionality) = (100_000, 100);
+    let (cardinality, dimensionality) = (1_000_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
     let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
@@ -30,7 +30,7 @@ fn cakes(c: &mut Criterion) {
 
         let mut radius = 0.;
         for n in (0..=100).step_by(25) {
-            radius = (n as f32) / if metric_name == "cosine" { 10_000. } else { 1_000. };
+            radius = (n as f32) / if metric_name == "cosine" { 1_000. } else { 100. };
             let id = BenchmarkId::new("Clustered", radius);
             group.bench_with_input(id, &radius, |b, _| {
                 b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered));
