@@ -58,21 +58,27 @@ where
 {
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
-    let mut candidates = vec![root];
+    let mut candidates = vec![(root, root.distance_to_instance(data, query))];
 
-    let (mut terminal, mut non_terminal): (Vec<_>, Vec<_>);
+    let [mut insiders, mut terminal]: [Vec<_>; 2];
     while !candidates.is_empty() {
-        (terminal, non_terminal) = candidates
+        // Filter out candidates that are outside the query ball, partition the
+        // rest into insiders and non-insiders, and add the insiders to the
+        // confirmed list.
+        (insiders, candidates) = candidates
             .into_iter()
-            .map(|c| (c, c.distance_to_instance(data, query)))
             .filter(|&(c, d)| d <= (c.radius + radius))
             .partition(|&(c, d)| (c.radius + d) <= radius);
-        confirmed.append(&mut terminal);
+        confirmed.append(&mut insiders);
 
-        (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
+        // Partition the non-insiders into terminal and non-terminal clusters,
+        // and add the terminal clusters to the confirmed list.
+        (terminal, candidates) = candidates.into_iter().partition(|&(c, _)| c.is_leaf());
         straddlers.append(&mut terminal);
 
-        candidates = non_terminal
+        // Add the children of the non-terminal clusters to the candidates list
+        // for the next iteration.
+        candidates = candidates
             .into_iter()
             .flat_map(|(c, d)| {
                 if d < c.radius {
@@ -82,6 +88,7 @@ where
                         .map_or_else(|| unreachable!("Non-leaf cluster without children"), |v| v.to_vec())
                 }
             })
+            .map(|c| (c, c.distance_to_instance(data, query)))
             .collect();
     }
 

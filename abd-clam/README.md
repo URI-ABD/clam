@@ -67,12 +67,12 @@ let model = Cakes::new(data, Some(seed), criteria);
 // just use the model we just created.
 
 // We can now perform RNN search on the model.
-let rnn_results: Vec<(usize, f32)> = model.rnn_search(&query, radius, RnnAlgorithm::Clustered);
-// assert!(!rnn_results.is_empty());  // dataset updates are WIP
+let rnn_results: Vec<(usize, f32)> = model.rnn_search(&query, radius, rnn::Algorithm::Clustered);
+assert!(!rnn_results.is_empty());  // dataset updates are WIP
 
 // We can also perform KNN search on the model.
-let knn_results: Vec<(usize, f32)> = model.knn_search(&query, k, KnnAlgorithm::RepeatedRnn);
-// assert!(knn_results.len() >= k);  // dataset updates are WIP
+let knn_results: Vec<(usize, f32)> = model.knn_search(&query, k, knn::Algorithm::RepeatedRnn);
+assert!(knn_results.len() >= k);  // dataset updates are WIP
 
 // Both results are a Vec of 2-tuples where the first element is the index of the point
 // in the dataset and the second element is the distance from the query point.

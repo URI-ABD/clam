@@ -145,7 +145,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "dataset updates are WIP"]
     fn test_search() {
         let data = vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]];
 
@@ -182,7 +181,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "dataset updates are WIP"]
     fn rnn_search() {
         let data = (-100..=100).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
         let data = VecDataset::new("test".to_string(), data, metric, false);
