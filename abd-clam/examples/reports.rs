@@ -56,8 +56,6 @@ fn main() {
             println!("Making reports on {data_name} with {metric_name} ...");
 
             let (data, queries) = search_readers::read_search_data(data_name).unwrap();
-            let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-            let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
             let dimensionality = data[0].len();
 
             let data = VecDataset::new(data_name.to_string(), data, metric, false);
@@ -227,8 +225,8 @@ fn get_reports_root() -> PathBuf {
 // }
 
 fn report_linear<'a>(
-    data: &'a VecDataset<&'a [f32], f32>,
-    queries: &'a [&'a [f32]],
+    data: &'a VecDataset<Vec<f32>, f32>,
+    queries: &'a [Vec<f32>],
     out_dir: &Path,
     batch_size: usize,
 ) -> f32 {
@@ -249,7 +247,7 @@ fn report_linear<'a>(
         let mut pb = tqdm!(total = queries.len(), desc = format!("Linear Batch {n}/{num_batches}"));
         let mut array = Array2::<f32>::default((0, batch.len()));
 
-        for &query in queries.iter() {
+        for query in queries.iter() {
             let start = Instant::now();
             let distances = data.query_to_many(query, batch);
             time += start.elapsed().as_secs_f32();

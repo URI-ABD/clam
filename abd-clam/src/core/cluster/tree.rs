@@ -1,5 +1,7 @@
 //! A `Tree` represents a hierarchy of "similar" instances from a metric-`Space`.
 
+use core::marker::PhantomData;
+
 use distances::Number;
 
 use crate::{Cluster, Dataset, PartitionCriteria};
@@ -13,18 +15,18 @@ use crate::{Cluster, Dataset, PartitionCriteria};
 /// - `U`: The type of the distance values between instances.
 /// - `D`: The type of the `Dataset` from which the `Tree` is built.
 #[derive(Debug)]
-pub struct Tree<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+pub struct Tree<T: Send + Sync, U: Number, D: Dataset<T, U>> {
     /// The dataset from which the tree is built.
     data: D,
     /// The root `Cluster` of the tree.
-    root: Cluster<T, U>,
+    root: Cluster<T, U, D>,
     /// The depth of the tree.
     depth: usize,
-    /// The type of the instances in the tree.
-    center: T,
+    /// The type of the instances in the `Tree`.
+    _t: PhantomData<T>,
 }
 
-impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     /// Constructs a new `Tree` for a given dataset. Importantly, this does not
     /// partition the tree.
     ///
@@ -33,12 +35,11 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     pub fn new(data: D, seed: Option<u64>) -> Self {
         let root = Cluster::new_root(&data, data.indices(), seed);
         let depth = root.max_leaf_depth();
-        let center = root.center;
         Self {
             data,
             root,
             depth,
-            center,
+            _t: PhantomData,
         }
     }
 
@@ -52,7 +53,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     ///
     /// The `Tree` after partitioning.
     #[must_use]
-    pub fn partition(mut self, criteria: &PartitionCriteria<T, U>) -> Self {
+    pub fn partition(mut self, criteria: &PartitionCriteria<T, U, D>) -> Self {
         self.root = self.root.partition(&mut self.data, criteria);
         self
     }
@@ -63,18 +64,13 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     }
 
     /// A reference to the root `Cluster` of the tree.
-    pub(crate) const fn root(&self) -> &Cluster<T, U> {
+    pub(crate) const fn root(&self) -> &Cluster<T, U, D> {
         &self.root
     }
 
     /// The depth of the tree.
     pub(crate) const fn depth(&self) -> usize {
         self.depth
-    }
-
-    /// The center of the tree.
-    pub(crate) const fn center(&self) -> T {
-        self.center
     }
 
     /// The cardinality of the `Tree`, i.e. the number of instances in the data.

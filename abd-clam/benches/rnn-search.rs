@@ -10,11 +10,9 @@ fn cakes(c: &mut Criterion) {
     let (min_val, max_val) = (-1., 1.);
 
     let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-    let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
     let num_queries = 1_000;
     let queries = random_data::random_f32(num_queries, dimensionality, min_val, max_val, seed + 1);
-    let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
     for &(metric_name, metric) in &COMMON_METRICS_F32[..1] {
         let mut group = c.benchmark_group(format!("rnn-{metric_name}"));

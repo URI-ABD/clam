@@ -1,9 +1,8 @@
 use std::time::Instant;
 
-use distances::strings::levenshtein;
 use symagen::random_data;
 
-use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_STR};
 
 fn main() {
     let seed = 42;
@@ -11,16 +10,14 @@ fn main() {
     let (train_size, num_queries) = (10_000, 100);
 
     let data = random_data::random_string(train_size, min_len, max_len, alphabet, seed);
-    let data = data.iter().map(String::as_str).collect();
 
-    let metric = levenshtein::<u16>;
+    let metric = COMMON_METRICS_STR[1].1;
     let data = VecDataset::new("genomic".to_string(), data, metric, true);
 
     let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
     let model = Cakes::new(data, Some(42), criteria);
 
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
-    let queries = queries.iter().map(String::as_str).collect::<Vec<_>>();
     for radius in [10, 25, 50, 60] {
         let start = Instant::now();
         let results = model.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered);

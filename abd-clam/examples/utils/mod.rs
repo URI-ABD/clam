@@ -26,7 +26,7 @@ pub fn check_search<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(queries:
     let iqp = queries
         .par_iter()
         .enumerate()
-        .map(|(i, &query)| {
+        .map(|(i, query)| {
             let naive = cakes
                 .rnn_search(query, r, rnn::Algorithm::Linear)
                 .into_iter()

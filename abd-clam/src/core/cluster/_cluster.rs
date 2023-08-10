@@ -2,7 +2,10 @@
 //! divisive hierarchical cluster of arbitrary datasets in arbitrary metric
 //! spaces.
 
-use core::hash::{Hash, Hasher};
+use core::{
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
 
 use distances::Number;
 
@@ -20,7 +23,7 @@ pub type Ratios = [f64; 6];
 /// For now, `Cluster` names are unique within a single tree. We plan on adding
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug)]
-pub struct Cluster<T: Send + Sync + Copy, U: Number> {
+pub struct Cluster<T: Send + Sync, U: Number, D: Dataset<T, U>> {
     /// The `Cluster`'s history in the tree.
     pub history: Vec<bool>,
     /// The seed used in the random number generator for this `Cluster`.
@@ -29,12 +32,8 @@ pub struct Cluster<T: Send + Sync + Copy, U: Number> {
     pub offset: usize,
     /// The number of instances in the `Cluster`.
     pub cardinality: usize,
-    /// The geometric mean of the `Cluster`.
-    pub center: T,
     /// The index of the `center` instance in the dataset.
     pub arg_center: usize,
-    /// The instance furthest from the `center` of the `Cluster`.
-    pub radial: T,
     /// The index of the `radial` instance in the dataset.
     pub arg_radial: usize,
     /// The distance from the `center` to the `radial` instance.
@@ -43,38 +42,42 @@ pub struct Cluster<T: Send + Sync + Copy, U: Number> {
     #[allow(dead_code)]
     pub lfd: f64,
     /// The children of the `Cluster`.
-    pub children: Option<Children<T, U>>,
+    pub children: Option<Children<T, U, D>>,
     /// The six `Cluster` ratios used for anomaly detection and related applications.
     #[allow(dead_code)]
     pub ratios: Option<Ratios>,
+    /// The type of instances in the data.
+    _t: PhantomData<T>,
+    /// The type of the dataset.
+    _d: PhantomData<D>,
 }
 
 /// The children of a `Cluster`.
 #[derive(Debug)]
-pub struct Children<T: Send + Sync + Copy, U: Number> {
+pub struct Children<T: Send + Sync, U: Number, D: Dataset<T, U>> {
     /// The left child of the `Cluster`.
-    pub left: Box<Cluster<T, U>>,
+    pub left: Box<Cluster<T, U, D>>,
     /// The right child of the `Cluster`.
-    pub right: Box<Cluster<T, U>>,
+    pub right: Box<Cluster<T, U, D>>,
     /// The left pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the left child).
-    pub l_pole: T,
+    pub arg_l: usize,
     /// The right pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the right child).
-    pub r_pole: T,
+    pub arg_r: usize,
     /// The distance from the `l_pole` to the `r_pole` instance.
     pub polar_distance: U,
 }
 
-impl<T: Send + Sync + Copy, U: Number> PartialEq for Cluster<T, U> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> PartialEq for Cluster<T, U, D> {
     fn eq(&self, other: &Self) -> bool {
         self.history == other.history
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Eq for Cluster<T, U> {}
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> Eq for Cluster<T, U, D> {}
 
-impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> PartialOrd for Cluster<T, U, D> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.depth() == other.depth() {
             self.offset.partial_cmp(&other.offset)
@@ -84,7 +87,7 @@ impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> Ord for Cluster<T, U, D> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if self.depth() == other.depth() {
             self.offset.cmp(&other.offset)
@@ -94,19 +97,19 @@ impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Hash for Cluster<T, U> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> Hash for Cluster<T, U, D> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.offset, self.cardinality).hash(state);
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> std::fmt::Display for Cluster<T, U> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> std::fmt::Display for Cluster<T, U, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
+impl<T: Send + Sync, U: Number, D: Dataset<T, U>> Cluster<T, U, D> {
     /// Creates a new root `Cluster`.
     ///
     /// # Arguments
@@ -114,7 +117,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * `data`: on which to create the `Cluster`.
     /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
     /// * `seed`: The seed used in the random number generator for this `Cluster`.
-    pub fn new_root<D: Dataset<T, U>>(data: &D, indices: &[usize], seed: Option<u64>) -> Self {
+    pub fn new_root(data: &D, indices: &[usize], seed: Option<u64>) -> Self {
         Self::new(data, seed, vec![true], 0, indices)
     }
 
@@ -127,13 +130,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * `history`: The `Cluster`'s history in the tree.
     /// * `offset`: The offset of the indices of the `Cluster`'s instances in the dataset.
     /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
-    pub fn new<D: Dataset<T, U>>(
-        data: &D,
-        seed: Option<u64>,
-        history: Vec<bool>,
-        offset: usize,
-        indices: &[usize],
-    ) -> Self {
+    pub fn new(data: &D, seed: Option<u64>, history: Vec<bool>, offset: usize, indices: &[usize]) -> Self {
         let cardinality = indices.len();
 
         // TODO: Explore with different values for the threshold e.g. 10, 100, 1000, etc.
@@ -147,12 +144,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
         let Some(arg_center) = data.median(&arg_samples) else { unreachable!("The cluster should have at least one instance.") };
 
-        let center = data.get(arg_center);
-
         let center_distances = data.one_to_many(arg_center, indices);
         let Some((arg_radial, radius)) = utils::arg_max(&center_distances) else { unreachable!("The cluster should have at least one instance.") };
         let arg_radial = indices[arg_radial];
-        let radial = data.get(arg_radial);
 
         let lfd = utils::compute_lfd(radius, &center_distances);
 
@@ -161,14 +155,14 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             seed,
             offset,
             cardinality,
-            center,
             arg_center,
-            radial,
             arg_radial,
             radius,
             lfd,
             children: None,
             ratios: None,
+            _t: PhantomData,
+            _d: PhantomData,
         }
     }
 
@@ -188,7 +182,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * The `Cluster` on which the method was called after partitioning
     /// recursively until the `PartitionCriteria` is no longer met on any of the
     /// leaf `Cluster`s.
-    pub fn partition<D: Dataset<T, U>>(mut self, data: &mut D, criteria: &PartitionCriteria<T, U>) -> Self {
+    pub fn partition(mut self, data: &mut D, criteria: &PartitionCriteria<T, U, D>) -> Self {
         let mut indices = data.indices().to_vec();
         (self, indices) = self._partition(data, criteria, indices);
         data.reorder(&indices);
@@ -197,14 +191,14 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// Recursive helper function for `partition`.
-    fn _partition<D: Dataset<T, U>>(
+    fn _partition(
         mut self,
         data: &D,
-        criteria: &PartitionCriteria<T, U>,
+        criteria: &PartitionCriteria<T, U, D>,
         mut indices: Vec<usize>,
     ) -> (Self, Vec<usize>) {
         if criteria.check(&self) {
-            let ([(l_pole, l_indices), (r_pole, r_indices)], polar_distance) = self.partition_once(data, indices);
+            let ([(arg_l, l_indices), (arg_r, r_indices)], polar_distance) = self.partition_once(data, indices);
 
             let r_offset = self.offset + l_indices.len();
 
@@ -226,8 +220,8 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             self.children = Some(Children {
                 left,
                 right,
-                l_pole,
-                r_pole,
+                arg_l,
+                arg_r,
                 polar_distance,
             });
         }
@@ -245,12 +239,12 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// Partitions the `Cluster` into two children once.
-    fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(T, Vec<usize>); 2], U) {
-        let l_distances = data.query_to_many(self.radial, &indices);
+    fn partition_once(&self, data: &D, indices: Vec<usize>) -> ([(usize, Vec<usize>); 2], U) {
+        let l_distances = data.one_to_many(self.arg_radial, &indices);
 
         let Some((arg_r, polar_distance)) = utils::arg_max(&l_distances) else { unreachable!("The cluster should have at least one instance.") };
-        let r_pole = data.get(indices[arg_r]);
-        let r_distances = data.query_to_many(r_pole, &indices);
+        let arg_r = indices[arg_r];
+        let r_distances = data.one_to_many(arg_r, &indices);
 
         let (l_indices, r_indices) = indices
             .into_iter()
@@ -262,9 +256,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         let r_indices = Self::drop_distances(r_indices);
 
         if l_indices.len() < r_indices.len() {
-            ([(r_pole, r_indices), (self.radial, l_indices)], polar_distance)
+            ([(arg_r, r_indices), (self.arg_radial, l_indices)], polar_distance)
         } else {
-            ([(self.radial, l_indices), (r_pole, r_indices)], polar_distance)
+            ([(self.arg_radial, l_indices), (arg_r, r_indices)], polar_distance)
         }
     }
 
@@ -409,7 +403,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// The indices of the `Cluster`'s instances in the dataset.
-    pub fn indices<'a, D: Dataset<T, U>>(&'a self, data: &'a D) -> &[usize] {
+    pub fn indices<'a>(&'a self, data: &'a D) -> &[usize] {
         &data.indices()[self.offset..(self.offset + self.cardinality)]
     }
 
@@ -547,31 +541,31 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// Distance from the `center` to the given instance.
-    pub fn distance_to_instance<D: Dataset<T, U>>(&self, data: &D, instance: T) -> U {
-        data.metric()(instance, self.center)
+    pub fn distance_to_instance(&self, data: &D, instance: &T) -> U {
+        data.query_to_one(instance, self.arg_center)
     }
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
     #[allow(dead_code)]
-    pub fn distance_to_other<D: Dataset<T, U>>(&self, data: &D, other: &Self) -> U {
-        data.metric()(self.center, other.center)
+    pub fn distance_to_other(&self, data: &D, other: &Self) -> U {
+        data.one_to_one(self.arg_center, other.arg_center)
     }
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
-    pub fn overlapping_children<D: Dataset<T, U>>(&self, data: &D, query: T, radius: U) -> Vec<&Self> {
+    pub fn overlapping_children(&self, data: &D, query: &T, radius: U) -> Vec<&Self> {
         self.children.as_ref().map_or_else(
             Vec::new,
             |Children {
                  left,
                  right,
-                 l_pole,
-                 r_pole,
+                 arg_l,
+                 arg_r,
                  polar_distance,
              }| {
-                let ql = data.metric()(query, *l_pole);
-                let qr = data.metric()(query, *r_pole);
+                let ql = data.query_to_one(query, *arg_l);
+                let qr = data.query_to_one(query, *arg_r);
 
                 let swap = ql < qr;
                 let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
@@ -592,19 +586,26 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 mod tests {
     use core::f32::EPSILON;
 
-    use distances::vectors::euclidean;
-
     use crate::{
         Tree, {Dataset, VecDataset},
     };
 
     use super::*;
 
+    fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
+        distances::vectors::euclidean(a, b)
+    }
+
     #[test]
     fn test_cluster() {
-        let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
+        let data = vec![
+            vec![0_f32, 0., 0.],
+            vec![1., 1., 1.],
+            vec![2., 2., 2.],
+            vec![3., 3., 3.],
+        ];
         let name = "test".to_string();
-        let mut data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
+        let mut data = VecDataset::new(name, data, metric, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
         let root = Cluster::new_root(&data, &indices, Some(42)).partition(&mut data, &partition_criteria);
@@ -636,32 +637,22 @@ mod tests {
             "The subtree of the root cluster should have 7 elements but had {}.",
             subtree.len()
         );
-        for c in root.subtree() {
-            let center_d = data.query_to_one(c.center, c.arg_center);
-            assert!(
-                center_d <= f32::EPSILON,
-                "Center must be the closest instance to itself. {c} had center {:?} and argcenter {} in data {:?}",
-                c.center,
-                c.arg_center,
-                data.data
-            );
-
-            let radial_d = data.query_to_one(c.radial, c.arg_radial);
-            assert!(
-                radial_d <= f32::EPSILON,
-                "Radial must be the closest instance to itself. {c} had radial {:?} but argradial {} in data {:?}",
-                c.radial,
-                c.arg_radial,
-                data.data
-            );
-        }
     }
 
     #[test]
     fn test_leaf_indices() {
-        let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
         let name = "test".to_string();
-        let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
+        let data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -674,9 +665,18 @@ mod tests {
 
     #[test]
     fn test_end_to_end_reordering() {
-        let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
         let name = "test".to_string();
-        let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
+        let data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -694,9 +694,8 @@ mod tests {
         let seed = 42;
 
         let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let name = "test".to_string();
-        let mut data = VecDataset::<_, f32>::new(name, data, euclidean, false);
+        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
         let indices = data.indices().to_vec();
         let partition_criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
@@ -707,22 +706,10 @@ mod tests {
             assert!(c.radius >= 0., "Radius must be non-negative.");
             assert!(c.lfd > 0., "LFD must be positive.");
 
-            let radius = data.metric()(c.center, c.radial);
+            let radius = data.one_to_one(c.arg_center, c.arg_radial);
             assert!(
                 (c.radius - radius).abs() < EPSILON,
                 "Radius must be equal to the distance to the farthest instance."
-            );
-
-            let center_d = data.query_to_one(c.center, c.arg_center);
-            assert!(
-                center_d <= f32::EPSILON,
-                "Center must be the closest instance to itself. {c} had {center_d}"
-            );
-
-            let radial_d = data.query_to_one(c.radial, c.arg_radial);
-            assert!(
-                radial_d <= f32::EPSILON,
-                "Radial must be the closest instance to itself. {c} had {radial_d}"
             );
         }
     }

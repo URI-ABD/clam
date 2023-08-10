@@ -14,10 +14,8 @@ fn genomic(c: &mut Criterion) {
 
     println!("Building dataset ...");
     let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
-    let data = data.iter().map(String::as_str).collect::<Vec<_>>();
 
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
-    let queries = queries.iter().map(String::as_str).collect::<Vec<_>>();
 
     for &(metric_name, metric) in &COMMON_METRICS_STR[..2] {
         let mut group = c.benchmark_group(format!("genomic-{metric_name}"));

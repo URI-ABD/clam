@@ -1,9 +1,13 @@
 //! Provides the `Dataset` trait and an implementation for a vector of data.
 
+mod arrow_dataset;
 mod vec2d;
 
 #[allow(clippy::module_name_repetitions)]
 pub use vec2d::VecDataset;
+
+#[allow(clippy::module_name_repetitions)]
+pub use arrow_dataset::{BatchedArrowDataset, ConstructableNumber};
 
 use core::cmp::Ordering;
 
@@ -13,7 +17,7 @@ use rayon::prelude::*;
 use distances::Number;
 
 /// A common interface for datasets used in CLAM.
-pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
+pub trait Dataset<T: Send + Sync, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns the name of the dataset. This is used to identify the dataset in
     /// various places.
     fn name(&self) -> &str;
@@ -30,32 +34,32 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// Returns a slice of indices that can be used to access the dataset.
     fn indices(&self) -> &[usize];
 
-    /// Returns the instance at a given index in the dataset.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - An index in the dataset.
-    ///
-    /// # Panics
-    ///
-    /// * If `index` is not a valid index in the dataset.
-    ///
-    /// # Returns
-    ///
-    /// The instance at `index`.
-    fn get(&self, index: usize) -> T;
+    // /// Returns the instance at a given index in the dataset.
+    // ///
+    // /// # Arguments
+    // ///
+    // /// * `index` - An index in the dataset.
+    // ///
+    // /// # Panics
+    // ///
+    // /// * If `index` is not a valid index in the dataset.
+    // ///
+    // /// # Returns
+    // ///
+    // /// The instance at `index`.
+    // fn get(&self, index: usize) -> &T;
 
-    /// Returns the metric used to calculate distances between instances.
-    ///
-    /// A metric should obey the following properties:
-    ///
-    /// * Identity: `d(x, y) = 0 <=> x = y`
-    /// * Non-negativity: `d(x, y) >= 0`
-    /// * Symmetry: `d(x, y) = d(y, x)`
-    ///
-    /// If the metric also obeys the triangle inequality, `d(x, z) <= d(x, y) + d(y, z)`,
-    /// then CLAM can make certain guarantees about the exactness of search results.
-    fn metric(&self) -> fn(T, T) -> U;
+    // /// Returns the metric used to calculate distances between instances.
+    // ///
+    // /// A metric should obey the following properties:
+    // ///
+    // /// * Identity: `d(x, y) = 0 <=> x = y`
+    // /// * Non-negativity: `d(x, y) >= 0`
+    // /// * Symmetry: `d(x, y) = d(y, x)`
+    // ///
+    // /// If the metric also obeys the triangle inequality, `d(x, z) <= d(x, y) + d(y, z)`,
+    // /// then CLAM can make certain guarantees about the exactness of search results.
+    // fn metric(&self) -> fn(&T, &T) -> U;
 
     /// Swaps the values at two given indices in the dataset.
     ///
@@ -106,9 +110,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// The distance between the instances at `left` and `right`.
-    fn one_to_one(&self, left: usize, right: usize) -> U {
-        (self.metric())(self.get(left), self.get(right))
-    }
+    fn one_to_one(&self, left: usize, right: usize) -> U;
 
     /// Returns whether or not two indexed instances in the dataset are equal.
     ///
@@ -184,9 +186,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// The distance between the query and the instance at `index`
-    fn query_to_one(&self, query: T, index: usize) -> U {
-        (self.metric())(query, self.get(index))
-    }
+    fn query_to_one(&self, query: &T, index: usize) -> U;
 
     /// Returns a vector of distances between a query and all indexed instances.
     ///
@@ -198,7 +198,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// A vector of distances between the query and all instances at `indices`
-    fn query_to_many(&self, query: T, indices: &[usize]) -> Vec<U> {
+    fn query_to_many(&self, query: &T, indices: &[usize]) -> Vec<U> {
         if self.is_metric_expensive() || indices.len() > 1_000 {
             indices
                 .par_iter()

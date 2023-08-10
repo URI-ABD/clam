@@ -36,13 +36,11 @@ fn search(seed: Option<u64>, data_name: &str) -> Vec<String> {
 
     // let (data, queries) = search_readers::read_search_data(data_name).unwrap();
     let (data, _) = anomaly_readers::read_anomaly_data(data_name, true).unwrap();
-    let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
-    // let queries = queries.iter().map(|v| v.as_slice()).collect::<Vec<_>>();
     let num_queries = 10_000;
     let queries = (0..num_queries)
         .map(|v| v % data.len())
-        .map(|i| data[i])
+        .map(|i| data[i].clone())
         .collect::<Vec<_>>();
 
     let line_start = vec![
