@@ -25,9 +25,9 @@ type Hits<U> = DoublePriorityQueue<usize, OrdNumber<U>>;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: &T, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: Dataset<T, U>,
 {
@@ -51,11 +51,11 @@ where
 /// and there are no more `Grain`s which can be partitioned.
 ///
 /// Contrast this to `SieveV1` which does not treat the center of a cluster separately from the rest of the points.
-pub struct SieveV2<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+pub struct SieveV2<'a, T: Send + Sync, U: Number, D: Dataset<T, U>> {
     /// The cluster tree to search.
     tree: &'a Tree<T, U, D>,
     /// The query point.
-    query: T,
+    query: &'a T,
     /// The number of neighbors to find. The algorithm requires k > 0.
     k: usize,
     /// A vector of `Grains` which could still contain one of the k-nearest
@@ -63,16 +63,16 @@ pub struct SieveV2<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// When a `Grain` represents only a center, multiplicity is 1. When
     /// a `Grain` represents all non-center points of a cluster, multiplicity
     /// is cardinality - 1.
-    grains: Vec<Grain<'a, T, U>>,
+    grains: Vec<Grain<'a, T, U, D>>,
     /// Whether hits contains the k-nearest neighbors.
     is_refined: bool,
     /// A priority queue of points which could be a nearest neighbor.
     hits: priority_queue::DoublePriorityQueue<usize, OrdNumber<U>>,
 }
 
-impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D> {
+impl<'a, T: Send + Sync, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D> {
     /// Creates a new instance of a `Sieve V2`.
-    pub fn new(tree: &'a Tree<T, U, D>, query: T, k: usize) -> Self {
+    pub fn new(tree: &'a Tree<T, U, D>, query: &'a T, k: usize) -> Self {
         Self {
             tree,
             query,
@@ -212,11 +212,11 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 /// A Grain is a structure which stores a cluster, a distance, and a multiplicity.
-struct Grain<'a, T: Send + Sync + Copy, U: Number> {
+struct Grain<'a, T: Send + Sync, U: Number, D: Dataset<T, U>> {
     /// Just something we have to do.
     t_: std::marker::PhantomData<T>,
     /// The cluster.
-    c: &'a Cluster<T, U>,
+    c: &'a Cluster<T, U, D>,
     /// The distance of the cluster's center to the query.
     d: U,
     /// The multiplicity of the cluster (in this version, multiplicity =
@@ -224,9 +224,9 @@ struct Grain<'a, T: Send + Sync + Copy, U: Number> {
     multiplicity: usize,
 }
 
-impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
+impl<'a, T: Send + Sync, U: Number, D: Dataset<T, U>> Grain<'a, T, U, D> {
     /// Creates a new instance of a Grain.
-    const fn new(c: &'a Cluster<T, U>, d: U, multiplicity: usize) -> Self {
+    const fn new(c: &'a Cluster<T, U, D>, d: U, multiplicity: usize) -> Self {
         let t = PhantomData;
         Self {
             t_: t,
@@ -369,10 +369,9 @@ impl<U: Number> Ord for OrdNumber<U> {
 #[cfg(test)]
 mod tests {
 
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
-    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+    use crate::{cakes::knn::linear, euclidean_f32, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn sieve_v2() {
@@ -381,19 +380,17 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean_f32, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
         for k in [100, 10, 1] {
-            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
-            let mut sieve_nn = super::search(tree, query, k);
+            let linear_nn = linear::search(tree.data(), &query[0], k, tree.indices());
+            let mut sieve_nn = super::search(tree, &query[0], k);
             sieve_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
             assert_eq!(linear_nn, sieve_nn);
         }

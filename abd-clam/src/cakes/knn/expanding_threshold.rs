@@ -18,13 +18,13 @@ use crate::{Cluster, Dataset, Tree};
 /// and the second element is the distance from the query to the instance.
 ///
 /// Contrast this to `SieveV1` and `SieveV2`, which use a (mostly) decreasing threshold.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: &T, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: Dataset<T, U>,
 {
-    let mut candidates = priority_queue::PriorityQueue::<&Cluster<T, U>, RevNumber<U>>::new();
+    let mut candidates = priority_queue::PriorityQueue::<&Cluster<T, U, D>, RevNumber<U>>::new();
     let mut hits = priority_queue::PriorityQueue::<usize, OrdNumber<U>>::new();
     let d = tree.root().distance_to_instance(tree.data(), query);
     candidates.push(tree.root(), RevNumber(d_min(tree.root(), d)));
@@ -50,7 +50,7 @@ where
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
-fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
+fn d_min<T: Send + Sync, U: Number, D: Dataset<T, U>>(c: &Cluster<T, U, D>, d: U) -> U {
     if d < c.radius {
         U::zero()
     } else {
@@ -59,10 +59,10 @@ fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
 }
 
 /// Pops from the top of `candidates` until the top candidate is a leaf cluster.
-fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
+fn pop_till_leaf<T: Send + Sync, U: Number, D: Dataset<T, U>>(
     tree: &Tree<T, U, D>,
-    query: T,
-    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>,
+    query: &T,
+    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U, D>, RevNumber<U>>,
 ) {
     while !candidates
         .peek()
@@ -86,11 +86,11 @@ fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
 }
 
 /// Pops a single leaf from the top of candidates and add those points to hits.
-fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
+fn leaf_into_hits<T: Send + Sync, U: Number, D: Dataset<T, U>>(
     tree: &Tree<T, U, D>,
-    query: T,
+    query: &T,
     hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>,
-    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>,
+    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U, D>, RevNumber<U>>,
 ) {
     let (leaf, RevNumber(d)) = candidates
         .pop()
@@ -169,10 +169,9 @@ impl<T: Number> Ord for RevNumber<T> {
 #[cfg(test)]
 mod tests {
 
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
-    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+    use crate::{cakes::knn::linear, euclidean_f32, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn expanding_thresholds() {
@@ -181,19 +180,17 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean_f32, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
         for k in [100, 10, 1] {
-            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
-            let mut thresholds_nn = super::search(tree, query, k);
+            let linear_nn = linear::search(tree.data(), &query[0], k, tree.indices());
+            let mut thresholds_nn = super::search(tree, &query[0], k);
             thresholds_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
             assert_eq!(linear_nn, thresholds_nn);
         }

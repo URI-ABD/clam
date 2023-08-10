@@ -48,9 +48,9 @@ impl Algorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub(crate) fn search<T, U, D>(self, query: T, radius: U, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
+    pub(crate) fn search<T, U, D>(self, query: &T, radius: U, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
     where
-        T: Send + Sync + Copy,
+        T: Send + Sync,
         U: Number,
         D: Dataset<T, U>,
     {

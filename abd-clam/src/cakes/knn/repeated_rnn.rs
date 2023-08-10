@@ -21,9 +21,9 @@ const MULTIPLIER: f64 = 2.0;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: &T, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: crate::Dataset<T, U>,
 {
@@ -86,10 +86,9 @@ where
 #[cfg(test)]
 mod tests {
 
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
-    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+    use crate::{cakes::knn::linear, euclidean_f32, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn repeated_rnn() {
@@ -98,19 +97,17 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean_f32, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
         for k in [100, 10, 1] {
-            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
-            let repeated_nn = super::search(tree, query, k);
+            let linear_nn = linear::search(tree.data(), &query[0], k, tree.indices());
+            let repeated_nn = super::search(tree, &query[0], k);
 
             assert_eq!(linear_nn, repeated_nn);
         }

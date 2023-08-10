@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use symagen::random_data;
 
-use abd_clam::{Cakes, PartitionCriteria, RnnAlgorithm, VecDataset, COMMON_METRICS_STR};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_STR};
 
 fn main() {
     let seed = 42;

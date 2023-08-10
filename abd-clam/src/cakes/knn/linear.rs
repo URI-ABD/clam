@@ -19,9 +19,9 @@ use crate::Dataset;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(data: &D, query: T, k: usize, indices: &[usize]) -> Vec<(usize, U)>
+pub fn search<T, U, D>(data: &D, query: &T, k: usize, indices: &[usize]) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: Dataset<T, U>,
 {
@@ -33,11 +33,9 @@ where
 
 #[cfg(test)]
 mod tests {
-
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
-    use crate::{Cakes, PartitionCriteria, VecDataset};
+    use crate::{euclidean_f32, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn linear() {
@@ -46,18 +44,16 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, euclidean_f32, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
         for k in [100, 10, 1] {
-            let linear_nn = super::search(tree.data(), query, k, tree.indices());
+            let linear_nn = super::search(tree.data(), &query[0], k, tree.indices());
 
             assert_eq!(
                 linear_nn.len(),

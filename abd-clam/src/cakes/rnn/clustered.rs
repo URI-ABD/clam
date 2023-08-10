@@ -18,9 +18,9 @@ use super::linear;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, radius: U) -> Vec<(usize, U)>
+pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: &T, radius: U) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: Dataset<T, U>,
 {
@@ -44,14 +44,15 @@ where
 /// query ball, and the second element is the straddlers, i.e. those that
 /// overlap the query ball. The 2-tuples are the clusters and the distance
 /// from the query to the cluster center.
+#[allow(clippy::type_complexity)]
 pub fn tree_search<'a, T, U, D>(
     data: &D,
-    root: &'a Cluster<T, U>,
-    query: T,
+    root: &'a Cluster<T, U, D>,
+    query: &T,
     radius: U,
-) -> [Vec<(&'a Cluster<T, U>, U)>; 2]
+) -> [Vec<(&'a Cluster<T, U, D>, U)>; 2]
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: Dataset<T, U>,
 {
@@ -90,13 +91,13 @@ where
 /// Perform fine-grained leaf search
 pub fn leaf_search<T, U, D>(
     data: &D,
-    confirmed: Vec<(&Cluster<T, U>, U)>,
-    straddlers: Vec<(&Cluster<T, U>, U)>,
-    query: T,
+    confirmed: Vec<(&Cluster<T, U, D>, U)>,
+    straddlers: Vec<(&Cluster<T, U, D>, U)>,
+    query: &T,
     radius: U,
 ) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    T: Send + Sync,
     U: Number,
     D: Dataset<T, U>,
 {
