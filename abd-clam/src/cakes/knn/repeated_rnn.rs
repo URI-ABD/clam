@@ -89,7 +89,7 @@ mod tests {
     use distances::vectors::euclidean;
     use symagen::random_data;
 
-    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+    use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn repeated_rnn() {
@@ -109,8 +109,8 @@ mod tests {
         let tree = model.tree();
 
         for k in [100, 10, 1] {
-            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
-            let repeated_nn = super::search(tree, query, k);
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            let repeated_nn = sort_hits(super::search(tree, query, k));
 
             assert_eq!(linear_nn, repeated_nn);
         }
