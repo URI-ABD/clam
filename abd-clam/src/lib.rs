@@ -27,7 +27,7 @@ pub use crate::{
     cakes::{knn, rnn, Cakes},
     core::{
         cluster::{PartitionCriteria, PartitionCriterion, Tree},
-        dataset::{Dataset, VecDataset},
+        dataset::{BatchedArrowDataset, ConstructableNumber, Dataset, VecDataset},
     },
 };
 

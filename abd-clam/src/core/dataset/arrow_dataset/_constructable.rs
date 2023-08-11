@@ -1,6 +1,8 @@
 use distances::Number;
 
+/// A number which can be constructed from bytes
 pub trait ConstructableNumber: Number {
+    /// Construct `Self` from native endian bytes
     fn from_ne_bytes(bytes: &[u8]) -> Self;
 }
 

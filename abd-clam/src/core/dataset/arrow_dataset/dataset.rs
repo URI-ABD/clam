@@ -34,9 +34,16 @@ use std::error::Error;
 /// but also write out the reordering order to disk which will be read and used upon construction.
 #[derive(Debug)]
 pub struct BatchedArrowDataset<T: ConstructableNumber, U: Number> {
+    /// The name of the dataset
     name: String,
+
+    /// The distance metric used by the dataset
     metric: fn(&Vec<T>, &Vec<T>) -> U,
+
+    /// A flag corresponding to if the metric is expensive to compute or not
     metric_is_expensive: bool,
+
+    /// The reader and i/o interface for the batched arrow files
     reader: BatchedArrowReader<T>,
 }
 
@@ -55,6 +62,9 @@ impl<T: ConstructableNumber, U: Number> BatchedArrowDataset<T, U> {
     ///
     /// # Returns
     /// A result containing a constructed `BatchedArrowDataset`
+    ///
+    /// # Errors
+    /// Any errors that occur during the parsing of IPC metadata or file reading
     pub fn new(
         data_dir: &str,
         name: String,
@@ -70,8 +80,14 @@ impl<T: ConstructableNumber, U: Number> BatchedArrowDataset<T, U> {
         })
     }
 
+    /// Returns an instance of the dataset at index `idx`
+    ///
+    /// # Args
+    /// - `idx`: The desired index
+    ///
+    /// # Returns
+    /// The instance in the dataset at the desired index
     pub fn get(&self, idx: usize) -> Vec<T> {
-        // assert!(idx < self.cardinality(), "Index out of range");
         self.reader.get(idx)
     }
 
@@ -91,6 +107,10 @@ impl<T: ConstructableNumber, U: Number> BatchedArrowDataset<T, U> {
     ///
     /// # Args
     /// - `indices`: The indices to reorder the dataset by
+    ///
+    /// # Errors
+    /// Any i/o errors that may occur when writing the reordering map or constructing
+    /// the necessary IPC components
     pub fn reorder_to_file(&mut self, indices: &[usize]) -> Result<(), Box<dyn Error>> {
         self.reorder(indices);
         self.reader.write_reordering_map()?;

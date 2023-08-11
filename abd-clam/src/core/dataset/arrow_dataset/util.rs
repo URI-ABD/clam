@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use arrow2::{
     array::Float32Array,
     chunk::Chunk,
@@ -11,7 +12,7 @@ use uuid::Uuid;
 
 /// Returns the path of the newly created dataset
 #[allow(dead_code)]
-pub(crate) fn generate_batched_arrow_test_data(
+pub fn generate_batched_arrow_test_data(
     batches: usize,
     dimensionality: usize,
     cols_per_batch: usize,
@@ -35,7 +36,7 @@ pub(crate) fn generate_batched_arrow_test_data(
     // For each batch, we need to create a file, create the write options, create the file writer to write
     // the arrow data, craete our arrays and finally construct our chunk and write it out.
     for batch_number in 0..batches {
-        let file = File::create(path.join(format!("batch-{}.arrow", batch_number))).unwrap();
+        let file = File::create(path.join(format!("batch-{batch_number}.arrow"))).unwrap();
         let options = WriteOptions { compression: None };
         let mut writer = FileWriter::try_new(file, schema.clone(), None, options).unwrap();
 
@@ -58,9 +59,9 @@ pub(crate) fn generate_batched_arrow_test_data(
 
         // From those fields construct our schema
         let schema = Schema::from(fields);
-        let file = File::create(path.join(format!("batch-{}.arrow", batches))).unwrap();
+        let file = File::create(path.join(format!("batch-{batches}.arrow"))).unwrap();
         let options = WriteOptions { compression: None };
-        let mut writer = FileWriter::try_new(file, schema.clone(), None, options).unwrap();
+        let mut writer = FileWriter::try_new(file, schema, None, options).unwrap();
 
         let arrays = (0..cols)
             .map(|_| {

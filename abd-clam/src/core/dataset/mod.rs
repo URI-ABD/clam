@@ -1,7 +1,8 @@
 //! Provides the `Dataset` trait and an implementation for a vector of data.
-
-mod arrow_dataset;
 mod vec2d;
+
+/// Provides `BatchedArrowDataset`
+mod arrow_dataset;
 
 #[allow(clippy::module_name_repetitions)]
 pub use vec2d::VecDataset;

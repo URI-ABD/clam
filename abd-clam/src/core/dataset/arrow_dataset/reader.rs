@@ -10,37 +10,58 @@ use std::path::PathBuf;
 use std::{error::Error, marker::PhantomData};
 use std::{fs::File, sync::RwLock};
 
+/// Encapsulates the original and reordered indices that a dataset may have
 #[derive(Debug)]
-pub(crate) struct ArrowIndices {
+pub struct ArrowIndices {
+    /// The original ordering of the dataset (may or may not be linear)
     pub original_indices: Vec<usize>,
+
+    /// The reordering map for this dataset
     pub reordered_indices: Vec<usize>,
 }
 
+/// Orchestrates and coordinates reading and random access to a set of dataset
+/// shards in the Arrow IPC format.
 #[derive(Debug)]
-pub(crate) struct BatchedArrowReader<T: ConstructableNumber> {
+pub struct BatchedArrowReader<T: ConstructableNumber> {
+    /// The original and reordered indices
     pub indices: ArrowIndices,
 
-    // The directory where the data is stored
+    /// The directory where the data is stored
     data_dir: PathBuf,
+
+    /// The metadata associated with this batch of files
     metadata: ArrowMetaData<T>,
+
+    /// The readers for each of the shards in the dataset
     readers: RwLock<Vec<File>>,
 
-    // This is here so we dont have to perform two rwlocks every
-    // `get`
+    /// The number of readers in the dataset. This is just an alias to
+    /// self.readers.len() but allows us to cut down on the number of
+    /// reads to the `RwLock`
     num_readers: usize,
 
-    // We allocate a column of the specific number of bytes
-    // necessary (type_size * num_rows) at construction to
-    // lessen the number of vector allocations we need to do.
-    // This might be able to be removed. Unclear.
-    _col: RwLock<Vec<u8>>,
+    /// A preallocated vector of u8's corresponding to an instance in
+    /// the dataset. This is a member to cut down on the number of allocations
+    /// needed
+    col: RwLock<Vec<u8>>,
 
-    // We'd like to associate this handle with a type, hence the phantomdata
+    /// We only accept a single primitive type for the dataset. This is that type
     _t: PhantomData<T>,
 }
 
 impl<T: ConstructableNumber> BatchedArrowReader<T> {
-    pub(crate) fn new(data_dir: &str) -> Result<Self, Box<dyn Error>> {
+    /// Constructs a new `BatchedArrowReader`
+    ///
+    /// # Args
+    /// - `data_dir`: The dataset directory
+    ///
+    /// # Returns
+    /// A newly constructed `BatchedArrowReader` situated in `data_dir`
+    ///
+    /// # Errors
+    /// Any I/O or IPC format errors
+    pub fn new(data_dir: &str) -> Result<Self, Box<dyn Error>> {
         // By processing our data directory we get both the handles for each of the shards and the reordering map
         // for the dataset if it exists
         let path = PathBuf::from(data_dir);
@@ -54,32 +75,33 @@ impl<T: ConstructableNumber> BatchedArrowReader<T> {
 
         // Index information
         let original_indices: Vec<usize> = (0..cardinality).collect();
-        let reordered_indices = match reordered_indices {
-            Some(indices) => indices,
-            None => original_indices.clone(),
-        };
+        let reordered_indices = reordered_indices.map_or_else(|| original_indices.clone(), |indices| indices);
 
-        Ok(BatchedArrowReader {
+        Ok(Self {
             data_dir: path,
             indices: ArrowIndices {
-                reordered_indices,
                 original_indices,
+                reordered_indices,
             },
 
             readers: RwLock::new(handles),
             num_readers,
-            _t: Default::default(),
-            _col: RwLock::new(vec![0u8; metadata.row_size_in_bytes()]),
+            _t: PhantomData::default(),
+            col: RwLock::new(vec![0u8; metadata.row_size_in_bytes()]),
             metadata,
         })
     }
 
-    pub(crate) fn get(&self, index: usize) -> Vec<T> {
-        let resolved_index = self.indices.reordered_indices[index];
-        self.get_column(resolved_index)
-    }
-
-    fn get_column(&self, index: usize) -> Vec<T> {
+    /// Returns a column at a given index in the dataset
+    ///
+    /// # Args
+    /// - `idx`: The desired index
+    ///
+    /// # Returns
+    /// A vector of scalars representing an instance in the dataset
+    ///
+    pub fn get(&self, index: usize) -> Vec<T> {
+        let index = self.indices.reordered_indices[index];
         let metadata = &self.metadata;
 
         // Returns the index of the reader associated with the index
@@ -94,6 +116,9 @@ impl<T: ConstructableNumber> BatchedArrowReader<T> {
         // the data buffer, hence the 2*i+1.
         let data_buffer: Buffer = metadata.buffers[index];
 
+        // Resolve the offset that we need to seek to to get to the actual data. This is
+        // conditonally different based upon the last shard in the dataset's cardinality.
+        #[allow(clippy::cast_sign_loss)]
         let offset = if reader_index == self.num_readers - 1 {
             metadata.last_batch_start_of_data + data_buffer.offset as u64
         } else {
@@ -101,20 +126,21 @@ impl<T: ConstructableNumber> BatchedArrowReader<T> {
         };
 
         // We `expect` here because any other result is a total failure
+        #[allow(clippy::expect_used)]
         let mut readers = self.readers.write().expect("Could not access column. Invalid index");
-        let mut _col = self
-            ._col
-            .write()
-            .expect("Could not access column buffer. Memory error.");
 
-        read_bytes_from_file(&mut readers[reader_index], offset, &mut _col)
+        #[allow(clippy::expect_used)]
+        let mut col = self.col.write().expect("Could not access column buffer. Memory error.");
+
+        read_bytes_from_file(&mut readers[reader_index], offset, &mut col)
     }
 
-    pub(crate) fn write_reordering_map(&self) -> Result<(), Box<dyn Error>> {
+    /// Writes a reordering map to the dataset's data directory
+    ///
+    /// # Errors
+    /// Any I/O or IPC formatting errors that occur during constructing and writing the reordering
+    /// map
+    pub fn write_reordering_map(&self) -> Result<(), Box<dyn Error>> {
         super::io::write_reordering_map(&self.indices.reordered_indices, &self.data_dir)
-    }
-
-    pub(crate) fn metadata(&self) -> &ArrowMetaData<T> {
-        &self.metadata
     }
 }

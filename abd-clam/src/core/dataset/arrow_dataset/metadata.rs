@@ -8,8 +8,11 @@ use std::io::{Read, Seek, SeekFrom};
 use std::marker::PhantomData;
 use std::{fmt, mem};
 
+/// The number of bytes every arrow file has preprended by default.
+/// These are always skipped and seeked past.
 const ARROW_MAGIC_OFFSET: u64 = 12;
 
+/// An error that may occur during metadata parsing
 #[derive(Debug)]
 pub struct MetadataParsingError<'msg>(&'msg str);
 
@@ -39,26 +42,30 @@ impl<'msg> Error for MetadataParsingError<'msg> {}
 /// (<= `cardinality_per_batch`)
 #[derive(Debug)]
 pub struct ArrowMetaData<T: ConstructableNumber> {
-    // The offsets of the buffers containing the validation data and actual data
+    /// The offsets of the buffers containing the validation data and actual data
     pub buffers: Vec<Buffer>,
 
-    // The file pointer offset corresponding to the beginning of the actual data
+    /// The file pointer offset corresponding to the beginning of the actual data
     pub start_of_data: u64,
+
+    /// The number of instances per batch. Guaranteed for all except the last batch.
     pub cardinality_per_batch: usize,
 
-    // Number of rows in the dataset (we assume each col. has the same number)
+    /// Number of rows in the dataset (we assume each col. has the same number)
     pub num_rows: usize,
 
-    // The size of the type of the dataset in bytes
+    /// The size of the type of the dataset in bytes
     pub type_size: usize,
 
-    // The start of the data in the last batch. May or may not be equal to
-    // `start_of_data`
+    /// The start of the data in the last batch. May or may not be equal to
+    /// `start_of_data`
     pub last_batch_start_of_data: u64,
+
+    /// The cardinality of the last batch. May or may not be equal to
+    /// `cardinality_per_batch`
     pub last_batch_cardinality: usize,
 
-    // We store the type information to assure synchronization in the case of
-    // independently constructed dataset and metadata
+    /// The primitive type associated with the dataset
     _t: PhantomData<T>,
 }
 
@@ -70,11 +77,15 @@ type MetaInfo = (Vec<Buffer>, u64, usize, usize);
 
 impl<T: ConstructableNumber> ArrowMetaData<T> {
     /// Returns the size of a row in the dataset in bytes
-    pub fn row_size_in_bytes(&self) -> usize {
+    pub const fn row_size_in_bytes(&self) -> usize {
         self.num_rows * self.type_size
     }
 
-    pub fn calculate_cardinality(&self, num_readers: usize) -> usize {
+    /// Calculates the cardinality of the dataset
+    ///
+    /// # Args
+    /// - `num_readers`: The number of readers (files) in the dataset
+    pub const fn calculate_cardinality(&self, num_readers: usize) -> usize {
         self.cardinality_per_batch * (num_readers - 1) + self.last_batch_cardinality
     }
 
@@ -84,7 +95,7 @@ impl<T: ConstructableNumber> ArrowMetaData<T> {
         let (_, last_batch_start_of_data, _, last_batch_cardinality) =
             Self::extract_metadata(&mut handles[handles.len() - 1])?;
 
-        Ok(ArrowMetaData {
+        Ok(Self {
             buffers,
             start_of_data,
             cardinality_per_batch,
@@ -92,7 +103,7 @@ impl<T: ConstructableNumber> ArrowMetaData<T> {
             type_size: mem::size_of::<T>(),
             last_batch_start_of_data,
             last_batch_cardinality,
-            _t: Default::default(),
+            _t: PhantomData::default(),
         })
     }
 
@@ -129,7 +140,7 @@ impl<T: ConstructableNumber> ArrowMetaData<T> {
         // We then read the next four bytes, this contains a u32 which has the size of the
         // metadata
         let meta_size = Self::read_metadata_size(reader)?;
-        let mut data_start = ARROW_MAGIC_OFFSET + meta_size as u64;
+        let mut data_start = ARROW_MAGIC_OFFSET + u64::from(meta_size);
 
         // Stuff is always padded to an 8 byte boundary, so we add the padding to the offset
         // The +4 here is to skip past the continuation bytes ff ff ff ff
@@ -192,7 +203,8 @@ impl<T: ConstructableNumber> ArrowMetaData<T> {
         let num_rows: usize = nodes
             .get(0)
             .ok_or(MetadataParsingError("Header contains no nodes and thus cannot be read"))?
-            .length() as usize;
+            .length()
+            .try_into()?;
 
         // We then convert the buffer references to owned buffers. This gives us the offset corresponding to the
         // start of each column and the length of each column in bytes.

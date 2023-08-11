@@ -9,14 +9,18 @@ use std::error::Error;
 use std::io::{Read, Seek, SeekFrom};
 use std::{
     ffi::OsString,
-    fs::{read_dir, File},
+    fs::{read_dir, DirEntry, File},
     path::{Path, PathBuf},
 };
 
 use super::_constructable::ConstructableNumber;
 
+/// The default name for a reordering map
 const REORDERING_FILENAME: &str = "reordering.arrow";
 
+/// The result of processing a data directory. Namely, a list of file
+/// handles and an optional reordering map if the dataset has already
+/// been reordered.
 pub type FilesAndReorderingMap = (Vec<File>, Option<Vec<usize>>);
 
 /// Scans a given directory for batch files and returns their handles as well as an optional
@@ -32,13 +36,13 @@ pub type FilesAndReorderingMap = (Vec<File>, Option<Vec<usize>>);
 ///
 /// # Arguments
 /// `data_dir`: A directory pointing to a batched dataset
-pub(crate) fn process_data_directory(data_dir: &Path) -> Result<FilesAndReorderingMap, Box<dyn Error>> {
+pub fn process_data_directory(data_dir: &Path) -> Result<FilesAndReorderingMap, Box<dyn Error>> {
     let mut reordering = None;
-
-    // Very annoying. We need to sort these files to maintain consistent loading. read_dir does not do this in any
-    // consistent way. We will do this lexiographically.
-
-    let mut filenames: Vec<OsString> = read_dir(data_dir)?.map(|file| file.unwrap().file_name()).collect();
+    let mut filenames: Vec<OsString> = read_dir(data_dir)?
+        .collect::<Result<Vec<DirEntry>, std::io::Error>>()?
+        .into_iter()
+        .map(|file| file.file_name())
+        .collect();
 
     filenames.sort();
 
@@ -49,8 +53,8 @@ pub(crate) fn process_data_directory(data_dir: &Path) -> Result<FilesAndReorderi
     let handles: Vec<File> = filenames
         .iter()
         .filter(|name| *name != REORDERING_FILENAME)
-        .map(|name| File::open(data_dir.join(name)).unwrap())
-        .collect();
+        .map(|name| File::open(data_dir.join(name)))
+        .collect::<Result<Vec<File>, std::io::Error>>()?;
 
     Ok((handles, reordering))
 }
@@ -60,7 +64,7 @@ pub(crate) fn process_data_directory(data_dir: &Path) -> Result<FilesAndReorderi
 /// # Args
 /// - `reordered_indices`: A reordering map for a given dataset
 /// - `data_dir`: The directory to place the reordering map
-pub(crate) fn write_reordering_map(reordered_indices: &[usize], data_dir: &Path) -> Result<(), Box<dyn Error>> {
+pub fn write_reordering_map(reordered_indices: &[usize], data_dir: &Path) -> Result<(), Box<dyn Error>> {
     let reordered_indices: Vec<u64> = reordered_indices.iter().map(|x| *x as u64).collect();
 
     let array: PrimitiveArray<u64> = UInt64Array::from_vec(reordered_indices);
@@ -91,7 +95,8 @@ pub(crate) fn write_reordering_map(reordered_indices: &[usize], data_dir: &Path)
 /// - `reader`: A file
 /// - `offset`: The number of bytes from the start of the file we should start reading after. I.e.
 ///     if offset is `n`, this function will begin reading at position `n` in the file.
-pub(crate) fn read_bytes_from_file<T: ConstructableNumber>(reader: &mut File, offset: u64, buffer: &mut [u8]) -> Vec<T> {
+#[allow(clippy::unwrap_used)]
+pub fn read_bytes_from_file<T: ConstructableNumber>(reader: &mut File, offset: u64, buffer: &mut [u8]) -> Vec<T> {
     // Here's where we do the mutating
     // Skip past the validity bytes (our data is assumed to be non-nullable)
     reader
@@ -127,17 +132,39 @@ fn read_reordering_map(data_dir: &Path) -> Result<Vec<usize>, Box<dyn Error>> {
     let mut reader = FileReader::new(reader, metadata, None, None);
 
     // There's only one column, so we grab it
-    let binding = reader.next().unwrap()?;
+    let binding = reader
+        .next()
+        .ok_or("Could not read first column. Reordering map is invalid.")??;
     let column = &binding.columns()[0];
 
     // `Array` implements `Any`, so we can downcase it to a PrimitiveArray<u64> without any isssues, then
     // just convert that to usize. Unwrapping here is fine because we assume non-nullable because
     // `write_reordering_map` writes as non-nullable.
-    Ok(column
+    column
         .as_any()
         .downcast_ref::<PrimitiveArray<u64>>()
-        .unwrap()
-        .iter()
-        .map(|x| *x.unwrap() as usize)
-        .collect())
+        .ok_or("Could not read reordering map. Invalid file")?
+        .into_iter()
+        .map(convert_u64_usize)
+        .collect()
+}
+
+/// Converts a u64 to a usize with appropriate error handling
+///
+/// # Args
+/// - `num`: Possibly a u64
+///
+/// # Returns
+/// A result with the converted usize
+///
+/// # Errors
+/// If the argument is empty, this constitutes an error. There may also
+/// be conversion errors from u64 to usize
+///
+/// # Note
+/// Does this affect embedded applications?
+fn convert_u64_usize(num: Option<&u64>) -> Result<usize, Box<dyn Error>> {
+    let ref_num = num.ok_or("Missing index in reordering map. Invalid file.")?;
+    let converted = usize::try_from(*ref_num)?;
+    Ok(converted)
 }
