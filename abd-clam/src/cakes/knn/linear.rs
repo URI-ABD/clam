@@ -1,10 +1,10 @@
 //! Linear search for the k nearest neighbors of a query.
 
-use core::cmp::Ordering;
-
 use distances::Number;
 
 use crate::Dataset;
+
+use super::Hits;
 
 /// Linear search for the nearest neighbors of a query.
 ///
@@ -26,9 +26,13 @@ where
     D: Dataset<T, U>,
 {
     let distances = data.query_to_many(query, indices);
-    let mut hits = indices.iter().copied().zip(distances.into_iter()).collect::<Vec<_>>();
-    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less));
-    hits[..k].to_vec()
+
+    let mut hits = Hits::new(k);
+    indices
+        .iter()
+        .zip(distances.iter())
+        .for_each(|(&i, &d)| hits.push(i, d));
+    hits.extract()
 }
 
 #[cfg(test)]
@@ -38,6 +42,31 @@ mod tests {
     use symagen::random_data;
 
     use crate::{Cakes, PartitionCriteria, VecDataset};
+
+    #[test]
+    fn tiny() {
+        let data = (1..=10).map(|i| vec![i as f32]).collect::<Vec<_>>();
+        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let data = VecDataset::new("tiny".to_string(), data, euclidean::<_, f32>, false);
+
+        let query = vec![0.0];
+
+        let criteria = PartitionCriteria::default();
+        let model = Cakes::new(data, None, criteria);
+        let tree = model.tree();
+
+        let linear_nn = super::search(tree.data(), &query, 3, tree.indices());
+        assert_eq!(linear_nn.len(), 3);
+
+        let distances = {
+            let mut distances = linear_nn.iter().map(|(_, d)| *d).collect::<Vec<_>>();
+            distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            distances
+        };
+        let true_distances = vec![1.0, 2.0, 3.0];
+
+        assert_eq!(distances, true_distances);
+    }
 
     #[test]
     fn linear() {

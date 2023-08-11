@@ -172,7 +172,7 @@ mod tests {
     use distances::vectors::euclidean;
     use symagen::random_data;
 
-    use crate::{cakes::knn::linear, Cakes, PartitionCriteria, VecDataset};
+    use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn expanding_thresholds() {
@@ -192,9 +192,8 @@ mod tests {
         let tree = model.tree();
 
         for k in [100, 10, 1] {
-            let linear_nn = linear::search(tree.data(), query, k, tree.indices());
-            let mut thresholds_nn = super::search(tree, query, k);
-            thresholds_nn.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            let thresholds_nn = sort_hits(super::search(tree, query, k));
             assert_eq!(linear_nn, thresholds_nn);
         }
     }

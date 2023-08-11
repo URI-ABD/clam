@@ -7,7 +7,10 @@
 //! to this enum as they are being implemented. They should not be considered
 //! stable until they are documented as such.
 
+use core::{cmp::Ordering, hash::Hash};
+
 use distances::Number;
+use priority_queue::PriorityQueue;
 
 use crate::{Dataset, Tree};
 
@@ -115,5 +118,132 @@ impl Algorithm {
             Self::SieveV2 => sieve_v2::search(tree, query, k),
             Self::ExpandingThreshold => expanding_threshold::search(tree, query, k),
         }
+    }
+}
+
+/// A priority queue of hits for K-Nearest Neighbor search.
+pub(crate) struct Hits<I: Hash + Eq + Copy, U: Number> {
+    /// The priority queue of hits.
+    pub queue: PriorityQueue<I, OrdNumber<U>>,
+    /// The number of neighbors to search for.
+    pub capacity: usize,
+}
+
+impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
+    /// Creates a new priority queue of hits.
+    ///
+    /// The priority queue is initialized with a `capacity` and is maintained
+    /// at that `capacity`.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - The number of neighbors to search for.
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            queue: PriorityQueue::with_capacity(capacity),
+            capacity,
+        }
+    }
+
+    /// Number of hits in the queue.
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    /// Whether the queue is empty.
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    /// Returns the distance of the farthest hit in the queue.
+    ///
+    /// If the queue is empty, returns the result of calling `default`.
+    pub fn peek(&self, default: impl FnOnce() -> U) -> U {
+        self.queue.peek().map_or_else(default, |(_, &OrdNumber(d))| d)
+    }
+
+    /// Pushes a hit onto the queue.
+    ///
+    /// If the queue is not full, the hit is pushed onto the queue. If the queue
+    /// is full and the distance of the hit is less than the distance of the
+    /// farthest hit in the queue, the farthest hit is popped from the queue and
+    /// the new hit is pushed onto the queue.
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - The index of the hit.
+    /// * `d` - The distance of the hit.
+    pub fn push(&mut self, i: I, d: U) {
+        if self.queue.len() < self.capacity {
+            self.queue.push(i, OrdNumber(d));
+        } else if d < self.peek(U::zero) {
+            self.queue.pop();
+            self.queue.push(i, OrdNumber(d));
+        }
+    }
+
+    /// Push a batch of items onto the queue and reconcile with capacity at the
+    /// end.
+    pub fn push_batch(&mut self, items: impl Iterator<Item = (I, U)>) {
+        items.for_each(|(i, d)| {
+            self.queue.push(i, OrdNumber(d));
+        });
+        while self.queue.len() > self.capacity {
+            self.queue.pop();
+        }
+    }
+
+    /// Pops hits from the queue until the distance of the farthest hit is no
+    /// farther than the given `threshold`.
+    pub fn pop_until(&mut self, threshold: U) {
+        while threshold < self.peek(U::zero) {
+            self.queue.pop();
+        }
+    }
+
+    /// Extracts the hits from the queue.
+    pub fn extract(&self) -> Vec<(I, U)> {
+        self.queue.iter().map(|(&i, &OrdNumber(d))| (i, d)).collect()
+    }
+}
+
+/// Field by which we rank elements in priority queue of hits.
+#[derive(Debug)]
+pub struct OrdNumber<U: Number>(U);
+
+impl<U: Number> PartialEq for OrdNumber<U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<U: Number> Eq for OrdNumber<U> {}
+
+impl<U: Number> PartialOrd for OrdNumber<U> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<U: Number> Ord for OrdNumber<U> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or_else(|| {
+            unreachable!(
+                "All hits are instances, and
+        therefore each hit has a distance from the query. Since all hits' distances to the
+        query will be represented by the same type, we can always compare them."
+            )
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use distances::Number;
+
+    pub(crate) fn sort_hits<U: Number>(mut hits: Vec<(usize, U)>) -> Vec<(usize, U)> {
+        hits.sort_by(|(i, _), (j, _)| i.cmp(j));
+        hits
     }
 }
