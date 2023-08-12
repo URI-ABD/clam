@@ -1,10 +1,12 @@
 //! Repeated RNN search, with increasing radii, for k-nearest neighbors.
 
-use core::{cmp::Ordering, f64::EPSILON};
+use core::f64::EPSILON;
 
 use distances::Number;
 
 use crate::{cakes::rnn::clustered::tree_search, utils, Tree};
+
+use super::Hits;
 
 /// The multiplier to use for increasing the radius in the repeated RNN algorithm.
 const MULTIPLIER: f64 = 2.0;
@@ -65,22 +67,19 @@ where
             .sum::<usize>();
     }
 
-    let mut hits = confirmed
-        .into_iter()
-        .chain(straddlers.into_iter())
-        .flat_map(|(c, d)| {
-            let indices = c.indices(tree.data());
-            let distances = if c.is_singleton() {
-                vec![d; c.cardinality]
-            } else {
-                tree.data().query_to_many(query, indices)
-            };
-            indices.iter().copied().zip(distances.into_iter())
-        })
-        .collect::<Vec<_>>();
+    let mut hits = Hits::new(k);
 
-    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
-    hits[..k].to_vec()
+    confirmed.into_iter().chain(straddlers.into_iter()).for_each(|(c, d)| {
+        let indices = c.indices(tree.data());
+        let distances = if c.is_singleton() {
+            vec![d; c.cardinality]
+        } else {
+            tree.data().query_to_many(query, indices)
+        };
+        hits.push_batch(indices.iter().copied().zip(distances.into_iter()));
+    });
+
+    hits.extract()
 }
 
 #[cfg(test)]
