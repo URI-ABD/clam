@@ -4,6 +4,8 @@ use distances::Number;
 
 use crate::{Cluster, Dataset, Tree};
 
+use super::{OrdNumber, RevNumber};
+
 /// K-Nearest Neighbor search with expanding threshold.
 ///
 /// /// # Arguments
@@ -111,58 +113,6 @@ fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize
     while hits.len() > k {
         hits.pop()
             .unwrap_or_else(|| unreachable!("`hits` is non-empty and has at least k elements."));
-    }
-}
-
-/// Field by which we rank elements in priority queue of hits.
-struct OrdNumber<T: Number>(T);
-
-impl<T: Number> PartialEq for OrdNumber<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl<T: Number> Eq for OrdNumber<T> {}
-
-impl<T: Number> PartialOrd for OrdNumber<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
-}
-
-impl<T: Number> Ord for OrdNumber<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0
-            .partial_cmp(&other.0)
-            .unwrap_or_else(|| unreachable!("elements are always comparable"))
-    }
-}
-
-/// Field which functions as the reverse of `OrdNumber`, for ranking elements
-/// in the priority queue of candidates.
-struct RevNumber<T: Number>(T);
-
-impl<T: Number> PartialEq for RevNumber<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl<T: Number> Eq for RevNumber<T> {}
-
-impl<T: Number> PartialOrd for RevNumber<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        other.0.partial_cmp(&self.0)
-    }
-}
-
-impl<T: Number> Ord for RevNumber<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other
-            .0
-            .partial_cmp(&self.0)
-            .unwrap_or_else(|| unreachable!("elements are always comparable"))
     }
 }
 
