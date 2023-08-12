@@ -133,13 +133,6 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         (self.multiplicity <= k) || self.is_leaf
     }
 
-    /// A Grain is "inside" the threshold if the furthest, worst-case possible point is at most as far as
-    /// threshold distance from the query.
-    #[allow(dead_code)]
-    pub fn is_inside(&self, threshold: U) -> bool {
-        self.d <= threshold
-    }
-
     /// A Grain is "outside" the threshold if the closest, best-case possible point is further than
     /// the threshold distance to the query.
     pub fn is_outside(&self, threshold: U) -> bool {

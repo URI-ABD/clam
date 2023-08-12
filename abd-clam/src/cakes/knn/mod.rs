@@ -228,13 +228,31 @@ impl<U: Number> PartialOrd for OrdNumber<U> {
 
 impl<U: Number> Ord for OrdNumber<U> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or_else(|| {
-            unreachable!(
-                "All hits are instances, and
-        therefore each hit has a distance from the query. Since all hits' distances to the
-        query will be represented by the same type, we can always compare them."
-            )
-        })
+        self.partial_cmp(other).unwrap_or(Ordering::Greater)
+    }
+}
+
+/// Field by which we reverse-rank elements in priority queue of hits.
+#[derive(Debug)]
+pub struct RevNumber<U: Number>(U);
+
+impl<U: Number> PartialEq for RevNumber<U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<U: Number> Eq for RevNumber<U> {}
+
+impl<U: Number> PartialOrd for RevNumber<U> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        other.0.partial_cmp(&self.0)
+    }
+}
+
+impl<U: Number> Ord for RevNumber<U> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Greater)
     }
 }
 
