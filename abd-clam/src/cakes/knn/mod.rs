@@ -146,6 +146,7 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
     }
 
     /// Number of hits in the queue.
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.queue.len()
     }
@@ -258,10 +259,12 @@ impl<U: Number> Ord for RevNumber<U> {
 
 #[cfg(test)]
 mod tests {
+    use core::cmp::Ordering;
+
     use distances::Number;
 
     pub(crate) fn sort_hits<U: Number>(mut hits: Vec<(usize, U)>) -> Vec<(usize, U)> {
-        hits.sort_by(|(i, _), (j, _)| i.cmp(j));
+        hits.sort_by(|(_, i), (_, j)| i.partial_cmp(j).unwrap_or(Ordering::Greater));
         hits
     }
 }

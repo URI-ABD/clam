@@ -37,17 +37,13 @@ where
     loop {
         // The threshold is the minimum distance, so far, which guarantees that
         // the k nearest neighbors are within the threshold.
-        let i = Grain::partition(&mut grains, k, hits.len());
+        let i = Grain::partition(&mut grains, k);
         let threshold = grains[i].d;
 
         // Remove hits which are outside the threshold.
         hits.pop_until(threshold);
 
         let (insiders, non_insiders) = grains.split_at_mut(i);
-        if non_insiders.is_empty() {
-            grains_to_hits(data, query, &mut hits, insiders);
-            break;
-        }
 
         let (small_insiders, insiders) = insiders
             .iter_mut()
@@ -145,29 +141,29 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 
     /// Wrapper function for `_partition_kth`.
-    pub fn partition(grains: &mut [Self], k: usize, g_init: usize) -> usize {
-        Self::_partition(grains, k, 0, grains.len() - 1, g_init)
+    pub fn partition(grains: &mut [Self], k: usize) -> usize {
+        Self::_partition(grains, k, 0, grains.len() - 1)
     }
 
     /// Finds the smallest index i such that all grains with distance closer to or
     /// equal to the distance of the grain at index i have a multiplicity greater
     /// than or equal to k.
     #[allow(clippy::many_single_char_names)]
-    fn _partition(grains: &mut [Self], k: usize, l: usize, r: usize, g_init: usize) -> usize {
+    fn _partition(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
         if l >= r {
             min(l, r)
         } else {
             let p = Self::_partition_once(grains, l, r);
 
             // The number of guaranteed hits within the first p grains.
-            let g: usize = grains.iter().take(p).map(|g| g.multiplicity).sum();
+            let g = grains.iter().take(p).map(|g| g.multiplicity).sum::<usize>();
 
-            match g.cmp(&(k - g_init)) {
+            match g.cmp(&k) {
                 Ordering::Equal => p,
-                Ordering::Less => Self::_partition(grains, k, p + 1, r, g_init),
+                Ordering::Less => Self::_partition(grains, k, p + 1, r),
                 Ordering::Greater => {
                     if (p > 0) && (g > (k + grains[p - 1].multiplicity)) {
-                        Self::_partition(grains, k, l, p - 1, g_init)
+                        Self::_partition(grains, k, l, p - 1)
                     } else {
                         p
                     }
@@ -185,7 +181,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 
         let (mut a, mut b) = (l, l);
         while b < r {
-            if grains[b].d <= grains[r].d {
+            if grains[b].d < grains[r].d {
                 grains.swap(a, b);
                 a += 1;
             }
@@ -201,6 +197,8 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 #[cfg(test)]
 mod tests {
 
+    use core::f32::EPSILON;
+
     use distances::vectors::euclidean;
     use symagen::random_data;
 
@@ -208,7 +206,7 @@ mod tests {
 
     #[test]
     fn sieve_v1() {
-        let (cardinality, dimensionality) = (1_000, 10);
+        let (cardinality, dimensionality) = (10_000, 10);
         let (min_val, max_val) = (-1.0, 1.0);
         let seed = 42;
 
@@ -227,7 +225,17 @@ mod tests {
             let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
             let sieve_nn = sort_hits(super::search(tree, query, k));
 
-            assert_eq!(linear_nn, sieve_nn);
+            assert_eq!(sieve_nn.len(), k);
+
+            let d_linear = linear_nn[k - 1].1;
+            let d_sieve = sieve_nn[k - 1].1;
+            assert!(
+                (d_linear - d_sieve).abs() < EPSILON,
+                "k = {}, linear = {}, sieve = {}",
+                k,
+                d_linear,
+                d_sieve
+            );
         }
     }
 }
