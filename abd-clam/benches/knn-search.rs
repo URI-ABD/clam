@@ -29,32 +29,36 @@ fn cakes(c: &mut Criterion) {
         let cakes = Cakes::new(dataset, Some(seed), criteria);
 
         for k in (0..=8).map(|i| 2_usize.pow(i)) {
-            let id = BenchmarkId::new("Linear", k);
-            group.bench_with_input(id, &k, |b, _| {
-                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::Linear));
-            });
-
-            let id = BenchmarkId::new("RepeatedRnn", k);
-            group.bench_with_input(id, &k, |b, _| {
-                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::RepeatedRnn));
-            });
+            // let id = BenchmarkId::new("RepeatedRnn", k);
+            // group.bench_with_input(id, &k, |b, _| {
+            //     b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::RepeatedRnn));
+            // });
 
             let id = BenchmarkId::new("SieveV1", k);
             group.bench_with_input(id, &k, |b, _| {
                 b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveV1));
             });
 
-            let id = BenchmarkId::new("SieveV2", k);
-            group.bench_with_input(id, &k, |b, _| {
-                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveV2));
-            });
+            // let id = BenchmarkId::new("SieveV2", k);
+            // group.bench_with_input(id, &k, |b, _| {
+            //     b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveV2));
+            // });
 
             let id = BenchmarkId::new("ExpandingThreshold", k);
             group.bench_with_input(id, &k, |b, _| {
                 b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::ExpandingThreshold));
             });
+
+            let id = BenchmarkId::new("ImprovedSieve", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::ImprovedSieve));
+            });
         }
 
+        let id = BenchmarkId::new("Linear", 9);
+        group.bench_with_input(id, &9, |b, _| {
+            b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, 9, knn::Algorithm::Linear));
+        });
         group.finish();
     }
 }
