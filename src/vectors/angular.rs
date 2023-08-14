@@ -135,3 +135,58 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
         .map(|(a, b)| a.abs_diff(b) / (a.abs() + b.abs()))
         .fold(U::zero(), |acc, v| acc + v)
 }
+
+/// Computes the Bray-Curtis distance between two vectors.
+///
+/// The Bray-Curtis dissimilarity is typically used in ecology to
+/// measure biodiversity between two sites. Each entry in a vector
+/// typically represents the number of observations of a particular
+/// species. The distance is defined as 1 minus twice the sum of
+/// the minimum observations component-wise divided by the sum all the
+/// observations.
+///
+/// # Arguments
+///
+/// * `x`: A slice of numbers.
+/// * `y`: A slice of numbers.
+///
+/// The function won't panic if given vectors with floating point entries or
+/// negative entries, but Bray-Curtis dissimilarity is intended for use
+/// with vectors of non-negative integers.
+///
+/// # Examples
+/// ```
+/// use distances::vectors::bray_curtis;
+///
+/// let x: Vec<usize>  = vec![6, 7, 4];
+/// let y: Vec<usize> = vec![10, 0, 6];
+///
+/// let distance: f32 =  bray_curtis(&x, &y);
+///
+/// assert_eq!(distance, 0.39393938);
+/// ```
+///
+/// # References
+///
+/// * [Bray-Curtis dissimilarity](https://en.wikipedia.org/wiki/Bray%E2%80%93Curtis_dissimilarity)
+pub fn bray_curtis<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
+    let [sum_x, sum_y, sum_min] =
+        x.iter()
+            .zip(y.iter())
+            .fold([T::zero(); 3], |[sum_x, sum_y, sum_min], (&a, &b)| {
+                [a + sum_x, b + sum_y, if a > b { b } else { a } + sum_min]
+            });
+
+    let [sum_x, sum_y, sum_min] = [U::from(sum_x), U::from(sum_y), U::from(sum_min)];
+
+    if sum_x < U::epsilon() || sum_y < U::epsilon() || sum_min < U::epsilon() {
+        U::one()
+    } else {
+        let d = U::one() - U::from(2) * sum_min / (sum_x + sum_y);
+        if d < U::epsilon() {
+            U::zero()
+        } else {
+            d
+        }
+    }
+}
