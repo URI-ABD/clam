@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::core::dataset::{BatchedArrowDataset, Dataset};
     use arrow2::{
         array::Float32Array,
         chunk::Chunk,
@@ -11,8 +12,20 @@ mod tests {
     use std::{fs::File, path::PathBuf};
     use uuid::Uuid;
 
-    /// Returns the path of the newly created dataset
-    #[allow(dead_code)]
+    /// Generates a new random f32 arrow dataset and returns the directory in which it was created (/tmp/)
+    /// Notably, this function can create datasets with final batches that have an arbitrarily smaller
+    /// number of columns than other batches. This allows for testing unevenly split datasets.
+    ///
+    /// # Args
+    /// - `batches` - The number of batches in the dataset
+    /// - `dimensionality` - The dimensionality of the dataset
+    /// - `cols_per_batch` - The number of columns per batch (I.e. rows in a normal format)
+    /// - `seed` - The seed for the rng
+    /// - `uneven_cols` - If this is `Some(n)`, then the last batch will have `n` columns. Note that `n`
+    /// must be less than or equal to `cols_per_batch`.
+    ///
+    /// # Returns
+    /// The path where the dataset was generated.
     pub fn generate_batched_arrow_test_data(
         batches: usize,
         dimensionality: usize,
@@ -33,6 +46,8 @@ mod tests {
 
         // From those fields construct our schema
         let schema = Schema::from(fields);
+
+        let batches = if uneven_cols.is_some() { batches - 1 } else { batches };
 
         // For each batch, we need to create a file, create the write options, create the file writer to write
         // the arrow data, craete our arrays and finally construct our chunk and write it out.
@@ -79,11 +94,6 @@ mod tests {
         path
     }
 
-    use crate::{
-        core::dataset::arrow_dataset::util::generate_batched_arrow_test_data,
-        core::dataset::{BatchedArrowDataset, Dataset},
-    };
-
     fn euclidean(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
         distances::vectors::euclidean(a, b)
     }
@@ -114,34 +124,6 @@ mod tests {
             dataset.get(i);
         }
     }
-
-    // #[test]
-    // fn test_cluster() {
-    //     let batches = 1;
-    //     let cols_per_batch = 4;
-    //     let dimensionality = 3;
-    //     let seed = 25565;
-
-    //     let path = generate_batched_arrow_test_data(batches, dimensionality, cols_per_batch, Some(seed), None);
-
-    //     let name = "Test Dataset".to_string();
-    //     let data =
-    //         BatchedArrowDataset::new(path.to_str().unwrap(), name, distances::vectors::euclidean, false).unwrap();
-
-    //     let indices = data.indices().to_vec();
-    //     let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-    //     let cluster = Cluster::new_root(&data, &indices, Some(42)).partition(&data, &partition_criteria, true);
-
-    //     assert_eq!(cluster.depth(), 0);
-    //     assert_eq!(cluster.cardinality(), 4);
-    //     assert_eq!(cluster.num_descendants(), 6);
-    //     assert!(cluster.radius() > 0.);
-    //     assert_eq!(format!("{cluster}"), "1");
-
-    //     let [left, right] = cluster.children().unwrap();
-    //     assert_eq!(format!("{left}"), "2");
-    //     assert_eq!(format!("{right}"), "3");
-    // }
 
     // Tests the difference between our implementation and the arrow2 implementation
     #[test]
@@ -197,14 +179,18 @@ mod tests {
         let cols_per_batch = 4;
         let dimensionality = 4;
         let seed = 25565;
+        let uneven = 3;
 
-        let path = generate_batched_arrow_test_data(batches, dimensionality, cols_per_batch, Some(seed), Some(3));
+        let path = generate_batched_arrow_test_data(batches, dimensionality, cols_per_batch, Some(seed), Some(uneven));
 
         let name = "Test Dataset".to_string();
         let dataset: BatchedArrowDataset<f32, f32> =
             BatchedArrowDataset::new(path.to_str().unwrap(), name, euclidean, false).unwrap();
 
-        assert_eq!(dataset.cardinality(), batches * cols_per_batch + 3);
+        assert_eq!(
+            dataset.cardinality(),
+            batches * cols_per_batch - (cols_per_batch - uneven)
+        );
         assert_eq!(dataset.get(0).len(), dimensionality);
 
         for i in 0..dataset.cardinality() {
@@ -220,23 +206,25 @@ mod tests {
         let seed = 25565;
         let uneven = 3;
 
+        let expected_cardinality = batches * cols_per_batch - (cols_per_batch - uneven);
+
         let path = generate_batched_arrow_test_data(batches, dimensionality, cols_per_batch, Some(seed), Some(uneven));
 
         let name = "Test Dataset".to_string();
         let dataset: BatchedArrowDataset<f32, f32> =
             BatchedArrowDataset::new(path.to_str().unwrap(), name, euclidean, false).unwrap();
 
-        assert_eq!(dataset.cardinality(), batches * cols_per_batch + 3);
+        assert_eq!(dataset.cardinality(), expected_cardinality);
         assert_eq!(dataset.get(0).len(), dimensionality);
 
-        let mut reader = std::fs::File::open(path.join("batch-3.arrow")).unwrap();
+        let mut reader = std::fs::File::open(path.join("batch-2.arrow")).unwrap();
         let metadata = arrow2::io::ipc::read::read_file_metadata(&mut reader).unwrap();
         let mut reader = arrow2::io::ipc::read::FileReader::new(reader, metadata, None, None);
 
         let binding = reader.next().unwrap().unwrap();
         let columns = binding.columns();
 
-        let offset = batches * cols_per_batch;
+        let offset = expected_cardinality - uneven;
         for i in 0..3 {
             let col: Vec<f32> = columns[i]
                 .as_any()
