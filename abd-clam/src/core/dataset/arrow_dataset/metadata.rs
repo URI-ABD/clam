@@ -103,7 +103,7 @@ impl<T: ConstructableNumber> ArrowMetaData<T> {
             type_size: mem::size_of::<T>(),
             last_batch_start_of_data,
             last_batch_cardinality,
-            _t: PhantomData::default(),
+            _t: PhantomData,
         })
     }
 

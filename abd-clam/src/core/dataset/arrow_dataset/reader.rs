@@ -86,7 +86,7 @@ impl<T: ConstructableNumber> BatchedArrowReader<T> {
 
             readers: RwLock::new(handles),
             num_readers,
-            _t: PhantomData::default(),
+            _t: PhantomData,
             col: RwLock::new(vec![0u8; metadata.row_size_in_bytes()]),
             metadata,
         })

@@ -21,8 +21,5 @@ mod io;
 /// Tests
 mod tests;
 
-/// File generation utility functionality
-mod util;
-
 /// Constructable number trait (TBR)
 mod _constructable;

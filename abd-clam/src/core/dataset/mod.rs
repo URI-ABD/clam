@@ -50,18 +50,6 @@ pub trait Dataset<T: Send + Sync, U: Number>: std::fmt::Debug + Send + Sync {
     /// The instance at `index`.
     fn get(&self, index: usize) -> Box<T>;
 
-    // /// Returns the metric used to calculate distances between instances.
-    // ///
-    // /// A metric should obey the following properties:
-    // ///
-    // /// * Identity: `d(x, y) = 0 <=> x = y`
-    // /// * Non-negativity: `d(x, y) >= 0`
-    // /// * Symmetry: `d(x, y) = d(y, x)`
-    // ///
-    // /// If the metric also obeys the triangle inequality, `d(x, z) <= d(x, y) + d(y, z)`,
-    // /// then CLAM can make certain guarantees about the exactness of search results.
-    // fn metric(&self) -> fn(&T, &T) -> U;
-
     /// Swaps the values at two given indices in the dataset.
     ///
     /// Note: It is acceptable for this function to panic if `i` or `j` are not valid indices in the
