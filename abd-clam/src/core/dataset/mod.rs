@@ -35,20 +35,20 @@ pub trait Dataset<T: Send + Sync, U: Number>: std::fmt::Debug + Send + Sync {
     /// Returns a slice of indices that can be used to access the dataset.
     fn indices(&self) -> &[usize];
 
-    // /// Returns the instance at a given index in the dataset.
-    // ///
-    // /// # Arguments
-    // ///
-    // /// * `index` - An index in the dataset.
-    // ///
-    // /// # Panics
-    // ///
-    // /// * If `index` is not a valid index in the dataset.
-    // ///
-    // /// # Returns
-    // ///
-    // /// The instance at `index`.
-    // fn get(&self, index: usize) -> &T;
+    /// Returns the instance at a given index in the dataset.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - An index in the dataset.
+    ///
+    /// # Panics
+    ///
+    /// * If `index` is not a valid index in the dataset.
+    ///
+    /// # Returns
+    ///
+    /// The instance at `index`.
+    fn get(&self, index: usize) -> Box<T>;
 
     // /// Returns the metric used to calculate distances between instances.
     // ///

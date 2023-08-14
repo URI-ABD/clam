@@ -55,7 +55,7 @@ impl<T: Send + Sync, U: Number> std::fmt::Debug for VecDataset<T, U> {
     }
 }
 
-impl<T: Send + Sync, U: Number> Dataset<T, U> for VecDataset<T, U> {
+impl<T: Send + Sync + Clone, U: Number> Dataset<T, U> for VecDataset<T, U> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -72,9 +72,9 @@ impl<T: Send + Sync, U: Number> Dataset<T, U> for VecDataset<T, U> {
         &self.indices
     }
 
-    // fn get(&self, index: usize) -> &T {
-    //     &self.data[index]
-    // }
+    fn get(&self, index: usize) -> Box<T> {
+        Box::new(self.data[index].clone())
+    }
 
     // fn metric(&self) -> fn(&T, &T) -> U{
     //     self.metric

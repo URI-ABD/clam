@@ -80,17 +80,6 @@ impl<T: ConstructableNumber, U: Number> BatchedArrowDataset<T, U> {
         })
     }
 
-    /// Returns an instance of the dataset at index `idx`
-    ///
-    /// # Args
-    /// - `idx`: The desired index
-    ///
-    /// # Returns
-    /// The instance in the dataset at the desired index
-    pub fn get(&self, idx: usize) -> Vec<T> {
-        self.reader.get(idx)
-    }
-
     /// Returns a row of the dataset at a given index
     ///
     /// # Notes
@@ -133,9 +122,16 @@ impl<T: ConstructableNumber, U: Number> crate::Dataset<Vec<T>, U> for BatchedArr
         &self.name
     }
 
-    // fn metric(&self) -> fn(&Vec<T>, &Vec<T>) -> U {
-    //     self.metric
-    // }
+    /// Returns an instance of the dataset at index `idx`
+    ///
+    /// # Args
+    /// - `idx`: The desired index
+    ///
+    /// # Returns
+    /// The instance in the dataset at the desired index
+    fn get(&self, idx: usize) -> Box<Vec<T>> {
+        Box::new(self.reader.get(idx))
+    }
 
     fn cardinality(&self) -> usize {
         self.reader.indices.original_indices.len()
