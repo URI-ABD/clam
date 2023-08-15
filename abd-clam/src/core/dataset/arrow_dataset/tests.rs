@@ -163,13 +163,25 @@ mod tests {
         let dimensionality = 1;
         let cols_per_batch = 500;
 
+        // Load in the dataset a first time
         let path = generate_batched_arrow_test_data(1, dimensionality, cols_per_batch, Some(42), None);
         let name = "Test Dataset".to_string();
         let mut data: BatchedArrowDataset<f32, f32> =
+            BatchedArrowDataset::new(path.clone().to_str().unwrap(), name, euclidean, false).unwrap();
+
+        // Reorder it in reverse
+        let reordering = (0..cols_per_batch).rev().collect::<Vec<usize>>();
+        data.reorder_to_file(&reordering).unwrap();
+
+        // Drop it
+        drop(data);
+
+        // Reload the dataset in the same directory
+        let name = "Test Dataset".to_string();
+        let data: BatchedArrowDataset<f32, f32> =
             BatchedArrowDataset::new(path.to_str().unwrap(), name, euclidean, false).unwrap();
 
-        let reordering = (0..cols_per_batch).rev().collect::<Vec<usize>>();
-        data.reorder(&reordering);
+        // Assert that the reordered indices we load in are the correct order
         assert_eq!(data.reordered_indices(), reordering);
     }
 
