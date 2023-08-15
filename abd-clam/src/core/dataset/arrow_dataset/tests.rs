@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn grab_col_raw() {
+    fn test_get_column() {
         let batches = 100;
         let cols_per_batch = 10000;
         let dimensionality = 10;
@@ -127,7 +127,7 @@ mod tests {
 
     // Tests the difference between our implementation and the arrow2 implementation
     #[test]
-    fn test_diff() {
+    fn test_arrow2_symmetry() {
         let dimensionality = 50;
         let cols_per_batch = 500;
 
