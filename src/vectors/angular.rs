@@ -1,5 +1,7 @@
 //! Angular distances between vectors.
 
+use core::cmp::min;
+
 use crate::{
     number::{Float, Int, UInt},
     Number,
@@ -150,9 +152,6 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// * `x`: A slice of numbers.
 /// * `y`: A slice of numbers.
 ///
-/// The function won't panic if given vectors with floating point entries or
-/// negative entries, but Bray-Curtis dissimilarity is intended for use
-/// with vectors of non-negative integers.
 ///
 /// # Examples
 /// ```
@@ -169,13 +168,13 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// # References
 ///
 /// * [Bray-Curtis dissimilarity](https://en.wikipedia.org/wiki/Bray%E2%80%93Curtis_dissimilarity)
-pub fn bray_curtis<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    let [sum_x, sum_y, sum_min] =
-        x.iter()
-            .zip(y.iter())
-            .fold([T::zero(); 3], |[sum_x, sum_y, sum_min], (&a, &b)| {
-                [a + sum_x, b + sum_y, if a > b { b } else { a } + sum_min]
-            });
+pub fn bray_curtis<T: UInt, U: Float>(x: &[T], y: &[T]) -> U {
+    let [sum_x, sum_y, sum_min] = x
+        .iter()
+        .zip(y.iter())
+        .fold([T::zero(); 3], |[sum_a, sum_b, sum_min], (&a, &b)| {
+            [a + sum_a, b + sum_b, min(a, b) + sum_min]
+        });
 
     let [sum_x, sum_y, sum_min] = [U::from(sum_x), U::from(sum_y), U::from(sum_min)];
 

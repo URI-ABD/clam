@@ -132,7 +132,7 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// L4-norm between two vectors.
 ///
 /// The L4-norm is defined as the fourth root of the sum of the fourth powers of
-/// the absolute differences between the corresponding elements of the two
+/// the absolute differences between the corresponding elements of the two vectors.
 ///
 /// See the [`crate::vectors`] module documentation for information on this
 /// function's potentially unexpected behaviors
@@ -229,6 +229,7 @@ pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
 ///
 /// The Lp-norm is defined as the pth root of the sum of the pth powers of
 /// the absolute differences between the corresponding elements of the two
+/// vectors.
 ///
 /// See the [`crate::vectors`] module documentation for information on this
 /// function's potentially unexpected behaviors

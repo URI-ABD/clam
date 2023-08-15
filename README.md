@@ -48,7 +48,7 @@ assert!((distance - (27.0_f32).sqrt()).abs() < 1e-6);
   - [x] `hamming`
   - [x] `canberra`
     - [Canberra Distance](https://en.wikipedia.org/wiki/Canberra_distance)
-  - [ ] `bray_curtis`
+  - [x] `bray_curtis`
     - [Bray-Curtis Distance](https://en.wikipedia.org/wiki/Bray%E2%80%93Curtis_dissimilarity)
   - [ ] `pearson`
     - `1.0 - r` where `r` is the [Pearson Correlation Coefficient](https://en.wikipedia.org/wiki/Pearson_correlation_coefficient)
