@@ -1,4 +1,5 @@
 //! Angular distances between vectors.
+
 use crate::{
     number::{Float, Int, UInt},
     Number,
