@@ -1,4 +1,10 @@
 //! Distance functions for vectors.
+//!
+//! # Potentially unexpected behaviors
+//! Computing many of these distances with vectors of differing or zero
+//! dimensionality may give unexpected results. Specifically, when one vector is
+//! shorter than the other, elements in the longer vector past the end of the
+//! shorter vector will be ignored.
 
 mod angular;
 mod lp_norms;

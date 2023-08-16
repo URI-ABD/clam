@@ -1,11 +1,4 @@
 //! Provides functions for calculating Lp-norms between two vectors.
-//!
-//! # Error conditions
-//! Computing many of these distances with vectors of differing or zero
-//! dimensionality may give unexpected results.
-// TODO - This wording is weak and non-committal, mostly because I'm not clear
-// on exactly what we want to commit to. Hopefully someone with a better idea of
-// that can write this.
 
 use core::cmp::Ordering;
 
@@ -19,9 +12,8 @@ use super::utils::abs_diff_iter;
 /// root of the sum of the squares of the absolute differences between the
 /// corresponding elements of the two vectors.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -50,9 +42,8 @@ pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// as the sum of the squares of the absolute differences between the
 /// corresponding elements of the two vectors.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -81,9 +72,8 @@ pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
 /// defined as the sum of the absolute differences between the corresponding
 /// elements of the two vectors.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -111,9 +101,8 @@ pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
 /// The L3-norm is defined as the cubic root of the sum of the cubes of the
 /// absolute differences between the corresponding elements of the two vectors.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -145,9 +134,8 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// The L4-norm is defined as the fourth root of the sum of the fourth powers of
 /// the absolute differences between the corresponding elements of the two
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -181,9 +169,8 @@ pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// Also known as the L∞-norm, the Chebyshev distance is defined as the maximum
 /// absolute difference between the corresponding elements of the two vectors.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -213,9 +200,8 @@ pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
 /// This is defined as the sum of the pth powers of the absolute differences
 /// between the corresponding elements of the two slices.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -244,9 +230,8 @@ pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
 /// The Lp-norm is defined as the pth root of the sum of the pth powers of
 /// the absolute differences between the corresponding elements of the two
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///

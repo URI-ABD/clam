@@ -1,11 +1,4 @@
 //! Angular distances between vectors.
-//!
-//! # Error conditions
-//! Computing many of these distances with vectors of differing or zero
-//! dimensionality may give unexpected results.
-// TODO - This wording is weak and non-committal, mostly because I'm not clear
-// on exactly what we want to commit to. Hopefully someone with a better idea of
-// that can write this.
 use crate::{
     number::{Float, Int, UInt},
     Number,
@@ -19,9 +12,8 @@ use crate::{
 /// The cosine similarity is defined as the dot product of the two vectors
 /// divided by the product of their magnitudes.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -70,9 +62,8 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// The Hamming distance is defined as the number of positions at which
 /// the corresponding elements are different.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
@@ -112,9 +103,8 @@ pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
 /// between the elements of the two vectors divided by the sum of the absolute
 /// values of the elements of the two vectors.
 ///
-/// # Error conditions
-/// See the module documentation for detailed information on this function's
-/// error conditions
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
 ///
 /// # Arguments
 ///
