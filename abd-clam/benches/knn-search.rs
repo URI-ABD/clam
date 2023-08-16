@@ -6,7 +6,7 @@ use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_F32};
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
-    let (cardinality, dimensionality) = (500_000, 30);
+    let (cardinality, dimensionality) = (100_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
     let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
@@ -28,7 +28,7 @@ fn cakes(c: &mut Criterion) {
         let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
         let cakes = Cakes::new(dataset, Some(seed), criteria);
 
-        for k in (1..=3).map(|i| 2_usize.pow(i)) {
+        for k in (3..=8).map(|i| 2_usize.pow(i)) {
             // let id = BenchmarkId::new("RepeatedRnn", k);
             // group.bench_with_input(id, &k, |b, _| {
             //     b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::RepeatedRnn));
@@ -49,15 +49,15 @@ fn cakes(c: &mut Criterion) {
                 b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::ExpandingThreshold));
             });
 
-            let id = BenchmarkId::new("ImprovedSieve", k);
+            let id = BenchmarkId::new("Sieve", k);
             group.bench_with_input(id, &k, |b, _| {
-                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::ImprovedSieve));
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::Sieve));
             });
 
-            // let id = BenchmarkId::new("ImprovedSieveSepCenter", k);
-            // group.bench_with_input(id, &k, |b, _| {
-            //     b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::ImprovedSieveSepCenter));
-            // });
+            let id = BenchmarkId::new("SieveSepCenter", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, knn::Algorithm::SieveSepCenter));
+            });
         }
 
         let id = BenchmarkId::new("Linear", 9);

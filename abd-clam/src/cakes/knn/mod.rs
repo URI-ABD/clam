@@ -15,9 +15,9 @@ use priority_queue::PriorityQueue;
 use crate::{Dataset, Tree};
 
 pub(crate) mod expanding_threshold;
-pub(crate) mod improved_sieve;
 pub(crate) mod linear;
 pub(crate) mod repeated_rnn;
+pub(crate) mod sieve;
 pub(crate) mod sieve_sep_center;
 pub(crate) mod sieve_v1;
 pub(crate) mod sieve_v2;
@@ -87,7 +87,7 @@ pub enum Algorithm {
     /// until candidates is empty or the closest candidate is worse than the furthest hit.
     ExpandingThreshold,
     /// Sieve where hits are also grains.
-    ImprovedSieve,
+    Sieve,
 
     /// Sieve where hits are also grains and the center of a cluster is treated separately
     SieveSepCenter,
@@ -124,7 +124,7 @@ impl Algorithm {
             Self::SieveV1 => sieve_v1::search(tree, query, k),
             Self::SieveV2 => sieve_v2::search(tree, query, k),
             Self::ExpandingThreshold => expanding_threshold::search(tree, query, k),
-            Self::ImprovedSieve => improved_sieve::search(tree, query, k),
+            Self::Sieve => sieve::search(tree, query, k),
             Self::SieveSepCenter => sieve_sep_center::search(tree, query, k),
         }
     }
