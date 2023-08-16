@@ -103,22 +103,6 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         }
     }
 
-    /// Returns whether the `Grain` is a cluster.
-    const fn is_cluster(&self) -> bool {
-        match self {
-            Grain::Hit { .. } | Grain::Center { .. } => false,
-            Grain::Cluster { .. } => true,
-        }
-    }
-
-    /// Returns whether the `Grain` is a center.
-    const fn is_not_center(&self) -> bool {
-        match self {
-            Grain::Hit { .. } | Grain::Cluster { .. } => true,
-            Grain::Center { .. } => false,
-        }
-    }
-
     /// Returns whether the `Grain` is outside the threshold.
     fn is_outside(&self, threshold: U) -> bool {
         self.d_min() > threshold
@@ -164,11 +148,46 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         Self::_partition(grains, k, 0, grains.len() - 1)
     }
 
+    /// Finds the smallest index i such that all grains with distance closer to or
+    /// equal to the distance of the grain at index i have a multiplicity greater
+    /// than or equal to k.
+    #[allow(clippy::many_single_char_names)]
+    fn _partition(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
+        if l >= r {
+            min(l, r)
+        } else {
+            let mean_cardinality: usize = grains.iter().map(Grain::multiplicity).sum::<usize>() / grains.len();
+            let pivot = if mean_cardinality > k {
+                l
+            } else {
+                // k / mean_cardinality -1
+                l + (r - l) / 2
+            };
+            let p = Self::partition_once(grains, l, r, pivot);
+
+            // The number of guaranteed hits within the first p grains.
+            let g = grains.iter().take(p + 1).map(Grain::multiplicity).sum::<usize>();
+            match g.cmp(&k) {
+                Ordering::Equal => p,
+                Ordering::Less => Self::_partition(grains, k, p + 1, r),
+                Ordering::Greater => {
+                    if (p > 0) && (g > (k + grains[p - 1].multiplicity())) {
+                        Self::_partition(grains, k, l, p - 1)
+                    } else if (p > 0) && (g == k + grains[p - 1].multiplicity()) {
+                        p - 1
+                    } else {
+                        p
+                    }
+                }
+            }
+        }
+    }
+
     /// Changes pivot point and swaps elements around so that all elements to left
     /// of pivot are less than or equal to pivot and all elements to right of pivot
     /// are greater than pivot.
-    fn _partition_once(grains: &mut [Self], l: usize, r: usize) -> usize {
-        let pivot = l + (r - l) / 2;
+    #[allow(clippy::many_single_char_names)]
+    fn partition_once(grains: &mut [Self], l: usize, r: usize, pivot: usize) -> usize {
         grains.swap(pivot, r);
 
         let (mut a, mut b) = (l, l);
@@ -183,32 +202,6 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         grains.swap(a, r);
 
         a
-    }
-
-    /// Finds the smallest index i such that all grains with distance closer to or
-    /// equal to the distance of the grain at index i have a multiplicity greater
-    /// than or equal to k.
-    #[allow(clippy::many_single_char_names)]
-    fn _partition(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
-        if l >= r {
-            min(l, r)
-        } else {
-            let p = Self::_partition_once(grains, l, r);
-
-            // The number of guaranteed hits within the first p grains.
-            let g = grains.iter().take(p).map(Grain::multiplicity).sum::<usize>();
-            match g.cmp(&k) {
-                Ordering::Equal => p - 1,
-                Ordering::Less => Self::_partition(grains, k, p + 1, r),
-                Ordering::Greater => {
-                    if (p > 0) && (g > (k + grains[p - 1].multiplicity())) {
-                        Self::_partition(grains, k, l, p - 1)
-                    } else {
-                        p - 1
-                    }
-                }
-            }
-        }
     }
 
     /// Returns the index of the instance if the `Grain` is of the `Hit` variant.
@@ -252,17 +245,14 @@ where
         // Remove grains which are outside the threshold.
 
         let (insiders, non_insiders) = grains.split_at_mut(i + 1);
-        let non_insiders = non_insiders
-            .iter_mut()
-            .map(|&mut g| g)
-            .filter(|g| !g.is_outside(threshold));
+        let non_insiders = non_insiders.iter().filter(|g| !g.is_outside(threshold));
 
         let (clusters, mut hits) = insiders
-            .iter_mut()
-            .map(|&mut g| g)
+            .iter()
             .chain(non_insiders)
-            .filter(Grain::is_not_center)
-            .partition::<Vec<_>, _>(Grain::is_cluster);
+            .copied()
+            .filter(|g| !matches!(g, Grain::Center { .. }))
+            .partition::<Vec<_>, _>(|g| matches!(g, Grain::Cluster { .. }));
 
         let (small_clusters, clusters) = clusters.into_iter().partition::<Vec<_>, _>(|g| g.is_small(k));
 
@@ -280,6 +270,7 @@ where
             .into_iter()
             .flat_map(Grain::cluster_to_children)
             .flat_map(|c| Grain::new_grains(c, data, query))
+            .chain(hits.into_iter())
             .collect();
     }
 }
