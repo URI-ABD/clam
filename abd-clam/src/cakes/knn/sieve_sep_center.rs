@@ -18,15 +18,16 @@ enum Grain<'a, T: Send + Sync + Copy, U: Number> {
         /// Index of the instance.
         index: usize,
     },
+
     /// A `Cluster`.
     Cluster {
         /// The cluster.
         c: &'a Cluster<T, U>,
         /// Theoretical worst case distance from the query to a point in the cluster.
-        d: U,
-        /// The diameter of the cluster.
-        diameter: U,
-        /// The number of instances in the cluster.
+        d_max: U,
+        /// Theoretical best case distance from the query to a point in the cluster.
+        d_min: U,
+        /// The number of instances in the cluster minus 1 for the center.
         multiplicity: usize,
         /// Whether the cluster is a leaf.
         is_leaf: bool,
@@ -34,9 +35,7 @@ enum Grain<'a, T: Send + Sync + Copy, U: Number> {
 
     /// A `Center` is the center of a cluster.
     Center {
-        /// The cluster.
-        c: &'a Cluster<T, U>,
-        /// Distance from cluster center to query
+        /// Distance from the query to the center.
         d: U,
     },
 }
@@ -47,8 +46,8 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         let r = c.radius;
         Self::Cluster {
             c,
-            d: d + r,
-            diameter: r + r,
+            d_max: d + r,
+            d_min: if d > r { d - r } else { U::zero() },
             multiplicity: c.cardinality - 1,
             is_leaf: c.is_leaf(),
         }
@@ -60,67 +59,80 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 
     /// Creates a new `Grain` from a cluster center.
-    const fn new_center(c: &'a Cluster<T, U>, d: U) -> Self {
-        Self::Center { c, d }
+    const fn new_center(d: U) -> Self {
+        Self::Center { d }
     }
 
     /// Creates center and cluster grains from a cluster.
-    fn new_grains(c: &'a Cluster<T, U>, data: &impl Dataset<T, U>, query: T) -> Vec<Self> {
-        let d = c.distance_to_instance(data, query);
-
-        vec![Self::new_cluster(c, d), Self::new_center(c, d)]
+    fn new_grains<D: Dataset<T, U>>(c: &'a Cluster<T, U>, data: &D, query: T) -> Vec<Self> {
+        if c.is_singleton() {
+            let d = c.distance_to_instance(data, query);
+            c.indices(data).iter().map(|&i| Self::new_hit(d, i)).collect()
+        } else if c.is_leaf() {
+            let indices = c.indices(data);
+            let distances = data.query_to_many(query, indices);
+            indices
+                .iter()
+                .zip(distances.into_iter())
+                .map(|(&i, d)| Self::new_hit(d, i))
+                .collect()
+        } else {
+            let d = c.distance_to_instance(data, query);
+            vec![Self::new_cluster(c, d), Self::new_center(d)]
+        }
     }
 
     /// Returns the theoretical minimum distance from the query to a point in
     /// the cluster if the `Grain` is of the `Cluster` variant; returns the
     /// distance to the instance if the `Grain` is of the `Hit` variant.
-    fn d_min(&self) -> U {
+    const fn d_min(&self) -> U {
         match self {
-            Grain::Hit { d, .. } => *d,
-            Grain::Cluster { d, diameter, .. } => *d - *diameter,
-            Grain::Center { c, d, .. } => *d - c.radius,
+            Grain::Hit { d, .. } | Grain::Cluster { d_min: d, .. } | Grain::Center { d, .. } => *d,
         }
     }
 
     /// Returns the theoretical maximum distance from the query to a point in
     /// the cluster if the `Grain` is of the `Cluster` variant; returns the
     /// distance to the instance if the `Grain` is of the `Hit` variant.
-    fn d_max(&self) -> U {
+    const fn d_max(&self) -> U {
         match self {
-            Grain::Hit { d, .. } | Grain::Cluster { d, .. } => *d,
-            Grain::Center { c, d, .. } => *d + c.radius,
+            Grain::Hit { d, .. } | Grain::Cluster { d_max: d, .. } | Grain::Center { d, .. } => *d,
         }
     }
 
     /// Returns whether the `Grain` has k or fewer instances or is a leaf.
     const fn is_small(&self, k: usize) -> bool {
         match self {
-            Grain::Hit { .. } => true,
+            Grain::Hit { .. } | Grain::Center { .. } => true,
             Grain::Cluster {
                 multiplicity, is_leaf, ..
             } => *multiplicity <= k || *is_leaf,
-            Grain::Center { .. } => false,
         }
     }
 
     /// Returns whether the `Grain` is outside the threshold.
-    fn is_outside(&self, threshold: U) -> bool {
-        self.d_min() > threshold
+    fn not_outside(&self, threshold: U) -> bool {
+        self.d_min() <= threshold
     }
 
     /// Returns the indices of the instances in the cluster if the `Grain` is of
     /// the `Cluster` variant
-    fn cluster_to_hits(self, data: &impl Dataset<T, U>, query: T) -> Vec<Grain<T, U>> {
+    fn cluster_to_hits<D: Dataset<T, U>>(self, data: &D, query: T) -> Vec<Self> {
         match self {
-            Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on non-hits and non-centers."),
-            Grain::Cluster { c, .. } => {
+            Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on Clusters."),
+            Grain::Cluster { c, d_max, .. } => {
                 let indices = c.indices(data);
-                let distances = data.query_to_many(query, indices);
-                indices
-                    .iter()
-                    .zip(distances.into_iter())
-                    .map(|(index, d)| Grain::new_hit(d, *index))
-                    .collect::<Vec<_>>()
+                if c.is_singleton() {
+                    let d = d_max - c.radius;
+                    indices.iter().map(|&i| Grain::new_hit(d, i)).collect()
+                } else {
+                    let distances = data.query_to_many(query, indices);
+                    indices
+                        .iter()
+                        .zip(distances.into_iter())
+                        .map(|(&index, d)| Grain::new_hit(d, index))
+                        .collect()
+                }
             }
         }
     }
@@ -128,7 +140,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// Returns the children of the cluster if the `Grain` is of the `Cluster`
     fn cluster_to_children(self) -> [&'a Cluster<T, U>; 2] {
         match self {
-            Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on non-hits and non-centers."),
+            Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on Clusters."),
             Grain::Cluster { c, .. } => c
                 .children()
                 .unwrap_or_else(|| unreachable!("This is only called on non-leaves.")),
@@ -156,21 +168,25 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         if l >= r {
             min(l, r)
         } else {
-            // If the mean cardinality of the grains is greater than k, the leftmost index should be the pivot.
-            let mean_cardinality: usize = grains.iter().map(Grain::multiplicity).sum::<usize>() / grains.len();
-            let pivot = if mean_cardinality > k { l } else { l + (r - l) / 2 };
-            let p = Self::partition_once(grains, l, r, pivot);
+            // If the mean cardinality of the grains in question is greater than
+            // k, the leftmost index should be the pivot.
+            let mean_cardinality = grains[l..=r].iter().map(Grain::multiplicity).sum::<usize>() / (r - l + 1);
+            let pivot = if mean_cardinality > k { 0 } else { (r - l) / 2 };
+            let p = l + Self::partition_once(&mut grains[l..=r], pivot);
 
             // The number of guaranteed hits within the first p grains.
             let g = grains.iter().take(p + 1).map(Grain::multiplicity).sum::<usize>();
+
             match g.cmp(&k) {
                 Ordering::Equal => p,
                 Ordering::Less => Self::_partition(grains, k, p + 1, r),
                 Ordering::Greater => {
-                    if (p > 0) && (g > (k + grains[p - 1].multiplicity())) {
-                        Self::_partition(grains, k, l, p - 1)
-                    } else if (p > 0) && (g == k + grains[p - 1].multiplicity()) {
-                        p - 1
+                    if p > l {
+                        match g.cmp(&(k + grains[p - 1].multiplicity())) {
+                            Ordering::Equal => p - 1,
+                            Ordering::Less => p,
+                            Ordering::Greater => Self::_partition(grains, k, l, p - 1),
+                        }
                     } else {
                         p
                     }
@@ -183,25 +199,24 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// of pivot are less than or equal to pivot and all elements to right of pivot
     /// are greater than pivot.
     #[allow(clippy::many_single_char_names)]
-    fn partition_once(grains: &mut [Self], l: usize, r: usize, pivot: usize) -> usize {
-        // If the pivot is 0, don't bother doing any additional swaps and just exchange the 0th element for the minimum.
+    fn partition_once(grains: &mut [Self], pivot: usize) -> usize {
+        // If the pivot is l, don't bother doing any additional swaps and just
+        // exchange the 0th element for the minimum.
         if pivot == 0 {
             let min = grains
                 .iter()
+                .map(Grain::d_max)
                 .enumerate()
-                .min_by(|(_, a), (_, b)| {
-                    a.d_max()
-                        .partial_cmp(&b.d_max())
-                        .unwrap_or_else(|| unreachable!("Should never be called on a slice with a NaN."))
-                })
-                .unwrap_or_else(|| unreachable!("Should never be called on a slice with a NaN."))
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater))
+                .unwrap_or_else(|| unreachable!("grains is non-empty"))
                 .0;
             grains.swap(pivot, min);
-            0
+            pivot
         } else {
+            let r = grains.len() - 1;
             grains.swap(pivot, r);
 
-            let (mut a, mut b) = (l, l);
+            let (mut a, mut b) = (0, 0);
             while b < r {
                 if grains[b].d_max() < grains[r].d_max() {
                     grains.swap(a, b);
@@ -244,9 +259,7 @@ where
     D: Dataset<T, U>,
 {
     let data = tree.data();
-    let c = tree.root();
-
-    let mut grains = Grain::new_grains(c, data, query);
+    let mut grains = Grain::new_grains(tree.root(), data, query);
 
     loop {
         // The threshold is the minimum distance, so far, which guarantees that
@@ -255,8 +268,8 @@ where
         let threshold = grains[i].d_max();
 
         // Remove grains which are outside the threshold.
-        let (insiders, non_insiders) = grains.split_at_mut(i + 1);
-        let non_insiders = non_insiders.iter().filter(|g| !g.is_outside(threshold));
+        let (insiders, non_insiders) = grains.split_at(i + 1);
+        let non_insiders = non_insiders.iter().filter(|g| g.not_outside(threshold));
 
         // Partition the grains into hits and clusters.
         let (clusters, mut hits) = insiders
@@ -276,8 +289,8 @@ where
 
         // If there are no more cluster grains, then the search is complete.
         if clusters.is_empty() {
-            let i = Grain::partition(&mut hits, k);
-            return hits[0..=i].iter().map(|g| (g.index(), g.d_max())).collect();
+            Grain::partition(&mut hits, k);
+            return hits[..k].iter().map(|g| (g.index(), g.d_max())).collect();
         }
 
         // Partition clusters into children and convert to grains.
