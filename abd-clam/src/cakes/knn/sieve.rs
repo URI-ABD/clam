@@ -133,13 +133,9 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
         if l >= r {
             min(l, r)
         } else {
+            // If mean cardinality is greater than k, we know the pivot should be the leftmost grain.
             let mean_cardinality: usize = grains.iter().map(Grain::multiplicity).sum::<usize>() / grains.len();
-            let pivot = if mean_cardinality > k {
-                l
-            } else {
-                // k / mean_cardinality -1
-                l + (r - l) / 2
-            };
+            let pivot = if mean_cardinality > k { l } else { l + (r - l) / 2 };
             let p = Self::partition_once(grains, l, r, pivot);
 
             // The number of guaranteed hits within the first p grains.
@@ -165,20 +161,36 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     /// are greater than pivot.
     #[allow(clippy::many_single_char_names)]
     fn partition_once(grains: &mut [Self], l: usize, r: usize, pivot: usize) -> usize {
-        grains.swap(pivot, r);
+        // If the pivot is 0, don't bother doing any additional swaps and just exchange the 0th element for the minimum.
+        if pivot == 0 {
+            let min = grains
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    a.d()
+                        .partial_cmp(&b.d())
+                        .unwrap_or_else(|| unreachable!("Should never be called on a slice with a NaN."))
+                })
+                .unwrap_or_else(|| unreachable!("Should never be called on a slice with a NaN."))
+                .0;
+            grains.swap(pivot, min);
+            0
+        } else {
+            grains.swap(pivot, r);
 
-        let (mut a, mut b) = (l, l);
-        while b < r {
-            if grains[b].d() < grains[r].d() {
-                grains.swap(a, b);
-                a += 1;
+            let (mut a, mut b) = (l, l);
+            while b < r {
+                if grains[b].d() < grains[r].d() {
+                    grains.swap(a, b);
+                    a += 1;
+                }
+                b += 1;
             }
-            b += 1;
+
+            grains.swap(a, r);
+
+            a
         }
-
-        grains.swap(a, r);
-
-        a
     }
 
     /// Returns the index of the instance if the `Grain` is of the `Hit` variant.
@@ -199,7 +211,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 ///
 /// # Returns
 ///
-/// A vector of 2-tuples, where the first e        // println!("i = {}", i);
+/// A vector of 2-tuples, where the first element is an index of an instance,
 /// and the second element is the distance from the query to the instance.
 pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
 where
@@ -220,27 +232,31 @@ where
         let threshold = grains[i].d();
 
         // Remove grains which are outside the threshold.
-
         let (insiders, non_insiders) = grains.split_at_mut(i + 1);
         let non_insiders = non_insiders.iter().filter(|g| !g.is_outside(threshold));
 
+        // Separate grains into hits and clusters.
         let (clusters, mut hits) = insiders
             .iter()
             .chain(non_insiders)
             .copied()
             .partition::<Vec<_>, _>(|g| matches!(g, Grain::Cluster { .. }));
 
+        // Separate small (cardinality less than k or leaf) clusters from the rest
         let (small_clusters, clusters) = clusters.into_iter().partition::<Vec<_>, _>(|g| g.is_small(k));
 
+        // Convert small clusters to hits.
         for cluster in small_clusters {
             hits.append(&mut cluster.cluster_to_hits(data, query));
         }
 
+        // If there are no more cluster grains, then the search is complete.
         if clusters.is_empty() {
             let i = Grain::partition(&mut hits, k);
             return hits[0..=i].iter().map(|g| (g.index(), g.d())).collect();
         }
 
+        // Partition clusters into children and convert to grains.
         grains = clusters
             .into_iter()
             .flat_map(Grain::cluster_to_children)
