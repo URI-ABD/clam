@@ -54,7 +54,8 @@ pub enum Algorithm {
     /// For each iteration of the search, we calculate a threshold from the
     /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
     /// to be within the threshold. We then use this threshold to filter out
-    /// clusters that are too far away from the query.
+    /// clusters that are too far away from the query. We maintain a separate priority
+    /// queue, `hits`, for the k closest instances found so far.
     ///
     /// This approach does not treat the center of a cluster separately from the rest
     /// of the points in the cluster.
@@ -67,7 +68,8 @@ pub enum Algorithm {
     /// For each iteration of the search, we calculate a threshold from the
     /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
     /// to be within the threshold. We then use this threshold to filter out
-    /// clusters that are too far away from the query.
+    /// clusters that are too far away from the query. We maintain a separate priority
+    /// queue, `hits`, for the k closest instances found so far.
     ///
     /// This approach treats the center of a cluster separately from the rest
     /// of the points in the cluster.
@@ -86,10 +88,32 @@ pub enum Algorithm {
     /// Hits are then removed from the queue until the queue has size k. Repeats these steps
     /// until candidates is empty or the closest candidate is worse than the furthest hit.
     ExpandingThreshold,
-    /// Sieve where hits are also grains.
+    /// Like SieveV1, but without the separate priority queue for hits.
+    ///
+    /// This algorithm is not stable.
+    ///
+    /// For each iteration of the search, we calculate a threshold from the
+    /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
+    /// to be within the threshold. We then use this threshold to filter out
+    /// clusters that are too far away from the query. Instead of maintaining
+    /// a separate priority queue for hits, hits are treated as grains.
+    ///
+    /// This approach does not treat the center of a cluster separately from the rest
+    /// of the points in the cluster.
     Sieve,
 
-    /// Sieve where hits are also grains and the center of a cluster is treated separately
+    /// Like SieveV2, but without the separate priority queue for hits.
+    ///
+    /// This algorithm is not stable.
+    ///
+    /// For each iteration of the search, we calculate a threshold from the
+    /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
+    /// to be within the threshold. We then use this threshold to filter out
+    /// clusters that are too far away from the query. Instead of maintaining
+    /// a separate priority queue for hits, hits are treated as grains.
+    ///
+    /// This approach treats the center of a cluster separately from the rest
+    /// of the points in the cluster.
     SieveSepCenter,
 }
 
