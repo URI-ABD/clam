@@ -284,7 +284,7 @@ mod tests {
         let test_metrics: &[(&str, fn(&str, &str) -> u16)] = &[
             ("hamming", distances::strings::hamming),
             ("levenshtein", distances::strings::levenshtein),
-            ("needleman_wunsch", crate::needleman_wunch::nw_distance),
+            ("needleman_wunsch", distances::strings::nw_distance),
         ];
 
         for &(metric_name, metric) in test_metrics {
