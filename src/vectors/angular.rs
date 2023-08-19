@@ -176,16 +176,14 @@ pub fn bray_curtis<T: UInt, U: Float>(x: &[T], y: &[T]) -> U {
             [a + sum_a, b + sum_b, min(a, b) + sum_min]
         });
 
-    let [sum_x, sum_y, sum_min] = [U::from(sum_x), U::from(sum_y), U::from(sum_min)];
-
-    if sum_x < U::epsilon() || sum_y < U::epsilon() || sum_min < U::epsilon() {
+    if sum_x == T::zero() || sum_y == T::zero() || sum_min == T::zero() {
         U::one()
     } else {
-        let d = U::one() - U::from(2) * sum_min / (sum_x + sum_y);
-        if d < U::epsilon() {
+        let (numerator, denominator) = (sum_min + sum_min, sum_x + sum_y);
+        if denominator <= numerator {
             U::zero()
         } else {
-            d
+            U::one() - U::from(numerator) / U::from(denominator)
         }
     }
 }
