@@ -51,6 +51,25 @@ impl<U: UInt> Penalties<U> {
 /// # Arguments
 ///
 /// * `penalties`: the set of penalties to use
+///
+/// # Examples
+///
+/// ```
+/// use distances::strings::{levenshtein_custom, Penalties};
+///
+/// let penalties = Penalties::new(0, 1, 1);
+/// let metric = levenshtein_custom(penalties);
+///
+/// let x = "NAJIBEATSPEPPERS";
+/// let y = "NAJIBPEPPERSEATS";
+/// let distance: u16 = metric(x, y);
+/// assert_eq!(distance, 8);
+///
+/// let x = "TOMEATSWHATFOODEATS";
+/// let y = "FOODEATSWHATTOMEATS";
+/// let distance: u16 = metric(x, y);
+/// assert_eq!(distance, 6);
+/// ```
 pub fn levenshtein_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> U {
     move |x: &str, y: &str| {
         if x.is_empty() {
@@ -124,9 +143,9 @@ pub fn levenshtein<U: UInt>(x: &str, y: &str) -> U {
         U::from(x.len())
     } else if x.len() < y.len() {
         // require tat a is no shorter than b
-        _levenshtein(y, x, Penalties::<U>::default())
+        _levenshtein(y, x, Penalties::default())
     } else {
-        _levenshtein(x, y, Penalties::<U>::default())
+        _levenshtein(x, y, Penalties::default())
     }
 }
 
@@ -137,17 +156,13 @@ pub fn levenshtein<U: UInt>(x: &str, y: &str) -> U {
 fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> U {
     // initialize DP table for string y
     // this is a bit ugly with the U casts
-    let mut cur = (0..=y.len())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .map(|v| U::from(v))
-        .collect::<Vec<U>>();
+    let mut cur = (0..=y.len()).map(U::from).collect::<Vec<_>>();
 
     // calculate edit distance
-    for (i, c_x) in x.chars().enumerate() {
+    for (i, c_x) in x.chars().enumerate().map(|(i, c)| (U::from(i + 1), c)) {
         // get first column for this row
         let mut pre = cur[0];
-        cur[0] = U::from(i) + U::one();
+        cur[0] = i;
         for (j, c_y) in y.chars().enumerate() {
             let tmp = cur[j + 1];
             cur[j + 1] = core::cmp::min(
