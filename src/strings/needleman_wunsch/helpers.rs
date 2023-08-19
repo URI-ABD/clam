@@ -4,13 +4,13 @@ use crate::{number::UInt, strings::Penalties};
 
 /// The direction of best alignment at a given position in the DP table
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Dir {
+pub enum Direction {
     /// Diagonal (Up and Left) for a match.
-    D,
+    Diagonal,
     /// Up for a gap in the first sequence.
-    U,
+    Up,
     /// Left for a gap in the second sequence.
-    L,
+    Left,
 }
 
 /// The type of edit needed to turn one sequence into another.
@@ -37,21 +37,25 @@ pub enum Edit {
 ///
 /// A nested vector of tuples of total-penalty and Direction, representing the
 /// best alignment at each position.
-pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<Vec<(U, Dir)>> {
+pub fn compute_table<U: UInt>(
+    x: &str,
+    y: &str,
+    penalties: Penalties<U>,
+) -> Vec<Vec<(U, Direction)>> {
     // Initializing table; the inner vectors represent rows in the table.
-    let mut table = vec![vec![(U::zero(), Dir::D); x.len() + 1]; y.len() + 1];
+    let mut table = vec![vec![(U::zero(), Direction::Diagonal); x.len() + 1]; y.len() + 1];
 
     // The top-left cell starts with a total penalty of zero and no direction.
-    table[0][0] = (U::zero(), Dir::D);
+    table[0][0] = (U::zero(), Direction::Diagonal);
 
     // Initialize left-most column of distance values.
     for (i, row) in table.iter_mut().enumerate().skip(1) {
-        row[0] = (penalties.gap * U::from(i), Dir::U);
+        row[0] = (penalties.gap * U::from(i), Direction::Up);
     }
 
     // Initialize top row of distance values.
     for (j, cell) in table[0].iter_mut().enumerate().skip(1) {
-        *cell = (penalties.gap * U::from(j), Dir::L);
+        *cell = (penalties.gap * U::from(j), Direction::Left);
     }
 
     // Set values for the body of the table
@@ -66,9 +70,9 @@ pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<
 
             // Compute the three possible penalties and use the minimum to set
             // the value for the next entry in the table.
-            let d00 = (table[i][j].0 + mismatch_penalty, Dir::D);
-            let d01 = (table[i][j + 1].0 + penalties.gap, Dir::U);
-            let d10 = (table[i + 1][j].0 + penalties.gap, Dir::L);
+            let d00 = (table[i][j].0 + mismatch_penalty, Direction::Diagonal);
+            let d01 = (table[i][j + 1].0 + penalties.gap, Direction::Up);
+            let d10 = (table[i + 1][j].0 + penalties.gap, Direction::Left);
 
             table[i + 1][j + 1] = min2(d00, min2(d01, d10));
         }
@@ -78,7 +82,7 @@ pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<
 }
 
 /// Returns the minimum of two penalties, defaulting to the first input.
-fn min2<U: UInt>(a: (U, Dir), b: (U, Dir)) -> (U, Dir) {
+fn min2<U: UInt>(a: (U, Direction), b: (U, Direction)) -> (U, Direction) {
     if a.0 <= b.0 {
         a
     } else {
@@ -103,6 +107,7 @@ pub fn compute_edits(x: &str, y: &str) -> [Vec<Edit>; 2] {
 
 /// Helper for `compute_edits` to compute the edits for `x` into `y`.
 fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
+    // TODO: Revisit this for correctness when we start working on the MSA.
     x.chars()
         .zip(y.chars())
         .filter(|(x, y)| x != y)
@@ -134,7 +139,7 @@ fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
 ///
 /// A tuple of the two aligned sequences.
 pub fn trace_back_iterative<U: UInt>(
-    table: &[Vec<(U, Dir)>],
+    table: &[Vec<(U, Direction)>],
     [x, y]: [&str; 2],
 ) -> (String, String) {
     let (x, y) = (x.as_bytes(), y.as_bytes());
@@ -144,18 +149,18 @@ pub fn trace_back_iterative<U: UInt>(
 
     while row_i > 0 && col_i > 0 {
         match table[row_i][col_i].1 {
-            Dir::D => {
+            Direction::Diagonal => {
                 aligned_x.push(x[col_i - 1]);
                 aligned_y.push(y[row_i - 1]);
                 row_i -= 1;
                 col_i -= 1;
             }
-            Dir::L => {
+            Direction::Left => {
                 aligned_x.push(x[col_i - 1]);
                 aligned_y.push(b'-');
                 col_i -= 1;
             }
-            Dir::U => {
+            Direction::Up => {
                 aligned_x.push(b'-');
                 aligned_y.push(y[row_i - 1]);
                 row_i -= 1;
@@ -189,7 +194,7 @@ pub fn trace_back_iterative<U: UInt>(
 ///
 /// A tuple of the two aligned sequences.
 pub fn trace_back_recursive<U: UInt>(
-    table: &[Vec<(U, Dir)>],
+    table: &[Vec<(U, Direction)>],
     [x, y]: [&str; 2],
 ) -> (String, String) {
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
@@ -222,25 +227,25 @@ pub fn trace_back_recursive<U: UInt>(
 /// * `[aligned_x, aligned_y]`: mutable aligned sequences that will be built
 /// up from initially empty vectors.
 fn _trace_back_recursive<U: UInt>(
-    table: &[Vec<(U, Dir)>],
+    table: &[Vec<(U, Direction)>],
     [mut row_i, mut col_i]: [usize; 2],
     [x, y]: [&[u8]; 2],
     [aligned_x, aligned_y]: [&mut Vec<u8>; 2],
 ) {
     if row_i > 0 || col_i > 0 {
         match table[row_i][col_i].1 {
-            Dir::D => {
+            Direction::Diagonal => {
                 aligned_x.push(x[col_i - 1]);
                 aligned_y.push(y[row_i - 1]);
                 row_i -= 1;
                 col_i -= 1;
             }
-            Dir::L => {
+            Direction::Left => {
                 aligned_x.push(x[col_i - 1]);
                 aligned_y.push(b'-');
                 col_i -= 1;
             }
-            Dir::U => {
+            Direction::Up => {
                 aligned_x.push(b'-');
                 aligned_y.push(y[row_i - 1]);
                 row_i -= 1;
@@ -261,24 +266,24 @@ mod tests {
         let table = compute_table::<u16>(x, y, Penalties::default());
 
         #[rustfmt::skip]
-        let true_table: [[(u16, Dir); 17]; 17] = [
-            [( 0, Dir::D), ( 1, Dir::L), ( 2, Dir::L), ( 3, Dir::L), ( 4, Dir::L), ( 5, Dir::L), ( 6, Dir::L), (7, Dir::L), (8, Dir::L), (9, Dir::L), (10, Dir::L), (11, Dir::L), (12, Dir::L), (13, Dir::L), (14, Dir::L), (15, Dir::L), (16, Dir::L)],
-            [( 1, Dir::U), ( 0, Dir::D), ( 1, Dir::L), ( 2, Dir::L), ( 3, Dir::L), ( 4, Dir::L), ( 5, Dir::L), (6, Dir::L), (7, Dir::L), (8, Dir::L), ( 9, Dir::L), (10, Dir::L), (11, Dir::L), (12, Dir::L), (13, Dir::L), (14, Dir::L), (15, Dir::L)],
-            [( 2, Dir::U), ( 1, Dir::U), ( 0, Dir::D), ( 1, Dir::L), ( 2, Dir::L), ( 3, Dir::L), ( 4, Dir::L), (5, Dir::L), (6, Dir::L), (7, Dir::L), ( 8, Dir::L), ( 9, Dir::L), (10, Dir::L), (11, Dir::L), (12, Dir::D), (13, Dir::L), (14, Dir::L)],
-            [( 3, Dir::U), ( 2, Dir::U), ( 1, Dir::U), ( 0, Dir::D), ( 1, Dir::L), ( 2, Dir::L), ( 3, Dir::L), (4, Dir::L), (5, Dir::L), (6, Dir::L), ( 7, Dir::L), ( 8, Dir::L), ( 9, Dir::L), (10, Dir::L), (11, Dir::L), (12, Dir::L), (13, Dir::L)],
-            [( 4, Dir::U), ( 3, Dir::U), ( 2, Dir::U), ( 1, Dir::U), ( 0, Dir::D), ( 1, Dir::L), ( 2, Dir::L), (3, Dir::L), (4, Dir::L), (5, Dir::L), ( 6, Dir::L), ( 7, Dir::L), ( 8, Dir::L), ( 9, Dir::L), (10, Dir::L), (11, Dir::L), (12, Dir::L)],
-            [( 5, Dir::U), ( 4, Dir::U), ( 3, Dir::U), ( 2, Dir::U), ( 1, Dir::U), ( 0, Dir::D), ( 1, Dir::L), (2, Dir::L), (3, Dir::L), (4, Dir::L), ( 5, Dir::L), ( 6, Dir::L), ( 7, Dir::L), ( 8, Dir::L), ( 9, Dir::L), (10, Dir::L), (11, Dir::L)],
-            [( 6, Dir::U), ( 5, Dir::U), ( 4, Dir::U), ( 3, Dir::U), ( 2, Dir::U), ( 1, Dir::U), ( 1, Dir::D), (1, Dir::D), (2, Dir::L), (3, Dir::L), ( 4, Dir::D), ( 5, Dir::L), ( 6, Dir::L), ( 7, Dir::D), ( 8, Dir::L), ( 9, Dir::L), (10, Dir::L)],
-            [( 7, Dir::U), ( 6, Dir::U), ( 5, Dir::D), ( 4, Dir::U), ( 3, Dir::U), ( 2, Dir::U), ( 2, Dir::D), (2, Dir::D), (2, Dir::D), (3, Dir::D), ( 4, Dir::D), ( 5, Dir::D), ( 6, Dir::D), ( 7, Dir::D), ( 7, Dir::D), ( 8, Dir::L), ( 9, Dir::L)],
-            [( 8, Dir::U), ( 7, Dir::U), ( 6, Dir::U), ( 5, Dir::U), ( 4, Dir::U), ( 3, Dir::U), ( 3, Dir::D), (3, Dir::D), (3, Dir::D), (3, Dir::D), ( 4, Dir::D), ( 5, Dir::D), ( 6, Dir::D), ( 7, Dir::D), ( 8, Dir::D), ( 7, Dir::D), ( 8, Dir::L)],
-            [( 9, Dir::U), ( 8, Dir::U), ( 7, Dir::U), ( 6, Dir::U), ( 5, Dir::U), ( 4, Dir::U), ( 4, Dir::D), (4, Dir::D), (4, Dir::D), (4, Dir::D), ( 4, Dir::D), ( 5, Dir::D), ( 5, Dir::D), ( 6, Dir::L), ( 7, Dir::L), ( 8, Dir::U), ( 7, Dir::D)],
-            [(10, Dir::U), ( 9, Dir::U), ( 8, Dir::U), ( 7, Dir::U), ( 6, Dir::U), ( 5, Dir::U), ( 4, Dir::D), (5, Dir::D), (4, Dir::D), (4, Dir::D), ( 5, Dir::D), ( 5, Dir::D), ( 6, Dir::D), ( 6, Dir::D), ( 7, Dir::D), ( 8, Dir::D), ( 8, Dir::U)],
-            [(11, Dir::U), (10, Dir::U), ( 9, Dir::U), ( 8, Dir::U), ( 7, Dir::U), ( 6, Dir::U), ( 5, Dir::U), (4, Dir::D), (5, Dir::U), (5, Dir::D), ( 4, Dir::D), ( 5, Dir::L), ( 6, Dir::D), ( 6, Dir::D), ( 7, Dir::D), ( 8, Dir::D), ( 9, Dir::D)],
-            [(12, Dir::U), (11, Dir::U), (10, Dir::U), ( 9, Dir::U), ( 8, Dir::U), ( 7, Dir::U), ( 6, Dir::D), (5, Dir::U), (4, Dir::D), (5, Dir::D), ( 5, Dir::U), ( 5, Dir::D), ( 6, Dir::D), ( 7, Dir::D), ( 7, Dir::D), ( 8, Dir::D), ( 9, Dir::D)],
-            [(13, Dir::U), (12, Dir::U), (11, Dir::U), (10, Dir::U), ( 9, Dir::U), ( 8, Dir::U), ( 7, Dir::D), (6, Dir::U), (5, Dir::D), (4, Dir::D), ( 5, Dir::L), ( 6, Dir::D), ( 6, Dir::D), ( 7, Dir::D), ( 8, Dir::D), ( 8, Dir::D), ( 9, Dir::D)],
-            [(14, Dir::U), (13, Dir::U), (12, Dir::U), (11, Dir::U), (10, Dir::U), ( 9, Dir::U), ( 8, Dir::U), (7, Dir::D), (6, Dir::U), (5, Dir::U), ( 4, Dir::D), ( 5, Dir::L), ( 6, Dir::L), ( 6, Dir::D), ( 7, Dir::L), ( 8, Dir::L), ( 9, Dir::D)],
-            [(15, Dir::U), (14, Dir::U), (13, Dir::U), (12, Dir::U), (11, Dir::U), (10, Dir::U), ( 9, Dir::U), (8, Dir::U), (7, Dir::U), (6, Dir::U), ( 5, Dir::U), ( 4, Dir::D), ( 5, Dir::L), ( 6, Dir::L), ( 7, Dir::D), ( 8, Dir::D), ( 9, Dir::D)],
-            [(16, Dir::U), (15, Dir::U), (14, Dir::U), (13, Dir::U), (12, Dir::U), (11, Dir::U), (10, Dir::U), (9, Dir::U), (8, Dir::U), (7, Dir::U), ( 6, Dir::U), ( 5, Dir::U), ( 4, Dir::D), ( 5, Dir::L), ( 6, Dir::L), ( 7, Dir::L), ( 8, Dir::D)]
+        let true_table: [[(u16, Direction); 17]; 17] = [
+            [( 0, Direction::Diagonal), ( 1, Direction::Left    ), ( 2, Direction::Left    ), ( 3, Direction::Left    ), ( 4, Direction::Left    ), ( 5, Direction::Left    ), ( 6, Direction::Left    ), (7, Direction::Left    ), (8, Direction::Left    ), (9, Direction::Left    ), (10, Direction::Left    ), (11, Direction::Left    ), (12, Direction::Left    ), (13, Direction::Left    ), (14, Direction::Left    ), (15, Direction::Left    ), (16, Direction::Left    )],
+            [( 1, Direction::Up      ), ( 0, Direction::Diagonal), ( 1, Direction::Left    ), ( 2, Direction::Left    ), ( 3, Direction::Left    ), ( 4, Direction::Left    ), ( 5, Direction::Left    ), (6, Direction::Left    ), (7, Direction::Left    ), (8, Direction::Left    ), ( 9, Direction::Left    ), (10, Direction::Left    ), (11, Direction::Left    ), (12, Direction::Left    ), (13, Direction::Left    ), (14, Direction::Left    ), (15, Direction::Left    )],
+            [( 2, Direction::Up      ), ( 1, Direction::Up      ), ( 0, Direction::Diagonal), ( 1, Direction::Left    ), ( 2, Direction::Left    ), ( 3, Direction::Left    ), ( 4, Direction::Left    ), (5, Direction::Left    ), (6, Direction::Left    ), (7, Direction::Left    ), ( 8, Direction::Left    ), ( 9, Direction::Left    ), (10, Direction::Left    ), (11, Direction::Left    ), (12, Direction::Diagonal), (13, Direction::Left    ), (14, Direction::Left    )],
+            [( 3, Direction::Up      ), ( 2, Direction::Up      ), ( 1, Direction::Up      ), ( 0, Direction::Diagonal), ( 1, Direction::Left    ), ( 2, Direction::Left    ), ( 3, Direction::Left    ), (4, Direction::Left    ), (5, Direction::Left    ), (6, Direction::Left    ), ( 7, Direction::Left    ), ( 8, Direction::Left    ), ( 9, Direction::Left    ), (10, Direction::Left    ), (11, Direction::Left    ), (12, Direction::Left    ), (13, Direction::Left    )],
+            [( 4, Direction::Up      ), ( 3, Direction::Up      ), ( 2, Direction::Up      ), ( 1, Direction::Up      ), ( 0, Direction::Diagonal), ( 1, Direction::Left    ), ( 2, Direction::Left    ), (3, Direction::Left    ), (4, Direction::Left    ), (5, Direction::Left    ), ( 6, Direction::Left    ), ( 7, Direction::Left    ), ( 8, Direction::Left    ), ( 9, Direction::Left    ), (10, Direction::Left    ), (11, Direction::Left    ), (12, Direction::Left    )],
+            [( 5, Direction::Up      ), ( 4, Direction::Up      ), ( 3, Direction::Up      ), ( 2, Direction::Up      ), ( 1, Direction::Up      ), ( 0, Direction::Diagonal), ( 1, Direction::Left    ), (2, Direction::Left    ), (3, Direction::Left    ), (4, Direction::Left    ), ( 5, Direction::Left    ), ( 6, Direction::Left    ), ( 7, Direction::Left    ), ( 8, Direction::Left    ), ( 9, Direction::Left    ), (10, Direction::Left    ), (11, Direction::Left    )],
+            [( 6, Direction::Up      ), ( 5, Direction::Up      ), ( 4, Direction::Up      ), ( 3, Direction::Up      ), ( 2, Direction::Up      ), ( 1, Direction::Up      ), ( 1, Direction::Diagonal), (1, Direction::Diagonal), (2, Direction::Left    ), (3, Direction::Left    ), ( 4, Direction::Diagonal), ( 5, Direction::Left    ), ( 6, Direction::Left    ), ( 7, Direction::Diagonal), ( 8, Direction::Left    ), ( 9, Direction::Left    ), (10, Direction::Left    )],
+            [( 7, Direction::Up      ), ( 6, Direction::Up      ), ( 5, Direction::Diagonal), ( 4, Direction::Up      ), ( 3, Direction::Up      ), ( 2, Direction::Up      ), ( 2, Direction::Diagonal), (2, Direction::Diagonal), (2, Direction::Diagonal), (3, Direction::Diagonal), ( 4, Direction::Diagonal), ( 5, Direction::Diagonal), ( 6, Direction::Diagonal), ( 7, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Left    ), ( 9, Direction::Left    )],
+            [( 8, Direction::Up      ), ( 7, Direction::Up      ), ( 6, Direction::Up      ), ( 5, Direction::Up      ), ( 4, Direction::Up      ), ( 3, Direction::Up      ), ( 3, Direction::Diagonal), (3, Direction::Diagonal), (3, Direction::Diagonal), (3, Direction::Diagonal), ( 4, Direction::Diagonal), ( 5, Direction::Diagonal), ( 6, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Left    )],
+            [( 9, Direction::Up      ), ( 8, Direction::Up      ), ( 7, Direction::Up      ), ( 6, Direction::Up      ), ( 5, Direction::Up      ), ( 4, Direction::Up      ), ( 4, Direction::Diagonal), (4, Direction::Diagonal), (4, Direction::Diagonal), (4, Direction::Diagonal), ( 4, Direction::Diagonal), ( 5, Direction::Diagonal), ( 5, Direction::Diagonal), ( 6, Direction::Left    ), ( 7, Direction::Left    ), ( 8, Direction::Up      ), ( 7, Direction::Diagonal)],
+            [(10, Direction::Up      ), ( 9, Direction::Up      ), ( 8, Direction::Up      ), ( 7, Direction::Up      ), ( 6, Direction::Up      ), ( 5, Direction::Up      ), ( 4, Direction::Diagonal), (5, Direction::Diagonal), (4, Direction::Diagonal), (4, Direction::Diagonal), ( 5, Direction::Diagonal), ( 5, Direction::Diagonal), ( 6, Direction::Diagonal), ( 6, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Diagonal), ( 8, Direction::Up      )],
+            [(11, Direction::Up      ), (10, Direction::Up      ), ( 9, Direction::Up      ), ( 8, Direction::Up      ), ( 7, Direction::Up      ), ( 6, Direction::Up      ), ( 5, Direction::Up      ), (4, Direction::Diagonal), (5, Direction::Up      ), (5, Direction::Diagonal), ( 4, Direction::Diagonal), ( 5, Direction::Left    ), ( 6, Direction::Diagonal), ( 6, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Diagonal), ( 9, Direction::Diagonal)],
+            [(12, Direction::Up      ), (11, Direction::Up      ), (10, Direction::Up      ), ( 9, Direction::Up      ), ( 8, Direction::Up      ), ( 7, Direction::Up      ), ( 6, Direction::Diagonal), (5, Direction::Up      ), (4, Direction::Diagonal), (5, Direction::Diagonal), ( 5, Direction::Up      ), ( 5, Direction::Diagonal), ( 6, Direction::Diagonal), ( 7, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Diagonal), ( 9, Direction::Diagonal)],
+            [(13, Direction::Up      ), (12, Direction::Up      ), (11, Direction::Up      ), (10, Direction::Up      ), ( 9, Direction::Up      ), ( 8, Direction::Up      ), ( 7, Direction::Diagonal), (6, Direction::Up      ), (5, Direction::Diagonal), (4, Direction::Diagonal), ( 5, Direction::Left    ), ( 6, Direction::Diagonal), ( 6, Direction::Diagonal), ( 7, Direction::Diagonal), ( 8, Direction::Diagonal), ( 8, Direction::Diagonal), ( 9, Direction::Diagonal)],
+            [(14, Direction::Up      ), (13, Direction::Up      ), (12, Direction::Up      ), (11, Direction::Up      ), (10, Direction::Up      ), ( 9, Direction::Up      ), ( 8, Direction::Up      ), (7, Direction::Diagonal), (6, Direction::Up      ), (5, Direction::Up      ), ( 4, Direction::Diagonal), ( 5, Direction::Left    ), ( 6, Direction::Left    ), ( 6, Direction::Diagonal), ( 7, Direction::Left    ), ( 8, Direction::Left    ), ( 9, Direction::Diagonal)],
+            [(15, Direction::Up      ), (14, Direction::Up      ), (13, Direction::Up      ), (12, Direction::Up      ), (11, Direction::Up      ), (10, Direction::Up      ), ( 9, Direction::Up      ), (8, Direction::Up      ), (7, Direction::Up      ), (6, Direction::Up      ), ( 5, Direction::Up      ), ( 4, Direction::Diagonal), ( 5, Direction::Left    ), ( 6, Direction::Left    ), ( 7, Direction::Diagonal), ( 8, Direction::Diagonal), ( 9, Direction::Diagonal)],
+            [(16, Direction::Up      ), (15, Direction::Up      ), (14, Direction::Up      ), (13, Direction::Up      ), (12, Direction::Up      ), (11, Direction::Up      ), (10, Direction::Up      ), (9, Direction::Up      ), (8, Direction::Up      ), (7, Direction::Up      ), ( 6, Direction::Up      ), ( 5, Direction::Up      ), ( 4, Direction::Diagonal), ( 5, Direction::Left    ), ( 6, Direction::Left    ), ( 7, Direction::Left    ), ( 8, Direction::Diagonal)]
         ];
 
         assert_eq!(table, true_table);
