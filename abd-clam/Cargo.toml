@@ -24,14 +24,13 @@ publish = true
 
 [dependencies]
 # distances = { path = "../distances" }
-distances = "1.1.2"
+distances = "1.2.0"
 rayon = "1.7.0"
 
 # Only used for Dataset::choose_unique
 # TODO: Use a smaller crate so we can have a smaller binary
 rand_chacha = "0.3.1"
 rand = "0.8.5"
-
 
 # Only used in CAKES
 # TODO: Break CAKES out into an optional feature
@@ -74,8 +73,4 @@ harness = false
 
 [[bench]]
 name = "genomic"
-harness = false
-
-[[bench]]
-name = "needleman-wunsch"
 harness = false

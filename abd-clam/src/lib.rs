@@ -19,7 +19,6 @@
 // pub mod chaoda;
 mod cakes;
 mod core;
-pub mod needleman_wunch;
 pub(crate) mod utils;
 
 pub(crate) use crate::core::cluster::Cluster;
@@ -57,5 +56,5 @@ pub const COMMON_METRICS_F64: &[(&str, fn(&[f64], &[f64]) -> f64)] = &[
 pub const COMMON_METRICS_STR: &[(&str, fn(&str, &str) -> u32)] = &[
     ("hamming", distances::strings::hamming),
     ("levenshtein", distances::strings::levenshtein),
-    ("needleman_wunsch", needleman_wunch::nw_distance),
+    ("needleman_wunsch", distances::strings::nw_distance),
 ];
