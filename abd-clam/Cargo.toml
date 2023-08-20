@@ -55,14 +55,6 @@ kdam = "0.3.0"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-npy = "0.8.1"
 
-[[example]]
-name = "reports"
-path = "examples/reports.rs"
-
-[[example]]
-name = "rnn-search"
-path = "examples/rnn-search.rs"
-
 [[bench]]
 name = "rnn-search"
 harness = false
