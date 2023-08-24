@@ -1,7 +1,7 @@
 use criterion::*;
 use symagen::random_data;
 
-use simd_euclidean::Vectorized;
+use distances::simd;
 
 use distances::vectors::{euclidean as l2_generic, euclidean_sq as l2_sq_generic};
 
@@ -21,7 +21,7 @@ fn simd_f32(c: &mut Criterion) {
 
         let id = BenchmarkId::new("L2-simd", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(Vectorized::distance(&vecs[0], &vecs[1])))
+            b.iter(|| black_box(simd::euclidean_f32(&vecs[0], &vecs[1])))
         });
 
         let id = BenchmarkId::new("L2-sq-generic", dimensionality);
@@ -31,7 +31,7 @@ fn simd_f32(c: &mut Criterion) {
 
         let id = BenchmarkId::new("L2-sq-simd", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(Vectorized::squared_distance(&vecs[0], &vecs[1])))
+            b.iter(|| black_box(simd::euclidean_sq_f32(&vecs[0], &vecs[1])))
         });
     }
     group.finish();
@@ -53,7 +53,7 @@ fn simd_f64(c: &mut Criterion) {
 
         let id = BenchmarkId::new("L2-simd", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(Vectorized::distance(&vecs[0], &vecs[1])))
+            b.iter(|| black_box(simd::euclidean_f64(&vecs[0], &vecs[1])))
         });
 
         let id = BenchmarkId::new("L2-sq-generic", dimensionality);
@@ -63,7 +63,7 @@ fn simd_f64(c: &mut Criterion) {
 
         let id = BenchmarkId::new("L2-sq-simd", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(Vectorized::squared_distance(&vecs[0], &vecs[1])))
+            b.iter(|| black_box(simd::euclidean_sq_f64(&vecs[0], &vecs[1])))
         });
     }
     group.finish();

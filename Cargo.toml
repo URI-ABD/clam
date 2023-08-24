@@ -17,7 +17,6 @@ readme = "README.md"
 publish = true
 
 [dependencies]
-simd_euclidean = { git = "https://github.com/nishaq503/simd-euclidean" }
 # libm = "0.2.7"  # no-std
 
 [dev-dependencies]
