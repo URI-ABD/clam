@@ -7,9 +7,8 @@ use distances::Number;
 
 use crate::{Cluster, Dataset, Tree};
 
-#[derive(Clone, Copy, Debug)]
-
 /// A Grain is an element of the sieve. It is either a hit or a cluster.
+#[derive(Clone, Copy, Debug)]
 enum Grain<'a, T: Send + Sync + Copy, U: Number> {
     /// A `Hit` is a single instance.
     Hit {
@@ -259,7 +258,7 @@ where
     D: Dataset<T, U>,
 {
     let data = tree.data();
-    let mut grains = Grain::new_grains(tree.root(), data, query);
+    let mut grains = Grain::new_grains(&tree.root, data, query);
 
     loop {
         // The threshold is the minimum distance, so far, which guarantees that

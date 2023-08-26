@@ -1,5 +1,6 @@
 //! Provides the `Dataset` trait and an implementation for a vector of data.
 
+mod npy_mmap;
 mod vec2d;
 
 #[allow(clippy::module_name_repetitions)]
@@ -29,21 +30,6 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
 
     /// Returns a slice of indices that can be used to access the dataset.
     fn indices(&self) -> &[usize];
-
-    /// Returns the instance at a given index in the dataset.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - An index in the dataset.
-    ///
-    /// # Panics
-    ///
-    /// * If `index` is not a valid index in the dataset.
-    ///
-    /// # Returns
-    ///
-    /// The instance at `index`.
-    fn get(&self, index: usize) -> T;
 
     /// Returns the metric used to calculate distances between instances.
     ///
@@ -106,9 +92,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// The distance between the instances at `left` and `right`.
-    fn one_to_one(&self, left: usize, right: usize) -> U {
-        (self.metric())(self.get(left), self.get(right))
-    }
+    fn one_to_one(&self, left: usize, right: usize) -> U;
 
     /// Returns whether or not two indexed instances in the dataset are equal.
     ///
@@ -184,9 +168,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// The distance between the query and the instance at `index`
-    fn query_to_one(&self, query: T, index: usize) -> U {
-        (self.metric())(query, self.get(index))
-    }
+    fn query_to_one(&self, query: T, index: usize) -> U;
 
     /// Returns a vector of distances between a query and all indexed instances.
     ///

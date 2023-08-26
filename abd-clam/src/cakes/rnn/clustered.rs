@@ -24,7 +24,7 @@ where
     U: Number,
     D: Dataset<T, U>,
 {
-    let [confirmed, straddlers] = tree_search(tree.data(), tree.root(), query, radius);
+    let [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, radius);
     leaf_search(tree.data(), confirmed, straddlers, query, radius)
 }
 

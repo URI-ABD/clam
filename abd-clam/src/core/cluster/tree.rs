@@ -15,13 +15,11 @@ use crate::{Cluster, Dataset, PartitionCriteria};
 #[derive(Debug)]
 pub struct Tree<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The dataset from which the tree is built.
-    data: D,
+    pub(crate) data: D,
     /// The root `Cluster` of the tree.
-    root: Cluster<T, U>,
+    pub(crate) root: Cluster<T, U>,
     /// The depth of the tree.
-    depth: usize,
-    /// The type of the instances in the tree.
-    center: T,
+    pub(crate) depth: usize,
 }
 
 impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
@@ -33,13 +31,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     pub fn new(data: D, seed: Option<u64>) -> Self {
         let root = Cluster::new_root(&data, data.indices(), seed);
         let depth = root.max_leaf_depth();
-        let center = root.center;
-        Self {
-            data,
-            root,
-            depth,
-            center,
-        }
+        Self { data, root, depth }
     }
 
     /// Recursively partitions the root `Cluster` using the given criteria.
@@ -60,21 +52,6 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Tree<T, U, D> {
     /// Returns a reference to the data used to build the `Tree`.
     pub const fn data(&self) -> &D {
         &self.data
-    }
-
-    /// A reference to the root `Cluster` of the tree.
-    pub(crate) const fn root(&self) -> &Cluster<T, U> {
-        &self.root
-    }
-
-    /// The depth of the tree.
-    pub(crate) const fn depth(&self) -> usize {
-        self.depth
-    }
-
-    /// The center of the tree.
-    pub(crate) const fn center(&self) -> T {
-        self.center
     }
 
     /// The cardinality of the `Tree`, i.e. the number of instances in the data.

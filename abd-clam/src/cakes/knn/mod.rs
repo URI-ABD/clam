@@ -19,8 +19,6 @@ pub(crate) mod linear;
 pub(crate) mod repeated_rnn;
 pub(crate) mod sieve;
 pub(crate) mod sieve_sep_center;
-pub(crate) mod sieve_v1;
-pub(crate) mod sieve_v2;
 
 /// The algorithm to use for K-Nearest Neighbor search.
 ///
@@ -46,34 +44,6 @@ pub enum Algorithm {
     /// are sorted by distance and the first `k` neighbors are returned. Ties
     /// are broken arbitrarily.
     RepeatedRnn,
-
-    /// Use the knn-sieve, with no separate grains for centers, to perform search.
-    ///
-    /// This algorithm is not stable.
-    ///
-    /// For each iteration of the search, we calculate a threshold from the
-    /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
-    /// to be within the threshold. We then use this threshold to filter out
-    /// clusters that are too far away from the query. We maintain a separate priority
-    /// queue, `hits`, for the k closest instances found so far.
-    ///
-    /// This approach does not treat the center of a cluster separately from the rest
-    /// of the points in the cluster.
-    SieveV1,
-
-    /// Use the knn-sieve, with separate grains for centers, to perform search.
-    ///
-    /// This algorithm is not stable.
-    ///
-    /// For each iteration of the search, we calculate a threshold from the
-    /// `Cluster`s such that the k nearest neighbors of the query are guaranteed
-    /// to be within the threshold. We then use this threshold to filter out
-    /// clusters that are too far away from the query. We maintain a separate priority
-    /// queue, `hits`, for the k closest instances found so far.
-    ///
-    /// This approach treats the center of a cluster separately from the rest
-    /// of the points in the cluster.
-    SieveV2,
 
     /// Uses two priority queues and an increasing threshold to perform search.
     ///
@@ -145,12 +115,34 @@ impl Algorithm {
         match self {
             Self::Linear => linear::search(tree.data(), query, k, tree.indices()),
             Self::RepeatedRnn => repeated_rnn::search(tree, query, k),
-            Self::SieveV1 => sieve_v1::search(tree, query, k),
-            Self::SieveV2 => sieve_v2::search(tree, query, k),
             Self::ExpandingThreshold => expanding_threshold::search(tree, query, k),
             Self::Sieve => sieve::search(tree, query, k),
             Self::SieveSepCenter => sieve_sep_center::search(tree, query, k),
         }
+    }
+
+    /// Returns the name of the algorithm.
+    #[must_use]
+    pub const fn name(&self) -> &str {
+        match self {
+            Self::Linear => "Linear",
+            Self::RepeatedRnn => "RepeatedRnn",
+            Self::ExpandingThreshold => "ExpandingThreshold",
+            Self::Sieve => "Sieve",
+            Self::SieveSepCenter => "SieveSepCenter",
+        }
+    }
+
+    /// Returns a list of all the algorithms.
+    #[must_use]
+    pub const fn variants<'a>() -> &'a [Self] {
+        &[
+            Self::Linear,
+            Self::RepeatedRnn,
+            Self::ExpandingThreshold,
+            Self::Sieve,
+            Self::SieveSepCenter,
+        ]
     }
 }
 
@@ -176,6 +168,15 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
             queue: PriorityQueue::with_capacity(capacity),
             capacity,
         }
+    }
+
+    /// Creates a new priority queue of hits from a vector of hits.
+    pub fn from_vec(capacity: usize, vec: Vec<(I, U)>) -> Self {
+        let mut queue = PriorityQueue::with_capacity(capacity);
+        for (i, d) in vec {
+            queue.push(i, OrdNumber(d));
+        }
+        Self { queue, capacity }
     }
 
     /// Number of hits in the queue.
@@ -230,6 +231,7 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
 
     /// Pops hits from the queue until the distance of the farthest hit is no
     /// farther than the given `threshold`.
+    #[allow(dead_code)]
     pub fn pop_until(&mut self, threshold: U) {
         while threshold < self.peek(U::zero) {
             self.queue.pop();

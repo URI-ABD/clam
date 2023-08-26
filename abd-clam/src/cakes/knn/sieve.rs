@@ -6,9 +6,8 @@ use distances::Number;
 
 use crate::{Cluster, Dataset, Tree};
 
-#[derive(Clone, Copy, Debug)]
-
 /// A Grain is an element of the sieve. It is either a hit or a cluster.
+#[derive(Clone, Copy, Debug)]
 enum Grain<'a, T: Send + Sync + Copy, U: Number> {
     /// A `Hit` is a single instance.
     Hit {
@@ -220,7 +219,7 @@ where
     D: Dataset<T, U>,
 {
     let data = tree.data();
-    let c = tree.root();
+    let c = &tree.root;
     let d = c.distance_to_instance(data, query);
 
     let mut grains = vec![Grain::new_cluster(c, d)];

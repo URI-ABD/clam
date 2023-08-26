@@ -59,4 +59,19 @@ impl Algorithm {
             Self::Clustered => clustered::search(tree, query, radius),
         }
     }
+
+    /// Returns the name of the algorithm.
+    #[must_use]
+    pub const fn name(&self) -> &str {
+        match self {
+            Self::Linear => "Linear",
+            Self::Clustered => "Clustered",
+        }
+    }
+
+    /// Returns a list of all the algorithms.
+    #[must_use]
+    pub const fn variants<'a>() -> &'a [Self] {
+        &[Self::Linear, Self::Clustered]
+    }
 }

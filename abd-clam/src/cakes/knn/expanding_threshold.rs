@@ -28,8 +28,11 @@ where
 {
     let mut candidates = priority_queue::PriorityQueue::<&Cluster<T, U>, RevNumber<U>>::new();
     let mut hits = priority_queue::PriorityQueue::<usize, OrdNumber<U>>::new();
-    let d = tree.root().distance_to_instance(tree.data(), query);
-    candidates.push(tree.root(), RevNumber(d_min(tree.root(), d)));
+
+    let (data, root) = (tree.data(), &tree.root);
+
+    let d = root.distance_to_instance(data, query);
+    candidates.push(root, RevNumber(d_min(root, d)));
 
     // stop if we have enough hits and the farthest hit is closer than the closest cluster by delta_min.
     while hits.len() < k

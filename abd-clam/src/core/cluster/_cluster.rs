@@ -2,7 +2,10 @@
 //! divisive hierarchical cluster of arbitrary datasets in arbitrary metric
 //! spaces.
 
-use core::hash::{Hash, Hasher};
+use core::{
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
 
 use distances::Number;
 
@@ -29,12 +32,8 @@ pub struct Cluster<T: Send + Sync + Copy, U: Number> {
     pub offset: usize,
     /// The number of instances in the `Cluster`.
     pub cardinality: usize,
-    /// The geometric mean of the `Cluster`.
-    pub center: T,
     /// The index of the `center` instance in the dataset.
     pub arg_center: usize,
-    /// The instance furthest from the `center` of the `Cluster`.
-    pub radial: T,
     /// The index of the `radial` instance in the dataset.
     pub arg_radial: usize,
     /// The distance from the `center` to the `radial` instance.
@@ -58,12 +57,14 @@ pub struct Children<T: Send + Sync + Copy, U: Number> {
     pub right: Box<Cluster<T, U>>,
     /// The left pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the left child).
-    pub l_pole: T,
+    pub arg_l: usize,
     /// The right pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the right child).
-    pub r_pole: T,
+    pub arg_r: usize,
     /// The distance from the `l_pole` to the `r_pole` instance.
     pub polar_distance: U,
+    /// To satisfy the compiler.
+    _t: PhantomData<T>,
 }
 
 impl<T: Send + Sync + Copy, U: Number> PartialEq for Cluster<T, U> {
@@ -147,12 +148,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
         let Some(arg_center) = data.median(&arg_samples) else { unreachable!("The cluster should have at least one instance.") };
 
-        let center = data.get(arg_center);
-
         let center_distances = data.one_to_many(arg_center, indices);
         let Some((arg_radial, radius)) = utils::arg_max(&center_distances) else { unreachable!("The cluster should have at least one instance.") };
         let arg_radial = indices[arg_radial];
-        let radial = data.get(arg_radial);
 
         let lfd = utils::compute_lfd(radius, &center_distances);
 
@@ -161,9 +159,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             seed,
             offset,
             cardinality,
-            center,
             arg_center,
-            radial,
             arg_radial,
             radius,
             lfd,
@@ -204,7 +200,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         mut indices: Vec<usize>,
     ) -> (Self, Vec<usize>) {
         if criteria.check(&self) {
-            let ([(l_pole, l_indices), (r_pole, r_indices)], polar_distance) = self.partition_once(data, indices);
+            let ([(arg_l, l_indices), (arg_r, r_indices)], polar_distance) = self.partition_once(data, indices);
 
             let r_offset = self.offset + l_indices.len();
 
@@ -219,38 +215,42 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
                 },
             );
 
-            let (left, right) = (Box::new(left), Box::new(right));
-
-            indices = l_indices.into_iter().chain(r_indices.into_iter()).collect::<Vec<_>>();
+            let arg_l = utils::pos_val(&l_indices, arg_l)
+                .map_or_else(|| unreachable!("We know the left pole is in the indices."), |(i, _)| i);
+            let arg_r = utils::pos_val(&r_indices, arg_r)
+                .map_or_else(|| unreachable!("We know the right pole is in the indices."), |(i, _)| i);
 
             self.children = Some(Children {
-                left,
-                right,
-                l_pole,
-                r_pole,
+                left: Box::new(left),
+                right: Box::new(right),
+                arg_l: self.offset + arg_l,
+                arg_r: r_offset + arg_r,
                 polar_distance,
+                _t: PhantomData,
             });
+
+            indices = l_indices.into_iter().chain(r_indices.into_iter()).collect::<Vec<_>>();
         }
 
         // reset the indices to center and radial indices for data reordering
-        let (arg_center, _) = utils::pos_val(&indices, self.arg_center)
-            .unwrap_or_else(|| unreachable!("We know the center is in the indices."));
+        let arg_center = utils::pos_val(&indices, self.arg_center)
+            .map_or_else(|| unreachable!("We know the center is in the indices."), |(i, _)| i);
         self.arg_center = self.offset + arg_center;
 
-        let (arg_radial, _) = utils::pos_val(&indices, self.arg_radial)
-            .unwrap_or_else(|| unreachable!("We know the radial is in the indices."));
+        let arg_radial = utils::pos_val(&indices, self.arg_radial)
+            .map_or_else(|| unreachable!("We know the radial is in the indices."), |(i, _)| i);
         self.arg_radial = self.offset + arg_radial;
 
         (self, indices)
     }
 
     /// Partitions the `Cluster` into two children once.
-    fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(T, Vec<usize>); 2], U) {
-        let l_distances = data.query_to_many(self.radial, &indices);
+    fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(usize, Vec<usize>); 2], U) {
+        let l_distances = data.one_to_many(self.arg_radial, &indices);
 
         let Some((arg_r, polar_distance)) = utils::arg_max(&l_distances) else { unreachable!("The cluster should have at least one instance.") };
-        let r_pole = data.get(indices[arg_r]);
-        let r_distances = data.query_to_many(r_pole, &indices);
+        let arg_r = indices[arg_r];
+        let r_distances = data.one_to_many(arg_r, &indices);
 
         let (l_indices, r_indices) = indices
             .into_iter()
@@ -262,9 +262,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         let r_indices = Self::drop_distances(r_indices);
 
         if l_indices.len() < r_indices.len() {
-            ([(r_pole, r_indices), (self.radial, l_indices)], polar_distance)
+            ([(arg_r, r_indices), (self.arg_radial, l_indices)], polar_distance)
         } else {
-            ([(self.radial, l_indices), (r_pole, r_indices)], polar_distance)
+            ([(self.arg_radial, l_indices), (arg_r, r_indices)], polar_distance)
         }
     }
 
@@ -548,14 +548,14 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
     /// Distance from the `center` to the given instance.
     pub fn distance_to_instance<D: Dataset<T, U>>(&self, data: &D, instance: T) -> U {
-        data.metric()(instance, self.center)
+        data.query_to_one(instance, self.arg_center)
     }
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
     #[allow(dead_code)]
     pub fn distance_to_other<D: Dataset<T, U>>(&self, data: &D, other: &Self) -> U {
-        data.metric()(self.center, other.center)
+        data.one_to_one(self.arg_center, other.arg_center)
     }
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
@@ -566,12 +566,13 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             |Children {
                  left,
                  right,
-                 l_pole,
-                 r_pole,
+                 arg_l,
+                 arg_r,
                  polar_distance,
+                 ..
              }| {
-                let ql = data.metric()(query, *l_pole);
-                let qr = data.metric()(query, *r_pole);
+                let ql = data.query_to_one(query, *arg_l);
+                let qr = data.query_to_one(query, *arg_r);
 
                 let swap = ql < qr;
                 let (ql, qr) = if swap { (qr, ql) } else { (ql, qr) };
@@ -590,8 +591,6 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
 #[cfg(test)]
 mod tests {
-    use core::f32::EPSILON;
-
     use distances::vectors::euclidean;
 
     use crate::{
@@ -637,22 +636,11 @@ mod tests {
             subtree.len()
         );
         for c in root.subtree() {
-            let center_d = data.query_to_one(c.center, c.arg_center);
+            let radius = data.one_to_one(c.arg_center, c.arg_radial);
             assert!(
-                center_d <= f32::EPSILON,
-                "Center must be the closest instance to itself. {c} had center {:?} and argcenter {} in data {:?}",
-                c.center,
-                c.arg_center,
-                data.data
-            );
-
-            let radial_d = data.query_to_one(c.radial, c.arg_radial);
-            assert!(
-                radial_d <= f32::EPSILON,
-                "Radial must be the closest instance to itself. {c} had radial {:?} but argradial {} in data {:?}",
-                c.radial,
-                c.arg_radial,
-                data.data
+                (radius - c.radius).abs() <= f32::EPSILON,
+                "Radius must be equal to the distance to the farthest instance. {c} had radius {} but distance {radius}.",
+                c.radius,
             );
         }
     }
@@ -666,7 +654,7 @@ mod tests {
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
-        let mut leaf_indices = tree.root().indices(tree.data()).to_vec();
+        let mut leaf_indices = tree.root.indices(tree.data()).to_vec();
         leaf_indices.sort_unstable();
 
         assert_eq!(leaf_indices, tree.data().indices());
@@ -707,22 +695,11 @@ mod tests {
             assert!(c.radius >= 0., "Radius must be non-negative.");
             assert!(c.lfd > 0., "LFD must be positive.");
 
-            let radius = data.metric()(c.center, c.radial);
+            let radius = data.one_to_one(c.arg_center, c.arg_radial);
             assert!(
-                (c.radius - radius).abs() < EPSILON,
-                "Radius must be equal to the distance to the farthest instance."
-            );
-
-            let center_d = data.query_to_one(c.center, c.arg_center);
-            assert!(
-                center_d <= f32::EPSILON,
-                "Center must be the closest instance to itself. {c} had {center_d}"
-            );
-
-            let radial_d = data.query_to_one(c.radial, c.arg_radial);
-            assert!(
-                radial_d <= f32::EPSILON,
-                "Radial must be the closest instance to itself. {c} had {radial_d}"
+                (radius - c.radius).abs() <= f32::EPSILON,
+                "Radius must be equal to the distance to the farthest instance. {c} had radius {} but distance {radius}.",
+                c.radius,
             );
         }
     }
