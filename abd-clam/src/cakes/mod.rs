@@ -3,6 +3,7 @@
 pub mod codec;
 pub mod knn;
 pub mod rnn;
+pub mod sharded;
 
 use distances::Number;
 use rayon::prelude::*;
@@ -21,7 +22,7 @@ use crate::{Dataset, PartitionCriteria, Tree};
 #[derive(Debug)]
 pub struct Cakes<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The tree used for the search.
-    tree: Tree<T, U, D>,
+    pub(crate) tree: Tree<T, U, D>,
 }
 
 impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
@@ -51,12 +52,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
 
     /// Returns the depth of the tree.
     pub const fn depth(&self) -> usize {
-        self.tree.depth()
-    }
-
-    /// Returns the center of the root cluster of the tree.
-    pub const fn center(&self) -> T {
-        self.tree.center()
+        self.tree.depth
     }
 
     /// Returns the radius of the root cluster of the tree.
@@ -162,7 +158,7 @@ mod tests {
             .unzip();
         assert_eq!(results.len(), 2);
 
-        let result_points = results.iter().map(|&i| cakes.data().get(i)).collect::<Vec<_>>();
+        let result_points = results.iter().map(|&i| cakes.data().data[i]).collect::<Vec<_>>();
         assert!(result_points.contains(&[0., 0.].as_slice()));
         assert!(result_points.contains(&[1., 1.].as_slice()));
 
@@ -175,7 +171,7 @@ mod tests {
 
         assert!(results
             .iter()
-            .map(|&i| cakes.data().get(i))
+            .map(|&i| cakes.data().data[i])
             .any(|x| x == [1., 1.].as_slice()));
     }
 

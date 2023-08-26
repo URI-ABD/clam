@@ -28,7 +28,7 @@ where
     D: Dataset<T, U>,
 {
     let data = tree.data();
-    let c = tree.root();
+    let c = &tree.root;
     let d = c.distance_to_instance(data, query);
 
     let mut grains = vec![Grain::new(c, d)];

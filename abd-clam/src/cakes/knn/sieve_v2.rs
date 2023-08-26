@@ -85,7 +85,7 @@ impl<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> SieveV2<'a, T, U, D
 
     /// One-time computation of `grains.`
     pub fn initialize_grains(&mut self) {
-        let root = self.tree.root();
+        let root = &self.tree.root;
         let distance = root.distance_to_instance(self.tree.data(), self.query);
         let grain_cluster = Grain::new(root, distance + root.radius, root.cardinality - 1);
         let grain_center = Grain::new(root, distance, 1);
@@ -334,7 +334,6 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 
 /// Field by which we rank elements in priority queue of hits.
 #[derive(Debug)]
-
 pub struct OrdNumber<U: Number> {
     /// The number we use to rank elements (distance to query).
     pub number: U,

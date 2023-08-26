@@ -72,10 +72,6 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
         &self.indices
     }
 
-    fn get(&self, index: usize) -> T {
-        self.data[index]
-    }
-
     fn metric(&self) -> fn(T, T) -> U {
         self.metric
     }
@@ -90,6 +86,14 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
 
     fn get_reordered_index(&self, i: usize) -> Option<usize> {
         self.reordering.as_ref().map(|indices| indices[i])
+    }
+
+    fn one_to_one(&self, left: usize, right: usize) -> U {
+        (self.metric)(self.data[left], self.data[right])
+    }
+
+    fn query_to_one(&self, query: T, index: usize) -> U {
+        (self.metric)(query, self.data[index])
     }
 }
 

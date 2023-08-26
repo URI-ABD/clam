@@ -30,7 +30,7 @@ where
     D: crate::Dataset<T, U>,
 {
     let mut radius = EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
-    let [mut confirmed, mut straddlers] = tree_search(tree.data(), tree.root(), query, U::from(radius));
+    let [mut confirmed, mut straddlers] = tree_search(tree.data(), &tree.root, query, U::from(radius));
 
     let mut num_hits = confirmed
         .iter()
@@ -40,7 +40,7 @@ where
 
     while num_hits == 0 {
         radius *= MULTIPLIER;
-        [confirmed, straddlers] = tree_search(tree.data(), tree.root(), query, U::from(radius));
+        [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, U::from(radius));
         num_hits = confirmed
             .iter()
             .chain(straddlers.iter())
@@ -59,7 +59,7 @@ where
         let factor = (k.as_f64() / num_hits.as_f64()).powf(1. / (lfd + EPSILON));
 
         radius *= if factor < MULTIPLIER { factor } else { MULTIPLIER };
-        [confirmed, straddlers] = tree_search(tree.data(), tree.root(), query, U::from(radius));
+        [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, U::from(radius));
         num_hits = confirmed
             .iter()
             .chain(straddlers.iter())
