@@ -7,6 +7,3 @@
 [submodule "SyMaGen"]
 	path = SyMaGen
 	url = https://github.com/morganprior/SyMaGen.git
-[submodule "simd-euclidean"]
-	path = simd-euclidean
-	url = https://github.com/nishaq503/simd-euclidean.git
