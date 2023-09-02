@@ -256,10 +256,18 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             .into_iter()
             .zip(l_distances.into_iter())
             .zip(r_distances.into_iter())
+            .filter(|&((i, _), _)| i != self.arg_radial && i != arg_r)
             .partition::<Vec<_>, _>(|&((_, l), r)| l <= r);
 
-        let l_indices = Self::drop_distances(l_indices);
-        let r_indices = Self::drop_distances(r_indices);
+        let (l_indices, r_indices) = {
+            let mut l_indices = Self::drop_distances(l_indices);
+            let mut r_indices = Self::drop_distances(r_indices);
+
+            l_indices.push(self.arg_radial);
+            r_indices.push(arg_r);
+
+            (l_indices, r_indices)
+        };
 
         if l_indices.len() < r_indices.len() {
             ([(arg_r, r_indices), (self.arg_radial, l_indices)], polar_distance)
