@@ -31,6 +31,9 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// Returns a slice of indices that can be used to access the dataset.
     fn indices(&self) -> &[usize];
 
+    /// Returns the instance at a given index in the dataset.
+    fn get(&self, i: usize) -> T;
+
     /// Returns the metric used to calculate distances between instances.
     ///
     /// A metric should obey the following properties:
@@ -303,4 +306,17 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
             .min_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Greater))
             .map(|(i, _)| indices[i])
     }
+
+    /// Makes a vector of sharded datasets from the given dataset.
+    ///
+    /// Each shard will be a random subset of the dataset, and will have a
+    /// cardinality of at most `max_cardinality`. The shards will be disjoint
+    /// subsets of the dataset.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_cardinality` - The maximum cardinality of each shard.
+    fn make_shards(self, max_cardinality: usize) -> Vec<Self>
+    where
+        Self: Sized;
 }

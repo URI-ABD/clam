@@ -1,6 +1,7 @@
 //! A dataset of a Vec of instances.
 
 use distances::Number;
+use rand::prelude::*;
 
 use crate::Dataset;
 
@@ -72,6 +73,10 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
         &self.indices
     }
 
+    fn get(&self, index: usize) -> T {
+        self.data[index]
+    }
+
     fn metric(&self) -> fn(T, T) -> U {
         self.metric
     }
@@ -94,6 +99,24 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
 
     fn query_to_one(&self, query: T, index: usize) -> U {
         (self.metric)(query, self.data[index])
+    }
+
+    fn make_shards(self, max_cardinality: usize) -> Vec<Self> {
+        let indices = {
+            let mut indices = self.indices.clone();
+            indices.shuffle(&mut rand::thread_rng());
+            indices
+        };
+
+        indices
+            .chunks(max_cardinality)
+            .enumerate()
+            .map(|(i, indices)| {
+                let data = indices.iter().map(|&i| self.data[i]).collect::<Vec<_>>();
+                let name = format!("{}-shard-{i}", self.name);
+                Self::new(name, data, self.metric, self.is_expensive)
+            })
+            .collect()
     }
 }
 
