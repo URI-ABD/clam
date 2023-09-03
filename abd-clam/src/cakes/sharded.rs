@@ -134,6 +134,21 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
         }
         hits.extract()
     }
+
+    /// Linear k-nearest neighbor search for a batch of queries.
+    pub fn batch_linear_knn(&self, queries: &[T], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|&query| self.linear_knn(query, k)).collect()
+    }
+
+    /// Linear k-nearest neighbor search for a query.
+    pub fn linear_knn(&self, query: T, k: usize) -> Vec<(usize, U)> {
+        let mut hits = knn::Hits::from_vec(k, self.sample_shard.knn_search(query, k, knn::Algorithm::Linear));
+        for (shard, &o) in self.shards.iter().zip(self.offsets.iter()) {
+            let new_hits = shard.knn_search(query, k, knn::Algorithm::Linear);
+            hits.push_batch(new_hits.into_iter().map(|(i, d)| (i + o, d)));
+        }
+        hits.extract()
+    }
 }
 
 #[cfg(test)]
