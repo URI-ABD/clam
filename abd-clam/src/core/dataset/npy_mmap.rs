@@ -99,6 +99,13 @@ impl<'a, T: Number + ViewElement + ViewMutElement + ViewMutNpyExt<'a>, U: Number
         &self.indices
     }
 
+    #[allow(unused_variables)]
+    fn get(&self, index: usize) -> ArrayView1<'a, T> {
+        todo!()
+        // let data = self.view();
+        // data.row(index)
+    }
+
     fn metric(&self) -> fn(ArrayView1<T>, ArrayView1<T>) -> U {
         self.metric
     }
@@ -152,5 +159,10 @@ impl<'a, T: Number + ViewElement + ViewMutElement + ViewMutNpyExt<'a>, U: Number
     fn query_to_many(&self, query: ArrayView1<T>, indices: &[usize]) -> Vec<U> {
         let data = self.view();
         indices.iter().map(|&i| (self.metric)(query, data.row(i))).collect()
+    }
+
+    #[allow(unused_variables)]
+    fn make_shards(self, max_cardinality: usize) -> Vec<Self> {
+        todo!()
     }
 }
