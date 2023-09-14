@@ -146,10 +146,14 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             data.choose_unique(n, indices, seed)
         };
 
-        let Some(arg_center) = data.median(&arg_samples) else { unreachable!("The cluster should have at least one instance.") };
+        let Some(arg_center) = data.median(&arg_samples) else {
+            unreachable!("The cluster should have at least one instance.")
+        };
 
         let center_distances = data.one_to_many(arg_center, indices);
-        let Some((arg_radial, radius)) = utils::arg_max(&center_distances) else { unreachable!("The cluster should have at least one instance.") };
+        let Some((arg_radial, radius)) = utils::arg_max(&center_distances) else {
+            unreachable!("The cluster should have at least one instance.")
+        };
         let arg_radial = indices[arg_radial];
 
         let lfd = utils::compute_lfd(radius, &center_distances);
@@ -229,7 +233,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
                 _t: PhantomData,
             });
 
-            indices = l_indices.into_iter().chain(r_indices.into_iter()).collect::<Vec<_>>();
+            indices = l_indices.into_iter().chain(r_indices).collect::<Vec<_>>();
         }
 
         // reset the indices to center and radial indices for data reordering
@@ -248,14 +252,16 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(usize, Vec<usize>); 2], U) {
         let l_distances = data.one_to_many(self.arg_radial, &indices);
 
-        let Some((arg_r, polar_distance)) = utils::arg_max(&l_distances) else { unreachable!("The cluster should have at least one instance.") };
+        let Some((arg_r, polar_distance)) = utils::arg_max(&l_distances) else {
+            unreachable!("The cluster should have at least one instance.")
+        };
         let arg_r = indices[arg_r];
         let r_distances = data.one_to_many(arg_r, &indices);
 
         let (l_indices, r_indices) = indices
             .into_iter()
-            .zip(l_distances.into_iter())
-            .zip(r_distances.into_iter())
+            .zip(l_distances)
+            .zip(r_distances)
             .filter(|&((i, _), _)| i != self.arg_radial && i != arg_r)
             .partition::<Vec<_>, _>(|&((_, l), r)| l <= r);
 
@@ -453,7 +459,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             .map(|s| {
                 let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
                 let s = format!("{a}{b}{c}{d}");
-                let Ok(s) = u8::from_str_radix(&s, 2) else { unreachable!("We know the characters used are only \"0\" and \"1\".") };
+                let Ok(s) = u8::from_str_radix(&s, 2) else {
+                    unreachable!("We know the characters used are only \"0\" and \"1\".")
+                };
                 format!("{s:01x}")
             })
             .collect()
@@ -538,8 +546,8 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
         match self.children() {
             Some([left, right]) => subtree
                 .into_iter()
-                .chain(left.subtree().into_iter())
-                .chain(right.subtree().into_iter())
+                .chain(left.subtree())
+                .chain(right.subtree())
                 .collect(),
 
             None => subtree,
@@ -626,7 +634,9 @@ mod tests {
 
         assert_eq!(format!("{root}"), "1");
 
-        let Some([left, right]) = root.children() else { unreachable!("The root cluster has children.") };
+        let Some([left, right]) = root.children() else {
+            unreachable!("The root cluster has children.")
+        };
         assert_eq!(format!("{left}"), "2");
         assert_eq!(format!("{right}"), "3");
 

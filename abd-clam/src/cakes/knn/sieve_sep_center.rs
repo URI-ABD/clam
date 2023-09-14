@@ -72,7 +72,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
             let distances = data.query_to_many(query, indices);
             indices
                 .iter()
-                .zip(distances.into_iter())
+                .zip(distances)
                 .map(|(&i, d)| Self::new_hit(d, i))
                 .collect()
         } else {
@@ -128,7 +128,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
                     let distances = data.query_to_many(query, indices);
                     indices
                         .iter()
-                        .zip(distances.into_iter())
+                        .zip(distances)
                         .map(|(&index, d)| Grain::new_hit(d, index))
                         .collect()
                 }
@@ -297,7 +297,7 @@ where
             .into_iter()
             .flat_map(Grain::cluster_to_children)
             .flat_map(|c| Grain::new_grains(c, data, query))
-            .chain(hits.into_iter())
+            .chain(hits)
             .collect();
     }
 }

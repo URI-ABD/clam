@@ -152,7 +152,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
 
         let (&best, _) = knn::Algorithm::variants()
             .iter()
-            .zip(times.into_iter())
+            .zip(times)
             .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater))
             .unwrap_or_else(|| unreachable!("We have at least several variants for knn-search."));
 

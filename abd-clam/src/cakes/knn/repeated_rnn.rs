@@ -69,14 +69,14 @@ where
 
     let mut hits = Hits::new(k);
 
-    confirmed.into_iter().chain(straddlers.into_iter()).for_each(|(c, d)| {
+    confirmed.into_iter().chain(straddlers).for_each(|(c, d)| {
         let indices = c.indices(tree.data());
         let distances = if c.is_singleton() {
             vec![d; c.cardinality]
         } else {
             tree.data().query_to_many(query, indices)
         };
-        hits.push_batch(indices.iter().copied().zip(distances.into_iter()));
+        hits.push_batch(indices.iter().copied().zip(distances));
     });
 
     hits.extract()

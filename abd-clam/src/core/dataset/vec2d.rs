@@ -52,7 +52,9 @@ impl<T: Send + Sync + Copy, U: Number> VecDataset<T, U> {
 
 impl<T: Send + Sync + Copy, U: Number> std::fmt::Debug for VecDataset<T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        f.debug_struct("Tabular Space").field("name", &self.name).finish()
+        f.debug_struct("Tabular Space")
+            .field("name", &self.name)
+            .finish_non_exhaustive()
     }
 }
 
