@@ -166,4 +166,24 @@ impl Number for Bool {
             self
         }
     }
+
+    fn num_bytes() -> usize {
+        1
+    }
+
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        Self::from_bool(bytes[0] != 0)
+    }
+
+    fn to_le_bytes(self) -> Vec<u8> {
+        self.0.to_le_bytes().to_vec()
+    }
+
+    fn from_be_bytes(bytes: &[u8]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+
+    fn to_be_bytes(self) -> Vec<u8> {
+        self.to_le_bytes()
+    }
 }

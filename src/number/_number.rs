@@ -71,6 +71,22 @@ pub trait Number:
     /// Returns `self` raised to the power of `exp`.
     #[must_use]
     fn powi(self, exp: i32) -> Self;
+
+    /// Returns the number of bytes used to represent a `Number`.
+    #[must_use]
+    fn num_bytes() -> usize;
+
+    /// Reads a `Number` from little endian bytes.
+    fn from_le_bytes(bytes: &[u8]) -> Self;
+
+    /// Converts a `Number` to little endian bytes.
+    fn to_le_bytes(self) -> Vec<u8>;
+
+    /// Reads a `Number` from big endian bytes.
+    fn from_be_bytes(bytes: &[u8]) -> Self;
+
+    /// Converts a `Number` to big endian bytes.
+    fn to_be_bytes(self) -> Vec<u8>;
 }
 
 impl Number for f32 {
@@ -126,6 +142,30 @@ impl Number for f32 {
     fn powi(self, exp: i32) -> Self {
         // libm::powf(self, exp.as_f32())  // no-std
         self.powi(exp)
+    }
+
+    fn num_bytes() -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; 4];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_le_bytes(ty_bytes)
+    }
+
+    fn to_le_bytes(self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+
+    fn from_be_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; 4];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_be_bytes(ty_bytes)
+    }
+
+    fn to_be_bytes(self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
@@ -183,6 +223,30 @@ impl Number for f64 {
         // libm::pow(self, exp.as_f64())  // no-std
         self.powi(exp)
     }
+
+    fn num_bytes() -> usize {
+        core::mem::size_of::<Self>()
+    }
+
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; 8];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_le_bytes(ty_bytes)
+    }
+
+    fn to_le_bytes(self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+
+    fn from_be_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; 8];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_be_bytes(ty_bytes)
+    }
+
+    fn to_be_bytes(self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
 }
 
 /// A macro to implement the `Number` trait for primitive types.
@@ -236,6 +300,30 @@ macro_rules! impl_number_iint {
 
                 fn powi(self, exp: i32) -> Self {
                     <$ty>::pow(self, exp as u32)
+                }
+
+                fn num_bytes() -> usize {
+                    core::mem::size_of::<$ty>()
+                }
+
+                fn from_le_bytes(bytes: &[u8]) -> Self {
+                    let mut ty_bytes = [0_u8; core::mem::size_of::<$ty>()];
+                    ty_bytes.copy_from_slice(bytes);
+                    Self::from_le_bytes(ty_bytes)
+                }
+
+                fn to_le_bytes(self) -> Vec<u8> {
+                    self.to_le_bytes().to_vec()
+                }
+
+                fn from_be_bytes(bytes: &[u8]) -> Self {
+                    let mut ty_bytes = [0_u8; core::mem::size_of::<$ty>()];
+                    ty_bytes.copy_from_slice(bytes);
+                    Self::from_be_bytes(ty_bytes)
+                }
+
+                fn to_be_bytes(self) -> Vec<u8> {
+                    self.to_be_bytes().to_vec()
                 }
             }
         )*
@@ -295,6 +383,30 @@ macro_rules! impl_number_uint {
 
                 fn powi(self, exp: i32) -> Self {
                     <$ty>::pow(self, exp as u32)
+                }
+
+                fn num_bytes() -> usize {
+                    core::mem::size_of::<$ty>()
+                }
+
+                fn from_le_bytes(bytes: &[u8]) -> Self {
+                    let mut ty_bytes = [0_u8; core::mem::size_of::<$ty>()];
+                    ty_bytes.copy_from_slice(bytes);
+                    Self::from_le_bytes(ty_bytes)
+                }
+
+                fn to_le_bytes(self) -> Vec<u8> {
+                    self.to_le_bytes().to_vec()
+                }
+
+                fn from_be_bytes(bytes: &[u8]) -> Self {
+                    let mut ty_bytes = [0_u8; core::mem::size_of::<$ty>()];
+                    ty_bytes.copy_from_slice(bytes);
+                    Self::from_be_bytes(ty_bytes)
+                }
+
+                fn to_be_bytes(self) -> Vec<u8> {
+                    self.to_be_bytes().to_vec()
                 }
             }
         )*
