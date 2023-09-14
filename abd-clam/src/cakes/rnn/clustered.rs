@@ -106,7 +106,7 @@ where
         } else {
             data.query_to_many(query, c.indices(data))
         };
-        c.indices(data).iter().copied().zip(distances.into_iter())
+        c.indices(data).iter().copied().zip(distances)
     });
 
     let indices = straddlers
@@ -115,6 +115,5 @@ where
         .copied()
         .collect::<Vec<_>>();
 
-    hits.chain(linear::search(data, query, radius, &indices).into_iter())
-        .collect()
+    hits.chain(linear::search(data, query, radius, &indices)).collect()
 }

@@ -94,7 +94,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
                 indices
                     .iter()
                     .copied()
-                    .zip(distances.into_iter())
+                    .zip(distances)
                     .map(|(index, d)| Grain::new_hit(d, index))
                     .collect::<Vec<_>>()
             }
@@ -261,7 +261,7 @@ where
             .flat_map(Grain::cluster_to_children)
             .map(|c| (c, c.distance_to_instance(data, query)))
             .map(|(c, d)| Grain::new_cluster(c, d))
-            .chain(hits.into_iter())
+            .chain(hits)
             .collect();
     }
 }

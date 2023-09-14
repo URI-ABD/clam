@@ -27,7 +27,7 @@ where
     indices
         .iter()
         .copied()
-        .zip(distances.into_iter())
+        .zip(distances)
         .filter(|&(_, d)| d <= radius)
         .collect()
 }

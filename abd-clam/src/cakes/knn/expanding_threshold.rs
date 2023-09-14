@@ -106,7 +106,7 @@ fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
     } else {
         tree.data().query_to_many(query, is)
     };
-    is.iter().zip(ds.into_iter()).for_each(|(&i, d)| {
+    is.iter().zip(ds).for_each(|(&i, d)| {
         hits.push(i, OrdNumber(d));
     });
 }
