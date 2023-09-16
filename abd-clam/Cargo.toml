@@ -10,7 +10,7 @@ authors = [
     "Oliver McLaughlin <olwmcjp@gmail.com>",
 ]
 edition = "2021"
-rust-version = "1.68"
+rust-version = "1.72"
 description = "Clustered Learning of Approximate Manifolds"
 license = "MIT"
 readme = "README.md"
