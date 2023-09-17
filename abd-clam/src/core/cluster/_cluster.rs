@@ -6,7 +6,6 @@ use core::{
     hash::{Hash, Hasher},
     marker::PhantomData,
 };
-
 use distances::Number;
 
 use crate::{utils, Dataset, PartitionCriteria, PartitionCriterion};
@@ -440,19 +439,24 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     pub fn history(&self) -> &[bool] {
         &self.history
     }
-
     /// The `name` of the `Cluster` as a hex-String.
     ///
     /// This is a human-readable representation of the `Cluster`'s `history`.
     /// It may be used to store the `Cluster` in a database, or to identify the
     /// `Cluster` in a visualization.
-    #[allow(clippy::many_single_char_names)]
     pub fn name(&self) -> String {
-        let d = self.history.len();
+        Self::history_to_name(&self.history)
+    }
+
+    /// Returns a human-readable hexidecimal representation of a `Cluster` history
+    /// boolean vector
+    #[allow(clippy::many_single_char_names)]
+    pub fn history_to_name(history: &[bool]) -> String {
+        let d = history.len();
         let padding = if d % 4 == 0 { 0 } else { 4 - d % 4 };
         let bin_name = (0..padding)
             .map(|_| "0")
-            .chain(self.history.iter().map(|&b| if b { "1" } else { "0" }))
+            .chain(history.iter().map(|&b| if b { "1" } else { "0" }))
             .collect::<Vec<_>>();
         bin_name
             .chunks_exact(4)
@@ -467,6 +471,64 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             .collect()
     }
 
+    /// Converts the hexidecimal representation of cluster history obtained from `Cluster::name`
+    /// back into a `Vec<bool>`
+    pub fn name_to_history(name: &str) -> Vec<bool> {
+        let mut history = vec![];
+
+        // Get the first 4 bits and dont add any 0 padding.
+        // Unwrapping here is warranted because every name is at least one bit long and thus
+        // the resulting string has nonzero length.
+        #[allow(clippy::unwrap_used)]
+        let mut chunk = name.chars().nth(0).unwrap() as u8;
+
+        // If the chunk is 0-9, we subtract 48 to get its true value
+        if chunk < 97 {
+            chunk -= 48;
+        }
+        // Otherwise, it's in the a-f range, in which we subtract 97 to
+        // zero it out and then add 10
+        else {
+            chunk -= 87;
+        }
+
+        // True iff. we've encountered a one bit in the chunk
+        let mut found_high_bit = false;
+        for i in 0..4 {
+            // Get the 3 - i th high bit
+            let mask = 1 << (3 - i);
+
+            if chunk & mask > 0 {
+                found_high_bit = true;
+            }
+
+            if found_high_bit {
+                history.push((chunk & mask) > 0);
+            }
+        }
+
+        for c in (name[1..]).chars() {
+            // Each char gets converted into 4 bits
+            let mut chunk = c as u8;
+
+            // If the chunk is 0-9, we subtract 48 to get its true value
+            if chunk < 97 {
+                chunk -= 48;
+            }
+            // Otherwise, it's in the a-f range, in which we subtract 97 to
+            // zero it out and then add 10
+            else {
+                chunk -= 87;
+            }
+
+            for i in 0..4 {
+                // Get the 3 - i th high bit
+                let mask = 1 << (3 - i);
+                history.push((chunk & mask) > 0);
+            }
+        }
+        history
+    }
     /// Whether the `Cluster` is the root of the tree.
     ///
     /// The root `Cluster` has a depth of 0.
@@ -605,6 +667,133 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 }
 
+use serde::{Deserialize, Serialize};
+
+/// Serialized information about a given `Cluster`'s children
+#[derive(Serialize, Deserialize)]
+pub struct SerializedChildInfo {
+    /// The encoded history of the left child
+    pub left_name: String,
+    /// The encoded history of the right child
+    pub right_name: String,
+    /// The left pole of the `Cluster`
+    pub arg_l: usize,
+    /// The right pole of the `Cluster`
+    pub arg_r: usize,
+    /// The distance from the `l_pole` to the `r_pole` in bytes.
+    /// This value gets reconstituted can be reconstituted from
+    /// whatever `U: Number` it was decomposed from
+    pub polar_distance_bytes: Vec<u8>,
+}
+
+/// Intermediate representation of `Cluster` for serialization.
+/// We do this instead of directly serializing/deserializing the Clusters themselves because
+/// writing a deserializer directly is moderately complicated with our exceptions
+#[allow(clippy::module_name_repetitions)]
+#[derive(Serialize, Deserialize)]
+pub struct SerializedCluster {
+    /// The encoded history of the `Cluster`
+    pub name: String,
+    /// The seed (if applicable) that the `Cluster` was constructed with
+    pub seed: Option<u64>,
+    /// The `Cluster`'s offset
+    pub offset: usize,
+    /// The `Cluster`'s cardinality
+    pub cardinality: usize,
+    /// The `Cluster`'s arg_center
+    pub arg_center: usize,
+    /// The `Cluster`'s arg_radial
+    pub arg_radial: usize,
+    /// The `Cluster`'s radius in byte form
+    pub radius_bytes: Vec<u8>,
+    /// The `Cluster`'s local fractal dimension
+    pub lfd: f64,
+    /// The `Cluster`'s ratios
+    pub ratios: Option<Ratios>,
+    /// Serialized information about the cluster's immediate children, if applicable
+    pub child_info: Option<SerializedChildInfo>,
+}
+
+impl SerializedCluster {
+    /// Converts a `Cluster` to a `SerializedCluster`
+    #[allow(dead_code)]
+    pub fn from_cluster<T: Send + Sync + Copy, U: Number>(cluster: &Cluster<T, U>) -> Self {
+        let name = cluster.name();
+        let cardinality = cluster.cardinality;
+        let offset = cluster.offset;
+        let seed = cluster.seed;
+
+        // Because Number isn't serializeable, we just convert it to bytes and
+        // serialize that
+        let radius_bytes = cluster.radius.to_le_bytes();
+        let arg_center = cluster.arg_center;
+        let arg_radial = cluster.arg_radial;
+        let lfd = cluster.lfd;
+
+        let ratios = cluster.ratios;
+
+        // Since we cant do this recursively we need to like depth-first traverse
+        // the tree and serialize manually
+        #[allow(clippy::option_if_let_else)]
+        let child_info = {
+            if let Some(children) = &cluster.children {
+                let Children {
+                    left,
+                    right,
+                    arg_l,
+                    arg_r,
+                    polar_distance,
+                    _t: _,
+                } = children;
+
+                Some(SerializedChildInfo {
+                    left_name: left.name(),
+                    right_name: right.name(),
+                    arg_l: *arg_l,
+                    arg_r: *arg_r,
+                    polar_distance_bytes: polar_distance.to_le_bytes(),
+                })
+            } else {
+                None
+            }
+        };
+
+        Self {
+            name,
+            seed,
+            offset,
+            cardinality,
+            arg_center,
+            arg_radial,
+            radius_bytes,
+            lfd,
+            ratios,
+            child_info,
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Converts a `SerializedCluster` to a `Cluster`. Optionally returns information about the
+    /// Children's poles
+    pub fn into_partial_cluster<T: Send + Sync + Copy, U: Number>(self) -> (Cluster<T, U>, Option<SerializedChildInfo>) {
+        (
+            Cluster {
+                history: Cluster::<T, U>::name_to_history(&self.name),
+                seed: self.seed,
+                offset: self.offset,
+                cardinality: self.cardinality,
+                arg_center: self.arg_center,
+                arg_radial: self.arg_radial,
+                radius: U::from_le_bytes(&self.radius_bytes),
+                lfd: self.lfd,
+                ratios: self.ratios,
+                children: None,
+            },
+            self.child_info,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use distances::vectors::euclidean;
@@ -719,6 +908,87 @@ mod tests {
                 "Radius must be equal to the distance to the farthest instance. {c} had radius {} but distance {radius}.",
                 c.radius,
             );
+        }
+    }
+
+    mod serialize_tests {
+        use super::*;
+        use crate::{Dataset, VecDataset};
+        use distances::vectors::euclidean;
+        use rand::Rng;
+
+        #[test]
+        fn test_basic() {
+            let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
+            let name = "test".to_string();
+            let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
+            let indices = data.indices().to_vec();
+            let mut c1 = Cluster::new_root(&data, &indices, Some(42));
+            c1.history = vec![true, true, false, false, true];
+
+            let s1 = SerializedCluster::from_cluster(&c1);
+            let s1_string = serde_json::to_string(&s1).unwrap();
+
+            let s2: SerializedCluster = serde_json::from_str(&s1_string).unwrap();
+            assert_eq!(s1.name, s2.name);
+            assert_eq!(s1.seed, s2.seed);
+            assert_eq!(s1.offset, s2.offset);
+            assert_eq!(s1.cardinality, s2.cardinality);
+            assert_eq!(s1.arg_center, s2.arg_center);
+            assert_eq!(s1.arg_radial, s2.arg_radial);
+            assert_eq!(s1.radius_bytes, s2.radius_bytes);
+            assert_eq!(s1.lfd, s2.lfd);
+            assert_eq!(s1.ratios, s2.ratios);
+
+            let (c2, chls) = s2.into_partial_cluster();
+
+            assert_eq!(c1, c2);
+            assert!(chls.is_none());
+        }
+
+        #[test]
+        fn test_history_to_name() {
+            use rand::distributions::{Bernoulli, Distribution};
+
+            let d = Bernoulli::new(0.3).unwrap();
+
+            for length in 1..800 {
+                let mut hist = vec![true];
+
+                for _ in 1..length {
+                    let b = d.sample(&mut rand::thread_rng());
+                    hist.push(b);
+                }
+
+                let name = Cluster::<&[f32], f32>::history_to_name(&hist);
+                let recovered = Cluster::<&[f32], f32>::name_to_history(&name);
+                assert_eq!(recovered, hist);
+            }
+        }
+
+        #[test]
+        fn test_name_to_history() {
+            let charset = "0123456789abcdef";
+            let mut rng = rand::thread_rng();
+
+            for length in 1..200 {
+                // Randomly choose the first char. Must be nonzero
+                let idx = rng.gen_range(1..charset.len());
+                let c = charset.chars().nth(idx).unwrap();
+                let mut name = String::from(c);
+
+                // Randomly choose the remaining characters
+                for _ in 1..length {
+                    let idx = rng.gen_range(0..charset.len());
+                    let c = charset.chars().nth(idx).unwrap();
+                    name.push(c);
+                }
+
+                let hist = Cluster::<&[f32], f32>::name_to_history(&name);
+                let recovered_name = Cluster::<&[f32], f32>::history_to_name(&hist);
+
+                assert_eq!(recovered_name, name);
+            }
         }
     }
 }

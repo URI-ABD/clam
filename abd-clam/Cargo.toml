@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.21.6"
+version = "0.21.7"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -48,12 +48,13 @@ libm = "0.2.7"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-npy = "0.8.1"
 memmap2 = "0.7.1"
+# Used for serializing `Cluster`s
+serde = { version = "1.0.164", features = ["derive"] }
+serde_json = { version = "1.0.96", features = ["alloc"] }
 
 [dev-dependencies]
 symagen = { path = "../SyMaGen" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = { version = "1.0.96", features = ["alloc"] }
 log = "0.4.19"
 env_logger = "0.10.0"
 num-format = "0.4.4"
