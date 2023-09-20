@@ -1,13 +1,13 @@
+use core::cmp::Ordering;
 use std::{path::Path, time::Instant};
 
 use abd_clam::{Cakes, Dataset, PartitionCriteria, ShardedCakes, VecDataset};
 use distances::Number;
+use ndarray::prelude::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::ann_readers;
-
-pub enum Metrics {
+enum Metrics {
     Cosine,
     Euclidean,
 }
@@ -15,7 +15,7 @@ pub enum Metrics {
 impl Metrics {
     fn from_str(s: &str) -> Result<Self, String> {
         match s.to_lowercase().as_str() {
-            "cosine" | "angular" => Ok(Metrics::Cosine),
+            "cosine" => Ok(Metrics::Cosine),
             "euclidean" => Ok(Metrics::Euclidean),
             _ => Err(format!("Unknown metric: {}", s)),
         }
@@ -45,130 +45,138 @@ pub struct Report<'a> {
 }
 
 impl Report<'_> {
-    fn save(&self, directory: &Path) -> Result<(), String> {
-        let path = directory.join(format!(
-            "{}_{}_{}_{}_{}.json",
-            self.data_name,
-            self.metric_name,
-            self.k,
-            self.algorithm,
-            self.shard_sizes.len()
-        ));
-        let report = serde_json::to_string(&self).map_err(|e| e.to_string())?;
+    fn save(&self, dir: &Path) -> Result<(), String> {
+        let path = dir.join(format!("{}_{}.json", self.data_name, self.metric_name));
+        let report = serde_json::to_string_pretty(&self).map_err(|e| e.to_string())?;
         std::fs::write(path, report).map_err(|e| e.to_string())?;
         Ok(())
     }
 }
 
-pub fn make_reports() -> Result<(), String> {
-    let reports_dir = {
-        let mut dir = std::env::current_dir().map_err(|e| e.to_string())?;
-        dir.push("reports");
-        if !dir.exists() {
-            std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
-        }
-        dir
+pub fn make_reports(
+    data_dir: &Path,
+    data_name: &str,
+    metric_name: &str,
+    tuning_depth: usize,
+    tuning_k: usize,
+    k: usize,
+    output_dir: &Path,
+) -> Result<(), String> {
+    let metric = Metrics::from_str(metric_name)?.distance();
+    let [train_data, queries] = read_search_data(data_dir, data_name)?;
+    println!("dataset: {data_name}, metric: {metric_name}");
+
+    let train_data = train_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let (cardinality, dimensionality) = (train_data.len(), train_data[0].len());
+    println!("cardinality: {cardinality}, dimensionality: {dimensionality}");
+
+    let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let num_queries = queries.len();
+    println!("num_queries: {num_queries}");
+
+    let max_cardinality = if cardinality > 1_000_000 {
+        cardinality / 10
+    } else {
+        cardinality
     };
 
-    for &(data_name, metric_name) in ann_readers::DATASETS {
-        if ["kosarak", "nytimes"].contains(&data_name) {
-            continue;
-        }
+    let data_shards = VecDataset::new(data_name.to_string(), train_data, metric, false)
+        .make_shards(max_cardinality);
+    let shards = data_shards
+        .into_iter()
+        .map(|d| {
+            let threshold = d.cardinality().as_f64().log2().ceil() as usize;
+            let criteria = PartitionCriteria::new(true).with_min_cardinality(threshold);
+            Cakes::new(d, None, criteria)
+        })
+        .collect::<Vec<_>>();
+    let cakes = ShardedCakes::new(shards).auto_tune(tuning_k, tuning_depth);
 
-        let metric = if let Ok(metric) = Metrics::from_str(metric_name) {
-            metric.distance()
-        } else {
-            continue;
-        };
-        println!("dataset: {data_name}, metric: {metric_name}");
+    let shard_sizes = cakes.shard_cardinalities();
+    println!("shard_sizes: {shard_sizes:?}");
 
-        let (train_data, queries) = ann_readers::read_search_data(data_name)?;
-        let (cardinality, dimensionality) = (train_data.len(), train_data[0].len());
-        println!("cardinality: {cardinality}, dimensionality: {dimensionality}");
+    let algorithm = cakes.best_knn_algorithm();
+    println!("algorithm: {}", algorithm.name());
 
-        let train_data = train_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let num_queries = queries.len();
-        println!("num_queries: {num_queries}");
+    let start = Instant::now();
+    let hits = cakes.batch_knn_search(&queries, k);
+    let elapsed = start.elapsed().as_secs_f32();
+    let throughput = queries.len().as_f32() / elapsed;
+    println!("throughput: {throughput}");
 
-        let max_cardinality = if cardinality > 1_000_000 {
-            cardinality / 10
-        } else {
-            cardinality
-        };
+    let start = Instant::now();
+    let linear_hits = cakes.batch_linear_knn(&queries, k);
+    let linear_elapsed = start.elapsed().as_secs_f32();
+    let linear_throughput = queries.len().as_f32() / linear_elapsed;
+    println!("linear_throughput: {linear_throughput}");
 
-        let threshold = max_cardinality.as_f64().log2().ceil() as usize;
-        let data_shards = VecDataset::new(data_name.to_string(), train_data, metric, false)
-            .make_shards(max_cardinality);
-        let shards = data_shards
-            .into_iter()
-            .map(|d| {
-                let criteria = PartitionCriteria::new(true).with_min_cardinality(threshold);
-                Cakes::new(d, None, criteria)
-            })
-            .collect::<Vec<_>>();
+    let speedup_factor = throughput / linear_throughput;
+    println!("speedup_factor: {speedup_factor}");
 
-        let sampling_depth = 10;
-        let cakes = ShardedCakes::new(shards).auto_tune(10, sampling_depth);
+    let recall = hits
+        .into_par_iter()
+        .zip(linear_hits.into_par_iter())
+        .map(|(mut hits, mut linear_hits)| {
+            hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+            let mut hits = hits.into_iter().map(|(_, d)| d).peekable();
 
-        for k in (1..3).map(|v| 10usize.pow(v)) {
-            println!("\tk: {k}");
+            linear_hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+            let mut linear_hits = linear_hits.into_iter().map(|(_, d)| d).peekable();
 
-            let algorithm = cakes.best_knn_algorithm();
-            println!("\t\talgorithm: {}", algorithm.name());
-
-            let start = Instant::now();
-            let hits = cakes.batch_knn_search(&queries, k);
-            let elapsed = start.elapsed().as_secs_f32();
-            let throughput = queries.len().as_f32() / elapsed;
-
-            let start = Instant::now();
-            let linear_hits = cakes.batch_linear_knn(&queries, k);
-            let linear_elapsed = start.elapsed().as_secs_f32();
-            let linear_throughput = queries.len().as_f32() / linear_elapsed;
-
-            let recall = hits
-                .into_par_iter()
-                .zip(linear_hits.into_par_iter())
-                .map(|(hits, linear_hits)| {
-                    let mut hits = hits.into_iter().map(|(_, d)| d).peekable();
-                    let mut linear_hits = linear_hits.into_iter().map(|(_, d)| d).peekable();
-
-                    let mut num_common = 0;
-                    while let (Some(&hit), Some(&linear_hit)) = (hits.peek(), linear_hits.peek()) {
-                        if hit < linear_hit {
-                            hits.next();
-                        } else if hit > linear_hit {
-                            linear_hits.next();
-                        } else {
-                            num_common += 1;
-                            hits.next();
-                            linear_hits.next();
-                        }
-                    }
-                    num_common.as_f32() / k.as_f32()
-                })
-                .sum::<f32>()
-                / queries.len().as_f32();
-
-            Report {
-                data_name,
-                metric_name,
-                cardinality,
-                dimensionality,
-                shard_sizes: cakes.shard_cardinalities(),
-                num_queries,
-                k,
-                algorithm: algorithm.name(),
-                throughput,
-                recall,
-                linear_throughput,
+            let mut num_common = 0;
+            while let (Some(&hit), Some(&linear_hit)) = (hits.peek(), linear_hits.peek()) {
+                if hit < linear_hit {
+                    hits.next();
+                } else if hit > linear_hit {
+                    linear_hits.next();
+                } else {
+                    num_common += 1;
+                    hits.next();
+                    linear_hits.next();
+                }
             }
-            .save(&reports_dir)?;
-        }
+            num_common.as_f32() / k.as_f32()
+        })
+        .sum::<f32>()
+        / queries.len().as_f32();
+    println!("recall: {recall}");
 
-        drop(cakes);
+    Report {
+        data_name,
+        metric_name,
+        cardinality,
+        dimensionality,
+        shard_sizes,
+        num_queries,
+        k,
+        algorithm: algorithm.name(),
+        throughput,
+        recall,
+        linear_throughput,
     }
+    .save(output_dir)?;
 
     Ok(())
+}
+
+fn read_search_data(dir: &Path, name: &str) -> Result<[Vec<Vec<f32>>; 2], String> {
+    let train_path = dir.join(format!("{}-train.npy", name));
+    let train_data = read_npy(&train_path)?;
+
+    let test_path = dir.join(format!("{}-test.npy", name));
+    let test_data = read_npy(&test_path)?;
+
+    Ok([train_data, test_data])
+}
+
+fn read_npy(path: &Path) -> Result<Vec<Vec<f32>>, String> {
+    let data: Array2<f32> = ndarray_npy::read_npy(path).map_err(|error| {
+        format!(
+            "Error: Failed to read your dataset at {}. {:}",
+            path.to_str().unwrap(),
+            error
+        )
+    })?;
+
+    Ok(data.outer_iter().map(|row| row.to_vec()).collect())
 }

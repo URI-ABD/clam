@@ -7,23 +7,10 @@ license = "MIT"
 readme = "README.md"
 packages = [{include = "cakes_results", from = "python"}]
 
-[tool.poetry.dependencies]
-python = ">=3.9,<3.12"
-pydantic = "^2.3.0"
-typer = "^0.9.0"
-numpy = "^1.25.2"
-seaborn = "^0.12.2"
-pandas = "<2.0"
-tqdm = "^4.66.1"
-
 [tool.poetry.group.dev.dependencies]
 pip = "^23.2.1"
 setuptools = "^68.1.2"
 pre-commit = "^3.3.3"
-black = "^23.7.0"
-ruff = "^0.0.286"
-mypy = "^1.5.1"
-pytest = "^7.4.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -65,13 +65,13 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
 
     /// Automatically tunes the algorithm to return the fastest variant for knn-search.
     #[must_use]
-    pub fn auto_tune(mut self, k: usize, sampling_depth: usize) -> Self {
+    pub fn auto_tune(mut self, k: usize, tuning_depth: usize) -> Self {
         let queries = self
             .tree
             .root
             .subtree()
             .into_iter()
-            .filter(|&c| c.depth() == sampling_depth || c.is_leaf() && c.depth() < sampling_depth)
+            .filter(|&c| c.depth() == tuning_depth || c.is_leaf() && c.depth() < tuning_depth)
             .map(|c| self.tree.data.get(c.arg_center))
             .collect::<Vec<_>>();
 
@@ -178,7 +178,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_search() {
+    fn tiny() {
         let data: Vec<&[f32]> = vec![&[0., 0.], &[1., 1.], &[2., 2.], &[3., 3.]];
 
         let name = "test".to_string();
@@ -211,7 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn rnn_search() {
+    fn line() {
         let data = (-100..=100).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let data = VecDataset::new("test".to_string(), data, euclidean, false);

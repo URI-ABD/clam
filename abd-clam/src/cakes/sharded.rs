@@ -62,8 +62,8 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
     /// * `k` - The number of nearest neighbors to auto-tune for.
     /// * `sampling_depth` - The depth at which to sample for auto-tuning.
     #[must_use]
-    pub fn auto_tune(mut self, k: usize, sampling_depth: usize) -> Self {
-        self.sample_shard = self.sample_shard.auto_tune(k, sampling_depth);
+    pub fn auto_tune(mut self, k: usize, tuning_depth: usize) -> Self {
+        self.sample_shard = self.sample_shard.auto_tune(k, tuning_depth);
         self
     }
 
@@ -261,6 +261,7 @@ mod tests {
                     hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                     hits
                 };
+                assert!(sharded_hits.len() == k, "Failed KNN search: query: {i}, k: {k}");
 
                 let cakes_distances = cakes_hits.iter().map(|&(_, d)| d).collect::<Vec<_>>();
                 let sharded_distances = sharded_hits.iter().map(|&(_, d)| d).collect::<Vec<_>>();
