@@ -1,6 +1,6 @@
 use std::{path::Path, time::Instant};
 
-use abd_clam::{Dataset, PartitionCriteria, ShardedCakes, VecDataset};
+use abd_clam::{Cakes, Dataset, PartitionCriteria, ShardedCakes, VecDataset};
 use distances::Number;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -91,29 +91,30 @@ pub fn make_reports() -> Result<(), String> {
         let num_queries = queries.len();
         println!("num_queries: {num_queries}");
 
-        let data = VecDataset::new(data_name.to_string(), train_data, metric, false);
-        let threshold = data.cardinality().as_f64().log2().ceil() as usize;
-        let criteria = PartitionCriteria::new(true).with_min_cardinality(threshold);
-
         let max_cardinality = if cardinality > 1_000_000 {
             cardinality / 10
         } else {
             cardinality
         };
+
+        let threshold = max_cardinality.as_f64().log2().ceil() as usize;
+        let data_shards = VecDataset::new(data_name.to_string(), train_data, metric, false)
+            .make_shards(max_cardinality);
+        let shards = data_shards
+            .into_iter()
+            .map(|d| {
+                let criteria = PartitionCriteria::new(true).with_min_cardinality(threshold);
+                Cakes::new(d, None, criteria)
+            })
+            .collect::<Vec<_>>();
+
         let sampling_depth = 10;
-        let cakes = ShardedCakes::new(
-            data,
-            Some(42),
-            criteria,
-            max_cardinality,
-            10,
-            sampling_depth,
-        );
+        let cakes = ShardedCakes::new(shards).auto_tune(10, sampling_depth);
 
         for k in (1..3).map(|v| 10usize.pow(v)) {
             println!("\tk: {k}");
 
-            let algorithm = cakes.fastest_algorithm;
+            let algorithm = cakes.best_knn_algorithm();
             println!("\t\talgorithm: {}", algorithm.name());
 
             let start = Instant::now();
@@ -155,7 +156,7 @@ pub fn make_reports() -> Result<(), String> {
                 metric_name,
                 cardinality,
                 dimensionality,
-                shard_sizes: vec![cardinality],
+                shard_sizes: cakes.shard_cardinalities(),
                 num_queries,
                 k,
                 algorithm: algorithm.name(),

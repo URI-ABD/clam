@@ -23,6 +23,8 @@ use crate::{Dataset, PartitionCriteria, Tree};
 pub struct Cakes<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
     /// The tree used for the search.
     pub(crate) tree: Tree<T, U, D>,
+    /// Best knn-search algorithm.
+    pub(crate) best_knn: knn::Algorithm,
 }
 
 impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
@@ -37,6 +39,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     pub fn new(data: D, seed: Option<u64>, criteria: PartitionCriteria<T, U>) -> Self {
         Self {
             tree: Tree::new(data, seed).partition(&criteria),
+            best_knn: knn::Algorithm::default(),
         }
     }
 
@@ -58,6 +61,38 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     /// Returns the radius of the root cluster of the tree.
     pub const fn radius(&self) -> U {
         self.tree.radius()
+    }
+
+    /// Automatically tunes the algorithm to return the fastest variant for knn-search.
+    #[must_use]
+    pub fn auto_tune(mut self, k: usize, sampling_depth: usize) -> Self {
+        let queries = self
+            .tree
+            .root
+            .subtree()
+            .into_iter()
+            .filter(|&c| c.depth() == sampling_depth || c.is_leaf() && c.depth() < sampling_depth)
+            .map(|c| self.tree.data.get(c.arg_center))
+            .collect::<Vec<_>>();
+
+        let mut times = Vec::new();
+        for &algorithm in knn::Algorithm::variants() {
+            let start = std::time::Instant::now();
+            let hits = self.batch_knn_search(&queries, k, algorithm);
+            let elapsed = start.elapsed().as_secs_f64();
+            drop(hits);
+            times.push(elapsed);
+        }
+
+        let (&best, _) = knn::Algorithm::variants()
+            .iter()
+            .zip(times)
+            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater))
+            .unwrap_or_else(|| unreachable!("We have at least several variants for knn-search."));
+
+        self.best_knn = best;
+
+        self
     }
 
     /// Performs a parallelized search for the nearest neighbors of a set of queries.
@@ -128,35 +163,6 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     /// and the second element is the distance from the query to the instance.
     pub fn knn_search(&self, query: T, k: usize, algorithm: knn::Algorithm) -> Vec<(usize, U)> {
         algorithm.search(&self.tree, query, k)
-    }
-
-    /// Automatically tunes the algorithm to return the fastest variant for knn-search.
-    pub fn auto_tune(&self, k: usize, sampling_depth: usize) -> knn::Algorithm {
-        let queries = self
-            .tree
-            .root
-            .subtree()
-            .into_iter()
-            .filter(|&c| c.depth() == sampling_depth || c.is_leaf() && c.depth() < sampling_depth)
-            .map(|c| self.tree.data.get(c.arg_center))
-            .collect::<Vec<_>>();
-
-        let mut times = Vec::new();
-        for &algorithm in knn::Algorithm::variants() {
-            let start = std::time::Instant::now();
-            let hits = self.batch_knn_search(&queries, k, algorithm);
-            let elapsed = start.elapsed().as_secs_f64();
-            drop(hits);
-            times.push(elapsed);
-        }
-
-        let (&best, _) = knn::Algorithm::variants()
-            .iter()
-            .zip(times)
-            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater))
-            .unwrap_or_else(|| unreachable!("We have at least several variants for knn-search."));
-
-        best
     }
 }
 

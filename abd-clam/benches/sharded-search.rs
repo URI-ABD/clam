@@ -73,13 +73,17 @@ fn cakes(c: &mut Criterion) {
         drop(cakes);
 
         for num_shards in (1..3).map(|i| 10usize.pow(i)) {
-            let data = VecDataset::new("sharded".to_string(), train_data.clone(), metric, false);
-            let criteria = PartitionCriteria::default();
-            let cakes = ShardedCakes::new(data, Some(seed), criteria, cardinality / num_shards, 10, 10);
+            let max_cardinality = cardinality / num_shards;
+            let shards = VecDataset::new("sharded".to_string(), train_data.clone(), metric, false)
+                .make_shards(max_cardinality)
+                .into_iter()
+                .map(|data| Cakes::new(data, Some(seed), PartitionCriteria::default()))
+                .collect();
+            let cakes = ShardedCakes::new(shards).auto_tune(10, 10);
 
             // Run benchmarks on multiple shards
             for k in (0..3).map(|i| 10usize.pow(i)) {
-                let name = format!("knn-{}-{}", num_shards, cakes.fastest_algorithm.name());
+                let name = format!("knn-{}-{}", num_shards, cakes.best_knn_algorithm().name());
                 let id = BenchmarkId::new(name, k);
                 group.bench_with_input(id, &k, |b, &k| {
                     b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k));
