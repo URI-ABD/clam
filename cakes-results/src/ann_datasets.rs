@@ -23,9 +23,13 @@ pub enum AnnDatasets {
     /// The sift data set.
     Sift,
     /// The lastfm data set.
-    ///
-    /// TODO: This data set needs to be reconverted to a numpy file because the current dtype is f64.
     LastFm,
+    /// The NYTimes data set.
+    NYTimes,
+    /// The kosarak data set.
+    Kosarak,
+    /// The MovieLens10m data set.
+    MovieLens10m,
 }
 
 impl AnnDatasets {
@@ -42,6 +46,9 @@ impl AnnDatasets {
             "mnist" => Ok(Self::Mnist),
             "sift" => Ok(Self::Sift),
             "lastfm" => Ok(Self::LastFm),
+            "nytimes" => Ok(Self::NYTimes),
+            "kosarak" => Ok(Self::Kosarak),
+            "movielens10m" => Ok(Self::MovieLens10m),
             _ => Err(format!("Unknown dataset: {s}")),
         }
     }
@@ -59,6 +66,9 @@ impl AnnDatasets {
             Self::Mnist => "mnist",
             Self::Sift => "sift",
             Self::LastFm => "lastfm",
+            Self::NYTimes => "nytimes",
+            Self::Kosarak => "kosarak",
+            Self::MovieLens10m => "movielens10m",
         }
     }
 
@@ -70,9 +80,13 @@ impl AnnDatasets {
             | Self::Glove50
             | Self::Glove100
             | Self::Glove200
-            | Self::LastFm => distances::vectors::cosine,
+            | Self::LastFm
+            | Self::NYTimes => distances::vectors::cosine,
             Self::FashionMnist | Self::Gist | Self::Mnist | Self::Sift => {
                 distances::simd::euclidean_f32
+            }
+            Self::Kosarak | Self::MovieLens10m => {
+                unimplemented!("We are still merging Jaccard distance. Generic distances are hard.")
             }
         }
     }
@@ -99,5 +113,45 @@ impl AnnDatasets {
         })?;
 
         Ok(data.outer_iter().map(|row| row.to_vec()).collect())
+    }
+
+    /// The link from which to download the data set.
+    const fn download_link<'a>(&self) -> &'a str {
+        match self {
+            Self::DeepImage => "http://ann-benchmarks.com/deep-image-96-angular.hdf5",
+            Self::FashionMnist => "http://ann-benchmarks.com/fashion-mnist-784-euclidean.hdf5",
+            Self::Gist => "http://ann-benchmarks.com/gist-960-euclidean.hdf5",
+            Self::Glove25 => "http://ann-benchmarks.com/glove-25-angular.hdf5",
+            Self::Glove50 => "http://ann-benchmarks.com/glove-50-angular.hdf5",
+            Self::Glove100 => "http://ann-benchmarks.com/glove-100-angular.hdf5",
+            Self::Glove200 => "http://ann-benchmarks.com/glove-200-angular.hdf5",
+            Self::Kosarak => "http://ann-benchmarks.com/kosarak-jaccard.hdf5",
+            Self::Mnist => "http://ann-benchmarks.com/mnist-784-euclidean.hdf5",
+            Self::MovieLens10m => "http://ann-benchmarks.com/movielens10m-jaccard.hdf5",
+            Self::NYTimes => "http://ann-benchmarks.com/nytimes-256-angular.hdf5",
+            Self::Sift => "http://ann-benchmarks.com/sift-128-euclidean.hdf5",
+            Self::LastFm => "http://ann-benchmarks.com/lastfm-64-dot.hdf5",
+        }
+    }
+
+    /// The name of the hdf5 file.
+    #[allow(dead_code)]
+    fn hdf5_name<'a>(&self) -> &'a str {
+        self.download_link().split(".com/").collect::<Vec<_>>()[1]
+    }
+
+    /// Read the data set from the given directory.
+    #[allow(dead_code, unused_variables)]
+    pub fn read_hdf5(&self, dir: &std::path::Path) -> Result<[Vec<Vec<f32>>; 2], String> {
+        let data_path = dir.join(self.hdf5_name());
+        // let file = hdf5::File::open(data_path).map_err(|error| {
+        //     format!(
+        //         "Error: Failed to read your dataset at {}. {}",
+        //         data_path.display(),
+        //         error
+        //     )
+        // })?;
+
+        todo!()
     }
 }

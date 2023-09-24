@@ -13,18 +13,18 @@ use crate::ann_datasets::AnnDatasets;
 
 /// Report the results of an ANN benchmark.
 pub fn make_reports(
-    data_dir: &Path,
-    data_name: &str,
+    input_dir: &Path,
+    dataset: &str,
     tuning_depth: usize,
     tuning_k: usize,
     k: usize,
     seed: Option<u64>,
     output_dir: &Path,
 ) -> Result<(), String> {
-    let dataset = AnnDatasets::from_str(data_name)?;
+    let dataset = AnnDatasets::from_str(dataset)?;
     let metric = dataset.metric();
-    let [train_data, queries] = dataset.read(data_dir)?;
-    info!("Dataset: {data_name}");
+    let [train_data, queries] = dataset.read(input_dir)?;
+    info!("Dataset: {}", dataset.name());
     info!("k: {k}");
 
     let train_data = train_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
@@ -47,13 +47,13 @@ pub fn make_reports(
 
     let max_cardinality = if cardinality < 1_000_000 {
         cardinality
-    } else if cardinality < 10_000_000 {
+    } else if cardinality < 5_000_000 {
         100_000
     } else {
         1_000_000
     };
 
-    let data_shards = VecDataset::new(data_name.to_string(), train_data, metric, false)
+    let data_shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
         .make_shards(max_cardinality);
     let shards = data_shards
         .into_iter()
@@ -120,7 +120,7 @@ pub fn make_reports(
     info!("Recall: {}", format_f32(recall));
 
     Report {
-        dataset: data_name,
+        dataset: dataset.name(),
         cardinality,
         dimensionality,
         shard_sizes,
