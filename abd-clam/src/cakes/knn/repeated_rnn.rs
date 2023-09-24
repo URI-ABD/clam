@@ -1,10 +1,8 @@
 //! Repeated RNN search, with increasing radii, for k-nearest neighbors.
 
-use core::f64::EPSILON;
-
 use distances::Number;
 
-use crate::{cakes::rnn::clustered::tree_search, utils, Tree};
+use crate::{cakes::rnn::clustered, utils, Cluster, Dataset, Tree};
 
 use super::Hits;
 
@@ -29,23 +27,15 @@ where
     U: Number,
     D: crate::Dataset<T, U>,
 {
-    let mut radius = EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
-    let [mut confirmed, mut straddlers] = tree_search(tree.data(), &tree.root, query, U::from(radius));
+    let mut radius = f64::EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
+    let [mut confirmed, mut straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
 
-    let mut num_hits = confirmed
-        .iter()
-        .chain(straddlers.iter())
-        .map(|&(c, _)| c.cardinality)
-        .sum::<usize>();
+    let mut num_hits = count_hits(&confirmed) + count_hits(&straddlers);
 
     while num_hits == 0 {
         radius *= MULTIPLIER;
-        [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, U::from(radius));
-        num_hits = confirmed
-            .iter()
-            .chain(straddlers.iter())
-            .map(|&(c, _)| c.cardinality)
-            .sum::<usize>();
+        [confirmed, straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
+        num_hits = count_hits(&confirmed) + count_hits(&straddlers);
     }
 
     while num_hits < k {
@@ -56,30 +46,42 @@ where
                 .map(|&(c, _)| c.lfd)
                 .collect::<Vec<_>>(),
         );
-        let factor = (k.as_f64() / num_hits.as_f64()).powf(1. / (lfd + EPSILON));
+        let factor = (k.as_f64() / num_hits.as_f64()).powf(1. / (lfd + f64::EPSILON));
 
         radius *= if factor < MULTIPLIER { factor } else { MULTIPLIER };
-        [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, U::from(radius));
-        num_hits = confirmed
-            .iter()
-            .chain(straddlers.iter())
-            .map(|&(c, _)| c.cardinality)
-            .sum::<usize>();
+        [confirmed, straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
+        num_hits = count_hits(&confirmed) + count_hits(&straddlers);
     }
 
-    let mut hits = Hits::new(k);
+    let radius = ideal_radius(&confirmed, &straddlers, &tree.data, k);
 
-    confirmed.into_iter().chain(straddlers).for_each(|(c, d)| {
-        let indices = c.indices(tree.data());
-        let distances = if c.is_singleton() {
-            vec![d; c.cardinality]
-        } else {
-            tree.data().query_to_many(query, indices)
-        };
-        hits.push_batch(indices.iter().copied().zip(distances));
-    });
+    Hits::from_vec(k, clustered::search(tree, query, radius)).extract()
+}
 
-    hits.extract()
+/// Count the total cardinality of the clusters.
+fn count_hits<T: Send + Sync + Copy, U: Number>(clusters: &[(&Cluster<T, U>, U)]) -> usize {
+    clusters.iter().map(|(c, _)| c.cardinality).sum()
+}
+
+/// Compute the ideal radius for the repeated RNN search.
+fn ideal_radius<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
+    confirmed: &[(&Cluster<T, U>, U)],
+    straddlers: &[(&Cluster<T, U>, U)],
+    data: &D,
+    k: usize,
+) -> U {
+    let distances = multiplied_hits(confirmed, data).chain(multiplied_hits(straddlers, data));
+    Hits::from_vec(k, distances.collect()).peek()
+}
+
+/// Duplicate the radius with the cardinality of the cluster for computing ideal radius.
+fn multiplied_hits<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
+    clusters: &'a [(&Cluster<T, U>, U)],
+    data: &'a D,
+) -> impl Iterator<Item = (usize, U)> + 'a {
+    clusters
+        .iter()
+        .flat_map(|&(c, d)| c.indices(data).iter().map(move |&i| (i, d + c.radius)))
 }
 
 #[cfg(test)]
@@ -92,7 +94,7 @@ mod tests {
 
     #[test]
     fn repeated_rnn() {
-        let (cardinality, dimensionality) = (1_000, 10);
+        let (cardinality, dimensionality) = (10_000, 100);
         let (min_val, max_val) = (-1.0, 1.0);
         let seed = 42;
 
@@ -107,10 +109,11 @@ mod tests {
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
-        for k in [100, 10, 1] {
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+        for k in [1, 10, 100] {
             let repeated_nn = sort_hits(super::search(tree, query, k));
+            assert_eq!(repeated_nn.len(), k);
 
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
             assert_eq!(linear_nn, repeated_nn);
         }
     }

@@ -1,27 +1,43 @@
+#![deny(clippy::correctness)]
+#![warn(
+    missing_docs,
+    clippy::all,
+    clippy::suspicious,
+    clippy::style,
+    clippy::complexity,
+    clippy::perf,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::missing_docs_in_private_items,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::cast_lossless
+)]
 #![doc = include_str!("../README.md")]
-
-use std::path::PathBuf;
 
 use clap::Parser;
 
+mod ann_datasets;
 mod ann_reports;
 
+/// Command line arguments for the replicating the ANN-Benchmarks results for Cakes.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct AnnArgs {
     /// Path to the directory with the data sets. The directory should contain
     /// the hdf5 files downloaded from the ann-benchmarks repository.
     #[arg(long)]
-    data_dir: PathBuf,
+    input_dir: std::path::PathBuf,
+    /// Output directory for the report.
+    #[arg(long)]
+    output_dir: std::path::PathBuf,
     /// Name of the data set to process. `data_dir` should contain two files
     /// named `{name}-train.npy` and `{name}-test.npy`. The train file
     /// contains the data to be indexed for search, and the test file contains
     /// the queries to be searched for.
     #[arg(long)]
-    name: String,
-    /// Name (case-insensitive) of the metric to use. Possible values are `cosine` and `euclidean`.
-    #[arg(long)]
-    metric: String,
+    dataset: String,
     /// The depth of the tree to use for auto-tuning knn-search.
     #[arg(long, default_value = "10")]
     tuning_depth: usize,
@@ -34,29 +50,24 @@ struct AnnArgs {
     /// Seed for the random number generator.
     #[arg(long)]
     seed: Option<u64>,
-    /// Output directory for the report.
-    #[arg(long)]
-    output_dir: PathBuf,
 }
 
 fn main() -> Result<(), String> {
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
     let args = AnnArgs::parse();
 
     // Check that the data set exists.
     let data_paths = [
-        args.data_dir.join(format!("{}-train.npy", args.name)),
-        args.data_dir.join(format!("{}-test.npy", args.name)),
+        args.input_dir.join(format!("{}-train.npy", args.dataset)),
+        args.input_dir.join(format!("{}-test.npy", args.dataset)),
     ];
     for path in &data_paths {
         if !path.exists() {
-            return Err(format!("File {:?} does not exist.", path));
+            return Err(format!("File {path:?} does not exist."));
         }
-    }
-
-    // Check that the metric is valid.
-    match args.metric.to_lowercase().as_str() {
-        "cosine" | "euclidean" => {}
-        _ => return Err(format!("Unknown metric: {}", args.metric)),
     }
 
     // Check that the output directory exists.
@@ -68,12 +79,12 @@ fn main() -> Result<(), String> {
     }
 
     ann_reports::make_reports(
-        &args.data_dir,
-        &args.name,
-        &args.metric,
+        &args.input_dir,
+        &args.dataset,
         args.tuning_depth,
         args.tuning_k,
         args.k,
+        args.seed,
         &args.output_dir,
     )?;
 

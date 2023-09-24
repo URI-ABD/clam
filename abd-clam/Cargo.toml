@@ -55,10 +55,6 @@ serde_json = { version = "1.0.96", features = ["alloc"] }
 [dev-dependencies]
 symagen = { path = "../SyMaGen" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
-log = "0.4.19"
-env_logger = "0.10.0"
-num-format = "0.4.4"
-kdam = "0.3.0"
 
 [[bench]]
 name = "rnn-search"

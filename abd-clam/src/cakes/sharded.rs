@@ -119,9 +119,10 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
 
     /// K-nearest neighbor search.
     pub fn knn_search(&self, query: T, k: usize) -> Vec<(usize, U)> {
-        let mut hits = knn::Hits::from_vec(k, self.sample_shard.knn_search(query, k, self.sample_shard.best_knn));
+        let hits = self.sample_shard.knn_search(query, k, self.sample_shard.best_knn);
+        let mut hits = knn::Hits::from_vec(k, hits);
         for (shard, &o) in self.shards.iter().zip(self.offsets.iter()) {
-            let radius = hits.peek(U::zero);
+            let radius = hits.peek();
             let new_hits = shard.rnn_search(query, radius, rnn::Algorithm::Clustered);
             hits.push_batch(new_hits.into_iter().map(|(i, d)| (i + o, d)));
         }
@@ -159,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn rnn_vectors() {
+    fn vectors() {
         let seed = 42;
         let (cardinality, dimensionality) = (10_000, 10);
         let (min_val, max_val) = (-1., 1.);
@@ -220,33 +221,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn knn_vectors() {
-        let seed = 42;
-        let (cardinality, dimensionality) = (10_000, 10);
-        let (min_val, max_val) = (-1., 1.);
-
-        let data_vec = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data_vec = data_vec.iter().map(Vec::as_slice).collect::<Vec<_>>();
-
-        let num_queries = 100;
-        let queries = random_data::random_f32(num_queries, dimensionality, min_val, max_val, seed + 1);
-
-        let name = format!("test-full");
-        let data = VecDataset::new(name, data_vec.clone(), metric, false);
-        let cakes = Cakes::new(data, Some(seed), PartitionCriteria::default());
-
-        let num_shards = 10;
-        let max_cardinality = cardinality / num_shards;
-        let name = format!("test-sharded");
-        let data_shards = VecDataset::new(name, data_vec, metric, false).make_shards(max_cardinality);
-        let shards = data_shards
-            .into_iter()
-            .map(|d| Cakes::new(d, Some(seed), PartitionCriteria::default()))
-            .collect::<Vec<_>>();
-        let sharded_cakes = ShardedCakes::new(shards).auto_tune(10, 7);
 
         for k in [100, 10, 1] {
             for (i, query) in queries.iter().enumerate() {
@@ -261,7 +235,7 @@ mod tests {
                     hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
                     hits
                 };
-                assert!(sharded_hits.len() == k, "Failed KNN search: query: {i}, k: {k}");
+                assert_eq!(sharded_hits.len(), k, "Failed KNN search: query: {i}, k: {k}");
 
                 let cakes_distances = cakes_hits.iter().map(|&(_, d)| d).collect::<Vec<_>>();
                 let sharded_distances = sharded_hits.iter().map(|&(_, d)| d).collect::<Vec<_>>();

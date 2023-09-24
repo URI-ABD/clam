@@ -5,6 +5,8 @@ pub mod knn;
 pub mod rnn;
 pub mod sharded;
 
+use core::cmp::Ordering;
+
 use distances::Number;
 use rayon::prelude::*;
 
@@ -75,22 +77,16 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
             .map(|c| self.tree.data.get(c.arg_center))
             .collect::<Vec<_>>();
 
-        let mut times = Vec::new();
-        for &algorithm in knn::Algorithm::variants() {
-            let start = std::time::Instant::now();
-            let hits = self.batch_knn_search(&queries, k, algorithm);
-            let elapsed = start.elapsed().as_secs_f64();
-            drop(hits);
-            times.push(elapsed);
-        }
-
-        let (&best, _) = knn::Algorithm::variants()
+        (self.best_knn, _, _) = knn::Algorithm::variants()
             .iter()
-            .zip(times)
-            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Greater))
-            .unwrap_or_else(|| unreachable!("We have at least several variants for knn-search."));
-
-        self.best_knn = best;
+            .map(|&algorithm| {
+                let start = std::time::Instant::now();
+                let hits = self.batch_knn_search(&queries, k, algorithm);
+                let elapsed = start.elapsed().as_secs_f32();
+                (algorithm, hits, elapsed)
+            })
+            .min_by(|(_, _, a), (_, _, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater))
+            .unwrap_or_else(|| unreachable!("There are several variants of knn-search"));
 
         self
     }

@@ -1,7 +1,7 @@
 # Cakes Results
 
 This crate contains the code for generating the results for the Cakes paper.
-Run `cargo run --release -- --help` for information on usage.
+Run `cargo run --release --bin cakes-results -- --help` for information on usage.
 
 ## Datasets
 
