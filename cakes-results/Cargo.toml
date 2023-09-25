@@ -21,3 +21,7 @@ num-format = "0.4.4"
 [[bin]]
 name = "knn-results"
 path = "src/knn_reports.rs"
+
+[[bin]]
+name = "scaling-results"
+path = "src/scaling_reports.rs"
