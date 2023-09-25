@@ -51,7 +51,7 @@ serde = { version = "1.0.164", features = ["derive"] }
 serde_json = { version = "1.0.96", features = ["alloc"] }
 
 [dev-dependencies]
-symagen = { version = "0.1.1",  path = "../SyMaGen" }
+symagen = { version = "0.1.2",  path = "../SyMaGen" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [[bench]]

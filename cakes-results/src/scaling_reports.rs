@@ -8,6 +8,7 @@ use distances::Number;
 use log::info;
 use num_format::ToFormattedString;
 use serde::{Deserialize, Serialize};
+use symagen::augmentation;
 
 mod ann_datasets;
 mod utils;
@@ -97,12 +98,26 @@ pub fn make_reports(
     let dataset = AnnDatasets::from_str(dataset)?;
     let metric = dataset.metric();
     let [train_data, queries] = dataset.read(input_dir)?;
+
     info!("Dataset: {}", dataset.name());
 
-    let train_data = train_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-    let dimensionality = train_data[0].len();
+    let base_cardinality = train_data.len();
+    info!(
+        "Base cardinality: {}",
+        base_cardinality.to_formatted_string(&num_format::Locale::en)
+    );
 
-    let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let dimensionality = train_data[0].len();
+    info!(
+        "Dimensionality: {}",
+        dimensionality.to_formatted_string(&num_format::Locale::en)
+    );
+
+    let queries = queries
+        .iter()
+        .take(100)
+        .map(Vec::as_slice)
+        .collect::<Vec<_>>();
     let num_queries = queries.len();
     info!(
         "Number of queries: {}",
@@ -110,33 +125,26 @@ pub fn make_reports(
     );
 
     let mut scale_times = Vec::new();
-    for &scale in scales {
-        let data = if scale == 0 {
+    for &multiplier in scales {
+        info!("");
+        info!("Scaling data by a factor of {}.", multiplier + 1);
+        info!("Error rate: {}", error_rate);
+
+        let data = if multiplier == 0 {
             train_data.clone()
         } else {
-            info!("Scaling data by a factor of {}.", scale + 1);
-            info!("Error rate: {}", error_rate);
-
-            // TODO: Use function from symagen.
-            let mut data = Vec::with_capacity(train_data.len() * (scale + 1));
-            for _ in 0..=scale {
-                data.extend_from_slice(&train_data);
-            }
-
-            data
+            augmentation::augment_data(&train_data, multiplier, error_rate)
         };
+
+        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
         let cardinality = data.len();
         info!(
-            "Cardinality: {}",
+            "Scaled cardinality: {}",
             cardinality.to_formatted_string(&num_format::Locale::en)
         );
-        info!(
-            "Dimensionality: {}",
-            dimensionality.to_formatted_string(&num_format::Locale::en)
-        );
 
-        let data_name = format!("{}-{}", dataset.name(), scale + 1);
+        let data_name = format!("{}-{}", dataset.name(), multiplier + 1);
         let data = VecDataset::new(data_name, data, metric, false);
         let criteria = PartitionCriteria::default();
 
@@ -170,12 +178,12 @@ pub fn make_reports(
             algo_times.push((algorithm.name(), k_throughput));
         }
 
-        scale_times.push((scale, cakes_time, algo_times));
+        scale_times.push((multiplier, cakes_time, algo_times));
     }
 
     let report = Report {
         dataset: dataset.name(),
-        base_cardinality: train_data.len(),
+        base_cardinality,
         dimensionality,
         num_queries,
         scales: scales.to_vec(),
