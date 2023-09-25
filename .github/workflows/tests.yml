@@ -25,7 +25,7 @@ jobs:
       - name: Fetch workspace members
         run: git submodule update --init
       - name: Run tests
-        run: cargo test --release
+        run: cargo test --release --workspace --exclude automl
 
   unittest:
     runs-on: ubuntu-latest

@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-abd-clam = { path = "../abd-clam" }
-# abd-clam = "0.21.6"
+abd-clam = { version = "0.22.0", path = "../abd-clam" }
 distances = "1.4.0"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-npy = "0.8.1"
@@ -17,6 +16,7 @@ clap = { version = "4.4.4", features = ["derive"] }
 log = "0.4.19"
 env_logger = "0.10.0"
 num-format = "0.4.4"
+symagen = { version = "0.1.1", path = "../SyMaGen" }
 
 [[bin]]
 name = "knn-results"
