@@ -17,3 +17,7 @@ clap = { version = "4.4.4", features = ["derive"] }
 log = "0.4.19"
 env_logger = "0.10.0"
 num-format = "0.4.4"
+
+[[bin]]
+name = "knn-results"
+path = "src/knn_reports.rs"

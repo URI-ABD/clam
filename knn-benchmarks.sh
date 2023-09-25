@@ -11,16 +11,14 @@ output_dir="../data/search_small/reports"
 echo "Starting ann-benchmarks at: $(date)"
 
 # Compile cakes-results
-cargo build --release --all-targets
+cargo build --release --bin knn-results
 
-for dataset in "deep-image" "fashion-mnist" "gist" "glove-25" "glove-50" "glove-100" "glove-200" "mnist" "sift"
+# for dataset in "deep-image" "fashion-mnist" "gist" "glove-25" "glove-50" "glove-100" "glove-200" "mnist" "sift"
+for dataset in "fashion-mnist" "mnist"
 do
-    for k in 10 100
-    do
-        ./target/release/cakes-results \
-            --input-dir $input_dir \
-            --output-dir $output_dir \
-            --dataset $dataset \
-            --k $k
-    done
+    ./target/release/knn-results \
+        --input-dir $input_dir \
+        --output-dir $output_dir \
+        --dataset $dataset \
+        --ks 10 100
 done
