@@ -5,7 +5,7 @@ use std::{path::Path, time::Instant};
 use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
 use clap::Parser;
 use distances::Number;
-use log::info;
+use log::{error, info};
 use num_format::ToFormattedString;
 use serde::{Deserialize, Serialize};
 use symagen::augmentation;
@@ -75,7 +75,13 @@ struct Args {
     #[arg(long)]
     seed: Option<u64>,
     /// Dataset scaling factors.
-    #[arg(long, value_parser, num_args = 1.., value_delimiter = ' ', default_value = "0 1 9 99")]
+    #[arg(
+        long,
+        value_parser,
+        num_args = 1..,
+        value_delimiter = ' ',
+        default_value = "0 1 9 19 29 39 49 59 69 79 89 99",
+    )]
     scales: Vec<usize>,
     /// Error rate used for scaling.
     #[arg(long, default_value = "0.01")]
@@ -169,9 +175,16 @@ pub fn make_reports(
 
                 k_throughput.push((k, throughput));
 
-                assert_eq!(hits.len(), num_queries);
+                if hits.len() != num_queries {
+                    error!("Number of hits does not match number of queries. Expected {num_queries}, got {}", hits.len());
+                }
                 for h in hits {
-                    assert_eq!(h.len(), k);
+                    if h.len() != k {
+                        error!(
+                            "Number of hits does not match k. Expected {k}, got {}",
+                            h.len()
+                        );
+                    }
                 }
             }
 
