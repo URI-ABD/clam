@@ -49,6 +49,7 @@ fn main() -> Result<(), String> {
         &args.scales,
         args.error_rate,
         &args.ks,
+        args.max_memory,
     )?;
 
     Ok(())
@@ -80,7 +81,7 @@ struct Args {
         value_parser,
         num_args = 1..,
         value_delimiter = ' ',
-        default_value = "0 1 9 19 29 39 49 59 69 79 89 99",
+        default_value = "0 1 9 19 49 59 79 99 199 499 599 799 999",
     )]
     scales: Vec<usize>,
     /// Error rate used for scaling.
@@ -89,9 +90,13 @@ struct Args {
     /// Number of nearest neighbors to search for.
     #[arg(long, value_parser, num_args = 1.., value_delimiter = ' ', default_value = "10 100")]
     ks: Vec<usize>,
+    /// Maximum memory usage (in gigabytes) for the scaled data sets.
+    #[arg(long, default_value = "256")]
+    max_memory: usize,
 }
 
 /// Report the results of a scaling benchmark.
+#[allow(clippy::too_many_arguments)]
 pub fn make_reports(
     input_dir: &Path,
     output_dir: &Path,
@@ -100,9 +105,10 @@ pub fn make_reports(
     scales: &[usize],
     error_rate: f32,
     ks: &[usize],
+    max_memory: usize,
 ) -> Result<(), String> {
     let dataset = AnnDatasets::from_str(dataset)?;
-    let metric = dataset.metric();
+    let metric = dataset.metric()?;
     let [train_data, queries] = dataset.read(input_dir)?;
 
     info!("Dataset: {}", dataset.name());
@@ -139,6 +145,16 @@ pub fn make_reports(
         let data = if multiplier == 0 {
             train_data.clone()
         } else {
+            // If memory cost would be too high, continue to next scale.
+            let memory_cost = memory_cost(base_cardinality * (1 + multiplier), dimensionality);
+            if memory_cost > max_memory * 1024 * 1024 * 1024 {
+                error!(
+                    "Memory cost would be over 256G. Skipping scale {}.",
+                    multiplier + 1
+                );
+                continue;
+            }
+
             augmentation::augment_data(&train_data, multiplier, error_rate)
         };
 
@@ -181,7 +197,11 @@ pub fn make_reports(
                 for h in hits {
                     if h.len() != k {
                         error!(
-                            "Number of hits does not match k. Expected {k}, got {}",
+                            "Number of hits does not match k. Dataset: {}, scale: {}, metric: {}, algorithm: {}, k: {k}, got: {}.",
+                            dataset.name(),
+                            multiplier + 1,
+                            dataset.metric_name(),
+                            algorithm.name(),
                             h.len()
                         );
                     }
@@ -207,6 +227,10 @@ pub fn make_reports(
     report.save(output_dir)?;
 
     Ok(())
+}
+
+fn memory_cost(cardinality: usize, dimensionality: usize) -> usize {
+    cardinality * dimensionality * std::mem::size_of::<f32>()
 }
 
 /// A report of the results of a scaling benchmark.

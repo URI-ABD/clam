@@ -116,7 +116,7 @@ fn make_reports(
     info!("");
 
     let dataset = AnnDatasets::from_str(dataset)?;
-    let metric = dataset.metric();
+    let metric = dataset.metric()?;
     let [train_data, queries] = dataset.read(input_dir)?;
     info!("Dataset: {}", dataset.name());
 
