@@ -2,8 +2,10 @@
 
 use distances::Number;
 use rand::prelude::*;
+use rayon::prelude::*;
 
-#[must_use]
+use crate::random_data;
+
 /// Generate an augmented dataset from an existing dataset by adding random points
 /// that are within a certain error distance of the original points.
 ///
@@ -11,25 +13,35 @@ use rand::prelude::*;
 ///
 /// * `data`: the existing dataset
 /// * `multiplier`: the number of new points to make per existing point
-/// * `error`: the maximum distance from the original point that the new points can be
+/// * `error`: the maximum euclidean distance from the original point that the
+///            new points can be
+#[must_use]
 pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec<f32>> {
-    let adjusted_error = error / data[0].len().as_f32().sqrt();
+    let dimensionality = data[0].len();
+    let dimensional_error = error / dimensionality.as_f32().sqrt();
 
-    let augmented_dataset = data.iter().flat_map(|point| {
-        let mut augmented_points = vec![point.clone()];
-        for _i in 1..=multiplier {
-            let mut augmented_point = point.clone();
-
-            for entry in augmented_point.iter_mut().take(point.len()) {
-                let random_error = rand::thread_rng().gen_range(-adjusted_error..adjusted_error);
-                *entry += random_error;
-            }
-            augmented_points.push(augmented_point);
-        }
-        augmented_points
-    });
-
-    augmented_dataset.collect()
+    data.par_iter()
+        .flat_map(|point| {
+            let perturbations = random_data::random_f32(
+                multiplier,
+                dimensionality,
+                1.0 - dimensional_error,
+                1.0 + dimensional_error,
+                rand::thread_rng().gen(),
+            );
+            perturbations
+                .into_iter()
+                .map(|perturbation| {
+                    point
+                        .iter()
+                        .zip(perturbation.iter())
+                        .map(|(&x, &y)| x * y)
+                        .collect::<Vec<_>>()
+                })
+                .chain(std::iter::once(point.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]
