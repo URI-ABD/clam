@@ -15,13 +15,11 @@ cargo build --release --bin scaling-results
 
 for dataset in "fashion-mnist" "glove-25" "glove-100" "sift" "random-128-euclidean" "gist" "deep-image"
 do
-    for error_rate in 0.01 0.05 0.1
-    do
-        ./target/release/scaling-results \
-            --input-dir $input_dir \
-            --output-dir $output_dir \
-            --dataset $dataset \
-            --error-rate $error_rate \
-            --ks 10 100
-    done
+    ./target/release/scaling-results \
+        --input-dir $input_dir \
+        --output-dir $output_dir \
+        --dataset $dataset \
+        --error-rate 0.1 \
+        --max-memory 32 \
+        --ks 10 100
 done

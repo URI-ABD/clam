@@ -46,7 +46,7 @@ fn main() -> Result<(), String> {
         &args.output_dir,
         &args.dataset,
         args.seed,
-        &args.scales,
+        args.max_scale,
         args.error_rate,
         &args.ks,
         args.max_memory,
@@ -75,15 +75,10 @@ struct Args {
     /// Seed for the random number generator.
     #[arg(long)]
     seed: Option<u64>,
-    /// Dataset scaling factors.
-    #[arg(
-        long,
-        value_parser,
-        num_args = 1..,
-        value_delimiter = ' ',
-        default_value = "0 1 9 19 49 59 79 99 199 499 599 799 999",
-    )]
-    scales: Vec<usize>,
+    /// Maximum scaling factor. The data set will be scaled by factors of
+    /// `2 ^ i` for `i` in `0..=max_scale`.
+    #[arg(long, default_value = "16")]
+    max_scale: u32,
     /// Error rate used for scaling.
     #[arg(long, default_value = "0.01")]
     error_rate: f32,
@@ -102,7 +97,7 @@ pub fn make_reports(
     output_dir: &Path,
     dataset: &str,
     seed: Option<u64>,
-    scales: &[usize],
+    max_scale: u32,
     error_rate: f32,
     ks: &[usize],
     max_memory: usize,
@@ -136,26 +131,45 @@ pub fn make_reports(
         num_queries.to_formatted_string(&num_format::Locale::en)
     );
 
-    let mut scale_times = Vec::new();
-    for &multiplier in scales {
+    let csv_name = format!("{}_{}.csv", dataset.name(), (error_rate * 100.) as usize);
+
+    let report = Report {
+        dataset: dataset.name(),
+        base_cardinality,
+        dimensionality,
+        num_queries,
+        error_rate,
+        ks: ks.to_vec(),
+        csv_name: &csv_name,
+    };
+    report.save(output_dir)?;
+
+    let csv_path = output_dir.join(&csv_name);
+    if csv_path.exists() {
+        std::fs::remove_file(&csv_path).map_err(|e| e.to_string())?;
+    }
+
+    let mut csv_writer = csv::Writer::from_path(csv_path).map_err(|e| e.to_string())?;
+    csv_writer
+        .write_record(["scale", "build_time", "algorithm", "k", "throughput"])
+        .map_err(|e| e.to_string())?;
+
+    for multiplier in (0..=max_scale).map(|s| 2_usize.pow(s)) {
         info!("");
-        info!("Scaling data by a factor of {}.", multiplier + 1);
+        info!("Scaling data by a factor of {}.", multiplier);
         info!("Error rate: {}", error_rate);
 
-        let data = if multiplier == 0 {
+        let data = if multiplier == 1 {
             train_data.clone()
         } else {
             // If memory cost would be too high, continue to next scale.
-            let memory_cost = memory_cost(base_cardinality * (1 + multiplier), dimensionality);
+            let memory_cost = memory_cost(base_cardinality * multiplier, dimensionality);
             if memory_cost > max_memory * 1024 * 1024 * 1024 {
-                error!(
-                    "Memory cost would be over 256G. Skipping scale {}.",
-                    multiplier + 1
-                );
+                error!("Memory cost would be over 256G. Skipping scale {multiplier}.");
                 continue;
             }
 
-            augmentation::augment_data(&train_data, multiplier, error_rate)
+            augmentation::augment_data(&train_data, multiplier - 1, error_rate)
         };
 
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
@@ -175,11 +189,9 @@ pub fn make_reports(
         let cakes_time = start.elapsed().as_secs_f32();
         info!("Cakes tree-building time: {:.3e} s", cakes_time);
 
-        let mut algo_times = Vec::new();
         for algorithm in knn::Algorithm::variants() {
             info!("Algorithm: {}", algorithm.name());
 
-            let mut k_throughput = Vec::new();
             for &k in ks {
                 info!("k: {}", k);
 
@@ -189,42 +201,41 @@ pub fn make_reports(
                 let throughput = num_queries.as_f32() / elapsed;
                 info!("Throughput: {} QPS", format_f32(throughput));
 
-                k_throughput.push((k, throughput));
+                csv_writer
+                    .write_record(&[
+                        (multiplier + 1).to_string(),
+                        cakes_time.to_string(),
+                        algorithm.name().to_string(),
+                        k.to_string(),
+                        throughput.to_string(),
+                    ])
+                    .map_err(|e| e.to_string())?;
 
-                if hits.len() != num_queries {
-                    error!("Number of hits does not match number of queries. Expected {num_queries}, got {}", hits.len());
-                }
-                for h in hits {
-                    if h.len() != k {
-                        error!(
-                            "Number of hits does not match k. Dataset: {}, scale: {}, metric: {}, algorithm: {}, k: {k}, got: {}.",
-                            dataset.name(),
-                            multiplier + 1,
-                            dataset.metric_name(),
-                            algorithm.name(),
-                            h.len()
-                        );
-                    }
+                // write what we have so far to csv
+                csv_writer.flush().map_err(|e| e.to_string())?;
+
+                let misses = hits
+                    .into_iter()
+                    .map(|h| h.len())
+                    .filter(|&h| h != k)
+                    .collect::<Vec<_>>();
+                if !misses.is_empty() {
+                    let &min_hits = misses.iter().min().unwrap();
+                    let &max_hits = misses.iter().max().unwrap();
+                    error!(
+                        "{} queries did not get enough hits. Expected {}, got between {} and {}.",
+                        misses.len(),
+                        k,
+                        min_hits,
+                        max_hits
+                    )
                 }
             }
-
-            algo_times.push((algorithm.name(), k_throughput));
         }
-
-        scale_times.push((multiplier, cakes_time, algo_times));
     }
 
-    let report = Report {
-        dataset: dataset.name(),
-        base_cardinality,
-        dimensionality,
-        num_queries,
-        scales: scales.to_vec(),
-        error_rate,
-        ks: ks.to_vec(),
-        throughput: scale_times,
-    };
-    report.save(output_dir)?;
+    // // finalize csv
+    // csv_writer.flush().map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -244,19 +255,12 @@ struct Report<'a> {
     dimensionality: usize,
     /// Number of queries.
     num_queries: usize,
-    /// Dataset scaling factors.
-    scales: Vec<usize>,
     /// Error rate used for scaling.
     error_rate: f32,
     /// Values of k used for knn-search.
     ks: Vec<usize>,
-    /// Throughput measurements for each scale, algorithm and k.
-    ///
-    /// The outer vector is of (scale, cakes_build_time, `algo_times`)
-    /// `algo_times` is a vector of (algorithm_name, `k_throughput`)
-    /// `k_throughput` is a vector of (k, throughput)
-    #[allow(clippy::type_complexity)]
-    throughput: Vec<(usize, f32, Vec<(&'a str, Vec<(usize, f32)>)>)>,
+    /// Csv name
+    csv_name: &'a str,
 }
 
 impl Report<'_> {
