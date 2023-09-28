@@ -91,7 +91,29 @@ struct Args {
 }
 
 /// Report the results of a scaling benchmark.
-#[allow(clippy::too_many_arguments)]
+///
+/// # Arguments
+///
+/// * `input_dir`: path to the directory with the data sets.
+/// * `output_dir`: path to the directory where the report should be saved.
+/// * `dataset`: name of the data set to process.
+/// * `seed`: seed for the random number generator.
+/// * `max_scale`: maximum scaling factor.
+/// * `error_rate`: error rate used for scaling.
+/// * `ks`: number of nearest neighbors to search for.
+/// * `max_memory`: maximum memory usage (in gigabytes) for the scaled data sets.
+///
+/// # Panics
+///
+/// * If the knn-algorithms panic.
+///
+/// # Errors
+///
+/// * If the data set does not exist.
+/// * If the metric of the data set is not supported.
+/// * If the output directory does not exist.
+/// * If the output directory is not writable.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn make_reports(
     input_dir: &Path,
     output_dir: &Path,
@@ -131,7 +153,7 @@ pub fn make_reports(
         num_queries.to_formatted_string(&num_format::Locale::en)
     );
 
-    let csv_name = format!("{}_{}.csv", dataset.name(), (error_rate * 100.) as usize);
+    let csv_name = format!("{}_{}.csv", dataset.name(), (error_rate * 100.).as_u64());
 
     let report = Report {
         dataset: dataset.name(),
@@ -219,6 +241,8 @@ pub fn make_reports(
                     .map(|h| h.len())
                     .filter(|&h| h != k)
                     .collect::<Vec<_>>();
+
+                #[allow(clippy::unwrap_used)]
                 if !misses.is_empty() {
                     let &min_hits = misses.iter().min().unwrap();
                     let &max_hits = misses.iter().max().unwrap();
@@ -228,7 +252,7 @@ pub fn make_reports(
                         k,
                         min_hits,
                         max_hits
-                    )
+                    );
                 }
             }
         }
@@ -240,7 +264,7 @@ pub fn make_reports(
     Ok(())
 }
 
-fn memory_cost(cardinality: usize, dimensionality: usize) -> usize {
+const fn memory_cost(cardinality: usize, dimensionality: usize) -> usize {
     cardinality * dimensionality * std::mem::size_of::<f32>()
 }
 
@@ -266,7 +290,7 @@ struct Report<'a> {
 impl Report<'_> {
     /// Save the report to a file in the given directory.
     fn save(&self, dir: &Path) -> Result<(), String> {
-        let e = (self.error_rate * 100.) as usize;
+        let e = (self.error_rate * 100.).as_u64();
         let path = dir.join(format!("{}_{}.json", self.dataset, e));
         let report = serde_json::to_string_pretty(&self).map_err(|e| e.to_string())?;
         std::fs::write(path, report).map_err(|e| e.to_string())?;
