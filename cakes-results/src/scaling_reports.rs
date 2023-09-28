@@ -22,14 +22,16 @@ fn main() -> Result<(), String> {
 
     let args = Args::parse();
 
-    // Check that the data set exists.
-    let data_paths = [
-        args.input_dir.join(format!("{}-train.npy", args.dataset)),
-        args.input_dir.join(format!("{}-test.npy", args.dataset)),
-    ];
-    for path in &data_paths {
-        if !path.exists() {
-            return Err(format!("File {path:?} does not exist."));
+    if !args.dataset.starts_with("random") {
+        // Check that the data set exists.
+        let data_paths = [
+            args.input_dir.join(format!("{}-train.npy", args.dataset)),
+            args.input_dir.join(format!("{}-test.npy", args.dataset)),
+        ];
+        for path in &data_paths {
+            if !path.exists() {
+                return Err(format!("File {path:?} does not exist."));
+            }
         }
     }
 
@@ -144,7 +146,7 @@ pub fn make_reports(
 
     let queries = queries
         .iter()
-        .take(100)
+        .take(1000)
         .map(Vec::as_slice)
         .collect::<Vec<_>>();
     let num_queries = queries.len();
@@ -157,6 +159,7 @@ pub fn make_reports(
 
     let report = Report {
         dataset: dataset.name(),
+        metric: dataset.metric_name(),
         base_cardinality,
         dimensionality,
         num_queries,
@@ -225,7 +228,7 @@ pub fn make_reports(
 
                 csv_writer
                     .write_record(&[
-                        (multiplier + 1).to_string(),
+                        multiplier.to_string(),
                         cakes_time.to_string(),
                         algorithm.name().to_string(),
                         k.to_string(),
@@ -258,9 +261,6 @@ pub fn make_reports(
         }
     }
 
-    // // finalize csv
-    // csv_writer.flush().map_err(|e| e.to_string())?;
-
     Ok(())
 }
 
@@ -273,6 +273,8 @@ const fn memory_cost(cardinality: usize, dimensionality: usize) -> usize {
 struct Report<'a> {
     /// Name of the data set.
     dataset: &'a str,
+    /// Metric of the data set.
+    metric: &'a str,
     /// Cardinality of the real data set.
     base_cardinality: usize,
     /// Dimensionality of the data set.

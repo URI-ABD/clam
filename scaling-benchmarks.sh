@@ -20,6 +20,6 @@ do
         --output-dir $output_dir \
         --dataset $dataset \
         --error-rate 0.1 \
-        --max-memory 32 \
+        --max-memory 256 \
         --ks 10 100
 done
