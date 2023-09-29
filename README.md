@@ -1,4 +1,4 @@
-# CLAM: Clustered Learning of Approximate Manifolds (v0.22.1)
+# CLAM: Clustered Learning of Approximate Manifolds (v0.22.2)
 
 CLAM is a Rust/Python library for learning approximate manifolds from data.
 It is designed to be fast, memory-efficient, easy to use, and scalable for big data applications.
@@ -19,7 +19,7 @@ Take a look at the following scripts:
 
 ## Usage
 
-CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.22.1`.
+CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.22.2`.
 
 Here is a simple example of how to use CLAM to perform nearest neighbors search:
 

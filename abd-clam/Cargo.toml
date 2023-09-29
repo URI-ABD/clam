@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.22.1"
+version = "0.22.2"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -23,7 +23,7 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { version = "1.4.0", path = "../distances" }
+distances = { version = "1.4.1", path = "../distances" }
 rayon = "1.8.0"
 
 # Only used for Dataset::choose_unique
@@ -54,6 +54,7 @@ serde_json = { version = "1.0.107", features = ["alloc"] }
 [dev-dependencies]
 symagen = { version = "0.1.3", path = "../SyMaGen" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
+tempdir = "0.3.7"
 
 [[bench]]
 name = "genomic"

@@ -1,5 +1,11 @@
 //! A dataset of a Vec of instances.
 
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+};
+
 use distances::Number;
 use rand::prelude::*;
 
@@ -47,6 +53,190 @@ impl<T: Send + Sync + Copy, U: Number> VecDataset<T, U> {
             indices,
             reordering: None,
         }
+    }
+}
+
+impl<'a, V: Number, U: Number> VecDataset<&'a [V], U> {
+    /// Saves a numeric dataset to a specified path in binary format
+    ///
+    /// # Errors
+    /// Errors on file write issues or if a reordered index does not exist
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        let mut handle = File::create(path).map_err(|err| format!("{err}"))?;
+
+        // Write header (Basic protection against reading bad data)
+        handle.write_all(b"VEC2D").map_err(|err| format!("{err}"))?;
+
+        // Write dataset name
+        handle.write_all(self.name.as_bytes()).map_err(|err| format!("{err}"))?;
+
+        // Write null terminator
+        handle.write(&[0]).map_err(|err| format!("{err}"))?;
+
+        // Write cardinality
+        let cardinality = self.data.len();
+        let cardinality_bytes = cardinality.to_le_bytes();
+        handle.write_all(&cardinality_bytes).map_err(|err| format!("{err}"))?;
+
+        // Write dimensionality
+        let dimensionality = self.data[0].len();
+        let dimensionality_bytes = dimensionality.to_le_bytes();
+        handle
+            .write_all(&dimensionality_bytes)
+            .map_err(|err| format!("{err}"))?;
+
+        // Write the type name for V
+        handle
+            .write_all(V::type_name().as_bytes())
+            .map_err(|err| format!("{err}"))?;
+
+        // Write null terminator
+        handle.write(&[0]).map_err(|err| format!("{err}"))?;
+
+        // Write individual vectors
+        for row in &self.data {
+            for column in *row {
+                let column_bytes = column.to_le_bytes();
+                handle.write_all(&column_bytes).map_err(|err| format!("{err}"))?;
+            }
+        }
+
+        // If the reordering map exists, write it and preprend a 1 for the flag byte. Otherwise write
+        // a 0 byte
+        if let Some(map) = &self.reordering {
+            // Write one byte corresponding to if the reordering map exists
+            handle.write(&[1_u8]).map_err(|err| format!("{err}"))?;
+
+            for idx in map {
+                let fullwidth = *idx as u64;
+
+                handle
+                    .write_all(&fullwidth.to_le_bytes())
+                    .map_err(|err| format!("{err}"))?;
+            }
+        } else {
+            handle.write(&[0]).map_err(|err| format!("{err}"))?;
+        }
+
+        Ok(())
+    }
+
+    /// Reads a saved numeric dataset from a specified path. The buffer passed in is the actual place where data is stored
+    /// because `Vec2d` only holds references
+    ///
+    /// # Errors
+    /// Errors on read write issues
+    pub fn load(
+        path: &Path,
+        metric: fn(&[V], &[V]) -> U,
+        is_expensive: bool,
+        buffer: &'a mut Vec<Vec<V>>,
+    ) -> Result<Self, String> {
+        let mut handle = File::open(path).map_err(|err| format!("{err}"))?;
+
+        // Decode the header (Assert the header is equal to 'VEC2D')
+        let mut header_buf = [0_u8; 5];
+        handle.read_exact(&mut header_buf).map_err(|err| format!("{err}"))?;
+        let found: String = header_buf.map(|c| c as char).iter().collect();
+        // If the header didn't match, return an error
+        if found != "VEC2D" {
+            return Err("Invalid header".to_string());
+        }
+
+        // Get the dataset's name
+        let mut name = String::new();
+        let mut char_buf = [0];
+        handle.read_exact(&mut char_buf).map_err(|err| format!("{err}"))?;
+
+        while char_buf[0] != 0 {
+            name.push(char_buf[0] as char);
+            handle.read_exact(&mut char_buf).map_err(|err| format!("{err}"))?;
+        }
+
+        // Get the cardinality and dimensionality
+        let mut cardinality_buf = [0_u8; 8];
+        let mut dimensionality_buf = [0_u8; 8];
+
+        // Read in the cardinality and dimensionality
+        handle
+            .read_exact(&mut cardinality_buf)
+            .map_err(|err| format!("{err}"))?;
+        handle
+            .read_exact(&mut dimensionality_buf)
+            .map_err(|err| format!("{err}"))?;
+
+        // Convert them to usize
+        let cardinality = usize::from_le_bytes(cardinality_buf);
+        let dimensionality = usize::from_le_bytes(dimensionality_buf);
+
+        // Now read the type name
+        let mut type_name = String::new();
+        let mut char_buf = [0];
+        handle.read_exact(&mut char_buf).map_err(|err| format!("{err}"))?;
+
+        while char_buf[0] != 0 {
+            type_name.push(char_buf[0] as char);
+            handle.read_exact(&mut char_buf).map_err(|err| format!("{err}"))?;
+        }
+
+        // If the given type does not match the read type, error out
+        if type_name != V::type_name() {
+            return Err(format!(
+                "Invalid type. File has data of type {} but dataset was constructed with type {}",
+                type_name,
+                V::type_name()
+            ));
+        }
+
+        // Get each data point
+        let type_size = V::num_bytes();
+
+        let mut value_buf = vec![0_u8; type_size];
+        *buffer = Vec::with_capacity(cardinality);
+
+        for _ in 0..cardinality {
+            let mut datum: Vec<V> = Vec::with_capacity(dimensionality);
+            for _ in 0..dimensionality {
+                handle.read_exact(&mut value_buf).map_err(|err| format!("{err}"))?;
+                let index = V::from_le_bytes(&value_buf);
+                datum.push(index);
+            }
+            buffer.push(datum);
+        }
+
+        let data: Vec<&[V]> = buffer.iter().map(Vec::as_slice).collect();
+
+        // Now, check if there's a reordering map
+        let mut bool_buf = [0_u8];
+        handle.read_exact(&mut bool_buf).map_err(|err| format!("{err}"))?;
+
+        // If we have a reordering map, read it
+        let reordering: Option<Vec<usize>> = if bool_buf[0] == 1 {
+            // Cardinality of the reordering map is equal to the cardinality of the datset
+            // so we read 8 bytes (one u64) *cardinality* times.
+            let mut map: Vec<usize> = Vec::with_capacity(cardinality);
+
+            let mut usize_buf = [0_u8; 8];
+            for _ in 0..cardinality {
+                handle.read_exact(&mut usize_buf).map_err(|err| format!("{err}"))?;
+
+                let mapping = usize::from_le_bytes(usize_buf);
+                map.push(mapping);
+            }
+            Some(map)
+        } else {
+            None
+        };
+
+        let indices = (0..data.len()).collect();
+        Ok(Self {
+            name,
+            data,
+            metric,
+            is_expensive,
+            indices,
+            reordering,
+        })
     }
 }
 
@@ -124,12 +314,10 @@ impl<T: Send + Sync + Copy, U: Number> Dataset<T, U> for VecDataset<T, U> {
 
 #[cfg(test)]
 mod tests {
-    use rand::prelude::*;
-    use symagen::random_data;
-
-    use distances::vectors::euclidean_sq;
-
     use super::*;
+    use distances::vectors::euclidean_sq;
+    use symagen::random_data;
+    use tempdir::TempDir;
 
     #[test]
     fn test_reordering_u32() {
@@ -205,5 +393,75 @@ mod tests {
             dataset.get_reordered_index(5).map(|i| dataset.data[i]),
             Some([12].as_slice())
         );
+    }
+
+    #[test]
+    fn test_save_load_deterministic() {
+        let data = vec![vec![1, 2, 3, 4, 5], vec![6, 7, 8, 9, 10]];
+        let data: Vec<&[u32]> = data.iter().map(Vec::as_slice).collect();
+        let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
+        let tmp_file = tmp_dir.path().join("datset.save");
+
+        let mut dataset = VecDataset::new("test".to_string(), data, euclidean_sq::<u32, u32>, false);
+        let indices = dataset.indices().iter().map(|x| *x).rev().collect::<Vec<usize>>();
+        dataset.set_reordered_indices(&indices);
+        dataset.save(&tmp_file).unwrap();
+
+        let mut buffer = vec![];
+        let other = VecDataset::<&[u32], u32>::load(&tmp_file, euclidean_sq, false, &mut buffer).unwrap();
+
+        assert_eq!(other.data, dataset.data);
+        assert_eq!(other.reordering, dataset.reordering);
+        assert_eq!(dataset.cardinality(), other.cardinality());
+    }
+
+    #[test]
+    fn test_save_load_random() {
+        use rand::Rng;
+
+        // Generate a random dataset. On even indices it generates a reordering map. Otherwise its not reordered
+        let mut rng = rand::thread_rng();
+        let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
+        for i in 0..5 {
+            let (cardinality, dimensionality) = (rng.gen_range(1_000..5_0000), rng.gen_range(1..50));
+            let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
+            let reference_data = reference_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            let tmp_file = tmp_dir.path().join(format!("datset_{}.save", i));
+
+            let mut dataset = VecDataset::new("test".to_string(), reference_data, euclidean_sq::<u32, u32>, false);
+            if i % 2 == 0 {
+                let indices = dataset.indices().iter().map(|x| *x).rev().collect::<Vec<usize>>();
+                dataset.set_reordered_indices(&indices);
+            }
+            dataset.save(&tmp_file).unwrap();
+
+            let mut buffer = vec![];
+            let other = VecDataset::<&[u32], u32>::load(&tmp_file, euclidean_sq, false, &mut buffer).unwrap();
+
+            assert_eq!(other.data, dataset.data);
+            assert_eq!(other.name, dataset.name);
+            assert_eq!(other.reordering, dataset.reordering);
+            assert_eq!(dataset.cardinality(), other.cardinality());
+        }
+    }
+    #[test]
+    fn test_unaligned_type_err() {
+        let data = vec![vec![1, 2, 3, 4, 5], vec![6, 7, 8, 9, 10]];
+        let data: Vec<&[u32]> = data.iter().map(Vec::as_slice).collect();
+        let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
+        let tmp_file = tmp_dir.path().join("datset.save");
+
+        // Construct it with u32
+        let mut dataset = VecDataset::new("test".to_string(), data, euclidean_sq::<u32, u32>, false);
+        let indices = dataset.indices().iter().map(|x| *x).rev().collect::<Vec<usize>>();
+        dataset.set_reordered_indices(&indices);
+        dataset.save(&tmp_file).unwrap();
+
+        let mut buffer = vec![];
+
+        // Try to load it back in as f32
+        let other = VecDataset::<&[f32], f32>::load(&tmp_file, euclidean_sq, false, &mut buffer);
+
+        assert!(other.is_err());
     }
 }
