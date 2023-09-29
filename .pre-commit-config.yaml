@@ -25,7 +25,7 @@ repos:
     - id: ruff
       exclude: |
           (?x)(
-            test_[a-zA-Z0-9]+.py$|
+            ^py-clam/tests/test_[a-zA-Z0-9]+.py$|
             ^py-clam/abd_clam/anomaly_detection/pretrained_models.py$
           )
       args: [--fix]

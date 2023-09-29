@@ -19,7 +19,7 @@ class Report(pydantic.BaseModel):
     num_queries: int
     error_rate: float
     ks: list[int]
-    csv_path: pathlib.Path = None
+    csv_path: pathlib.Path = pathlib.Path(".").resolve()
 
     @staticmethod
     def from_json(json_path: pathlib.Path) -> "Report":
@@ -27,16 +27,15 @@ class Report(pydantic.BaseModel):
         with json_path.open("r") as json_file:
             contents: dict[str, typing.Any] = json.load(json_file)
             contents["csv_path"] = json_path.parent.joinpath(contents.pop("csv_name"))
-            report = Report(**contents)
-        return report
+            return Report(**contents)
 
     def to_pandas(self) -> pandas.DataFrame:
+        """Read the CSV file into a pandas DataFrame."""
         return pandas.read_csv(self.csv_path)
 
 
-def plot_throughput(json_path: pathlib.Path, output_dir: pathlib.Path) -> None:
+def plot_throughput(json_path: pathlib.Path, output_dir: pathlib.Path) -> bool:
     """Plot the throughput of the Cakes search."""
-
     report = Report.from_json(json_path)
     df = report.to_pandas()
 
@@ -72,3 +71,5 @@ def plot_throughput(json_path: pathlib.Path, output_dir: pathlib.Path) -> None:
     ax.legend()
     fig.tight_layout()
     fig.savefig(output_path, dpi=300)
+
+    return True

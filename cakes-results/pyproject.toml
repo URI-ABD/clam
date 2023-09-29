@@ -19,7 +19,6 @@ matplotlib = "^3.8.0"
 [tool.poetry.group.dev.dependencies]
 pip = "^23.2.1"
 setuptools = "^68.1.2"
-pre-commit = "^3.3.3"
 
 [build-system]
 requires = ["poetry-core"]

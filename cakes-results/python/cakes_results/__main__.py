@@ -1,12 +1,12 @@
 """Provides the CLI for the Image Calculator plugin."""
 
 import concurrent.futures
-import json
 import logging
 import pathlib
 
 import tqdm
 import typer
+
 from cakes_results import scaling_plots
 
 # Initialize the logger
@@ -21,7 +21,7 @@ app = typer.Typer()
 
 
 @app.command()
-def main(  # noqa: PLR0913
+def main(
     input_dir: pathlib.Path = typer.Option(
         ...,
         help="The directory containing the reports from the scaling experiments.",
@@ -40,7 +40,6 @@ def main(  # noqa: PLR0913
     ),
 ) -> None:
     """Create the plots for the scaling results of the Cakes search."""
-
     logger.info(f"input_dir = {input_dir}")
     logger.info(f"output_dir = {output_dir}")
 
@@ -48,12 +47,18 @@ def main(  # noqa: PLR0913
     logger.info(f"Found {len(files)} json files.")
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = []
+        futures: list[concurrent.futures.Future[bool]] = []
         for f in files:
-            futures.append(executor.submit(scaling_plots.plot_throughput, f, output_dir))
+            futures.append(
+                executor.submit(scaling_plots.plot_throughput, f, output_dir),
+            )
 
-        for f in tqdm.tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Processing files"):
-            f.result()
+        for f in tqdm.tqdm(
+            concurrent.futures.as_completed(futures),
+            total=len(futures),
+            desc="Processing files",
+        ):
+            f.result()  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":
