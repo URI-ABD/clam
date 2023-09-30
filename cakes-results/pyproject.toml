@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "cakes-results"
+version = "0.1.0"
+description = "Regenerating plots for the CAKES paper."
+authors = ["Najib Ishaq <najib_ishaq@zoho.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "cakes_results", from = "python"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+pydantic = "^2.4.1"
+pandas = "^2.1.1"
+typer = "^0.9.0"
+tqdm = "^4.66.1"
+seaborn = "^0.12.2"
+matplotlib = "^3.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pip = "^23.2.1"
+setuptools = "^68.1.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
