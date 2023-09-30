@@ -1,6 +1,5 @@
 //! Provides the `Dataset` trait and an implementation for a vector of data.
 
-mod npy_mmap;
 mod vec2d;
 
 #[allow(clippy::module_name_repetitions)]
@@ -212,7 +211,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
         let indices = {
             let mut indices = indices.to_vec();
             if let Some(seed) = seed {
-                indices.shuffle(&mut rand_chacha::ChaCha8Rng::seed_from_u64(seed));
+                indices.shuffle(&mut rand::rngs::StdRng::seed_from_u64(seed));
             } else {
                 indices.shuffle(&mut rand::thread_rng());
             }
