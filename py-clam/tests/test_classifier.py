@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 
@@ -12,6 +13,8 @@ from abd_clam import space
 from abd_clam.classification import Classifier
 from abd_clam.utils import helpers
 from abd_clam.utils import synthetic_data
+
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
 class TestSearch(unittest.TestCase):
@@ -56,6 +59,7 @@ class TestSearch(unittest.TestCase):
         )
         assert score >= 0.75, "score on bullseye dataset was too low."
 
+    @unittest.skipIf(IN_GITHUB_ACTIONS, "Requires disk write access.")
     def test_cached(self):
         full_x, full_y = synthetic_data.bullseye(n=200, num_rings=3)
         full_x = helpers.normalize(full_x, mode="gaussian")
