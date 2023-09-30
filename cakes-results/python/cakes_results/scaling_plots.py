@@ -1,4 +1,4 @@
-"""Plots for the scaling results of the Cakes searchgit status."""
+"""Plots for the scaling results of the Cakes scaling benchmarks."""
 
 import json
 import pathlib
