@@ -8,6 +8,15 @@ CLAM provides utilities for fast search (Cakes) and anomaly detection (Chaoda).
 As of writing this document, the project is still in a pre-1.0 state.
 This means that the API is not yet stable and breaking changes may occur frequently.
 
+## Benchmarks
+
+### CAKES: IEEE Big Data 2023
+
+Take a look at the following scripts:
+
+- `knn-benchmarks.sh`
+- `scaling-benchmarks.sh`
+
 ## Usage
 
 CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.22.0`.
