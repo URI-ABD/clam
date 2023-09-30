@@ -3,29 +3,43 @@ name: Stable Release
 on:
   push:
     branches:
+      - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
-  cargo:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  crates:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Update
-        run: rustup update
+      - uses: actions/checkout@v3
       - name: Fetch workspace members
         run: git submodule update --init
-      - name: Publish
+      - name: Setup | Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: |
+            clippy
+            rustfmt
+      - name: Clam | Publish
         run: cargo publish -p abd-clam --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   pypi:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
+      - uses: actions/checkout@v3
       - name: Fetch workspace members
         run: git submodule update --init
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
       - name: Dependencies
         run: |
           pip install --user poetry && poetry install
