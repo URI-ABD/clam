@@ -176,6 +176,9 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
         for (i, d) in vec {
             queue.push(i, OrdNumber(d));
         }
+        while queue.len() > capacity {
+            queue.pop();
+        }
         Self { queue, capacity }
     }
 
@@ -194,8 +197,8 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
     /// Returns the distance of the farthest hit in the queue.
     ///
     /// If the queue is empty, returns the result of calling `default`.
-    pub fn peek(&self, default: impl FnOnce() -> U) -> U {
-        self.queue.peek().map_or_else(default, |(_, &OrdNumber(d))| d)
+    pub fn peek(&self) -> U {
+        self.queue.peek().map_or_else(U::zero, |(_, &OrdNumber(d))| d)
     }
 
     /// Pushes a hit onto the queue.
@@ -212,7 +215,7 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
     pub fn push(&mut self, i: I, d: U) {
         if self.queue.len() < self.capacity {
             self.queue.push(i, OrdNumber(d));
-        } else if d < self.peek(U::zero) {
+        } else if d < self.peek() {
             self.queue.pop();
             self.queue.push(i, OrdNumber(d));
         }
@@ -233,7 +236,7 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
     /// farther than the given `threshold`.
     #[allow(dead_code)]
     pub fn pop_until(&mut self, threshold: U) {
-        while threshold < self.peek(U::zero) {
+        while threshold < self.peek() {
             self.queue.pop();
         }
     }
