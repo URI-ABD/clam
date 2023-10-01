@@ -11,7 +11,7 @@ jobs:
 
   tests:
     needs: pre-commit
-    uses: ./.github/workflows/tests/macos.yml
+    uses: ./.github/workflows/tests-macos.yml
 
   build:
     needs: tests

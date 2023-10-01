@@ -24,8 +24,6 @@ jobs:
           components: |
             clippy
             rustfmt
-      - name: Install | Maturin
-        run: cargo install maturin
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
@@ -41,7 +39,7 @@ jobs:
           path: ./.venv
           key: venv-${{ hashFiles('poetry.lock') }}
       - name: Poetry | Install
-        run: poetry install --no-interaction
+        run: poetry run poetry install --no-interaction
       - name: Maturin | Develop
         run: maturin develop --release --strip
       - name: Matrix | Test

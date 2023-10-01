@@ -11,7 +11,7 @@ jobs:
 
   tests:
     needs: pre-commit
-    uses: ./.github/workflows/tests/linux.yml
+    uses: ./.github/workflows/tests-linux.yml
 
   build:
     needs: tests
