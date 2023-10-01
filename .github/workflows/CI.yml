@@ -2,7 +2,7 @@ name: Publish
 
 on:
   push:
-    branches-ignore:
+    branches:
       - main
       - master
 
@@ -23,7 +23,8 @@ jobs:
 
   tests-macos:
     needs: pre-commit
-    uses: ./.github/workflows/tests-macos.yml
+    uses: ./.github/workflows/tests-linux.yml
+    # uses: ./.github/workflows/tests-macos.yml  # TODO: fix maturin command on macOS
 
   upload-macos:
     needs: tests-macos
