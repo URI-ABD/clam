@@ -19,6 +19,7 @@ jobs:
     uses: ./.github/workflows/tests.yml
 
   linux:
+    name: Linux | Wheels
     needs: tests
     runs-on: ubuntu-latest
     strategy:
@@ -45,6 +46,7 @@ jobs:
           path: dist
 
   windows:
+    name: Windows | Wheels
     needs: tests
     runs-on: windows-latest
     strategy:
@@ -71,6 +73,7 @@ jobs:
           path: dist
 
   macos:
+    name: MacOS | Wheels
     needs: tests
     runs-on: macos-latest
     strategy:
@@ -96,6 +99,8 @@ jobs:
           path: dist
 
   sdist:
+    name: Sdist | Wheels
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
