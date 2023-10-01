@@ -12,164 +12,16 @@ permissions:
 
 jobs:
   pre-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup | Checkout
-        uses: actions/checkout@v3
-      - name: Fetch workspace members
-        run: git submodule update --init
-      - name: Setup | Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: |
-            clippy
-            rustfmt
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-      - uses: pre-commit/action@v3.0.0
+    uses: ./.github/workflows/pre-commit.yml
 
   linux:
-    name: Linux | Tests
     needs: pre-commit
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [x86_64, x86, aarch64, armv7, s390x, ppc64le]
-        python-version: ['3.9', '3.10', '3.11']
-    steps:
-      - uses: actions/checkout@v3
-      - name: Fetch workspace members
-        run: git submodule update --init
-      - name: Setup | Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: |
-            clippy
-            rustfmt
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Poetry | Install
-        uses: abatilo/actions-poetry@v2
-      - name: Poetry | Config
-        run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-      - name: Poetry | Cache
-        uses: actions/cache@v3
-        with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: PyClam | Install
-        run: poetry install --no-interaction
-      - name: Maturin | Develop
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: develop --release --strip
-          sccache: 'true'
-          manylinux: auto
-      - name: Matrix | Test
-        run: |
-          cargo test --release
-          poetry run python -m unittest discover python
+    uses: ./.github/workflows/tests-linux.yml
 
   macos:
-    name: MacOS | Tests
     needs: pre-commit
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [x86_64, aarch64]
-        python-version: ['3.9', '3.10', '3.11']
-    steps:
-      - uses: actions/checkout@v3
-      - name: Fetch workspace members
-        run: git submodule update --init
-      - name: Setup | Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: |
-            clippy
-            rustfmt
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Poetry | Install
-        uses: abatilo/actions-poetry@v2
-      - name: Poetry | Config
-        run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-      - name: Poetry | Cache
-        uses: actions/cache@v3
-        with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: PyClam | Install
-        run: poetry install --no-interaction
-      - name: Maturin | Develop
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: develop --release --strip
-          sccache: 'true'
-          manylinux: auto
-      - name: Matrix | Test
-        run: |
-          cargo test --release
-          poetry run python -m unittest discover python
+    uses: ./.github/workflows/tests-macos.yml
 
   windows:
-    name: Windows | Tests
     needs: pre-commit
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [x64, x86]
-        python-version: ['3.9', '3.10', '3.11']
-    steps:
-      - uses: actions/checkout@v3
-      - name: Fetch workspace members
-        run: git submodule update --init
-      - name: Setup | Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          components: |
-            clippy
-            rustfmt
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Poetry | Install
-        uses: abatilo/actions-poetry@v2
-      - name: Poetry | Config
-        run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-      - name: Poetry | Cache
-        uses: actions/cache@v3
-        with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: PyClam | Install
-        run: poetry install --no-interaction
-      - name: Maturin | Develop
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: develop --release --strip
-          sccache: 'true'
-          manylinux: auto
-      - name: Matrix | Test
-        run: |
-          cargo test --release
-          poetry run python -m unittest discover python
+    uses: ./.github/workflows/tests-windows.yml
