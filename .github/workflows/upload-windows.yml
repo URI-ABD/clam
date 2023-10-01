@@ -6,15 +6,7 @@ permissions:
   contents: read
 
 jobs:
-  pre-commit:
-    uses: ./.github/workflows/pre-commit.yml
-
-  tests:
-    needs: pre-commit
-    uses: ./.github/workflows/tests-windows.yml
-
   build:
-    needs: tests
     runs-on: windows-latest
     strategy:
       matrix:

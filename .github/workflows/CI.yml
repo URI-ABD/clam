@@ -39,7 +39,7 @@ jobs:
     uses: ./.github/workflows/upload-windows.yml
 
   upload-sdist:
-    needs: pre-commit
+    needs: tests-linux
     uses: ./.github/workflows/upload-sdist.yml
 
   release:
