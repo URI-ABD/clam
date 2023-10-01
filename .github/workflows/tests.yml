@@ -3,7 +3,7 @@ name: Tests
 on:
   workflow_call:
   push:
-    branches-ignore:
+    branches:
       - main
       - master
 
