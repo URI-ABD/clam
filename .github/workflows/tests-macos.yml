@@ -17,17 +17,19 @@ jobs:
       - uses: actions/checkout@v3
       - name: Fetch workspace members
         run: git submodule update --init
-      - name: Setup | Rust
+      - name: Instal | Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: |
             clippy
             rustfmt
+      - name: Install | Maturin
+        run: cargo install maturin
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Poetry | Install
+      - name: Install | Poetry
         uses: abatilo/actions-poetry@v2
       - name: Poetry | Config
         run: |
@@ -38,7 +40,7 @@ jobs:
         with:
           path: ./.venv
           key: venv-${{ hashFiles('poetry.lock') }}
-      - name: PyClam | Install
+      - name: Poetry | Install
         run: poetry install --no-interaction
       - name: Maturin | Develop
         run: maturin develop --release --strip
