@@ -87,6 +87,12 @@ pub trait Number:
 
     /// Converts a `Number` to big endian bytes.
     fn to_be_bytes(self) -> Vec<u8>;
+
+    /// Returns the name of the type.
+    #[must_use]
+    fn type_name<'a>() -> &'a str {
+        core::any::type_name::<Self>()
+    }
 }
 
 impl Number for f32 {
