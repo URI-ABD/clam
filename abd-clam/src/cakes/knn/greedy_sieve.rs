@@ -37,19 +37,13 @@ where
     // stop if we have enough hits and the farthest hit is closer than the closest cluster by delta_min.
     while hits.len() < k
         || (!candidates.is_empty()
-            && (hits.peek().unwrap_or_else(|| unreachable!("`hits` is non-empty")).1 .0
-                >= candidates
-                    .peek()
-                    .unwrap_or_else(|| unreachable!("`candidates` is non-empty"))
-                    .1
-                     .0))
+            && hits.peek().map_or_else(|| unreachable!(), |(_, &OrdNumber(d))| d)
+                >= candidates.peek().map_or_else(|| unreachable!(), |(_, &RevNumber(d))| d))
     {
         pop_till_leaf(tree, query, &mut candidates);
         leaf_into_hits(tree, query, &mut hits, &mut candidates);
         trim_hits(k, &mut hits);
     }
-    assert!(hits.len() >= k);
-
     hits.into_iter().map(|(i, OrdNumber(d))| (i, d)).collect()
 }
 
@@ -71,16 +65,12 @@ fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
 ) {
     while !candidates
         .peek()
-        .unwrap_or_else(|| unreachable!("`candidates` is non-empty"))
-        .0
-        .is_leaf()
+        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(c, _)| c.is_leaf())
     {
-        let [l, r] = candidates
-            .pop()
-            .unwrap_or_else(|| unreachable!("`candidates` is non-empty"))
-            .0
-            .children()
-            .unwrap_or_else(|| unreachable!("elements are non-leaves"));
+        let [l, r] = candidates.pop().map_or_else(
+            || unreachable!("`candidates` is non-empty"),
+            |(c, _)| c.children().unwrap_or_else(|| unreachable!("elements are non-leaves")),
+        );
         let [dl, dr] = [
             l.distance_to_instance(tree.data(), query),
             r.distance_to_instance(tree.data(), query),
@@ -128,7 +118,7 @@ mod tests {
     use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
 
     #[test]
-    fn expanding_thresholds() {
+    fn tiny() {
         let (cardinality, dimensionality) = (1_000, 10);
         let (min_val, max_val) = (-1.0, 1.0);
         let seed = 42;
@@ -149,7 +139,7 @@ mod tests {
             assert_eq!(linear_nn.len(), k);
 
             let thresholds_nn = sort_hits(super::search(tree, query, k));
-            assert_eq!(thresholds_nn.len(), k);
+            assert_eq!(linear_nn.len(), thresholds_nn.len());
 
             assert_eq!(linear_nn, thresholds_nn);
         }

@@ -14,7 +14,7 @@ use priority_queue::PriorityQueue;
 
 use crate::{Dataset, Tree};
 
-pub(crate) mod expanding_threshold;
+pub(crate) mod greedy_sieve;
 pub(crate) mod linear;
 pub(crate) mod repeated_rnn;
 pub(crate) mod sieve;
@@ -57,7 +57,7 @@ pub enum Algorithm {
     /// wherein the top priority hit is the one with the highest distance to the query.
     /// Hits are then removed from the queue until the queue has size k. Repeats these steps
     /// until candidates is empty or the closest candidate is worse than the furthest hit.
-    ExpandingThreshold,
+    GreedySieve,
     /// Like SieveV1, but without the separate priority queue for hits.
     ///
     /// This algorithm is not stable.
@@ -115,7 +115,7 @@ impl Algorithm {
         match self {
             Self::Linear => linear::search(tree.data(), query, k, tree.indices()),
             Self::RepeatedRnn => repeated_rnn::search(tree, query, k),
-            Self::ExpandingThreshold => expanding_threshold::search(tree, query, k),
+            Self::GreedySieve => greedy_sieve::search(tree, query, k),
             Self::Sieve => sieve::search(tree, query, k),
             Self::SieveSepCenter => sieve_sep_center::search(tree, query, k),
         }
@@ -127,22 +127,16 @@ impl Algorithm {
         match self {
             Self::Linear => "Linear",
             Self::RepeatedRnn => "RepeatedRnn",
-            Self::ExpandingThreshold => "ExpandingThreshold",
+            Self::GreedySieve => "GreedySieve",
             Self::Sieve => "Sieve",
             Self::SieveSepCenter => "SieveSepCenter",
         }
     }
 
-    /// Returns a list of all the algorithms.
+    /// Returns a list of all the algorithms, excluding Linear.
     #[must_use]
     pub const fn variants<'a>() -> &'a [Self] {
-        &[
-            Self::Linear,
-            Self::RepeatedRnn,
-            Self::ExpandingThreshold,
-            Self::Sieve,
-            Self::SieveSepCenter,
-        ]
+        &[Self::RepeatedRnn, Self::GreedySieve, Self::Sieve, Self::SieveSepCenter]
     }
 }
 

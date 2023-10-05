@@ -1,11 +1,12 @@
 //! Benchmarks for knn-search when the size of the data set is scaled.
 
+use core::cmp::Ordering;
 use std::{path::Path, time::Instant};
 
 use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
 use clap::Parser;
 use distances::Number;
-use log::{error, info};
+use log::{error, info, warn};
 use num_format::ToFormattedString;
 use serde::{Deserialize, Serialize};
 use symagen::augmentation;
@@ -176,7 +177,14 @@ pub fn make_reports(
 
     let mut csv_writer = csv::Writer::from_path(csv_path).map_err(|e| e.to_string())?;
     csv_writer
-        .write_record(["scale", "build_time", "algorithm", "k", "throughput"])
+        .write_record([
+            "scale",
+            "build_time",
+            "algorithm",
+            "k",
+            "throughput",
+            // "mean_recall",
+        ])
         .map_err(|e| e.to_string())?;
 
     for multiplier in (0..=max_scale).map(|s| 2_usize.pow(s)) {
@@ -190,7 +198,7 @@ pub fn make_reports(
             // If memory cost would be too high, continue to next scale.
             let memory_cost = memory_cost(base_cardinality * multiplier, dimensionality);
             if memory_cost > max_memory * 1024 * 1024 * 1024 {
-                error!("Memory cost would be over 256G. Skipping scale {multiplier}.");
+                warn!("Memory cost would be over 256G. Skipping scale {multiplier}.");
                 continue;
             }
 
@@ -214,54 +222,196 @@ pub fn make_reports(
         let cakes_time = start.elapsed().as_secs_f32();
         info!("Cakes tree-building time: {:.3e} s", cakes_time);
 
-        for algorithm in knn::Algorithm::variants() {
-            info!("Algorithm: {}", algorithm.name());
+        let mut prev_linear_throughput = 1_000.0;
+        let linear_throughput_threshold = 50.0;
 
-            for &k in ks {
-                info!("k: {}", k);
+        for &k in ks {
+            info!("k: {}", k);
 
-                let start = Instant::now();
-                let hits = cakes.batch_knn_search(&queries, k, *algorithm);
-                let elapsed = start.elapsed().as_secs_f32();
-                let throughput = num_queries.as_f32() / elapsed;
+            #[allow(unused_variables)]
+            let (linear_hits, linear_throughput) =
+                if prev_linear_throughput >= linear_throughput_threshold {
+                    // Measure throughput of linear search.
+                    let (linear_hits, linear_throughput) =
+                        measure_algorithm(&cakes, &queries, ks[0], &knn::Algorithm::Linear);
+                    info!("Linear throughput: {} QPS", format_f32(linear_throughput));
+                    prev_linear_throughput = linear_throughput;
+                    (linear_hits, linear_throughput)
+                } else {
+                    warn!("Linear throughput is too low. Skipping linear search.");
+                    (Vec::new(), prev_linear_throughput)
+                };
+
+            line_to_csv(
+                &mut csv_writer,
+                multiplier,
+                cakes_time,
+                &knn::Algorithm::Linear,
+                k,
+                linear_throughput,
+                // 1.0,
+            )?;
+
+            for algorithm in knn::Algorithm::variants() {
+                info!("Algorithm: {}, k: {}", algorithm.name(), k);
+
+                let (hits, throughput) = measure_algorithm(&cakes, &queries, k, algorithm);
                 info!("Throughput: {} QPS", format_f32(throughput));
 
-                csv_writer
-                    .write_record(&[
-                        multiplier.to_string(),
-                        cakes_time.to_string(),
-                        algorithm.name().to_string(),
-                        k.to_string(),
-                        throughput.to_string(),
-                    ])
-                    .map_err(|e| e.to_string())?;
-
-                // write what we have so far to csv
-                csv_writer.flush().map_err(|e| e.to_string())?;
-
                 let misses = hits
-                    .into_iter()
+                    .iter()
                     .map(|h| h.len())
-                    .filter(|&h| h != k)
+                    .filter(|&h| h < k)
                     .collect::<Vec<_>>();
-
-                #[allow(clippy::unwrap_used)]
                 if !misses.is_empty() {
-                    let &min_hits = misses.iter().min().unwrap();
-                    let &max_hits = misses.iter().max().unwrap();
+                    let &min_hits = misses
+                        .iter()
+                        .min()
+                        .unwrap_or_else(|| unreachable!("`misses` is not empty."));
                     error!(
-                        "{} queries did not get enough hits. Expected {}, got between {} and {}.",
+                        "{} queries returned as low as {} neighbors.",
                         misses.len(),
-                        k,
-                        min_hits,
-                        max_hits
+                        min_hits
                     );
                 }
+
+                // let mean_recall = hits
+                //     .into_iter()
+                //     .zip(linear_hits.iter().cloned())
+                //     .map(|(h, l)| compute_recall(h, l))
+                //     .sum::<f32>()
+                //     / linear_hits.len().as_f32();
+                // info!("Mean recall: {}", format_f32(mean_recall));
+
+                line_to_csv(
+                    &mut csv_writer,
+                    multiplier,
+                    cakes_time,
+                    algorithm,
+                    k,
+                    throughput,
+                    // mean_recall,
+                )?;
             }
         }
     }
 
     Ok(())
+}
+
+/// Measure the throughput of a knn-search algorithm.
+///
+/// # Arguments
+///
+/// * `cakes`: the cakes index.
+/// * `queries`: the queries.
+/// * `k`: the number of nearest neighbors to search for.
+///
+/// # Returns
+///
+/// * A vector of the hits for each query.
+/// * The throughput of the algorithm.
+fn measure_algorithm<'a>(
+    cakes: &'a Cakes<&'a [f32], f32, VecDataset<&'a [f32], f32>>,
+    queries: &'a [&[f32]],
+    k: usize,
+    algorithm: &knn::Algorithm,
+) -> (Vec<Vec<(usize, f32)>>, f32) {
+    let num_queries = queries.len();
+    let start = Instant::now();
+    let hits = cakes.batch_knn_search(queries, k, *algorithm);
+    let elapsed = start.elapsed().as_secs_f32();
+    let throughput = num_queries.as_f32() / elapsed;
+
+    (hits, throughput)
+}
+
+/// Write a line of scaling-benchmarks to the csv file.
+///
+/// # Arguments
+///
+/// * `csv_writer`: the csv writer.
+/// * `multiplier`: the dataset cardinality scaling factor.
+/// * `cakes_time`: the time to build the cakes index.
+/// * `algorithm`: the knn-search algorithm.
+/// * `k`: the number of nearest neighbors to search for.
+/// * `throughput`: the throughput of the algorithm.
+/// * `mean_recall`: the mean recall of the algorithm.
+///
+/// # Errors
+///
+/// * If the csv writer fails to write to the file.
+/// * If the csv writer fails to flush to the file.
+fn line_to_csv(
+    csv_writer: &mut csv::Writer<std::fs::File>,
+    multiplier: usize,
+    cakes_time: f32,
+    algorithm: &knn::Algorithm,
+    k: usize,
+    throughput: f32,
+    // mean_recall: f32,
+) -> Result<(), String> {
+    csv_writer
+        .write_record(&[
+            multiplier.to_string(),
+            cakes_time.to_string(),
+            algorithm.name().to_string(),
+            k.to_string(),
+            throughput.to_string(),
+            // mean_recall.to_string(),
+        ])
+        .map_err(|e| e.to_string())?;
+
+    csv_writer.flush().map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Compute the recall of a knn-search algorithm.
+///
+/// # Arguments
+///
+/// * `hits`: the hits of the algorithm.
+/// * `linear_hits`: the hits of linear search.
+/// * `k`: the number of nearest neighbors to search for.
+///
+/// # Returns
+///
+/// * The recall of the algorithm.
+#[allow(dead_code)]
+fn compute_recall(mut hits: Vec<(usize, f32)>, mut linear_hits: Vec<(usize, f32)>) -> f32 {
+    if linear_hits.is_empty() {
+        warn!("Linear search was too slow. Skipping recall computation.");
+        1.0
+    } else {
+        info!(
+            "Num Hits: {}, Num Linear Hits: {}",
+            hits.len(),
+            linear_hits.len()
+        );
+        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+        let mut hits = hits.into_iter().map(|(_, d)| d).peekable();
+
+        linear_hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+        let mut linear_hits = linear_hits.into_iter().map(|(_, d)| d).peekable();
+
+        let mut num_common = 0_usize;
+        while let (Some(&hit), Some(&linear_hit)) = (hits.peek(), linear_hits.peek()) {
+            if (hit - linear_hit).abs() < f32::EPSILON {
+                num_common += 1;
+                hits.next();
+                linear_hits.next();
+            } else if hit < linear_hit {
+                hits.next();
+            } else {
+                linear_hits.next();
+            }
+        }
+        let recall = num_common.as_f32() / linear_hits.len().as_f32();
+        info!("Recall: {}, num_common: {}", format_f32(recall), num_common);
+
+        recall
+    }
 }
 
 const fn memory_cost(cardinality: usize, dimensionality: usize) -> usize {

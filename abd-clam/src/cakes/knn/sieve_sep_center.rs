@@ -289,7 +289,11 @@ where
         // If there are no more cluster grains, then the search is complete.
         if clusters.is_empty() {
             Grain::partition(&mut hits, k);
-            return hits[..k].iter().map(|g| (g.index(), g.d_max())).collect();
+
+            // TODO: Fix the panic here.
+            let l = core::cmp::min(k, hits.len());
+
+            return hits[..l].iter().map(|g| (g.index(), g.d_max())).collect();
         }
 
         // Partition clusters into children and convert to grains.

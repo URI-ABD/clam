@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{cakes::rnn::clustered, utils, Cluster, Dataset, Tree};
+use crate::{cakes::rnn::clustered, utils, Cluster, Tree};
 
 use super::Hits;
 
@@ -30,15 +30,15 @@ where
     let mut radius = f64::EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
     let [mut confirmed, mut straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
 
-    let mut num_hits = count_hits(&confirmed) + count_hits(&straddlers);
+    let mut num_confirmed = count_hits(&confirmed);
 
-    while num_hits == 0 {
+    while num_confirmed == 0 {
         radius *= MULTIPLIER;
         [confirmed, straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
-        num_hits = count_hits(&confirmed) + count_hits(&straddlers);
+        num_confirmed = count_hits(&confirmed);
     }
 
-    while num_hits < k {
+    while num_confirmed < k {
         let lfd = utils::mean(
             &confirmed
                 .iter()
@@ -46,42 +46,23 @@ where
                 .map(|&(c, _)| c.lfd)
                 .collect::<Vec<_>>(),
         );
-        let factor = (k.as_f64() / num_hits.as_f64()).powf(1. / (lfd + f64::EPSILON));
+        let factor = (k.as_f64() / num_confirmed.as_f64()).powf(1. / (lfd + f64::EPSILON));
 
         radius *= if factor < MULTIPLIER { factor } else { MULTIPLIER };
         [confirmed, straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
-        num_hits = count_hits(&confirmed) + count_hits(&straddlers);
+        num_confirmed = count_hits(&confirmed);
     }
 
-    let radius = ideal_radius(&confirmed, &straddlers, &tree.data, k);
-
-    Hits::from_vec(k, clustered::search(tree, query, radius)).extract()
+    Hits::from_vec(
+        k,
+        clustered::leaf_search(&tree.data, confirmed, straddlers, query, U::from(radius)),
+    )
+    .extract()
 }
 
 /// Count the total cardinality of the clusters.
 fn count_hits<T: Send + Sync + Copy, U: Number>(clusters: &[(&Cluster<T, U>, U)]) -> usize {
     clusters.iter().map(|(c, _)| c.cardinality).sum()
-}
-
-/// Compute the ideal radius for the repeated RNN search.
-fn ideal_radius<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
-    confirmed: &[(&Cluster<T, U>, U)],
-    straddlers: &[(&Cluster<T, U>, U)],
-    data: &D,
-    k: usize,
-) -> U {
-    let distances = multiplied_hits(confirmed, data).chain(multiplied_hits(straddlers, data));
-    Hits::from_vec(k, distances.collect()).peek()
-}
-
-/// Duplicate the radius with the cardinality of the cluster for computing ideal radius.
-fn multiplied_hits<'a, T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
-    clusters: &'a [(&Cluster<T, U>, U)],
-    data: &'a D,
-) -> impl Iterator<Item = (usize, U)> + 'a {
-    clusters
-        .iter()
-        .flat_map(|&(c, d)| c.indices(data).iter().map(move |&i| (i, d + c.radius)))
 }
 
 #[cfg(test)]
