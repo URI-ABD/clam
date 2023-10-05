@@ -212,6 +212,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 ///
 /// A vector of 2-tuples, where the first element is an index of an instance,
 /// and the second element is the distance from the query to the instance.
+#[allow(clippy::many_single_char_names)]
 pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
 where
     T: Send + Sync + Copy,
@@ -251,8 +252,12 @@ where
 
         // If there are no more cluster grains, then the search is complete.
         if clusters.is_empty() {
-            let i = Grain::partition(&mut hits, k);
-            return hits[0..=i].iter().map(|g| (g.index(), g.d())).collect();
+            Grain::partition(&mut hits, k);
+
+            // TODO: Fix the panic here.
+            let l = core::cmp::min(k, hits.len());
+
+            return hits[..l].iter().map(|g| (g.index(), g.d())).collect();
         }
 
         // Partition clusters into children and convert to grains.

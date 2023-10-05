@@ -13,13 +13,14 @@ echo "Starting scaling-benchmarks at: $(date)"
 # Compile cakes-results
 cargo build --release --bin scaling-results
 
-for dataset in "fashion-mnist" "glove-25" "glove-100" "sift" "random-128-euclidean" "gist" "deep-image"
+# for dataset in "fashion-mnist" "glove-25" "glove-100" "sift" "random-128-euclidean" "gist" "deep-image"
+for dataset in "fashion-mnist" "glove-25"
 do
     ./target/release/scaling-results \
         --input-dir $input_dir \
         --output-dir $output_dir \
         --dataset $dataset \
         --error-rate 0.1 \
-        --max-memory 256 \
-        --ks 10 100
+        --max-memory 32 \
+        --ks 10
 done
