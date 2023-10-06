@@ -3,6 +3,7 @@
 //! spaces.
 
 use core::{
+    cmp::Ordering,
     hash::{Hash, Hasher},
     marker::PhantomData,
 };
@@ -75,17 +76,16 @@ impl<T: Send + Sync + Copy, U: Number> PartialEq for Cluster<T, U> {
 impl<T: Send + Sync + Copy, U: Number> Eq for Cluster<T, U> {}
 
 impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.depth() == other.depth() {
-            self.offset.cmp(&other.offset)
-        } else {
-            self.depth().cmp(&other.depth())
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.depth().cmp(&other.depth()) {
+            Ordering::Equal => self.offset.cmp(&other.offset),
+            ordering => ordering,
         }
     }
 }
