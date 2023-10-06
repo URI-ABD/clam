@@ -37,6 +37,7 @@ class TestSearch(unittest.TestCase):
 
         return score
 
+    @unittest.skipIf(IN_GITHUB_ACTIONS, "Requires disk write access.")
     def test_digits(self):
         digits = load_digits()
 
@@ -49,6 +50,7 @@ class TestSearch(unittest.TestCase):
         )
         assert score >= 0.75, "score on digits dataset was too low."
 
+    @unittest.skipIf(IN_GITHUB_ACTIONS, "Requires disk write access.")
     def test_bullseye(self):
         full_x, full_y = synthetic_data.bullseye(n=256, num_rings=3)
         full_x = helpers.normalize(full_x, mode="gaussian")
