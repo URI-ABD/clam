@@ -54,7 +54,7 @@ jobs:
             clippy
             rustfmt
       - name: Clam | Tests
-        run: cargo test --release --workspace --exclude automl
+        run: cargo test --release --package abd-clam
 
   python:
     name: Python | Tests
