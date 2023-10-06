@@ -76,11 +76,7 @@ impl<T: Send + Sync + Copy, U: Number> Eq for Cluster<T, U> {}
 
 impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.depth() == other.depth() {
-            self.offset.partial_cmp(&other.offset)
-        } else {
-            self.depth().partial_cmp(&other.depth())
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -458,17 +454,26 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
             .map(|_| "0")
             .chain(history.iter().map(|&b| if b { "1" } else { "0" }))
             .collect::<Vec<_>>();
-        bin_name
-            .chunks_exact(4)
-            .map(|s| {
-                let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
-                let s = format!("{a}{b}{c}{d}");
-                let Ok(s) = u8::from_str_radix(&s, 2) else {
-                    unreachable!("We know the characters used are only \"0\" and \"1\".")
-                };
-                format!("{s:01x}")
-            })
-            .collect()
+        // bin_name
+        //     .chunks_exact(4)
+        //     .map(|s| {
+        //         let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
+        //         let s = format!("{a}{b}{c}{d}");
+        //         let Ok(s) = u8::from_str_radix(&s, 2) else {
+        //             unreachable!("We know the characters used are only \"0\" and \"1\".")
+        //         };
+        //         format!("{s:01x}")
+        //     })
+        //     .collect()
+        bin_name.chunks_exact(4).fold(String::new(), |mut acc, s| {
+            let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
+            let s = format!("{a}{b}{c}{d}");
+            let Ok(s) = u8::from_str_radix(&s, 2) else {
+                unreachable!("We know the characters used are only \"0\" and \"1\".")
+            };
+            acc.push_str(&format!("{s:01x}"));
+            acc
+        })
     }
 
     /// Converts the hexidecimal representation of cluster history obtained from `Cluster::name`

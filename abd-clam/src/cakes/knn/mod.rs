@@ -261,13 +261,13 @@ impl<U: Number> Eq for OrdNumber<U> {}
 
 impl<U: Number> PartialOrd for OrdNumber<U> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 
 impl<U: Number> Ord for OrdNumber<U> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Greater)
+        self.0.partial_cmp(&other.0).unwrap_or(Ordering::Greater)
     }
 }
 
@@ -285,13 +285,13 @@ impl<U: Number> Eq for RevNumber<U> {}
 
 impl<U: Number> PartialOrd for RevNumber<U> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.0.partial_cmp(&self.0)
+        Some(self.cmp(other))
     }
 }
 
 impl<U: Number> Ord for RevNumber<U> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Greater)
+        other.0.partial_cmp(&self.0).unwrap_or(Ordering::Greater)
     }
 }
 

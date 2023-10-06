@@ -38,14 +38,14 @@ where
 #[cfg(test)]
 mod tests {
 
-    use distances::vectors::euclidean;
+    use distances::{vectors::euclidean, Number};
     use symagen::random_data;
 
     use crate::{Cakes, PartitionCriteria, VecDataset};
 
     #[test]
     fn tiny() {
-        let data = (1..=10).map(|i| vec![i as f32]).collect::<Vec<_>>();
+        let data = (1..=10).map(|i| vec![i.as_f32()]).collect::<Vec<_>>();
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let data = VecDataset::new("tiny".to_string(), data, euclidean::<_, f32>, false);
 
