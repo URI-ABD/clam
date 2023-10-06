@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "abd-clam",
+    "cakes-results",
     # "py-clam",  # TODO: re-enable when py-clam uses maturin to bing to abd-clam
     "distances",
     "rust-automl",
