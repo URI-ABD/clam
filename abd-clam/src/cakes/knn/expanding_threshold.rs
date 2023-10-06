@@ -146,7 +146,11 @@ mod tests {
 
         for k in [100, 10, 1] {
             let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            assert_eq!(linear_nn.len(), k);
+
             let thresholds_nn = sort_hits(super::search(tree, query, k));
+            assert_eq!(thresholds_nn.len(), k);
+
             assert_eq!(linear_nn, thresholds_nn);
         }
     }
