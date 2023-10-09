@@ -149,7 +149,7 @@ fn make_reports(
         .make_shards(max_cardinality);
     let shards = data_shards
         .into_iter()
-        .map(|d| Cakes::new(d, seed, PartitionCriteria::default()))
+        .map(|d| Cakes::new(d, seed, &PartitionCriteria::default()))
         .collect::<Vec<_>>();
     let cakes = ShardedCakes::new(shards);
 
@@ -165,7 +165,9 @@ fn make_reports(
 
     let cakes = cakes.auto_tune(tuning_depth, tuning_k);
 
-    let algorithm = cakes.best_knn_algorithm();
+    let algorithm = cakes.best_knn_algorithm().unwrap_or_else(|| {
+        unreachable!("We auto-tuned the algorithm, so there should be a best algorithm.")
+    });
     info!("Tuned algorithm: {}", algorithm.name());
 
     for k in ks {

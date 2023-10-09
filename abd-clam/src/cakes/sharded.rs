@@ -68,7 +68,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> ShardedCakes<I, U, D> {
     }
 
     /// Returns the best knn-search algorithm for the sample shard.
-    pub const fn best_knn_algorithm(&self) -> knn::Algorithm {
+    pub const fn best_knn_algorithm(&self) -> Option<knn::Algorithm> {
         self.sample_shard.best_knn
     }
 
@@ -116,7 +116,9 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> ShardedCakes<I, U, D> {
 
     /// K-nearest neighbor search.
     pub fn knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-        let hits = self.sample_shard.knn_search(query, k, self.sample_shard.best_knn);
+        let hits = self
+            .sample_shard
+            .knn_search(query, k, self.best_knn_algorithm().unwrap_or_default());
         let mut hits = knn::Hits::from_vec(k, hits);
         for (shard, &o) in self.shards.iter().zip(self.offsets.iter()) {
             let radius = hits.peek();
@@ -169,7 +171,7 @@ mod tests {
 
         let name = format!("test-full");
         let data = VecDataset::new(name, data_vec.clone(), metric, false);
-        let cakes = Cakes::new(data, Some(seed), PartitionCriteria::default());
+        let cakes = Cakes::new(data, Some(seed), &PartitionCriteria::default());
 
         let num_shards = 10;
         let max_cardinality = cardinality / num_shards;
@@ -177,7 +179,7 @@ mod tests {
         let data_shards = VecDataset::new(name, data_vec, metric, false).make_shards(max_cardinality);
         let shards = data_shards
             .into_iter()
-            .map(|d| Cakes::new(d, Some(seed), PartitionCriteria::default()))
+            .map(|d| Cakes::new(d, Some(seed), &PartitionCriteria::default()))
             .collect::<Vec<_>>();
         let sharded_cakes = ShardedCakes::new(shards).auto_tune(10, 7);
 

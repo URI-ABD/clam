@@ -30,8 +30,8 @@ fn cakes(c: &mut Criterion) {
             .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
         let dataset = VecDataset::new("knn".to_string(), data.clone(), metric, false);
-        let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = Cakes::new(dataset, Some(seed), criteria);
+        let criteria = PartitionCriteria::default();
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         for k in (0..=8).map(|v| 2usize.pow(v)) {
             for &variant in knn::Algorithm::variants() {

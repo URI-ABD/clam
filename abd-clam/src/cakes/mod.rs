@@ -25,7 +25,7 @@ pub struct Cakes<I: Instance, U: Number, D: Dataset<I, U>> {
     /// The tree used for the search.
     pub(crate) tree: Tree<I, U, D>,
     /// Best knn-search algorithm.
-    pub(crate) best_knn: knn::Algorithm,
+    pub(crate) best_knn: Option<knn::Algorithm>,
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
@@ -36,11 +36,10 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// * `data` - The dataset to search.
     /// * `seed` - The seed to use for the random number generator.
     /// * `criteria` - The criteria to use for partitioning the tree.
-    #[allow(clippy::needless_pass_by_value)] // clippy is wrong in this case
-    pub fn new(data: D, seed: Option<u64>, criteria: PartitionCriteria<U>) -> Self {
+    pub fn new(data: D, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
         Self {
-            tree: Tree::new(data, seed).partition(&criteria),
-            best_knn: knn::Algorithm::default(),
+            tree: Tree::new(data, seed).partition(criteria),
+            best_knn: None,
         }
     }
 
@@ -82,7 +81,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
                 let start = std::time::Instant::now();
                 let hits = self.batch_knn_search(&queries, k, algorithm);
                 let elapsed = start.elapsed().as_secs_f32();
-                (algorithm, hits, elapsed)
+                (Some(algorithm), hits, elapsed)
             })
             .min_by(|(_, _, a), (_, _, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater))
             .unwrap_or_else(|| unreachable!("There are several variants of knn-search"));
@@ -167,7 +166,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
 
     /// Linear k-nearest neighbor search for a query.
     pub fn tuned_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-        self.knn_search(query, k, self.best_knn)
+        self.knn_search(query, k, self.best_knn.unwrap_or_default())
     }
 
     /// Linear k-nearest neighbor search for a batch of queries.
@@ -185,7 +184,6 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
 mod tests {
     use std::{cmp::Ordering, collections::HashSet};
 
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
     use crate::VecDataset;
@@ -193,7 +191,7 @@ mod tests {
     use super::*;
 
     fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        euclidean(x, y)
+        distances::vectors::euclidean(x, y)
     }
 
     #[test]
@@ -202,8 +200,8 @@ mod tests {
 
         let name = "test".to_string();
         let dataset = VecDataset::new(name, data, metric, false);
-        let criteria = PartitionCriteria::new(true);
-        let cakes = Cakes::new(dataset, None, criteria);
+        let criteria = PartitionCriteria::default();
+        let cakes = Cakes::new(dataset, None, &criteria);
 
         let query = vec![0., 1.];
         let (results, _): (Vec<_>, Vec<_>) = cakes
@@ -233,8 +231,8 @@ mod tests {
     fn line() {
         let data = (-100..=100).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
         let data = VecDataset::new("test".to_string(), data, metric, false);
-        let criteria = PartitionCriteria::new(true);
-        let cakes = Cakes::new(data, Some(42), criteria);
+        let criteria = PartitionCriteria::default();
+        let cakes = Cakes::new(data, Some(42), &criteria);
 
         let queries = (-10..=10).step_by(2).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
         for v in [2, 10, 50] {
@@ -282,7 +280,7 @@ mod tests {
 
         let name = format!("test-euclidean");
         let data = VecDataset::new(name, data.clone(), metric, false);
-        let cakes = Cakes::new(data, Some(seed), PartitionCriteria::default());
+        let cakes = Cakes::new(data, Some(seed), &PartitionCriteria::default());
 
         for radius in [0.0, 0.05, 0.1, 0.25, 0.5] {
             for (i, query) in queries.iter().enumerate() {
@@ -325,7 +323,7 @@ mod tests {
 
         let name = format!("test-hamming");
         let data = VecDataset::new(name, data.clone(), metric, false);
-        let cakes = Cakes::new(data, Some(42), PartitionCriteria::default());
+        let cakes = Cakes::new(data, Some(42), &PartitionCriteria::default());
 
         for radius in [1, 5, 10, 25] {
             for (i, query) in queries.iter().enumerate() {
