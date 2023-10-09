@@ -37,8 +37,12 @@ where
     // stop if we have enough hits and the farthest hit is closer than the closest cluster by delta_min.
     while hits.len() < k
         || (!candidates.is_empty()
-            && hits.peek().map_or_else(|| unreachable!(), |(_, &OrdNumber(d))| d)
-                >= candidates.peek().map_or_else(|| unreachable!(), |(_, &RevNumber(d))| d))
+            && hits
+                .peek()
+                .map_or_else(|| unreachable!("`hits` is non-empty."), |(_, &OrdNumber(d))| d)
+                >= candidates
+                    .peek()
+                    .map_or_else(|| unreachable!("`candidates` is non-empty."), |(_, &RevNumber(d))| d))
     {
         pop_till_leaf(tree, query, &mut candidates);
         leaf_into_hits(tree, query, &mut hits, &mut candidates);
