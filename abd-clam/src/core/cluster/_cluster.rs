@@ -9,6 +9,7 @@ use core::{
     ops::Range,
 };
 use distances::Number;
+use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 
 use crate::{utils, Dataset, Instance, PartitionCriteria, PartitionCriterion};
@@ -495,7 +496,6 @@ impl<U: Number> Cluster<U> {
     /// Whether the `Cluster` is the root of the tree.
     ///
     /// The root `Cluster` has a depth of 0.
-    #[allow(dead_code)]
     pub fn is_root(&self) -> bool {
         self.depth() == 0
     }
@@ -511,6 +511,8 @@ impl<U: Number> Cluster<U> {
     /// Whether the `Cluster` contains only one instance or only identical
     /// instances.
     pub fn is_singleton(&self) -> bool {
+        // TODO: How do we handle distance functions that do not obey the
+        // identity requirement.
         self.radius == U::zero()
     }
 
@@ -630,25 +632,6 @@ impl<U: Number> Cluster<U> {
     }
 }
 
-use serde::{Deserialize, Serialize};
-
-/// Serialized information about a given `Cluster`'s children
-#[derive(Serialize, Deserialize)]
-pub struct SerializedChildInfo {
-    /// The encoded history of the left child
-    pub left_name: String,
-    /// The encoded history of the right child
-    pub right_name: String,
-    /// The left pole of the `Cluster`
-    pub arg_l: usize,
-    /// The right pole of the `Cluster`
-    pub arg_r: usize,
-    /// The distance from the `l_pole` to the `r_pole` in bytes.
-    /// This value gets reconstituted can be reconstituted from
-    /// whatever `U: Number` it was decomposed from
-    pub polar_distance_bytes: Vec<u8>,
-}
-
 /// Intermediate representation of `Cluster` for serialization.
 /// We do this instead of directly serializing/deserializing the Clusters themselves because
 /// writing a deserializer directly is moderately complicated with our exceptions
@@ -674,7 +657,24 @@ pub struct SerializedCluster {
     /// The `Cluster`'s ratios
     pub ratios: Option<Ratios>,
     /// Serialized information about the cluster's immediate children, if applicable
-    pub child_info: Option<SerializedChildInfo>,
+    pub children: Option<SerializedChildren>,
+}
+
+/// Serialized information about a given `Cluster`'s children
+#[derive(Serialize, Deserialize)]
+pub struct SerializedChildren {
+    /// The encoded history of the left child
+    pub left_name: String,
+    /// The encoded history of the right child
+    pub right_name: String,
+    /// The left pole of the `Cluster`
+    pub arg_l: usize,
+    /// The right pole of the `Cluster`
+    pub arg_r: usize,
+    /// The distance from the `l_pole` to the `r_pole` in bytes.
+    /// This value gets reconstituted can be reconstituted from
+    /// whatever `U: Number` it was decomposed from
+    pub polar_distance_bytes: Vec<u8>,
 }
 
 impl SerializedCluster {
@@ -697,28 +697,23 @@ impl SerializedCluster {
 
         // Since we cant do this recursively we need to like depth-first traverse
         // the tree and serialize manually
-        #[allow(clippy::option_if_let_else)]
-        let child_info = {
-            if let Some(children) = &cluster.children {
-                let Children {
-                    left,
-                    right,
-                    arg_l,
-                    arg_r,
-                    polar_distance,
-                } = children;
-
-                Some(SerializedChildInfo {
+        let children = cluster.children.as_ref().map(
+            |Children {
+                 left,
+                 right,
+                 arg_l,
+                 arg_r,
+                 polar_distance,
+             }| {
+                SerializedChildren {
                     left_name: left.name(),
                     right_name: right.name(),
                     arg_l: *arg_l,
                     arg_r: *arg_r,
                     polar_distance_bytes: polar_distance.to_le_bytes(),
-                })
-            } else {
-                None
-            }
-        };
+                }
+            },
+        );
 
         Self {
             name,
@@ -730,14 +725,14 @@ impl SerializedCluster {
             radius_bytes,
             lfd,
             ratios,
-            child_info,
+            children,
         }
     }
 
     #[allow(dead_code)]
     /// Converts a `SerializedCluster` to a `Cluster`. Optionally returns information about the
     /// Children's poles
-    pub fn into_partial_cluster<U: Number>(self) -> (Cluster<U>, Option<SerializedChildInfo>) {
+    pub fn into_partial_cluster<U: Number>(self) -> (Cluster<U>, Option<SerializedChildren>) {
         (
             Cluster {
                 history: Cluster::<U>::name_to_history(&self.name),
@@ -751,24 +746,21 @@ impl SerializedCluster {
                 ratios: self.ratios,
                 children: None,
             },
-            self.child_info,
+            self.children,
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use distances::vectors::euclidean;
-    use rand::Rng;
+    use rand::{distributions::Bernoulli, prelude::Distribution, Rng};
 
-    use crate::{
-        Tree, {Dataset, VecDataset},
-    };
+    use crate::{Dataset, Tree, VecDataset};
 
     use super::*;
 
     fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        euclidean(x, y)
+        distances::vectors::euclidean(x, y)
     }
 
     #[test]
@@ -916,16 +908,14 @@ mod tests {
         assert_eq!(s1.lfd, s2.lfd);
         assert_eq!(s1.ratios, s2.ratios);
 
-        let (c2, chls) = s2.into_partial_cluster();
+        let (c2, children) = s2.into_partial_cluster();
 
         assert_eq!(c1, c2);
-        assert!(chls.is_none());
+        assert!(children.is_none());
     }
 
     #[test]
     fn history_to_name() {
-        use rand::distributions::{Bernoulli, Distribution};
-
         let d = Bernoulli::new(0.3).unwrap();
 
         for length in 1..800 {
