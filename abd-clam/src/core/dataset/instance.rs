@@ -42,9 +42,9 @@ pub trait Instance: Send + Sync {
     where
         Self: Sized,
     {
-        let mut num_bytes = [0; 8];
+        let mut num_bytes = vec![0; <usize as Number>::num_bytes()];
         reader.read_exact(&mut num_bytes).map_err(|e| e.to_string())?;
-        let num_bytes = usize::from_be_bytes(num_bytes);
+        let num_bytes = <usize as Number>::from_be_bytes(&num_bytes);
 
         let mut buf = vec![0; num_bytes];
         reader.read_exact(&mut buf).map_err(|e| e.to_string())?;
