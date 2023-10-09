@@ -3,7 +3,7 @@
 use distances::Number;
 
 /// Trait for individual data points.
-pub trait Instance: Send + Sync + Sized {
+pub trait Instance: Send + Sync {
     /// Convert the instance to a byte vector.
     fn to_bytes(&self) -> Vec<u8>;
 
@@ -12,7 +12,9 @@ pub trait Instance: Send + Sync + Sized {
     /// # Errors
     ///
     /// If the byte vector cannot be parsed into an instance.
-    fn from_bytes(bytes: &[u8]) -> Result<Self, String>;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String>
+    where
+        Self: Sized;
 
     /// The name of the type of instance.
     fn type_name() -> String;
@@ -36,7 +38,10 @@ pub trait Instance: Send + Sync + Sized {
     /// # Errors
     ///
     /// If the file cannot be read or the instance cannot be parsed.
-    fn load<R: std::io::Read>(reader: &mut R) -> Result<Self, String> {
+    fn load<R: std::io::Read>(reader: &mut R) -> Result<Self, String>
+    where
+        Self: Sized,
+    {
         let mut num_bytes = [0; 8];
         reader.read_exact(&mut num_bytes).map_err(|e| e.to_string())?;
         let num_bytes = usize::from_be_bytes(num_bytes);
