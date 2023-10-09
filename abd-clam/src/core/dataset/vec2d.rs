@@ -8,7 +8,6 @@ use std::{
 };
 
 use distances::Number;
-use itertools::Itertools;
 
 use crate::Dataset;
 
@@ -32,7 +31,7 @@ pub struct VecDataset<I: Instance, U: Number> {
     /// Whether the metric is expensive to compute.
     pub(crate) is_expensive: bool,
     /// The reordering of the dataset after building the tree.
-    pub(crate) permutation: Option<Vec<usize>>,
+    pub(crate) permuted_indices: Option<Vec<usize>>,
 }
 
 impl<I: Instance, U: Number> VecDataset<I, U> {
@@ -50,15 +49,103 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
             data,
             metric,
             is_expensive,
-            permutation: None,
+            permuted_indices: None,
         }
     }
+}
 
-    /// Saves a numeric dataset to a specified path in binary format
-    ///
-    /// # Errors
-    /// Errors on file write issues or if a reordered index does not exist
-    pub fn save(&self, path: &Path) -> Result<(), String> {
+impl<I: Instance, U: Number, Idx> Index<Idx> for VecDataset<I, U>
+where
+    Idx: SliceIndex<[I], Output = I>,
+{
+    type Output = Idx::Output;
+
+    fn index(&self, index: Idx) -> &Self::Output {
+        self.data.index(index)
+    }
+}
+
+impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
+    fn type_name(&self) -> String {
+        format!("VecDataset<{}>", I::type_name())
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn cardinality(&self) -> usize {
+        self.data.len()
+    }
+
+    fn is_metric_expensive(&self) -> bool {
+        self.is_expensive
+    }
+
+    fn metric(&self) -> fn(&I, &I) -> U {
+        self.metric
+    }
+
+    fn permute_instances(&mut self, permutation: &[usize]) -> Result<(), String> {
+        let n = permutation.len();
+
+        // The "source index" represents the index that we hope to swap to
+        let mut source_index: usize;
+
+        // INVARIANT: After each iteration of the loop, the elements of the
+        // sub-array [0..i] are in the correct position.
+        for i in 0..n - 1 {
+            source_index = permutation[i];
+
+            // If the element at is already at the correct position, we can
+            // just skip.
+            if source_index != i {
+                // Here we're essentially following the cycle. We *know* by
+                // the invariant that all elements to the left of i are in
+                // the correct position, so what we're doing is following
+                // the cycle until we find an index to the right of i. Which,
+                // because we followed the position changes, is the correct
+                // index to swap.
+                while source_index < i {
+                    source_index = permutation[source_index];
+                }
+
+                // We swap to the correct index. Importantly, this index is always
+                // to the right of i, we do not modify any index to the left of i.
+                // Thus, because we followed the cycle to the correct index to swap,
+                // we know that the element at i, after this swap, is in the correct
+                // position.
+                self.data.swap(source_index, i);
+            }
+        }
+
+        // Inverse mapping
+        self.permuted_indices = Some(permutation.to_vec());
+
+        Ok(())
+    }
+
+    fn permuted_indices(&self) -> Option<&[usize]> {
+        self.permuted_indices.as_deref()
+    }
+
+    fn make_shards(mut self, max_cardinality: usize) -> Vec<Self> {
+        let mut shards = Vec::new();
+
+        while self.data.len() > max_cardinality {
+            let at = self.data.len() - max_cardinality;
+            let chunk = self.data.split_off(at);
+
+            let name = format!("{}-shard-{}", self.name, shards.len());
+            shards.push(Self::new(name, chunk, self.metric, self.is_expensive));
+        }
+        self.name = format!("{}-shard-{}", self.name, shards.len());
+        shards.push(self);
+
+        shards
+    }
+
+    fn save(&self, path: &Path) -> Result<(), String> {
         let mut handle = File::create(path).map_err(|e| e.to_string())?;
 
         // Write header (Basic protection against reading bad data)
@@ -86,7 +173,7 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
         }
 
         // If the dataset was permuted, write the permutation map.
-        let permutation = self.permutation.as_ref().map_or(Vec::new(), |permutation| {
+        let permutation = self.permuted_indices.as_ref().map_or(Vec::new(), |permutation| {
             permutation.iter().flat_map(|i| i.to_le_bytes()).collect()
         });
         let permutation_bytes = permutation.len().to_le_bytes();
@@ -98,15 +185,7 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
         Ok(())
     }
 
-    /// Reads a dataset from a specified path.
-    ///
-    /// # Errors
-    ///
-    /// - If the file cannot be read.
-    /// - If the type of the data in the file does not match the type of the dataset.
-    /// - If the file is corrupted.
-    /// - If the reordering map is corrupted.
-    pub fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
+    fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
         let mut handle = File::open(path).map_err(|e| e.to_string())?;
 
         // Read the number of bytes in the type name
@@ -168,114 +247,8 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
             data,
             metric,
             is_expensive,
-            permutation,
+            permuted_indices: permutation,
         })
-    }
-}
-
-impl<I: Instance, U: Number, Idx> Index<Idx> for VecDataset<I, U>
-where
-    Idx: SliceIndex<[I], Output = I>,
-{
-    type Output = Idx::Output;
-
-    fn index(&self, index: Idx) -> &Self::Output {
-        self.data.index(index)
-    }
-}
-
-impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
-    fn type_name(&self) -> String {
-        format!("VecDataset<{}>", I::type_name())
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn cardinality(&self) -> usize {
-        self.data.len()
-    }
-
-    fn is_metric_expensive(&self) -> bool {
-        self.is_expensive
-    }
-
-    fn metric(&self) -> fn(&I, &I) -> U {
-        self.metric
-    }
-
-    fn permute_instances(&mut self, permutation: &[usize]) -> Result<(), String> {
-        let n = permutation.len();
-
-        // The "source index" represents the index that we hope to swap to
-        let mut source_index: usize;
-
-        // INVARIANT: After each iteration of the loop, the elements of the
-        // subarray [0..i] are in the correct position.
-        for i in 0..n - 1 {
-            source_index = permutation[i];
-
-            // If the element at is already at the correct position, we can
-            // just skip.
-            if source_index != i {
-                // Here we're essentially following the cycle. We *know* by
-                // the invariant that all elements to the left of i are in
-                // the correct position, so what we're doing is following
-                // the cycle until we find an index to the right of i. Which,
-                // because we followed the position changes, is the correct
-                // index to swap.
-                while source_index < i {
-                    source_index = permutation[source_index];
-                }
-
-                // We swap to the correct index. Importantly, this index is always
-                // to the right of i, we do not modify any index to the left of i.
-                // Thus, because we followed the cycle to the correct index to swap,
-                // we know that the element at i, after this swap, is in the correct
-                // position.
-                self.data.swap(source_index, i);
-            }
-        }
-
-        // Inverse mapping
-        self.permutation = Some(permutation.to_vec());
-
-        Ok(())
-    }
-
-    fn permuted_indices(&self) -> Option<&[usize]> {
-        self.permutation.as_deref()
-    }
-
-    fn one_to_one(&self, left: usize, right: usize) -> U {
-        (self.metric)(&self.data[left], &self.data[right])
-    }
-
-    fn query_to_one(&self, query: &I, index: usize) -> U {
-        (self.metric)(query, &self.data[index])
-    }
-
-    fn make_shards(self, max_cardinality: usize) -> Vec<Self> {
-        let mut shards = Vec::new();
-
-        for chunk in &self.data.into_iter().chunks(max_cardinality) {
-            let name = format!("{}-shard-{}", self.name, shards.len());
-            let data = chunk.collect_vec();
-            let data = Self::new(name, data, self.metric, self.is_expensive);
-            shards.push(data);
-        }
-
-        shards
-        // (&self.data
-        //     .into_iter()
-        //     .chunks(max_cardinality))
-        //     .enumerate()
-        //     .map(|(i, data)| {
-        //         let name = format!("{}-shard-{i}", self.name);
-        //         Self::new(name, data.to_vec(), self.metric, self.is_expensive)
-        //     })
-        //     .collect()
     }
 }
 
@@ -352,7 +325,7 @@ mod tests {
         let other = VecDataset::<Vec<u32>, u32>::load(&tmp_file, metric_u32, false).unwrap();
 
         assert_eq!(other.data, dataset.data);
-        assert_eq!(other.permutation, dataset.permutation);
+        assert_eq!(other.permuted_indices, dataset.permuted_indices);
         assert_eq!(dataset.cardinality(), other.cardinality());
     }
 
@@ -377,7 +350,7 @@ mod tests {
 
             assert_eq!(other.data, dataset.data);
             assert_eq!(other.name, dataset.name);
-            assert_eq!(other.permutation, dataset.permutation);
+            assert_eq!(other.permuted_indices, dataset.permuted_indices);
             assert_eq!(dataset.cardinality(), other.cardinality());
         }
     }

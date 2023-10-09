@@ -8,13 +8,14 @@ pub use instance::Instance;
 pub use vec2d::VecDataset;
 
 use core::{cmp::Ordering, ops::Index};
+use std::path::Path;
 
 use rand::prelude::*;
 
 use distances::Number;
 
 /// A common interface for datasets used in CLAM.
-pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync {
+pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync + Sized {
     /// Returns the name of the type of the dataset.
     fn type_name(&self) -> String;
 
@@ -62,7 +63,8 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// * None otherwise.
     fn permuted_indices(&self) -> Option<&[usize]>;
 
-    /// Get the index before the dataset was reordered.
+    /// Get the index before the dataset was reordered. If the dataset was not
+    /// reordered, this is the identity function.
     fn original_index(&self, index: usize) -> usize {
         self.permuted_indices().map_or(index, |indices| indices[index])
     }
@@ -77,7 +79,9 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// # Returns
     ///
     /// The distance between the instances at `left` and `right`.
-    fn one_to_one(&self, left: usize, right: usize) -> U;
+    fn one_to_one(&self, left: usize, right: usize) -> U {
+        self.metric()(&self[left], &self[right])
+    }
 
     /// Returns whether or not two indexed instances in the dataset are equal.
     ///
@@ -149,7 +153,9 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// # Returns
     ///
     /// The distance between the query and the instance at `index`
-    fn query_to_one(&self, query: &I, index: usize) -> U;
+    fn query_to_one(&self, query: &I, index: usize) -> U {
+        self.metric()(query, &self[index])
+    }
 
     /// Returns a vector of distances between a query and all indexed instances.
     ///
@@ -243,7 +249,31 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// # Arguments
     ///
     /// * `max_cardinality` - The maximum cardinality of each shard.
-    fn make_shards(self, max_cardinality: usize) -> Vec<Self>
-    where
-        Self: Sized;
+    fn make_shards(self, max_cardinality: usize) -> Vec<Self>;
+
+    /// Saves the dataset to a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the file to save the dataset to.
+    ///
+    /// # Errors
+    ///
+    /// * If the dataset cannot be saved to the given path.
+    fn save(&self, path: &Path) -> Result<(), String>;
+
+    /// Loads a dataset from a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the file to load the dataset from.
+    /// * `metric` - The metric to use for the dataset.
+    /// * `is_expensive` - Whether or not the metric is expensive to calculate.
+    ///
+    /// # Errors
+    ///
+    /// * If the dataset cannot be loaded from the given path.
+    /// * If the dataset is not the same type as the one that was saved.
+    /// * If the file was corrupted.
+    fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>;
 }
