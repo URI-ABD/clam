@@ -9,6 +9,7 @@ use core::{
     ops::Range,
 };
 use distances::Number;
+use std::fmt::Write;
 
 use crate::{utils, Dataset, Instance, PartitionCriteria, PartitionCriterion};
 
@@ -431,7 +432,6 @@ impl<U: Number> Cluster<U> {
     ///
     /// The `history` of a `Cluster` is used to identify the `Cluster` in the
     /// tree, and to compute the `Cluster`'s `name`.
-    #[allow(dead_code)]
     pub fn history(&self) -> &[bool] {
         &self.history
     }
@@ -444,96 +444,54 @@ impl<U: Number> Cluster<U> {
         Self::history_to_name(&self.history)
     }
 
-    /// Returns a human-readable hexidecimal representation of a `Cluster` history
+    /// Returns a human-readable hexadecimal representation of a `Cluster` history
     /// boolean vector
-    #[allow(clippy::many_single_char_names)]
     pub fn history_to_name(history: &[bool]) -> String {
-        let d = history.len();
-        let padding = if d % 4 == 0 { 0 } else { 4 - d % 4 };
-        let bin_name = (0..padding)
-            .map(|_| "0")
-            .chain(history.iter().map(|&b| if b { "1" } else { "0" }))
-            .collect::<Vec<_>>();
-        // bin_name
-        //     .chunks_exact(4)
-        //     .map(|s| {
-        //         let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
-        //         let s = format!("{a}{b}{c}{d}");
-        //         let Ok(s) = u8::from_str_radix(&s, 2) else {
-        //             unreachable!("We know the characters used are only \"0\" and \"1\".")
-        //         };
-        //         format!("{s:01x}")
-        //     })
-        //     .collect()
-        bin_name.chunks_exact(4).fold(String::new(), |mut acc, s| {
-            let [a, b, c, d] = [s[0], s[1], s[2], s[3]];
-            let s = format!("{a}{b}{c}{d}");
-            let Ok(s) = u8::from_str_radix(&s, 2) else {
-                unreachable!("We know the characters used are only \"0\" and \"1\".")
-            };
-            acc.push_str(&format!("{s:01x}"));
-            acc
-        })
+        let rem = history.len() % 4;
+        let padding = if rem == 0 { 0 } else { 4 - rem };
+        (0..padding) // Pad the history with 0s to make it a multiple of 4.
+            .map(|_| &false)
+            .chain(history)
+            // Convert each bool to a binary string.
+            .map(|&b| if b { "1" } else { "0" })
+            .collect::<Vec<_>>()
+            .chunks_exact(4)
+            .map(|s| {
+                // Convert each 4-bit binary string to a hexadecimal character.
+                u8::from_str_radix(&s.join(""), 2)
+                    .unwrap_or_else(|_| unreachable!("We know the characters used are only \"0\" and \"1\"."))
+            })
+            .fold(String::new(), |mut acc, s| {
+                // Append each hexadecimal character to the accumulator.
+                write!(&mut acc, "{s:01x}")
+                    .unwrap_or_else(|_| unreachable!("We know the characters used are hexadecimal."));
+                acc
+            })
     }
 
-    /// Converts the hexidecimal representation of cluster history obtained from `Cluster::name`
-    /// back into a `Vec<bool>`
+    /// Returns a boolean vector representation of a `Cluster` history from a
+    /// human-readable hexadecimal representation.
     pub fn name_to_history(name: &str) -> Vec<bool> {
-        let mut history = vec![];
-
-        // Get the first 4 bits and dont add any 0 padding.
-        // Unwrapping here is warranted because every name is at least one bit long and thus
-        // the resulting string has nonzero length.
-        #[allow(clippy::unwrap_used)]
-        let mut chunk = name.chars().nth(0).unwrap() as u8;
-
-        // If the chunk is 0-9, we subtract 48 to get its true value
-        if chunk < 97 {
-            chunk -= 48;
-        }
-        // Otherwise, it's in the a-f range, in which we subtract 97 to
-        // zero it out and then add 10
-        else {
-            chunk -= 87;
-        }
-
-        // True iff. we've encountered a one bit in the chunk
-        let mut found_high_bit = false;
-        for i in 0..4 {
-            // Get the 3 - i th high bit
-            let mask = 1 << (3 - i);
-
-            if chunk & mask > 0 {
-                found_high_bit = true;
-            }
-
-            if found_high_bit {
-                history.push((chunk & mask) > 0);
-            }
-        }
-
-        for c in (name[1..]).chars() {
-            // Each char gets converted into 4 bits
-            let mut chunk = c as u8;
-
-            // If the chunk is 0-9, we subtract 48 to get its true value
-            if chunk < 97 {
-                chunk -= 48;
-            }
-            // Otherwise, it's in the a-f range, in which we subtract 97 to
-            // zero it out and then add 10
-            else {
-                chunk -= 87;
-            }
-
-            for i in 0..4 {
-                // Get the 3 - i th high bit
-                let mask = 1 << (3 - i);
-                history.push((chunk & mask) > 0);
-            }
-        }
-        history
+        name.chars()
+            // Convert each hexadecimal character to u8
+            .map(|c| {
+                u8::from_str_radix(&c.to_string(), 16)
+                    .unwrap_or_else(|_| unreachable!("We know the characters used are hexadecimal."))
+            })
+            .fold(String::new(), |mut acc, c| {
+                // Convert each u8 to a 4-bit binary string and append it to the accumulator.
+                write!(&mut acc, "{c:04b}")
+                    .unwrap_or_else(|_| unreachable!("We know the characters used are only \"0\" and \"1\"."));
+                acc
+            })
+            // Remove any leading 0s.
+            .trim_start_matches('0')
+            .chars()
+            // Convert each binary character to a bool.
+            .map(|c| c == '1')
+            .collect()
     }
+
     /// Whether the `Cluster` is the root of the tree.
     ///
     /// The root `Cluster` has a depth of 0.
