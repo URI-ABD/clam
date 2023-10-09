@@ -4,12 +4,13 @@
 
 use core::{
     cmp::Ordering,
+    fmt::{Display, Formatter},
     hash::{Hash, Hasher},
-    marker::PhantomData,
+    ops::Range,
 };
 use distances::Number;
 
-use crate::{utils, Dataset, PartitionCriteria, PartitionCriterion};
+use crate::{utils, Dataset, Instance, PartitionCriteria, PartitionCriterion};
 
 /// Ratios are used for anomaly detection and related applications.
 pub type Ratios = [f64; 6];
@@ -23,7 +24,7 @@ pub type Ratios = [f64; 6];
 /// For now, `Cluster` names are unique within a single tree. We plan on adding
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug)]
-pub struct Cluster<T: Send + Sync + Copy, U: Number> {
+pub struct Cluster<U: Number> {
     /// The `Cluster`'s history in the tree.
     pub history: Vec<bool>,
     /// The seed used in the random number generator for this `Cluster`.
@@ -42,7 +43,7 @@ pub struct Cluster<T: Send + Sync + Copy, U: Number> {
     #[allow(dead_code)]
     pub lfd: f64,
     /// The children of the `Cluster`.
-    pub children: Option<Children<T, U>>,
+    pub children: Option<Children<U>>,
     /// The six `Cluster` ratios used for anomaly detection and related applications.
     #[allow(dead_code)]
     pub ratios: Option<Ratios>,
@@ -50,11 +51,11 @@ pub struct Cluster<T: Send + Sync + Copy, U: Number> {
 
 /// The children of a `Cluster`.
 #[derive(Debug)]
-pub struct Children<T: Send + Sync + Copy, U: Number> {
+pub struct Children<U: Number> {
     /// The left child of the `Cluster`.
-    pub left: Box<Cluster<T, U>>,
+    pub left: Box<Cluster<U>>,
     /// The right child of the `Cluster`.
-    pub right: Box<Cluster<T, U>>,
+    pub right: Box<Cluster<U>>,
     /// The left pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the left child).
     pub arg_l: usize,
@@ -63,25 +64,23 @@ pub struct Children<T: Send + Sync + Copy, U: Number> {
     pub arg_r: usize,
     /// The distance from the `l_pole` to the `r_pole` instance.
     pub polar_distance: U,
-    /// To satisfy the compiler.
-    _t: PhantomData<T>,
 }
 
-impl<T: Send + Sync + Copy, U: Number> PartialEq for Cluster<T, U> {
+impl<U: Number> PartialEq for Cluster<U> {
     fn eq(&self, other: &Self) -> bool {
         self.history == other.history
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Eq for Cluster<T, U> {}
+impl<U: Number> Eq for Cluster<U> {}
 
-impl<T: Send + Sync + Copy, U: Number> PartialOrd for Cluster<T, U> {
+impl<U: Number> PartialOrd for Cluster<U> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
+impl<U: Number> Ord for Cluster<U> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.depth().cmp(&other.depth()) {
             Ordering::Equal => self.offset.cmp(&other.offset),
@@ -90,19 +89,19 @@ impl<T: Send + Sync + Copy, U: Number> Ord for Cluster<T, U> {
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Hash for Cluster<T, U> {
+impl<U: Number> Hash for Cluster<U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.offset, self.cardinality).hash(state);
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> std::fmt::Display for Cluster<T, U> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<U: Number> Display for Cluster<U> {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
+impl<U: Number> Cluster<U> {
     /// Creates a new root `Cluster`.
     ///
     /// # Arguments
@@ -110,8 +109,9 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * `data`: on which to create the `Cluster`.
     /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
     /// * `seed`: The seed used in the random number generator for this `Cluster`.
-    pub fn new_root<D: Dataset<T, U>>(data: &D, indices: &[usize], seed: Option<u64>) -> Self {
-        Self::new(data, seed, vec![true], 0, indices)
+    pub fn new_root<I: Instance, D: Dataset<I, U>>(data: &D, seed: Option<u64>) -> Self {
+        let indices = (0..data.cardinality()).collect::<Vec<_>>();
+        Self::new(data, seed, vec![true], 0, &indices)
     }
 
     /// Creates a new `Cluster`.
@@ -123,7 +123,7 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * `history`: The `Cluster`'s history in the tree.
     /// * `offset`: The offset of the indices of the `Cluster`'s instances in the dataset.
     /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
-    pub fn new<D: Dataset<T, U>>(
+    pub fn new<I: Instance, D: Dataset<I, U>>(
         data: &D,
         seed: Option<u64>,
         history: Vec<bool>,
@@ -183,19 +183,20 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     /// * The `Cluster` on which the method was called after partitioning
     /// recursively until the `PartitionCriteria` is no longer met on any of the
     /// leaf `Cluster`s.
-    pub fn partition<D: Dataset<T, U>>(mut self, data: &mut D, criteria: &PartitionCriteria<T, U>) -> Self {
-        let mut indices = data.indices().to_vec();
+    pub fn partition<I: Instance, D: Dataset<I, U>>(mut self, data: &mut D, criteria: &PartitionCriteria<U>) -> Self {
+        let mut indices = (0..self.cardinality).collect::<Vec<_>>();
         (self, indices) = self._partition(data, criteria, indices);
-        data.reorder(&indices);
+        data.permute_instances(&indices)
+            .unwrap_or_else(|_| unreachable!("All indices are valid."));
 
         self
     }
 
     /// Recursive helper function for `partition`.
-    fn _partition<D: Dataset<T, U>>(
+    fn _partition<I: Instance, D: Dataset<I, U>>(
         mut self,
         data: &D,
-        criteria: &PartitionCriteria<T, U>,
+        criteria: &PartitionCriteria<U>,
         mut indices: Vec<usize>,
     ) -> (Self, Vec<usize>) {
         if criteria.check(&self) {
@@ -203,15 +204,11 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
 
             let r_offset = self.offset + l_indices.len();
 
+            let (l_history, r_history) = (self.child_history(false), self.child_history(true));
+
             let ((left, l_indices), (right, r_indices)) = rayon::join(
-                || {
-                    Self::new(data, self.seed, self.child_history(false), self.offset, &l_indices)
-                        ._partition(data, criteria, l_indices)
-                },
-                || {
-                    Self::new(data, self.seed, self.child_history(true), r_offset, &r_indices)
-                        ._partition(data, criteria, r_indices)
-                },
+                || Self::new(data, self.seed, l_history, self.offset, &l_indices)._partition(data, criteria, l_indices),
+                || Self::new(data, self.seed, r_history, r_offset, &r_indices)._partition(data, criteria, r_indices),
             );
 
             let arg_l = utils::pos_val(&l_indices, arg_l)
@@ -225,7 +222,6 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
                 arg_l: self.offset + arg_l,
                 arg_r: r_offset + arg_r,
                 polar_distance,
-                _t: PhantomData,
             });
 
             indices = l_indices.into_iter().chain(r_indices).collect::<Vec<_>>();
@@ -244,7 +240,11 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// Partitions the `Cluster` into two children once.
-    fn partition_once<D: Dataset<T, U>>(&self, data: &D, indices: Vec<usize>) -> ([(usize, Vec<usize>); 2], U) {
+    fn partition_once<I: Instance, D: Dataset<I, U>>(
+        &self,
+        data: &D,
+        indices: Vec<usize>,
+    ) -> ([(usize, Vec<usize>); 2], U) {
         let l_distances = data.one_to_many(self.arg_radial, &indices);
 
         let Some((arg_r, polar_distance)) = utils::arg_max(&l_distances) else {
@@ -418,8 +418,8 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// The indices of the `Cluster`'s instances in the dataset.
-    pub fn indices<'a, D: Dataset<T, U>>(&'a self, data: &'a D) -> &[usize] {
-        &data.indices()[self.offset..(self.offset + self.cardinality)]
+    pub const fn indices(&self) -> Range<usize> {
+        self.offset..(self.offset + self.cardinality)
     }
 
     /// The `history` of the `Cluster` as a bool vector.
@@ -630,20 +630,20 @@ impl<T: Send + Sync + Copy, U: Number> Cluster<T, U> {
     }
 
     /// Distance from the `center` to the given instance.
-    pub fn distance_to_instance<D: Dataset<T, U>>(&self, data: &D, instance: T) -> U {
+    pub fn distance_to_instance<I: Instance, D: Dataset<I, U>>(&self, data: &D, instance: &I) -> U {
         data.query_to_one(instance, self.arg_center)
     }
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
     #[allow(dead_code)]
-    pub fn distance_to_other<D: Dataset<T, U>>(&self, data: &D, other: &Self) -> U {
+    pub fn distance_to_other<I: Instance, D: Dataset<I, U>>(&self, data: &D, other: &Self) -> U {
         data.one_to_one(self.arg_center, other.arg_center)
     }
 
     /// Assuming that this `Cluster` overlaps with with query ball, we return
     /// only those children that also overlap with the query ball
-    pub fn overlapping_children<D: Dataset<T, U>>(&self, data: &D, query: T, radius: U) -> Vec<&Self> {
+    pub fn overlapping_children<I: Instance, D: Dataset<I, U>>(&self, data: &D, query: &I, radius: U) -> Vec<&Self> {
         self.children.as_ref().map_or_else(
             Vec::new,
             |Children {
@@ -722,7 +722,7 @@ pub struct SerializedCluster {
 impl SerializedCluster {
     /// Converts a `Cluster` to a `SerializedCluster`
     #[allow(dead_code)]
-    pub fn from_cluster<T: Send + Sync + Copy, U: Number>(cluster: &Cluster<T, U>) -> Self {
+    pub fn from_cluster<U: Number>(cluster: &Cluster<U>) -> Self {
         let name = cluster.name();
         let cardinality = cluster.cardinality;
         let offset = cluster.offset;
@@ -748,7 +748,6 @@ impl SerializedCluster {
                     arg_l,
                     arg_r,
                     polar_distance,
-                    _t: _,
                 } = children;
 
                 Some(SerializedChildInfo {
@@ -780,10 +779,10 @@ impl SerializedCluster {
     #[allow(dead_code)]
     /// Converts a `SerializedCluster` to a `Cluster`. Optionally returns information about the
     /// Children's poles
-    pub fn into_partial_cluster<T: Send + Sync + Copy, U: Number>(self) -> (Cluster<T, U>, Option<SerializedChildInfo>) {
+    pub fn into_partial_cluster<U: Number>(self) -> (Cluster<U>, Option<SerializedChildInfo>) {
         (
             Cluster {
-                history: Cluster::<T, U>::name_to_history(&self.name),
+                history: Cluster::<U>::name_to_history(&self.name),
                 seed: self.seed,
                 offset: self.offset,
                 cardinality: self.cardinality,
@@ -802,6 +801,7 @@ impl SerializedCluster {
 #[cfg(test)]
 mod tests {
     use distances::vectors::euclidean;
+    use rand::Rng;
 
     use crate::{
         Tree, {Dataset, VecDataset},
@@ -809,14 +809,17 @@ mod tests {
 
     use super::*;
 
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        euclidean(x, y)
+    }
+
     #[test]
-    fn test_cluster() {
-        let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
+    fn tiny() {
+        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
         let name = "test".to_string();
-        let mut data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
-        let indices = data.indices().to_vec();
+        let mut data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let root = Cluster::new_root(&data, &indices, Some(42)).partition(&mut data, &partition_criteria);
+        let root = Cluster::new_root(&data, Some(42)).partition(&mut data, &partition_criteria);
 
         assert!(!root.is_leaf());
         assert!(root.children().is_some());
@@ -858,49 +861,66 @@ mod tests {
     }
 
     #[test]
-    fn test_leaf_indices() {
-        let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
+    fn leaf_indices() {
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
         let name = "test".to_string();
-        let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
+        let data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
-        let mut leaf_indices = tree.root.indices(tree.data()).to_vec();
-        leaf_indices.sort_unstable();
+        let leaf_indices = tree.root.indices().collect::<Vec<_>>();
+        let tree_indices = (0..tree.root.cardinality).collect::<Vec<_>>();
 
-        assert_eq!(leaf_indices, tree.data().indices());
+        assert_eq!(leaf_indices, tree_indices);
     }
 
     #[test]
-    fn test_end_to_end_reordering() {
-        let data: Vec<&[f32]> = vec![&[10.], &[1.], &[-5.], &[8.], &[3.], &[2.], &[0.5], &[0.]];
+    fn reordering() {
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
         let name = "test".to_string();
-        let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
+        let data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
 
         let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        let tree_indices = (0..tree.root.cardinality).collect::<Vec<_>>();
 
         // Assert that the root's indices actually cover the whole dataset.
-        assert_eq!(tree.data().cardinality(), tree.indices().len());
+        assert_eq!(tree.data().cardinality(), tree_indices.len());
 
         // Assert that the tree's indices have been reordered in depth-first order
-        assert_eq!((0..tree.cardinality()).collect::<Vec<usize>>(), tree.indices());
+        assert_eq!((0..tree.cardinality()).collect::<Vec<_>>(), tree_indices);
     }
 
     #[test]
-    fn cluster() {
+    fn medium() {
         let (dimensionality, min_val, max_val) = (10, -1., 1.);
         let seed = 42;
 
         let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let name = "test".to_string();
-        let mut data = VecDataset::<_, f32>::new(name, data, euclidean, false);
-        let indices = data.indices().to_vec();
+        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_min_cardinality(1);
 
-        let root = Cluster::new_root(&data, &indices, Some(seed)).partition(&mut data, &partition_criteria);
+        let root = Cluster::new_root(&data, Some(seed)).partition(&mut data, &partition_criteria);
 
         for c in root.subtree() {
             assert!(c.cardinality > 0, "Cardinality must be positive.");
@@ -916,84 +936,76 @@ mod tests {
         }
     }
 
-    mod serialize_tests {
-        use super::*;
-        use crate::{Dataset, VecDataset};
-        use distances::vectors::euclidean;
-        use rand::Rng;
+    #[test]
+    fn serialization() {
+        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
+        let name = "test".to_string();
+        let data = VecDataset::new(name, data, metric, false);
+        let mut c1 = Cluster::new_root(&data, Some(42));
+        c1.history = vec![true, true, false, false, true];
 
-        #[test]
-        fn test_basic() {
-            let data: Vec<&[f32]> = vec![&[0., 0., 0.], &[1., 1., 1.], &[2., 2., 2.], &[3., 3., 3.]];
-            let name = "test".to_string();
-            let data = VecDataset::new(name, data, euclidean::<f32, f32>, false);
-            let indices = data.indices().to_vec();
-            let mut c1 = Cluster::new_root(&data, &indices, Some(42));
-            c1.history = vec![true, true, false, false, true];
+        let s1 = SerializedCluster::from_cluster(&c1);
+        let s1_string = serde_json::to_string(&s1).unwrap();
 
-            let s1 = SerializedCluster::from_cluster(&c1);
-            let s1_string = serde_json::to_string(&s1).unwrap();
+        let s2: SerializedCluster = serde_json::from_str(&s1_string).unwrap();
+        assert_eq!(s1.name, s2.name);
+        assert_eq!(s1.seed, s2.seed);
+        assert_eq!(s1.offset, s2.offset);
+        assert_eq!(s1.cardinality, s2.cardinality);
+        assert_eq!(s1.arg_center, s2.arg_center);
+        assert_eq!(s1.arg_radial, s2.arg_radial);
+        assert_eq!(s1.radius_bytes, s2.radius_bytes);
+        assert_eq!(s1.lfd, s2.lfd);
+        assert_eq!(s1.ratios, s2.ratios);
 
-            let s2: SerializedCluster = serde_json::from_str(&s1_string).unwrap();
-            assert_eq!(s1.name, s2.name);
-            assert_eq!(s1.seed, s2.seed);
-            assert_eq!(s1.offset, s2.offset);
-            assert_eq!(s1.cardinality, s2.cardinality);
-            assert_eq!(s1.arg_center, s2.arg_center);
-            assert_eq!(s1.arg_radial, s2.arg_radial);
-            assert_eq!(s1.radius_bytes, s2.radius_bytes);
-            assert_eq!(s1.lfd, s2.lfd);
-            assert_eq!(s1.ratios, s2.ratios);
+        let (c2, chls) = s2.into_partial_cluster();
 
-            let (c2, chls) = s2.into_partial_cluster();
+        assert_eq!(c1, c2);
+        assert!(chls.is_none());
+    }
 
-            assert_eq!(c1, c2);
-            assert!(chls.is_none());
-        }
+    #[test]
+    fn history_to_name() {
+        use rand::distributions::{Bernoulli, Distribution};
 
-        #[test]
-        fn test_history_to_name() {
-            use rand::distributions::{Bernoulli, Distribution};
+        let d = Bernoulli::new(0.3).unwrap();
 
-            let d = Bernoulli::new(0.3).unwrap();
+        for length in 1..800 {
+            let mut hist = vec![true];
 
-            for length in 1..800 {
-                let mut hist = vec![true];
-
-                for _ in 1..length {
-                    let b = d.sample(&mut rand::thread_rng());
-                    hist.push(b);
-                }
-
-                let name = Cluster::<&[f32], f32>::history_to_name(&hist);
-                let recovered = Cluster::<&[f32], f32>::name_to_history(&name);
-                assert_eq!(recovered, hist);
+            for _ in 1..length {
+                let b = d.sample(&mut rand::thread_rng());
+                hist.push(b);
             }
+
+            let name = Cluster::<f32>::history_to_name(&hist);
+            let recovered = Cluster::<f32>::name_to_history(&name);
+            assert_eq!(recovered, hist);
         }
+    }
 
-        #[test]
-        fn test_name_to_history() {
-            let charset = "0123456789abcdef";
-            let mut rng = rand::thread_rng();
+    #[test]
+    fn name_to_history() {
+        let charset = "0123456789abcdef";
+        let mut rng = rand::thread_rng();
 
-            for length in 1..200 {
-                // Randomly choose the first char. Must be nonzero
-                let idx = rng.gen_range(1..charset.len());
+        for length in 1..200 {
+            // Randomly choose the first char. Must be nonzero
+            let idx = rng.gen_range(1..charset.len());
+            let c = charset.chars().nth(idx).unwrap();
+            let mut name = String::from(c);
+
+            // Randomly choose the remaining characters
+            for _ in 1..length {
+                let idx = rng.gen_range(0..charset.len());
                 let c = charset.chars().nth(idx).unwrap();
-                let mut name = String::from(c);
-
-                // Randomly choose the remaining characters
-                for _ in 1..length {
-                    let idx = rng.gen_range(0..charset.len());
-                    let c = charset.chars().nth(idx).unwrap();
-                    name.push(c);
-                }
-
-                let hist = Cluster::<&[f32], f32>::name_to_history(&name);
-                let recovered_name = Cluster::<&[f32], f32>::history_to_name(&hist);
-
-                assert_eq!(recovered_name, name);
+                name.push(c);
             }
+
+            let hist = Cluster::<f32>::name_to_history(&name);
+            let recovered_name = Cluster::<f32>::history_to_name(&hist);
+
+            assert_eq!(recovered_name, name);
         }
     }
 }

@@ -1,19 +1,23 @@
 //! Provides the `Dataset` trait and an implementation for a vector of data.
 
+mod instance;
 mod vec2d;
 
+pub use instance::Instance;
 #[allow(clippy::module_name_repetitions)]
 pub use vec2d::VecDataset;
 
-use core::cmp::Ordering;
+use core::{cmp::Ordering, ops::Index};
 
 use rand::prelude::*;
-use rayon::prelude::*;
 
 use distances::Number;
 
 /// A common interface for datasets used in CLAM.
-pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sync {
+pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync {
+    /// Returns the name of the type of the dataset.
+    fn type_name(&self) -> String;
+
     /// Returns the name of the dataset. This is used to identify the dataset in
     /// various places.
     fn name(&self) -> &str;
@@ -27,12 +31,6 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// when calculating distances.
     fn is_metric_expensive(&self) -> bool;
 
-    /// Returns a slice of indices that can be used to access the dataset.
-    fn indices(&self) -> &[usize];
-
-    /// Returns the instance at a given index in the dataset.
-    fn get(&self, i: usize) -> T;
-
     /// Returns the metric used to calculate distances between instances.
     ///
     /// A metric should obey the following properties:
@@ -43,46 +41,31 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     ///
     /// If the metric also obeys the triangle inequality, `d(x, z) <= d(x, y) + d(y, z)`,
     /// then CLAM can make certain guarantees about the exactness of search results.
-    fn metric(&self) -> fn(T, T) -> U;
+    fn metric(&self) -> fn(&I, &I) -> U;
 
-    /// Swaps the values at two given indices in the dataset.
-    ///
-    /// Note: It is acceptable for this function to panic if `i` or `j` are not valid indices in the
-    /// dataset.
+    /// Reorders the internal order of instances by a given permutation of indices.
     ///
     /// # Arguments
     ///
-    /// * `i` - An index in the dataset.
-    /// * `j` - An index in the dataset.
+    /// * `permutation` - A permutation of indices in the dataset.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Implementations of this function may panic if `i` or `j` are not valid indices.
-    fn swap(&mut self, i: usize, j: usize);
+    /// * If any of the indices in `permutation` are invalid indices in the dataset.
+    fn permute_instances(&mut self, permutation: &[usize]) -> Result<(), String>;
 
-    /// Sets the reordered indices by a given permutation of indices.
-    ///
-    /// # Arguments
-    ///
-    /// * `indices` - A permutation of indices that will be applied to the dataset.
-    fn set_reordered_indices(&mut self, indices: &[usize]);
-
-    /// Returns the index of the instance at a given index in the dataset after
-    /// reordering.
-    ///
-    /// # Arguments
-    ///
-    /// * `i` - An old index in the dataset.
+    /// Returns the permutation of indices that was used to reorder the dataset.
     ///
     /// # Returns
     ///
-    /// * The index of the instance at `i` after reordering.
-    /// * `None` if the dataset has not been reordered.
-    ///
-    /// # Panics
-    ///
-    /// * If `i` is not a valid index in the dataset.
-    fn get_reordered_index(&self, i: usize) -> Option<usize>;
+    /// * Some if the dataset was permuted.
+    /// * None otherwise.
+    fn permuted_indices(&self) -> Option<&[usize]>;
+
+    /// Get the index before the dataset was reordered.
+    fn original_index(&self, index: usize) -> usize {
+        self.permuted_indices().map_or(index, |indices| indices[index])
+    }
 
     /// Calculates the distance between two indexed instances in the dataset.
     ///
@@ -124,11 +107,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     ///
     /// A vector of distances between the instance at `left` and all instances at `right`
     fn one_to_many(&self, left: usize, right: &[usize]) -> Vec<U> {
-        if self.is_metric_expensive() || right.len() > 10_000 {
-            right.par_iter().map(|&r| self.one_to_one(left, r)).collect()
-        } else {
-            right.iter().map(|&r| self.one_to_one(left, r)).collect()
-        }
+        right.iter().map(|&r| self.one_to_one(left, r)).collect()
     }
 
     /// Returns a vector of vectors of distances.
@@ -170,7 +149,7 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// The distance between the query and the instance at `index`
-    fn query_to_one(&self, query: T, index: usize) -> U;
+    fn query_to_one(&self, query: &I, index: usize) -> U;
 
     /// Returns a vector of distances between a query and all indexed instances.
     ///
@@ -182,15 +161,8 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
     /// # Returns
     ///
     /// A vector of distances between the query and all instances at `indices`
-    fn query_to_many(&self, query: T, indices: &[usize]) -> Vec<U> {
-        if self.is_metric_expensive() || indices.len() > 1_000 {
-            indices
-                .par_iter()
-                .map(|&index| self.query_to_one(query, index))
-                .collect()
-        } else {
-            indices.iter().map(|&index| self.query_to_one(query, index)).collect()
-        }
+    fn query_to_many(&self, query: &I, indices: &[usize]) -> Vec<U> {
+        indices.iter().map(|&index| self.query_to_one(query, index)).collect()
     }
 
     /// Chooses a subset of indices that are unique with respect to the metric.
@@ -230,50 +202,6 @@ pub trait Dataset<T: Send + Sync + Copy, U: Number>: std::fmt::Debug + Send + Sy
         }
 
         chosen
-    }
-
-    /// Reorders the internal dataset by a given permutation of indices.
-    ///
-    /// # Arguments
-    ///
-    /// `indices` - A permutation of indices that will be applied to the dataset.
-    fn reorder(&mut self, indices: &[usize]) {
-        let n = indices.len();
-
-        // TODO: We'll need to support reordering only a subset (i.e. batch)
-        // of indices at some point, so this assert will change in the future.
-
-        // The "source index" represents the index that we hope to swap to
-        let mut source_index: usize;
-
-        // INVARIANT: After each iteration of the loop, the elements of the
-        // subarray [0..i] are in the correct position.
-        for i in 0..n - 1 {
-            source_index = indices[i];
-
-            // If the element at is already at the correct position, we can
-            // just skip.
-            if source_index != i {
-                // Here we're essentially following the cycle. We *know* by
-                // the invariant that all elements to the left of i are in
-                // the correct position, so what we're doing is following
-                // the cycle until we find an index to the right of i. Which,
-                // because we followed the position changes, is the correct
-                // index to swap.
-                while source_index < i {
-                    source_index = indices[source_index];
-                }
-
-                // We swap to the correct index. Importantly, this index is always
-                // to the right of i, we do not modify any index to the left of i.
-                // Thus, because we followed the cycle to the correct index to swap,
-                // we know that the element at i, after this swap, is in the correct
-                // position.
-                self.swap(source_index, i);
-            }
-        }
-        // Inverse mapping
-        self.set_reordered_indices(indices);
     }
 
     /// Calculates the geometric median of a set of indexed instances. Returns

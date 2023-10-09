@@ -10,29 +10,29 @@ use crate::Cluster;
 ///
 /// - `T`: The type of the instances in the `Cluster`.
 /// - `U`: The type of the distance values between instances.
-pub trait PartitionCriterion<T: Send + Sync + Copy, U: Number>: Send + Sync {
+pub trait PartitionCriterion<U: Number>: Send + Sync {
     /// Check whether a `Cluster` meets the criterion for partitioning.
     // TODO: Figure out how to have this not leak `Cluster` or make `Cluster` public.
-    fn check(&self, c: &Cluster<T, U>) -> bool;
+    fn check(&self, c: &Cluster<U>) -> bool;
 }
 
 /// A collection of criteria used to decide when to partition a `Cluster`.
 #[allow(clippy::module_name_repetitions)]
-pub struct PartitionCriteria<T: Send + Sync + Copy, U: Number> {
+pub struct PartitionCriteria<U: Number> {
     /// The criteria used to decide when to partition a `Cluster`.
-    criteria: Vec<Box<dyn PartitionCriterion<T, U>>>,
+    criteria: Vec<Box<dyn PartitionCriterion<U>>>,
     /// Whether all criteria must be met for a `Cluster` to be partitioned or if any one criterion
     /// is sufficient.
     check_all: bool,
 }
 
-impl<T: Send + Sync + Copy, U: Number> Default for PartitionCriteria<T, U> {
+impl<U: Number> Default for PartitionCriteria<U> {
     fn default() -> Self {
         Self::new(true).with_min_cardinality(1)
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> PartitionCriteria<T, U> {
+impl<U: Number> PartitionCriteria<U> {
     /// Create a new `PartitionCriteria` instance.
     ///
     /// # Arguments
@@ -75,14 +75,14 @@ impl<T: Send + Sync + Copy, U: Number> PartitionCriteria<T, U> {
     ///
     /// * `c`: the custom criterion to add.
     #[allow(dead_code)]
-    pub(crate) fn with_custom(mut self, c: Box<dyn PartitionCriterion<T, U>>) -> Self {
+    pub(crate) fn with_custom(mut self, c: Box<dyn PartitionCriterion<U>>) -> Self {
         self.criteria.push(c);
         self
     }
 }
 
-impl<T: Send + Sync + Copy, U: Number> PartitionCriterion<T, U> for PartitionCriteria<T, U> {
-    fn check(&self, cluster: &Cluster<T, U>) -> bool {
+impl<U: Number> PartitionCriterion<U> for PartitionCriteria<U> {
+    fn check(&self, cluster: &Cluster<U>) -> bool {
         !cluster.is_singleton()
             && if self.check_all {
                 self.criteria.iter().all(|c| c.check(cluster))
@@ -96,8 +96,8 @@ impl<T: Send + Sync + Copy, U: Number> PartitionCriterion<T, U> for PartitionCri
 #[derive(Debug, Clone)]
 pub struct MaxDepth(usize);
 
-impl<T: Send + Sync + Copy, U: Number> PartitionCriterion<T, U> for MaxDepth {
-    fn check(&self, c: &Cluster<T, U>) -> bool {
+impl<U: Number> PartitionCriterion<U> for MaxDepth {
+    fn check(&self, c: &Cluster<U>) -> bool {
         c.depth() < self.0
     }
 }
@@ -106,8 +106,8 @@ impl<T: Send + Sync + Copy, U: Number> PartitionCriterion<T, U> for MaxDepth {
 #[derive(Debug, Clone)]
 pub struct MinCardinality(usize);
 
-impl<T: Send + Sync + Copy, U: Number> PartitionCriterion<T, U> for MinCardinality {
-    fn check(&self, c: &Cluster<T, U>) -> bool {
+impl<U: Number> PartitionCriterion<U> for MinCardinality {
+    fn check(&self, c: &Cluster<U>) -> bool {
         c.cardinality > self.0
     }
 }

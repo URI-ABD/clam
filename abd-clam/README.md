@@ -8,6 +8,15 @@ CLAM provides utilities for fast search (Cakes) and anomaly detection (Chaoda).
 As of writing this document, the project is still in a pre-1.0 state.
 This means that the API is not yet stable and breaking changes may occur frequently.
 
+## Benchmarks
+
+### CAKES: IEEE Big Data 2023
+
+Take a look at the following scripts:
+
+- `knn-benchmarks.sh`
+- `scaling-benchmarks.sh`
+
 ## Usage
 
 CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.22.3`.
@@ -26,7 +35,7 @@ use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
 /// signature is `fn(T, T) -> U` where `T` is the type of the points (must
 /// implement `Send`, `Sync` and `Copy`) and `U` is a `Number` type (e.g. `f32`)
 /// from the `distances` crate.
-fn euclidean(x: &[f32], y: &[f32]) -> f32 {
+fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     x.iter()
         .zip(y.iter())
         .map(|(a, b)| a - b)
@@ -49,15 +58,11 @@ let query: Vec<f32> = data[0].clone();
 let radius: f32 = 0.05;
 let k = 10;
 
-// We need the contents of data to be &[f32] instead of Vec<f32>. We will rectify this
-// in CLAM by extending the trait bounds of some types in CLAM.
-let data: Vec<&[f32]> = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-
 let name = "demo".to_string();  // The name of the dataset.
 let is_metric_expensive = false;  // We will assume that our distance function is cheap to compute.
 
 // The metric function itself will be given to Cakes.
-let data = VecDataset::new(name, data, euclidean, is_metric_expensive);
+let data = VecDataset::<Vec<f32>, f32>::new(name, data, euclidean, is_metric_expensive);
 
 // We will use the default partition criteria for this example. This will partition
 // the data until each Cluster contains a single unique point.

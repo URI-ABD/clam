@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::Dataset;
+use crate::{Dataset, Instance};
 
 /// Linear search for the ranged nearest neighbors of a query.
 ///
@@ -17,11 +17,11 @@ use crate::Dataset;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(data: &D, query: T, radius: U, indices: &[usize]) -> Vec<(usize, U)>
+pub fn search<I, U, D>(data: &D, query: &I, radius: U, indices: &[usize]) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
     let distances = data.query_to_many(query, indices);
     indices

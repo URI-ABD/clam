@@ -120,7 +120,6 @@ fn make_reports(
     let [train_data, queries] = dataset.read(input_dir)?;
     info!("Dataset: {}", dataset.name());
 
-    let train_data = train_data.iter().map(Vec::as_slice).collect::<Vec<_>>();
     let (cardinality, dimensionality) = (train_data.len(), train_data[0].len());
     info!(
         "Cardinality: {}",
@@ -131,7 +130,7 @@ fn make_reports(
         dimensionality.to_formatted_string(&num_format::Locale::en)
     );
 
-    let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let queries = queries.iter().collect::<Vec<_>>();
     let num_queries = queries.len();
     info!(
         "Number of queries: {}",

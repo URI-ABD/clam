@@ -12,7 +12,7 @@ use core::{cmp::Ordering, hash::Hash};
 use distances::Number;
 use priority_queue::PriorityQueue;
 
-use crate::{Dataset, Tree};
+use crate::{Dataset, Instance, Tree};
 
 pub(crate) mod greedy_sieve;
 pub(crate) mod linear;
@@ -106,14 +106,17 @@ impl Algorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub(crate) fn search<T, U, D>(self, tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+    pub(crate) fn search<I, U, D>(self, tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
     where
-        T: Send + Sync + Copy,
+        I: Instance,
         U: Number,
-        D: Dataset<T, U>,
+        D: Dataset<I, U>,
     {
         match self {
-            Self::Linear => linear::search(tree.data(), query, k, tree.indices()),
+            Self::Linear => {
+                let indices = (0..tree.cardinality()).collect::<Vec<_>>();
+                linear::search(tree.data(), query, k, &indices)
+            }
             Self::RepeatedRnn => repeated_rnn::search(tree, query, k),
             Self::GreedySieve => greedy_sieve::search(tree, query, k),
             Self::Sieve => sieve::search(tree, query, k),

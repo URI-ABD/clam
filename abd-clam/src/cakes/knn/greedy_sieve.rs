@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{Cluster, Dataset, Tree};
+use crate::{Cluster, Dataset, Instance, Tree};
 
 use super::{OrdNumber, RevNumber};
 
@@ -20,13 +20,13 @@ use super::{OrdNumber, RevNumber};
 /// and the second element is the distance from the query to the instance.
 ///
 /// Contrast this to `SieveV1` and `SieveV2`, which use a (mostly) decreasing threshold.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
-    let mut candidates = priority_queue::PriorityQueue::<&Cluster<T, U>, RevNumber<U>>::new();
+    let mut candidates = priority_queue::PriorityQueue::<&Cluster<U>, RevNumber<U>>::new();
     let mut hits = priority_queue::PriorityQueue::<usize, OrdNumber<U>>::new();
 
     let (data, root) = (tree.data(), &tree.root);
@@ -53,7 +53,7 @@ where
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
-fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
+fn d_min<U: Number>(c: &Cluster<U>, d: U) -> U {
     if d < c.radius {
         U::zero()
     } else {
@@ -62,10 +62,10 @@ fn d_min<T: Send + Sync + Copy, U: Number>(c: &Cluster<T, U>, d: U) -> U {
 }
 
 /// Pops from the top of `candidates` until the top candidate is a leaf cluster.
-fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
-    tree: &Tree<T, U, D>,
-    query: T,
-    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>,
+fn pop_till_leaf<I: Instance, U: Number, D: Dataset<I, U>>(
+    tree: &Tree<I, U, D>,
+    query: &I,
+    candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
 ) {
     while !candidates
         .peek()
@@ -85,22 +85,21 @@ fn pop_till_leaf<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
 }
 
 /// Pops a single leaf from the top of candidates and add those points to hits.
-fn leaf_into_hits<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>>(
-    tree: &Tree<T, U, D>,
-    query: T,
+fn leaf_into_hits<I: Instance, U: Number, D: Dataset<I, U>>(
+    tree: &Tree<I, U, D>,
+    query: &I,
     hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>,
-    candidates: &mut priority_queue::PriorityQueue<&Cluster<T, U>, RevNumber<U>>,
+    candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
 ) {
     let (leaf, RevNumber(d)) = candidates
         .pop()
         .unwrap_or_else(|| unreachable!("candidates is non-empty"));
-    let is = leaf.indices(tree.data());
-    let ds = if leaf.is_singleton() {
-        vec![d; is.len()]
+    let distances = if leaf.is_singleton() {
+        vec![d; leaf.indices().len()]
     } else {
-        tree.data().query_to_many(query, is)
+        tree.data().query_to_many(query, &leaf.indices().collect::<Vec<_>>())
     };
-    is.iter().zip(ds).for_each(|(&i, d)| {
+    leaf.indices().zip(distances).for_each(|(i, d)| {
         hits.push(i, OrdNumber(d));
     });
 }
@@ -115,11 +114,13 @@ fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize
 
 #[cfg(test)]
 mod tests {
-
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
     use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
+
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        distances::vectors::euclidean(x, y)
+    }
 
     #[test]
     fn tiny() {
@@ -128,18 +129,19 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
+        let query = &query[0];
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
+        let indices = (0..cardinality).collect::<Vec<_>>();
+
         for k in [100, 10, 1] {
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
             assert_eq!(linear_nn.len(), k);
 
             let thresholds_nn = sort_hits(super::search(tree, query, k));

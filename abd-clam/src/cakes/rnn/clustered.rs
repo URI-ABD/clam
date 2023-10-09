@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{Cluster, Dataset, Tree};
+use crate::{Cluster, Dataset, Instance, Tree};
 
 use super::linear;
 
@@ -18,11 +18,11 @@ use super::linear;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, radius: U) -> Vec<(usize, U)>
+pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, radius: U) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
     let [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, radius);
     leaf_search(tree.data(), confirmed, straddlers, query, radius)
@@ -44,16 +44,11 @@ where
 /// query ball, and the second element is the straddlers, i.e. those that
 /// overlap the query ball. The 2-tuples are the clusters and the distance
 /// from the query to the cluster center.
-pub fn tree_search<'a, T, U, D>(
-    data: &D,
-    root: &'a Cluster<T, U>,
-    query: T,
-    radius: U,
-) -> [Vec<(&'a Cluster<T, U>, U)>; 2]
+pub fn tree_search<'a, I, U, D>(data: &D, root: &'a Cluster<U>, query: &I, radius: U) -> [Vec<(&'a Cluster<U>, U)>; 2]
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
@@ -88,31 +83,30 @@ where
 }
 
 /// Perform fine-grained leaf search
-pub fn leaf_search<T, U, D>(
+pub fn leaf_search<I, U, D>(
     data: &D,
-    confirmed: Vec<(&Cluster<T, U>, U)>,
-    straddlers: Vec<(&Cluster<T, U>, U)>,
-    query: T,
+    confirmed: Vec<(&Cluster<U>, U)>,
+    straddlers: Vec<(&Cluster<U>, U)>,
+    query: &I,
     radius: U,
 ) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
     let hits = confirmed.into_iter().flat_map(|(c, d)| {
         let distances = if c.is_singleton() {
             vec![d; c.cardinality]
         } else {
-            data.query_to_many(query, c.indices(data))
+            data.query_to_many(query, &c.indices().collect::<Vec<_>>())
         };
-        c.indices(data).iter().copied().zip(distances)
+        c.indices().zip(distances)
     });
 
     let indices = straddlers
         .into_iter()
-        .flat_map(|(c, _)| c.indices(data))
-        .copied()
+        .flat_map(|(c, _)| c.indices())
         .collect::<Vec<_>>();
 
     hits.chain(linear::search(data, query, radius, &indices)).collect()

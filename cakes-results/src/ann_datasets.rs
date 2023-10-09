@@ -109,10 +109,10 @@ impl AnnDatasets {
 
     /// Return the metric to use for this data set.
     #[allow(clippy::type_complexity)]
-    pub fn metric(&self) -> Result<fn(&[f32], &[f32]) -> f32, String> {
+    pub fn metric(&self) -> Result<fn(&Vec<f32>, &Vec<f32>) -> f32, String> {
         match self.metric_name() {
-            "cosine" => Ok(distances::vectors::cosine),
-            "euclidean" => Ok(distances::simd::euclidean_f32),
+            "cosine" => Ok(cosine),
+            "euclidean" => Ok(euclidean),
             "jaccard" => Err(
                 "We are still merging Jaccard distance. Generic distances are hard.".to_string(),
             ),
@@ -205,4 +205,16 @@ impl AnnDatasets {
 
         todo!()
     }
+}
+
+/// A wrapper around the cosine distance function.
+#[allow(clippy::ptr_arg)]
+fn cosine(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+    distances::vectors::cosine(x, y)
+}
+
+/// A wrapper around the euclidean distance function.
+#[allow(clippy::ptr_arg)]
+fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+    distances::simd::euclidean_f32(x, y)
 }

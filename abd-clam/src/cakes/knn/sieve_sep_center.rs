@@ -5,11 +5,11 @@ use core::cmp::{min, Ordering};
 
 use distances::Number;
 
-use crate::{Cluster, Dataset, Tree};
+use crate::{Cluster, Dataset, Instance, Tree};
 
 /// A Grain is an element of the sieve. It is either a hit or a cluster.
-#[derive(Clone, Copy, Debug)]
-enum Grain<'a, T: Send + Sync + Copy, U: Number> {
+#[derive(Debug)]
+enum Grain<'a, U: Number> {
     /// A `Hit` is a single instance.
     Hit {
         /// Distance from the query to the instance.
@@ -21,7 +21,7 @@ enum Grain<'a, T: Send + Sync + Copy, U: Number> {
     /// A `Cluster`.
     Cluster {
         /// The cluster.
-        c: &'a Cluster<T, U>,
+        c: &'a Cluster<U>,
         /// Theoretical worst case distance from the query to a point in the cluster.
         d_max: U,
         /// Theoretical best case distance from the query to a point in the cluster.
@@ -39,9 +39,9 @@ enum Grain<'a, T: Send + Sync + Copy, U: Number> {
     },
 }
 
-impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
+impl<'a, U: Number> Grain<'a, U> {
     /// Creates a new `Grain` from a cluster.
-    fn new_cluster(c: &'a Cluster<T, U>, d: U) -> Self {
+    fn new_cluster(c: &'a Cluster<U>, d: U) -> Self {
         let r = c.radius;
         Self::Cluster {
             c,
@@ -63,18 +63,13 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 
     /// Creates center and cluster grains from a cluster.
-    fn new_grains<D: Dataset<T, U>>(c: &'a Cluster<T, U>, data: &D, query: T) -> Vec<Self> {
+    fn new_grains<I: Instance, D: Dataset<I, U>>(c: &'a Cluster<U>, data: &D, query: &I) -> Vec<Self> {
         if c.is_singleton() {
             let d = c.distance_to_instance(data, query);
-            c.indices(data).iter().map(|&i| Self::new_hit(d, i)).collect()
+            c.indices().map(|i| Self::new_hit(d, i)).collect()
         } else if c.is_leaf() {
-            let indices = c.indices(data);
-            let distances = data.query_to_many(query, indices);
-            indices
-                .iter()
-                .zip(distances)
-                .map(|(&i, d)| Self::new_hit(d, i))
-                .collect()
+            let distances = data.query_to_many(query, &c.indices().collect::<Vec<_>>());
+            c.indices().zip(distances).map(|(i, d)| Self::new_hit(d, i)).collect()
         } else {
             let d = c.distance_to_instance(data, query);
             vec![Self::new_cluster(c, d), Self::new_center(d)]
@@ -116,20 +111,18 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 
     /// Returns the indices of the instances in the cluster if the `Grain` is of
     /// the `Cluster` variant
-    fn cluster_to_hits<D: Dataset<T, U>>(self, data: &D, query: T) -> Vec<Self> {
+    fn cluster_to_hits<I: Instance, D: Dataset<I, U>>(self, data: &D, query: &I) -> Vec<Self> {
         match self {
             Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on Clusters."),
             Grain::Cluster { c, d_max, .. } => {
-                let indices = c.indices(data);
                 if c.is_singleton() {
                     let d = d_max - c.radius;
-                    indices.iter().map(|&i| Grain::new_hit(d, i)).collect()
+                    c.indices().map(|index| Grain::new_hit(d, index)).collect()
                 } else {
-                    let distances = data.query_to_many(query, indices);
-                    indices
-                        .iter()
+                    let distances = data.query_to_many(query, &c.indices().collect::<Vec<_>>());
+                    c.indices()
                         .zip(distances)
-                        .map(|(&index, d)| Grain::new_hit(d, index))
+                        .map(|(index, d)| Grain::new_hit(d, index))
                         .collect()
                 }
             }
@@ -137,7 +130,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 
     /// Returns the children of the cluster if the `Grain` is of the `Cluster`
-    fn cluster_to_children(self) -> [&'a Cluster<T, U>; 2] {
+    fn cluster_to_children(self) -> [&'a Cluster<U>; 2] {
         match self {
             Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on Clusters."),
             Grain::Cluster { c, .. } => c
@@ -251,14 +244,15 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
     let data = tree.data();
     let mut grains = Grain::new_grains(&tree.root, data, query);
+    let [mut insiders, mut non_insiders]: [Vec<_>; 2];
 
     loop {
         // The threshold is the minimum distance, so far, which guarantees that
@@ -267,14 +261,14 @@ where
         let threshold = grains[i].d_max();
 
         // Remove grains which are outside the threshold.
-        let (insiders, non_insiders) = grains.split_at(i + 1);
-        let non_insiders = non_insiders.iter().filter(|g| g.not_outside(threshold));
+        non_insiders = grains.split_off(i + 1);
+        insiders = grains;
+        let non_insiders = non_insiders.into_iter().filter(|g| g.not_outside(threshold));
 
         // Partition the grains into hits and clusters.
         let (clusters, mut hits) = insiders
-            .iter()
+            .into_iter()
             .chain(non_insiders)
-            .copied()
             .filter(|g| !matches!(g, Grain::Center { .. }))
             .partition::<Vec<_>, _>(|g| matches!(g, Grain::Cluster { .. }));
 
@@ -308,13 +302,13 @@ where
 
 #[cfg(test)]
 mod tests {
-
-    use core::f32::EPSILON;
-
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
     use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
+
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        distances::vectors::euclidean(x, y)
+    }
 
     #[test]
     fn sieve_sep_center() {
@@ -323,18 +317,18 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
+        let query = &query[0];
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
+        let indices = (0..cardinality).collect::<Vec<_>>();
         for k in [100, 10, 1] {
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
             let sieve_nn = sort_hits(super::search(tree, query, k));
 
             assert_eq!(sieve_nn.len(), k);
@@ -342,7 +336,7 @@ mod tests {
             let d_linear = linear_nn[k - 1].1;
             let d_sieve = sieve_nn[k - 1].1;
             assert!(
-                (d_linear - d_sieve).abs() < EPSILON,
+                (d_linear - d_sieve).abs() < f32::EPSILON,
                 "k = {}, linear = {}, sieve = {}",
                 k,
                 d_linear,

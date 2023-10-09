@@ -4,11 +4,11 @@
 use core::cmp::{min, Ordering};
 use distances::Number;
 
-use crate::{Cluster, Dataset, Tree};
+use crate::{Cluster, Dataset, Instance, Tree};
 
 /// A Grain is an element of the sieve. It is either a hit or a cluster.
 #[derive(Clone, Copy, Debug)]
-enum Grain<'a, T: Send + Sync + Copy, U: Number> {
+enum Grain<'a, U: Number> {
     /// A `Hit` is a single instance.
     Hit {
         /// Distance from the query to the instance.
@@ -19,7 +19,7 @@ enum Grain<'a, T: Send + Sync + Copy, U: Number> {
     /// A `Cluster`.
     Cluster {
         /// The cluster.
-        c: &'a Cluster<T, U>,
+        c: &'a Cluster<U>,
         /// Theoretical worst case distance from the query to a point in the cluster.
         d: U,
         /// The diameter of the cluster.
@@ -31,9 +31,9 @@ enum Grain<'a, T: Send + Sync + Copy, U: Number> {
     },
 }
 
-impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
+impl<'a, U: Number> Grain<'a, U> {
     /// Creates a new `Grain` from a cluster.
-    fn new_cluster(c: &'a Cluster<T, U>, d: U) -> Self {
+    fn new_cluster(c: &'a Cluster<U>, d: U) -> Self {
         let r = c.radius;
         Self::Cluster {
             c,
@@ -85,15 +85,12 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 
     /// Returns the indices of the instances in the cluster if the `Grain` is of
     /// the `Cluster` variant
-    fn cluster_to_hits(self, data: &impl Dataset<T, U>, query: T) -> Vec<Grain<T, U>> {
+    fn cluster_to_hits<I: Instance, D: Dataset<I, U>>(self, data: &D, query: &I) -> Vec<Self> {
         match self {
             Grain::Hit { .. } => unreachable!("This is only called on non-hits."),
             Grain::Cluster { c, .. } => {
-                let indices = c.indices(data);
-                let distances = data.query_to_many(query, indices);
-                indices
-                    .iter()
-                    .copied()
+                let distances = data.query_to_many(query, &c.indices().collect::<Vec<_>>());
+                c.indices()
                     .zip(distances)
                     .map(|(index, d)| Grain::new_hit(d, index))
                     .collect::<Vec<_>>()
@@ -102,7 +99,7 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
     }
 
     /// Returns the children of the cluster if the `Grain` is of the `Cluster`
-    fn cluster_to_children(self) -> [&'a Cluster<T, U>; 2] {
+    fn cluster_to_children(self) -> [&'a Cluster<U>; 2] {
         match self {
             Grain::Hit { .. } => unreachable!("This is only called on non-hits."),
             Grain::Cluster { c, .. } => c
@@ -213,17 +210,18 @@ impl<'a, T: Send + Sync + Copy, U: Number> Grain<'a, T, U> {
 /// A vector of 2-tuples, where the first element is an index of an instance,
 /// and the second element is the distance from the query to the instance.
 #[allow(clippy::many_single_char_names)]
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: Dataset<T, U>,
+    D: Dataset<I, U>,
 {
     let data = tree.data();
     let c = &tree.root;
     let d = c.distance_to_instance(data, query);
 
     let mut grains = vec![Grain::new_cluster(c, d)];
+    let [mut insiders, mut non_insiders]: [Vec<_>; 2];
 
     loop {
         // The threshold is the minimum distance, so far, which guarantees that
@@ -232,14 +230,14 @@ where
         let threshold = grains[i].d();
 
         // Remove grains which are outside the threshold.
-        let (insiders, non_insiders) = grains.split_at_mut(i + 1);
-        let non_insiders = non_insiders.iter().filter(|g| !g.is_outside(threshold));
+        non_insiders = grains.split_off(i + 1);
+        insiders = grains;
+        let non_insiders = non_insiders.into_iter().filter(|g| !g.is_outside(threshold));
 
         // Separate grains into hits and clusters.
         let (clusters, mut hits) = insiders
-            .iter()
+            .into_iter()
             .chain(non_insiders)
-            .copied()
             .partition::<Vec<_>, _>(|g| matches!(g, Grain::Cluster { .. }));
 
         // Separate small (cardinality less than k or leaf) clusters from the rest
@@ -273,13 +271,13 @@ where
 
 #[cfg(test)]
 mod tests {
-
-    use core::f32::EPSILON;
-
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
     use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
+
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        distances::vectors::euclidean(x, y)
+    }
 
     #[test]
     fn sieve() {
@@ -288,18 +286,18 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
+        let query = &query[0];
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
+        let indices = (0..cardinality).collect::<Vec<_>>();
         for k in [100, 10, 1] {
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
             let sieve_nn = sort_hits(super::search(tree, query, k));
 
             assert_eq!(sieve_nn.len(), k);
@@ -307,7 +305,7 @@ mod tests {
             let d_linear = linear_nn[k - 1].1;
             let d_sieve = sieve_nn[k - 1].1;
             assert!(
-                (d_linear - d_sieve).abs() < EPSILON,
+                (d_linear - d_sieve).abs() < f32::EPSILON,
                 "k = {}, linear = {}, sieve = {}",
                 k,
                 d_linear,
