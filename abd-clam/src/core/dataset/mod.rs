@@ -15,7 +15,7 @@ use rand::prelude::*;
 use distances::Number;
 
 /// A common interface for datasets used in CLAM.
-pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync + Sized {
+pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync {
     /// Returns the name of the type of the dataset.
     fn type_name(&self) -> String;
 
@@ -249,7 +249,9 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// # Arguments
     ///
     /// * `max_cardinality` - The maximum cardinality of each shard.
-    fn make_shards(self, max_cardinality: usize) -> Vec<Self>;
+    fn make_shards(self, max_cardinality: usize) -> Vec<Self>
+    where
+        Self: Sized;
 
     /// Saves the dataset to a file.
     ///
@@ -275,5 +277,7 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// * If the dataset cannot be loaded from the given path.
     /// * If the dataset is not the same type as the one that was saved.
     /// * If the file was corrupted.
-    fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>;
+    fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>
+    where
+        Self: Sized;
 }
