@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{cakes::rnn::clustered, utils, Cluster, Tree};
+use crate::{cakes::rnn::clustered, utils, Cluster, Instance, Tree};
 
 use super::Hits;
 
@@ -21,11 +21,11 @@ const MULTIPLIER: f64 = 2.0;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<T, U, D>(tree: &Tree<T, U, D>, query: T, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
 where
-    T: Send + Sync + Copy,
+    I: Instance,
     U: Number,
-    D: crate::Dataset<T, U>,
+    D: crate::Dataset<I, U>,
 {
     let mut radius = f64::EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
     let [mut confirmed, mut straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
@@ -61,17 +61,19 @@ where
 }
 
 /// Count the total cardinality of the clusters.
-fn count_hits<T: Send + Sync + Copy, U: Number>(clusters: &[(&Cluster<T, U>, U)]) -> usize {
+fn count_hits<U: Number>(clusters: &[(&Cluster<U>, U)]) -> usize {
     clusters.iter().map(|(c, _)| c.cardinality).sum()
 }
 
 #[cfg(test)]
 mod tests {
-
-    use distances::vectors::euclidean;
     use symagen::random_data;
 
     use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
+
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        distances::vectors::euclidean(x, y)
+    }
 
     #[test]
     fn repeated_rnn() {
@@ -80,21 +82,21 @@ mod tests {
         let seed = 42;
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("knn-test".to_string(), data, euclidean::<_, f32>, false);
+        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
 
         let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = query[0].as_slice();
+        let query = &query[0];
 
         let criteria = PartitionCriteria::default();
         let model = Cakes::new(data, Some(seed), criteria);
         let tree = model.tree();
 
+        let indices = (0..cardinality).collect::<Vec<_>>();
         for k in [1, 10, 100] {
             let repeated_nn = sort_hits(super::search(tree, query, k));
             assert_eq!(repeated_nn.len(), k);
 
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, tree.indices()));
+            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
             assert_eq!(linear_nn, repeated_nn);
         }
     }

@@ -5,7 +5,7 @@ use core::ops::AddAssign;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{knn, rnn, Cakes, Dataset};
+use crate::{knn, rnn, Cakes, Dataset, Instance};
 
 /// Cakes search with sharded datasets.
 ///
@@ -18,23 +18,23 @@ use crate::{knn, rnn, Cakes, Dataset};
 /// - `D`: The type of the dataset.
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct ShardedCakes<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+pub struct ShardedCakes<I: Instance, U: Number, D: Dataset<I, U>> {
     /// A random sample of the full dataset.
-    pub(crate) sample_shard: Cakes<T, U, D>,
+    pub(crate) sample_shard: Cakes<I, U, D>,
     /// The full shards.
-    pub(crate) shards: Vec<Cakes<T, U, D>>,
+    pub(crate) shards: Vec<Cakes<I, U, D>>,
     /// The Dataset.
     pub(crate) offsets: Vec<usize>,
 }
 
-impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
+impl<I: Instance, U: Number, D: Dataset<I, U>> ShardedCakes<I, U, D> {
     /// Creates a new `ShardedCakes` instance.
     ///
     /// # Arguments
     ///
     /// * `shards` - The shards to use.
     #[must_use]
-    pub fn new(mut shards: Vec<Cakes<T, U, D>>) -> Self {
+    pub fn new(mut shards: Vec<Cakes<I, U, D>>) -> Self {
         let new_shards = shards.split_off(1);
         let sample_shard = shards
             .pop()
@@ -85,15 +85,12 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
     }
 
     /// Ranged nearest neighbor search for a batch of queries.
-    pub fn batch_rnn_search(&self, queries: &[T], radius: U) -> Vec<Vec<(usize, U)>> {
-        queries
-            .par_iter()
-            .map(|&query| self.rnn_search(query, radius))
-            .collect()
+    pub fn batch_rnn_search(&self, queries: &[&I], radius: U) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|query| self.rnn_search(query, radius)).collect()
     }
 
     /// Ranged nearest neighbor search.
-    pub fn rnn_search(&self, query: T, radius: U) -> Vec<(usize, U)> {
+    pub fn rnn_search(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         self.sample_shard
             .rnn_search(query, radius, rnn::Algorithm::Clustered)
             .into_par_iter()
@@ -113,12 +110,12 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
     }
 
     /// K-nearest neighbor search for a batch of queries.
-    pub fn batch_knn_search(&self, queries: &[T], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|&query| self.knn_search(query, k)).collect()
+    pub fn batch_knn_search(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|query| self.knn_search(query, k)).collect()
     }
 
     /// K-nearest neighbor search.
-    pub fn knn_search(&self, query: T, k: usize) -> Vec<(usize, U)> {
+    pub fn knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let hits = self.sample_shard.knn_search(query, k, self.sample_shard.best_knn);
         let mut hits = knn::Hits::from_vec(k, hits);
         for (shard, &o) in self.shards.iter().zip(self.offsets.iter()) {
@@ -130,12 +127,12 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> ShardedCakes<T, U, D> {
     }
 
     /// Linear k-nearest neighbor search for a batch of queries.
-    pub fn batch_linear_knn(&self, queries: &[T], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|&query| self.linear_knn(query, k)).collect()
+    pub fn batch_linear_knn(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|query| self.linear_knn(query, k)).collect()
     }
 
     /// Linear k-nearest neighbor search for a query.
-    pub fn linear_knn(&self, query: T, k: usize) -> Vec<(usize, U)> {
+    pub fn linear_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let mut hits = knn::Hits::from_vec(k, self.sample_shard.knn_search(query, k, knn::Algorithm::Linear));
         for (shard, &o) in self.shards.iter().zip(self.offsets.iter()) {
             let new_hits = shard.knn_search(query, k, knn::Algorithm::Linear);
@@ -155,7 +152,7 @@ mod tests {
 
     use super::ShardedCakes;
 
-    fn metric(a: &[f32], b: &[f32]) -> f32 {
+    fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
         distances::vectors::euclidean(a, b)
     }
 
@@ -166,7 +163,6 @@ mod tests {
         let (min_val, max_val) = (-1., 1.);
 
         let data_vec = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data_vec = data_vec.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
         let num_queries = 100;
         let queries = random_data::random_f32(num_queries, dimensionality, min_val, max_val, seed + 1);

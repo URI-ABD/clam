@@ -145,11 +145,7 @@ pub fn make_reports(
         dimensionality.to_formatted_string(&num_format::Locale::en)
     );
 
-    let queries = queries
-        .iter()
-        .take(1000)
-        .map(Vec::as_slice)
-        .collect::<Vec<_>>();
+    let queries = queries.iter().take(1000).collect::<Vec<_>>();
     let num_queries = queries.len();
     info!(
         "Number of queries: {}",
@@ -204,8 +200,6 @@ pub fn make_reports(
 
             augmentation::augment_data(&train_data, multiplier - 1, error_rate)
         };
-
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
         let cardinality = data.len();
         info!(
@@ -312,8 +306,8 @@ pub fn make_reports(
 /// * A vector of the hits for each query.
 /// * The throughput of the algorithm.
 fn measure_algorithm<'a>(
-    cakes: &'a Cakes<&'a [f32], f32, VecDataset<&'a [f32], f32>>,
-    queries: &'a [&[f32]],
+    cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32>>,
+    queries: &'a [&Vec<f32>],
     k: usize,
     algorithm: &knn::Algorithm,
 ) -> (Vec<Vec<(usize, f32)>>, f32) {

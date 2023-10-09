@@ -2,7 +2,17 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_STR};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
+
+fn hamming(x: &String, y: &String) -> u16 {
+    distances::strings::hamming(x, y)
+}
+
+fn levenshtein(x: &String, y: &String) -> u16 {
+    distances::strings::levenshtein(x, y)
+}
+
+const METRICS: &[(&str, fn(&String, &String) -> u16)] = &[("hamming", hamming), ("levenshtein", levenshtein)];
 
 fn genomic(c: &mut Criterion) {
     let seed = 42;
@@ -14,12 +24,11 @@ fn genomic(c: &mut Criterion) {
 
     println!("Building dataset ...");
     let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
-    let data = data.iter().map(String::as_str).collect::<Vec<_>>();
 
     let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
-    let queries = queries.iter().map(String::as_str).collect::<Vec<_>>();
+    let queries = queries.iter().collect::<Vec<_>>();
 
-    for &(metric_name, metric) in &COMMON_METRICS_STR[..2] {
+    for &(metric_name, metric) in METRICS {
         let mut group = c.benchmark_group(format!("genomic-{metric_name}"));
         group
             .sampling_mode(SamplingMode::Flat)

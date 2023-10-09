@@ -2,7 +2,13 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset, COMMON_METRICS_F32};
+use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
+
+fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+    distances::vectors::euclidean(x, y)
+}
+
+const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[("euclidean", euclidean)];
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
@@ -10,13 +16,12 @@ fn cakes(c: &mut Criterion) {
     let (min_val, max_val) = (-1., 1.);
 
     let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-    let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
     let num_queries = 100;
     let queries = random_data::random_f32(num_queries, dimensionality, min_val, max_val, seed + 1);
-    let queries = queries.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let queries = queries.iter().collect::<Vec<_>>();
 
-    for &(metric_name, metric) in &COMMON_METRICS_F32[..1] {
+    for &(metric_name, metric) in METRICS {
         let mut group = c.benchmark_group(format!("knn-{metric_name}"));
         group
             .sample_size(10)

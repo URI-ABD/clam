@@ -8,7 +8,7 @@
 
 use distances::Number;
 
-use crate::{Dataset, Tree};
+use crate::{Dataset, Instance, Tree};
 
 pub(crate) mod clustered;
 pub(crate) mod linear;
@@ -48,14 +48,17 @@ impl Algorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub(crate) fn search<T, U, D>(self, query: T, radius: U, tree: &Tree<T, U, D>) -> Vec<(usize, U)>
+    pub(crate) fn search<I, U, D>(self, query: &I, radius: U, tree: &Tree<I, U, D>) -> Vec<(usize, U)>
     where
-        T: Send + Sync + Copy,
+        I: Instance,
         U: Number,
-        D: Dataset<T, U>,
+        D: Dataset<I, U>,
     {
         match self {
-            Self::Linear => linear::search(tree.data(), query, radius, tree.indices()),
+            Self::Linear => {
+                let indices = (0..tree.cardinality()).collect::<Vec<_>>();
+                linear::search(tree.data(), query, radius, &indices)
+            }
             Self::Clustered => clustered::search(tree, query, radius),
         }
     }

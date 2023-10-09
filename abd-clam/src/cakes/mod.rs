@@ -1,6 +1,5 @@
 //! CLAM-Accelerated K-nearest-neighbor Entropy-scaling Search.
 
-pub mod codec;
 pub mod knn;
 pub mod rnn;
 pub mod sharded;
@@ -10,7 +9,7 @@ use core::cmp::Ordering;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{Dataset, PartitionCriteria, Tree};
+use crate::{Dataset, Instance, PartitionCriteria, Tree};
 
 /// CLAM-Accelerated K-nearest-neighbor Entropy-scaling Search.
 ///
@@ -22,14 +21,14 @@ use crate::{Dataset, PartitionCriteria, Tree};
 /// * `U` - The type of the distance value.
 /// * `D` - The type of the dataset.
 #[derive(Debug)]
-pub struct Cakes<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> {
+pub struct Cakes<I: Instance, U: Number, D: Dataset<I, U>> {
     /// The tree used for the search.
-    pub(crate) tree: Tree<T, U, D>,
+    pub(crate) tree: Tree<I, U, D>,
     /// Best knn-search algorithm.
     pub(crate) best_knn: knn::Algorithm,
 }
 
-impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
+impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// Creates a new CAKES instance.
     ///
     /// # Arguments
@@ -38,7 +37,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     /// * `seed` - The seed to use for the random number generator.
     /// * `criteria` - The criteria to use for partitioning the tree.
     #[allow(clippy::needless_pass_by_value)] // clippy is wrong in this case
-    pub fn new(data: D, seed: Option<u64>, criteria: PartitionCriteria<T, U>) -> Self {
+    pub fn new(data: D, seed: Option<u64>, criteria: PartitionCriteria<U>) -> Self {
         Self {
             tree: Tree::new(data, seed).partition(&criteria),
             best_knn: knn::Algorithm::default(),
@@ -51,7 +50,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     }
 
     /// Returns a reference to the tree.
-    pub const fn tree(&self) -> &Tree<T, U, D> {
+    pub const fn tree(&self) -> &Tree<I, U, D> {
         &self.tree
     }
 
@@ -74,7 +73,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
             .subtree()
             .into_iter()
             .filter(|&c| c.depth() == tuning_depth || c.is_leaf() && c.depth() < tuning_depth)
-            .map(|c| self.tree.data.get(c.arg_center))
+            .map(|c| &self.tree.data[c.arg_center])
             .collect::<Vec<_>>();
 
         (self.best_knn, _, _) = knn::Algorithm::variants()
@@ -103,10 +102,10 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of vectors of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn batch_rnn_search(&self, queries: &[T], radius: U, algorithm: rnn::Algorithm) -> Vec<Vec<(usize, U)>> {
+    pub fn batch_rnn_search(&self, queries: &[&I], radius: U, algorithm: rnn::Algorithm) -> Vec<Vec<(usize, U)>> {
         queries
             .par_iter()
-            .map(|&query| self.rnn_search(query, radius, algorithm))
+            .map(|query| self.rnn_search(query, radius, algorithm))
             .collect()
     }
 
@@ -122,7 +121,7 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn rnn_search(&self, query: T, radius: U, algorithm: rnn::Algorithm) -> Vec<(usize, U)> {
+    pub fn rnn_search(&self, query: &I, radius: U, algorithm: rnn::Algorithm) -> Vec<(usize, U)> {
         algorithm.search(query, radius, &self.tree)
     }
 
@@ -138,10 +137,10 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of vectors of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn batch_knn_search(&self, queries: &[T], k: usize, algorithm: knn::Algorithm) -> Vec<Vec<(usize, U)>> {
+    pub fn batch_knn_search(&self, queries: &[&I], k: usize, algorithm: knn::Algorithm) -> Vec<Vec<(usize, U)>> {
         queries
             .par_iter()
-            .map(|&query| self.knn_search(query, k, algorithm))
+            .map(|query| self.knn_search(query, k, algorithm))
             .collect()
     }
 
@@ -157,27 +156,27 @@ impl<T: Send + Sync + Copy, U: Number, D: Dataset<T, U>> Cakes<T, U, D> {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub fn knn_search(&self, query: T, k: usize, algorithm: knn::Algorithm) -> Vec<(usize, U)> {
+    pub fn knn_search(&self, query: &I, k: usize, algorithm: knn::Algorithm) -> Vec<(usize, U)> {
         algorithm.search(&self.tree, query, k)
     }
 
     /// Linear k-nearest neighbor search for a batch of queries.
-    pub fn batch_tuned_knn(&self, queries: &[T], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|&query| self.tuned_knn(query, k)).collect()
+    pub fn batch_tuned_knn(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|query| self.tuned_knn(query, k)).collect()
     }
 
     /// Linear k-nearest neighbor search for a query.
-    pub fn tuned_knn(&self, query: T, k: usize) -> Vec<(usize, U)> {
+    pub fn tuned_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         self.knn_search(query, k, self.best_knn)
     }
 
     /// Linear k-nearest neighbor search for a batch of queries.
-    pub fn batch_linear_knn(&self, queries: &[T], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|&query| self.linear_knn(query, k)).collect()
+    pub fn batch_linear_knn(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|query| self.linear_knn(query, k)).collect()
     }
 
     /// Linear k-nearest neighbor search for a query.
-    pub fn linear_knn(&self, query: T, k: usize) -> Vec<(usize, U)> {
+    pub fn linear_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         self.knn_search(query, k, knn::Algorithm::Linear)
     }
 }
@@ -193,12 +192,16 @@ mod tests {
 
     use super::*;
 
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        euclidean(x, y)
+    }
+
     #[test]
     fn tiny() {
-        let data: Vec<&[f32]> = vec![&[0., 0.], &[1., 1.], &[2., 2.], &[3., 3.]];
+        let data = vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]];
 
         let name = "test".to_string();
-        let dataset = VecDataset::new(name, data, euclidean, false);
+        let dataset = VecDataset::new(name, data, metric, false);
         let criteria = PartitionCriteria::new(true);
         let cakes = Cakes::new(dataset, None, criteria);
 
@@ -209,9 +212,9 @@ mod tests {
             .unzip();
         assert_eq!(results.len(), 2);
 
-        let result_points = results.iter().map(|&i| cakes.data().data[i]).collect::<Vec<_>>();
-        assert!(result_points.contains(&[0., 0.].as_slice()));
-        assert!(result_points.contains(&[1., 1.].as_slice()));
+        let result_points = results.iter().map(|&i| &cakes.data().data[i]).collect::<Vec<_>>();
+        assert!(result_points.contains(&&vec![0., 0.]));
+        assert!(result_points.contains(&&vec![1., 1.]));
 
         let query = vec![1., 1.];
         let (results, _): (Vec<_>, Vec<_>) = cakes
@@ -222,15 +225,14 @@ mod tests {
 
         assert!(results
             .iter()
-            .map(|&i| cakes.data().data[i])
+            .map(|&i| &cakes.data().data[i])
             .any(|x| x == [1., 1.].as_slice()));
     }
 
     #[test]
     fn line() {
         let data = (-100..=100).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let data = VecDataset::new("test".to_string(), data, euclidean, false);
+        let data = VecDataset::new("test".to_string(), data, metric, false);
         let criteria = PartitionCriteria::new(true);
         let cakes = Cakes::new(data, Some(42), criteria);
 
@@ -274,43 +276,34 @@ mod tests {
         let (min_val, max_val) = (-1., 1.);
 
         let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
 
         let num_queries = 100;
         let queries = random_data::random_f32(num_queries, dimensionality, min_val, max_val, seed + 1);
 
-        #[allow(clippy::type_complexity)]
-        let test_metrics: &[(&str, fn(&[f32], &[f32]) -> f32)] = &[
-            ("euclidean", distances::vectors::euclidean),
-            ("manhattan", distances::vectors::manhattan),
-        ];
+        let name = format!("test-euclidean");
+        let data = VecDataset::new(name, data.clone(), metric, false);
+        let cakes = Cakes::new(data, Some(seed), PartitionCriteria::default());
 
-        for &(metric_name, metric) in test_metrics {
-            let name = format!("test-{metric_name}");
-            let data = VecDataset::new(name, data.clone(), metric, false);
-            let cakes = Cakes::new(data, Some(seed), PartitionCriteria::default());
+        for radius in [0.0, 0.05, 0.1, 0.25, 0.5] {
+            for (i, query) in queries.iter().enumerate() {
+                let linear_hits = {
+                    let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
+                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+                    hits
+                };
 
-            for radius in [0.0, 0.05, 0.1, 0.25, 0.5] {
-                for (i, query) in queries.iter().enumerate() {
-                    let linear_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
-                        hits
-                    };
-
-                    let ranged_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
-                        hits
-                    };
-                    let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
-                    let ranged_indices = ranged_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
-                    let diff = linear_indices.difference(&ranged_indices).copied().collect::<Vec<_>>();
-                    assert!(
-                        diff.is_empty(),
-                        "Failed Clustered search: query: {i}, radius: {radius}\nlnn: {linear_indices:?}\nrnn: {ranged_indices:?}\ndiff: {diff:?}",
-                    );
-                }
+                let ranged_hits = {
+                    let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
+                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+                    hits
+                };
+                let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
+                let ranged_indices = ranged_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
+                let diff = linear_indices.difference(&ranged_indices).copied().collect::<Vec<_>>();
+                assert!(
+                    diff.is_empty(),
+                    "Failed Clustered search: query: {i}, radius: {radius}\nlnn: {linear_indices:?}\nrnn: {ranged_indices:?}\ndiff: {diff:?}",
+                );
             }
         }
     }
@@ -322,44 +315,38 @@ mod tests {
         let (min_len, max_len) = (100, 100);
 
         let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
-        let data = data.iter().map(String::as_str).collect::<Vec<_>>();
 
         let num_queries = 10;
         let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
 
-        #[allow(clippy::type_complexity)]
-        let test_metrics: &[(&str, fn(&str, &str) -> u16)] = &[
-            ("hamming", distances::strings::hamming),
-            ("levenshtein", distances::strings::levenshtein),
-            ("needleman_wunsch", distances::strings::nw_distance),
-        ];
+        fn metric(x: &String, y: &String) -> u16 {
+            distances::strings::hamming(x, y)
+        }
 
-        for &(metric_name, metric) in test_metrics {
-            let name = format!("test-{metric_name}");
-            let data = VecDataset::new(name, data.clone(), metric, false);
-            let cakes = Cakes::new(data, Some(42), PartitionCriteria::default());
+        let name = format!("test-hamming");
+        let data = VecDataset::new(name, data.clone(), metric, false);
+        let cakes = Cakes::new(data, Some(42), PartitionCriteria::default());
 
-            for radius in [1, 5, 10, 25] {
-                for (i, query) in queries.iter().enumerate() {
-                    let linear_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
-                        hits
-                    };
+        for radius in [1, 5, 10, 25] {
+            for (i, query) in queries.iter().enumerate() {
+                let linear_hits = {
+                    let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Linear);
+                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+                    hits
+                };
 
-                    let ranged_hits = {
-                        let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
-                        hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
-                        hits
-                    };
-                    let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
-                    let ranged_indices = ranged_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
-                    let diff = linear_indices.difference(&ranged_indices).copied().collect::<Vec<_>>();
-                    assert!(
+                let ranged_hits = {
+                    let mut hits = cakes.rnn_search(query, radius, rnn::Algorithm::Clustered);
+                    hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
+                    hits
+                };
+                let linear_indices = linear_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
+                let ranged_indices = ranged_hits.iter().map(|&(i, _)| i).collect::<HashSet<_>>();
+                let diff = linear_indices.difference(&ranged_indices).copied().collect::<Vec<_>>();
+                assert!(
                         diff.is_empty(),
                         "Failed Clustered search: query: {i}, radius: {radius}\nlnn: {linear_indices:?}\nrnn: {ranged_indices:?}\ndiff: {diff:?}",
                     );
-                }
             }
         }
     }
