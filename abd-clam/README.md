@@ -91,7 +91,7 @@ assert!(!rnn_results.is_empty());
 let knn_results: Vec<(usize, f32)> = model.knn_search(
     &query,
     k,
-    knn::Algorithm::RepeatedRnn,
+    knn::Algorithm::default(),
 );
 assert!(knn_results.len() >= k);
 
