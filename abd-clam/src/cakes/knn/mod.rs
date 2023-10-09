@@ -1,7 +1,8 @@
 //! Algorithms for K Nearest Neighbor search.
 //!
-//! The stable algorithms are `Linear` and `RepeatedRnn`, with the default being
-//! `RepeatedRnn`.
+//! The stable algorithms are `Linear`, `RepeatedRnn`, `GreedySieve`, `Sieve`,
+//! and `SieveSepCenter`. The default algorithm is `GreedySieve`, as it was the
+//! best overall performer in our scaling experiments.
 //!
 //! We will experiment with other algorithms in the future, and they will be added
 //! to this enum as they are being implemented. They should not be considered
@@ -21,8 +22,6 @@ pub(crate) mod sieve;
 pub(crate) mod sieve_sep_center;
 
 /// The algorithm to use for K-Nearest Neighbor search.
-///
-/// The default is `RepeatedRnn`, as determined by the benchmarks in the crate.
 #[derive(Clone, Copy, Debug)]
 pub enum Algorithm {
     /// Use linear search on the entire dataset.
@@ -58,6 +57,7 @@ pub enum Algorithm {
     /// Hits are then removed from the queue until the queue has size k. Repeats these steps
     /// until candidates is empty or the closest candidate is worse than the furthest hit.
     GreedySieve,
+
     /// Like SieveV1, but without the separate priority queue for hits.
     ///
     /// This algorithm is not stable.
@@ -89,7 +89,7 @@ pub enum Algorithm {
 
 impl Default for Algorithm {
     fn default() -> Self {
-        Self::RepeatedRnn
+        Self::GreedySieve
     }
 }
 

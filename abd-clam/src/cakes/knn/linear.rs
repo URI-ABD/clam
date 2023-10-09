@@ -55,7 +55,7 @@ mod tests {
         let query = vec![0.0];
 
         let criteria = PartitionCriteria::default();
-        let model = Cakes::new(data, None, criteria);
+        let model = Cakes::new(data, None, &criteria);
         let tree = model.tree();
 
         let indices = (0..tree.cardinality()).collect::<Vec<_>>();
@@ -85,7 +85,7 @@ mod tests {
         let query = &query[0];
 
         let criteria = PartitionCriteria::default();
-        let model = Cakes::new(data, Some(seed), criteria);
+        let model = Cakes::new(data, Some(seed), &criteria);
         let tree = model.tree();
 
         let indices = (0..cardinality).collect::<Vec<_>>();

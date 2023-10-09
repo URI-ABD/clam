@@ -1,5 +1,7 @@
 //! A `Tree` represents a hierarchy of "similar" instances from a metric-`Space`.
 
+use core::marker::PhantomData;
+
 use distances::Number;
 
 use crate::{Cluster, Dataset, Instance, PartitionCriteria};
@@ -21,7 +23,7 @@ pub struct Tree<I: Instance, U: Number, D: Dataset<I, U>> {
     /// The depth of the tree.
     pub(crate) depth: usize,
     /// To satisfy the `Instance` trait bound.
-    _i: core::marker::PhantomData<I>,
+    _i: PhantomData<I>,
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
@@ -37,7 +39,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
             data,
             root,
             depth,
-            _i: core::marker::PhantomData,
+            _i: PhantomData,
         }
     }
 
@@ -70,9 +72,4 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     pub const fn radius(&self) -> U {
         self.root.radius
     }
-
-    // /// Returns the indices contained in the root of the `Tree`.
-    // pub fn indices(&self) -> &[usize] {
-    //     self.data.indices()
-    // }
 }

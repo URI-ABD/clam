@@ -30,8 +30,8 @@ fn cakes(c: &mut Criterion) {
             .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
         let dataset = VecDataset::new("rnn".to_string(), data.clone(), metric, false);
-        let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = Cakes::new(dataset, Some(seed), criteria);
+        let criteria = PartitionCriteria::default();
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         let mut radius = 0.;
         for n in (0..=100).step_by(25) {

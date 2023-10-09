@@ -38,8 +38,8 @@ fn genomic(c: &mut Criterion) {
         println!("Building cakes for {metric_name} ...");
         let data_name = format!("{metric_name}-{cardinality}");
         let dataset = VecDataset::new(data_name, data.clone(), metric, true);
-        let criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-        let cakes = Cakes::new(dataset, Some(seed), criteria);
+        let criteria = PartitionCriteria::default();
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         let radii = [50, 25, 10, 1];
         println!("Running benchmark for {metric_name} ...");
