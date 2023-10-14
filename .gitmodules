@@ -1,9 +1,6 @@
 [submodule "distances"]
 	path = distances
 	url = https://github.com/URI-ABD/distances.git
-[submodule "rust-automl"]
-	path = rust-automl
-	url = https://github.com/nishaq503/rust-automl.git
 [submodule "SyMaGen"]
 	path = SyMaGen
 	url = https://github.com/morganprior/SyMaGen.git
