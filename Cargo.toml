@@ -2,9 +2,8 @@
 members = [
     "abd-clam",
     "cakes-results",
-    # "py-clam",  # TODO: re-enable when py-clam uses maturin to bing to abd-clam
+    # "py-clam",  # TODO: re-enable when we have python bindings
     "distances",
-    "rust-automl",
     "SyMaGen"
 ]
 resolver = "2"
