@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest"]  # "macos-latest": problems with the cc linker in symagen
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -55,35 +55,3 @@ jobs:
             rustfmt
       - name: Clam | Tests
         run: cargo test --release --package abd-clam
-
-  python:
-    name: Python | Tests
-    needs: pre-commit
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Fetch workspace members
-        run: git submodule update --init
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
-      - name: Poetry | Install
-        uses: abatilo/actions-poetry@v2
-      - name: Poetry | Config
-        run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-      - name: Poetry | Cache
-        uses: actions/cache@v3
-        with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: PyClam | Install
-        run: poetry install --no-interaction
-      - name: PyClam | Tests
-        run: |
-          poetry run python -m unittest discover py-clam

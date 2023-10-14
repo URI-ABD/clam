@@ -10,11 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    uses: ./.github/workflows/tests.yml
-
   crates:
-    needs: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -29,22 +25,3 @@ jobs:
             rustfmt
       - name: Clam | Publish
         run: cargo publish -p abd-clam --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-  pypi:
-    needs: tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Fetch workspace members
-        run: git submodule update --init
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
-      - name: Dependencies
-        run: |
-          pip install --user poetry && poetry install
-      - name: Publish
-        env:
-          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: poetry publish --build --username $PYPI_USERNAME --password $PYPI_PASSWORD
