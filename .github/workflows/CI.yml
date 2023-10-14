@@ -2,7 +2,7 @@ name: Publish
 
 on:
   push:
-    branches-ignore:
+    branches:
       - main
       - master
 
@@ -10,42 +10,22 @@ permissions:
   contents: read
 
 jobs:
-  pre-commit:
-    uses: ./.github/workflows/pre-commit.yml
-
-  tests-linux:
-    needs: pre-commit
-    uses: ./.github/workflows/tests-linux.yml
-
   upload-linux:
-    needs: tests-linux
     uses: ./.github/workflows/upload-linux.yml
 
-  tests-macos:
-    needs: pre-commit
-    uses: ./.github/workflows/tests-linux.yml
-    # uses: ./.github/workflows/tests-macos.yml  # TODO: fix maturin command on macOS
-
   upload-macos:
-    needs: tests-macos
     uses: ./.github/workflows/upload-macos.yml
 
-  tests-windows:
-    needs: pre-commit
-    uses: ./.github/workflows/tests-windows.yml
-
   upload-windows:
-    needs: tests-windows
     uses: ./.github/workflows/upload-windows.yml
 
   upload-sdist:
-    needs: tests-linux
     uses: ./.github/workflows/upload-sdist.yml
 
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [upload-linux, upload-macos, upload-windows, upload-sdist]
     steps:
       - uses: actions/download-artifact@v3

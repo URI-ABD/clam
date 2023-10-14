@@ -37,11 +37,14 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
+          key: venv-windows-${{ hashFiles('poetry.lock') }}
       - name: Poetry | Install
         run: poetry run poetry install --no-interaction
       - name: Maturin | Develop
-        run: poetry run maturin develop --release --strip
+        uses: PyO3/maturin-action@v1
+        with:
+          command: develop
+          args: --release
       - name: Matrix | Test
         run: |
           cargo test --release

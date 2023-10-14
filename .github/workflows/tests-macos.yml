@@ -33,15 +33,18 @@ jobs:
         run: |
           poetry config virtualenvs.create true --local
           poetry config virtualenvs.in-project true --local
+      - name: Poetry | Install
+        run: poetry install --no-interaction
       - name: Poetry | Cache
         uses: actions/cache@v3
         with:
           path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: Poetry | Install
-        run: poetry install --no-interaction
+          key: venv-macos-${{ hashFiles('poetry.lock') }}
       - name: Maturin | Develop
-        run: poetry run maturin develop --release --strip  # fails: [Errno 8] Exec format error: '/Users/runner/work/py-clam/py-clam/.venv/bin/maturin'
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release
       - name: Matrix | Test
         run: |
           cargo test --release

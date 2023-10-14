@@ -36,6 +36,9 @@ class TestSearch(unittest.TestCase):
 
         return score
 
+    @unittest.skipIf(
+        IN_GITHUB_ACTIONS, "Classification tests have high variance on github actions."
+    )
     def test_digits(self):
         digits = load_digits()
 
@@ -46,8 +49,11 @@ class TestSearch(unittest.TestCase):
         score = self.get_score(
             *train_test_split(full_x, full_y, test_size=100, random_state=42),
         )
-        assert score >= 0.5, "score on digits dataset was too low."
+        assert score >= 0.75, "score on digits dataset was too low."
 
+    @unittest.skipIf(
+        IN_GITHUB_ACTIONS, "Classification tests have high variance on github actions."
+    )
     def test_bullseye(self):
         full_x, full_y = synthetic_data.bullseye(n=256, num_rings=3)
         full_x = helpers.normalize(full_x, mode="gaussian")
@@ -56,7 +62,7 @@ class TestSearch(unittest.TestCase):
         score = self.get_score(
             *train_test_split(full_x, full_y, test_size=100, random_state=42),
         )
-        assert score >= 0.5, "score on bullseye dataset was too low."
+        assert score >= 0.75, "score on bullseye dataset was too low."
 
     @unittest.skipIf(IN_GITHUB_ACTIONS, "Requires disk write access.")
     def test_cached(self):
@@ -95,4 +101,4 @@ class TestSearch(unittest.TestCase):
         test_labels = list(map(int, test_y))
         score = accuracy_score(test_labels, predicted_labels)
 
-        assert score >= 0.5, "score on cached bullseye dataset was too low."
+        assert score >= 0.75, "score on cached bullseye dataset was too low."

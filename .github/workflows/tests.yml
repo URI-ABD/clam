@@ -3,9 +3,13 @@ name: Tests
 on:
   workflow_call:
   push:
-    branches:
+    branches-ignore:
       - main
       - master
+  pull_request:
+    branches:
+        - main
+        - master
 
 permissions:
   contents: read
@@ -18,9 +22,9 @@ jobs:
     needs: pre-commit
     uses: ./.github/workflows/tests-linux.yml
 
-  # macos:
-  #   needs: pre-commit
-  #   uses: ./.github/workflows/tests-macos.yml  # TODO: fix maturin command on macos
+  macos:
+    needs: pre-commit
+    uses: ./.github/workflows/tests-macos.yml
 
   windows:
     needs: pre-commit
