@@ -14,7 +14,7 @@
     clippy::panic,
     clippy::cast_lossless
 )]
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../../README.md")]
 
 // pub mod chaoda;
 mod cakes;
