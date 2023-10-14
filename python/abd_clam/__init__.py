@@ -21,7 +21,7 @@ from .core import graph_criteria
 from .core import metric
 from .core import space
 
-__version__ = "0.22.1"
+__version__ = "0.23.0"
 
 
 """ From Maturin
