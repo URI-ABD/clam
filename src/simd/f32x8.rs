@@ -10,7 +10,7 @@ impl F32x8 {
     ///
     /// Will panic if the slice is not at least 8 elements long.
     pub fn from_slice(slice: &[f32]) -> Self {
-        assert!(slice.len() >= Self::lanes());
+        debug_assert!(slice.len() >= Self::lanes());
         Self(
             slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
         )
@@ -41,4 +41,4 @@ impl_op8!(Add, add, F32x8, +);
 impl_op8!(assn AddAssign, add_assign, F32x8, +=);
 impl_op8!(Sub, sub, F32x8, -);
 impl_op8!(assn SubAssign, sub_assign, F32x8, -=);
-impl_euclidean!(F32x8, f32);
+impl_distances!(F32x8, f32);

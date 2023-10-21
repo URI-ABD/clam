@@ -114,11 +114,61 @@ macro_rules! impl_op8 {
     };
 }
 
-macro_rules! impl_euclidean {
+macro_rules! impl_op16 {
+    ($trait:ident, $fn:ident, $typ:ty, $op:tt) => {
+        impl $trait for $typ {
+            type Output = $typ;
+            fn $fn(self, rhs: Self) -> Self::Output {
+                Self(
+                    self.0 $op rhs.0,
+                    self.1 $op rhs.1,
+                    self.2 $op rhs.2,
+                    self.3 $op rhs.3,
+                    self.4 $op rhs.4,
+                    self.5 $op rhs.5,
+                    self.6 $op rhs.6,
+                    self.7 $op rhs.7,
+                    self.8 $op rhs.8,
+                    self.9 $op rhs.9,
+                    self.10 $op rhs.10,
+                    self.11 $op rhs.11,
+                    self.12 $op rhs.12,
+                    self.13 $op rhs.13,
+                    self.14 $op rhs.14,
+                    self.15 $op rhs.15,
+                )
+            }
+        }
+    };
+    (assn $trait:ident, $fn:ident, $typ:ty, $op:tt) => {
+        impl $trait for $typ {
+            fn $fn(&mut self, rhs: Self) {
+                    self.0 $op rhs.0;
+                    self.1 $op rhs.1;
+                    self.2 $op rhs.2;
+                    self.3 $op rhs.3;
+                    self.4 $op rhs.4;
+                    self.5 $op rhs.5;
+                    self.6 $op rhs.6;
+                    self.7 $op rhs.7;
+                    self.8 $op rhs.8;
+                    self.9 $op rhs.9;
+                    self.10 $op rhs.10;
+                    self.11 $op rhs.11;
+                    self.12 $op rhs.12;
+                    self.13 $op rhs.13;
+                    self.14 $op rhs.14;
+                    self.15 $op rhs.15;
+            }
+        }
+    };
+}
+
+macro_rules! impl_distances {
     ($name:ident, $ty:ty) => {
         use super::Naive;
         impl $name {
-            /// Calculate the squared distance between two slices
+            /// Calculate the squared distance between two SIMD lane-slices
             pub fn euclidean_inner(a: &[$ty], b: &[$ty]) -> $name {
                 let i = $name::from_slice(a);
                 let j = $name::from_slice(b);
@@ -126,12 +176,19 @@ macro_rules! impl_euclidean {
                 u * u
             }
 
+            /// Calculate the cosine accumulators (3) between two SIMD lane-slices
+            pub fn cosine_inner(a: &[$ty], b: &[$ty]) -> [$name; 3] {
+                let i = $name::from_slice(a);
+                let j = $name::from_slice(b);
+                [i * i, j * j, i * j]
+            }
+
             /// Calculate euclidean distance between two slices of equal length,
             /// using auto-vectorized SIMD primitives
-            pub fn squared_distance(a: &[$ty], b: &[$ty]) -> $ty {
+            pub fn squared_euclidean(a: &[$ty], b: &[$ty]) -> $ty {
                 assert_eq!(a.len(), b.len());
                 if a.len() < $name::lanes() {
-                    return Naive::squared_distance(a, b);
+                    return Naive::squared_euclidean(a, b);
                 }
 
                 let mut i = 0;
@@ -146,13 +203,58 @@ macro_rules! impl_euclidean {
 
                 let mut sum = sum.horizontal_add();
                 if i < a.len() {
-                    sum += Naive::squared_distance(&a[i..], &b[i..]);
+                    sum += Naive::squared_euclidean(&a[i..], &b[i..]);
                 }
                 sum
             }
 
-            pub fn distance(a: &[$ty], b: &[$ty]) -> $ty {
-                $name::squared_distance(a, b).sqrt()
+            pub fn euclidean(a: &[$ty], b: &[$ty]) -> $ty {
+                $name::squared_euclidean(a, b).sqrt()
+            }
+
+            pub fn cosine_acc(a: &[$ty], b: &[$ty]) -> [$ty; 3] {
+                assert_eq!(a.len(), b.len());
+                if a.len() < $name::lanes() {
+                    return Naive::cosine_acc(a, b);
+                }
+                let mut i = 0;
+                let [mut xx, mut yy, mut xy] = [
+                    $name::splat(0 as $ty),
+                    $name::splat(0 as $ty),
+                    $name::splat(0 as $ty),
+                ];
+                while a.len() - $name::lanes() >= i {
+                    let [xxs, yys, xys] =
+                        $name::cosine_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
+                    xx += xxs;
+                    yy += yys;
+                    xy += xys;
+                    i += $name::lanes();
+                }
+                let mut xxsum = xx.horizontal_add();
+                let mut yysum = yy.horizontal_add();
+                let mut xysum = xy.horizontal_add();
+                if i < a.len() {
+                    let [xxs, yys, xys] = Naive::cosine_acc(&a[i..], &b[i..]);
+                    xxsum += xxs;
+                    yysum += yys;
+                    xysum += xys;
+                }
+                [xxsum, yysum, xysum]
+            }
+            pub fn cosine(a: &[$ty], b: &[$ty]) -> $ty {
+                let [xx, yy, xy] = $name::cosine_acc(a, b);
+                let eps = <$ty>::EPSILON;
+                if xx < eps || yy < eps || xy < eps {
+                    1 as $ty
+                } else {
+                    let d = 1 as $ty - xy / (xx * yy).sqrt();
+                    if d < eps {
+                        0 as $ty
+                    } else {
+                        d
+                    }
+                }
             }
         }
     };
@@ -163,25 +265,48 @@ macro_rules! impl_naive {
         impl Naive for &[$ty1] {
             type Output = $ty2;
             type Ty = $ty1;
-            fn squared_distance(self, other: Self) -> $ty2 {
+            fn squared_euclidean(self, other: Self) -> Self::Output {
                 assert_eq!(self.len(), other.len());
 
-                let mut sum = 0 as $ty2;
+                let mut sum = 0 as Self::Output;
                 for i in 0..self.len() {
                     let d = self[i] - other[i];
-                    sum += (d * d) as $ty2;
+                    sum += (d * d) as Self::Output;
                 }
                 sum
             }
 
-            fn distance(self, other: Self) -> $ty2 {
-                Naive::squared_distance(self, other).sqrt()
+            fn euclidean(self, other: Self) -> Self::Output {
+                Naive::squared_euclidean(self, other).sqrt()
+            }
+
+            fn cosine_acc(self, other: Self) -> [Self::Output; 3] {
+                self.iter()
+                    .zip(other.iter())
+                    .fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
+                        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+                    })
+            }
+
+            fn cosine(self, other: Self) -> Self::Output {
+                let [xx, yy, xy] = Naive::cosine_acc(self, other);
+                let eps = Self::Output::EPSILON;
+                if xx < eps || yy < eps || xy < eps {
+                    1 as Self::Output
+                } else {
+                    let d = 1 as Self::Output - xy / (xx * yy).sqrt();
+                    if d < eps {
+                        0 as Self::Output
+                    } else {
+                        d
+                    }
+                }
             }
         }
         impl Naive for &Vec<$ty1> {
             type Output = $ty2;
             type Ty = $ty1;
-            fn squared_distance(self, other: Self) -> $ty2 {
+            fn squared_euclidean(self, other: Self) -> $ty2 {
                 assert_eq!(self.len(), other.len());
 
                 let mut sum = 0 as $ty2;
@@ -192,9 +317,63 @@ macro_rules! impl_naive {
                 sum
             }
 
-            fn distance(self, other: Self) -> $ty2 {
-                Naive::squared_distance(self, other).sqrt()
+            fn euclidean(self, other: Self) -> $ty2 {
+                Naive::squared_euclidean(self, other).sqrt()
+            }
+
+            fn cosine_acc(self, other: Self) -> [Self::Output; 3] {
+                self.iter()
+                    .zip(other.iter())
+                    .fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
+                        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+                    })
+            }
+
+            fn cosine(self, other: Self) -> Self::Output {
+                let [xx, yy, xy] = Naive::cosine_acc(self, other);
+                let eps = Self::Output::EPSILON;
+                if xx < eps || yy < eps || xy < eps {
+                    1 as Self::Output
+                } else {
+                    let d = 1 as Self::Output - xy / (xx * yy).sqrt();
+                    if d < eps {
+                        0 as Self::Output
+                    } else {
+                        d
+                    }
+                }
             }
         }
     };
 }
+/*
+macro_rules! impl_cosine {
+    ($name:ident, $ty:ty, $lanes:literal) => {
+        impl $name {
+            /// Calculate the dot product of two slices
+            pub fn dot(a: &[$ty], b: &[$ty]) -> $name {
+                $name::from_slice(a)
+                    .zip($name::from_slice(b))
+                    .fold($name::splat(0 as $ty), |acc, (a, b)| a.mul_add(b, acc))
+                    .reduce_sum()
+            }
+            pub fn cosine(a: &[$ty], b: &[$ty]) -> $name {
+                let xx = $name::dot(a, a);
+                let yy = $name::dot(b, b);
+                let xy = $name::dot(a, b);
+
+                if xx < $ty::epsilon() || yy < $ty::epsilon() || xy < $name::epsilon() {
+                    $name::one()
+                } else {
+                    let d = $ty::one() - xy * (xx * yy).inv_sqrt();
+                    if d < $ty::epsilon() {
+                        $ty::zero()
+                    } else {
+                        d
+                    }
+                }
+            }
+        }
+    };
+}
+*/

@@ -10,7 +10,7 @@ impl F64x4 {
     ///
     /// Will panic if the slice is not at least 4 elements long.
     pub fn from_slice(slice: &[f64]) -> Self {
-        assert!(slice.len() >= Self::lanes());
+        debug_assert!(slice.len() >= Self::lanes());
         Self(slice[0], slice[1], slice[2], slice[3])
         // unsafe {
         //     F64x4(
@@ -36,4 +36,4 @@ impl_op4!(assn AddAssign, add_assign, F64x4, +=);
 impl_op4!(Sub, sub, F64x4, -);
 impl_op4!(assn SubAssign, sub_assign, F64x4, -=);
 
-impl_euclidean!(F64x4, f64);
+impl_distances!(F64x4, f64);
