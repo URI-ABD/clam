@@ -656,8 +656,8 @@ pub struct SerializedCluster {
     pub lfd: f64,
     /// The `Cluster`'s ratios
     pub ratios: Option<Ratios>,
-    /// Serialized information about the cluster's immediate children, if applicable
-    pub children: Option<SerializedChildren>,
+    // /// Serialized information about the cluster's immediate children, if applicable
+    // pub children: Option<SerializedChildren>,
 }
 
 /// Serialized information about a given `Cluster`'s children
@@ -680,7 +680,7 @@ pub struct SerializedChildren {
 impl SerializedCluster {
     /// Converts a `Cluster` to a `SerializedCluster`
     #[allow(dead_code)]
-    pub fn from_cluster<U: Number>(cluster: &Cluster<U>) -> Self {
+    pub fn from_cluster<U: Number>(cluster: &Cluster<U>) -> (Self, Option<SerializedChildren>) {
         let name = cluster.name();
         let cardinality = cluster.cardinality;
         let offset = cluster.offset;
@@ -715,39 +715,38 @@ impl SerializedCluster {
             },
         );
 
-        Self {
-            name,
-            seed,
-            offset,
-            cardinality,
-            arg_center,
-            arg_radial,
-            radius_bytes,
-            lfd,
-            ratios,
+        (
+            Self {
+                name,
+                seed,
+                offset,
+                cardinality,
+                arg_center,
+                arg_radial,
+                radius_bytes,
+                lfd,
+                ratios,
+            },
             children,
-        }
+        )
     }
 
     #[allow(dead_code)]
     /// Converts a `SerializedCluster` to a `Cluster`. Optionally returns information about the
     /// Children's poles
-    pub fn into_partial_cluster<U: Number>(self) -> (Cluster<U>, Option<SerializedChildren>) {
-        (
-            Cluster {
-                history: Cluster::<U>::name_to_history(&self.name),
-                seed: self.seed,
-                offset: self.offset,
-                cardinality: self.cardinality,
-                arg_center: self.arg_center,
-                arg_radial: self.arg_radial,
-                radius: U::from_le_bytes(&self.radius_bytes),
-                lfd: self.lfd,
-                ratios: self.ratios,
-                children: None,
-            },
-            self.children,
-        )
+    pub fn into_partial_cluster<U: Number>(self) -> Cluster<U> {
+        Cluster {
+            history: Cluster::<U>::name_to_history(&self.name),
+            seed: self.seed,
+            offset: self.offset,
+            cardinality: self.cardinality,
+            arg_center: self.arg_center,
+            arg_radial: self.arg_radial,
+            radius: U::from_le_bytes(&self.radius_bytes),
+            lfd: self.lfd,
+            ratios: self.ratios,
+            children: None,
+        }
     }
 }
 
@@ -894,7 +893,7 @@ mod tests {
         let mut c1 = Cluster::new_root(&data, Some(42));
         c1.history = vec![true, true, false, false, true];
 
-        let s1 = SerializedCluster::from_cluster(&c1);
+        let (s1, s1_children) = SerializedCluster::from_cluster(&c1);
         let s1_string = serde_json::to_string(&s1).unwrap();
 
         let s2: SerializedCluster = serde_json::from_str(&s1_string).unwrap();
@@ -908,10 +907,10 @@ mod tests {
         assert_eq!(s1.lfd, s2.lfd);
         assert_eq!(s1.ratios, s2.ratios);
 
-        let (c2, children) = s2.into_partial_cluster();
+        let c2 = s2.into_partial_cluster();
 
         assert_eq!(c1, c2);
-        assert!(children.is_none());
+        assert!(s1_children.is_none());
     }
 
     #[test]

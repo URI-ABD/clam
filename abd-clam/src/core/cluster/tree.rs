@@ -3,15 +3,14 @@
 use core::marker::PhantomData;
 use std::{
     fs::{DirBuilder, File},
-    io::Write,
-    path::Path,
+    io::{Read, Write},
+    path::{Path, PathBuf},
 };
 
-use distances::Number;
-
+use super::{SerializedChildren, SerializedCluster, _cluster::Children};
 use crate::{Cluster, Dataset, Instance, PartitionCriteria};
-
-use super::SerializedCluster;
+use distances::Number;
+use serde::Serialize;
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.
@@ -91,67 +90,222 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     pub fn save(&self, path: &Path) -> Result<(), String> {
         // General structure
         // user_given_path/
-        //      clusters/ <-- Clusters are serialized using their hex name.
-        //                     Leaves have their name prepended with 'l_'
-        //      dataset/
-
+        //      clusters/   <-- Clusters are serialized using their hex name.
+        //                      Leaves have their name prepended with 'l_'.
+        //      childinfo/  <-- Information about clusters immediate children
+        //      dataset/    <-- The serialized dataset
+        //      leaves.json <-- A json file of leaf names
         // Create our directory
         let dirbuilder = DirBuilder::new();
         dirbuilder.create(path).map_err(|e| e.to_string())?;
 
         // Create cluster directory
         let cluster_path = path.join("clusters");
-        dirbuilder.create(cluster_path).map_err(|e| e.to_string())?;
+        dirbuilder.create(&cluster_path).map_err(|e| e.to_string())?;
+
+        // Create childinfo directory
+        let childinfo_path = path.join("childinfo");
+        dirbuilder.create(&childinfo_path).map_err(|e| e.to_string())?;
+
+        // Create dataset directory
+        let dataset_dir = path.join("dataset");
+        dirbuilder.create(&dataset_dir).map_err(|e| e.to_string())?;
+
+        // List of leaf clusters (Used for loading in the tree later)
+        let mut leaves: Vec<String> = vec![];
 
         // Traverse the tree, serializing each cluster
         let mut stack = vec![&self.root];
         while let Some(cur) = stack.pop() {
-            // Our filename is dynamic based on if the cluster is a leaf or not
-            let mut filename: String = String::new();
+            let filename: String = cur.name();
 
             // If the cluster is a parent, we push the children to the queue
-            if !cur.is_leaf() {
+            if cur.is_leaf() {
+                leaves.push(filename.clone());
+            } else {
                 // Unwrapping is justified here because we validated that the cluster
                 // is a leaf before reaching this code
                 #[allow(clippy::unwrap_used)]
                 let [l, r] = cur.children().unwrap();
                 stack.push(l);
                 stack.push(r);
-
-                // Append "l_" to filename if the node is a leaf
-                filename += "l_";
             }
 
-            // Finalize the filename
-            filename += &cur.name();
-
-            // Create the path to and open the serialized cluster file
-            let node_path = path.join(filename);
-            let mut file = File::create(node_path).map_err(|e| e.to_string())?;
-
             // Write out the serialized cluster
-            let serialized = SerializedCluster::from_cluster(cur);
-            let serialized = serde_json::to_string(&serialized).map_err(|e| e.to_string())?;
-            write!(file, "{serialized}").map_err(|e| e.to_string())?;
+            let (serialized, children) = SerializedCluster::from_cluster(cur);
+            let node_path = cluster_path.join(&filename);
+            serialize_to_file(node_path, &serialized)?;
+
+            if let Some(childinfo) = children {
+                let info_path = childinfo_path.join(&filename);
+                serialize_to_file(info_path, &childinfo)?;
+            }
         }
 
-        // Serialize our dataset
-        let dataset_path = path.join("dataset");
-        dirbuilder.create(dataset_path).map_err(|e| e.to_string())?;
-        self.data.save(path)?;
+        // Save the dataset
+        let saved_dataset_path = dataset_dir.join("data");
+        self.data.save(&saved_dataset_path)?;
+
+        // Save the leaf data
+        let leaf_data_path = path.join("leaves.json");
+        serialize_to_file(leaf_data_path, &leaves)?;
 
         Ok(())
     }
 
     /// # Errors
-    pub fn load(_path: &Path) -> Result<Self, String> {
-        // Load the dataset in
+    #[allow(clippy::missing_panics_doc)]
+    pub fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
+        let cluster_path = path.join("clusters");
+        let childinfo_path = path.join("childinfo");
+        let dataset_dir = path.join("dataset").join("data");
+        let dataset = D::load(&dataset_dir, metric, is_expensive)?;
 
         // Load the root in
+        let root = recover_serialized_cluster(cluster_path.join("1"))?;
 
-        // Load the leaves into a vec
+        // Leaf list
+        let mut handle = File::open(path.join("leaves.json")).map_err(|e| e.to_string())?;
+        let mut leaf_buf = String::new();
+        handle.read_to_string(&mut leaf_buf).map_err(|e| e.to_string())?;
 
-        // for each leaf { build out to that leaf }
-        todo!()
+        let leaf_names: Vec<String> = serde_json::from_str(&leaf_buf).map_err(|e| e.to_string())?;
+
+        let mut boxed_root = Box::new(root);
+
+        // Now, for each leaf, we build out the tree up to that leaf
+        for leaf in leaf_names {
+            let mut cur = &mut boxed_root;
+            let leaf_history = Cluster::<U>::name_to_history(&leaf);
+
+            for step in 0..leaf_history.len() {
+                if step == 0 {
+                    continue;
+                }
+
+                let branch = leaf_history[step];
+
+                if cur.children.is_none() {
+                    let mut left_history = leaf_history[0..step].to_vec();
+                    left_history.push(false);
+
+                    let left_name = Cluster::<U>::history_to_name(&left_history);
+                    let left: Cluster<U> = recover_serialized_cluster(cluster_path.join(left_name))?;
+
+                    let mut right_history = leaf_history[0..step].to_vec();
+                    right_history.push(true);
+
+                    let right_name = Cluster::<U>::history_to_name(&right_history);
+                    let right: Cluster<U> = recover_serialized_cluster(cluster_path.join(right_name))?;
+
+                    let parent_name = Cluster::<U>::history_to_name(&leaf_history[0..step]);
+                    let childinfo = recover_childinfo(childinfo_path.join(&parent_name))?;
+
+                    cur.children = Some(Children {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                        arg_l: childinfo.arg_l,
+                        arg_r: childinfo.arg_r,
+                        polar_distance: <U as Number>::from_le_bytes(&childinfo.polar_distance_bytes),
+                    });
+                }
+
+                // Unwrap is justified here because we always check if cur.children is None and
+                // load in the children if it is.
+                #[allow(clippy::unwrap_used)]
+                let children = cur.children.as_mut().unwrap();
+
+                if branch {
+                    cur = &mut children.right;
+                } else {
+                    cur = &mut children.left;
+                }
+            }
+        }
+
+        // TODO: Fix depth
+        Ok(Self {
+            data: dataset,
+            root: *boxed_root,
+            depth: 0,
+            _i: PhantomData,
+        })
+    }
+}
+
+///
+fn serialize_to_file<S: Serialize>(path: PathBuf, object: &S) -> Result<(), String> {
+    let mut file = File::create(path).map_err(|e| e.to_string())?;
+    let info_string = serde_json::to_string(&object).map_err(|e| e.to_string())?;
+    file.write_all(info_string.as_bytes()).map_err(|e| e.to_string())
+}
+
+///
+fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, String> {
+    let mut buffer = String::new();
+    let mut cluster_handle = File::open(path).map_err(|e| e.to_string())?;
+
+    cluster_handle.read_to_string(&mut buffer).map_err(|e| e.to_string())?;
+
+    let cluster: SerializedCluster = serde_json::from_str(&buffer).map_err(|e| e.to_string())?;
+    Ok(cluster.into_partial_cluster())
+}
+
+///
+fn recover_childinfo(path: PathBuf) -> Result<SerializedChildren, String> {
+    let mut buffer = String::new();
+    let mut childinfo_handle = File::open(path).map_err(|e| e.to_string())?;
+
+    childinfo_handle
+        .read_to_string(&mut buffer)
+        .map_err(|e| e.to_string())?;
+
+    let childinfo: SerializedChildren = serde_json::from_str(&buffer).map_err(|e| e.to_string())?;
+    Ok(childinfo)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env::temp_dir;
+
+    use crate::{PartitionCriteria, Tree, VecDataset};
+
+    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+        distances::vectors::euclidean(x, y)
+    }
+
+    #[test]
+    fn directory_structure_after_save() {
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
+        let name = "test".to_string();
+        let data = VecDataset::new(name, data, metric, false);
+        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+
+        let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+
+        let leaf_indices = tree.root.indices().collect::<Vec<_>>();
+        let tree_indices = (0..tree.root.cardinality).collect::<Vec<_>>();
+
+        assert_eq!(leaf_indices, tree_indices);
+
+        let tree_path = temp_dir().join("tree");
+
+        if tree_path.exists() {
+            std::fs::remove_dir_all(&tree_path).unwrap();
+        }
+
+        tree.save(&tree_path).unwrap();
+
+        let new_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+        dbg!(new_tree);
     }
 }
