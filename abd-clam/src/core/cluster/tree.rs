@@ -91,10 +91,9 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         // General structure
         // user_given_path/
         //      clusters/   <-- Clusters are serialized using their hex name.
-        //                      Leaves have their name prepended with 'l_'.
-        //      childinfo/  <-- Information about clusters immediate children
-        //      dataset/    <-- The serialized dataset
-        //      leaves.json <-- A json file of leaf names
+        //      childinfo/  <-- Information about clusters immediate children.
+        //      dataset/    <-- The serialized dataset.
+        //      leaves.json <-- A json file of leaf names.
         // Create our directory
         let dirbuilder = DirBuilder::new();
         dirbuilder.create(path).map_err(|e| e.to_string())?;
