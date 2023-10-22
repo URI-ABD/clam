@@ -84,16 +84,19 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// The path given will point to a newly created folder which will
     /// store all necessary data for tree reconstruction.
     ///
+    /// The directory structure looks like the following:
+    /// ```text
+    /// user_given_path/
+    ///      clusters/   <-- Clusters are serialized using their hex name.
+    ///      childinfo/  <-- Information about clusters immediate children.
+    ///      dataset/    <-- The serialized dataset.
+    ///      leaves.json <-- A json file of leaf names.
+    /// ````
+    ///
     /// # Errors
     /// Errors out on any directory or file creation issues
     #[allow(clippy::missing_panics_doc)]
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        // General structure
-        // user_given_path/
-        //      clusters/   <-- Clusters are serialized using their hex name.
-        //      childinfo/  <-- Information about clusters immediate children.
-        //      dataset/    <-- The serialized dataset.
-        //      leaves.json <-- A json file of leaf names.
         // Create our directory
         let dirbuilder = DirBuilder::new();
         dirbuilder.create(path).map_err(|e| e.to_string())?;
@@ -229,11 +232,12 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
             }
         }
 
-        // TODO: Fix depth
+        let root = *boxed_root;
+
         Ok(Self {
             data: dataset,
-            root: *boxed_root,
-            depth: 0,
+            depth: root.max_leaf_depth(),
+            root,
             _i: PhantomData,
         })
     }
@@ -298,7 +302,9 @@ mod tests {
         tree1: &Tree<I, U, VecDataset<I, U>>,
         tree2: &Tree<I, U, VecDataset<I, U>>,
     ) {
-        //assert_eq!(tree1.depth, tree2.depth, "Tree depths inequal");
+        // TODO: (OWM) Right now tree depths are never actually recalculated after partitioning, so `depth` is always
+        // zero on a normal tree. This is not the case with a recovered tree.
+        // assert_eq!(tree1.depth, tree2.depth, "Tree depths inequal");
         assert_clusters_equal(&tree1.root, &tree1.data, &tree2.root, &tree2.data);
     }
 
