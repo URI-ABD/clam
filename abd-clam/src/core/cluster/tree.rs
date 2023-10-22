@@ -2,7 +2,7 @@
 
 use core::marker::PhantomData;
 use std::{
-    fs::{DirBuilder, File},
+    fs::{create_dir, File},
     io::{Read, Write},
     path::{Path, PathBuf},
 };
@@ -97,24 +97,21 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// Errors out on any directory or file creation issues
     #[allow(clippy::missing_panics_doc)]
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        // Create our directory if needed
-        let dirbuilder = DirBuilder::new();
-
         if !path.exists() {
             return Err("Given path does not exist".to_string());
         }
 
         // Create cluster directory
         let cluster_path = path.join("clusters");
-        dirbuilder.create(&cluster_path).map_err(|e| e.to_string())?;
+        create_dir(&cluster_path).map_err(|e| e.to_string())?;
 
         // Create childinfo directory
         let childinfo_path = path.join("childinfo");
-        dirbuilder.create(&childinfo_path).map_err(|e| e.to_string())?;
+        create_dir(&childinfo_path).map_err(|e| e.to_string())?;
 
         // Create dataset directory
         let dataset_dir = path.join("dataset");
-        dirbuilder.create(&dataset_dir).map_err(|e| e.to_string())?;
+        create_dir(&dataset_dir).map_err(|e| e.to_string())?;
 
         // List of leaf clusters (Used for loading in the tree later)
         let mut leaves: Vec<String> = vec![];
