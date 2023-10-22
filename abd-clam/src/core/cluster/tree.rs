@@ -100,6 +100,10 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         // Create our directory if needed
         let dirbuilder = DirBuilder::new();
 
+        if !path.exists() {
+            return Err("Given path does not exist".to_string());
+        }
+
         // Create cluster directory
         let cluster_path = path.join("clusters");
         dirbuilder.create(&cluster_path).map_err(|e| e.to_string())?;
@@ -163,6 +167,11 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         let cluster_path = path.join("clusters");
         let childinfo_path = path.join("childinfo");
         let dataset_dir = path.join("dataset").join("data");
+
+        if !(cluster_path.exists() && childinfo_path.exists() && dataset_dir.exists()) {
+            return Err("Save directory is malformed".to_string());
+        }
+
         let dataset = D::load(&dataset_dir, metric, is_expensive)?;
 
         // Load the root in
@@ -240,6 +249,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     }
 }
 
+// TODO: At some point we will encode `object` as bytes instead of json
 /// Serializes a serializeable (`impl Serialize`) object to a given path
 ///
 /// # Errors
@@ -260,6 +270,7 @@ fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, St
 
     cluster_handle.read_to_string(&mut buffer).map_err(|e| e.to_string())?;
 
+    // TODO: At some point we will encode the serialized cluster as bytes, so this will be a byte decode
     let cluster: SerializedCluster = serde_json::from_str(&buffer).map_err(|e| e.to_string())?;
     Ok(cluster.into_partial_cluster())
 }
@@ -272,6 +283,7 @@ fn recover_serialized_childinfo(path: PathBuf) -> Result<SerializedChildren, Str
     let mut buffer = String::new();
     let mut childinfo_handle = File::open(path).map_err(|e| e.to_string())?;
 
+    // TODO: At some point we will encode the childinfo as bytes, so this will be a byte decode
     childinfo_handle
         .read_to_string(&mut buffer)
         .map_err(|e| e.to_string())?;

@@ -884,24 +884,24 @@ mod tests {
         let mut c1 = Cluster::new_root(&data, Some(42));
         c1.history = vec![true, true, false, false, true];
 
-        let (s1, s1_children) = SerializedCluster::from_cluster(&c1);
-        let s1_string = serde_json::to_string(&s1).unwrap();
+        let (original, original_children) = SerializedCluster::from_cluster(&c1);
+        let original_string = serde_json::to_string(&original).unwrap();
 
-        let s2: SerializedCluster = serde_json::from_str(&s1_string).unwrap();
-        assert_eq!(s1.name, s2.name);
-        assert_eq!(s1.seed, s2.seed);
-        assert_eq!(s1.offset, s2.offset);
-        assert_eq!(s1.cardinality, s2.cardinality);
-        assert_eq!(s1.arg_center, s2.arg_center);
-        assert_eq!(s1.arg_radial, s2.arg_radial);
-        assert_eq!(s1.radius_bytes, s2.radius_bytes);
-        assert_eq!(s1.lfd, s2.lfd);
-        assert_eq!(s1.ratios, s2.ratios);
+        let deserialized: SerializedCluster = serde_json::from_str(&original_string).unwrap();
+        assert_eq!(original.name, deserialized.name);
+        assert_eq!(original.seed, deserialized.seed);
+        assert_eq!(original.offset, deserialized.offset);
+        assert_eq!(original.cardinality, deserialized.cardinality);
+        assert_eq!(original.arg_center, deserialized.arg_center);
+        assert_eq!(original.arg_radial, deserialized.arg_radial);
+        assert_eq!(original.radius_bytes, deserialized.radius_bytes);
+        assert_eq!(original.lfd, deserialized.lfd);
+        assert_eq!(original.ratios, deserialized.ratios);
 
-        let c2 = s2.into_partial_cluster();
+        let c2 = deserialized.into_partial_cluster();
 
         assert_eq!(c1, c2);
-        assert!(s1_children.is_none());
+        assert!(original_children.is_none());
     }
 
     #[test]
