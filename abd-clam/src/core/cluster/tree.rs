@@ -195,7 +195,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                     let right: Cluster<U> = recover_serialized_cluster(cluster_path.join(right_name))?;
 
                     let parent_name = Cluster::<U>::history_to_name(&leaf_history[0..step]);
-                    let childinfo = recover_childinfo(childinfo_path.join(&parent_name))?;
+                    let childinfo = recover_serialized_childinfo(childinfo_path.join(&parent_name))?;
 
                     cur.children = Some(Children {
                         left: Box::new(left),
@@ -248,7 +248,7 @@ fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, St
 }
 
 ///
-fn recover_childinfo(path: PathBuf) -> Result<SerializedChildren, String> {
+fn recover_serialized_childinfo(path: PathBuf) -> Result<SerializedChildren, String> {
     let mut buffer = String::new();
     let mut childinfo_handle = File::open(path).map_err(|e| e.to_string())?;
 
@@ -262,16 +262,86 @@ fn recover_childinfo(path: PathBuf) -> Result<SerializedChildren, String> {
 
 #[cfg(test)]
 mod tests {
+    use distances::Number;
     use std::env::temp_dir;
 
-    use crate::{PartitionCriteria, Tree, VecDataset};
+    use crate::{
+        core::cluster::{Cluster, _cluster::Children},
+        Dataset, Instance, PartitionCriteria, Tree, VecDataset,
+    };
 
     fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
         distances::vectors::euclidean(x, y)
     }
 
+    //I: Instance, U: Number, D: Dataset<I, U>
+    fn assert_trees_equal<I: Instance, U: Number>(
+        tree1: &Tree<I, U, VecDataset<I, U>>,
+        tree2: &Tree<I, U, VecDataset<I, U>>,
+    ) {
+        //assert_eq!(tree1.depth, tree2.depth, "Tree depths inequal");
+        assert_clusters_equal(&tree1.root, &tree1.data, &tree2.root, &tree2.data);
+    }
+
+    fn assert_clusters_equal<I: Instance, U: Number>(
+        cluster1: &Cluster<U>,
+        dataset1: &VecDataset<I, U>,
+        cluster2: &Cluster<U>,
+        dataset2: &VecDataset<I, U>,
+    ) {
+        // Assert their cardinalities
+        assert_eq!(cluster1.cardinality, cluster2.cardinality);
+
+        // Resolve centers
+        let (center1, center2) = (&dataset1.data[cluster1.arg_center], &dataset2.data[cluster2.arg_center]);
+        let (radial1, radial2) = (&dataset1.data[cluster1.arg_radial], &dataset2.data[cluster2.arg_radial]);
+
+        // Metric is assumed to be shared (Good idea?)
+        let metric = dataset1.metric();
+
+        // Assert centers and radials are equal
+        assert_eq!(metric(center1, center2), U::zero());
+        assert_eq!(metric(radial1, radial2), U::zero());
+
+        // Get children and assert they are of equal optionality
+        let (children1, children2) = (&cluster1.children, &cluster2.children);
+
+        assert!(
+            children1.is_none() && children2.is_none() || children1.is_some() && children2.is_some(),
+            "One cluster has children, the other does not"
+        );
+
+        // If we have children, assert their relevant details are equal and then recurse on their clusters
+        if children1.is_some() {
+            let Children {
+                left: left_1,
+                right: right_1,
+                arg_l: arg_l_1,
+                arg_r: arg_r_1,
+                ..
+            } = children1.as_ref().unwrap();
+
+            let Children {
+                left: left_2,
+                right: right_2,
+                arg_l: arg_l_2,
+                arg_r: arg_r_2,
+                ..
+            } = children2.as_ref().unwrap();
+
+            let (l_1, l_2) = (&dataset1.data[*arg_l_1], &dataset1.data[*arg_l_2]);
+            let (r_1, r_2) = (&dataset1.data[*arg_r_1], &dataset1.data[*arg_r_2]);
+
+            assert_eq!(metric(l_1, l_2), U::zero());
+            assert_eq!(metric(r_1, r_2), U::zero());
+
+            assert_clusters_equal(left_1, dataset1, left_2, dataset2);
+            assert_clusters_equal(right_1, dataset1, right_2, dataset2);
+        }
+    }
+
     #[test]
-    fn directory_structure_after_save() {
+    fn recover_tiny() {
         let data = vec![
             vec![10.],
             vec![1.],
@@ -282,26 +352,85 @@ mod tests {
             vec![0.5],
             vec![0.],
         ];
+
+        // Generate some tree from a small dataset
         let name = "test".to_string();
         let data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
-        let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        let tree_path = temp_dir().join("tiny_tree");
 
-        let leaf_indices = tree.root.indices().collect::<Vec<_>>();
-        let tree_indices = (0..tree.root.cardinality).collect::<Vec<_>>();
-
-        assert_eq!(leaf_indices, tree_indices);
-
-        let tree_path = temp_dir().join("tree");
-
+        // Delete the path if it exists
         if tree_path.exists() {
             std::fs::remove_dir_all(&tree_path).unwrap();
         }
 
-        tree.save(&tree_path).unwrap();
+        // Save the tree
+        raw_tree.save(&tree_path).unwrap();
 
-        let new_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
-        dbg!(new_tree);
+        // Recover the tree
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+
+        // Assert recovering was successful
+        assert_trees_equal(&raw_tree, &recovered_tree);
+    }
+
+    #[test]
+    fn recover_medium() {
+        let (dimensionality, min_val, max_val) = (10, -1., 1.);
+        let seed = 42;
+
+        let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
+        let name = "test".to_string();
+        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
+
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+
+        let tree_path = temp_dir().join("medium_tree");
+
+        // Delete the path if it exists
+        if tree_path.exists() {
+            std::fs::remove_dir_all(&tree_path).unwrap();
+        }
+
+        // Save the tree
+        raw_tree.save(&tree_path).unwrap();
+
+        // Recover the tree
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+
+        // Assert recovering was successful
+        assert_trees_equal(&raw_tree, &recovered_tree);
+    }
+
+    #[test]
+    fn recover_large() {
+        let (dimensionality, min_val, max_val) = (10, -1., 1.);
+        let seed = 42;
+
+        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
+        let name = "test".to_string();
+        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
+
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+
+        let tree_path = temp_dir().join("medium_tree");
+
+        // Delete the path if it exists
+        if tree_path.exists() {
+            std::fs::remove_dir_all(&tree_path).unwrap();
+        }
+
+        // Save the tree
+        raw_tree.save(&tree_path).unwrap();
+
+        // Recover the tree
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+
+        // Assert recovering was successful
+        assert_trees_equal(&raw_tree, &recovered_tree);
     }
 }
