@@ -97,9 +97,12 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// Errors out on any directory or file creation issues
     #[allow(clippy::missing_panics_doc)]
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        // Create our directory
+        // Create our directory if needed
         let dirbuilder = DirBuilder::new();
-        dirbuilder.create(path).map_err(|e| e.to_string())?;
+
+        if !path.exists() {
+            dirbuilder.create(path).map_err(|e| e.to_string())?;
+        }
 
         // Create cluster directory
         let cluster_path = path.join("clusters");
