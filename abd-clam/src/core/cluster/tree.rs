@@ -120,16 +120,14 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         while let Some(cur) = stack.pop() {
             let filename: String = cur.name();
 
-            // If the cluster is a parent, we push the children to the queue
-            if cur.is_leaf() {
-                leaves.push(filename.clone());
-            } else {
-                // Unwrapping is justified here because we validated that the cluster
-                // is a leaf before reaching this code
-                #[allow(clippy::unwrap_used)]
-                let [l, r] = cur.children().unwrap();
-                stack.push(l);
-                stack.push(r);
+            match &cur.children {
+                Some(Children { left, right, .. }) => {
+                    stack.push(left);
+                    stack.push(right);
+                }
+                None => {
+                    leaves.push(filename.clone());
+                }
             }
 
             // Write out the serialized cluster
