@@ -61,6 +61,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     #[must_use]
     pub fn partition(mut self, criteria: &PartitionCriteria<U>) -> Self {
         self.root = self.root.partition(&mut self.data, criteria);
+        self.depth = self.root.max_leaf_depth();
         self
     }
 
@@ -307,9 +308,7 @@ mod tests {
         tree1: &Tree<I, U, VecDataset<I, U>>,
         tree2: &Tree<I, U, VecDataset<I, U>>,
     ) {
-        // TODO: (OWM) Right now tree depths are never actually recalculated after partitioning, so `depth` is always
-        // zero on a normal tree. This is not the case with a recovered tree.
-        // assert_eq!(tree1.depth, tree2.depth, "Tree depths inequal");
+        assert_eq!(tree1.depth, tree2.depth, "Tree depths inequal");
         assert_clusters_equal(&tree1.root, &tree1.data, &tree2.root, &tree2.data);
     }
 
