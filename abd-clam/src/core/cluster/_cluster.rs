@@ -656,17 +656,11 @@ pub struct SerializedCluster {
     pub lfd: f64,
     /// The `Cluster`'s ratios
     pub ratios: Option<Ratios>,
-    // /// Serialized information about the cluster's immediate children, if applicable
-    // pub children: Option<SerializedChildren>,
 }
 
 /// Serialized information about a given `Cluster`'s children
 #[derive(Serialize, Deserialize)]
 pub struct SerializedChildren {
-    /// The encoded history of the left child
-    pub left_name: String,
-    /// The encoded history of the right child
-    pub right_name: String,
     /// The left pole of the `Cluster`
     pub arg_l: usize,
     /// The right pole of the `Cluster`
@@ -699,15 +693,12 @@ impl SerializedCluster {
         // the tree and serialize manually
         let children = cluster.children.as_ref().map(
             |Children {
-                 left,
-                 right,
                  arg_l,
                  arg_r,
                  polar_distance,
+                 ..
              }| {
                 SerializedChildren {
-                    left_name: left.name(),
-                    right_name: right.name(),
                     arg_l: *arg_l,
                     arg_r: *arg_r,
                     polar_distance_bytes: polar_distance.to_le_bytes(),

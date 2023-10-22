@@ -82,10 +82,10 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// Saves a tree to a given location
     ///
     /// The path given will point to a newly created folder which will
-    /// store all necessary data for reconstruction.
+    /// store all necessary data for tree reconstruction.
     ///
     /// # Errors
-    /// .
+    /// Errors out on any directory or file creation issues
     #[allow(clippy::missing_panics_doc)]
     pub fn save(&self, path: &Path) -> Result<(), String> {
         // General structure
@@ -152,9 +152,14 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         Ok(())
     }
 
+    /// Reconstructs a `Tree` from a directory `path` with associated metric `metric`. Returns the
+    /// reconstructed tree.
+    ///
     /// # Errors
+    /// This function will return an error if there's any file creation, file reading, or json deserialization issues.
     #[allow(clippy::missing_panics_doc)]
     pub fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
+        // Alises to relevant directories
         let cluster_path = path.join("clusters");
         let childinfo_path = path.join("childinfo");
         let dataset_dir = path.join("dataset").join("data");
@@ -163,40 +168,44 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         // Load the root in
         let root = recover_serialized_cluster(cluster_path.join("1"))?;
 
-        // Leaf list
+        // Open up and read the names of leaf indices
         let mut handle = File::open(path.join("leaves.json")).map_err(|e| e.to_string())?;
         let mut leaf_buf = String::new();
         handle.read_to_string(&mut leaf_buf).map_err(|e| e.to_string())?;
 
         let leaf_names: Vec<String> = serde_json::from_str(&leaf_buf).map_err(|e| e.to_string())?;
-
         let mut boxed_root = Box::new(root);
 
         // Now, for each leaf, we build out the tree up to that leaf
-        // This is bounded O(nd) where n is the # of nodes, d is the depth of the tree
         for leaf in leaf_names {
             let mut cur = &mut boxed_root;
             let leaf_history = Cluster::<U>::name_to_history(&leaf);
 
+            // We start from index 1 to skip the identically 1 prefix at index 0
             for step in 1..leaf_history.len() {
                 let branch = leaf_history[step];
 
+                // If we don't have any children here, we need to build them out
                 if cur.children.is_none() {
+                    // Construct the names for the left and right children
                     let mut left_history = leaf_history[0..step].to_vec();
                     left_history.push(false);
-
-                    let left_name = Cluster::<U>::history_to_name(&left_history);
-                    let left: Cluster<U> = recover_serialized_cluster(cluster_path.join(left_name))?;
 
                     let mut right_history = leaf_history[0..step].to_vec();
                     right_history.push(true);
 
+                    let left_name = Cluster::<U>::history_to_name(&left_history);
                     let right_name = Cluster::<U>::history_to_name(&right_history);
+
+                    // Deserialize the left and right child clusters
+                    let left: Cluster<U> = recover_serialized_cluster(cluster_path.join(left_name))?;
                     let right: Cluster<U> = recover_serialized_cluster(cluster_path.join(right_name))?;
 
+                    // Get the childinfo (arg_l, arg_r, etc.)
                     let parent_name = Cluster::<U>::history_to_name(&leaf_history[0..step]);
                     let childinfo = recover_serialized_childinfo(childinfo_path.join(&parent_name))?;
 
+                    // Reconstruct the children
                     cur.children = Some(Children {
                         left: Box::new(left),
                         right: Box::new(right),
@@ -211,6 +220,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 #[allow(clippy::unwrap_used)]
                 let children = cur.children.as_mut().unwrap();
 
+                // Choose which branch to take
                 if branch {
                     cur = &mut children.right;
                 } else {
@@ -229,14 +239,20 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     }
 }
 
+/// Serializes a serializeable (`impl Serialize`) object to a given path
 ///
+/// # Errors
+/// This function will error out on serialization or file i/o errors.
 fn serialize_to_file<S: Serialize>(path: PathBuf, object: &S) -> Result<(), String> {
     let mut file = File::create(path).map_err(|e| e.to_string())?;
     let info_string = serde_json::to_string(&object).map_err(|e| e.to_string())?;
     file.write_all(info_string.as_bytes()).map_err(|e| e.to_string())
 }
 
+/// Recovers a `Cluster` from a serialized cluster contained in a given file. Does not recover child info
 ///
+/// # Errors
+/// This function will error out on any deserialization or file i/o errors.
 fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, String> {
     let mut buffer = String::new();
     let mut cluster_handle = File::open(path).map_err(|e| e.to_string())?;
@@ -247,7 +263,10 @@ fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, St
     Ok(cluster.into_partial_cluster())
 }
 
+/// Recovers child information for a given cluster
 ///
+/// # Errors
+/// This function will error out on any deserialization or file i/o errors.
 fn recover_serialized_childinfo(path: PathBuf) -> Result<SerializedChildren, String> {
     let mut buffer = String::new();
     let mut childinfo_handle = File::open(path).map_err(|e| e.to_string())?;
@@ -383,7 +402,7 @@ mod tests {
 
         let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
         let name = "test".to_string();
-        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
+        let data = VecDataset::<_, f32>::new(name, data, metric, false);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
@@ -412,7 +431,7 @@ mod tests {
 
         let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
         let name = "test".to_string();
-        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
+        let data = VecDataset::<_, f32>::new(name, data, metric, false);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
 
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
