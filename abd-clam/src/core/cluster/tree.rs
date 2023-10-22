@@ -173,15 +173,12 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         let mut boxed_root = Box::new(root);
 
         // Now, for each leaf, we build out the tree up to that leaf
+        // This is bounded O(nd) where n is the # of nodes, d is the depth of the tree
         for leaf in leaf_names {
             let mut cur = &mut boxed_root;
             let leaf_history = Cluster::<U>::name_to_history(&leaf);
 
-            for step in 0..leaf_history.len() {
-                if step == 0 {
-                    continue;
-                }
-
+            for step in 1..leaf_history.len() {
                 let branch = leaf_history[step];
 
                 if cur.children.is_none() {
