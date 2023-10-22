@@ -104,6 +104,7 @@ impl Vectorized for &[f32] {
     type Output = f32;
     fn squared_euclidean(self, other: Self) -> Self::Output {
         if self.len() >= 64 {
+            // TODO will this fail on 128-bit?
             F32x8::squared_euclidean(self, other)
         } else {
             F32x4::squared_euclidean(self, other)
