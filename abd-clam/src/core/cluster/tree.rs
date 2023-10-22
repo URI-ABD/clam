@@ -286,7 +286,7 @@ fn recover_serialized_childinfo(path: PathBuf) -> Result<SerializedChildren, Str
 #[cfg(test)]
 mod tests {
     use distances::Number;
-    use std::env::temp_dir;
+    use tempdir::TempDir;
 
     use crate::{
         core::cluster::{Cluster, _cluster::Children},
@@ -384,18 +384,13 @@ mod tests {
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
-        let tree_path = temp_dir().join("tiny_tree");
-
-        // Delete the path if it exists
-        if tree_path.exists() {
-            std::fs::remove_dir_all(&tree_path).unwrap();
-        }
+        let tree_path = TempDir::new("tree_tiny").unwrap();
 
         // Save the tree
-        raw_tree.save(&tree_path).unwrap();
+        raw_tree.save(&tree_path.path()).unwrap();
 
         // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
 
         // Assert recovering was successful
         assert_trees_equal(&raw_tree, &recovered_tree);
@@ -413,18 +408,13 @@ mod tests {
 
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
-        let tree_path = temp_dir().join("medium_tree");
-
-        // Delete the path if it exists
-        if tree_path.exists() {
-            std::fs::remove_dir_all(&tree_path).unwrap();
-        }
+        let tree_path = TempDir::new("tree_medium").unwrap();
 
         // Save the tree
-        raw_tree.save(&tree_path).unwrap();
+        raw_tree.save(&tree_path.path()).unwrap();
 
         // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
 
         // Assert recovering was successful
         assert_trees_equal(&raw_tree, &recovered_tree);
@@ -442,18 +432,13 @@ mod tests {
 
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
-        let tree_path = temp_dir().join("medium_tree");
-
-        // Delete the path if it exists
-        if tree_path.exists() {
-            std::fs::remove_dir_all(&tree_path).unwrap();
-        }
+        let tree_path = TempDir::new("tree_large").unwrap();
 
         // Save the tree
-        raw_tree.save(&tree_path).unwrap();
+        raw_tree.save(&tree_path.path()).unwrap();
 
         // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path, metric, false).unwrap();
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
 
         // Assert recovering was successful
         assert_trees_equal(&raw_tree, &recovered_tree);
