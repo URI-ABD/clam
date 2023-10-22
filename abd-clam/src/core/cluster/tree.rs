@@ -91,7 +91,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     ///      childinfo/  <-- Information about clusters immediate children.
     ///      dataset/    <-- The serialized dataset.
     ///      leaves.json <-- A json file of leaf names.
-    /// ````
+    /// ```
     ///
     /// # Errors
     /// Errors out on any directory or file creation issues
@@ -99,10 +99,6 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     pub fn save(&self, path: &Path) -> Result<(), String> {
         // Create our directory if needed
         let dirbuilder = DirBuilder::new();
-
-        if !path.exists() {
-            dirbuilder.create(path).map_err(|e| e.to_string())?;
-        }
 
         // Create cluster directory
         let cluster_path = path.join("clusters");
@@ -300,7 +296,6 @@ mod tests {
         distances::vectors::euclidean(x, y)
     }
 
-    //I: Instance, U: Number, D: Dataset<I, U>
     fn assert_trees_equal<I: Instance, U: Number>(
         tree1: &Tree<I, U, VecDataset<I, U>>,
         tree2: &Tree<I, U, VecDataset<I, U>>,
