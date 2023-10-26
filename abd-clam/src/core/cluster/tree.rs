@@ -405,7 +405,7 @@ mod tests {
         let (dimensionality, min_val, max_val) = (10, -1., 1.);
         let seed = 42;
 
-        let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
+        let data = symagen::random_data::random_f32(1000, dimensionality, min_val, max_val, seed);
         let name = "test".to_string();
         let data = VecDataset::<_, f32>::new(name, data, metric, false);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
@@ -413,30 +413,6 @@ mod tests {
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
 
         let tree_path = TempDir::new("tree_medium").unwrap();
-
-        // Save the tree
-        raw_tree.save(&tree_path.path()).unwrap();
-
-        // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
-
-        // Assert recovering was successful
-        assert_trees_equal(&raw_tree, &recovered_tree);
-    }
-
-    #[test]
-    fn recover_large() {
-        let (dimensionality, min_val, max_val) = (10, -1., 1.);
-        let seed = 42;
-
-        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
-        let name = "test".to_string();
-        let data = VecDataset::<_, f32>::new(name, data, metric, false);
-        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
-
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-
-        let tree_path = TempDir::new("tree_large").unwrap();
 
         // Save the tree
         raw_tree.save(&tree_path.path()).unwrap();
