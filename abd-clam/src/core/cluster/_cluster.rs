@@ -406,7 +406,6 @@ impl<U: Number> Cluster<U> {
     ///
     /// * `means`: The means of the `Cluster` ratios.
     /// * `sds`: The standard deviations of the `Cluster` ratios.
-    #[allow(unused_mut, unused_variables, dead_code)]
     pub fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
         let ratios: Vec<_> = self
             .ratios
@@ -420,7 +419,6 @@ impl<U: Number> Cluster<U> {
             .collect();
         self.ratios = Some(ratios.try_into().unwrap());
 
-        // wont let me match children like other functions because self is taken by mut reference and does not return self
         match &mut self.children {
             Some(children) => {
                 children.left.set_normalized_ratios(means, sds);

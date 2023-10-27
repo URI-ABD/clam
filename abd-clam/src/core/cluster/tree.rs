@@ -66,11 +66,25 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         self
     }
 
-    /// Recursively computes the anomaly ratios for all clusters in the tree.
+    /// Sets the `Cluster` ratios for anomaly detection and related applications.
+    ///
+    /// This method may only be called on the root `Cluster`. It is user error
+    /// to call this method on a non-root `Cluster`.
+    ///
+    /// This method should be called after calling `partition` on the root
+    /// `Cluster`. It is user error to call this method before calling
+    /// `partition` on the root `Cluster`.
+    ///
+    /// # Arguments
+    ///
+    /// * `normalized`: Whether to normalize the ratios. We use Gaussian error
+    /// functions to normalize the ratios, which is a common practice in
+    /// anomaly detection.
     pub fn with_ratios(mut self, normalize: bool) -> Self {
         self.root = self.root.set_child_parent_ratios([1.0; 6]);
 
         if normalize {
+            // collect ratios into vec in dft order
             let all_ratios = self
                 .root
                 .subtree()
@@ -84,6 +98,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
                 .collect();
 
+            // mean of each column
             let means: [f64; 6] = all_ratios
                 .iter()
                 .map(|values| statistical::mean(values))
@@ -91,6 +106,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 .try_into()
                 .unwrap();
 
+            // sd of each column
             let sds: [f64; 6] = all_ratios
                 .iter()
                 .zip(means.iter())
@@ -345,24 +361,20 @@ mod tests {
     }
     #[test]
     fn test_ratios() {
-        let data = vec![
-            vec![10.],
-            vec![1.],
-            vec![-5.],
-            vec![8.],
-            vec![3.],
-            vec![2.],
-            vec![0.5],
-            vec![0.],
-        ];
-
         // Generate some tree from a small dataset
+        let data = vec![vec![10.], vec![1.], vec![3.]];
+
         let name = "test".to_string();
         let data = VecDataset::new(name, data, metric, false);
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
         let raw_tree = Tree::new(data, Some(42))
             .partition(&partition_criteria)
             .with_ratios(false);
+
+        //      1
+        //   10    11
+        //100  101
+
         let all_ratios = raw_tree
             .root
             .subtree()
@@ -370,29 +382,82 @@ mod tests {
             .map(|c| c.ratios.unwrap())
             .collect::<Vec<_>>();
 
-        for row in &all_ratios {
-            println!("{:?}", row);
-        }
+        let all_cardinalities = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.cardinality)
+            .collect::<Vec<_>>();
+
+        let all_lfd = raw_tree.root.subtree().into_iter().map(|c| c.lfd).collect::<Vec<_>>();
+
+        let all_radius = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.radius)
+            .collect::<Vec<_>>();
+
+        // manually calculate ratios between root and its children
+        let root_ratios = vec![
+            all_cardinalities[0] as f64,
+            all_radius[0] as f64,
+            all_lfd[0],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let lc_ratios = vec![
+            all_cardinalities[1] as f64 / root_ratios[0] as f64,
+            all_radius[1] as f64 / root_ratios[1] as f64,
+            all_lfd[1] / root_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let lclc_ratios = vec![
+            all_cardinalities[2] as f64 / lc_ratios[0] as f64,
+            all_radius[2] as f64 / lc_ratios[1] as f64,
+            all_lfd[2] / lc_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let lcrc_ratios = vec![
+            all_cardinalities[3] as f64 / lc_ratios[0] as f64,
+            all_radius[3] as f64 / lc_ratios[1] as f64,
+            all_lfd[3] / lc_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let rc_ratios = vec![
+            all_cardinalities[3] as f64 / root_ratios[0] as f64,
+            all_radius[3] as f64 / root_ratios[1] as f64,
+            all_lfd[3] / root_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+
+        assert_eq!(all_ratios[0][0..3], root_ratios[0..3], "root not correct");
+        assert_eq!(all_ratios[1][0..3], lc_ratios[0..3], "lc not correct");
+        assert_eq!(all_ratios[2][0..3], lclc_ratios[0..3], "lclc not correct");
+        assert_eq!(all_ratios[3][0..3], lcrc_ratios[0..3], "lcrc not correct");
+        assert_eq!(all_ratios[4][0..3], rc_ratios[0..3], "rc not correct");
     }
 
     #[test]
     fn test_normalized_ratios() {
-        let data = vec![
-            vec![10.],
-            vec![1.],
-            vec![-5.],
-            vec![8.],
-            vec![3.],
-            vec![2.],
-            vec![0.5],
-            vec![0.],
-        ];
+        let (dimensionality, min_val, max_val) = (10, -1., 1.);
+        let seed = 42;
 
-        // Generate some tree from a small dataset
+        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
         let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
+        let data = VecDataset::<_, f32>::new(name, data, metric, false);
+
         let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let raw_tree = Tree::new(data, Some(42))
+        let raw_tree = Tree::new(data, Some(seed))
             .partition(&partition_criteria)
             .with_ratios(true);
 
@@ -402,10 +467,6 @@ mod tests {
             .into_iter()
             .map(|c| c.ratios.unwrap())
             .collect::<Vec<_>>();
-
-        for row in &all_ratios {
-            println!("{:?}", row);
-        }
 
         for row in &all_ratios {
             for val in row {

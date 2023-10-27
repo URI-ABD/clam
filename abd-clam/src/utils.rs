@@ -57,7 +57,7 @@ pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
 #[allow(dead_code)]
 pub fn normalize_1d(values: &[f64]) -> Vec<f64> {
     let mean = mean(values);
-    let std = (EPSILON + sd(values, mean)) * SQRT_2;
+    let std = (EPSILON + statistical::population_standard_deviation(values, Some(mean))) * SQRT_2;
     values
         .iter()
         .map(|&v| v - mean)
@@ -100,7 +100,6 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
 ///
 /// * `ratio` - The ratio to compute the EMA of.
 /// * `parent_ema` - The parent EMA to use.
-#[allow(dead_code)]
 pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
     let alpha = 2. / 11.;
