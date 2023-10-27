@@ -360,32 +360,43 @@ impl<U: Number> Cluster<U> {
     /// # Arguments
     ///
     /// * `parent_ratios`: The ratios for the parent `Cluster`.
-    #[allow(unused_mut, unused_variables, dead_code)]
-    fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
-        todo!()
-        // let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
+    pub fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
+        let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
 
-        // let c = (self.cardinality as f64) / pc;
-        // let r = self.radius().as_f64() / pr;
-        // let l = self.lfd() / pl;
+        let c = (self.cardinality as f64) / pc;
+        let r = self.radius.as_f64() / pr;
+        let l = self.lfd / pl;
 
-        // let c_ = self.next_ema(c, pc_);
-        // let r_ = self.next_ema(r, pr_);
-        // let l_ = self.next_ema(l, pl_);
+        let c_ = utils::next_ema(c, pc_);
+        let r_ = utils::next_ema(r, pr_);
+        let l_ = utils::next_ema(l, pl_);
 
-        // let ratios = [c, r, l, c_, r_, l_];
-        // self.ratios = Some(ratios);
+        let ratios = [c, r, l, c_, r_, l_];
+        self.ratios = Some(ratios);
 
-        // match &self.index {
-        //     Index::Indices(_) => (),
-        //     Index::Children(([(l, left), (r, right)], lr)) => {
-        //         let left = Box::new(left.set_child_parent_ratios([1.; 6]));
-        //         let right = Box::new(right.set_child_parent_ratios([1.; 6]));
-        //         self.index = Index::Children(([(*l, left), (*r, right)], *lr));
-        //     },
-        // };
+        match self.children {
+            Some(Children {
+                left,
+                right,
+                arg_l,
+                arg_r,
+                polar_distance,
+            }) => {
+                let left = Box::new(left.set_child_parent_ratios(ratios));
+                let right = Box::new(right.set_child_parent_ratios(ratios));
+                let children = Children {
+                    left,
+                    right,
+                    arg_l,
+                    arg_r,
+                    polar_distance,
+                };
+                self.children = Some(children);
+            }
+            None => (),
+        }
 
-        // self
+        self
     }
 
     /// Normalizes the `Cluster` ratios for anomaly detection and related
@@ -396,27 +407,27 @@ impl<U: Number> Cluster<U> {
     /// * `means`: The means of the `Cluster` ratios.
     /// * `sds`: The standard deviations of the `Cluster` ratios.
     #[allow(unused_mut, unused_variables, dead_code)]
-    fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
-        todo!()
-        // let ratios: Vec<_> = self
-        //     .ratios
-        //     .unwrap()
-        //     .into_iter()
-        //     .zip(means.into_iter())
-        //     .zip(sds.into_iter())
-        //     .map(|((value, mean), std)| (value - mean) / (std * 2_f64.sqrt()))
-        //     .map(libm::erf)
-        //     .map(|v| (1. + v) / 2.)
-        //     .collect();
-        // self.ratios = Some(ratios.try_into().unwrap());
+    pub fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
+        let ratios: Vec<_> = self
+            .ratios
+            .unwrap()
+            .into_iter()
+            .zip(means.into_iter())
+            .zip(sds.into_iter())
+            .map(|((value, mean), std)| (value - mean) / (std * 2_f64.sqrt()))
+            .map(libm::erf)
+            .map(|v| (1. + v) / 2.)
+            .collect();
+        self.ratios = Some(ratios.try_into().unwrap());
 
-        // match self.index {
-        //     Index::Indices(_) => (),
-        //     Index::Children(([(_, mut left), (_, mut right)], _)) => {
-        //         left.set_normalized_ratios(means, sds);
-        //         right.set_normalized_ratios(means, sds);
-        //     },
-        // };
+        // wont let me match children like other functions because self is taken by mut reference and does not return self
+        match &mut self.children {
+            Some(children) => {
+                children.left.set_normalized_ratios(means, sds);
+                children.right.set_normalized_ratios(means, sds);
+            }
+            None => (),
+        }
     }
 
     /// The indices of the `Cluster`'s instances in the dataset.
