@@ -11,6 +11,7 @@ use super::{SerializedChildren, SerializedCluster, _cluster::Children};
 use crate::{Cluster, Dataset, Instance, PartitionCriteria};
 use distances::Number;
 use serde::Serialize;
+extern crate statistical;
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.
@@ -62,6 +63,45 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     pub fn partition(mut self, criteria: &PartitionCriteria<U>) -> Self {
         self.root = self.root.partition(&mut self.data, criteria);
         self.depth = self.root.max_leaf_depth();
+        self
+    }
+
+    /// Recursively computes the anomaly ratios for all clusters in the tree.
+    pub fn with_ratios(mut self, normalize: bool) -> Self {
+        self.root = self.root.set_child_parent_ratios([1.0; 6]);
+
+        if normalize {
+            let all_ratios = self
+                .root
+                .subtree()
+                .into_iter()
+                .map(|c| c.ratios.unwrap())
+                .collect::<Vec<_>>();
+
+            // Transpose the ratios
+            let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
+            let all_ratios: Vec<Vec<_>> = (0..6)
+                .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
+                .collect();
+
+            let means: [f64; 6] = all_ratios
+                .iter()
+                .map(|values| statistical::mean(values))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+            let sds: [f64; 6] = all_ratios
+                .iter()
+                .zip(means.iter())
+                .map(|(values, &mean)| 1e-8 + statistical::population_standard_deviation(values, Some(mean)))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+            self.root.set_normalized_ratios(means, sds);
+        }
+
         self
     }
 
@@ -303,6 +343,76 @@ mod tests {
     fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
         distances::vectors::euclidean(x, y)
     }
+    #[test]
+    fn test_ratios() {
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
+
+        // Generate some tree from a small dataset
+        let name = "test".to_string();
+        let data = VecDataset::new(name, data, metric, false);
+        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(false);
+        let all_ratios = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.ratios.unwrap())
+            .collect::<Vec<_>>();
+
+        for row in &all_ratios {
+            println!("{:?}", row);
+        }
+    }
+
+    #[test]
+    fn test_normalized_ratios() {
+        let data = vec![
+            vec![10.],
+            vec![1.],
+            vec![-5.],
+            vec![8.],
+            vec![3.],
+            vec![2.],
+            vec![0.5],
+            vec![0.],
+        ];
+
+        // Generate some tree from a small dataset
+        let name = "test".to_string();
+        let data = VecDataset::new(name, data, metric, false);
+        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(true);
+
+        let all_ratios = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.ratios.unwrap())
+            .collect::<Vec<_>>();
+
+        for row in &all_ratios {
+            println!("{:?}", row);
+        }
+
+        for row in &all_ratios {
+            for val in row {
+                assert!(*val >= 0. && *val <= 1.);
+            }
+        }
+    }
 
     fn assert_trees_equal<I: Instance, U: Number>(
         tree1: &Tree<I, U, VecDataset<I, U>>,
@@ -422,5 +532,113 @@ mod tests {
 
         // Assert recovering was successful
         assert_trees_equal(&raw_tree, &recovered_tree);
+    }
+
+    #[test]
+    fn recover_large() {
+        let (dimensionality, min_val, max_val) = (10, -1., 1.);
+        let seed = 42;
+
+        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
+        let name = "test".to_string();
+        let data = VecDataset::<_, f32>::new(name, data, metric, false);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
+
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+
+        let tree_path = TempDir::new("tree_large").unwrap();
+
+        // Save the tree
+        raw_tree.save(&tree_path.path()).unwrap();
+
+        // Recover the tree
+        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
+
+        // Assert recovering was successful
+        assert_trees_equal(&raw_tree, &recovered_tree);
+    }
+
+    fn transpose(all_ratios: &Vec<[f64; 6]>) -> Vec<Vec<f64>> {
+        let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
+        let all_ratios: Vec<Vec<_>> = (0..6)
+            .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
+            .collect();
+
+        all_ratios
+    }
+
+    fn calc_means(all_ratios: &Vec<Vec<f64>>) -> [f64; 6] {
+        let means: [f64; 6] = all_ratios
+            .iter()
+            .map(|values| statistical::mean(values))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        means
+    }
+
+    fn calc_sds(all_ratios: &Vec<Vec<f64>>) -> [f64; 6] {
+        let means = calc_means(all_ratios);
+        let sds: [f64; 6] = all_ratios
+            .iter()
+            .zip(means.iter())
+            .map(|(values, &mean)| 1e-8 + statistical::population_standard_deviation(values, Some(mean)))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        sds
+    }
+
+    #[test]
+    fn test_means() {
+        let all_ratios: Vec<[f64; 6]> = vec![
+            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
+            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
+            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
+        ];
+
+        let transposed = transpose(&all_ratios);
+        let means = calc_means(&transposed);
+
+        let expected_means: [f64; 6] = [3.3333333333333335, 4.0, 6.333333333333334, 6.0, 8.0, 8.666666666666668];
+
+        means.iter().zip(expected_means.iter()).for_each(|(&val1, &val2)| {
+            assert!(
+                (val1 - val2).abs() < 0.001,
+                "Values not equal: val1 = {}, val2 = {}",
+                val1,
+                val2
+            );
+        });
+    }
+
+    #[test]
+    fn test_sds() {
+        let all_ratios: Vec<[f64; 6]> = vec![
+            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
+            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
+            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
+        ];
+
+        let expected_standard_deviations: [f64; 6] = [1.247, 0.816, 1.247, 1.632, 0.816, 5.792];
+        // let sds = calc_sds(&transpose(&all_ratios));
+        let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
+        let all_ratios: Vec<Vec<_>> = (0..6)
+            .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
+            .collect();
+
+        let sds = calc_sds(&all_ratios);
+
+        sds.iter()
+            .zip(expected_standard_deviations.iter())
+            .for_each(|(&val1, &val2)| {
+                assert!(
+                    (val1 - val2).abs() < 0.001,
+                    "Values not equal: val1 = {}, val2 = {}",
+                    val1,
+                    val2
+                );
+            });
     }
 }
