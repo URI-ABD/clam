@@ -1,6 +1,6 @@
 [package]
 name = "distances"
-version = "1.6.0-dev0"
+version = "1.4.1"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Noah Daniels <noah_daniels@uri.edu>",
@@ -21,8 +21,7 @@ publish = true
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-# symagen = { path = "../SyMaGen" }
-symagen = "0.1.1"
+symagen = { version = "0.1.1", path = "../SyMaGen" }
 
 [[bench]]
 name = "inv-sqrt"
