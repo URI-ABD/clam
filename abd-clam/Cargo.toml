@@ -23,7 +23,7 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { version = "1.4.1", path = "../distances" }
+distances = { version = "1.5.0", path = "../distances" }
 rayon = "1.8.0"
 
 # Only used for Dataset::choose_unique
