@@ -110,3 +110,94 @@ pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
 pub fn pos_val<T: Eq + Copy>(values: &[T], v: T) -> Option<(usize, T)> {
     values.iter().copied().enumerate().find(|&(_, x)| x == v)
 }
+
+/// Transpose a matrix represented as an array of arrays (slices) to an array of Vecs.
+///
+/// Given an array of arrays (slices), where each slice represents a row and each element
+/// within the slice represents a column, this function transposes the data to an array of Vecs.
+/// The resulting array of Vecs represents the columns of the original matrix. It is expected that each array
+/// in the input data has 6 columns.
+///
+/// # Arguments
+///
+/// - `all_ratios`: A reference to a Vec of arrays where each array has 6 columns.
+///
+/// # Returns
+///
+/// An array of Vecs where each Vec represents a column of the original matrix.
+/// /// Note that all arrays in the input Vec must have 6 columns.
+///
+/// # Panics
+///
+/// This function may panic if the input data does not have consistent array lengths or if
+/// the number of columns in the arrays is not 6.
+///
+pub fn transpose(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
+    let all_ratios: Vec<f64> = values.iter().flat_map(|arr| arr.iter().copied()).collect();
+    let mut transposed: [Vec<f64>; 6] = Default::default();
+
+    for (s, element) in transposed.iter_mut().enumerate() {
+        *element = all_ratios.iter().skip(s).step_by(6).copied().collect();
+    }
+
+    transposed
+}
+
+/// Calculate the mean of every row in a 2D array represented as an array of Vecs.
+///
+/// Given an array of Vecs, where each Vec represents a row and contains a series of f64 values,
+/// this function computes the mean for each row. It returns an array of means, where each element
+/// corresponds to the mean of the respective row.
+///
+/// # Arguments
+///
+/// - `values`: A reference to an array of Vecs, where each Vec represents a row.
+///
+/// # Returns
+///
+/// An array of means, where each element represents the mean of a row.
+/// # Panics
+///
+/// This function may panic if the input data does not have consistent row lengths or if the
+/// number of rows in the array is not 6.
+///
+pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
+    let means: [f64; 6] = values
+        .iter()
+        .map(|values| statistical::mean(values))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("Array always has a length of 6."));
+
+    means
+}
+
+/// Calculate the standard deviation of every row in a 2D array represented as an array of Vecs.
+///
+/// Given an array of Vecs, where each Vec represents a row and contains a series of f64 values,
+/// this function computes the standard deviation for each row. It returns an array of standard
+/// deviations, where each element corresponds to the standard deviation of the respective row.
+///
+/// # Arguments
+///
+/// - `values`: A reference to an array of Vecs, where each Vec represents a row.
+///
+/// # Returns
+///
+/// An array of standard deviations, where each element represents the standard deviation of a row.
+/// # Panics
+///
+/// This function may panic if the input data does not have consistent row lengths or if the
+/// number of rows in the array is not 6.
+///
+pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
+    let means = calc_row_means(values);
+    let sds: [f64; 6] = values
+        .iter()
+        .zip(means.iter())
+        .map(|(values, &mean)| f64::EPSILON + statistical::population_standard_deviation(values, Some(mean)))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("Array always has a length of 6"));
+    sds
+}
