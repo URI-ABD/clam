@@ -66,6 +66,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         self
     }
 
+    /// # Panics
     /// Sets the `Cluster` ratios for anomaly detection and related applications.
     ///
     /// This method may only be called on the root `Cluster`. It is user error
@@ -80,6 +81,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// * `normalized`: Whether to normalize the ratios. We use Gaussian error
     /// functions to normalize the ratios, which is a common practice in
     /// anomaly detection.
+    #[must_use]
     pub fn with_ratios(mut self, normalize: bool) -> Self {
         self.root = self.root.set_child_parent_ratios([1.0; 6]);
 
@@ -89,13 +91,16 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 .root
                 .subtree()
                 .into_iter()
-                .map(|c| c.ratios.unwrap())
+                .map(|c| {
+                    c.ratios
+                        .unwrap_or_else(|| unreachable!("We just set the ratios above."))
+                })
                 .collect::<Vec<_>>();
 
             // Transpose the ratios
-            let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
+            let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().copied()).collect();
             let all_ratios: Vec<Vec<_>> = (0..6)
-                .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
+                .map(|s| all_ratios.iter().skip(s).step_by(6).copied().collect())
                 .collect();
 
             // mean of each column
@@ -104,7 +109,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 .map(|values| statistical::mean(values))
                 .collect::<Vec<_>>()
                 .try_into()
-                .unwrap();
+                .unwrap_or_else(|_| unreachable!("Array always has a length of 6."));
 
             // sd of each column
             let sds: [f64; 6] = all_ratios
@@ -113,7 +118,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 .map(|(values, &mean)| 1e-8 + statistical::population_standard_deviation(values, Some(mean)))
                 .collect::<Vec<_>>()
                 .try_into()
-                .unwrap();
+                .unwrap_or_else(|_| unreachable!("Array always has a length of 6"));
 
             self.root.set_normalized_ratios(means, sds);
         }
