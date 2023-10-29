@@ -125,12 +125,7 @@ pub fn pos_val<T: Eq + Copy>(values: &[T], v: T) -> Option<(usize, T)> {
 /// # Returns
 ///
 /// An array of Vecs where each Vec represents a column of the original matrix.
-/// /// Note that all arrays in the input Vec must have 6 columns.
-///
-/// # Panics
-///
-/// This function may panic if the input data does not have consistent array lengths or if
-/// the number of columns in the arrays is not 6.
+/// Note that all arrays in the input Vec must have 6 columns.
 ///
 pub fn transpose(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
     let all_ratios: Vec<f64> = values.iter().flat_map(|arr| arr.iter().copied()).collect();
@@ -156,10 +151,6 @@ pub fn transpose(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
 /// # Returns
 ///
 /// An array of means, where each element represents the mean of a row.
-/// # Panics
-///
-/// This function may panic if the input data does not have consistent row lengths or if the
-/// number of rows in the array is not 6.
 ///
 pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
     let means: [f64; 6] = values
@@ -185,10 +176,6 @@ pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
 /// # Returns
 ///
 /// An array of standard deviations, where each element represents the standard deviation of a row.
-/// # Panics
-///
-/// This function may panic if the input data does not have consistent row lengths or if the
-/// number of rows in the array is not 6.
 ///
 pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
     let means = calc_row_means(values);
