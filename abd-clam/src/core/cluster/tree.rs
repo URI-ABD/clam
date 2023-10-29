@@ -8,10 +8,9 @@ use std::{
 };
 
 use super::{SerializedChildren, SerializedCluster, _cluster::Children};
-use crate::{Cluster, Dataset, Instance, PartitionCriteria};
+use crate::{utils, Cluster, Dataset, Instance, PartitionCriteria};
 use distances::Number;
 use serde::Serialize;
-extern crate statistical;
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.
@@ -97,28 +96,21 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 })
                 .collect::<Vec<_>>();
 
-            // Transpose the ratios
-            let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().copied()).collect();
-            let all_ratios: Vec<Vec<_>> = (0..6)
-                .map(|s| all_ratios.iter().skip(s).step_by(6).copied().collect())
-                .collect();
+            // // tranposed ratios into [Vec<f64>;6]
+            // let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
+            // let mut transposed: [Vec<f64>; 6] = Default::default();
+
+            // for (s, element) in transposed.iter_mut().enumerate() {
+            //     *element = all_ratios.iter().skip(s).step_by(6).cloned().collect();
+            // }
+
+            let all_ratios = utils::transpose(&all_ratios);
 
             // mean of each column
-            let means: [f64; 6] = all_ratios
-                .iter()
-                .map(|values| statistical::mean(values))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap_or_else(|_| unreachable!("Array always has a length of 6."));
+            let means: [f64; 6] = utils::calc_row_means(&all_ratios);
 
             // sd of each column
-            let sds: [f64; 6] = all_ratios
-                .iter()
-                .zip(means.iter())
-                .map(|(values, &mean)| 1e-8 + statistical::population_standard_deviation(values, Some(mean)))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap_or_else(|_| unreachable!("Array always has a length of 6"));
+            let sds: [f64; 6] = utils::calc_row_sds(&all_ratios);
 
             self.root.set_normalized_ratios(means, sds);
         }
@@ -364,121 +356,6 @@ mod tests {
     fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
         distances::vectors::euclidean(x, y)
     }
-    #[test]
-    fn test_ratios() {
-        // Generate some tree from a small dataset
-        let data = vec![vec![10.], vec![1.], vec![3.]];
-
-        let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
-            .with_ratios(false);
-
-        //      1
-        //   10    11
-        //100  101
-
-        let all_ratios = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.ratios.unwrap())
-            .collect::<Vec<_>>();
-
-        let all_cardinalities = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.cardinality)
-            .collect::<Vec<_>>();
-
-        let all_lfd = raw_tree.root.subtree().into_iter().map(|c| c.lfd).collect::<Vec<_>>();
-
-        let all_radius = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.radius)
-            .collect::<Vec<_>>();
-
-        // manually calculate ratios between root and its children
-        let root_ratios = vec![
-            all_cardinalities[0] as f64,
-            all_radius[0] as f64,
-            all_lfd[0],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let lc_ratios = vec![
-            all_cardinalities[1] as f64 / root_ratios[0] as f64,
-            all_radius[1] as f64 / root_ratios[1] as f64,
-            all_lfd[1] / root_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let lclc_ratios = vec![
-            all_cardinalities[2] as f64 / lc_ratios[0] as f64,
-            all_radius[2] as f64 / lc_ratios[1] as f64,
-            all_lfd[2] / lc_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let lcrc_ratios = vec![
-            all_cardinalities[3] as f64 / lc_ratios[0] as f64,
-            all_radius[3] as f64 / lc_ratios[1] as f64,
-            all_lfd[3] / lc_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let rc_ratios = vec![
-            all_cardinalities[3] as f64 / root_ratios[0] as f64,
-            all_radius[3] as f64 / root_ratios[1] as f64,
-            all_lfd[3] / root_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-
-        assert_eq!(all_ratios[0][0..3], root_ratios[0..3], "root not correct");
-        assert_eq!(all_ratios[1][0..3], lc_ratios[0..3], "lc not correct");
-        assert_eq!(all_ratios[2][0..3], lclc_ratios[0..3], "lclc not correct");
-        assert_eq!(all_ratios[3][0..3], lcrc_ratios[0..3], "lcrc not correct");
-        assert_eq!(all_ratios[4][0..3], rc_ratios[0..3], "rc not correct");
-    }
-
-    #[test]
-    fn test_normalized_ratios() {
-        let (dimensionality, min_val, max_val) = (10, -1., 1.);
-        let seed = 42;
-
-        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
-        let name = "test".to_string();
-        let data = VecDataset::<_, f32>::new(name, data, metric, false);
-
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let raw_tree = Tree::new(data, Some(seed))
-            .partition(&partition_criteria)
-            .with_ratios(true);
-
-        let all_ratios = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.ratios.unwrap())
-            .collect::<Vec<_>>();
-
-        for row in &all_ratios {
-            for val in row {
-                assert!(*val >= 0. && *val <= 1.);
-            }
-        }
-    }
 
     fn assert_trees_equal<I: Instance, U: Number>(
         tree1: &Tree<I, U, VecDataset<I, U>>,
@@ -624,36 +501,149 @@ mod tests {
         assert_trees_equal(&raw_tree, &recovered_tree);
     }
 
-    fn transpose(all_ratios: &Vec<[f64; 6]>) -> Vec<Vec<f64>> {
-        let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
-        let all_ratios: Vec<Vec<_>> = (0..6)
-            .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
-            .collect();
+    #[test]
+    fn test_ratios() {
+        // Generate some tree from a small dataset
+        let data = vec![vec![10.], vec![1.], vec![3.]];
 
-        all_ratios
+        let name = "test".to_string();
+        let data = VecDataset::new(name, data, metric, false);
+        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(false);
+
+        //      1
+        //   10    11
+        //100  101
+
+        let all_ratios = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.ratios.unwrap())
+            .collect::<Vec<_>>();
+
+        let all_cardinalities = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.cardinality)
+            .collect::<Vec<_>>();
+
+        let all_lfd = raw_tree.root.subtree().into_iter().map(|c| c.lfd).collect::<Vec<_>>();
+
+        let all_radius = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.radius)
+            .collect::<Vec<_>>();
+
+        // manually calculate ratios between root and its children
+        let root_ratios = vec![
+            all_cardinalities[0] as f64,
+            all_radius[0] as f64,
+            all_lfd[0],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let lc_ratios = vec![
+            all_cardinalities[1] as f64 / root_ratios[0] as f64,
+            all_radius[1] as f64 / root_ratios[1] as f64,
+            all_lfd[1] / root_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let lclc_ratios = vec![
+            all_cardinalities[2] as f64 / lc_ratios[0] as f64,
+            all_radius[2] as f64 / lc_ratios[1] as f64,
+            all_lfd[2] / lc_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let lcrc_ratios = vec![
+            all_cardinalities[3] as f64 / lc_ratios[0] as f64,
+            all_radius[3] as f64 / lc_ratios[1] as f64,
+            all_lfd[3] / lc_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+        let rc_ratios = vec![
+            all_cardinalities[3] as f64 / root_ratios[0] as f64,
+            all_radius[3] as f64 / root_ratios[1] as f64,
+            all_lfd[3] / root_ratios[2],
+            -1.,
+            -1.,
+            -1.,
+        ];
+
+        assert_eq!(all_ratios[0][0..3], root_ratios[0..3], "root not correct");
+        assert_eq!(all_ratios[1][0..3], lc_ratios[0..3], "lc not correct");
+        assert_eq!(all_ratios[2][0..3], lclc_ratios[0..3], "lclc not correct");
+        assert_eq!(all_ratios[3][0..3], lcrc_ratios[0..3], "lcrc not correct");
+        assert_eq!(all_ratios[4][0..3], rc_ratios[0..3], "rc not correct");
     }
 
-    fn calc_means(all_ratios: &Vec<Vec<f64>>) -> [f64; 6] {
-        let means: [f64; 6] = all_ratios
-            .iter()
-            .map(|values| statistical::mean(values))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+    #[test]
+    fn test_normalized_ratios() {
+        let (dimensionality, min_val, max_val) = (10, -1., 1.);
+        let seed = 42;
 
-        means
+        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
+        let name = "test".to_string();
+        let data = VecDataset::<_, f32>::new(name, data, metric, false);
+
+        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
+        let raw_tree = Tree::new(data, Some(seed))
+            .partition(&partition_criteria)
+            .with_ratios(true);
+
+        let all_ratios = raw_tree
+            .root
+            .subtree()
+            .into_iter()
+            .map(|c| c.ratios.unwrap())
+            .collect::<Vec<_>>();
+
+        for row in &all_ratios {
+            for val in row {
+                assert!(*val >= 0. && *val <= 1.);
+            }
+        }
     }
 
-    fn calc_sds(all_ratios: &Vec<Vec<f64>>) -> [f64; 6] {
-        let means = calc_means(all_ratios);
-        let sds: [f64; 6] = all_ratios
-            .iter()
-            .zip(means.iter())
-            .map(|(values, &mean)| 1e-8 + statistical::population_standard_deviation(values, Some(mean)))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        sds
+    use crate::utils;
+
+    #[test]
+    fn test_transpose() {
+        // Input data: 3 rows x 6 columns
+        let data: Vec<[f64; 6]> = vec![
+            [2.0, 3.0, 5.0, 7.0, 11.0, 13.0],
+            [4.0, 3.0, 5.0, 9.0, 10.0, 15.0],
+            [6.0, 2.0, 8.0, 11.0, 9.0, 11.0],
+        ];
+
+        // Expected transposed data: 6 rows x 3 columns
+        let expected_transposed: [Vec<f64>; 6] = [
+            vec![2.0, 4.0, 6.0],
+            vec![3.0, 3.0, 2.0],
+            vec![5.0, 5.0, 8.0],
+            vec![7.0, 9.0, 11.0],
+            vec![11.0, 10.0, 9.0],
+            vec![13.0, 15.0, 11.0],
+        ];
+
+        let transposed_data = utils::transpose(&data);
+
+        // Check if the transposed data matches the expected result
+        for i in 0..6 {
+            assert_eq!(transposed_data[i], expected_transposed[i]);
+        }
     }
 
     #[test]
@@ -664,19 +654,15 @@ mod tests {
             [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
         ];
 
-        let transposed = transpose(&all_ratios);
-        let means = calc_means(&transposed);
+        let transposed = utils::transpose(&all_ratios);
+        let means = utils::calc_row_means(&transposed);
 
         let expected_means: [f64; 6] = [3.3333333333333335, 4.0, 6.333333333333334, 6.0, 8.0, 8.666666666666668];
 
-        means.iter().zip(expected_means.iter()).for_each(|(&val1, &val2)| {
-            assert!(
-                (val1 - val2).abs() < 0.001,
-                "Values not equal: val1 = {}, val2 = {}",
-                val1,
-                val2
-            );
-        });
+        means
+            .iter()
+            .zip(expected_means.iter())
+            .for_each(|(&a, &b)| assert!(float_cmp::approx_eq!(f64, a, b, ulps = 2), "{}, {} not equal", a, b));
     }
 
     #[test]
@@ -687,24 +673,25 @@ mod tests {
             [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
         ];
 
-        let expected_standard_deviations: [f64; 6] = [1.247, 0.816, 1.247, 1.632, 0.816, 5.792];
-        // let sds = calc_sds(&transpose(&all_ratios));
-        let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
-        let all_ratios: Vec<Vec<_>> = (0..6)
-            .map(|s| all_ratios.iter().skip(s).step_by(6).cloned().collect())
-            .collect();
-
-        let sds = calc_sds(&all_ratios);
+        let expected_standard_deviations: [f64; 6] = [
+            1.2472191289246,
+            0.81649658092773,
+            1.2472191289246,
+            1.6329931618555,
+            0.81649658092773,
+            5.7927157323276,
+        ];
+        let sds = utils::calc_row_sds(&utils::transpose(&all_ratios));
 
         sds.iter()
             .zip(expected_standard_deviations.iter())
-            .for_each(|(&val1, &val2)| {
+            .for_each(|(&a, &b)| {
                 assert!(
-                    (val1 - val2).abs() < 0.001,
-                    "Values not equal: val1 = {}, val2 = {}",
-                    val1,
-                    val2
-                );
+                    float_cmp::approx_eq!(f64, a, b, epsilon = 0.00000003),
+                    "{}, {} not equal",
+                    a,
+                    b
+                )
             });
     }
 }
