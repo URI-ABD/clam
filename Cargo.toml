@@ -22,6 +22,7 @@ publish = true
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 symagen = { version = "0.1.1", path = "../SyMaGen" }
+test-case = "3.2.1"
 
 [[bench]]
 name = "inv-sqrt"
