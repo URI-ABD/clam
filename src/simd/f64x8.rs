@@ -14,7 +14,6 @@ impl F64x8 {
         Self(
             slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
         )
-        // unsafe { Self(*slice.get_unchecked(0), *slice.get_unchecked(1)) }
     }
 
     pub fn horizontal_add(self) -> f64 {

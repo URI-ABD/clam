@@ -12,14 +12,6 @@ impl F32x4 {
     pub fn from_slice(slice: &[f32]) -> Self {
         debug_assert!(slice.len() >= Self::lanes());
         Self(slice[0], slice[1], slice[2], slice[3])
-        // unsafe {
-        //     Self(
-        //         *slice.get_unchecked(0),
-        //         *slice.get_unchecked(1),
-        //         *slice.get_unchecked(2),
-        //         *slice.get_unchecked(3),
-        //     )
-        // }
     }
 
     pub fn horizontal_add(self) -> f32 {

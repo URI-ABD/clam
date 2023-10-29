@@ -346,34 +346,3 @@ macro_rules! impl_naive {
         }
     };
 }
-/*
-macro_rules! impl_cosine {
-    ($name:ident, $ty:ty, $lanes:literal) => {
-        impl $name {
-            /// Calculate the dot product of two slices
-            pub fn dot(a: &[$ty], b: &[$ty]) -> $name {
-                $name::from_slice(a)
-                    .zip($name::from_slice(b))
-                    .fold($name::splat(0 as $ty), |acc, (a, b)| a.mul_add(b, acc))
-                    .reduce_sum()
-            }
-            pub fn cosine(a: &[$ty], b: &[$ty]) -> $name {
-                let xx = $name::dot(a, a);
-                let yy = $name::dot(b, b);
-                let xy = $name::dot(a, b);
-
-                if xx < $ty::epsilon() || yy < $ty::epsilon() || xy < $name::epsilon() {
-                    $name::one()
-                } else {
-                    let d = $ty::one() - xy * (xx * yy).inv_sqrt();
-                    if d < $ty::epsilon() {
-                        $ty::zero()
-                    } else {
-                        d
-                    }
-                }
-            }
-        }
-    };
-}
-*/

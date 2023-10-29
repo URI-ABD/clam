@@ -17,18 +17,6 @@ impl F32x16 {
             slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
             slice[8], slice[9], slice[10], slice[11], slice[12], slice[13], slice[14], slice[15],
         )
-        // unsafe {
-        //     Self(
-        //         *slice.get_unchecked(0),
-        //         *slice.get_unchecked(1),
-        //         *slice.get_unchecked(2),
-        //         *slice.get_unchecked(3),
-        //         *slice.get_unchecked(4),
-        //         *slice.get_unchecked(5),
-        //         *slice.get_unchecked(6),
-        //         *slice.get_unchecked(7),
-        //     )
-        // }
     }
 
     pub fn horizontal_add(self) -> f32 {

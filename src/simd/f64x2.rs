@@ -12,7 +12,6 @@ impl F64x2 {
     pub fn from_slice(slice: &[f64]) -> Self {
         debug_assert!(slice.len() >= Self::lanes());
         Self(slice[0], slice[1])
-        // unsafe { Self(*slice.get_unchecked(0), *slice.get_unchecked(1)) }
     }
 
     pub fn horizontal_add(self) -> f64 {
