@@ -13,7 +13,10 @@ edition = "2021"
 rust-version = "1.72"
 description = "Clustering, Learning and Approximation with Manifolds"
 license = "MIT"
-readme = "../README.md"
+readme = "./README.md"
+documentation = "docs.rs/abd-clam"
+repository = "https://github.com/URI-ABD/clam"
+homepage = "https://github.com/URI-ABD/clam"
 
 # Publishing lock.
 # When you're ready to start publishing, set publish to true
