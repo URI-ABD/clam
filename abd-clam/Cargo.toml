@@ -14,7 +14,7 @@ rust-version = "1.72"
 description = "Clustering, Learning and Approximation with Manifolds"
 license = "MIT"
 readme = "./README.md"
-documentation = "docs.rs/abd-clam"
+documentation = "https://docs.rs/abd-clam/latest/abd_clam/"
 repository = "https://github.com/URI-ABD/clam"
 homepage = "https://github.com/URI-ABD/clam"
 
