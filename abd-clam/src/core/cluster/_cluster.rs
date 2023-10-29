@@ -354,6 +354,7 @@ impl<U: Number> Cluster<U> {
         // self
     }
 
+    /// # Panics
     /// Sets the chile-parent `Cluster` ratios for anomaly detection and related
     /// applications.
     ///
@@ -361,44 +362,44 @@ impl<U: Number> Cluster<U> {
     ///
     /// * `parent_ratios`: The ratios for the parent `Cluster`.
     pub fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
-        let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
+        let [parent_cardinality, parent_radius, parent_lfd, parent_cardinality_ema, parent_radius_ema, parent_lfd_ema] =
+            parent_ratios;
 
-        let c = (self.cardinality as f64) / pc;
-        let r = self.radius.as_f64() / pr;
-        let l = self.lfd / pl;
+        let c = self.cardinality.as_f64() / parent_cardinality;
+        let r = self.radius.as_f64() / parent_radius;
+        let l = self.lfd / parent_lfd;
 
-        let c_ = utils::next_ema(c, pc_);
-        let r_ = utils::next_ema(r, pr_);
-        let l_ = utils::next_ema(l, pl_);
+        let c_ = utils::next_ema(c, parent_cardinality_ema);
+        let r_ = utils::next_ema(r, parent_radius_ema);
+        let l_ = utils::next_ema(l, parent_lfd_ema);
 
         let ratios = [c, r, l, c_, r_, l_];
         self.ratios = Some(ratios);
 
-        match self.children {
-            Some(Children {
+        if let Some(Children {
+            left,
+            right,
+            arg_l,
+            arg_r,
+            polar_distance,
+        }) = self.children
+        {
+            let left = Box::new(left.set_child_parent_ratios(ratios));
+            let right = Box::new(right.set_child_parent_ratios(ratios));
+            let children = Children {
                 left,
                 right,
                 arg_l,
                 arg_r,
                 polar_distance,
-            }) => {
-                let left = Box::new(left.set_child_parent_ratios(ratios));
-                let right = Box::new(right.set_child_parent_ratios(ratios));
-                let children = Children {
-                    left,
-                    right,
-                    arg_l,
-                    arg_r,
-                    polar_distance,
-                };
-                self.children = Some(children);
-            }
-            None => (),
+            };
+            self.children = Some(children);
         }
 
         self
     }
 
+    /// # Panics
     /// Normalizes the `Cluster` ratios for anomaly detection and related
     /// applications.
     ///
@@ -407,17 +408,20 @@ impl<U: Number> Cluster<U> {
     /// * `means`: The means of the `Cluster` ratios.
     /// * `sds`: The standard deviations of the `Cluster` ratios.
     pub fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
-        let ratios: Vec<_> = self
+        let normalized_ratios: Vec<_> = self
             .ratios
-            .unwrap()
+            .unwrap_or_else(|| unreachable!("Ratios should have been set first."))
             .into_iter()
-            .zip(means.into_iter())
-            .zip(sds.into_iter())
+            .zip(means)
+            .zip(sds)
             .map(|((value, mean), std)| (value - mean) / (std * 2_f64.sqrt()))
             .map(libm::erf)
             .map(|v| (1. + v) / 2.)
             .collect();
-        self.ratios = Some(ratios.try_into().unwrap());
+
+        if let Ok(normalized_ratios) = normalized_ratios.try_into() {
+            self.ratios = Some(normalized_ratios);
+        }
 
         match &mut self.children {
             Some(children) => {
