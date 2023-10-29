@@ -29,4 +29,4 @@ pub mod strings;
 pub mod vectors;
 
 /// The version of the crate.
-pub const VERSION: &str = "1.4.1";
+pub const VERSION: &str = "1.5.0";
