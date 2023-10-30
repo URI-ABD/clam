@@ -96,14 +96,6 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                 })
                 .collect::<Vec<_>>();
 
-            // // tranposed ratios into [Vec<f64>;6]
-            // let all_ratios: Vec<f64> = all_ratios.iter().flat_map(|arr| arr.iter().cloned()).collect();
-            // let mut transposed: [Vec<f64>; 6] = Default::default();
-
-            // for (s, element) in transposed.iter_mut().enumerate() {
-            //     *element = all_ratios.iter().skip(s).step_by(6).cloned().collect();
-            // }
-
             let all_ratios = utils::transpose(&all_ratios);
 
             // mean of each column
