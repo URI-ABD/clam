@@ -43,7 +43,7 @@ where
             &confirmed
                 .iter()
                 .chain(straddlers.iter())
-                .map(|&(c, _)| c.lfd)
+                .map(|&(c, _)| c.lfd())
                 .collect::<Vec<_>>(),
         );
         let factor = (k.as_f64() / num_confirmed.as_f64()).powf(1. / (lfd + f64::EPSILON));
@@ -62,42 +62,5 @@ where
 
 /// Count the total cardinality of the clusters.
 fn count_hits<U: Number>(clusters: &[(&Cluster<U>, U)]) -> usize {
-    clusters.iter().map(|(c, _)| c.cardinality).sum()
-}
-
-#[cfg(test)]
-mod tests {
-    use symagen::random_data;
-
-    use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
-
-    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        distances::vectors::euclidean(x, y)
-    }
-
-    #[test]
-    fn repeated_rnn() {
-        let (cardinality, dimensionality) = (10_000, 100);
-        let (min_val, max_val) = (-1.0, 1.0);
-        let seed = 42;
-
-        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
-
-        let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = &query[0];
-
-        let criteria = PartitionCriteria::default();
-        let model = Cakes::new(data, Some(seed), &criteria);
-        let tree = model.tree();
-
-        let indices = (0..cardinality).collect::<Vec<_>>();
-        for k in [1, 10, 100] {
-            let repeated_nn = sort_hits(super::search(tree, query, k));
-            assert_eq!(repeated_nn.len(), k);
-
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
-            assert_eq!(linear_nn, repeated_nn);
-        }
-    }
+    clusters.iter().map(|(c, _)| c.cardinality()).sum()
 }

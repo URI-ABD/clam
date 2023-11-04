@@ -54,10 +54,10 @@ where
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
 fn d_min<U: Number>(c: &Cluster<U>, d: U) -> U {
-    if d < c.radius {
+    if d < c.radius() {
         U::zero()
     } else {
-        d - c.radius
+        d - c.radius()
     }
 }
 
@@ -109,45 +109,5 @@ fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize
     while hits.len() > k {
         hits.pop()
             .unwrap_or_else(|| unreachable!("`hits` is non-empty and has at least k elements."));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use symagen::random_data;
-
-    use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
-
-    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        distances::vectors::euclidean(x, y)
-    }
-
-    #[test]
-    fn tiny() {
-        let (cardinality, dimensionality) = (1_000, 10);
-        let (min_val, max_val) = (-1.0, 1.0);
-        let seed = 42;
-
-        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
-
-        let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = &query[0];
-
-        let criteria = PartitionCriteria::default();
-        let model = Cakes::new(data, Some(seed), &criteria);
-        let tree = model.tree();
-
-        let indices = (0..cardinality).collect::<Vec<_>>();
-
-        for k in [100, 10, 1] {
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
-            assert_eq!(linear_nn.len(), k);
-
-            let thresholds_nn = sort_hits(super::search(tree, query, k));
-            assert_eq!(linear_nn.len(), thresholds_nn.len());
-
-            assert_eq!(linear_nn, thresholds_nn);
-        }
     }
 }

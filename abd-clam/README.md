@@ -12,33 +12,26 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 ### Cakes: Nearest Neighbor Search
 
 ```rust
-use symagen::random_data;
-
 use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
 
-/// Euclidean distance function.
+/// The distance function with with do perform clustering and search.
 ///
-/// This function is used to compute the distance between two points for the purposes
-/// of this demo. You can use your own distance function instead. The required
-/// signature is `fn(&I, &I) -> U` where `I` is the type of the points (must
-/// implement the `Instance` trait) and `U` is a `Number` type (e.g. `f32`)
-/// from the `distances` crate.
+/// We use the `distances` crate for the distance function.
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-    x.iter()
-        .zip(y.iter())
-        .map(|(a, b)| a - b)
-        .map(|v| v * v)
-        .sum::<f32>()
-        .sqrt()
+    distances::simd::euclidean_f32(x, y)
 }
 
-// Some parameters for generating random data.
-let seed = 42;
-let (cardinality, dimensionality) = (10_000, 10);
-let (min_val, max_val) = (-1.0, 1.0);
-
 /// Generate some random data. You can use your own data here.
-let data: Vec<Vec<f32>> = random_data::random_f32(
+///
+/// CLAM can handle arbitrarily large datasets. We use a small one here for
+/// demonstration.
+///
+/// We use the `symagen` crate for generating interesting datasets for examples
+/// and tests.
+let seed = 42;
+let (cardinality, dimensionality) = (1_000, 10);
+let (min_val, max_val) = (-1.0, 1.0);
+let data: Vec<Vec<f32>> = symagen::random_data::random_f32(
     cardinality,
     dimensionality,
     min_val,
@@ -46,10 +39,13 @@ let data: Vec<Vec<f32>> = random_data::random_f32(
     seed,
 );
 
-// We will use the first point in data as our query, and we will perform
-// RNN search with a radius of 0.05 and KNN search for the 10 nearest neighbors.
-let query: Vec<f32> = data[0].clone();
+// We will use the origin as our query.
+let query: Vec<f32> = vec![0.0; dimensionality];
+
+// RNN search will use a radius of 0.05.
 let radius: f32 = 0.05;
+
+// KNN search will find the 10 nearest neighbors.
 let k = 10;
 
 // The name of the dataset.
@@ -71,21 +67,17 @@ let data = VecDataset::<Vec<f32>, f32>::new(
 let criteria = PartitionCriteria::default();
 
 // The Cakes struct provides the functionality described in the CHESS paper.
-// This line performs a non-trivial amount of work.
+// This line performs a non-trivial amount of work. #understatement
 let model = Cakes::new(data, Some(seed), &criteria);
 
-// Note that the dataset has been reordered to improve search performance.
-
-// We will soon add the ability to save and load models, but for now we will
-// just use the model we just created.
+// At this point, the dataset has been reordered to improve search performance.
 
 // We can now perform RNN search on the model.
 let rnn_results: Vec<(usize, f32)> = model.rnn_search(
     &query,
     radius,
-    rnn::Algorithm::Clustered,
+    rnn::Algorithm::default(),
 );
-assert!(!rnn_results.is_empty());
 
 // We can also perform KNN search on the model.
 let knn_results: Vec<(usize, f32)> = model.knn_search(
@@ -93,11 +85,13 @@ let knn_results: Vec<(usize, f32)> = model.knn_search(
     k,
     knn::Algorithm::default(),
 );
-assert!(knn_results.len() >= k);
+assert!(knn_results.len() == k);
 
 // Both results are a Vec of 2-tuples where the first element is the index of
 // the point in the dataset and the second element is the distance from the
 // query point.
+
+// TODO: Add snippets for saving/loading models.
 ```
 
 ### Chaoda: Anomaly Detection

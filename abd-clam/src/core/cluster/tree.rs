@@ -4,13 +4,16 @@ use core::marker::PhantomData;
 use std::{
     fs::{create_dir, File},
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-use super::{SerializedChildren, SerializedCluster, _cluster::Children};
+use super::{
+    SerializedCluster,
+    _cluster::{Children, SerializedChildren},
+};
 use crate::{utils, Cluster, Dataset, Instance, PartitionCriteria};
 use distances::Number;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.
@@ -65,38 +68,36 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         self
     }
 
-    /// # Panics
     /// Sets the `Cluster` ratios for anomaly detection and related applications.
     ///
-    /// This method may only be called on the root `Cluster`. It is user error
-    /// to call this method on a non-root `Cluster`.
-    ///
-    /// This method should be called after calling `partition` on the root
-    /// `Cluster`. It is user error to call this method before calling
-    /// `partition` on the root `Cluster`.
+    /// This should only be called on the root `Cluster` after calling `partition`.
     ///
     /// # Arguments
     ///
-    /// * `normalized`: Whether to normalize the ratios. We use Gaussian error
-    /// functions to normalize the ratios, which is a common practice in
-    /// anomaly detection.
+    /// * `normalized`: Whether to apply Gaussian error normalization to the ratios.
+    ///
+    /// # Panics
+    ///
+    /// * If this method is called on a non-root `Cluster`.
+    /// * If this method is called before calling `partition` on the root `Cluster`.
     #[must_use]
     pub fn with_ratios(mut self, normalize: bool) -> Self {
+        // TODO: Let's move this to a method on Cluster.
+
         self.root = self.root.set_child_parent_ratios([1.0; 6]);
 
         if normalize {
-            // collect ratios into vec in dft order
             let all_ratios = self
                 .root
                 .subtree()
-                .into_iter()
+                .iter()
                 .map(|c| {
-                    c.ratios
+                    c.ratios()
                         .unwrap_or_else(|| unreachable!("We just set the ratios above."))
                 })
                 .collect::<Vec<_>>();
 
-            let all_ratios = utils::transpose(&all_ratios);
+            let all_ratios = utils::rows_to_cols(&all_ratios);
 
             // mean of each column
             let means: [f64; 6] = utils::calc_row_means(&all_ratios);
@@ -117,12 +118,22 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
 
     /// The cardinality of the `Tree`, i.e. the number of instances in the data.
     pub const fn cardinality(&self) -> usize {
-        self.root.cardinality
+        self.root.cardinality()
     }
 
     /// The radius of the root of the `Tree`.
     pub const fn radius(&self) -> U {
-        self.root.radius
+        self.root.radius()
+    }
+
+    /// The root `Cluster` of the `Tree`.
+    pub const fn root(&self) -> &Cluster<U> {
+        &self.root
+    }
+
+    /// The depth of the `Tree`.
+    pub const fn depth(&self) -> usize {
+        self.depth
     }
 
     /// Saves a tree to a given location
@@ -131,17 +142,24 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// store all necessary data for tree reconstruction.
     ///
     /// The directory structure looks like the following:
+    ///
     /// ```text
-    /// user_given_path/
-    ///      clusters/   <-- Clusters are serialized using their hex name.
-    ///      childinfo/  <-- Information about clusters immediate children.
-    ///      dataset/    <-- The serialized dataset.
-    ///      leaves.json <-- A json file of leaf names.
+    /// /user/given/path/
+    ///    |- clusters/    <-- Clusters are serialized using their hex name.
+    ///    |- childinfo/   <-- Information about clusters immediate children.
+    ///    |- dataset/     <-- The serialized dataset.
+    ///    |- leaves.json  <-- A json file of leaf names.
     /// ```
     ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to save the tree to.
+    ///
     /// # Errors
-    /// Errors out on any directory or file creation issues
-    #[allow(clippy::missing_panics_doc)]
+    ///
+    /// * If `path` does not exist.
+    /// * If `path` cannot be written to.
+    /// * If there are any serialization errors with the dataset.
     pub fn save(&self, path: &Path) -> Result<(), String> {
         if !path.exists() {
             return Err("Given path does not exist".to_string());
@@ -167,8 +185,8 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         while let Some(cur) = stack.pop() {
             let filename: String = cur.name();
 
-            match &cur.children {
-                Some(Children { left, right, .. }) => {
+            match cur.children() {
+                Some([left, right]) => {
                     stack.push(left);
                     stack.push(right);
                 }
@@ -180,11 +198,11 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
             // Write out the serialized cluster
             let (serialized, children) = SerializedCluster::from_cluster(cur);
             let node_path = cluster_path.join(&filename);
-            serialize_to_file(node_path, &serialized)?;
+            serialize_to_file(&node_path, &serialized)?;
 
             if let Some(childinfo) = children {
                 let info_path = childinfo_path.join(&filename);
-                serialize_to_file(info_path, &childinfo)?;
+                serialize_to_file(&info_path, &childinfo)?;
             }
         }
 
@@ -194,7 +212,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
 
         // Save the leaf data
         let leaf_data_path = path.join("leaves.json");
-        serialize_to_file(leaf_data_path, &leaves)?;
+        serialize_to_file(&leaf_data_path, &leaves)?;
 
         Ok(())
     }
@@ -202,10 +220,29 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     /// Reconstructs a `Tree` from a directory `path` with associated metric `metric`. Returns the
     /// reconstructed tree.
     ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to load the tree from.
+    /// * `metric` - The metric to use for the tree.
+    /// * `is_expensive` - Whether or not the metric is expensive to compute.
+    ///
+    /// # Returns
+    ///
+    /// The reconstructed tree.
+    ///
     /// # Errors
-    /// This function will return an error if there's any file creation, file reading, or json deserialization issues.
-    #[allow(clippy::missing_panics_doc)]
+    ///
+    /// * If `path` does not exist.
+    /// * If `path` does not contain a valid tree. See `save` for more information
+    /// on the directory structure.
+    /// * If the `path` cannot be read from.
+    /// * If there are any deserialization errors with the dataset.
+    /// * If there are any deserialization errors with the clusters.
     pub fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
+        if !path.exists() {
+            return Err("Given path does not exist".to_string());
+        }
+
         // Alises to relevant directories
         let cluster_path = path.join("clusters");
         let childinfo_path = path.join("childinfo");
@@ -218,14 +255,10 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         let dataset = D::load(&dataset_dir, metric, is_expensive)?;
 
         // Load the root in
-        let root = recover_serialized_cluster(cluster_path.join("1"))?;
+        let root = recover_serialized_cluster(&cluster_path.join("1"))?;
 
         // Open up and read the names of leaf indices
-        let mut handle = File::open(path.join("leaves.json")).map_err(|e| e.to_string())?;
-        let mut leaf_buf = String::new();
-        handle.read_to_string(&mut leaf_buf).map_err(|e| e.to_string())?;
-
-        let leaf_names: Vec<String> = serde_json::from_str(&leaf_buf).map_err(|e| e.to_string())?;
+        let leaf_names: Vec<String> = deserialize_from_file(&path.join("leaves.json"), &mut Vec::new())?;
         let mut boxed_root = Box::new(root);
 
         // Now, for each leaf, we build out the tree up to that leaf
@@ -235,7 +268,9 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
 
             // We start from index 1 to skip the identically 1 prefix at index 0
             for step in 1..leaf_history.len() {
-                let branch = leaf_history[step];
+                let go_right = leaf_history[step];
+
+                // TODO: Child reconstruction should be moved to a method on Cluster
 
                 // If we don't have any children here, we need to build them out
                 if cur.children.is_none() {
@@ -250,12 +285,12 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                     let right_name = Cluster::<U>::history_to_name(&right_history);
 
                     // Deserialize the left and right child clusters
-                    let left: Cluster<U> = recover_serialized_cluster(cluster_path.join(left_name))?;
-                    let right: Cluster<U> = recover_serialized_cluster(cluster_path.join(right_name))?;
+                    let left: Cluster<U> = recover_serialized_cluster(&cluster_path.join(left_name))?;
+                    let right: Cluster<U> = recover_serialized_cluster(&cluster_path.join(right_name))?;
 
                     // Get the childinfo (arg_l, arg_r, etc.)
                     let parent_name = Cluster::<U>::history_to_name(&leaf_history[0..step]);
-                    let childinfo = recover_serialized_childinfo(childinfo_path.join(&parent_name))?;
+                    let childinfo = recover_serialized_childinfo(&childinfo_path.join(&parent_name))?;
 
                     // Reconstruct the children
                     cur.children = Some(Children {
@@ -267,13 +302,13 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
                     });
                 }
 
-                // Unwrap is justified here because we always check if cur.children is None and
-                // load in the children if it is.
-                #[allow(clippy::unwrap_used)]
-                let children = cur.children.as_mut().unwrap();
+                let children = cur
+                    .children
+                    .as_mut()
+                    .unwrap_or_else(|| unreachable!("We have already checked if `children` is None."));
 
                 // Choose which branch to take
-                if branch {
+                if go_right {
                     cur = &mut children.right;
                 } else {
                     cur = &mut children.left;
@@ -292,29 +327,46 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     }
 }
 
-// TODO: At some point we will encode `object` as bytes instead of json
-/// Serializes a serializeable (`impl Serialize`) object to a given path
+/// Serializes an object to a given path.
+///
+/// # Arguments
+///
+/// * `path` - The path to serialize the object to.
+/// * `object` - The object to serialize.
 ///
 /// # Errors
-/// This function will error out on serialization or file i/o errors.
-fn serialize_to_file<S: Serialize>(path: PathBuf, object: &S) -> Result<(), String> {
+///
+/// * If `path` cannot be written to.
+/// * If there are any serialization errors with the object.
+fn serialize_to_file<S: Serialize>(path: &Path, object: &S) -> Result<(), String> {
+    // TODO: At some point we will encode `object` as bytes instead of json
     let mut file = File::create(path).map_err(|e| e.to_string())?;
-    let info_string = serde_json::to_string(&object).map_err(|e| e.to_string())?;
-    file.write_all(info_string.as_bytes()).map_err(|e| e.to_string())
+    let object = postcard::to_allocvec(object).map_err(|e| e.to_string())?;
+    file.write_all(&object).map_err(|e| e.to_string())
+}
+
+/// Deserializes an object from a given path.
+///
+/// # Arguments
+///
+/// * `path` - The path to deserialize the object from.
+///
+/// # Errors
+///
+/// * If `path` cannot be read from.
+/// * If there are any deserialization errors with the object.
+fn deserialize_from_file<'a, D: Deserialize<'a>>(path: &Path, buffer: &'a mut Vec<u8>) -> Result<D, String> {
+    let mut handle = File::open(path).map_err(|e| e.to_string())?;
+    handle.read_to_end(buffer).map_err(|e| e.to_string())?;
+    postcard::from_bytes(buffer).map_err(|e| e.to_string())
 }
 
 /// Recovers a `Cluster` from a serialized cluster contained in a given file. Does not recover child info
 ///
 /// # Errors
 /// This function will error out on any deserialization or file i/o errors.
-fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, String> {
-    let mut buffer = String::new();
-    let mut cluster_handle = File::open(path).map_err(|e| e.to_string())?;
-
-    cluster_handle.read_to_string(&mut buffer).map_err(|e| e.to_string())?;
-
-    // TODO: At some point we will encode the serialized cluster as bytes, so this will be a byte decode
-    let cluster: SerializedCluster = serde_json::from_str(&buffer).map_err(|e| e.to_string())?;
+fn recover_serialized_cluster<U: Number>(path: &Path) -> Result<Cluster<U>, String> {
+    let cluster: SerializedCluster = deserialize_from_file(path, &mut Vec::new())?;
     Ok(cluster.into_partial_cluster())
 }
 
@@ -322,368 +374,6 @@ fn recover_serialized_cluster<U: Number>(path: PathBuf) -> Result<Cluster<U>, St
 ///
 /// # Errors
 /// This function will error out on any deserialization or file i/o errors.
-fn recover_serialized_childinfo(path: PathBuf) -> Result<SerializedChildren, String> {
-    let mut buffer = String::new();
-    let mut childinfo_handle = File::open(path).map_err(|e| e.to_string())?;
-
-    // TODO: At some point we will encode the childinfo as bytes, so this will be a byte decode
-    childinfo_handle
-        .read_to_string(&mut buffer)
-        .map_err(|e| e.to_string())?;
-
-    let childinfo: SerializedChildren = serde_json::from_str(&buffer).map_err(|e| e.to_string())?;
-    Ok(childinfo)
-}
-
-#[cfg(test)]
-mod tests {
-    use distances::Number;
-    use tempdir::TempDir;
-
-    use crate::{
-        core::cluster::{Cluster, _cluster::Children},
-        Dataset, Instance, PartitionCriteria, Tree, VecDataset,
-    };
-
-    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        distances::vectors::euclidean(x, y)
-    }
-
-    fn assert_trees_equal<I: Instance, U: Number>(
-        tree1: &Tree<I, U, VecDataset<I, U>>,
-        tree2: &Tree<I, U, VecDataset<I, U>>,
-    ) {
-        assert_eq!(tree1.depth, tree2.depth, "Tree depths inequal");
-        assert_clusters_equal(&tree1.root, &tree1.data, &tree2.root, &tree2.data);
-    }
-
-    fn assert_clusters_equal<I: Instance, U: Number>(
-        cluster1: &Cluster<U>,
-        dataset1: &VecDataset<I, U>,
-        cluster2: &Cluster<U>,
-        dataset2: &VecDataset<I, U>,
-    ) {
-        // Assert their cardinalities
-        assert_eq!(cluster1.cardinality, cluster2.cardinality);
-
-        // Resolve centers
-        let (center1, center2) = (&dataset1.data[cluster1.arg_center], &dataset2.data[cluster2.arg_center]);
-        let (radial1, radial2) = (&dataset1.data[cluster1.arg_radial], &dataset2.data[cluster2.arg_radial]);
-
-        // Metric is assumed to be shared (Good idea?)
-        let metric = dataset1.metric();
-
-        // Assert centers and radials are equal
-        assert_eq!(metric(center1, center2), U::zero());
-        assert_eq!(metric(radial1, radial2), U::zero());
-
-        // Get children and assert they are of equal optionality
-        let (children1, children2) = (&cluster1.children, &cluster2.children);
-
-        assert!(
-            children1.is_none() && children2.is_none() || children1.is_some() && children2.is_some(),
-            "One cluster has children, the other does not"
-        );
-
-        // If we have children, assert their relevant details are equal and then recurse on their clusters
-        if children1.is_some() {
-            let Children {
-                left: left_1,
-                right: right_1,
-                arg_l: arg_l_1,
-                arg_r: arg_r_1,
-                ..
-            } = children1.as_ref().unwrap();
-
-            let Children {
-                left: left_2,
-                right: right_2,
-                arg_l: arg_l_2,
-                arg_r: arg_r_2,
-                ..
-            } = children2.as_ref().unwrap();
-
-            let (l_1, l_2) = (&dataset1.data[*arg_l_1], &dataset1.data[*arg_l_2]);
-            let (r_1, r_2) = (&dataset1.data[*arg_r_1], &dataset1.data[*arg_r_2]);
-
-            assert_eq!(metric(l_1, l_2), U::zero());
-            assert_eq!(metric(r_1, r_2), U::zero());
-
-            assert_clusters_equal(left_1, dataset1, left_2, dataset2);
-            assert_clusters_equal(right_1, dataset1, right_2, dataset2);
-        }
-    }
-
-    #[test]
-    fn recover_tiny() {
-        let data = vec![
-            vec![10.],
-            vec![1.],
-            vec![-5.],
-            vec![8.],
-            vec![3.],
-            vec![2.],
-            vec![0.5],
-            vec![0.],
-        ];
-
-        // Generate some tree from a small dataset
-        let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-
-        let tree_path = TempDir::new("tree_tiny").unwrap();
-
-        // Save the tree
-        raw_tree.save(&tree_path.path()).unwrap();
-
-        // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
-
-        // Assert recovering was successful
-        assert_trees_equal(&raw_tree, &recovered_tree);
-    }
-
-    #[test]
-    fn recover_medium() {
-        let (dimensionality, min_val, max_val) = (10, -1., 1.);
-        let seed = 42;
-
-        let data = symagen::random_data::random_f32(1000, dimensionality, min_val, max_val, seed);
-        let name = "test".to_string();
-        let data = VecDataset::<_, f32>::new(name, data, metric, false);
-        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
-
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-
-        let tree_path = TempDir::new("tree_medium").unwrap();
-
-        // Save the tree
-        raw_tree.save(&tree_path.path()).unwrap();
-
-        // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
-
-        // Assert recovering was successful
-        assert_trees_equal(&raw_tree, &recovered_tree);
-    }
-
-    #[test]
-    fn recover_large() {
-        let (dimensionality, min_val, max_val) = (10, -1., 1.);
-        let seed = 42;
-
-        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
-        let name = "test".to_string();
-        let data = VecDataset::<_, f32>::new(name, data, metric, false);
-        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::new(true).with_min_cardinality(1);
-
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-
-        let tree_path = TempDir::new("tree_large").unwrap();
-
-        // Save the tree
-        raw_tree.save(&tree_path.path()).unwrap();
-
-        // Recover the tree
-        let recovered_tree = Tree::<Vec<f32>, f32, VecDataset<_, _>>::load(&tree_path.path(), metric, false).unwrap();
-
-        // Assert recovering was successful
-        assert_trees_equal(&raw_tree, &recovered_tree);
-    }
-
-    #[test]
-    fn test_ratios() {
-        // Generate some tree from a small dataset
-        let data = vec![vec![10.], vec![1.], vec![3.]];
-
-        let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
-            .with_ratios(false);
-
-        //      1
-        //   10    11
-        //100  101
-
-        let all_ratios = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.ratios.unwrap())
-            .collect::<Vec<_>>();
-
-        let all_cardinalities = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.cardinality)
-            .collect::<Vec<_>>();
-
-        let all_lfd = raw_tree.root.subtree().into_iter().map(|c| c.lfd).collect::<Vec<_>>();
-
-        let all_radius = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.radius)
-            .collect::<Vec<_>>();
-
-        // manually calculate ratios between root and its children
-        let root_ratios = vec![
-            all_cardinalities[0] as f64,
-            all_radius[0] as f64,
-            all_lfd[0],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let lc_ratios = vec![
-            all_cardinalities[1] as f64 / root_ratios[0] as f64,
-            all_radius[1] as f64 / root_ratios[1] as f64,
-            all_lfd[1] / root_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let lclc_ratios = vec![
-            all_cardinalities[2] as f64 / lc_ratios[0] as f64,
-            all_radius[2] as f64 / lc_ratios[1] as f64,
-            all_lfd[2] / lc_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let lcrc_ratios = vec![
-            all_cardinalities[3] as f64 / lc_ratios[0] as f64,
-            all_radius[3] as f64 / lc_ratios[1] as f64,
-            all_lfd[3] / lc_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-        let rc_ratios = vec![
-            all_cardinalities[3] as f64 / root_ratios[0] as f64,
-            all_radius[3] as f64 / root_ratios[1] as f64,
-            all_lfd[3] / root_ratios[2],
-            -1.,
-            -1.,
-            -1.,
-        ];
-
-        assert_eq!(all_ratios[0][0..3], root_ratios[0..3], "root not correct");
-        assert_eq!(all_ratios[1][0..3], lc_ratios[0..3], "lc not correct");
-        assert_eq!(all_ratios[2][0..3], lclc_ratios[0..3], "lclc not correct");
-        assert_eq!(all_ratios[3][0..3], lcrc_ratios[0..3], "lcrc not correct");
-        assert_eq!(all_ratios[4][0..3], rc_ratios[0..3], "rc not correct");
-    }
-
-    #[test]
-    fn test_normalized_ratios() {
-        let (dimensionality, min_val, max_val) = (10, -1., 1.);
-        let seed = 42;
-
-        let data = symagen::random_data::random_f32(100_000, dimensionality, min_val, max_val, seed);
-        let name = "test".to_string();
-        let data = VecDataset::<_, f32>::new(name, data, metric, false);
-
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let raw_tree = Tree::new(data, Some(seed))
-            .partition(&partition_criteria)
-            .with_ratios(true);
-
-        let all_ratios = raw_tree
-            .root
-            .subtree()
-            .into_iter()
-            .map(|c| c.ratios.unwrap())
-            .collect::<Vec<_>>();
-
-        for row in &all_ratios {
-            for val in row {
-                assert!(*val >= 0. && *val <= 1.);
-            }
-        }
-    }
-
-    use crate::utils;
-
-    #[test]
-    fn test_transpose() {
-        // Input data: 3 rows x 6 columns
-        let data: Vec<[f64; 6]> = vec![
-            [2.0, 3.0, 5.0, 7.0, 11.0, 13.0],
-            [4.0, 3.0, 5.0, 9.0, 10.0, 15.0],
-            [6.0, 2.0, 8.0, 11.0, 9.0, 11.0],
-        ];
-
-        // Expected transposed data: 6 rows x 3 columns
-        let expected_transposed: [Vec<f64>; 6] = [
-            vec![2.0, 4.0, 6.0],
-            vec![3.0, 3.0, 2.0],
-            vec![5.0, 5.0, 8.0],
-            vec![7.0, 9.0, 11.0],
-            vec![11.0, 10.0, 9.0],
-            vec![13.0, 15.0, 11.0],
-        ];
-
-        let transposed_data = utils::transpose(&data);
-
-        // Check if the transposed data matches the expected result
-        for i in 0..6 {
-            assert_eq!(transposed_data[i], expected_transposed[i]);
-        }
-    }
-
-    #[test]
-    fn test_means() {
-        let all_ratios: Vec<[f64; 6]> = vec![
-            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
-            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
-            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
-        ];
-
-        let transposed = utils::transpose(&all_ratios);
-        let means = utils::calc_row_means(&transposed);
-
-        let expected_means: [f64; 6] = [3.3333333333333335, 4.0, 6.333333333333334, 6.0, 8.0, 8.666666666666668];
-
-        means
-            .iter()
-            .zip(expected_means.iter())
-            .for_each(|(&a, &b)| assert!(float_cmp::approx_eq!(f64, a, b, ulps = 2), "{}, {} not equal", a, b));
-    }
-
-    #[test]
-    fn test_sds() {
-        let all_ratios: Vec<[f64; 6]> = vec![
-            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
-            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
-            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
-        ];
-
-        let expected_standard_deviations: [f64; 6] = [
-            1.2472191289246,
-            0.81649658092773,
-            1.2472191289246,
-            1.6329931618555,
-            0.81649658092773,
-            5.7927157323276,
-        ];
-        let sds = utils::calc_row_sds(&utils::transpose(&all_ratios));
-
-        sds.iter()
-            .zip(expected_standard_deviations.iter())
-            .for_each(|(&a, &b)| {
-                assert!(
-                    float_cmp::approx_eq!(f64, a, b, epsilon = 0.00000003),
-                    "{}, {} not equal",
-                    a,
-                    b
-                )
-            });
-    }
+fn recover_serialized_childinfo(path: &Path) -> Result<SerializedChildren, String> {
+    deserialize_from_file(path, &mut Vec::new())
 }

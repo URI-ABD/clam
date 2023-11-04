@@ -59,8 +59,8 @@ where
         (terminal, non_terminal) = candidates
             .into_iter()
             .map(|c| (c, c.distance_to_instance(data, query)))
-            .filter(|&(c, d)| d <= (c.radius + radius))
-            .partition(|&(c, d)| (c.radius + d) <= radius);
+            .filter(|&(c, d)| d <= (c.radius() + radius))
+            .partition(|&(c, d)| (c.radius() + d) <= radius);
         confirmed.append(&mut terminal);
 
         (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
@@ -69,7 +69,7 @@ where
         candidates = non_terminal
             .into_iter()
             .flat_map(|(c, d)| {
-                if d < c.radius {
+                if d < c.radius() {
                     c.overlapping_children(data, query, radius)
                 } else {
                     c.children()
@@ -97,7 +97,7 @@ where
 {
     let hits = confirmed.into_iter().flat_map(|(c, d)| {
         let distances = if c.is_singleton() {
-            vec![d; c.cardinality]
+            vec![d; c.cardinality()]
         } else {
             data.query_to_many(query, &c.indices().collect::<Vec<_>>())
         };

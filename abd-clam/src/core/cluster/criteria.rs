@@ -108,6 +108,6 @@ pub struct MinCardinality(usize);
 
 impl<U: Number> PartitionCriterion<U> for MinCardinality {
     fn check(&self, c: &Cluster<U>) -> bool {
-        c.cardinality > self.0
+        c.cardinality() > self.0
     }
 }

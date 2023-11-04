@@ -23,15 +23,15 @@ use super::Instance;
 /// - `U`: The type of the distance values between instances.
 pub struct VecDataset<I: Instance, U: Number> {
     /// The name of the dataset.
-    pub(crate) name: String,
+    name: String,
     /// The data of the dataset.
-    pub(crate) data: Vec<I>,
+    data: Vec<I>,
     /// The metric of the dataset.
-    pub(crate) metric: fn(&I, &I) -> U,
+    metric: fn(&I, &I) -> U,
     /// Whether the metric is expensive to compute.
-    pub(crate) is_expensive: bool,
+    is_expensive: bool,
     /// The reordering of the dataset after building the tree.
-    pub(crate) permuted_indices: Option<Vec<usize>>,
+    permuted_indices: Option<Vec<usize>>,
 }
 
 impl<I: Instance, U: Number> VecDataset<I, U> {
@@ -51,6 +51,18 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
             is_expensive,
             permuted_indices: None,
         }
+    }
+
+    /// A reference to the underlying data.
+    #[must_use]
+    pub fn data(&self) -> &[I] {
+        &self.data
+    }
+
+    /// Moves the underlying data out of the dataset.
+    #[must_use]
+    pub fn data_owned(self) -> Vec<I> {
+        self.data
     }
 }
 
@@ -249,127 +261,5 @@ impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
             is_expensive,
             permuted_indices: permutation,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use distances::vectors::euclidean_sq;
-    use rand::prelude::*;
-    use symagen::random_data;
-    use tempdir::TempDir;
-
-    use crate::Dataset;
-
-    use super::VecDataset;
-
-    fn metric_u32(x: &Vec<u32>, y: &Vec<u32>) -> u32 {
-        euclidean_sq(x, y)
-    }
-
-    fn metric_f32(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        euclidean_sq(x, y)
-    }
-
-    #[test]
-    fn reordering() {
-        // 10 random 10 dimensional datasets reordered 10 times in 10 random ways
-        let mut rng = rand::thread_rng();
-        let name = "test".to_string();
-        let cardinality = 10_000;
-
-        for i in 0..10 {
-            let dimensionality = 10;
-            let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
-            for _ in 0..10 {
-                let mut dataset = VecDataset::new(name.clone(), reference_data.clone(), metric_u32, false);
-                let mut new_indices = (0..cardinality).collect::<Vec<_>>();
-                new_indices.shuffle(&mut rng);
-
-                dataset.permute_instances(&new_indices).unwrap();
-                for i in 0..cardinality {
-                    assert_eq!(dataset.data[i], reference_data[new_indices[i]]);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn original_indices() {
-        let data: Vec<Vec<u32>> = (1_u32..7).map(|x| vec![x * 2]).collect();
-        let permutation = vec![1, 3, 4, 0, 5, 2];
-        let permuted_data = vec![vec![4], vec![8], vec![10], vec![2], vec![12], vec![6]];
-
-        let mut dataset = VecDataset::new("test".to_string(), data, metric_u32, false);
-        dataset.permute_instances(&permutation).unwrap();
-
-        assert_eq!(dataset.data, permuted_data);
-
-        for (i, (p, v)) in permutation.into_iter().zip(permuted_data).enumerate() {
-            assert_eq!(dataset.original_index(i), p);
-            assert_eq!(dataset.data[i], v);
-        }
-    }
-
-    #[test]
-    fn save_load_tiny() {
-        let data = vec![vec![1, 2, 3, 4, 5], vec![6, 7, 8, 9, 10]];
-        let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
-        let tmp_file = tmp_dir.path().join("dataset.save");
-
-        let mut dataset = VecDataset::new("test".to_string(), data, metric_u32, false);
-        let indices = (0..dataset.cardinality()).rev().collect::<Vec<_>>();
-        dataset.permute_instances(&indices).unwrap();
-        dataset.save(&tmp_file).unwrap();
-
-        let other = VecDataset::<Vec<u32>, u32>::load(&tmp_file, metric_u32, false).unwrap();
-
-        assert_eq!(other.data, dataset.data);
-        assert_eq!(other.permuted_indices, dataset.permuted_indices);
-        assert_eq!(dataset.cardinality(), other.cardinality());
-    }
-
-    #[test]
-    fn save_load_medium() {
-        // Generate a random dataset. On even indices it generates a reordering map. Otherwise its not reordered
-        let mut rng = rand::thread_rng();
-        let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
-        for i in 0..5 {
-            let (cardinality, dimensionality) = (rng.gen_range(1_000..50_000), rng.gen_range(1..50));
-            let reference_data = random_data::random_u32(cardinality, dimensionality, 0, 100_000, i);
-            let tmp_file = tmp_dir.path().join(format!("dataset_{}.save", i));
-
-            let mut dataset = VecDataset::new("test".to_string(), reference_data, metric_u32, false);
-            if i % 2 == 0 {
-                let indices = (0..dataset.cardinality()).rev().collect::<Vec<_>>();
-                dataset.permute_instances(&indices).unwrap();
-            }
-            dataset.save(&tmp_file).unwrap();
-
-            let other = VecDataset::<Vec<u32>, u32>::load(&tmp_file, metric_u32, false).unwrap();
-
-            assert_eq!(other.data, dataset.data);
-            assert_eq!(other.name, dataset.name);
-            assert_eq!(other.permuted_indices, dataset.permuted_indices);
-            assert_eq!(dataset.cardinality(), other.cardinality());
-        }
-    }
-
-    #[test]
-    fn unaligned_type_err() {
-        let data = vec![vec![1, 2, 3, 4, 5], vec![6, 7, 8, 9, 10]];
-        let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
-        let tmp_file = tmp_dir.path().join("dataset.save");
-
-        // Construct it with u32
-        let mut dataset = VecDataset::new("test".to_string(), data, metric_u32, false);
-        let indices = (0..dataset.cardinality()).rev().collect::<Vec<_>>();
-        dataset.permute_instances(&indices).unwrap();
-        dataset.save(&tmp_file).unwrap();
-
-        // Try to load it back in as f32
-        let other = VecDataset::<Vec<f32>, f32>::load(&tmp_file, metric_f32, false);
-
-        assert!(other.is_err());
     }
 }

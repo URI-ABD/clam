@@ -7,12 +7,11 @@ pub use instance::Instance;
 #[allow(clippy::module_name_repetitions)]
 pub use vec2d::VecDataset;
 
-use core::{cmp::Ordering, ops::Index};
+use core::ops::Index;
 use std::path::Path;
 
-use rand::prelude::*;
-
 use distances::Number;
+use rand::prelude::*;
 
 /// A common interface for datasets used in CLAM.
 pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync {
@@ -230,14 +229,15 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// * `None`, if `indices` is empty.
     fn median(&self, indices: &[usize]) -> Option<usize> {
         // TODO: Refactor this to scale for arbitrarily large n
-        self.pairwise(indices)
+        let distances = self
+            .pairwise(indices)
             .into_iter()
             // TODO: Bench using .max instead of .sum
             // .map(|v| v.into_iter().max_by(|l, r| l.partial_cmp(r).unwrap()).unwrap())
             .map(|v| v.into_iter().sum::<U>())
-            .enumerate()
-            .min_by(|(_, l), (_, r)| l.partial_cmp(r).unwrap_or(Ordering::Greater))
-            .map(|(i, _)| indices[i])
+            .collect::<Vec<_>>();
+
+        crate::utils::arg_min(&distances).map(|(i, _)| indices[i])
     }
 
     /// Makes a vector of sharded datasets from the given dataset.
