@@ -227,7 +227,7 @@ pub fn make_reports(
                 if prev_linear_throughput >= linear_throughput_threshold {
                     // Measure throughput of linear search.
                     let (linear_hits, linear_throughput) =
-                        measure_algorithm(&cakes, &queries, ks[0], &knn::Algorithm::Linear);
+                        measure_algorithm(&cakes, &queries, ks[0], knn::Algorithm::Linear);
                     info!("Linear throughput: {} QPS", format_f32(linear_throughput));
                     prev_linear_throughput = linear_throughput;
                     (linear_hits, linear_throughput)
@@ -240,13 +240,13 @@ pub fn make_reports(
                 &mut csv_writer,
                 multiplier,
                 cakes_time,
-                &knn::Algorithm::Linear,
+                knn::Algorithm::Linear,
                 k,
                 linear_throughput,
                 // 1.0,
             )?;
 
-            for algorithm in knn::Algorithm::variants() {
+            for &algorithm in knn::Algorithm::variants() {
                 info!("Algorithm: {}, k: {}", algorithm.name(), k);
 
                 let (hits, throughput) = measure_algorithm(&cakes, &queries, k, algorithm);
@@ -254,7 +254,7 @@ pub fn make_reports(
 
                 let misses = hits
                     .iter()
-                    .map(|h| h.len())
+                    .map(Vec::len)
                     .filter(|&h| h < k)
                     .collect::<Vec<_>>();
                 if !misses.is_empty() {
@@ -309,11 +309,11 @@ fn measure_algorithm<'a>(
     cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32>>,
     queries: &'a [&Vec<f32>],
     k: usize,
-    algorithm: &knn::Algorithm,
+    algorithm: knn::Algorithm,
 ) -> (Vec<Vec<(usize, f32)>>, f32) {
     let num_queries = queries.len();
     let start = Instant::now();
-    let hits = cakes.batch_knn_search(queries, k, *algorithm);
+    let hits = cakes.batch_knn_search(queries, k, algorithm);
     let elapsed = start.elapsed().as_secs_f32();
     let throughput = num_queries.as_f32() / elapsed;
 
@@ -340,7 +340,7 @@ fn line_to_csv(
     csv_writer: &mut csv::Writer<std::fs::File>,
     multiplier: usize,
     cakes_time: f32,
-    algorithm: &knn::Algorithm,
+    algorithm: knn::Algorithm,
     k: usize,
     throughput: f32,
     // mean_recall: f32,
