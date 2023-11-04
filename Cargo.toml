@@ -23,7 +23,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 distances = { version = "1.6.0", path = "../distances" }
 rand = "0.8.4"
-rand_chacha = "0.3.1"
 rayon = "1.8.0"
 
 [dependencies.pyo3]

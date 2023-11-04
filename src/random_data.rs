@@ -6,7 +6,7 @@ use rand::prelude::*;
 /// Generate a randomized tabular dataset for use in benchmarks and tests with a
 /// given seed.
 ///
-/// This uses the `rand_chacha` crate's `ChaCha20Rng` as the random number generator.
+/// This uses the `rand` crate's `StdRng` as the random number generator.
 ///
 /// # Arguments:
 ///
@@ -23,16 +23,13 @@ pub fn random_tabular_seedable<T: Number>(
     max_val: T,
     seed: u64,
 ) -> Vec<Vec<T>> {
-    // let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
-    let diff = max_val - min_val;
-    (0..cardinality)
-        .map(|_| {
-            (0..dimensionality)
-                .map(|_| min_val + T::next_random(&mut rng) / diff)
-                .collect()
-        })
-        .collect()
+    random_tabular(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
+    )
 }
 
 /// Generate a randomized tabular dataset for use in benchmarks and tests.
