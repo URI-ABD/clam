@@ -1,6 +1,14 @@
 name: Tests
 
-on: [push]
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
 
 jobs:
   pre-commit:
