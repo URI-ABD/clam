@@ -48,7 +48,7 @@ impl Algorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub(crate) fn search<I, U, D>(self, query: &I, radius: U, tree: &Tree<I, U, D>) -> Vec<(usize, U)>
+    pub fn search<I, U, D>(self, query: &I, radius: U, tree: &Tree<I, U, D>) -> Vec<(usize, U)>
     where
         I: Instance,
         U: Number,
@@ -72,9 +72,9 @@ impl Algorithm {
         }
     }
 
-    /// Returns a list of all the algorithms.
+    /// Returns a list of all the algorithms, excluding Linear.
     #[must_use]
     pub const fn variants<'a>() -> &'a [Self] {
-        &[Self::Linear, Self::Clustered]
+        &[Self::Clustered]
     }
 }

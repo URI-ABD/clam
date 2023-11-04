@@ -106,7 +106,7 @@ impl Algorithm {
     ///
     /// A vector of 2-tuples, where the first element is the index of the instance
     /// and the second element is the distance from the query to the instance.
-    pub(crate) fn search<I, U, D>(self, tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
+    pub fn search<I, U, D>(self, tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
     where
         I: Instance,
         U: Number,
@@ -289,17 +289,5 @@ impl<U: Number> PartialOrd for RevNumber<U> {
 impl<U: Number> Ord for RevNumber<U> {
     fn cmp(&self, other: &Self) -> Ordering {
         other.0.partial_cmp(&self.0).unwrap_or(Ordering::Greater)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use core::cmp::Ordering;
-
-    use distances::Number;
-
-    pub(crate) fn sort_hits<U: Number>(mut hits: Vec<(usize, U)>) -> Vec<(usize, U)> {
-        hits.sort_by(|(_, i), (_, j)| i.partial_cmp(j).unwrap_or(Ordering::Greater));
-        hits
     }
 }

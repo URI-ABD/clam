@@ -12,7 +12,6 @@ use distances::Number;
 /// NAN values are ordered as greater than all other values.
 ///
 /// This will return `None` if the given slice is empty.
-#[allow(dead_code)]
 pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
     values
         .iter()
@@ -43,25 +42,23 @@ pub fn mean<T: Number>(values: &[T]) -> f64 {
 /// Return the standard deviation value of the given slice of values.
 #[allow(dead_code)]
 pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
-    values
+    let var = values
         .iter()
         .map(|v| v.as_f64())
         .map(|v| v - mean)
         .map(|v| v.powi(2))
         .sum::<f64>()
-        .sqrt()
-        / values.len().as_f64()
+        / values.len().as_f64();
+    var.sqrt()
 }
 
 /// Apply Gaussian normalization to the given values.
 #[allow(dead_code)]
-pub fn normalize_1d(values: &[f64]) -> Vec<f64> {
-    let mean = mean(values);
-    let std = (EPSILON + statistical::population_standard_deviation(values, Some(mean))) * SQRT_2;
+pub fn normalize_1d(values: &[f64], mean: f64, sd: f64) -> Vec<f64> {
     values
         .iter()
         .map(|&v| v - mean)
-        .map(|v| v / std)
+        .map(|v| v / ((EPSILON + sd) * SQRT_2))
         .map(libm::erf)
         .map(|v| (1. + v) / 2.)
         .collect()
@@ -126,8 +123,7 @@ pub fn pos_val<T: Eq + Copy>(values: &[T], v: T) -> Option<(usize, T)> {
 ///
 /// An array of Vecs where each Vec represents a column of the original matrix.
 /// Note that all arrays in the input Vec must have 6 columns.
-///
-pub fn transpose(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
+pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
     let all_ratios: Vec<f64> = values.iter().flat_map(|arr| arr.iter().copied()).collect();
     let mut transposed: [Vec<f64>; 6] = Default::default();
 
@@ -153,14 +149,12 @@ pub fn transpose(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
 /// An array of means, where each element represents the mean of a row.
 ///
 pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
-    let means: [f64; 6] = values
+    values
         .iter()
         .map(|values| statistical::mean(values))
         .collect::<Vec<_>>()
         .try_into()
-        .unwrap_or_else(|_| unreachable!("Array always has a length of 6."));
-
-    means
+        .unwrap_or_else(|_| unreachable!("Array always has a length of 6."))
 }
 
 /// Calculate the standard deviation of every row in a 2D array represented as an array of Vecs.
@@ -179,12 +173,92 @@ pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
 ///
 pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
     let means = calc_row_means(values);
-    let sds: [f64; 6] = values
+    values
         .iter()
         .zip(means.iter())
-        .map(|(values, &mean)| f64::EPSILON + statistical::population_standard_deviation(values, Some(mean)))
+        .map(|(values, &mean)| statistical::population_standard_deviation(values, Some(mean)))
         .collect::<Vec<_>>()
         .try_into()
-        .unwrap_or_else(|_| unreachable!("Array always has a length of 6"));
-    sds
+        .unwrap_or_else(|_| unreachable!("Array always has a length of 6"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transpose() {
+        // Input data: 3 rows x 6 columns
+        let data: Vec<[f64; 6]> = vec![
+            [2.0, 3.0, 5.0, 7.0, 11.0, 13.0],
+            [4.0, 3.0, 5.0, 9.0, 10.0, 15.0],
+            [6.0, 2.0, 8.0, 11.0, 9.0, 11.0],
+        ];
+
+        // Expected transposed data: 6 rows x 3 columns
+        let expected_transposed: [Vec<f64>; 6] = [
+            vec![2.0, 4.0, 6.0],
+            vec![3.0, 3.0, 2.0],
+            vec![5.0, 5.0, 8.0],
+            vec![7.0, 9.0, 11.0],
+            vec![11.0, 10.0, 9.0],
+            vec![13.0, 15.0, 11.0],
+        ];
+
+        let transposed_data = rows_to_cols(&data);
+
+        // Check if the transposed data matches the expected result
+        for i in 0..6 {
+            assert_eq!(transposed_data[i], expected_transposed[i]);
+        }
+    }
+
+    #[test]
+    fn test_means() {
+        let all_ratios: Vec<[f64; 6]> = vec![
+            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
+            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
+            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
+        ];
+
+        let transposed = rows_to_cols(&all_ratios);
+        let means = calc_row_means(&transposed);
+
+        let expected_means: [f64; 6] = [3.3333333333333335, 4.0, 6.333333333333334, 6.0, 8.0, 8.666666666666668];
+
+        means
+            .iter()
+            .zip(expected_means.iter())
+            .for_each(|(&a, &b)| assert!(float_cmp::approx_eq!(f64, a, b, ulps = 2), "{}, {} not equal", a, b));
+    }
+
+    #[test]
+    fn test_sds() {
+        let all_ratios: Vec<[f64; 6]> = vec![
+            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
+            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
+            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
+        ];
+
+        let expected_standard_deviations: [f64; 6] = [
+            1.2472191289246,
+            0.81649658092773,
+            1.2472191289246,
+            1.6329931618555,
+            0.81649658092773,
+            5.7927157323276,
+        ];
+        let sds = calc_row_sds(&rows_to_cols(&all_ratios));
+
+        sds.iter()
+            .zip(expected_standard_deviations.iter())
+            .for_each(|(&a, &b)| {
+                assert!(
+                    float_cmp::approx_eq!(f64, a, b, epsilon = 0.00000003),
+                    "{}, {} not equal",
+                    a,
+                    b
+                )
+            });
+    }
 }

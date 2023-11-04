@@ -28,44 +28,43 @@ pub type Ratios = [f64; 6];
 #[derive(Debug)]
 pub struct Cluster<U: Number> {
     /// The `Cluster`'s history in the tree.
-    pub history: Vec<bool>,
+    history: Vec<bool>,
     /// The seed used in the random number generator for this `Cluster`.
-    pub seed: Option<u64>,
+    seed: Option<u64>,
     /// The offset of the indices of the `Cluster`'s instances in the dataset.
-    pub offset: usize,
+    offset: usize,
     /// The number of instances in the `Cluster`.
-    pub cardinality: usize,
+    cardinality: usize,
     /// The index of the `center` instance in the dataset.
-    pub arg_center: usize,
+    arg_center: usize,
     /// The index of the `radial` instance in the dataset.
-    pub arg_radial: usize,
+    arg_radial: usize,
     /// The distance from the `center` to the `radial` instance.
-    pub radius: U,
+    radius: U,
     /// The local fractal dimension of the `Cluster`.
-    #[allow(dead_code)]
-    pub lfd: f64,
+    lfd: f64,
     /// The children of the `Cluster`.
-    pub children: Option<Children<U>>,
+    pub(crate) children: Option<Children<U>>,
     /// The six `Cluster` ratios used for anomaly detection and related applications.
     #[allow(dead_code)]
-    pub ratios: Option<Ratios>,
+    ratios: Option<Ratios>,
 }
 
 /// The children of a `Cluster`.
 #[derive(Debug)]
 pub struct Children<U: Number> {
     /// The left child of the `Cluster`.
-    pub left: Box<Cluster<U>>,
+    pub(crate) left: Box<Cluster<U>>,
     /// The right child of the `Cluster`.
-    pub right: Box<Cluster<U>>,
+    pub(crate) right: Box<Cluster<U>>,
     /// The left pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the left child).
-    pub arg_l: usize,
+    pub(crate) arg_l: usize,
     /// The right pole of the `Cluster` (i.e. the instance used to identify
     /// instances for the right child).
-    pub arg_r: usize,
+    pub(crate) arg_r: usize,
     /// The distance from the `l_pole` to the `r_pole` instance.
-    pub polar_distance: U,
+    pub(crate) polar_distance: U,
 }
 
 impl<U: Number> PartialEq for Cluster<U> {
@@ -104,6 +103,46 @@ impl<U: Number> Display for Cluster<U> {
 }
 
 impl<U: Number> Cluster<U> {
+    /// The number of instances in the `Cluster`.
+    pub const fn cardinality(&self) -> usize {
+        self.cardinality
+    }
+
+    /// The index of the instance at the `center` of the `Cluster`.
+    pub const fn arg_center(&self) -> usize {
+        self.arg_center
+    }
+
+    /// The index of the instance with the maximum distance from the `center`
+    pub const fn arg_radial(&self) -> usize {
+        self.arg_radial
+    }
+
+    /// The distance from the `center` to the `radial` instance.
+    pub const fn radius(&self) -> U {
+        self.radius
+    }
+
+    /// The local fractal dimension of the `Cluster`.
+    pub const fn lfd(&self) -> f64 {
+        self.lfd
+    }
+
+    /// The six `Cluster` ratios used for anomaly detection and related
+    /// applications.
+    ///
+    /// These ratios are:
+    ///
+    /// * child-cardinality / parent-cardinality.
+    /// * child-radius / parent-radius.
+    /// * child-lfd / parent-lfd.
+    /// * EMA of child-cardinality / parent-cardinality.
+    /// * EMA of child-radius / parent-radius.
+    /// * EMA of child-lfd / parent-lfd.
+    pub const fn ratios(&self) -> Option<Ratios> {
+        self.ratios
+    }
+
     /// Creates a new root `Cluster`.
     ///
     /// # Arguments
@@ -125,7 +164,7 @@ impl<U: Number> Cluster<U> {
     /// * `history`: The `Cluster`'s history in the tree.
     /// * `offset`: The offset of the indices of the `Cluster`'s instances in the dataset.
     /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
-    pub fn new<I: Instance, D: Dataset<I, U>>(
+    fn new<I: Instance, D: Dataset<I, U>>(
         data: &D,
         seed: Option<u64>,
         history: Vec<bool>,
@@ -185,6 +224,7 @@ impl<U: Number> Cluster<U> {
     /// * The `Cluster` on which the method was called after partitioning
     /// recursively until the `PartitionCriteria` is no longer met on any of the
     /// leaf `Cluster`s.
+    #[must_use]
     pub fn partition<I: Instance, D: Dataset<I, U>>(mut self, data: &mut D, criteria: &PartitionCriteria<U>) -> Self {
         let mut indices = (0..self.cardinality).collect::<Vec<_>>();
         (self, indices) = self._partition(data, criteria, indices);
@@ -295,73 +335,14 @@ impl<U: Number> Cluster<U> {
         history
     }
 
-    /// Sets the `Cluster` ratios for anomaly detection and related applications.
-    ///
-    /// This method may only be called on the root `Cluster`. It is user error
-    /// to call this method on a non-root `Cluster`.
-    ///
-    /// This method should be called after calling `partition` on the root
-    /// `Cluster`. It is user error to call this method before calling
-    /// `partition` on the root `Cluster`.
-    ///
-    /// # Arguments
-    ///
-    /// * `normalized`: Whether to normalize the ratios. We use Gaussian error
-    /// functions to normalize the ratios, which is a common practice in
-    /// anomaly detection.
-    #[allow(unused_mut, unused_variables, dead_code)]
-    pub fn with_ratios(mut self, normalized: bool) -> Self {
-        todo!()
-        // if !self.is_root() {
-        //     panic!("This method may only be set from the root cluster.")
-        // }
-        // if self.is_leaf() {
-        //     panic!("Please `build` and `partition` the tree before setting cluster ratios.")
-        // }
-
-        // match &self.index {
-        //     Index::Indices(_) => panic!("Should not be here ..."),
-        //     Index::Children(([(l, left), (r, right)], lr)) => {
-        //         let left = Box::new(left.set_child_parent_ratios([1.; 6]));
-        //         let right = Box::new(right.set_child_parent_ratios([1.; 6]));
-        //         self.index = Index::Children(([(*l, left), (*r, right)], *lr));
-        //     },
-        // };
-        // self.ratios = Some([1.; 6]);
-
-        // if normalized {
-        //     let ratios: Vec<_> = self.subtree().iter().flat_map(|c| c.ratios()).collect();
-        //     let ratios: Vec<Vec<_>> = (0..6)
-        //         .map(|s| ratios.iter().skip(s).step_by(6).cloned().collect())
-        //         .collect();
-        //     let means: [f64; 6] = ratios
-        //         .iter()
-        //         .map(|values| helpers::mean(values))
-        //         .collect::<Vec<_>>()
-        //         .try_into()
-        //         .unwrap();
-        //     let sds: [f64; 6] = ratios
-        //         .iter()
-        //         .zip(means.iter())
-        //         .map(|(values, &mean)| 1e-8 + helpers::sd(values, mean))
-        //         .collect::<Vec<_>>()
-        //         .try_into()
-        //         .unwrap();
-
-        //     self.set_normalized_ratios(means, sds);
-        // }
-
-        // self
-    }
-
-    /// # Panics
     /// Sets the chile-parent `Cluster` ratios for anomaly detection and related
     /// applications.
     ///
     /// # Arguments
     ///
     /// * `parent_ratios`: The ratios for the parent `Cluster`.
-    pub fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
+    #[must_use]
+    pub(crate) fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
         let [parent_cardinality, parent_radius, parent_lfd, parent_cardinality_ema, parent_radius_ema, parent_lfd_ema] =
             parent_ratios;
 
@@ -399,7 +380,6 @@ impl<U: Number> Cluster<U> {
         self
     }
 
-    /// # Panics
     /// Normalizes the `Cluster` ratios for anomaly detection and related
     /// applications.
     ///
@@ -407,14 +387,14 @@ impl<U: Number> Cluster<U> {
     ///
     /// * `means`: The means of the `Cluster` ratios.
     /// * `sds`: The standard deviations of the `Cluster` ratios.
-    pub fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
+    pub(crate) fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
         let normalized_ratios: Vec<_> = self
             .ratios
             .unwrap_or_else(|| unreachable!("Ratios should have been set first."))
             .into_iter()
             .zip(means)
             .zip(sds)
-            .map(|((value, mean), std)| (value - mean) / (std * 2_f64.sqrt()))
+            .map(|((value, mean), std)| (value - mean) / std.mul_add(core::f64::consts::SQRT_2, f64::EPSILON))
             .map(libm::erf)
             .map(|v| (1. + v) / 2.)
             .collect();
@@ -460,6 +440,7 @@ impl<U: Number> Cluster<U> {
 
     /// Returns a human-readable hexadecimal representation of a `Cluster` history
     /// boolean vector
+    #[must_use]
     pub fn history_to_name(history: &[bool]) -> String {
         let rem = history.len() % 4;
         let padding = if rem == 0 { 0 } else { 4 - rem };
@@ -485,6 +466,7 @@ impl<U: Number> Cluster<U> {
 
     /// Returns a boolean vector representation of a `Cluster` history from a
     /// human-readable hexadecimal representation.
+    #[must_use]
     pub fn name_to_history(name: &str) -> Vec<bool> {
         name.chars()
             // Convert each hexadecimal character to u8
@@ -504,13 +486,6 @@ impl<U: Number> Cluster<U> {
             // Convert each binary character to a bool.
             .map(|c| c == '1')
             .collect()
-    }
-
-    /// Whether the `Cluster` is the root of the tree.
-    ///
-    /// The root `Cluster` has a depth of 0.
-    pub fn is_root(&self) -> bool {
-        self.depth() == 0
     }
 
     /// The depth of the `Cluster` in the tree.
@@ -540,39 +515,16 @@ impl<U: Number> Cluster<U> {
     }
 
     /// The distance between the poles of the `Cluster`.
-    #[allow(dead_code)]
     pub fn polar_distance(&self) -> Option<U> {
         self.children.as_ref().map(|v| v.polar_distance)
     }
 
-    /// The six `Cluster` ratios used for anomaly detection and related
-    /// applications.
-    ///
-    /// These ratios are:
-    ///
-    /// * child-cardinality / parent-cardinality.
-    /// * child-radius / parent-radius.
-    /// * child-lfd / parent-lfd.
-    /// * EMA of child-cardinality / parent-cardinality.
-    /// * EMA of child-radius / parent-radius.
-    /// * EMA of child-lfd / parent-lfd.
-    ///
-    /// This method may only be called after calling `with_ratios` on the root.
-    /// It is user error to call this method before calling `with_ratios` on
-    /// the root.
-    #[allow(dead_code)]
-    pub fn ratios(&self) -> Ratios {
-        self.ratios.unwrap_or([0.; 6])
-    }
-
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
-    #[allow(dead_code)]
     pub fn is_ancestor_of(&self, other: &Self) -> bool {
         self.depth() < other.depth() && self.history.as_slice() == &other.history[..self.history.len()]
     }
 
     /// Whether this `Cluster` is an descendant of the `other` `Cluster`.
-    #[allow(dead_code)]
     pub fn is_descendant_of(&self, other: &Self) -> bool {
         other.is_ancestor_of(self)
     }
@@ -609,7 +561,6 @@ impl<U: Number> Cluster<U> {
 
     /// Distance from the `center` of this `Cluster` to the center of the
     /// `other` `Cluster`.
-    #[allow(dead_code)]
     pub fn distance_to_other<I: Instance, D: Dataset<I, U>>(&self, data: &D, other: &Self) -> U {
         data.one_to_one(self.arg_center, other.arg_center)
     }
@@ -686,7 +637,6 @@ pub struct SerializedChildren {
 
 impl SerializedCluster {
     /// Converts a `Cluster` to a `SerializedCluster`
-    #[allow(dead_code)]
     pub fn from_cluster<U: Number>(cluster: &Cluster<U>) -> (Self, Option<SerializedChildren>) {
         let name = cluster.name();
         let cardinality = cluster.cardinality;
@@ -735,9 +685,9 @@ impl SerializedCluster {
         )
     }
 
-    #[allow(dead_code)]
     /// Converts a `SerializedCluster` to a `Cluster`. Optionally returns information about the
     /// Children's poles
+    #[must_use]
     pub fn into_partial_cluster<U: Number>(self) -> Cluster<U> {
         Cluster {
             history: Cluster::<U>::name_to_history(&self.name),
@@ -750,213 +700,6 @@ impl SerializedCluster {
             lfd: self.lfd,
             ratios: self.ratios,
             children: None,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use rand::{distributions::Bernoulli, prelude::Distribution, Rng};
-
-    use crate::{Dataset, Tree, VecDataset};
-
-    use super::*;
-
-    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        distances::vectors::euclidean(x, y)
-    }
-
-    #[test]
-    fn tiny() {
-        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
-        let name = "test".to_string();
-        let mut data = VecDataset::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-        let root = Cluster::new_root(&data, Some(42)).partition(&mut data, &partition_criteria);
-
-        assert!(!root.is_leaf());
-        assert!(root.children().is_some());
-
-        assert_eq!(root.depth(), 0);
-        assert_eq!(root.cardinality, 4);
-        assert_eq!(root.subtree().len(), 7);
-        assert!(root.radius > 0.);
-
-        assert_eq!(format!("{root}"), "1");
-
-        let Some([left, right]) = root.children() else {
-            unreachable!("The root cluster has children.")
-        };
-        assert_eq!(format!("{left}"), "2");
-        assert_eq!(format!("{right}"), "3");
-
-        for child in [left, right] {
-            assert_eq!(child.depth(), 1);
-            assert_eq!(child.cardinality, 2);
-            assert_eq!(child.subtree().len(), 3);
-        }
-
-        let subtree = root.subtree();
-        assert_eq!(
-            subtree.len(),
-            7,
-            "The subtree of the root cluster should have 7 elements but had {}.",
-            subtree.len()
-        );
-        for c in root.subtree() {
-            let radius = data.one_to_one(c.arg_center, c.arg_radial);
-            assert!(
-                (radius - c.radius).abs() <= f32::EPSILON,
-                "Radius must be equal to the distance to the farthest instance. {c} had radius {} but distance {radius}.",
-                c.radius,
-            );
-        }
-    }
-
-    #[test]
-    fn leaf_indices() {
-        let data = vec![
-            vec![10.],
-            vec![1.],
-            vec![-5.],
-            vec![8.],
-            vec![3.],
-            vec![2.],
-            vec![0.5],
-            vec![0.],
-        ];
-        let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-
-        let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-
-        let leaf_indices = tree.root.indices().collect::<Vec<_>>();
-        let tree_indices = (0..tree.root.cardinality).collect::<Vec<_>>();
-
-        assert_eq!(leaf_indices, tree_indices);
-    }
-
-    #[test]
-    fn reordering() {
-        let data = vec![
-            vec![10.],
-            vec![1.],
-            vec![-5.],
-            vec![8.],
-            vec![3.],
-            vec![2.],
-            vec![0.5],
-            vec![0.],
-        ];
-        let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-
-        let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let tree_indices = (0..tree.root.cardinality).collect::<Vec<_>>();
-
-        // Assert that the root's indices actually cover the whole dataset.
-        assert_eq!(tree.data().cardinality(), tree_indices.len());
-
-        // Assert that the tree's indices have been reordered in depth-first order
-        assert_eq!((0..tree.cardinality()).collect::<Vec<_>>(), tree_indices);
-    }
-
-    #[test]
-    fn medium() {
-        let (dimensionality, min_val, max_val) = (10, -1., 1.);
-        let seed = 42;
-
-        let data = symagen::random_data::random_f32(10_000, dimensionality, min_val, max_val, seed);
-        let name = "test".to_string();
-        let mut data = VecDataset::<_, f32>::new(name, data, metric, false);
-        let partition_criteria = PartitionCriteria::new(true).with_min_cardinality(1);
-
-        let root = Cluster::new_root(&data, Some(seed)).partition(&mut data, &partition_criteria);
-
-        for c in root.subtree() {
-            assert!(c.cardinality > 0, "Cardinality must be positive.");
-            assert!(c.radius >= 0., "Radius must be non-negative.");
-            assert!(c.lfd > 0., "LFD must be positive.");
-
-            let radius = data.one_to_one(c.arg_center, c.arg_radial);
-            assert!(
-                (radius - c.radius).abs() <= f32::EPSILON,
-                "Radius must be equal to the distance to the farthest instance. {c} had radius {} but distance {radius}.",
-                c.radius,
-            );
-        }
-    }
-
-    #[test]
-    fn serialization() {
-        let data = vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]];
-        let name = "test".to_string();
-        let data = VecDataset::new(name, data, metric, false);
-        let mut c1 = Cluster::new_root(&data, Some(42));
-        c1.history = vec![true, true, false, false, true];
-
-        let (original, original_children) = SerializedCluster::from_cluster(&c1);
-        let original_string = serde_json::to_string(&original).unwrap();
-
-        let deserialized: SerializedCluster = serde_json::from_str(&original_string).unwrap();
-        assert_eq!(original.name, deserialized.name);
-        assert_eq!(original.seed, deserialized.seed);
-        assert_eq!(original.offset, deserialized.offset);
-        assert_eq!(original.cardinality, deserialized.cardinality);
-        assert_eq!(original.arg_center, deserialized.arg_center);
-        assert_eq!(original.arg_radial, deserialized.arg_radial);
-        assert_eq!(original.radius_bytes, deserialized.radius_bytes);
-        assert_eq!(original.lfd, deserialized.lfd);
-        assert_eq!(original.ratios, deserialized.ratios);
-
-        let c2 = deserialized.into_partial_cluster();
-
-        assert_eq!(c1, c2);
-        assert!(original_children.is_none());
-    }
-
-    #[test]
-    fn history_to_name() {
-        let d = Bernoulli::new(0.3).unwrap();
-
-        for length in 1..800 {
-            let mut hist = vec![true];
-
-            for _ in 1..length {
-                let b = d.sample(&mut rand::thread_rng());
-                hist.push(b);
-            }
-
-            let name = Cluster::<f32>::history_to_name(&hist);
-            let recovered = Cluster::<f32>::name_to_history(&name);
-            assert_eq!(recovered, hist);
-        }
-    }
-
-    #[test]
-    fn name_to_history() {
-        let charset = "0123456789abcdef";
-        let mut rng = rand::thread_rng();
-
-        for length in 1..200 {
-            // Randomly choose the first char. Must be nonzero
-            let idx = rng.gen_range(1..charset.len());
-            let c = charset.chars().nth(idx).unwrap();
-            let mut name = String::from(c);
-
-            // Randomly choose the remaining characters
-            for _ in 1..length {
-                let idx = rng.gen_range(0..charset.len());
-                let c = charset.chars().nth(idx).unwrap();
-                name.push(c);
-            }
-
-            let hist = Cluster::<f32>::name_to_history(&name);
-            let recovered_name = Cluster::<f32>::history_to_name(&hist);
-
-            assert_eq!(recovered_name, name);
         }
     }
 }

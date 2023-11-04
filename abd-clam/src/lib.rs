@@ -21,11 +21,10 @@ mod cakes;
 mod core;
 pub(crate) mod utils;
 
-pub(crate) use crate::core::cluster::Cluster;
 pub use crate::{
-    cakes::{knn, rnn, sharded::ShardedCakes, Cakes},
+    cakes::{knn, rnn, sharded::ShardedCakes, singular::Cakes},
     core::{
-        cluster::{PartitionCriteria, PartitionCriterion, Tree},
+        cluster::{Cluster, PartitionCriteria, PartitionCriterion, SerializedCluster, Tree},
         dataset::{Dataset, Instance, VecDataset},
     },
 };

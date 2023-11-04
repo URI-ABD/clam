@@ -34,12 +34,12 @@ enum Grain<'a, U: Number> {
 impl<'a, U: Number> Grain<'a, U> {
     /// Creates a new `Grain` from a cluster.
     fn new_cluster(c: &'a Cluster<U>, d: U) -> Self {
-        let r = c.radius;
+        let r = c.radius();
         Self::Cluster {
             c,
             d: d + r,
             diameter: r + r,
-            multiplicity: c.cardinality,
+            multiplicity: c.cardinality(),
             is_leaf: c.is_leaf(),
         }
     }
@@ -266,51 +266,5 @@ where
             .map(|(c, d)| Grain::new_cluster(c, d))
             .chain(hits)
             .collect();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use symagen::random_data;
-
-    use crate::{cakes::knn::linear, knn::tests::sort_hits, Cakes, PartitionCriteria, VecDataset};
-
-    fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-        distances::vectors::euclidean(x, y)
-    }
-
-    #[test]
-    fn sieve() {
-        let (cardinality, dimensionality) = (10_000, 10);
-        let (min_val, max_val) = (-1.0, 1.0);
-        let seed = 42;
-
-        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
-        let data = VecDataset::new("knn-test".to_string(), data, metric, false);
-
-        let query = random_data::random_f32(1, dimensionality, min_val, max_val, seed * 2);
-        let query = &query[0];
-
-        let criteria = PartitionCriteria::default();
-        let model = Cakes::new(data, Some(seed), &criteria);
-        let tree = model.tree();
-
-        let indices = (0..cardinality).collect::<Vec<_>>();
-        for k in [100, 10, 1] {
-            let linear_nn = sort_hits(linear::search(tree.data(), query, k, &indices));
-            let sieve_nn = sort_hits(super::search(tree, query, k));
-
-            assert_eq!(sieve_nn.len(), k);
-
-            let d_linear = linear_nn[k - 1].1;
-            let d_sieve = sieve_nn[k - 1].1;
-            assert!(
-                (d_linear - d_sieve).abs() < f32::EPSILON,
-                "k = {}, linear = {}, sieve = {}",
-                k,
-                d_linear,
-                d_sieve
-            );
-        }
     }
 }
