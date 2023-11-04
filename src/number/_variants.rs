@@ -70,9 +70,6 @@ pub trait Float: Number {
     #[must_use]
     fn cbrt(self) -> Self;
 
-    /// Returns the machine epsilon for a `Float`.
-    fn epsilon() -> Self;
-
     /// Returns the inverse square root of a `Float`, i.e. `1.0 / self.sqrt()`.
     #[must_use]
     fn inv_sqrt(self) -> Self {
@@ -95,10 +92,6 @@ macro_rules! impl_float {
 
                 fn cbrt(self) -> Self {
                     Self::cbrt(self)
-                }
-
-                fn epsilon() -> Self {
-                    Self::EPSILON
                 }
 
                 fn powf(self, exp: Self) -> Self {

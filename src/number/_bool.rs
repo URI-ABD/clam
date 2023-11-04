@@ -186,4 +186,8 @@ impl Number for Bool {
     fn to_be_bytes(self) -> Vec<u8> {
         self.to_le_bytes()
     }
+
+    fn epsilon() -> Self {
+        Self(0)
+    }
 }
