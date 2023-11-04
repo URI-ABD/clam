@@ -6,34 +6,21 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Update rust toolchain
         run: rustup update
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: 3.9
       - uses: pre-commit/action@v3.0.0
 
-  cargo:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Update
       run: rustup update
 
     - name: Run tests
       run: cargo test --release
-
-  # unittest:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - uses: actions/setup-python@v3
-  #       with:
-  #         python-version: 3.9
-  #     - name: Dependencies
-  #       run: |
-  #         pip install --user poetry && poetry install
-  #     - name: Run
-  #       run: poetry run python -m unittest discover python
