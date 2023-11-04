@@ -127,9 +127,14 @@ impl AnnDatasets {
             let (min_val, max_val) = (-1.0, 1.0);
             let seed = 42;
 
-            let train_data =
-                symagen::random_data::random_f32(1_000_000, dimensionality, min_val, max_val, seed);
-            let test_data = symagen::random_data::random_f32(
+            let train_data = symagen::random_data::random_tabular_seedable(
+                1_000_000,
+                dimensionality,
+                min_val,
+                max_val,
+                seed,
+            );
+            let test_data = symagen::random_data::random_tabular_seedable(
                 10_000,
                 dimensionality,
                 min_val,

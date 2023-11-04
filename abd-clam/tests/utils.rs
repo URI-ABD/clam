@@ -42,7 +42,7 @@ pub fn gen_dataset(
     seed: u64,
     metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
 ) -> VecDataset<Vec<f32>, f32> {
-    let data = symagen::random_data::random_f32(cardinality, dimensionality, -1., 1., seed);
+    let data = symagen::random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, -1., 1., seed);
     let name = "test".to_string();
     VecDataset::new(name, data, metric, false)
 }

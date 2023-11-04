@@ -31,7 +31,7 @@ fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
 let seed = 42;
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1.0, 1.0);
-let data: Vec<Vec<f32>> = symagen::random_data::random_f32(
+let data: Vec<Vec<f32>> = symagen::random_data::random_tabular_seedable(
     cardinality,
     dimensionality,
     min_val,
