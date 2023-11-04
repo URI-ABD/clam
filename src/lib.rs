@@ -21,7 +21,7 @@ pub mod augmentation;
 pub mod random_data;
 
 /// The version of the crate.
-pub const VERSION: &str = "0.1.3";
+pub const VERSION: &str = "0.2.0";
 
 /// Guess the number game.
 ///
