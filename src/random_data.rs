@@ -1,21 +1,37 @@
 //! Generate random data for use in benchmarks and tests.
 
+use distances::Number;
 use rand::prelude::*;
 
-/// Generate a randomized tabular dataset for use in benchmarks and tests.
+/// Generate a randomized tabular dataset for use in benchmarks and tests with a
+/// given seed.
+///
+/// This uses the `rand_chacha` crate's `ChaCha20Rng` as the random number generator.
 ///
 /// # Arguments:
 ///
 /// * `cardinality`: number of points to generate.
 /// * `dimensionality`: dimensionality of points to generate.
-/// * `min_val`: of each axis in the hypercube
-/// * `max_val`: of each axis in the hypercube
-/// * `seed`: for the random number generator
+/// * `min_val`: of each axis in the hypercube.
+/// * `max_val`: of each axis in the hypercube.
+/// * `seed`: for the random number generator.
 #[must_use]
-pub fn random_u8(cardinality: usize, dimensionality: usize, min_val: u8, max_val: u8, seed: u64) -> Vec<Vec<u8>> {
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+pub fn random_tabular_seedable<T: Number>(
+    cardinality: usize,
+    dimensionality: usize,
+    min_val: T,
+    max_val: T,
+    seed: u64,
+) -> Vec<Vec<T>> {
+    // let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+    let diff = max_val - min_val;
     (0..cardinality)
-        .map(|_| (0..dimensionality).map(|_| rng.gen_range(min_val..=max_val)).collect())
+        .map(|_| {
+            (0..dimensionality)
+                .map(|_| min_val + T::next_random(&mut rng) / diff)
+                .collect()
+        })
         .collect()
 }
 
@@ -25,48 +41,24 @@ pub fn random_u8(cardinality: usize, dimensionality: usize, min_val: u8, max_val
 ///
 /// * `cardinality`: number of points to generate.
 /// * `dimensionality`: dimensionality of points to generate.
-/// * `min_val`: of each axis in the hypercube
-/// * `max_val`: of each axis in the hypercube
-/// * `seed`: for the random number generator
+/// * `min_val`: of each axis in the hypercube.
+/// * `max_val`: of each axis in the hypercube.
+/// * `rng`: random number generator.
 #[must_use]
-pub fn random_f32(cardinality: usize, dimensionality: usize, min_val: f32, max_val: f32, seed: u64) -> Vec<Vec<f32>> {
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+pub fn random_tabular<T: Number, R: Rng>(
+    cardinality: usize,
+    dimensionality: usize,
+    min_val: T,
+    max_val: T,
+    rng: &mut R,
+) -> Vec<Vec<T>> {
+    let diff = max_val - min_val;
     (0..cardinality)
-        .map(|_| (0..dimensionality).map(|_| rng.gen_range(min_val..=max_val)).collect())
-        .collect()
-}
-
-/// Generate a randomized tabular dataset for use in benchmarks and tests.
-///
-/// # Arguments:
-///
-/// * `cardinality`: number of points to generate.
-/// * `dimensionality`: dimensionality of points to generate.
-/// * `min_val`: of each axis in the hypercube
-/// * `max_val`: of each axis in the hypercube
-/// * `seed`: for the random number generator
-#[must_use]
-pub fn random_f64(cardinality: usize, dimensionality: usize, min_val: f64, max_val: f64, seed: u64) -> Vec<Vec<f64>> {
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
-    (0..cardinality)
-        .map(|_| (0..dimensionality).map(|_| rng.gen_range(min_val..=max_val)).collect())
-        .collect()
-}
-
-/// Generate a randomized tabular dataset for use in benchmarks and tests.
-///
-/// # Arguments:
-///
-/// * `cardinality`: number of points to generate.
-/// * `dimensionality`: dimensionality of points to generate.
-/// * `min_val`: of each axis in the hypercube
-/// * `max_val`: of each axis in the hypercube
-/// * `seed`: for the random number generator
-#[must_use]
-pub fn random_u32(cardinality: usize, dimensionality: usize, min_val: u32, max_val: u32, seed: u64) -> Vec<Vec<u32>> {
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
-    (0..cardinality)
-        .map(|_| (0..dimensionality).map(|_| rng.gen_range(min_val..=max_val)).collect())
+        .map(|_| {
+            (0..dimensionality)
+                .map(|_| min_val + T::next_random(rng) / diff)
+                .collect()
+        })
         .collect()
 }
 
@@ -82,7 +74,7 @@ pub fn random_u32(cardinality: usize, dimensionality: usize, min_val: u32, max_v
 #[must_use]
 pub fn random_string(cardinality: usize, min_len: usize, max_len: usize, alphabet: &str, seed: u64) -> Vec<String> {
     let alphabet = alphabet.chars().collect::<Vec<_>>();
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     (0..cardinality)
         .map(|_| {
             let len = rng.gen_range(min_len..=max_len);
