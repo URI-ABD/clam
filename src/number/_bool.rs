@@ -190,4 +190,8 @@ impl Number for Bool {
     fn epsilon() -> Self {
         Self(0)
     }
+
+    fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+        Self(rng.gen())
+    }
 }

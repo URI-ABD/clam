@@ -47,7 +47,8 @@ fn lp_f32() {
     let (cardinality, dimensionality) = (100, 10_000);
     let (min_val, max_val) = (-10., 10.);
 
-    let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, seed);
+    let data =
+        random_data::random_tabular_seedable(cardinality, dimensionality, min_val, max_val, seed);
 
     for x in data.iter() {
         for y in data.iter() {

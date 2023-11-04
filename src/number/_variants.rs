@@ -61,7 +61,7 @@ macro_rules! impl_uint {
 impl_uint!(u8, u16, u32, u64, u128, usize);
 
 /// Sub-trait of `Number` for all floating point types.
-pub trait Float: Number {
+pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the square root of a `Float`.
     #[must_use]
     fn sqrt(self) -> Self;

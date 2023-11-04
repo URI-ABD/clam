@@ -17,6 +17,7 @@ readme = "README.md"
 publish = true
 
 [dependencies]
+rand = "0.8.5"
 # libm = "0.2.7"  # no-std
 
 [dev-dependencies]

@@ -102,6 +102,9 @@ pub trait Number:
     /// For integer types, this is 0.
     #[must_use]
     fn epsilon() -> Self;
+
+    /// Returns a random `Number`.
+    fn next_random<R: rand::Rng>(rng: &mut R) -> Self;
 }
 
 impl Number for f32 {
@@ -185,6 +188,10 @@ impl Number for f32 {
 
     fn epsilon() -> Self {
         Self::EPSILON
+    }
+
+    fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+        rng.gen()
     }
 }
 
@@ -270,6 +277,10 @@ impl Number for f64 {
     fn epsilon() -> Self {
         Self::EPSILON
     }
+
+    fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+        rng.gen()
+    }
 }
 
 /// A macro to implement the `Number` trait for primitive types.
@@ -351,6 +362,10 @@ macro_rules! impl_number_iint {
 
                 fn epsilon() -> Self {
                     0
+                }
+
+                fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+                    rng.gen()
                 }
             }
         )*
@@ -438,6 +453,10 @@ macro_rules! impl_number_uint {
 
                 fn epsilon() -> Self {
                     0
+                }
+
+                fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+                    rng.gen()
                 }
             }
         )*
