@@ -14,7 +14,7 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 ```rust
 use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
 
-/// The distance function with with do perform clustering and search.
+/// The distance function with with to perform clustering and search.
 ///
 /// We use the `distances` crate for the distance function.
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
