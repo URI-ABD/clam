@@ -25,7 +25,7 @@ pub(crate) mod utils;
 pub use crate::{
     cakes::{knn, rnn, sharded::ShardedCakes, singular::Cakes},
     core::{
-        cluster::{Cluster, PartitionCriteria, PartitionCriterion, SerializedCluster, Tree},
+        cluster::{Cluster, PartitionCriteria, PartitionCriterion, Tree},
         dataset::{Dataset, Instance, VecDataset},
         graph::{Edge, Graph},
     },

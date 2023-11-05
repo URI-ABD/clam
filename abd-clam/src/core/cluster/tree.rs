@@ -1,16 +1,8 @@
 //! A `Tree` represents a hierarchy of "similar" instances from a metric-`Space`.
 
 use core::marker::PhantomData;
-use std::{
-    fs::{create_dir, File},
-    io::{Read, Write},
-    path::Path,
-};
+use std::path::Path;
 
-use super::{
-    SerializedCluster,
-    _cluster::{Children, SerializedChildren},
-};
 use crate::{utils, Cluster, Dataset, Instance, PartitionCriteria};
 use distances::Number;
 use serde::{Deserialize, Serialize};
@@ -23,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// - `T`: The type of the instances in the `Tree`.
 /// - `U`: The type of the distance values between instances.
 /// - `D`: The type of the `Dataset` from which the `Tree` is built.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Tree<I: Instance, U: Number, D: Dataset<I, U>> {
     /// The dataset from which the tree is built.
     pub(crate) data: D,
@@ -145,10 +137,8 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
     ///
     /// ```text
     /// /user/given/path/
-    ///    |- clusters/    <-- Clusters are serialized using their hex name.
-    ///    |- childinfo/   <-- Information about clusters immediate children.
-    ///    |- dataset/     <-- The serialized dataset.
-    ///    |- leaves.json  <-- A json file of leaf names.
+    ///    |- dataset      <-- The serialized dataset.
+    ///    |- clusters     <-- Clusters are serialized to a single file.
     /// ```
     ///
     /// # Arguments
@@ -165,54 +155,11 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
             return Err("Given path does not exist".to_string());
         }
 
-        // Create cluster directory
+        let dataset_path = path.join("dataset");
+        self.data.save(&dataset_path)?;
+
         let cluster_path = path.join("clusters");
-        create_dir(&cluster_path).map_err(|e| e.to_string())?;
-
-        // Create childinfo directory
-        let childinfo_path = path.join("childinfo");
-        create_dir(&childinfo_path).map_err(|e| e.to_string())?;
-
-        // Create dataset directory
-        let dataset_dir = path.join("dataset");
-        create_dir(&dataset_dir).map_err(|e| e.to_string())?;
-
-        // List of leaf clusters (Used for loading in the tree later)
-        let mut leaves: Vec<String> = vec![];
-
-        // Traverse the tree, serializing each cluster
-        let mut stack = vec![&self.root];
-        while let Some(cur) = stack.pop() {
-            let filename: String = cur.name();
-
-            match cur.children() {
-                Some([left, right]) => {
-                    stack.push(left);
-                    stack.push(right);
-                }
-                None => {
-                    leaves.push(filename.clone());
-                }
-            }
-
-            // Write out the serialized cluster
-            let (serialized, children) = SerializedCluster::from_cluster(cur);
-            let node_path = cluster_path.join(&filename);
-            serialize_to_file(&node_path, &serialized)?;
-
-            if let Some(childinfo) = children {
-                let info_path = childinfo_path.join(&filename);
-                serialize_to_file(&info_path, &childinfo)?;
-            }
-        }
-
-        // Save the dataset
-        let saved_dataset_path = dataset_dir.join("data");
-        self.data.save(&saved_dataset_path)?;
-
-        // Save the leaf data
-        let leaf_data_path = path.join("leaves.json");
-        serialize_to_file(&leaf_data_path, &leaves)?;
+        self.root.save(&cluster_path)?;
 
         Ok(())
     }
@@ -243,137 +190,22 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
             return Err("Given path does not exist".to_string());
         }
 
-        // Alises to relevant directories
+        // Alises to relevant paths
         let cluster_path = path.join("clusters");
-        let childinfo_path = path.join("childinfo");
-        let dataset_dir = path.join("dataset").join("data");
+        let dataset_path = path.join("dataset");
 
-        if !(cluster_path.exists() && childinfo_path.exists() && dataset_dir.exists()) {
-            return Err("Save directory is malformed".to_string());
+        if !(cluster_path.exists() && dataset_path.exists()) {
+            return Err("Saved tree is malformed".to_string());
         }
 
-        let dataset = D::load(&dataset_dir, metric, is_expensive)?;
-
-        // Load the root in
-        let root = recover_serialized_cluster(&cluster_path.join("1"))?;
-
-        // Open up and read the names of leaf indices
-        let leaf_names: Vec<String> = deserialize_from_file(&path.join("leaves.json"), &mut Vec::new())?;
-        let mut boxed_root = Box::new(root);
-
-        // Now, for each leaf, we build out the tree up to that leaf
-        for leaf in leaf_names {
-            let mut cur = &mut boxed_root;
-            let leaf_history = Cluster::<U>::name_to_history(&leaf);
-
-            // We start from index 1 to skip the identically 1 prefix at index 0
-            for step in 1..leaf_history.len() {
-                let go_right = leaf_history[step];
-
-                // TODO: Child reconstruction should be moved to a method on Cluster
-
-                // If we don't have any children here, we need to build them out
-                if cur.children.is_none() {
-                    // Construct the names for the left and right children
-                    let mut left_history = leaf_history[0..step].to_vec();
-                    left_history.push(false);
-
-                    let mut right_history = leaf_history[0..step].to_vec();
-                    right_history.push(true);
-
-                    let left_name = Cluster::<U>::history_to_name(&left_history);
-                    let right_name = Cluster::<U>::history_to_name(&right_history);
-
-                    // Deserialize the left and right child clusters
-                    let left: Cluster<U> = recover_serialized_cluster(&cluster_path.join(left_name))?;
-                    let right: Cluster<U> = recover_serialized_cluster(&cluster_path.join(right_name))?;
-
-                    // Get the childinfo (arg_l, arg_r, etc.)
-                    let parent_name = Cluster::<U>::history_to_name(&leaf_history[0..step]);
-                    let childinfo = recover_serialized_childinfo(&childinfo_path.join(&parent_name))?;
-
-                    // Reconstruct the children
-                    cur.children = Some(Children {
-                        left: Box::new(left),
-                        right: Box::new(right),
-                        arg_l: childinfo.arg_l,
-                        arg_r: childinfo.arg_r,
-                        polar_distance: <U as Number>::from_le_bytes(&childinfo.polar_distance_bytes),
-                    });
-                }
-
-                let children = cur
-                    .children
-                    .as_mut()
-                    .unwrap_or_else(|| unreachable!("We have already checked if `children` is None."));
-
-                // Choose which branch to take
-                if go_right {
-                    cur = &mut children.right;
-                } else {
-                    cur = &mut children.left;
-                }
-            }
-        }
-
-        let root = *boxed_root;
+        let data = D::load(&dataset_path, metric, is_expensive)?;
+        let root = Cluster::<U>::load(&cluster_path)?;
 
         Ok(Self {
-            data: dataset,
+            data,
             depth: root.max_leaf_depth(),
             root,
             _i: PhantomData,
         })
     }
-}
-
-/// Serializes an object to a given path.
-///
-/// # Arguments
-///
-/// * `path` - The path to serialize the object to.
-/// * `object` - The object to serialize.
-///
-/// # Errors
-///
-/// * If `path` cannot be written to.
-/// * If there are any serialization errors with the object.
-fn serialize_to_file<S: Serialize>(path: &Path, object: &S) -> Result<(), String> {
-    // TODO: At some point we will encode `object` as bytes instead of json
-    let mut file = File::create(path).map_err(|e| e.to_string())?;
-    let object = postcard::to_allocvec(object).map_err(|e| e.to_string())?;
-    file.write_all(&object).map_err(|e| e.to_string())
-}
-
-/// Deserializes an object from a given path.
-///
-/// # Arguments
-///
-/// * `path` - The path to deserialize the object from.
-///
-/// # Errors
-///
-/// * If `path` cannot be read from.
-/// * If there are any deserialization errors with the object.
-fn deserialize_from_file<'a, D: Deserialize<'a>>(path: &Path, buffer: &'a mut Vec<u8>) -> Result<D, String> {
-    let mut handle = File::open(path).map_err(|e| e.to_string())?;
-    handle.read_to_end(buffer).map_err(|e| e.to_string())?;
-    postcard::from_bytes(buffer).map_err(|e| e.to_string())
-}
-
-/// Recovers a `Cluster` from a serialized cluster contained in a given file. Does not recover child info
-///
-/// # Errors
-/// This function will error out on any deserialization or file i/o errors.
-fn recover_serialized_cluster<U: Number>(path: &Path) -> Result<Cluster<U>, String> {
-    let cluster: SerializedCluster = deserialize_from_file(path, &mut Vec::new())?;
-    Ok(cluster.into_partial_cluster())
-}
-
-/// Recovers child information for a given cluster
-///
-/// # Errors
-/// This function will error out on any deserialization or file i/o errors.
-fn recover_serialized_childinfo(path: &Path) -> Result<SerializedChildren, String> {
-    deserialize_from_file(path, &mut Vec::new())
 }

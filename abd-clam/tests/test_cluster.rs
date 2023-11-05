@@ -1,7 +1,6 @@
 //! Tests for the `Cluster` struct.
 
-use abd_clam::{Cluster, Dataset, PartitionCriteria, SerializedCluster, Tree, VecDataset};
-use rand::{distributions::Bernoulli, prelude::Distribution, Rng};
+use abd_clam::{Cluster, Dataset, PartitionCriteria, Tree, VecDataset};
 
 mod utils;
 
@@ -22,13 +21,13 @@ fn tiny() {
     assert_eq!(root.subtree().len(), 7);
     assert!(root.radius() > 0.);
 
-    assert_eq!(format!("{root}"), "1");
+    assert_eq!(format!("{root}"), "0-4");
 
     let Some([left, right]) = root.children() else {
         unreachable!("The root cluster has children.")
     };
-    assert_eq!(format!("{left}"), "2");
-    assert_eq!(format!("{right}"), "3");
+    assert_eq!(format!("{left}"), "0-2");
+    assert_eq!(format!("{right}"), "2-4");
 
     for child in [left, right] {
         assert_eq!(child.depth(), 1);
@@ -83,71 +82,22 @@ fn serialization() {
         utils::euclidean::<f32, f32>,
     );
 
-    let c1 = Cluster::new_root(&data, Some(42));
-    // c1.history = vec![true, true, false, false, true];
-
-    let (original, original_children) = SerializedCluster::from_cluster(&c1);
+    let original = Cluster::new_root(&data, Some(42));
+    // original.history = vec![true, true, false, false, true];
 
     let original_bytes = postcard::to_allocvec(&original).unwrap();
-    let deserialized: SerializedCluster = postcard::from_bytes(&original_bytes).unwrap();
+    let deserialized: Cluster<f32> = postcard::from_bytes(&original_bytes).unwrap();
 
-    assert_eq!(original.name, deserialized.name);
-    assert_eq!(original.seed, deserialized.seed);
-    assert_eq!(original.offset, deserialized.offset);
-    assert_eq!(original.cardinality, deserialized.cardinality);
-    assert_eq!(original.arg_center, deserialized.arg_center);
-    assert_eq!(original.arg_radial, deserialized.arg_radial);
-    assert_eq!(original.radius_bytes, deserialized.radius_bytes);
-    assert_eq!(original.lfd, deserialized.lfd);
-    assert_eq!(original.ratios, deserialized.ratios);
-
-    let c2 = deserialized.into_partial_cluster();
-
-    assert_eq!(c1, c2);
-    assert!(original_children.is_none());
-}
-
-#[test]
-fn history_to_name() {
-    let d = Bernoulli::new(0.3).unwrap();
-
-    for length in 1..800 {
-        let mut hist = vec![true];
-
-        for _ in 1..length {
-            let b = d.sample(&mut rand::thread_rng());
-            hist.push(b);
-        }
-
-        let name = Cluster::<f32>::history_to_name(&hist);
-        let recovered = Cluster::<f32>::name_to_history(&name);
-        assert_eq!(recovered, hist);
-    }
-}
-
-#[test]
-fn name_to_history() {
-    let charset = "0123456789abcdef";
-    let mut rng = rand::thread_rng();
-
-    for length in 1..200 {
-        // Randomly choose the first char. Must be nonzero
-        let idx = rng.gen_range(1..charset.len());
-        let c = charset.chars().nth(idx).unwrap();
-        let mut name = String::from(c);
-
-        // Randomly choose the remaining characters
-        for _ in 1..length {
-            let idx = rng.gen_range(0..charset.len());
-            let c = charset.chars().nth(idx).unwrap();
-            name.push(c);
-        }
-
-        let hist = Cluster::<f32>::name_to_history(&name);
-        let recovered_name = Cluster::<f32>::history_to_name(&hist);
-
-        assert_eq!(recovered_name, name);
-    }
+    assert_eq!(original.name(), deserialized.name());
+    assert_eq!(original.cardinality(), deserialized.cardinality());
+    assert_eq!(original.indices(), deserialized.indices());
+    assert_eq!(original.arg_center(), deserialized.arg_center());
+    assert_eq!(original.arg_radial(), deserialized.arg_radial());
+    assert_eq!(original.lfd(), deserialized.lfd());
+    assert_eq!(original.ratios(), deserialized.ratios());
+    assert_eq!(original.depth(), deserialized.depth());
+    assert_eq!(original.radius(), deserialized.radius());
+    assert_eq!(original.children(), deserialized.children());
 }
 
 #[test]
