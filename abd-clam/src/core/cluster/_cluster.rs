@@ -10,7 +10,6 @@ use core::{
 };
 use distances::Number;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write;
 
 use crate::{utils, Dataset, Instance, PartitionCriteria, PartitionCriterion};
 
@@ -27,8 +26,8 @@ use crate::core::cluster::Ratios;
 /// tree-based prefixes which will make names unique across multiple trees.
 #[derive(Debug)]
 pub struct Cluster<U: Number> {
-    /// The `Cluster`'s history in the tree.
-    history: Vec<bool>,
+    /// The depth of this `Cluster` in the tree.
+    depth: usize,
     /// The seed used in the random number generator for this `Cluster`.
     seed: Option<u64>,
     /// The offset of the indices of the `Cluster`'s instances in the dataset.
@@ -69,7 +68,7 @@ pub struct Children<U: Number> {
 
 impl<U: Number> PartialEq for Cluster<U> {
     fn eq(&self, other: &Self) -> bool {
-        self.history == other.history
+        self.offset == other.offset && self.cardinality == other.cardinality
     }
 }
 
@@ -152,7 +151,7 @@ impl<U: Number> Cluster<U> {
     /// * `seed`: The seed used in the random number generator for this `Cluster`.
     pub fn new_root<I: Instance, D: Dataset<I, U>>(data: &D, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        Self::new(data, seed, vec![true], 0, &indices)
+        Self::new(data, seed, 0, &indices, 0)
     }
 
     /// Creates a new `Cluster`.
@@ -161,15 +160,15 @@ impl<U: Number> Cluster<U> {
     ///
     /// * `data`: on which to create the `Cluster`.
     /// * `seed`: The seed used in the random number generator for this `Cluster`.
-    /// * `history`: The `Cluster`'s history in the tree.
     /// * `offset`: The offset of the indices of the `Cluster`'s instances in the dataset.
     /// * `indices`: The indices of instances from the `dataset` that are contained in the `Cluster`.
+    /// * `depth`: The depth of the `Cluster` in the tree.
     fn new<I: Instance, D: Dataset<I, U>>(
         data: &D,
         seed: Option<u64>,
-        history: Vec<bool>,
         offset: usize,
         indices: &[usize],
+        depth: usize,
     ) -> Self {
         let cardinality = indices.len();
 
@@ -195,7 +194,7 @@ impl<U: Number> Cluster<U> {
         let lfd = utils::compute_lfd(radius, &center_distances);
 
         Self {
-            history,
+            depth,
             seed,
             offset,
             cardinality,
@@ -246,11 +245,15 @@ impl<U: Number> Cluster<U> {
 
             let r_offset = self.offset + l_indices.len();
 
-            let (l_history, r_history) = (self.child_history(false), self.child_history(true));
-
             let ((left, l_indices), (right, r_indices)) = rayon::join(
-                || Self::new(data, self.seed, l_history, self.offset, &l_indices)._partition(data, criteria, l_indices),
-                || Self::new(data, self.seed, r_history, r_offset, &r_indices)._partition(data, criteria, r_indices),
+                || {
+                    Self::new(data, self.seed, self.offset, &l_indices, self.depth + 1)
+                        ._partition(data, criteria, l_indices)
+                },
+                || {
+                    Self::new(data, self.seed, r_offset, &r_indices, self.depth + 1)
+                        ._partition(data, criteria, r_indices)
+                },
             );
 
             let arg_l = utils::pos_val(&l_indices, arg_l)
@@ -322,17 +325,6 @@ impl<U: Number> Cluster<U> {
     /// Drops the distances from a vector, returning only the indices.
     fn drop_distances(indices: Vec<((usize, U), U)>) -> Vec<usize> {
         indices.into_iter().map(|((i, _), _)| i).collect()
-    }
-
-    /// The `history` of the child `Cluster`.
-    ///
-    /// # Arguments
-    ///
-    /// * `right`: Whether the child `Cluster` is the right child.
-    fn child_history(&self, right: bool) -> Vec<bool> {
-        let mut history = self.history.clone();
-        history.push(right);
-        history
     }
 
     /// Sets the chile-parent `Cluster` ratios for anomaly detection and related
@@ -417,75 +409,14 @@ impl<U: Number> Cluster<U> {
         self.offset..(self.offset + self.cardinality)
     }
 
-    /// The `history` of the `Cluster` as a bool vector.
-    ///
-    /// The root `Cluster` has a `history` of length 1, being `vec![true]`. The
-    /// history of a left child is the history of its parent with a `false`
-    /// appended. The history of a right child is the history of its parent with
-    /// a `true` appended.
-    ///
-    /// The `history` of a `Cluster` is used to identify the `Cluster` in the
-    /// tree, and to compute the `Cluster`'s `name`.
-    pub fn history(&self) -> &[bool] {
-        &self.history
-    }
     /// The `name` of the `Cluster` as a hex-String.
     ///
-    /// This is a human-readable representation of the `Cluster`'s `history`.
+    /// This is a human-readable representation of the `Cluster`'s `offset` and `cardinality`.
+    /// It is a unique identifier in the tree.
     /// It may be used to store the `Cluster` in a database, or to identify the
     /// `Cluster` in a visualization.
     pub fn name(&self) -> String {
-        Self::history_to_name(&self.history)
-    }
-
-    /// Returns a human-readable hexadecimal representation of a `Cluster` history
-    /// boolean vector
-    #[must_use]
-    pub fn history_to_name(history: &[bool]) -> String {
-        let rem = history.len() % 4;
-        let padding = if rem == 0 { 0 } else { 4 - rem };
-        (0..padding) // Pad the history with 0s to make it a multiple of 4.
-            .map(|_| &false)
-            .chain(history)
-            // Convert each bool to a binary string.
-            .map(|&b| if b { "1" } else { "0" })
-            .collect::<Vec<_>>()
-            .chunks_exact(4)
-            .map(|s| {
-                // Convert each 4-bit binary string to a hexadecimal character.
-                u8::from_str_radix(&s.join(""), 2)
-                    .unwrap_or_else(|_| unreachable!("We know the characters used are only \"0\" and \"1\"."))
-            })
-            .fold(String::new(), |mut acc, s| {
-                // Append each hexadecimal character to the accumulator.
-                write!(&mut acc, "{s:01x}")
-                    .unwrap_or_else(|_| unreachable!("We know the characters used are hexadecimal."));
-                acc
-            })
-    }
-
-    /// Returns a boolean vector representation of a `Cluster` history from a
-    /// human-readable hexadecimal representation.
-    #[must_use]
-    pub fn name_to_history(name: &str) -> Vec<bool> {
-        name.chars()
-            // Convert each hexadecimal character to u8
-            .map(|c| {
-                u8::from_str_radix(&c.to_string(), 16)
-                    .unwrap_or_else(|_| unreachable!("We know the characters used are hexadecimal."))
-            })
-            .fold(String::new(), |mut acc, c| {
-                // Convert each u8 to a 4-bit binary string and append it to the accumulator.
-                write!(&mut acc, "{c:04b}")
-                    .unwrap_or_else(|_| unreachable!("We know the characters used are only \"0\" and \"1\"."));
-                acc
-            })
-            // Remove any leading 0s.
-            .trim_start_matches('0')
-            .chars()
-            // Convert each binary character to a bool.
-            .map(|c| c == '1')
-            .collect()
+        format!("{}-{}", self.offset, self.cardinality)
     }
 
     /// The depth of the `Cluster` in the tree.
@@ -493,7 +424,7 @@ impl<U: Number> Cluster<U> {
     /// The root `Cluster` has a depth of 0. The depth of a child is the depth
     /// of its parent plus 1.
     pub fn depth(&self) -> usize {
-        self.history.len() - 1
+        self.depth
     }
 
     /// Whether the `Cluster` contains only one instance or only identical
@@ -521,7 +452,7 @@ impl<U: Number> Cluster<U> {
 
     /// Whether this `Cluster` is an ancestor of the `other` `Cluster`.
     pub fn is_ancestor_of(&self, other: &Self) -> bool {
-        self.depth() < other.depth() && self.history.as_slice() == &other.history[..self.history.len()]
+        self.cardinality > other.cardinality && self.indices().contains(&other.offset)
     }
 
     /// Whether this `Cluster` is an descendant of the `other` `Cluster`.
@@ -602,8 +533,8 @@ impl<U: Number> Cluster<U> {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Serialize, Deserialize)]
 pub struct SerializedCluster {
-    /// The encoded history of the `Cluster`
-    pub name: String,
+    /// The depth of the `Cluster`.
+    pub depth: usize,
     /// The seed (if applicable) that the `Cluster` was constructed with
     pub seed: Option<u64>,
     /// The `Cluster`'s offset
@@ -620,6 +551,8 @@ pub struct SerializedCluster {
     pub lfd: f64,
     /// The `Cluster`'s ratios
     pub ratios: Option<Ratios>,
+    /// Left_cardinality
+    pub left_cardinality: Option<usize>,
 }
 
 /// Serialized information about a given `Cluster`'s children
@@ -638,8 +571,8 @@ pub struct SerializedChildren {
 impl SerializedCluster {
     /// Converts a `Cluster` to a `SerializedCluster`
     pub fn from_cluster<U: Number>(cluster: &Cluster<U>) -> (Self, Option<SerializedChildren>) {
-        let name = cluster.name();
-        let cardinality = cluster.cardinality;
+        let depth = cluster.depth();
+        let cardinality = cluster.cardinality();
         let offset = cluster.offset;
         let seed = cluster.seed;
 
@@ -654,24 +587,28 @@ impl SerializedCluster {
 
         // Since we cant do this recursively we need to like depth-first traverse
         // the tree and serialize manually
-        let children = cluster.children.as_ref().map(
-            |Children {
-                 arg_l,
-                 arg_r,
-                 polar_distance,
-                 ..
-             }| {
-                SerializedChildren {
+        let (children, left_cardinality) = match cluster.children.as_ref() {
+            Some(Children {
+                arg_l,
+                arg_r,
+                polar_distance,
+                left,
+                ..
+            }) => {
+                let c = SerializedChildren {
                     arg_l: *arg_l,
                     arg_r: *arg_r,
                     polar_distance_bytes: polar_distance.to_le_bytes(),
-                }
-            },
-        );
+                };
+                let l = left.cardinality();
+                (Some(c), Some(l))
+            }
+            None => (None, None),
+        };
 
         (
             Self {
-                name,
+                depth,
                 seed,
                 offset,
                 cardinality,
@@ -680,6 +617,7 @@ impl SerializedCluster {
                 radius_bytes,
                 lfd,
                 ratios,
+                left_cardinality,
             },
             children,
         )
@@ -690,7 +628,7 @@ impl SerializedCluster {
     #[must_use]
     pub fn into_partial_cluster<U: Number>(self) -> Cluster<U> {
         Cluster {
-            history: Cluster::<U>::name_to_history(&self.name),
+            depth: self.depth,
             seed: self.seed,
             offset: self.offset,
             cardinality: self.cardinality,
