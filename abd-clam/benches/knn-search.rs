@@ -8,44 +8,47 @@ fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::vectors::euclidean(x, y)
 }
 
-const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[("euclidean", euclidean)];
+fn euclidean_simd(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+    distances::simd::euclidean_f32(x, y)
+}
+
+const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] =
+    &[("euclidean", euclidean), ("euclidean_simd", euclidean_simd)];
 
 fn cakes(c: &mut Criterion) {
     let seed = 42;
-    let (cardinality, dimensionality) = (1_000_000, 10);
+    let (cardinality, dimensionality) = (100_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
     let data = random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, min_val, max_val, seed);
 
-    let num_queries = 100;
-    let queries = random_data::random_tabular_seedable::<f32>(num_queries, dimensionality, min_val, max_val, seed + 1);
-    let queries = queries.iter().collect::<Vec<_>>();
+    let query = vec![0.0; dimensionality];
 
     for &(metric_name, metric) in METRICS {
         let mut group = c.benchmark_group(format!("knn-{metric_name}"));
         group
-            .sample_size(10)
+            // .sample_size(100)
             .sampling_mode(SamplingMode::Flat)
-            .throughput(Throughput::Elements(num_queries as u64))
+            .throughput(Throughput::Elements(1))
             .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
         let dataset = VecDataset::new("knn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
         let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
-        for k in (0..=8).map(|v| 2usize.pow(v)) {
+        for k in (0..3).map(|v| 10_usize.pow(v)) {
             for &variant in knn::Algorithm::variants() {
                 let id = BenchmarkId::new(variant.name(), k);
                 group.bench_with_input(id, &k, |b, _| {
-                    b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, k, variant));
+                    b.iter_with_large_drop(|| cakes.knn_search(&query, k, variant));
                 });
             }
-        }
 
-        let id = BenchmarkId::new("Linear", 9);
-        group.bench_with_input(id, &9, |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_knn_search(&queries, 9, knn::Algorithm::Linear));
-        });
+            let id = BenchmarkId::new("Linear", k);
+            group.bench_with_input(id, &k, |b, _| {
+                b.iter_with_large_drop(|| cakes.knn_search(&query, k, knn::Algorithm::Linear));
+            });
+        }
         group.finish();
     }
 }
