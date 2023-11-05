@@ -22,7 +22,8 @@ rand = "0.8.5"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-symagen = { version = "0.2.0", path = "../SyMaGen" }
+symagen = "0.2.0"
+# symagen = { version = "0.2.0", path = "../SyMaGen" }
 test-case = "3.2.1"
 
 [[bench]]
