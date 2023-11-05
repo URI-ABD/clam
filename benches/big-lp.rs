@@ -42,7 +42,13 @@ fn big_lp_norms(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, d as u64);
+        let data = random_data::random_tabular_seedable(
+            cardinality,
+            dimensionality,
+            min_val,
+            max_val,
+            d as u64,
+        );
 
         for (i, &metric) in metrics.iter().enumerate() {
             let p = i as i32 + 1;

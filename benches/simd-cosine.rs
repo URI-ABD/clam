@@ -12,7 +12,13 @@ fn simd_f32(c: &mut Criterion) {
 
     for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_f32(cardinality, dimensionality, min_val, max_val, d as u64);
+        let vecs = random_data::random_tabular_seedable(
+            cardinality,
+            dimensionality,
+            min_val,
+            max_val,
+            d as u64,
+        );
 
         let id = BenchmarkId::new("Cosine-generic", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
@@ -34,7 +40,13 @@ fn simd_f64(c: &mut Criterion) {
 
     for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_f64(cardinality, dimensionality, min_val, max_val, d as u64);
+        let vecs = random_data::random_tabular_seedable(
+            cardinality,
+            dimensionality,
+            min_val,
+            max_val,
+            d as u64,
+        );
 
         let id = BenchmarkId::new("Cosine-generic", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {

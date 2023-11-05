@@ -249,7 +249,7 @@ mod test {
         let input_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
 
         for i in input_sizes {
-            let data = random_data::random_f32(2, i, -10_f32, 10.0, 42);
+            let data = random_data::random_tabular_seedable(2, i, -10_f32, 10.0, 42);
             let (a, b) = (&data[0], &data[1]);
 
             let diff = (vector_euclidean(a, b) - scalar_euclidean(a, b)).abs();

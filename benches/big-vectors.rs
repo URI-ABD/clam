@@ -38,7 +38,13 @@ fn big_f32(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_f32(cardinality, dimensionality, min_val, max_val, d as u64);
+        let data = random_data::random_tabular_seedable(
+            cardinality,
+            dimensionality,
+            min_val,
+            max_val,
+            d as u64,
+        );
 
         for &(name, metric) in metrics {
             let id = BenchmarkId::new(name, dimensionality);
@@ -64,7 +70,13 @@ fn big_u32(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_u32(cardinality, dimensionality, min_val, max_val, d as u64);
+        let data = random_data::random_tabular_seedable(
+            cardinality,
+            dimensionality,
+            min_val,
+            max_val,
+            d as u64,
+        );
 
         let id = BenchmarkId::new("L1", dimensionality);
         bench_one(&mut group, id, &data[0], &data[1], manhattan);
