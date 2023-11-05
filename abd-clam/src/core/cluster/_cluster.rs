@@ -6,10 +6,17 @@ use core::{
     cmp::Ordering,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
+    marker::PhantomData,
     ops::Range,
 };
+use std::path::Path;
+
 use distances::Number;
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{MapAccess, SeqAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use crate::{utils, Dataset, Instance, PartitionCriteria, PartitionCriterion};
 
@@ -32,7 +39,7 @@ pub struct Cluster<U: Number> {
     seed: Option<u64>,
     /// The offset of the indices of the `Cluster`'s instances in the dataset.
     offset: usize,
-    /// The number of instances in the `Cluster`.
+    /// The number of instDances in the `Cluster`.
     cardinality: usize,
     /// The index of the `center` instance in the dataset.
     arg_center: usize,
@@ -45,8 +52,235 @@ pub struct Cluster<U: Number> {
     /// The children of the `Cluster`.
     pub(crate) children: Option<Children<U>>,
     /// The six `Cluster` ratios used for anomaly detection and related applications.
-    #[allow(dead_code)]
     ratios: Option<Ratios>,
+}
+
+impl<U: Number> Serialize for Cluster<U> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("Cluster", 10)?;
+        state.serialize_field("depth", &self.depth)?;
+        state.serialize_field("seed", &self.seed)?;
+        state.serialize_field("offset", &self.offset)?;
+        state.serialize_field("cardinality", &self.cardinality)?;
+        state.serialize_field("arg_center", &self.arg_center)?;
+        state.serialize_field("arg_radial", &self.arg_radial)?;
+        state.serialize_field("radius", &self.radius.to_le_bytes())?;
+        state.serialize_field("lfd", &self.lfd)?;
+        state.serialize_field("children", &self.children)?;
+        state.serialize_field("ratios", &self.ratios)?;
+        state.end()
+    }
+}
+
+impl<'de, U: Number> Deserialize<'de> for Cluster<U> {
+    #[allow(clippy::too_many_lines)]
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        /// The fields in the `Cluster` struct.
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field {
+            /// The depth of this `Cluster` in the tree.
+            Depth,
+            /// The seed used in the random number generator for this `Cluster`.
+            Seed,
+            /// The offset of the indices of the `Cluster`'s instances in the dataset.
+            Offset,
+            /// The number of instances in the `Cluster`.
+            Cardinality,
+            /// The index of the `center` instance in the dataset.
+            ArgCenter,
+            /// The index of the `radial` instance in the dataset.
+            ArgRadial,
+            /// The distance from the `center` to the `radial` instance.
+            Radius,
+            /// The local fractal dimension of the `Cluster`.
+            Lfd,
+            /// The children of the `Cluster`.
+            Children,
+            /// The six `Cluster` ratios used for anomaly detection and related applications.
+            Ratios,
+        }
+
+        /// The `Cluster` visitor for deserialization.
+        struct ClusterVisitor<U: Number>(PhantomData<U>);
+
+        impl<'de, U: Number> Visitor<'de> for ClusterVisitor<U> {
+            type Value = Cluster<U>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> core::fmt::Result {
+                formatter.write_str("struct Cluster")
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let depth = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                let seed = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                let offset = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                let cardinality = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                let arg_center = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
+                let arg_radial = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
+
+                let radius_bytes: Vec<u8> = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
+                let radius = U::from_le_bytes(&radius_bytes);
+
+                let lfd = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(7, &self))?;
+                let children = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(8, &self))?;
+                let ratios = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(9, &self))?;
+
+                Ok(Cluster {
+                    depth,
+                    seed,
+                    offset,
+                    cardinality,
+                    arg_center,
+                    arg_radial,
+                    radius,
+                    lfd,
+                    children,
+                    ratios,
+                })
+            }
+
+            fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
+                let mut depth = None;
+                let mut seed = None;
+                let mut offset = None;
+                let mut cardinality = None;
+                let mut arg_center = None;
+                let mut arg_radial = None;
+                let mut radius = None;
+                let mut lfd = None;
+                let mut children = None;
+                let mut ratios = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Depth => {
+                            if depth.is_some() {
+                                return Err(serde::de::Error::duplicate_field("depth"));
+                            }
+                            depth = Some(map.next_value()?);
+                        }
+                        Field::Seed => {
+                            if seed.is_some() {
+                                return Err(serde::de::Error::duplicate_field("seed"));
+                            }
+                            seed = Some(map.next_value()?);
+                        }
+                        Field::Offset => {
+                            if offset.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offset"));
+                            }
+                            offset = Some(map.next_value()?);
+                        }
+                        Field::Cardinality => {
+                            if cardinality.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cardinality"));
+                            }
+                            cardinality = Some(map.next_value()?);
+                        }
+                        Field::ArgCenter => {
+                            if arg_center.is_some() {
+                                return Err(serde::de::Error::duplicate_field("arg_center"));
+                            }
+                            arg_center = Some(map.next_value()?);
+                        }
+                        Field::ArgRadial => {
+                            if arg_radial.is_some() {
+                                return Err(serde::de::Error::duplicate_field("arg_radial"));
+                            }
+                            arg_radial = Some(map.next_value()?);
+                        }
+                        Field::Radius => {
+                            if radius.is_some() {
+                                return Err(serde::de::Error::duplicate_field("radius"));
+                            }
+                            radius = Some(map.next_value()?);
+                        }
+                        Field::Lfd => {
+                            if lfd.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lfd"));
+                            }
+                            lfd = Some(map.next_value()?);
+                        }
+                        Field::Children => {
+                            if children.is_some() {
+                                return Err(serde::de::Error::duplicate_field("children"));
+                            }
+                            children = Some(map.next_value()?);
+                        }
+                        Field::Ratios => {
+                            if ratios.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ratios"));
+                            }
+                            ratios = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let depth = depth.ok_or_else(|| serde::de::Error::missing_field("depth"))?;
+                let seed = seed.ok_or_else(|| serde::de::Error::missing_field("seed"))?;
+                let offset = offset.ok_or_else(|| serde::de::Error::missing_field("offset"))?;
+                let cardinality = cardinality.ok_or_else(|| serde::de::Error::missing_field("cardinality"))?;
+                let arg_center = arg_center.ok_or_else(|| serde::de::Error::missing_field("arg_center"))?;
+                let arg_radial = arg_radial.ok_or_else(|| serde::de::Error::missing_field("arg_radial"))?;
+
+                let radius_bytes: Vec<u8> = radius.ok_or_else(|| serde::de::Error::missing_field("radius"))?;
+                let radius = U::from_le_bytes(&radius_bytes);
+
+                let lfd = lfd.ok_or_else(|| serde::de::Error::missing_field("lfd"))?;
+                let children = children.ok_or_else(|| serde::de::Error::missing_field("children"))?;
+                let ratios = ratios.ok_or_else(|| serde::de::Error::missing_field("ratios"))?;
+
+                Ok(Cluster {
+                    depth,
+                    seed,
+                    offset,
+                    cardinality,
+                    arg_center,
+                    arg_radial,
+                    radius,
+                    lfd,
+                    children,
+                    ratios,
+                })
+            }
+        }
+
+        /// The fields in the `Cluster` struct.
+        const FIELDS: &[&str] = &[
+            "depth",
+            "seed",
+            "offset",
+            "cardinality",
+            "arg_center",
+            "arg_radial",
+            "radius",
+            "lfd",
+            "children",
+            "ratios",
+        ];
+        deserializer.deserialize_struct("Cluster", FIELDS, ClusterVisitor(PhantomData))
+    }
 }
 
 /// The children of a `Cluster`.
@@ -64,6 +298,141 @@ pub struct Children<U: Number> {
     pub(crate) arg_r: usize,
     /// The distance from the `l_pole` to the `r_pole` instance.
     pub(crate) polar_distance: U,
+}
+
+impl<U: Number> Serialize for Children<U> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("Children", 5)?;
+        state.serialize_field("left", &self.left)?;
+        state.serialize_field("right", &self.right)?;
+        state.serialize_field("arg_l", &self.arg_l)?;
+        state.serialize_field("arg_r", &self.arg_r)?;
+        state.serialize_field("polar_distance", &self.polar_distance.to_le_bytes())?;
+        state.end()
+    }
+}
+
+impl<'de, U: Number> Deserialize<'de> for Children<U> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        /// The fields in the `Children` struct.
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field {
+            /// The left child of the `Cluster`.
+            Left,
+            /// The right child of the `Cluster`.
+            Right,
+            /// The left pole of the `Cluster` (i.e. the instance used to identify
+            ArgL,
+            /// The right pole of the `Cluster` (i.e. the instance used to identify
+            ArgR,
+            /// The distance from the `l_pole` to the `r_pole` instance.
+            PolarDistance,
+        }
+
+        /// The `Children` visitor for deserialization.
+        struct ChildrenVisitor<U: Number>(PhantomData<U>);
+
+        impl<'de, U: Number> Visitor<'de> for ChildrenVisitor<U> {
+            type Value = Children<U>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> core::fmt::Result {
+                formatter.write_str("struct Children")
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let left = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+                let right = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                let arg_l = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                let arg_r = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+
+                let polar_distance_bytes: Vec<u8> = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
+                let polar_distance = U::from_le_bytes(&polar_distance_bytes);
+
+                Ok(Children {
+                    left,
+                    right,
+                    arg_l,
+                    arg_r,
+                    polar_distance,
+                })
+            }
+
+            fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
+                let mut left = None;
+                let mut right = None;
+                let mut arg_l = None;
+                let mut arg_r = None;
+                let mut polar_distance = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Left => {
+                            if left.is_some() {
+                                return Err(serde::de::Error::duplicate_field("left"));
+                            }
+                            left = Some(map.next_value()?);
+                        }
+                        Field::Right => {
+                            if right.is_some() {
+                                return Err(serde::de::Error::duplicate_field("right"));
+                            }
+                            right = Some(map.next_value()?);
+                        }
+                        Field::ArgL => {
+                            if arg_l.is_some() {
+                                return Err(serde::de::Error::duplicate_field("arg_l"));
+                            }
+                            arg_l = Some(map.next_value()?);
+                        }
+                        Field::ArgR => {
+                            if arg_r.is_some() {
+                                return Err(serde::de::Error::duplicate_field("arg_r"));
+                            }
+                            arg_r = Some(map.next_value()?);
+                        }
+                        Field::PolarDistance => {
+                            if polar_distance.is_some() {
+                                return Err(serde::de::Error::duplicate_field("polar_distance"));
+                            }
+                            polar_distance = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let left = left.ok_or_else(|| serde::de::Error::missing_field("left"))?;
+                let right = right.ok_or_else(|| serde::de::Error::missing_field("right"))?;
+                let arg_l = arg_l.ok_or_else(|| serde::de::Error::missing_field("arg_l"))?;
+                let arg_r = arg_r.ok_or_else(|| serde::de::Error::missing_field("arg_r"))?;
+
+                let polar_distance_bytes: Vec<u8> =
+                    polar_distance.ok_or_else(|| serde::de::Error::missing_field("polar_distance"))?;
+                let polar_distance = U::from_le_bytes(&polar_distance_bytes);
+
+                Ok(Children {
+                    left,
+                    right,
+                    arg_l,
+                    arg_r,
+                    polar_distance,
+                })
+            }
+        }
+
+        /// The fields in the `Children` struct.
+        const FIELDS: &[&str] = &["left", "right", "arg_l", "arg_r", "polar_distance"];
+        deserializer.deserialize_struct("Children", FIELDS, ChildrenVisitor(PhantomData))
+    }
 }
 
 impl<U: Number> PartialEq for Cluster<U> {
@@ -416,14 +785,14 @@ impl<U: Number> Cluster<U> {
     /// It may be used to store the `Cluster` in a database, or to identify the
     /// `Cluster` in a visualization.
     pub fn name(&self) -> String {
-        format!("{}-{}", self.offset, self.cardinality)
+        format!("{}-{}", self.offset, self.offset + self.cardinality)
     }
 
     /// The depth of the `Cluster` in the tree.
     ///
     /// The root `Cluster` has a depth of 0. The depth of a child is the depth
     /// of its parent plus 1.
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.depth
     }
 
@@ -525,119 +894,41 @@ impl<U: Number> Cluster<U> {
             },
         )
     }
-}
 
-/// Intermediate representation of `Cluster` for serialization.
-/// We do this instead of directly serializing/deserializing the Clusters themselves because
-/// writing a deserializer directly is moderately complicated with our exceptions
-#[allow(clippy::module_name_repetitions)]
-#[derive(Serialize, Deserialize)]
-pub struct SerializedCluster {
-    /// The depth of the `Cluster`.
-    pub depth: usize,
-    /// The seed (if applicable) that the `Cluster` was constructed with
-    pub seed: Option<u64>,
-    /// The `Cluster`'s offset
-    pub offset: usize,
-    /// The `Cluster`'s cardinality
-    pub cardinality: usize,
-    /// The `Cluster`'s arg_center
-    pub arg_center: usize,
-    /// The `Cluster`'s arg_radial
-    pub arg_radial: usize,
-    /// The `Cluster`'s radius in byte form
-    pub radius_bytes: Vec<u8>,
-    /// The `Cluster`'s local fractal dimension
-    pub lfd: f64,
-    /// The `Cluster`'s ratios
-    pub ratios: Option<Ratios>,
-    /// Left_cardinality
-    pub left_cardinality: Option<usize>,
-}
-
-/// Serialized information about a given `Cluster`'s children
-#[derive(Serialize, Deserialize)]
-pub struct SerializedChildren {
-    /// The left pole of the `Cluster`
-    pub arg_l: usize,
-    /// The right pole of the `Cluster`
-    pub arg_r: usize,
-    /// The distance from the `l_pole` to the `r_pole` in bytes.
-    /// This value gets reconstituted can be reconstituted from
-    /// whatever `U: Number` it was decomposed from
-    pub polar_distance_bytes: Vec<u8>,
-}
-
-impl SerializedCluster {
-    /// Converts a `Cluster` to a `SerializedCluster`
-    pub fn from_cluster<U: Number>(cluster: &Cluster<U>) -> (Self, Option<SerializedChildren>) {
-        let depth = cluster.depth();
-        let cardinality = cluster.cardinality();
-        let offset = cluster.offset;
-        let seed = cluster.seed;
-
-        // Because Number isn't serializeable, we just convert it to bytes and
-        // serialize that
-        let radius_bytes = cluster.radius.to_le_bytes();
-        let arg_center = cluster.arg_center;
-        let arg_radial = cluster.arg_radial;
-        let lfd = cluster.lfd;
-
-        let ratios = cluster.ratios;
-
-        // Since we cant do this recursively we need to like depth-first traverse
-        // the tree and serialize manually
-        let (children, left_cardinality) = match cluster.children.as_ref() {
-            Some(Children {
-                arg_l,
-                arg_r,
-                polar_distance,
-                left,
-                ..
-            }) => {
-                let c = SerializedChildren {
-                    arg_l: *arg_l,
-                    arg_r: *arg_r,
-                    polar_distance_bytes: polar_distance.to_le_bytes(),
-                };
-                let l = left.cardinality();
-                (Some(c), Some(l))
-            }
-            None => (None, None),
-        };
-
-        (
-            Self {
-                depth,
-                seed,
-                offset,
-                cardinality,
-                arg_center,
-                arg_radial,
-                radius_bytes,
-                lfd,
-                ratios,
-                left_cardinality,
-            },
-            children,
-        )
+    /// Saves a `Cluster` to a given location.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to the `Cluster` file.
+    ///
+    /// # Errors
+    ///
+    /// * If the file cannot be created.
+    /// * If the file cannot be serialized.
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+        let mut writer = std::io::BufWriter::new(file);
+        bincode::serialize_into(&mut writer, self).map_err(|e| e.to_string())?;
+        Ok(())
     }
 
-    /// Converts a `SerializedCluster` to a `Cluster`. Optionally returns information about the
-    /// Children's poles
-    #[must_use]
-    pub fn into_partial_cluster<U: Number>(self) -> Cluster<U> {
-        Cluster {
-            depth: self.depth,
-            seed: self.seed,
-            offset: self.offset,
-            cardinality: self.cardinality,
-            arg_center: self.arg_center,
-            arg_radial: self.arg_radial,
-            radius: U::from_le_bytes(&self.radius_bytes),
-            lfd: self.lfd,
-            ratios: self.ratios,
-            children: None,
-        }
+    /// Loads a `Cluster` from a given location.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to the `Cluster` file.
+    ///
+    /// # Returns
+    ///
+    /// * The `Cluster` loaded from the file.
+    ///
+    /// # Errors
+    ///
+    /// * If the file cannot be opened.
+    /// * If the file cannot be deserialized.
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        let reader = std::io::BufReader::new(file);
+        bincode::deserialize_from(reader).map_err(|e| e.to_string())
     }
 }

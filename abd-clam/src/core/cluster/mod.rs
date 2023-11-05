@@ -11,7 +11,7 @@ mod criteria;
 mod tree;
 
 #[allow(clippy::module_name_repetitions)]
-pub use _cluster::{Cluster, SerializedCluster};
+pub use _cluster::Cluster;
 pub use criteria::{PartitionCriteria, PartitionCriterion};
 pub use tree::Tree;
 
