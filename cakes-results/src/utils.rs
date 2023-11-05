@@ -6,7 +6,7 @@ use num_format::ToFormattedString;
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 pub fn format_f32(x: f32) -> String {
     let trunc = x.trunc() as u32;
-    let fract = (x.fract() * 10f32.powi(6)).round() as u32;
+    let fract = (x.fract() * 10f32.powi(3)).round() as u32;
 
     let trunc = trunc.to_formatted_string(&num_format::Locale::en);
 

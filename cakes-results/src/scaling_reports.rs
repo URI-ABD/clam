@@ -6,7 +6,7 @@ use std::{path::Path, time::Instant};
 use abd_clam::{knn, PartitionCriteria, Search, SingleShard, VecDataset};
 use clap::Parser;
 use distances::Number;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use num_format::ToFormattedString;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -180,7 +180,7 @@ pub fn make_reports(
             "algorithm",
             "k",
             "throughput",
-            // "mean_recall",
+            "mean_recall",
         ])
         .map_err(|e| e.to_string())?;
 
@@ -244,7 +244,7 @@ pub fn make_reports(
                 knn::Algorithm::Linear,
                 k,
                 linear_throughput,
-                // 1.0,
+                1.0,
             )?;
 
             for &algorithm in knn::Algorithm::variants() {
@@ -270,13 +270,13 @@ pub fn make_reports(
                     );
                 }
 
-                // let mean_recall = hits
-                //     .into_iter()
-                //     .zip(linear_hits.iter().cloned())
-                //     .map(|(h, l)| compute_recall(h, l))
-                //     .sum::<f32>()
-                //     / linear_hits.len().as_f32();
-                // info!("Mean recall: {}", format_f32(mean_recall));
+                let mean_recall = hits
+                    .into_iter()
+                    .zip(linear_hits.iter().cloned())
+                    .map(|(h, l)| compute_recall(h, l))
+                    .sum::<f32>()
+                    / linear_hits.len().as_f32();
+                info!("Mean recall: {}", format_f32(mean_recall));
 
                 line_to_csv(
                     &mut csv_writer,
@@ -285,7 +285,7 @@ pub fn make_reports(
                     algorithm,
                     k,
                     throughput,
-                    // mean_recall,
+                    mean_recall,
                 )?;
             }
         }
@@ -347,7 +347,7 @@ fn line_to_csv(
     algorithm: knn::Algorithm,
     k: usize,
     throughput: f32,
-    // mean_recall: f32,
+    mean_recall: f32,
 ) -> Result<(), String> {
     csv_writer
         .write_record(&[
@@ -356,7 +356,7 @@ fn line_to_csv(
             algorithm.name().to_string(),
             k.to_string(),
             throughput.to_string(),
-            // mean_recall.to_string(),
+            mean_recall.to_string(),
         ])
         .map_err(|e| e.to_string())?;
 
@@ -376,17 +376,14 @@ fn line_to_csv(
 /// # Returns
 ///
 /// * The recall of the algorithm.
-#[allow(dead_code)]
 fn compute_recall(mut hits: Vec<(usize, f32)>, mut linear_hits: Vec<(usize, f32)>) -> f32 {
     if linear_hits.is_empty() {
         warn!("Linear search was too slow. Skipping recall computation.");
         1.0
     } else {
-        info!(
-            "Num Hits: {}, Num Linear Hits: {}",
-            hits.len(),
-            linear_hits.len()
-        );
+        let (num_hits, num_linear_hits) = (hits.len(), linear_hits.len());
+        debug!("Num Hits: {num_hits}, Num Linear Hits: {num_linear_hits}");
+
         hits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater));
         let mut hits = hits.into_iter().map(|(_, d)| d).peekable();
 
@@ -405,8 +402,8 @@ fn compute_recall(mut hits: Vec<(usize, f32)>, mut linear_hits: Vec<(usize, f32)
                 linear_hits.next();
             }
         }
-        let recall = num_common.as_f32() / linear_hits.len().as_f32();
-        info!("Recall: {}, num_common: {}", format_f32(recall), num_common);
+        let recall = num_common.as_f32() / num_linear_hits.as_f32();
+        debug!("Recall: {}, num_common: {}", format_f32(recall), num_common);
 
         recall
     }
@@ -421,7 +418,7 @@ const fn memory_cost(cardinality: usize, dimensionality: usize) -> usize {
 struct Report<'a> {
     /// Name of the data set.
     dataset: &'a str,
-    /// Metric of the data set.
+    /// Name of the distance function.
     metric: &'a str,
     /// Cardinality of the real data set.
     base_cardinality: usize,

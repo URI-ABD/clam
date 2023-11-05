@@ -14,6 +14,7 @@
     clippy::panic,
     clippy::cast_lossless
 )]
+#![allow(unused_imports)]
 
 //! Report the results of an ANN benchmark.
 
@@ -62,6 +63,7 @@ fn main() -> Result<(), String> {
     make_reports(
         &args.input_dir,
         &args.dataset,
+        args.use_shards,
         args.tuning_depth,
         args.tuning_k,
         args.ks,
@@ -89,6 +91,9 @@ struct Args {
     /// the queries to be searched for.
     #[arg(long)]
     dataset: String,
+    /// Whether to shard the data set for search.
+    #[arg(long)]
+    use_shards: bool,
     /// The depth of the tree to use for auto-tuning knn-search.
     #[arg(long, default_value = "10")]
     tuning_depth: usize,
@@ -104,10 +109,11 @@ struct Args {
 }
 
 /// Report the results of an ANN benchmark.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, unused_variables, clippy::too_many_arguments)]
 fn make_reports(
     input_dir: &Path,
     dataset: &str,
+    use_shards: bool,
     tuning_depth: usize,
     tuning_k: usize,
     ks: Vec<usize>,
@@ -138,13 +144,14 @@ fn make_reports(
         num_queries.to_formatted_string(&num_format::Locale::en)
     );
 
-    let max_cardinality = if cardinality < 1_000_000 {
-        cardinality
-    } else if cardinality < 5_000_000 {
-        100_000
-    } else {
-        1_000_000
-    };
+    // if use_shards {
+    //     let max_cardinality = if cardinality < 1_000_000 {
+    //         cardinality
+    //     } else if cardinality < 5_000_000 {
+    //         100_000
+    //     } else {
+    //         1_000_000
+    //     };
 
     let data_shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
         .make_shards(max_cardinality);
@@ -154,7 +161,21 @@ fn make_reports(
         .collect::<Vec<_>>();
     let mut cakes = RandomlySharded::new(shards);
 
-    let shard_sizes = cakes.shard_cardinalities();
+    //     let shard_sizes = cakes.shard_cardinalities();
+    //     info!(
+    //         "Shard sizes: [{}]",
+    //         shard_sizes
+    //             .iter()
+    //             .map(|s| s.to_formatted_string(&num_format::Locale::en))
+    //             .collect::<Vec<_>>()
+    //             .join(", ")
+    //     );
+    // } else {
+    //     todo!()
+    // }
+
+    let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false);
+    let shard_sizes = vec![cardinality];
     info!(
         "Shard sizes: [{}]",
         shard_sizes
@@ -223,6 +244,7 @@ fn make_reports(
 
         Report {
             dataset: dataset.name(),
+            metric: dataset.metric_name(),
             cardinality,
             dimensionality,
             shard_sizes: shard_sizes.clone(),
@@ -244,6 +266,8 @@ fn make_reports(
 struct Report<'a> {
     /// Name of the data set.
     dataset: &'a str,
+    /// Name of the distance function.
+    metric: &'a str,
     /// Number of data points in the data set.
     cardinality: usize,
     /// Dimensionality of the data set.
