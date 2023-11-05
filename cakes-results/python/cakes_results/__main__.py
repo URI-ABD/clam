@@ -24,6 +24,8 @@ app = typer.Typer()
 def main(
     input_dir: pathlib.Path = typer.Option(
         ...,
+        "--input-dir",
+        "-i",
         help="The directory containing the reports from the scaling experiments.",
         exists=True,
         readable=True,
@@ -32,6 +34,8 @@ def main(
     ),
     output_dir: pathlib.Path = typer.Option(
         ...,
+        "--output-dir",
+        "-o",
         help="The directory to save the plots.",
         exists=True,
         writable=True,
@@ -50,7 +54,7 @@ def main(
         futures: list[concurrent.futures.Future[bool]] = []
         for f in files:
             futures.append(
-                executor.submit(scaling_plots.plot_throughput, f, output_dir),
+                executor.submit(scaling_plots.plot_throughput, f, False, output_dir),
             )
 
         for f in tqdm.tqdm(

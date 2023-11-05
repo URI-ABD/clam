@@ -34,7 +34,9 @@ class Report(pydantic.BaseModel):
         return pandas.read_csv(self.csv_path)
 
 
-def plot_throughput(json_path: pathlib.Path, output_dir: pathlib.Path) -> bool:
+def plot_throughput(
+    json_path: pathlib.Path, make_title: bool, output_dir: pathlib.Path
+) -> bool:
     """Plot the throughput of the Cakes search."""
     report = Report.from_json(json_path)
     df = report.to_pandas()
@@ -42,7 +44,7 @@ def plot_throughput(json_path: pathlib.Path, output_dir: pathlib.Path) -> bool:
     name = f"{report.dataset}_{report.error_rate}"
     output_path = output_dir.joinpath(f"{name}_scaling.png")
 
-    fig, ax = plt.subplots(figsize=(16, 10))
+    fig, ax = plt.subplots(figsize=(8, 5))
     for algorithm, algorithm_df in df.groupby("algorithm"):
         for k, k_df in algorithm_df.groupby("k"):
             ax.plot(
@@ -52,14 +54,13 @@ def plot_throughput(json_path: pathlib.Path, output_dir: pathlib.Path) -> bool:
                 marker="x",
             )
 
-    title_pieces = [
-        f"Dataset: {report.dataset}",
-        f"Metric: {report.metric}",
-        f"Error Rate: {report.error_rate}",
-        f"Base Cardinality: {report.base_cardinality}",
-        f"Dimensionality: {report.dimensionality}",
-    ]
-    ax.set_title("Scaling Benchmarks: " + ", ".join(title_pieces))
+    if make_title:
+        title = (
+            f"Scaling {report.dataset}-{report.metric} ({report.base_cardinality}x"
+            f"{report.dimensionality}) with error rate {report.error_rate}"
+        )
+        ax.set_title(title)
+
     ax.set_xlabel("Multiplier")
     ax.set_ylabel("Throughput (queries/s)")
     ax.set_xscale("log")

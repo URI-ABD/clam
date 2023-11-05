@@ -215,7 +215,7 @@ impl AnnDatasets {
 /// A wrapper around the cosine distance function.
 #[allow(clippy::ptr_arg)]
 fn cosine(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-    distances::vectors::cosine(x, y)
+    distances::simd::cosine_f32(x, y)
 }
 
 /// A wrapper around the euclidean distance function.
