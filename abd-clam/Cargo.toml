@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.23.1"
+version = "0.23.2"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -43,15 +43,16 @@ priority-queue = "1.3.2"
 # TODO: Break CHAODA out into an optional feature
 # automl = { version = "0.3.0", path = "../rust-automl" }
 # automl = { git = "https://github.com/nishaq503/rust-automl", branch = "updates/dependencies" }
+# TODO: Switch from automl to smartcore
+automl = "0.2.7"
 # Only used for normalizing cluster ratios for CHAODA
 libm = "0.2.7"
 statistical = "1.0.0"
 
 # Only used for sharded datasets
 # TODO: Break sharded datasets out into an optional feature
-# ndarray = { version = "0.15.6", features = ["rayon"] }
-# ndarray-npy = "0.8.1"
 # memmap2 = "0.8.0"
+smartcore = "0.2.1"
 
 
 [dev-dependencies]

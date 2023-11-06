@@ -15,7 +15,7 @@ use std::fmt::Write;
 use crate::{utils, Dataset, Instance, PartitionCriteria, PartitionCriterion};
 
 /// Ratios are used for anomaly detection and related applications.
-pub type Ratios = [f64; 6];
+use crate::core::cluster::Ratios;
 
 /// A `Cluster` represents a collection of "similar" instances from a metric-`Space`.
 ///

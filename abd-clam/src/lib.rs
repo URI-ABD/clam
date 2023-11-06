@@ -16,8 +16,9 @@
 )]
 #![doc = include_str!("../README.md")]
 
-// pub mod chaoda;
 mod cakes;
+///anomaly detection
+pub mod chaoda;
 mod core;
 pub(crate) mod utils;
 
@@ -26,8 +27,9 @@ pub use crate::{
     core::{
         cluster::{Cluster, PartitionCriteria, PartitionCriterion, SerializedCluster, Tree},
         dataset::{Dataset, Instance, VecDataset},
+        graph::{Edge, Graph},
     },
 };
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.23.1";
+pub const VERSION: &str = "0.23.2";

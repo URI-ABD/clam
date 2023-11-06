@@ -1,6 +1,7 @@
+///TODO! Add documentation on graph module
 mod _graph;
-mod criteria;
+pub mod criteria;
 
 #[allow(unused_imports)]
-pub(crate) use _graph::{Edge, Graph};
+pub use _graph::{Edge, Graph};
 pub use criteria::MetaMLScorer;
