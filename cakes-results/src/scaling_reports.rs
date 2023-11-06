@@ -3,11 +3,12 @@
 use core::cmp::Ordering;
 use std::{path::Path, time::Instant};
 
-use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{knn, PartitionCriteria, Search, SingleShard, VecDataset};
 use clap::Parser;
 use distances::Number;
 use log::{error, info, warn};
 use num_format::ToFormattedString;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use symagen::augmentation;
 
@@ -212,7 +213,7 @@ pub fn make_reports(
         let criteria = PartitionCriteria::default();
 
         let start = Instant::now();
-        let cakes = Cakes::new(data, seed, &criteria);
+        let cakes = SingleShard::new(data, seed, &criteria);
         let cakes_time = start.elapsed().as_secs_f32();
         info!("Cakes tree-building time: {:.3e} s", cakes_time);
 
@@ -306,14 +307,17 @@ pub fn make_reports(
 /// * A vector of the hits for each query.
 /// * The throughput of the algorithm.
 fn measure_algorithm<'a>(
-    cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32>>,
+    cakes: &'a SingleShard<Vec<f32>, f32, VecDataset<Vec<f32>, f32>>,
     queries: &'a [&Vec<f32>],
     k: usize,
     algorithm: knn::Algorithm,
 ) -> (Vec<Vec<(usize, f32)>>, f32) {
     let num_queries = queries.len();
     let start = Instant::now();
-    let hits = cakes.batch_knn_search(queries, k, algorithm);
+    let hits = queries
+        .par_iter()
+        .map(|q| cakes.knn_search(q, k, algorithm))
+        .collect::<Vec<_>>();
     let elapsed = start.elapsed().as_secs_f32();
     let throughput = num_queries.as_f32() / elapsed;
 

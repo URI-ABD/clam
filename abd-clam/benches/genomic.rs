@@ -1,8 +1,9 @@
 use criterion::*;
 
+use rayon::prelude::*;
 use symagen::random_data;
 
-use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{rnn, PartitionCriteria, Search, SingleShard, VecDataset};
 
 fn hamming(x: &String, y: &String) -> u16 {
     distances::strings::hamming(x, y)
@@ -39,21 +40,31 @@ fn genomic(c: &mut Criterion) {
         let data_name = format!("{metric_name}-{cardinality}");
         let dataset = VecDataset::new(data_name, data.clone(), metric, true);
         let criteria = PartitionCriteria::default();
-        let cakes = Cakes::new(dataset, Some(seed), &criteria);
+        let cakes = SingleShard::new(dataset, Some(seed), &criteria);
 
         let radii = [50, 25, 10, 1];
         println!("Running benchmark for {metric_name} ...");
         for radius in radii {
             let id = BenchmarkId::new("Clustered", radius);
             group.bench_with_input(id, &radius, |b, &radius| {
-                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered));
+                b.iter_with_large_drop(|| {
+                    queries
+                        .par_iter()
+                        .map(|q| cakes.rnn_search(q, radius, rnn::Algorithm::Clustered))
+                        .collect::<Vec<_>>()
+                });
             });
         }
 
         group.sample_size(10);
         let id = BenchmarkId::new("Linear", radii[0]);
         group.bench_with_input(id, &radii[0], |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radii[0], rnn::Algorithm::Linear));
+            b.iter_with_large_drop(|| {
+                queries
+                    .par_iter()
+                    .map(|q| cakes.rnn_search(q, radii[0], rnn::Algorithm::Linear))
+                    .collect::<Vec<_>>()
+            });
         });
 
         group.finish();

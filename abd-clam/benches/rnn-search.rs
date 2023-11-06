@@ -1,8 +1,9 @@
 use criterion::*;
 
+use rayon::prelude::*;
 use symagen::random_data;
 
-use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{rnn, PartitionCriteria, Search, SingleShard, VecDataset};
 
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::vectors::euclidean(x, y)
@@ -31,7 +32,7 @@ fn cakes(c: &mut Criterion) {
 
         let dataset = VecDataset::new("rnn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
-        let cakes = Cakes::new(dataset, Some(seed), &criteria);
+        let cakes = SingleShard::new(dataset, Some(seed), &criteria);
 
         let mut radius = 0.;
         for n in (0..=100).step_by(25) {
@@ -44,7 +45,12 @@ fn cakes(c: &mut Criterion) {
 
                 let id = BenchmarkId::new(variant.name(), radius);
                 group.bench_with_input(id, &radius, |b, _| {
-                    b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, variant));
+                    b.iter_with_large_drop(|| {
+                        queries
+                            .par_iter()
+                            .map(|query| cakes.rnn_search(query, radius, variant))
+                            .collect::<Vec<_>>()
+                    });
                 });
             }
         }
@@ -52,7 +58,12 @@ fn cakes(c: &mut Criterion) {
         group.sample_size(10);
         let id = BenchmarkId::new("Linear", radius);
         group.bench_with_input(id, &radius, |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Linear));
+            b.iter_with_large_drop(|| {
+                queries
+                    .par_iter()
+                    .map(|query| cakes.rnn_search(query, radius, rnn::Algorithm::Linear))
+                    .collect::<Vec<_>>()
+            });
         });
 
         group.finish();

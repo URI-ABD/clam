@@ -2,5 +2,10 @@
 
 pub mod knn;
 pub mod rnn;
-pub mod sharded;
-pub mod singular;
+mod search;
+mod sharded;
+mod singular;
+
+pub use search::Search;
+pub use sharded::RandomlySharded;
+pub use singular::SingleShard;
