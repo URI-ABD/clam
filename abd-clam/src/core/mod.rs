@@ -2,4 +2,5 @@
 
 pub mod cluster;
 pub mod dataset;
-// pub mod graph;
+///TODO!: Add documentation for graph
+pub mod graph;

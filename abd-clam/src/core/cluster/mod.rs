@@ -14,3 +14,7 @@ mod tree;
 pub use _cluster::{Cluster, SerializedCluster};
 pub use criteria::{PartitionCriteria, PartitionCriterion};
 pub use tree::Tree;
+
+/// An array of 6 floats representing the parent to child ratios of cardinality, lfd, and radius,
+/// as well as the exponential moving average of each value
+pub type Ratios = [f64; 6];
