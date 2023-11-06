@@ -1,6 +1,6 @@
 //! Tests for the RNN-search algorithms.
 
-use abd_clam::{knn, rnn, Cakes, PartitionCriteria};
+use abd_clam::{knn, rnn, PartitionCriteria, SingleShard};
 use distances::Number;
 use float_cmp::assert_approx_eq;
 use test_case::test_case;
@@ -15,7 +15,7 @@ fn linear() {
     let query = &vec![0.0];
 
     let criteria = PartitionCriteria::default();
-    let model = Cakes::new(data, None, &criteria);
+    let model = SingleShard::new(data, None, &criteria);
     let tree = model.tree();
 
     let linear_knn = knn::Algorithm::Linear.search(tree, query, 3);
@@ -48,7 +48,7 @@ fn variants(cardinality: usize, dimensionality: usize) {
     let query = &vec![0.; dimensionality];
 
     let criteria = PartitionCriteria::default();
-    let cakes = Cakes::new(data, Some(seed), &criteria);
+    let cakes = SingleShard::new(data, Some(seed), &criteria);
     let tree = cakes.tree();
 
     for k in (0..3).map(|i| 10_usize.pow(i)) {

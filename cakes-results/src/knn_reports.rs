@@ -20,11 +20,12 @@
 use core::cmp::Ordering;
 use std::{path::Path, time::Instant};
 
-use abd_clam::{Cakes, Dataset, PartitionCriteria, ShardedCakes, VecDataset};
+use abd_clam::{Dataset, PartitionCriteria, RandomlySharded, Search, SingleShard, VecDataset};
 use clap::Parser;
 use distances::Number;
 use log::info;
 use num_format::ToFormattedString;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 mod ann_datasets;
@@ -149,9 +150,9 @@ fn make_reports(
         .make_shards(max_cardinality);
     let shards = data_shards
         .into_iter()
-        .map(|d| Cakes::new(d, seed, &PartitionCriteria::default()))
+        .map(|d| SingleShard::new(d, seed, &PartitionCriteria::default()))
         .collect::<Vec<_>>();
-    let cakes = ShardedCakes::new(shards);
+    let mut cakes = RandomlySharded::new(shards);
 
     let shard_sizes = cakes.shard_cardinalities();
     info!(
@@ -163,24 +164,28 @@ fn make_reports(
             .join(", ")
     );
 
-    let cakes = cakes.auto_tune(tuning_depth, tuning_k);
+    cakes.auto_tune_knn(tuning_depth, tuning_k);
 
-    let algorithm = cakes.best_knn_algorithm().unwrap_or_else(|| {
-        unreachable!("We auto-tuned the algorithm, so there should be a best algorithm.")
-    });
+    let algorithm = cakes.tuned_knn_algorithm();
     info!("Tuned algorithm: {}", algorithm.name());
 
     for k in ks {
         info!("k: {k}");
 
         let start = Instant::now();
-        let hits = cakes.batch_knn_search(&queries, k);
+        let hits = queries
+            .par_iter()
+            .map(|q| cakes.tuned_knn_search(q, k))
+            .collect::<Vec<_>>();
         let elapsed = start.elapsed().as_secs_f32();
         let throughput = queries.len().as_f32() / elapsed;
         info!("Throughput: {} QPS", format_f32(throughput));
 
         let start = Instant::now();
-        let linear_hits = cakes.batch_linear_knn(&queries, k);
+        let linear_hits = queries
+            .par_iter()
+            .map(|q| cakes.linear_knn_search(q, k))
+            .collect::<Vec<_>>();
         let linear_elapsed = start.elapsed().as_secs_f32();
         let linear_throughput = queries.len().as_f32() / linear_elapsed;
         info!("Linear throughput: {} QPS", format_f32(linear_throughput));
