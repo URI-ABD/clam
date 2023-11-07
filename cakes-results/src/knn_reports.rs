@@ -19,7 +19,7 @@
 //! Report the results of an ANN benchmark.
 
 use core::cmp::Ordering;
-use std::{path::Path, time::Instant};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use abd_clam::{Dataset, PartitionCriteria, RandomlySharded, Search, SingleShard, VecDataset};
 use clap::Parser;
@@ -144,38 +144,32 @@ fn make_reports(
         num_queries.to_formatted_string(&num_format::Locale::en)
     );
 
-    // if use_shards {
-    //     let max_cardinality = if cardinality < 1_000_000 {
-    //         cardinality
-    //     } else if cardinality < 5_000_000 {
-    //         100_000
-    //     } else {
-    //         1_000_000
-    //     };
+    let cakes: Arc<dyn Search<_, _, _>> = if use_shards {
+        let max_cardinality = if cardinality < 1_000_000 {
+            cardinality
+        } else if cardinality < 5_000_000 {
+            100_000
+        } else {
+            1_000_000
+        };
 
-    let data_shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
-        .make_shards(max_cardinality);
-    let shards = data_shards
-        .into_iter()
-        .map(|d| SingleShard::new(d, seed, &PartitionCriteria::default()))
-        .collect::<Vec<_>>();
-    let mut cakes = RandomlySharded::new(shards);
+        let data_shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
+            .make_shards(max_cardinality);
+        let shards = data_shards
+            .into_iter()
+            .map(|d| SingleShard::new(d, seed, &PartitionCriteria::default()))
+            .collect::<Vec<_>>();
+        let mut cakes = RandomlySharded::new(shards);
+        cakes.auto_tune_knn(tuning_k, tuning_depth);
+        Arc::new(cakes)
+    } else {
+        let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false);
+        let mut cakes = SingleShard::new(data, seed, &PartitionCriteria::default());
+        cakes.auto_tune_knn(tuning_k, tuning_depth);
+        Arc::new(cakes)
+    };
 
-    //     let shard_sizes = cakes.shard_cardinalities();
-    //     info!(
-    //         "Shard sizes: [{}]",
-    //         shard_sizes
-    //             .iter()
-    //             .map(|s| s.to_formatted_string(&num_format::Locale::en))
-    //             .collect::<Vec<_>>()
-    //             .join(", ")
-    //     );
-    // } else {
-    //     todo!()
-    // }
-
-    let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false);
-    let shard_sizes = vec![cardinality];
+    let shard_sizes = cakes.shard_cardinalities();
     info!(
         "Shard sizes: [{}]",
         shard_sizes
@@ -184,8 +178,6 @@ fn make_reports(
             .collect::<Vec<_>>()
             .join(", ")
     );
-
-    cakes.auto_tune_knn(tuning_depth, tuning_k);
 
     let algorithm = cakes.tuned_knn_algorithm();
     info!("Tuned algorithm: {}", algorithm.name());
