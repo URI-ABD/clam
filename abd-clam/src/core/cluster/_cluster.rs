@@ -39,7 +39,7 @@ pub struct Cluster<U: Number> {
     seed: Option<u64>,
     /// The offset of the indices of the `Cluster`'s instances in the dataset.
     offset: usize,
-    /// The number of instDances in the `Cluster`.
+    /// The number of instances in the `Cluster`.
     cardinality: usize,
     /// The index of the `center` instance in the dataset.
     arg_center: usize,
@@ -785,7 +785,7 @@ impl<U: Number> Cluster<U> {
     /// It may be used to store the `Cluster` in a database, or to identify the
     /// `Cluster` in a visualization.
     pub fn name(&self) -> String {
-        format!("{}-{}", self.offset, self.offset + self.cardinality)
+        format!("{}-{}", self.offset, self.cardinality)
     }
 
     /// The depth of the `Cluster` in the tree.

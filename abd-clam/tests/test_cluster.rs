@@ -27,7 +27,7 @@ fn tiny() {
         unreachable!("The root cluster has children.")
     };
     assert_eq!(format!("{left}"), "0-2");
-    assert_eq!(format!("{right}"), "2-4");
+    assert_eq!(format!("{right}"), "2-2");
 
     for child in [left, right] {
         assert_eq!(child.depth(), 1);
