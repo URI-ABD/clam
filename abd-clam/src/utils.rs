@@ -181,7 +181,7 @@ pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
 pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
     values
         .iter()
-        .map(|values| statistical::mean(values))
+        .map(|values| mean(values))
         .collect::<Vec<_>>()
         .try_into()
         .unwrap_or_else(|_| unreachable!("Array always has a length of 6."))
@@ -202,14 +202,12 @@ pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
 /// An array of standard deviations, where each element represents the standard deviation of a row.
 ///
 pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
-    let means = calc_row_means(values);
     values
         .iter()
-        .zip(means.iter())
-        .map(|(values, &mean)| statistical::population_standard_deviation(values, Some(mean)))
+        .map(|values| mean_variance(values).1.sqrt())
         .collect::<Vec<_>>()
         .try_into()
-        .unwrap_or_else(|_| unreachable!("Array always has a length of 6"))
+        .unwrap_or_else(|_| unreachable!("Array always has a length of 6."))
 }
 
 #[cfg(test)]
