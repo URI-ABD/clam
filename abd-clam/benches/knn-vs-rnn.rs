@@ -36,12 +36,11 @@ fn cakes(c: &mut Criterion) {
         let cakes = Cakes::new_single_shard(dataset, Some(seed), &criteria);
 
         for k in (0..=8).map(|v| 2usize.pow(v)) {
-            let radii = queries
-                .par_iter()
-                .map(|query| {
-                    cakes
-                        .linear_rnn_search(query, 0.0)
-                        .into_iter()
+            let radii = cakes
+                .batch_knn_search(&queries, k, knn::Algorithm::Linear)
+                .into_iter()
+                .map(|hits| {
+                    hits.into_iter()
                         .map(|(_, d)| d)
                         .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less))
                         .unwrap()

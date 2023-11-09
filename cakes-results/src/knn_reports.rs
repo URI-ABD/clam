@@ -26,7 +26,6 @@ use clap::Parser;
 use distances::Number;
 use log::info;
 use num_format::ToFormattedString;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 mod ann_datasets;
@@ -182,19 +181,13 @@ fn make_reports(
         info!("k: {k}");
 
         let start = Instant::now();
-        let hits = queries
-            .par_iter()
-            .map(|q| cakes.tuned_knn_search(q, k))
-            .collect::<Vec<_>>();
+        let hits = cakes.batch_tuned_knn_search(&queries, k);
         let elapsed = start.elapsed().as_secs_f32();
         let throughput = queries.len().as_f32() / elapsed;
         info!("Throughput: {} QPS", format_f32(throughput));
 
         let start = Instant::now();
-        let linear_hits = queries
-            .par_iter()
-            .map(|q| cakes.linear_knn_search(q, k))
-            .collect::<Vec<_>>();
+        let linear_hits = cakes.batch_linear_knn_search(&queries, k);
         let linear_elapsed = start.elapsed().as_secs_f32();
         let linear_throughput = queries.len().as_f32() / linear_elapsed;
         info!("Linear throughput: {} QPS", format_f32(linear_throughput));

@@ -8,7 +8,6 @@ use clap::Parser;
 use distances::Number;
 use log::{debug, error, info, warn};
 use num_format::ToFormattedString;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use symagen::augmentation;
 
@@ -314,10 +313,7 @@ fn measure_algorithm<'a>(
 ) -> (Vec<Vec<(usize, f32)>>, f32) {
     let num_queries = queries.len();
     let start = Instant::now();
-    let hits = queries
-        .par_iter()
-        .map(|q| cakes.knn_search(q, k, algorithm))
-        .collect::<Vec<_>>();
+    let hits = cakes.batch_knn_search(queries, k, algorithm);
     let elapsed = start.elapsed().as_secs_f32();
     let throughput = num_queries.as_f32() / elapsed;
 

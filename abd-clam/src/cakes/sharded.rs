@@ -65,20 +65,6 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> RandomlySharded<I, U, D> {
     pub fn offsets(&self) -> &[usize] {
         &self.offsets
     }
-
-    // /// K-nearest neighbor search.
-    // pub fn knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-    //     let hits = self
-    //         .sample_shard
-    //         .knn_search(query, k, self.best_knn_algorithm().unwrap_or_default());
-    //     let mut hits = knn::Hits::from_vec(k, hits);
-    //     for (shard, &o) in self.shards.iter().zip(self.offsets.iter()) {
-    //         let radius = hits.peek();
-    //         let new_hits = shard.rnn_search(query, radius, rnn::Algorithm::Clustered);
-    //         hits.push_batch(new_hits.into_iter().map(|(i, d)| (i + o, d)));
-    //     }
-    //     hits.extract()
-    // }
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for RandomlySharded<I, U, D> {
