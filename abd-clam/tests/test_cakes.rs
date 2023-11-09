@@ -1,6 +1,6 @@
 //! Tests for Cakes.
 
-use abd_clam::{knn, rnn, Instance, PartitionCriteria, Search, SingleShard, VecDataset};
+use abd_clam::{knn, rnn, Cakes, Instance, PartitionCriteria, VecDataset};
 use distances::Number;
 use float_cmp::approx_eq;
 use test_case::test_case;
@@ -14,7 +14,7 @@ fn tiny() {
         utils::euclidean,
     );
     let criteria = PartitionCriteria::default();
-    let cakes = SingleShard::new(data, None, &criteria);
+    let cakes = Cakes::new_single_shard(data, None, &criteria);
 
     let query = vec![0., 1.];
     let (results, _): (Vec<_>, Vec<_>) = cakes
@@ -23,7 +23,7 @@ fn tiny() {
         .unzip();
     assert_eq!(results.len(), 2);
 
-    let result_points = results.iter().map(|&i| &cakes.data()[i]).collect::<Vec<_>>();
+    let result_points = results.iter().map(|&i| &cakes[i]).collect::<Vec<_>>();
     assert!(result_points.contains(&&vec![0., 0.]));
     assert!(result_points.contains(&&vec![1., 1.]));
 
@@ -34,17 +34,14 @@ fn tiny() {
         .unzip();
     assert_eq!(results.len(), 1);
 
-    assert!(results
-        .iter()
-        .map(|&i| &cakes.data()[i])
-        .any(|x| x == [1., 1.].as_slice()));
+    assert!(results.iter().map(|&i| &cakes[i]).any(|x| x == [1., 1.].as_slice()));
 }
 
 #[test]
 fn line() {
     let data = utils::gen_dataset_from((-100..=100).map(|x| vec![x.as_f32()]).collect(), utils::euclidean);
     let criteria = PartitionCriteria::default();
-    let cakes = SingleShard::new(data, Some(42), &criteria);
+    let cakes = Cakes::new_single_shard(data, Some(42), &criteria);
 
     let queries = (-10..=10).step_by(2).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
     for v in [2, 10, 50] {
@@ -81,7 +78,7 @@ fn vectors(cardinality: usize, dimensionality: usize) {
     let seed = 42;
 
     let data = utils::gen_dataset(cardinality, dimensionality, seed, utils::euclidean);
-    let cakes = SingleShard::new(data, Some(seed), &PartitionCriteria::default());
+    let cakes = Cakes::new_single_shard(data, Some(seed), &PartitionCriteria::default());
 
     let num_queries = 100;
     let queries = utils::gen_dataset(num_queries, dimensionality, seed, utils::euclidean);
@@ -102,7 +99,7 @@ fn strings(cardinality: usize, alphabet: &str, metric: fn(&String, &String) -> u
 
     let data = symagen::random_data::random_string(cardinality, seq_len, seq_len, alphabet, seed);
     let data = VecDataset::new("test".to_string(), data.clone(), metric, false);
-    let cakes = SingleShard::new(data, Some(42), &PartitionCriteria::default());
+    let cakes = Cakes::new_single_shard(data, Some(42), &PartitionCriteria::default());
 
     let num_queries = 10;
     let queries = symagen::random_data::random_string(num_queries, seq_len, seq_len, alphabet, seed + 1);
@@ -113,7 +110,7 @@ fn strings(cardinality: usize, alphabet: &str, metric: fn(&String, &String) -> u
 
 fn check_search_quality<I: Instance, U: Number>(
     queries: &[&I],
-    cakes: &SingleShard<I, U, VecDataset<I, U>>,
+    cakes: &Cakes<I, U, VecDataset<I, U>>,
     radii: &[U],
     ks: &[usize],
 ) {

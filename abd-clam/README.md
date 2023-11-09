@@ -12,7 +12,7 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 ### Cakes: Nearest Neighbor Search
 
 ```rust
-use abd_clam::{knn, rnn, PartitionCriteria, Search, SingleShard, VecDataset};
+use abd_clam::{knn, rnn ,Cakes, PartitionCriteria, VecDataset};
 
 /// The distance function with with to perform clustering and search.
 ///
@@ -66,9 +66,9 @@ let data = VecDataset::<Vec<f32>, f32>::new(
 // the data until each Cluster contains a single unique point.
 let criteria = PartitionCriteria::default();
 
-// The SingleShard struct provides the functionality described in the CHESS paper.
+// The Cakes struct provides the functionality described in the CHESS paper.
 // It performs search assuming that the dataset is a single shard.
-let model = SingleShard::new(data, Some(seed), &criteria);
+let model = Cakes::new_single_shard(data, Some(seed), &criteria);
 // This line performs a non-trivial amount of work. #understatement
 
 // At this point, the dataset has been reordered to improve search performance.

@@ -21,7 +21,7 @@
 use core::cmp::Ordering;
 use std::{path::Path, sync::Arc, time::Instant};
 
-use abd_clam::{Dataset, PartitionCriteria, RandomlySharded, Search, SingleShard, VecDataset};
+use abd_clam::{Cakes, Dataset, PartitionCriteria, VecDataset};
 use clap::Parser;
 use distances::Number;
 use log::info;
@@ -144,7 +144,7 @@ fn make_reports(
         num_queries.to_formatted_string(&num_format::Locale::en)
     );
 
-    let cakes: Arc<dyn Search<_, _, _>> = if use_shards {
+    let cakes = if use_shards {
         let max_cardinality = if cardinality < 1_000_000 {
             cardinality
         } else if cardinality < 5_000_000 {
@@ -153,20 +153,16 @@ fn make_reports(
             1_000_000
         };
 
-        let data_shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
+        let shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
             .make_shards(max_cardinality);
-        let shards = data_shards
-            .into_iter()
-            .map(|d| SingleShard::new(d, seed, &PartitionCriteria::default()))
-            .collect::<Vec<_>>();
-        let mut cakes = RandomlySharded::new(shards);
+        let mut cakes = Cakes::new_randomly_sharded(shards, seed, &PartitionCriteria::default());
         cakes.auto_tune_knn(tuning_k, tuning_depth);
-        Arc::new(cakes)
+        cakes
     } else {
         let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false);
-        let mut cakes = SingleShard::new(data, seed, &PartitionCriteria::default());
+        let mut cakes = Cakes::new_single_shard(data, seed, &PartitionCriteria::default());
         cakes.auto_tune_knn(tuning_k, tuning_depth);
-        Arc::new(cakes)
+        cakes
     };
 
     let shard_sizes = cakes.shard_cardinalities();

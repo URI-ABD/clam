@@ -1,6 +1,6 @@
 //! Tests for the RNN-search algorithms.
 
-use abd_clam::{knn, rnn, PartitionCriteria, SingleShard};
+use abd_clam::{knn, rnn, PartitionCriteria, Tree};
 use distances::Number;
 use float_cmp::assert_approx_eq;
 use test_case::test_case;
@@ -15,11 +15,10 @@ fn linear() {
     let query = &vec![0.0];
 
     let criteria = PartitionCriteria::default();
-    let model = SingleShard::new(data, None, &criteria);
-    let tree = model.tree();
+    let tree = Tree::new(data, None).partition(&criteria);
 
-    let linear_knn = knn::Algorithm::Linear.search(tree, query, 3);
-    let linear_rnn = rnn::Algorithm::Linear.search(query, 1.5, tree);
+    let linear_knn = knn::Algorithm::Linear.search(&tree, query, 3);
+    let linear_rnn = rnn::Algorithm::Linear.search(query, 1.5, &tree);
 
     for hits in [linear_knn, linear_rnn] {
         assert_eq!(hits.len(), 3);
@@ -48,15 +47,14 @@ fn variants(cardinality: usize, dimensionality: usize) {
     let query = &vec![0.; dimensionality];
 
     let criteria = PartitionCriteria::default();
-    let cakes = SingleShard::new(data, Some(seed), &criteria);
-    let tree = cakes.tree();
+    let tree = Tree::new(data, None).partition(&criteria);
 
     for k in (0..3).map(|i| 10_usize.pow(i)) {
-        let linear_nn = knn::Algorithm::Linear.search(tree, query, k);
+        let linear_nn = knn::Algorithm::Linear.search(&tree, query, k);
         assert_eq!(linear_nn.len(), k);
 
         for variant in knn::Algorithm::variants() {
-            let variant_nn = variant.search(tree, query, k);
+            let variant_nn = variant.search(&tree, query, k);
 
             assert_eq!(linear_nn.len(), variant_nn.len());
 
@@ -66,10 +64,10 @@ fn variants(cardinality: usize, dimensionality: usize) {
     }
 
     for radius in (1..=10).rev().map(|i| 10_f32.powi(-i)) {
-        let linear_nn = rnn::Algorithm::Linear.search(query, radius, tree);
+        let linear_nn = rnn::Algorithm::Linear.search(query, radius, &tree);
 
         for variant in rnn::Algorithm::variants() {
-            let variant_nn = variant.search(query, radius, tree);
+            let variant_nn = variant.search(query, radius, &tree);
 
             if linear_nn.is_empty() {
                 assert!(
