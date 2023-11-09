@@ -31,7 +31,7 @@ fn cakes(c: &mut Criterion) {
 
         let dataset = VecDataset::new("rnn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
-        let cakes = Cakes::new_single_shard(dataset, Some(seed), &criteria);
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         let mut radius = 0.;
         for n in (0..=100).step_by(25) {

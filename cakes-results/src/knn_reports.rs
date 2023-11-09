@@ -159,7 +159,7 @@ fn make_reports(
         cakes
     } else {
         let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false);
-        let mut cakes = Cakes::new_single_shard(data, seed, &PartitionCriteria::default());
+        let mut cakes = Cakes::new(data, seed, &PartitionCriteria::default());
         cakes.auto_tune_knn(tuning_k, tuning_depth);
         cakes
     };

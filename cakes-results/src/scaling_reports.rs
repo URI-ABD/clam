@@ -212,7 +212,7 @@ pub fn make_reports(
         let criteria = PartitionCriteria::default();
 
         let start = Instant::now();
-        let cakes = Cakes::new_single_shard(data, seed, &criteria);
+        let cakes = Cakes::new(data, seed, &criteria);
         let cakes_time = start.elapsed().as_secs_f32();
         info!("Cakes tree-building time: {:.3e} s", cakes_time);
 

@@ -34,7 +34,7 @@ fn cakes(c: &mut Criterion) {
 
         let dataset = VecDataset::new("knn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
-        let cakes = Cakes::new_single_shard(dataset, Some(seed), &criteria);
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         for k in (0..3).map(|v| 10_usize.pow(v)) {
             for &variant in knn::Algorithm::variants() {
