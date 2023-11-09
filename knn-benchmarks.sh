@@ -5,8 +5,8 @@
 # - Ann Datasets: https://github.com/erikbern/ann-benchmarks#data-sets
 
 # Set input and output directories
-input_dir="../data/search_small/as_npy"
-output_dir="../data/search_small/reports"
+input_dir="../data/ann-benchmarks/datasets"
+output_dir="../data/ann-benchmarks/knn_reports"
 
 echo "Starting ann-benchmarks at: $(date)"
 

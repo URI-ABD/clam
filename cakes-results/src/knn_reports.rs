@@ -19,7 +19,7 @@
 //! Report the results of an ANN benchmark.
 
 use core::cmp::Ordering;
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{path::Path, time::Instant};
 
 use abd_clam::{Cakes, Dataset, PartitionCriteria, VecDataset};
 use clap::Parser;
@@ -108,7 +108,7 @@ struct Args {
 }
 
 /// Report the results of an ANN benchmark.
-#[allow(clippy::too_many_lines, unused_variables, clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 fn make_reports(
     input_dir: &Path,
     dataset: &str,
