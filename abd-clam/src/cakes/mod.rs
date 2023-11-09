@@ -9,6 +9,7 @@ mod sharded;
 mod singular;
 
 use distances::Number;
+use rayon::prelude::*;
 use search::Search;
 use sharded::RandomlySharded;
 use singular::SingleShard;
@@ -75,6 +76,22 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
         }
     }
 
+    /// Performs RNN search on a batch of queries with the given algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - The queries to search.
+    /// * `radius` - The search radius.
+    /// * `algo` - The algorithm to use.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors of tuples containing the index of the instance and
+    /// the distance to the query.
+    pub fn batch_rnn_search(&self, queries: &[&I], radius: U, algo: rnn::Algorithm) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|q| self.rnn_search(q, radius, algo)).collect()
+    }
+
     /// Performs an RNN search with the given algorithm.
     ///
     /// # Arguments
@@ -85,12 +102,28 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     ///
     /// # Returns
     ///
-    /// A vector of tuples containing the index of the instance and the distance to the query.
+    /// A vector of tuples containing the index of the instance and the distance
+    /// to the query.
     pub fn rnn_search(&self, query: &I, radius: U, algo: rnn::Algorithm) -> Vec<(usize, U)> {
         match self {
             Self::SingleShard(ss) => ss.rnn_search(query, radius, algo),
             Self::RandomlySharded(rs) => rs.rnn_search(query, radius, algo),
         }
+    }
+
+    /// Performs Linear RNN search on a batch of queries.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - The queries to search.
+    /// * `radius` - The search radius.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors of tuples containing the index of the instance and
+    /// the distance to the query.
+    pub fn batch_linear_rnn_search(&self, queries: &[&I], radius: U) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|q| self.linear_rnn_search(q, radius)).collect()
     }
 
     /// Performs a linear RNN search.
@@ -102,7 +135,8 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     ///
     /// # Returns
     ///
-    /// A vector of tuples containing the index of the instance and the distance to the query.
+    /// A vector of tuples containing the index of the instance and the distance
+    /// to the query.
     pub fn linear_rnn_search(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         match self {
             Self::SingleShard(ss) => ss.linear_rnn_search(query, radius),
@@ -116,6 +150,22 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
             Self::SingleShard(ss) => ss.tuned_knn_algorithm(),
             Self::RandomlySharded(rs) => rs.tuned_knn_algorithm(),
         }
+    }
+
+    /// Performs KNN search on a batch of queries with the given algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - The queries to search.
+    /// * `k` - The number of nearest neighbors to return.
+    /// * `algo` - The algorithm to use.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors of tuples containing the index of the instance and
+    /// the distance to the query.
+    pub fn batch_knn_search(&self, queries: &[&I], k: usize, algo: knn::Algorithm) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|q| self.knn_search(q, k, algo)).collect()
     }
 
     /// Performs a KNN search with the given algorithm.
@@ -162,6 +212,21 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
         }
     }
 
+    /// Performs Linear KNN search on a batch of queries.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - The queries to search.
+    /// * `k` - The number of nearest neighbors to return.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors of tuples containing the index of the instance and
+    /// the distance to the query.
+    pub fn batch_linear_knn_search(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|q| self.linear_knn_search(q, k)).collect()
+    }
+
     /// Performs a linear KNN search.
     ///
     /// # Arguments
@@ -179,6 +244,23 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
         }
     }
 
+    /// Performs RNN search on a batch of queries with the tuned algorithm.
+    ///
+    /// If the algorithm has not been tuned, this will use the default algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - The queries to search.
+    /// * `radius` - The search radius.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors of tuples containing the index of the instance and
+    /// the distance to the query.
+    pub fn batch_tuned_rnn_search(&self, queries: &[&I], radius: U) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|q| self.tuned_rnn_search(q, radius)).collect()
+    }
+
     /// Performs a RNN search with the tuned algorithm.
     ///
     /// If the algorithm has not been tuned, this will use the default algorithm.
@@ -194,6 +276,23 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     pub fn tuned_rnn_search(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         let algo = self.tuned_rnn_algorithm();
         self.rnn_search(query, radius, algo)
+    }
+
+    /// Performs KNN search on a batch of queries with the tuned algorithm.
+    ///
+    /// If the algorithm has not been tuned, this will use the default algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - The queries to search.
+    /// * `k` - The number of nearest neighbors to return.
+    ///
+    /// # Returns
+    ///
+    /// A vector of vectors of tuples containing the index of the instance and
+    /// the distance to the query.
+    pub fn batch_tuned_knn_search(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
+        queries.par_iter().map(|q| self.tuned_knn_search(q, k)).collect()
     }
 
     /// Performs a KNN search with the tuned algorithm.
@@ -233,6 +332,7 @@ where
                     .find(|(_, &o)| o > index)
                     .map_or_else(|| rs.num_shards() - 1, |(i, _)| i - 1);
 
+                let index = index - rs.offsets()[i];
                 rs.shards()[i].data().index(index)
             }
         }

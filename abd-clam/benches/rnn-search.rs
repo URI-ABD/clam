@@ -1,6 +1,5 @@
 use criterion::*;
 
-use rayon::prelude::*;
 use symagen::random_data;
 
 use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
@@ -45,12 +44,7 @@ fn cakes(c: &mut Criterion) {
 
                 let id = BenchmarkId::new(variant.name(), radius);
                 group.bench_with_input(id, &radius, |b, _| {
-                    b.iter_with_large_drop(|| {
-                        queries
-                            .par_iter()
-                            .map(|query| cakes.rnn_search(query, radius, variant))
-                            .collect::<Vec<_>>()
-                    });
+                    b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, variant));
                 });
             }
         }
@@ -58,12 +52,7 @@ fn cakes(c: &mut Criterion) {
         group.sample_size(10);
         let id = BenchmarkId::new("Linear", radius);
         group.bench_with_input(id, &radius, |b, _| {
-            b.iter_with_large_drop(|| {
-                queries
-                    .par_iter()
-                    .map(|query| cakes.rnn_search(query, radius, rnn::Algorithm::Linear))
-                    .collect::<Vec<_>>()
-            });
+            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Linear));
         });
 
         group.finish();

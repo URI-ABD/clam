@@ -21,7 +21,6 @@ log = "0.4.19"
 env_logger = "0.10.0"
 num-format = "0.4.4"
 csv = "1.2.2"
-rayon = "1.8.0"
 
 [[bin]]
 name = "knn-results"
