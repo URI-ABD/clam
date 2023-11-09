@@ -32,7 +32,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// * `data` - The dataset to search.
     /// * `seed` - The seed to use for the random number generator.
     /// * `criteria` - The criteria to use for partitioning the tree.
-    pub fn new_single_shard(data: D, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
+    pub fn new(data: D, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
         Self::SingleShard(SingleShard::new(data, seed, criteria))
     }
 

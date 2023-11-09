@@ -68,7 +68,7 @@ let criteria = PartitionCriteria::default();
 
 // The Cakes struct provides the functionality described in the CHESS paper.
 // We use a single shard here because the demo data is small.
-let model = Cakes::new_single_shard(data, Some(seed), &criteria);
+let model = Cakes::new(data, Some(seed), &criteria);
 // This line performs a non-trivial amount of work. #understatement
 
 // At this point, the dataset has been reordered to improve search performance.
