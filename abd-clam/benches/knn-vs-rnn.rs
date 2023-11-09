@@ -4,7 +4,7 @@ use criterion::*;
 use rayon::prelude::*;
 use symagen::random_data;
 
-use abd_clam::{knn, rnn, PartitionCriteria, Search, SingleShard, VecDataset};
+use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
 
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::vectors::euclidean(x, y)
@@ -33,7 +33,7 @@ fn cakes(c: &mut Criterion) {
 
         let dataset = VecDataset::new("knn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
-        let cakes = SingleShard::new(dataset, Some(seed), &criteria);
+        let cakes = Cakes::new_single_shard(dataset, Some(seed), &criteria);
 
         for k in (0..=8).map(|v| 2usize.pow(v)) {
             let radii = queries

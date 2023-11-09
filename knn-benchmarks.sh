@@ -13,8 +13,8 @@ echo "Starting ann-benchmarks at: $(date)"
 # Compile cakes-results
 cargo build --release --bin knn-results
 
-# for dataset in "deep-image" "fashion-mnist" "gist" "glove-25" "glove-50" "glove-100" "glove-200" "mnist" "sift"
-for dataset in "fashion-mnist" "mnist"
+# for dataset in "deep-image" "fashion-mnist" "gist" "glove-25" "glove-100" "mnist" "sift"
+for dataset in "fashion-mnist"
 do
     ./target/release/knn-results \
         --input-dir $input_dir \

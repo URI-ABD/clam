@@ -5,8 +5,8 @@ use core::ops::AddAssign;
 use distances::Number;
 use rayon::prelude::*;
 
-use super::Search;
-use crate::{knn, rnn, Dataset, Instance, SingleShard};
+use super::{Search, SingleShard};
+use crate::{knn, rnn, Dataset, Instance};
 
 /// Cakes search with sharded datasets.
 ///
@@ -54,6 +54,16 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> RandomlySharded<I, U, D> {
             shards: new_shards,
             offsets,
         }
+    }
+
+    /// Returns the shards.
+    pub fn shards(&self) -> &[SingleShard<I, U, D>] {
+        &self.shards
+    }
+
+    /// Returns the offsets of the shard indices.
+    pub fn offsets(&self) -> &[usize] {
+        &self.offsets
     }
 
     // /// K-nearest neighbor search.
@@ -153,7 +163,10 @@ mod tests {
 
     use symagen::random_data;
 
-    use crate::{cakes::Search, knn, rnn, Dataset, PartitionCriteria, SingleShard, VecDataset};
+    use crate::{
+        cakes::{Search, SingleShard},
+        knn, rnn, Dataset, PartitionCriteria, VecDataset,
+    };
 
     use super::RandomlySharded;
 

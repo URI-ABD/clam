@@ -23,7 +23,7 @@ mod core;
 pub(crate) mod utils;
 
 pub use crate::{
-    cakes::{knn, rnn, RandomlySharded, Search, SingleShard},
+    cakes::{knn, rnn, Cakes},
     core::{
         cluster::{Cluster, PartitionCriteria, PartitionCriterion, Tree},
         dataset::{Dataset, Instance, VecDataset},
