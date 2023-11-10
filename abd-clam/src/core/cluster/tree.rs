@@ -103,6 +103,21 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
         self
     }
 
+    /// Returns the `Cluster` with the given `offset` and `cardinality`.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset`: The offset of the `Cluster` to return.
+    /// * `cardinality`: The cardinality of the `Cluster` to return.
+    ///
+    /// # Returns
+    ///
+    /// The `Cluster` with the given `offset` and `cardinality` if it exists.
+    /// Otherwise, `None`.
+    pub fn get_cluster(&self, offset: usize, cardinality: usize) -> Option<&Cluster<U>> {
+        self.root.descend_to(offset, cardinality)
+    }
+
     /// Returns a reference to the data used to build the `Tree`.
     pub const fn data(&self) -> &D {
         &self.data

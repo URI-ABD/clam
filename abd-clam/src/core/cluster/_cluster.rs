@@ -471,6 +471,11 @@ impl<U: Number> Display for Cluster<U> {
 }
 
 impl<U: Number> Cluster<U> {
+    /// The offset of the indices of the `Cluster`'s instances in the dataset.
+    pub const fn offset(&self) -> usize {
+        self.offset
+    }
+
     /// The number of instances in the `Cluster`.
     pub const fn cardinality(&self) -> usize {
         self.cardinality
@@ -770,6 +775,28 @@ impl<U: Number> Cluster<U> {
                 children.right.set_normalized_ratios(means, sds);
             }
             None => (),
+        }
+    }
+
+    /// Descends to the `Cluster` with the given `offset` and `cardinality`.
+    ///
+    /// If such a `Cluster` does not exist, `None` is returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset`: The offset of the `Cluster`'s instances in the dataset.
+    /// * `cardinality`: The number of instances in the `Cluster`.
+    pub(crate) fn descend_to(&self, offset: usize, cardinality: usize) -> Option<&Self> {
+        if self.offset == offset && self.cardinality == cardinality {
+            Some(self)
+        } else {
+            self.children().and_then(|[left, right]| {
+                if left.indices().contains(&offset) {
+                    left.descend_to(offset, cardinality)
+                } else {
+                    right.descend_to(offset, cardinality)
+                }
+            })
         }
     }
 
