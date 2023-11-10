@@ -123,3 +123,25 @@ fn assert_subtree_equal<I: Instance, U: Number>(
         }
     }
 }
+
+#[test]
+fn get_cluster() {
+    let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
+
+    let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+    let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+
+    let clusters = tree.root().subtree();
+
+    for d in 0..tree.depth() {
+        for &c in clusters.iter().filter(|c| c.depth() == d) {
+            let (offset, cardinality) = (c.offset(), c.cardinality());
+
+            let c_ = tree.get_cluster(offset, cardinality);
+            assert!(c_.is_some());
+
+            let c_ = c_.unwrap();
+            assert_eq!(c_, c);
+        }
+    }
+}
