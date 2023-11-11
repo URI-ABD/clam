@@ -68,6 +68,66 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> RandomlySharded<I, U, D> {
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for RandomlySharded<I, U, D> {
+    #[allow(clippy::similar_names)]
+    fn save(&self, path: &std::path::Path) -> Result<(), String> {
+        if !path.exists() {
+            return Err(format!("Path does not exist: {path:?}"));
+        }
+
+        if !path.is_dir() {
+            return Err(format!("Path is not a directory: {path:?}"));
+        }
+
+        let sample_shard_dir = path.join("sample_shard");
+        if !sample_shard_dir.exists() {
+            std::fs::create_dir(&sample_shard_dir).map_err(|e| format!("Failed to create directory: {e:?}"))?;
+        }
+        self.sample_shard.save(&sample_shard_dir)?;
+
+        let shards_dir = path.join("shards");
+        if !shards_dir.exists() {
+            std::fs::create_dir(&shards_dir).map_err(|e| format!("Failed to create directory: {e:?}"))?;
+        }
+        for (i, shard) in self.shards.iter().enumerate() {
+            let shard_dir = shards_dir.join(format!("shard_{i}"));
+            if !shard_dir.exists() {
+                std::fs::create_dir(&shard_dir).map_err(|e| format!("Failed to create directory: {e:?}"))?;
+            }
+            shard.save(&shard_dir)?;
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::similar_names)]
+    fn load(path: &std::path::Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>
+    where
+        Self: Sized,
+    {
+        if !path.exists() {
+            return Err(format!("Path does not exist: {path:?}"));
+        }
+
+        if !path.is_dir() {
+            return Err(format!("Path is not a directory: {path:?}"));
+        }
+
+        let sample_shard_dir = path.join("sample_shard");
+        let mut shards = vec![SingleShard::load(&sample_shard_dir, metric, is_expensive)?];
+
+        let shards_dir = path.join("shards");
+        for i in 0.. {
+            let shard_dir = shards_dir.join(format!("shard_{i}"));
+            if !shard_dir.exists() {
+                break;
+            }
+            let shard = SingleShard::load(&shard_dir, metric, is_expensive)?;
+            shards.push(shard);
+        }
+
+        Ok(Self::new(shards))
+    }
+
     fn num_shards(&self) -> usize {
         1 + self.shards.len()
     }

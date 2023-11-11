@@ -201,3 +201,44 @@ fn get_trees(num_shards: u64) {
     let trees = cakes.trees();
     assert_eq!(trees.len(), num_shards as usize);
 }
+
+#[test]
+fn save_load_single() {
+    let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
+
+    let criteria = PartitionCriteria::default();
+    let cakes = Cakes::new(data, None, &criteria);
+
+    let tmp_dir = tempdir::TempDir::new("cakes-test").unwrap();
+    cakes.save(tmp_dir.path()).unwrap();
+
+    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
+
+    let shards = cakes.shards();
+    assert_eq!(shards.len(), 1);
+
+    let trees = cakes.trees();
+    assert_eq!(trees.len(), 1);
+}
+
+#[test_case(10)]
+#[test_case(100)]
+fn save_load_sharded(num_shards: u64) {
+    let shards = (0..num_shards)
+        .map(|i| utils::gen_dataset(100, 10, i, utils::euclidean))
+        .collect();
+
+    let criteria = PartitionCriteria::default();
+    let cakes = Cakes::new_randomly_sharded(shards, None, &criteria);
+
+    let tmp_dir = tempdir::TempDir::new("sharded-cakes-test").unwrap();
+    cakes.save(tmp_dir.path()).unwrap();
+
+    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
+
+    let shards = cakes.shards();
+    assert_eq!(shards.len(), num_shards as usize);
+
+    let trees = cakes.trees();
+    assert_eq!(trees.len(), num_shards as usize);
+}
