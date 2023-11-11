@@ -2,6 +2,8 @@
 
 use core::ops::Index;
 
+use std::path::Path;
+
 pub mod knn;
 pub mod rnn;
 mod search;
@@ -34,6 +36,60 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// * `criteria` - The criteria to use for partitioning the tree.
     pub fn new(data: D, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
         Self::SingleShard(SingleShard::new(data, seed, criteria))
+    }
+
+    /// Saves the Cakes structure to the given path.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to save the Cakes structure to.
+    ///
+    /// # Errors
+    ///
+    /// * If the `path` does not exist.
+    /// * If the `path` is not a valid directory.
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        match self {
+            Self::SingleShard(ss) => ss.save(path),
+            Self::RandomlySharded(rs) => rs.save(path),
+        }
+    }
+
+    /// Loads the Cakes structure from the given path.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to load the Cakes structure from.
+    /// * `metric` - The metric to use for the search.
+    /// * `is_expensive` - Whether the metric is expensive to compute.
+    ///
+    /// # Returns
+    ///
+    /// The Cakes structure.
+    ///
+    /// # Errors
+    ///
+    /// * If the `path` does not exist.
+    /// * If the `path` is not a valid directory.
+    /// * If the `path` does not contain a valid Cakes structure.
+    pub fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
+        if !path.exists() {
+            return Err(format!("Path '{}' does not exist.", path.display()));
+        }
+
+        if !path.is_dir() {
+            return Err(format!("Path '{}' is not a directory.", path.display()));
+        }
+
+        // Check if there is a subdirectory for `sample_shard`.
+        let sample_shard_path = path.join("sample_shard");
+        if sample_shard_path.exists() {
+            let rs = RandomlySharded::load(path, metric, is_expensive)?;
+            Ok(Self::RandomlySharded(rs))
+        } else {
+            let ss = SingleShard::load(path, metric, is_expensive)?;
+            Ok(Self::SingleShard(ss))
+        }
     }
 
     /// Returns the references to the tree(s) of the dataset.

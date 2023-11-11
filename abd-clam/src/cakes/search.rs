@@ -1,11 +1,44 @@
 //! Supplies the `Search` trait.
 
+use std::path::Path;
+
 use distances::Number;
 
 use crate::{knn, rnn, Dataset, Instance};
 
 /// A trait for performing RNN- and KNN-Search.
 pub trait Search<I: Instance, U: Number, D: Dataset<I, U>>: Send + Sync {
+    /// Saves the search structure to a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to save the search structure to.
+    ///
+    /// # Errors
+    ///
+    /// * If the `path` does not exist.
+    /// * If the `path` is not a valid directory.
+    fn save(&self, path: &Path) -> Result<(), String>;
+
+    /// Loads the search structure from a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to load the search structure from.
+    ///
+    /// # Returns
+    ///
+    /// The search structure.
+    ///
+    /// # Errors
+    ///
+    /// * If the `path` does not exist.
+    /// * If the `path` is not a valid directory.
+    /// * If the `path` does not contain a valid search structure.
+    fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>
+    where
+        Self: Sized;
+
     /// Returns the number of shards.
     fn num_shards(&self) -> usize;
 

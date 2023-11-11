@@ -2,6 +2,8 @@
 
 use core::cmp::Ordering;
 
+use std::path::Path;
+
 use distances::Number;
 use rayon::prelude::*;
 
@@ -75,6 +77,84 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> SingleShard<I, U, D> {
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for SingleShard<I, U, D> {
+    #[allow(clippy::similar_names)]
+    fn save(&self, path: &Path) -> Result<(), String> {
+        if !path.exists() {
+            return Err(format!("The path '{}' does not exist.", path.display()));
+        }
+
+        if !path.is_dir() {
+            return Err(format!("The path '{}' is not a directory.", path.display()));
+        }
+
+        let tree_dir = path.join("tree");
+        if !tree_dir.exists() {
+            std::fs::create_dir(&tree_dir).map_err(|e| e.to_string())?;
+        }
+        self.tree.save(&tree_dir)?;
+
+        let best_rnn = self
+            .best_rnn
+            .map_or_else(|| "None".to_string(), |a| a.name().to_string());
+        let best_knn = self
+            .best_knn
+            .map_or_else(|| "None".to_string(), |a| a.name().to_string());
+
+        let best_algo_file = path.join("best-algo.txt");
+        std::fs::write(best_algo_file, format!("{best_rnn}\n{best_knn}")).map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::similar_names)]
+    fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>
+    where
+        Self: Sized,
+    {
+        if !path.exists() {
+            return Err(format!("The path '{}' does not exist.", path.display()));
+        }
+
+        if !path.is_dir() {
+            return Err(format!("The path '{}' is not a directory.", path.display()));
+        }
+
+        let best_algo_file = path.join("best-algo.txt");
+        if !best_algo_file.exists() {
+            return Err(format!("The file '{}' does not exist.", best_algo_file.display()));
+        }
+
+        let contents = std::fs::read_to_string(&best_algo_file).map_err(|e| e.to_string())?;
+        let mut lines = contents.lines();
+        let best_rnn = lines.next().ok_or_else(|| "The file is empty.".to_string())?;
+        let best_knn = lines.next().ok_or_else(|| "The file is empty.".to_string())?;
+
+        if lines.next().is_some() {
+            return Err("The file has too many lines.".to_string());
+        }
+
+        let best_rnn = if best_rnn == "None" {
+            None
+        } else {
+            Some(rnn::Algorithm::from_name(best_rnn)?)
+        };
+
+        let best_knn = if best_knn == "None" {
+            None
+        } else {
+            Some(knn::Algorithm::from_name(best_knn)?)
+        };
+
+        let tree_dir = path.join("tree");
+        let tree = Tree::<I, U, D>::load(&tree_dir, metric, is_expensive)?;
+
+        Ok(Self {
+            tree,
+            best_rnn,
+            best_knn,
+        })
+    }
+
     fn num_shards(&self) -> usize {
         1
     }
