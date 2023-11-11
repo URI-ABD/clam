@@ -57,8 +57,8 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> RandomlySharded<I, U, D> {
     }
 
     /// Returns the shards.
-    pub fn shards(&self) -> &[SingleShard<I, U, D>] {
-        &self.shards
+    pub fn shards(&self) -> Vec<&SingleShard<I, U, D>> {
+        core::iter::once(&self.sample_shard).chain(self.shards.iter()).collect()
     }
 
     /// Returns the offsets of the shard indices.
