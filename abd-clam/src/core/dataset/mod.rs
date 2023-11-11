@@ -12,6 +12,7 @@ use std::path::Path;
 
 use distances::Number;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 /// A common interface for datasets used in CLAM.
 pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync {
@@ -110,7 +111,7 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     ///
     /// A vector of distances between the instance at `left` and all instances at `right`
     fn one_to_many(&self, left: usize, right: &[usize]) -> Vec<U> {
-        right.iter().map(|&r| self.one_to_one(left, r)).collect()
+        self.query_to_many(&self[left], right)
     }
 
     /// Returns a vector of vectors of distances.
@@ -167,7 +168,14 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     ///
     /// A vector of distances between the query and all instances at `indices`
     fn query_to_many(&self, query: &I, indices: &[usize]) -> Vec<U> {
-        indices.iter().map(|&index| self.query_to_one(query, index)).collect()
+        if self.is_metric_expensive() {
+            indices
+                .par_iter()
+                .map(|&index| self.query_to_one(query, index))
+                .collect()
+        } else {
+            indices.iter().map(|&index| self.query_to_one(query, index)).collect()
+        }
     }
 
     /// Chooses a subset of indices that are unique with respect to the metric.
@@ -197,7 +205,11 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
 
         let mut chosen = Vec::new();
         for i in indices {
-            let is_old = chosen.iter().any(|&o| self.are_instances_equal(i, o));
+            let is_old = if self.is_metric_expensive() {
+                chosen.par_iter().any(|&o| self.are_instances_equal(i, o))
+            } else {
+                chosen.iter().any(|&o| self.are_instances_equal(i, o))
+            };
             if !is_old {
                 chosen.push(i);
             }
