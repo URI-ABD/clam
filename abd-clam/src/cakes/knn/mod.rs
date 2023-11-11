@@ -136,6 +136,32 @@ impl Algorithm {
         }
     }
 
+    /// Returns the algorithm from a string representation of the name.
+    ///
+    /// The string representation is case-insensitive.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string representation of the name.
+    ///
+    /// # Returns
+    ///
+    /// The algorithm variant.
+    ///
+    /// # Errors
+    ///
+    /// If the string representation is not recognized.
+    pub fn from_name(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "linear" => Ok(Self::Linear),
+            "repeatedrnn" => Ok(Self::RepeatedRnn),
+            "greedysieve" => Ok(Self::GreedySieve),
+            "sieve" => Ok(Self::Sieve),
+            "sievesepcenter" => Ok(Self::SieveSepCenter),
+            _ => Err(format!("Unknown algorithm: {s}")),
+        }
+    }
+
     /// Returns a list of all the algorithms, excluding Linear.
     #[must_use]
     pub const fn variants<'a>() -> &'a [Self] {
