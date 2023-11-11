@@ -174,3 +174,30 @@ fn check_search_quality<I: Instance, U: Number>(
         }
     }
 }
+
+#[test_case(10)]
+#[test_case(100)]
+fn get_trees(num_shards: u64) {
+    let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
+
+    let criteria = PartitionCriteria::default();
+    let cakes = Cakes::new(data, None, &criteria);
+
+    let shards = cakes.shards();
+    assert_eq!(shards.len(), 1);
+
+    let trees = cakes.trees();
+    assert_eq!(trees.len(), 1);
+
+    let shards = (0..num_shards)
+        .map(|i| utils::gen_dataset(100, 10, i, utils::euclidean))
+        .collect();
+
+    let cakes = Cakes::new_randomly_sharded(shards, None, &criteria);
+
+    let shards = cakes.shards();
+    assert_eq!(shards.len(), num_shards as usize);
+
+    let trees = cakes.trees();
+    assert_eq!(trees.len(), num_shards as usize);
+}
