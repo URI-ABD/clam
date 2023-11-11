@@ -1,9 +1,11 @@
 //! Trait for individual data points.
 
+use core::fmt::Debug;
+
 use distances::Number;
 
 /// Trait for individual data points.
-pub trait Instance: Send + Sync {
+pub trait Instance: Debug + Send + Sync {
     /// Convert the instance to a byte vector.
     fn to_bytes(&self) -> Vec<u8>;
 

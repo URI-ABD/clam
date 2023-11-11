@@ -1,5 +1,13 @@
 //! Provides the `Dataset` trait and an implementation for a vector of data.
 
+use core::{fmt::Debug, ops::Index};
+
+use std::path::Path;
+
+use distances::Number;
+use rand::prelude::*;
+use rayon::prelude::*;
+
 mod instance;
 mod vec2d;
 
@@ -7,15 +15,8 @@ pub use instance::Instance;
 #[allow(clippy::module_name_repetitions)]
 pub use vec2d::VecDataset;
 
-use core::ops::Index;
-use std::path::Path;
-
-use distances::Number;
-use rand::prelude::*;
-use rayon::prelude::*;
-
 /// A common interface for datasets used in CLAM.
-pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Sync {
+pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Output = I> {
     /// Returns the name of the type of the dataset.
     fn type_name(&self) -> String;
 
@@ -44,16 +45,34 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// then CLAM can make certain guarantees about the exactness of search results.
     fn metric(&self) -> fn(&I, &I) -> U;
 
-    /// Reorders the internal order of instances by a given permutation of indices.
+    /// Sets the permutation of indices that was used to reorder the dataset.
+    ///
+    /// This is primarily used when permuting the dataset to reorder it after
+    /// building a tree.
     ///
     /// # Arguments
     ///
-    /// * `permutation` - A permutation of indices in the dataset.
+    /// * `indices` - The permutation of indices.
+    fn set_permuted_indices(&mut self, indices: Option<&[usize]>);
+
+    /// Swaps the location of two instances in the dataset.
+    ///
+    /// This is primarily used when permuting the dataset to reorder it after
+    /// building a tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `left` - An index in the dataset.
+    /// * `right` - An index in the dataset.
     ///
     /// # Errors
     ///
-    /// * If any of the indices in `permutation` are invalid indices in the dataset.
-    fn permute_instances(&mut self, permutation: &[usize]) -> Result<(), String>;
+    /// * If there is an error swapping the instances in the implementor.
+    ///
+    /// # Panics
+    ///
+    /// * If either `left` or `right` are invalid indices in the dataset.
+    fn swap(&mut self, left: usize, right: usize) -> Result<(), String>;
 
     /// Returns the permutation of indices that was used to reorder the dataset.
     ///
@@ -62,6 +81,58 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
     /// * Some if the dataset was permuted.
     /// * None otherwise.
     fn permuted_indices(&self) -> Option<&[usize]>;
+
+    /// Reorders the internal order of instances by a given permutation of indices.
+    ///
+    /// # Arguments
+    ///
+    /// * `permutation` - A permutation of indices in the dataset.
+    ///
+    /// # Errors
+    ///
+    /// * See `swap`.
+    ///
+    /// # Panics
+    ///
+    /// * If any of the indices in `permutation` are invalid indices in the dataset.
+    fn permute_instances(&mut self, permutation: &[usize]) -> Result<(), String> {
+        let n = permutation.len();
+
+        // The "source index" represents the index that we hope to swap to
+        let mut source_index: usize;
+
+        // INVARIANT: After each iteration of the loop, the elements of the
+        // sub-array [0..i] are in the correct position.
+        for i in 0..n - 1 {
+            source_index = permutation[i];
+
+            // If the element at is already at the correct position, we can
+            // just skip.
+            if source_index != i {
+                // Here we're essentially following the cycle. We *know* by
+                // the invariant that all elements to the left of i are in
+                // the correct position, so what we're doing is following
+                // the cycle until we find an index to the right of i. Which,
+                // because we followed the position changes, is the correct
+                // index to swap.
+                while source_index < i {
+                    source_index = permutation[source_index];
+                }
+
+                // We swap to the correct index. Importantly, this index is always
+                // to the right of i, we do not modify any index to the left of i.
+                // Thus, because we followed the cycle to the correct index to swap,
+                // we know that the element at i, after this swap, is in the correct
+                // position.
+                self.swap(source_index, i)?;
+            }
+        }
+
+        // Inverse mapping
+        self.set_permuted_indices(Some(permutation));
+
+        Ok(())
+    }
 
     /// Get the index before the dataset was reordered. If the dataset was not
     /// reordered, this is the identity function.
