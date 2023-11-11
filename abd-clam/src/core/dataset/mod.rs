@@ -205,12 +205,14 @@ pub trait Dataset<I: Instance, U: Number>: Index<usize, Output = I> + Send + Syn
 
         let mut chosen = Vec::new();
         for i in indices {
-            let is_old = if self.is_metric_expensive() {
+            // Check if the instance is identical to any of the previously chosen
+            // instances.
+            let is_chosen = if self.is_metric_expensive() {
                 chosen.par_iter().any(|&o| self.are_instances_equal(i, o))
             } else {
                 chosen.iter().any(|&o| self.are_instances_equal(i, o))
             };
-            if !is_old {
+            if !is_chosen {
                 chosen.push(i);
             }
             if chosen.len() == n {
