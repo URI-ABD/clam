@@ -1,11 +1,12 @@
 //! A `Tree` represents a hierarchy of "similar" instances from a metric-`Space`.
 
 use core::marker::PhantomData;
+
 use std::path::Path;
 
-use crate::{utils, Cluster, Dataset, Instance, PartitionCriteria};
 use distances::Number;
-use serde::{Deserialize, Serialize};
+
+use crate::{utils, Cluster, Dataset, Instance, PartitionCriteria};
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.
@@ -15,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// - `T`: The type of the instances in the `Tree`.
 /// - `U`: The type of the distance values between instances.
 /// - `D`: The type of the `Dataset` from which the `Tree` is built.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Tree<I: Instance, U: Number, D: Dataset<I, U>> {
     /// The dataset from which the tree is built.
     pub(crate) data: D,
@@ -205,7 +206,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D> {
             return Err("Given path does not exist".to_string());
         }
 
-        // Alises to relevant paths
+        // Aliases to relevant paths
         let cluster_path = path.join("clusters");
         let dataset_path = path.join("dataset");
 
