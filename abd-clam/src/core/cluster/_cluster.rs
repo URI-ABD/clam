@@ -9,7 +9,12 @@ use core::{
     marker::PhantomData,
     ops::Range,
 };
-use std::path::Path;
+
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter},
+    path::Path,
+};
 
 use distances::Number;
 use serde::{
@@ -933,8 +938,7 @@ impl<U: Number> Cluster<U> {
     /// * If the file cannot be created.
     /// * If the file cannot be serialized.
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-        let mut writer = std::io::BufWriter::new(file);
+        let mut writer = BufWriter::new(File::create(path).map_err(|e| e.to_string())?);
         bincode::serialize_into(&mut writer, self).map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -954,8 +958,7 @@ impl<U: Number> Cluster<U> {
     /// * If the file cannot be opened.
     /// * If the file cannot be deserialized.
     pub fn load(path: &Path) -> Result<Self, String> {
-        let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        let reader = std::io::BufReader::new(file);
+        let reader = BufReader::new(File::open(path).map_err(|e| e.to_string())?);
         bincode::deserialize_from(reader).map_err(|e| e.to_string())
     }
 }
