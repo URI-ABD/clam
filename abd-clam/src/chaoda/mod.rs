@@ -1,4 +1,4 @@
-///TODO! Add more details on each modules
+//! TODO: Add more details on each modules
 
 // mod _chaoda;
 /// Modules related to various aspects of machine learning and data analysis.
