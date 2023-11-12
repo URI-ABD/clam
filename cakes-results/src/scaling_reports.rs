@@ -116,7 +116,11 @@ struct Args {
 /// * If the metric of the data set is not supported.
 /// * If the output directory does not exist.
 /// * If the output directory is not writable.
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::cognitive_complexity
+)]
 pub fn make_reports(
     input_dir: &Path,
     output_dir: &Path,

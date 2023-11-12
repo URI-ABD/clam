@@ -168,7 +168,6 @@ impl<'a, U: Number> Edge<'a, U> {
 /// connections between overlapping `Cluster`s.
 ///
 /// TODO: Add more info on what graphs we useful for.
-
 #[derive(Debug, Clone)]
 pub struct Graph<'a, U: Number> {
     /// A set of `Cluster`s in the graph.
