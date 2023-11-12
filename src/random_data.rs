@@ -53,7 +53,7 @@ pub fn random_tabular<T: Number, R: Rng>(
     (0..cardinality)
         .map(|_| {
             (0..dimensionality)
-                .map(|_| min_val + T::next_random(rng) / diff)
+                .map(|_| min_val + T::next_random(rng) % diff)
                 .collect()
         })
         .collect()
