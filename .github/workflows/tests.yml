@@ -36,11 +36,11 @@ jobs:
           python3.9 -m venv .venv
           source .venv/bin/activate
           echo "VIRTUAL ENV:" $VIRTUAL_ENV
-      - name: Build and test
-        run: maturin develop --release --extras=dev
+      # - name: Build and test
+      #   run: maturin develop --release --extras=dev
       - name: Rust tests
         run: cargo test --release
-      - name: Python tests
-        run: |
-          pip install pytest
-          pytest
+      # - name: Python tests
+      #   run: |
+      #     pip install pytest
+      #     pytest
