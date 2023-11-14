@@ -1,0 +1,54 @@
+fail_fast: true
+
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.4.0
+  hooks:
+    - id: debug-statements
+    - id: trailing-whitespace
+      exclude: '.bumpversion.cfg'
+    - id: end-of-file-fixer
+    - id: check-yaml
+    - id: check-toml
+    - id: check-added-large-files
+    - id: check-merge-conflict
+
+- repo: https://github.com/psf/black
+  rev: '23.3.0'
+  hooks:
+    - id: black
+      language_version: python3.9
+
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: 'v0.0.272'
+  hooks:
+    - id: ruff
+      exclude: |
+          (?x)(
+            test_[a-zA-Z0-9]+.py$|
+            ^python/abd_clam/anomaly_detection/pretrained_models.py$
+          )
+      args: [--fix]
+
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: 'v1.2.0'
+  hooks:
+    - id: mypy
+      additional_dependencies: [types-requests==2.28.11.8]
+
+- repo: local
+  hooks:
+    - id: cargo-fmt
+      name: cargo fmt
+      entry: cargo fmt --all -- --check
+      language: rust
+      types: [rust]
+    - id: cargo-clippy
+      name: cargo clippy
+      entry: cargo clippy --all -- -D warnings -W clippy::pedantic -W clippy::nursery
+      language: rust
+      pass_filenames: false
+      types: [rust]
