@@ -1,10 +1,10 @@
 [workspace]
 members = [
     "crates/core",
-    "cakes-results",
+    # "cakes-results",
     # "py-clam",  # TODO: re-enable when we have python bindings
-    "distances",
-    "SyMaGen"
+    # "distances",
+    # "SyMaGen"
 ]
 resolver = "2"
 

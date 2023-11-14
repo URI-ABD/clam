@@ -31,6 +31,30 @@ This repository is a workspace that contains the following crates:
 - [CHESS](https://arxiv.org/abs/1908.08551)
 - [CHAODA](https://arxiv.org/abs/2103.11774)
 
+## Development
+
+### Prerequisites
+
+1. [`docker`](https://docs.docker.com/engine/install/) **or** [`podman`](https://podman.io/getting-started/installation)
+2. [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
+
+### Getting Started
+
+1. Clone the repo.
+2. CD into the folder.
+3. Check `hermit` is installed correctly
+   1. `hermit status` should show earthly and rust as being installed.
+   2. `earthly --version` should return successfully.
+   3. `cargo --version` should return successfully.
+4. 
+
+### Building
+
+To work in this repo, the only tool you must have installed is [`hermit`](https://cashapp.github.io/hermit/usage/get-started/).
+If you have `hermit` installed, once you clone this repo, you should have all of the tooling you need present automatically.
+
+If you do not wish to use `hermit`
+
 ## Citation
 
 TODO
