@@ -56,7 +56,7 @@ smartcore = "0.2.1"
 
 
 [dev-dependencies]
-symagen = { version = "0.2.0", path = "../SyMaGen" }
+symagen = { version = "0.2.0", path = "../symagen" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
 tempdir = "0.3.7"
 float-cmp = "0.9.0"
