@@ -6,36 +6,36 @@ For major changes, please open an issue to discuss what you would like to change
 As of writing this document, the project is still in a pre-1.0 state.
 This means that the API is not yet stable and breaking changes may occur frequently.
 
-## Pull Requests
+## Prerequisites
+
+- [`docker`](https://docs.docker.com/engine/install/)
+- [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
+
+## Getting Started
 
 1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
-   - After cloning from your fork, you should run the tests to make sure that all is well: `cargo test --release`.
-   - If you get an error from Cargo saying that a manifest path could not be read, you may need to update the git submodules in the repository. Run `git submodule update --init` and try the running the tests again.
-2. Install [poetry](https://python-poetry.org/docs/#installation) on your system.
-   - `curl -sSL https://install.python-poetry.org | python3 -`
-3. Make a python virtual environment with python 3.9.x.
-   - We recommend using [pyenv](https://github.com/pyenv/pyenv) to install the version of python you need: `pyenv install 3.9.16`
-   - Use the python version you installed with pyenv to create a virtual environment: `~/.pyenv/verisons/3.9.16/bin/python -m venv .venv`
-   - Activate the virtual environment: `source .venv/bin/activate`
+2. Clone the repo from your fork.
+   1. `git clone ...`
+3. Initialize submodules.
+   1. `git submodule update --init`
+4. Test that things work.
+   1. `cargo test --release`
+5. Install pre-commit hooks
+   1. `pre-commit install`
+6. Make a new branch.
+   1. Make sure to branch from the head of the `master` branch.
+   2. Have a plan and scope in mind for your changes.
+   3. You may not have merge commits in your branch because we wish to keep a linear history on the `master` branch. Use `git rebase` to keep your branch up-to-date with the `master` branch.
+7. Make your changes.
+   1. Remember to add tests and documentation.
+8. Bump the version.
+   1. If you need help with this step, please ask.
+9. Commit and push your changes.
+10. Open a pull request.
+
+### Python-Specific Work
+
+1. Install [`poetry`](https://python-poetry.org/docs/#installation).
+   1. `python -m pip install poetry`
+2. Install the project dependencies, using `poetry`.
    - Use poetry to install the project dependencies: `poetry install`
-   - Install the pre-commit hooks: `pre-commit install`
-4. Make a new branch.
-   - Make sure to branch from the head of the `master` branch.
-   - Have a plan and scope in mind for your changes.
-   - You may not have merge commits in your branch because we wish to keep a linear history on the `master` branch. Use `git rebase` to keep your branch up-to-date with the `master` branch.
-5. Make your changes.
-   - Remember to add tests and documentation.
-6. Bump the version number using `bump2version`.
-   - `bump2version patch` for bug fixes, performance improvements and refactoring.
-   - `bump2version minor` for feature additions and breaking changes.
-   - `bump2version dev` for work-in-progress changes.
-   - `bump2version release` when the work-in-progress changes are ready for release.
-   - `bump2version --dry-run --verbose --allow-dirty release|minor|patch|dev` to see what will happen without actually changing anything.
-7. Commit and push your changes.
-   - Work through the pre-commit checks.
-   - If you wish to save your work before the pre-commit checks are complete, use `git commit --no-verify`. Note that we will not review a PR for which the CI checks fail.
-   - Try to use commit messages that are descriptive and follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification.
-8. Open a pull request.
-   - You must rebase your branch to the head of the `master` branch before opening a pull request.
-   - Pre-commit checks and tests will run again on GitHub and must pass before someone will even review the PR.
-   - Once a PR is approved, it will be merged into the `master` branch and will automatically trigger a release to `PyPI` and `crates.io`.
