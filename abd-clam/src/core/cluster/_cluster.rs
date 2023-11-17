@@ -17,6 +17,7 @@ use std::{
 };
 
 use distances::Number;
+use mt_logger::{mt_log, Level};
 use serde::{
     de::{MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
@@ -571,6 +572,10 @@ impl<U: Number> Cluster<U> {
         let arg_radial = indices[arg_radial];
 
         let lfd = utils::compute_lfd(radius, &center_distances);
+        mt_log!(
+            Level::Debug,
+            "Created cluster with depth {depth} offset {offset} and cardinality {cardinality}."
+        );
 
         Self {
             depth,
@@ -606,8 +611,11 @@ impl<U: Number> Cluster<U> {
     pub fn partition<I: Instance, D: Dataset<I, U>>(mut self, data: &mut D, criteria: &PartitionCriteria<U>) -> Self {
         let mut indices = (0..self.cardinality).collect::<Vec<_>>();
         (self, indices) = self._partition(data, criteria, indices);
+
+        mt_log!(Level::Debug, "Finished building tree. Starting data permutation.");
         data.permute_instances(&indices)
             .unwrap_or_else(|_| unreachable!("All indices are valid."));
+        mt_log!(Level::Debug, "Finished data permutation.");
 
         self
     }
@@ -620,6 +628,14 @@ impl<U: Number> Cluster<U> {
         mut indices: Vec<usize>,
     ) -> (Self, Vec<usize>) {
         if criteria.check(&self) {
+            mt_log!(
+                Level::Debug,
+                "Partitioning cluster at depth {} with offset {} and cardinality {}.",
+                self.depth,
+                self.offset,
+                self.cardinality
+            );
+
             let ([(arg_l, l_indices), (arg_r, r_indices)], polar_distance) = self.partition_once(data, indices);
 
             let r_offset = self.offset + l_indices.len();
