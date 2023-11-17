@@ -26,6 +26,11 @@ pub const VERSION: &str = "0.2.1";
 /// Guess the number game.
 ///
 /// This is a demo function for the Python module.
+///
+/// # Panics
+///
+/// * If the user input is not a number.
+/// * If unable to read the user input.
 #[pyfunction]
 #[allow(clippy::redundant_pub_crate)]
 pub fn guess_the_number() {
@@ -62,6 +67,11 @@ pub fn guess_the_number() {
 ///
 /// The name of this function must match the `lib.name` setting in the `Cargo.toml`,
 /// else Python will not be able to import the module.
+///
+/// # Errors
+///
+/// * If unable to add the function to the module.
+/// * If unable to add the module to the Python interpreter.
 #[pymodule]
 pub fn symagen(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(guess_the_number, m)?)?;
