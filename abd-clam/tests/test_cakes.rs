@@ -12,6 +12,7 @@ fn tiny() {
     let data = utils::gen_dataset_from(
         vec![vec![0., 0.], vec![1., 1.], vec![2., 2.], vec![3., 3.]],
         utils::euclidean,
+        Some(vec![true, false, true, false]),
     );
     let criteria = PartitionCriteria::default();
     let cakes = Cakes::new(data, None, &criteria);
@@ -39,7 +40,9 @@ fn tiny() {
 
 #[test]
 fn line() {
-    let data = utils::gen_dataset_from((-100..=100).map(|x| vec![x.as_f32()]).collect(), utils::euclidean);
+    let data = (-100..=100).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
+    let metadata = Some(data.iter().map(|x| x[0] > 0.0).collect());
+    let data = utils::gen_dataset_from(data, utils::euclidean, metadata);
     let criteria = PartitionCriteria::default();
     let cakes = Cakes::new(data, Some(42), &criteria);
 
@@ -98,7 +101,8 @@ fn strings(cardinality: usize, alphabet: &str, metric: fn(&String, &String) -> u
     let seq_len = 100;
 
     let data = symagen::random_data::random_string(cardinality, seq_len, seq_len, alphabet, seed);
-    let data = VecDataset::new("test".to_string(), data.clone(), metric, false);
+
+    let data = VecDataset::<_, _, bool>::new("test".to_string(), data.clone(), metric, false, None);
     let cakes = Cakes::new(data, Some(42), &PartitionCriteria::default());
 
     let num_queries = 10;
@@ -108,9 +112,9 @@ fn strings(cardinality: usize, alphabet: &str, metric: fn(&String, &String) -> u
     check_search_quality(&queries, &cakes, &[1, 5, 10], &[1, 5, 10]);
 }
 
-fn check_search_quality<I: Instance, U: Number>(
+fn check_search_quality<I: Instance, U: Number, M: Instance>(
     queries: &[&I],
-    cakes: &Cakes<I, U, VecDataset<I, U>>,
+    cakes: &Cakes<I, U, VecDataset<I, U, M>>,
     radii: &[U],
     ks: &[usize],
 ) {
@@ -212,7 +216,7 @@ fn save_load_single() {
     let tmp_dir = tempdir::TempDir::new("cakes-test").unwrap();
     cakes.save(tmp_dir.path()).unwrap();
 
-    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
+    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _, bool>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
 
     let shards = cakes.shards();
     assert_eq!(shards.len(), 1);
@@ -234,7 +238,7 @@ fn save_load_sharded(num_shards: u64) {
     let tmp_dir = tempdir::TempDir::new("sharded-cakes-test").unwrap();
     cakes.save(tmp_dir.path()).unwrap();
 
-    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
+    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _, bool>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
 
     let shards = cakes.shards();
     assert_eq!(shards.len(), num_shards as usize);

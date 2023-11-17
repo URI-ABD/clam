@@ -9,6 +9,7 @@ fn tiny() {
     let mut data = utils::gen_dataset_from(
         vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]],
         utils::euclidean::<f32, f32>,
+        Some(vec![true, true, false, false]),
     );
     let partition_criteria = PartitionCriteria::default();
     let root = Cluster::new_root(&data, Some(42)).partition(&mut data, &partition_criteria);
@@ -60,7 +61,7 @@ fn medium() {
     check_subtree(&root, &data);
 }
 
-fn check_subtree(root: &Cluster<f32>, data: &VecDataset<Vec<f32>, f32>) {
+fn check_subtree(root: &Cluster<f32>, data: &VecDataset<Vec<f32>, f32, bool>) {
     for c in root.subtree() {
         assert!(c.cardinality() > 0, "Cardinality must be positive.");
         assert!(c.radius() >= 0., "Radius must be non-negative.");
@@ -80,6 +81,7 @@ fn serialization() {
     let data = utils::gen_dataset_from(
         vec![vec![0., 0., 0.], vec![1., 1., 1.], vec![2., 2., 2.], vec![3., 3., 3.]],
         utils::euclidean::<f32, f32>,
+        Some(vec![true, true, false, false]),
     );
 
     let original = Cluster::new_root(&data, Some(42));
@@ -103,7 +105,7 @@ fn serialization() {
 #[test]
 fn ratios() {
     // Generate some tree from a small dataset
-    let data = utils::gen_dataset_from(vec![vec![10.], vec![1.], vec![3.]], utils::euclidean::<f32, f32>);
+    let data = utils::gen_dataset_from(vec![vec![10.], vec![1.], vec![3.]], utils::euclidean::<f32, f32>, None);
 
     let partition_criteria = PartitionCriteria::default();
     let root = Tree::new(data, Some(42))

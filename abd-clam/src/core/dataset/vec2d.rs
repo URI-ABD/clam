@@ -1,6 +1,6 @@
 //! A dataset of a Vec of instances.
 
-use core::ops::Index;
+use core::{fmt::Debug, ops::Index};
 
 use std::{
     fs::File,
@@ -23,7 +23,7 @@ use super::Instance;
 /// - `T`: The type of the instances in the `Dataset`.
 /// - `U`: The type of the distance values between instances.
 #[derive(Debug)]
-pub struct VecDataset<I: Instance, U: Number> {
+pub struct VecDataset<I: Instance, U: Number, M: Instance> {
     /// The name of the dataset.
     name: String,
     /// The data of the dataset.
@@ -34,9 +34,11 @@ pub struct VecDataset<I: Instance, U: Number> {
     is_expensive: bool,
     /// The reordering of the dataset after building the tree.
     permuted_indices: Option<Vec<usize>>,
+    /// Metadata about the dataset.
+    metadata: Option<Vec<M>>,
 }
 
-impl<I: Instance, U: Number> VecDataset<I, U> {
+impl<I: Instance, U: Number, M: Instance> VecDataset<I, U, M> {
     /// Creates a new dataset.
     ///
     /// # Arguments
@@ -45,13 +47,20 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
     /// * `data`: The vector of instances.
     /// * `metric`: The metric for computing distances between instances.
     /// * `is_expensive`: Whether the metric is expensive to compute.
-    pub fn new(name: String, data: Vec<I>, metric: fn(&I, &I) -> U, is_expensive: bool) -> Self {
+    pub fn new(
+        name: String,
+        data: Vec<I>,
+        metric: fn(&I, &I) -> U,
+        is_expensive: bool,
+        metadata: Option<Vec<M>>,
+    ) -> Self {
         Self {
             name,
             data,
             metric,
             is_expensive,
             permuted_indices: None,
+            metadata,
         }
     }
 
@@ -66,9 +75,27 @@ impl<I: Instance, U: Number> VecDataset<I, U> {
     pub fn data_owned(self) -> Vec<I> {
         self.data
     }
+
+    /// A reference to the underlying metadata.
+    #[must_use]
+    pub fn metadata(&self) -> Option<&[M]> {
+        self.metadata.as_deref()
+    }
+
+    /// Moves the underlying metadata out of the dataset.
+    #[must_use]
+    pub fn metadata_owned(self) -> Option<Vec<M>> {
+        self.metadata
+    }
+
+    /// A reference to the metadata of a specific instance.
+    #[must_use]
+    pub fn metadata_of(&self, index: usize) -> Option<&M> {
+        self.metadata().map(|m| &m[index])
+    }
 }
 
-impl<I: Instance, U: Number> Index<usize> for VecDataset<I, U> {
+impl<I: Instance, U: Number, M: Instance> Index<usize> for VecDataset<I, U, M> {
     type Output = I;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -76,7 +103,7 @@ impl<I: Instance, U: Number> Index<usize> for VecDataset<I, U> {
     }
 }
 
-impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
+impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> {
     fn type_name(&self) -> String {
         format!("VecDataset<{}>", I::type_name())
     }
@@ -103,6 +130,9 @@ impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
 
     fn swap(&mut self, left: usize, right: usize) -> Result<(), String> {
         self.data.swap(left, right);
+        if let Some(v) = self.metadata.as_mut() {
+            v.swap(left, right);
+        };
         Ok(())
     }
 
@@ -116,9 +146,10 @@ impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
         while self.data.len() > max_cardinality {
             let at = self.data.len() - max_cardinality;
             let chunk = self.data.split_off(at);
+            let meta_chunk = self.metadata.as_mut().map(|m| m.split_off(at));
 
             let name = format!("{}-shard-{}", self.name, shards.len());
-            shards.push(Self::new(name, chunk, self.metric, self.is_expensive));
+            shards.push(Self::new(name, chunk, self.metric, self.is_expensive, meta_chunk));
         }
         self.name = format!("{}-shard-{}", self.name, shards.len());
         shards.push(self);
@@ -161,6 +192,17 @@ impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
         // Write individual vectors
         for row in &self.data {
             row.save(&mut handle)?;
+        }
+
+        // Write number of metadata
+        let num_metadata = self.metadata.as_ref().map_or(0, Vec::len).to_le_bytes();
+        handle.write_all(&num_metadata).map_err(|e| e.to_string())?;
+
+        // Write metadata
+        if let Some(metadata) = &self.metadata {
+            for meta in metadata {
+                meta.save(&mut handle)?;
+            }
         }
 
         Ok(())
@@ -231,12 +273,29 @@ impl<I: Instance, U: Number> Dataset<I, U> for VecDataset<I, U> {
             .map(|_| I::load(&mut handle))
             .collect::<Result<Vec<_>, _>>()?;
 
+        // Read the number of metadata
+        let num_metadata = {
+            let mut num_metadata_buf = vec![0; usize::num_bytes()];
+            handle.read_exact(&mut num_metadata_buf).map_err(|e| e.to_string())?;
+            <usize as Number>::from_le_bytes(&num_metadata_buf)
+        };
+
+        let metadata = if num_metadata == 0 {
+            None
+        } else {
+            let metadata = (0..num_metadata)
+                .map(|_| M::load(&mut handle))
+                .collect::<Result<Vec<_>, _>>()?;
+            Some(metadata)
+        };
+
         Ok(Self {
             name,
             data,
             metric,
             is_expensive,
             permuted_indices: permutation,
+            metadata,
         })
     }
 }

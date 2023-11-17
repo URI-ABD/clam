@@ -93,3 +93,56 @@ impl Instance for String {
         "String".to_string()
     }
 }
+
+impl Instance for bool {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![<u8 as From<_>>::from(*self)]
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String>
+    where
+        Self: Sized,
+    {
+        if bytes.len() == 1 {
+            Ok(bytes[0] != 0)
+        } else {
+            Err(format!("Expected 1 byte, got {}", bytes.len()))
+        }
+    }
+
+    fn type_name() -> String {
+        "bool".to_string()
+    }
+}
+
+/// Macro to implement `Instance` for all `Number` types from `distances`.
+///
+/// This for using these types as metadata.
+macro_rules! impl_instance_number {
+    ($($ty:ty),*) => {
+        $(
+            impl Instance for $ty {
+                fn to_bytes(&self) -> Vec<u8> {
+                    self.to_le_bytes().to_vec()
+                }
+
+                fn from_bytes(bytes: &[u8]) -> Result<Self, String>
+                where
+                    Self: Sized,
+                {
+                    if bytes.len() == <$ty as Number>::num_bytes() {
+                        Ok(<$ty as Number>::from_le_bytes(bytes))
+                    } else {
+                        Err(format!("Expected {} bytes, got {}", <$ty as Number>::num_bytes(), bytes.len()))
+                    }
+                }
+
+                fn type_name() -> String {
+                    stringify!($ty).to_string()
+                }
+            }
+        )*
+    }
+}
+
+impl_instance_number!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64);
