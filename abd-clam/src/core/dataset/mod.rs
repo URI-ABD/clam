@@ -199,6 +199,23 @@ pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Ou
         left.iter().map(|&l| self.one_to_many(l, right)).collect()
     }
 
+    /// Returns a vector of distances between the given pairs of indexed instances.
+    ///
+    /// # Arguments
+    ///
+    /// * `index_pairs` - A slice of pairs of indices in the dataset.
+    ///
+    /// # Returns
+    ///
+    /// A vector of distances between the given pairs of instances.
+    fn pairs(&self, index_pairs: &[(usize, usize)]) -> Vec<U> {
+        if self.is_metric_expensive() {
+            index_pairs.par_iter().map(|&(l, r)| self.one_to_one(l, r)).collect()
+        } else {
+            index_pairs.iter().map(|&(l, r)| self.one_to_one(l, r)).collect()
+        }
+    }
+
     /// Returns a vector of distances between all pairs of indexed instances.
     ///
     /// # Arguments
@@ -209,9 +226,28 @@ pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Ou
     ///
     /// A vector of vectors of distances between all pairs of instances at `indices`
     fn pairwise(&self, indices: &[usize]) -> Vec<Vec<U>> {
-        // TODO: Don't repeat the work of having to calculate the metric twice
-        // for each pair.
-        self.many_to_many(indices, indices)
+        let n = indices.len();
+        let mut matrix = vec![vec![U::zero(); n]; n];
+
+        for (i, &p) in indices.iter().enumerate() {
+            let index_pairs = indices.iter().skip(i + 1).map(|&q| (p, q)).collect::<Vec<_>>();
+            let distances = self.pairs(&index_pairs);
+            distances
+                .into_iter()
+                .enumerate()
+                .map(|(j, d)| (j + i + 1, d))
+                .for_each(|(j, d)| {
+                    matrix[i][j] = d;
+                    matrix[j][i] = d;
+                });
+        }
+
+        // compute the diagonal for non-metrics
+        let index_pairs = indices.iter().map(|&p| (p, p)).collect::<Vec<_>>();
+        let distances = self.pairs(&index_pairs);
+        distances.into_iter().enumerate().for_each(|(i, d)| matrix[i][i] = d);
+
+        matrix
     }
 
     /// Calculates the distance between a query and an indexed instance in the dataset.
