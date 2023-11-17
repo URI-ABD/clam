@@ -212,7 +212,7 @@ pub fn make_reports(
         );
 
         let data_name = format!("{}-{}", dataset.name(), multiplier + 1);
-        let data = VecDataset::new(data_name, data, metric, false);
+        let data = VecDataset::new(data_name, data, metric, false, None);
         let criteria = PartitionCriteria::default();
 
         let start = Instant::now();
@@ -310,7 +310,7 @@ pub fn make_reports(
 /// * A vector of the hits for each query.
 /// * The throughput of the algorithm.
 fn measure_algorithm<'a>(
-    cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32>>,
+    cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32, bool>>,
     queries: &'a [&Vec<f32>],
     k: usize,
     algorithm: knn::Algorithm,

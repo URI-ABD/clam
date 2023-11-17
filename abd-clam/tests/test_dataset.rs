@@ -15,8 +15,15 @@ fn reordering() {
     for i in 0..10 {
         let reference_data =
             symagen::random_data::random_tabular_seedable::<u32>(cardinality, dimensionality, 0, 100_000, i);
+        let metadata = reference_data.iter().map(|x| x[0] > 50_000).collect::<Vec<_>>();
         for _ in 0..10 {
-            let mut dataset = VecDataset::new(format!("test-{i}"), reference_data.clone(), utils::euclidean_sq, false);
+            let mut dataset = VecDataset::new(
+                format!("test-{i}"),
+                reference_data.clone(),
+                utils::euclidean_sq,
+                false,
+                Some(metadata.clone()),
+            );
             let mut new_indices = (0..cardinality).collect::<Vec<_>>();
             new_indices.shuffle(&mut rand::thread_rng());
 
@@ -35,7 +42,7 @@ fn original_indices() {
     let permuted_data = permutation.iter().map(|&i| data[i].clone()).collect::<Vec<_>>();
     // let permuted_data = vec![vec![4], vec![8], vec![10], vec![2], vec![12], vec![6]];
 
-    let mut dataset = VecDataset::new("test".to_string(), data, utils::euclidean_sq, false);
+    let mut dataset = VecDataset::<_, _, bool>::new("test".to_string(), data, utils::euclidean_sq, false, None);
     dataset.permute_instances(&permutation).unwrap();
 
     assert_eq!(dataset.data(), permuted_data);
@@ -49,7 +56,7 @@ fn original_indices() {
 #[test]
 fn save_load_tiny() {
     let metric = utils::euclidean_sq::<u32>;
-    let mut data = utils::gen_dataset_from(vec![vec![1, 2, 3, 4, 5], vec![6, 7, 8, 9, 10]], metric);
+    let mut data = utils::gen_dataset_from(vec![vec![1, 2, 3, 4, 5], vec![6, 7, 8, 9, 10]], metric, None);
 
     let indices = (0..data.cardinality()).rev().collect::<Vec<_>>();
     data.permute_instances(&indices).unwrap();
@@ -58,7 +65,7 @@ fn save_load_tiny() {
     let tmp_file = tmp_dir.path().join("dataset.save");
     data.save(&tmp_file).unwrap();
 
-    let other = VecDataset::load(&tmp_file, metric, false).unwrap();
+    let other = VecDataset::<_, _, bool>::load(&tmp_file, metric, false).unwrap();
 
     assert_eq!(other.data(), data.data());
     assert_eq!(other.permuted_indices(), data.permuted_indices());
@@ -78,14 +85,14 @@ fn save_load(cardinality: usize, dimensionality: usize) {
             symagen::random_data::random_tabular_seedable::<u32>(cardinality, dimensionality, 0, 100_000, i);
         let tmp_file = tmp_dir.path().join(format!("dataset_{}.save", i));
 
-        let mut dataset = VecDataset::new("test".to_string(), reference_data, metric, false);
+        let mut dataset = VecDataset::<_, _, bool>::new("test".to_string(), reference_data, metric, false, None);
         if i % 2 == 0 {
             let indices = (0..dataset.cardinality()).rev().collect::<Vec<_>>();
             dataset.permute_instances(&indices).unwrap();
         }
         dataset.save(&tmp_file).unwrap();
 
-        let other = VecDataset::<Vec<u32>, u32>::load(&tmp_file, metric, false).unwrap();
+        let other = VecDataset::<Vec<u32>, u32, bool>::load(&tmp_file, metric, false).unwrap();
 
         assert_eq!(other.data(), dataset.data());
         assert_eq!(other.name(), dataset.name());
@@ -103,12 +110,12 @@ fn load_errors() {
     let tmp_file = tmp_dir.path().join("dataset.save");
 
     // Construct it with u32
-    let mut dataset = VecDataset::new("test".to_string(), data, utils::euclidean_sq, false);
+    let mut dataset = VecDataset::<_, _, bool>::new("test".to_string(), data, utils::euclidean_sq, false, None);
     let indices = (0..dataset.cardinality()).rev().collect::<Vec<_>>();
     dataset.permute_instances(&indices).unwrap();
     dataset.save(&tmp_file).unwrap();
 
     // Try to load it back in as f32
-    let other = VecDataset::<Vec<f32>, f32>::load(&tmp_file, utils::euclidean, false);
+    let other = VecDataset::<Vec<f32>, f32, bool>::load(&tmp_file, utils::euclidean, false);
     assert!(other.is_err());
 }

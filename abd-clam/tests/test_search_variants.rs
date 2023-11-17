@@ -10,7 +10,8 @@ mod utils;
 #[test]
 fn linear() {
     let data = (-10..=10).map(|i| vec![i.as_f32()]).collect::<Vec<_>>();
-    let data = utils::gen_dataset_from(data, utils::euclidean);
+    let metadata = data.iter().map(|i| i[0] > 0.0).collect::<Vec<_>>();
+    let data = utils::gen_dataset_from(data, utils::euclidean, Some(metadata));
 
     let query = &vec![0.0];
 

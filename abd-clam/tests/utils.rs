@@ -41,19 +41,20 @@ pub fn gen_dataset(
     dimensionality: usize,
     seed: u64,
     metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
-) -> VecDataset<Vec<f32>, f32> {
+) -> VecDataset<Vec<f32>, f32, bool> {
     let data = symagen::random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, -1., 1., seed);
     let name = "test".to_string();
-    VecDataset::new(name, data, metric, false)
+    VecDataset::new(name, data, metric, false, None)
 }
 
 /// Generate a dataset from the given data.
 pub fn gen_dataset_from<T: Number, U: Number>(
     data: Vec<Vec<T>>,
     metric: fn(&Vec<T>, &Vec<T>) -> U,
-) -> VecDataset<Vec<T>, U> {
+    metadata: Option<Vec<bool>>,
+) -> VecDataset<Vec<T>, U, bool> {
     let name = "test".to_string();
-    VecDataset::new(name, data, metric, false)
+    VecDataset::new(name, data, metric, false, metadata)
 }
 
 /// Compute the recall of the nearest neighbors found.
