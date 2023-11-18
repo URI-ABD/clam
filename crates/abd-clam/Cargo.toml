@@ -26,7 +26,7 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { version = "1.6.2", path = "../crates/distances" }
+distances = { version = "1.6.2", path = "../distances" }
 rayon = "1.8.0"
 serde = { version = "1.0.188", features = ["derive"] }
 
@@ -57,7 +57,7 @@ smartcore = "0.2.1"
 
 
 [dev-dependencies]
-symagen = { path = "../crates/SyMaGen" }
+symagen = { path = "../SyMaGen" }
 criterion = { version = "0.5.1", features = ["html_reports"] }
 tempdir = "0.3.7"
 float-cmp = "0.9.0"

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-abd-clam = { path = "../abd-clam" }
+abd-clam = { path = "../crates/abd-clam" }
 distances = { path = "../crates/distances" }
 symagen = { path = "../crates/SyMaGen" }
 

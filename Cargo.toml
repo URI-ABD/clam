@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "abd-clam",
+    "crates/abd-clam",
     "cakes-results",
     # "py-clam",  # TODO: re-enable when we have python bindings
     "crates/distances",
