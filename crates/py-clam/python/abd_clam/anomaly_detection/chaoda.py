@@ -168,7 +168,7 @@ class CHAODA:
         self.build()
         return self.__scores
 
-    def predict_single(self, query: typing.Any) -> float:  # noqa: ANN401
+    def predict_single(self, query: typing.Any) -> float:
         """Predict the anomaly score for a single query."""
         scores = []
         for bowl in self.__bowls:

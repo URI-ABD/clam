@@ -172,7 +172,7 @@ class Cluster:
         return self.__arg_center  # type: ignore[return-value]
 
     @property
-    def center(self) -> typing.Any:  # noqa: ANN401
+    def center(self) -> typing.Any:
         """The (approximate) geometric median of the cluster."""
         if self.__arg_center is constants.UNSET:
             msg = "Please call `build` on the cluster before using this property."
@@ -462,7 +462,7 @@ class Cluster:
             index,
         )
 
-    def distance_to_instance(self, instance: typing.Any) -> float:  # noqa: ANN401
+    def distance_to_instance(self, instance: typing.Any) -> float:
         """Compute the distance from the center of the Cluster to the instance."""
         return self.__metric_space.distance_metric.one_to_one(self.center, instance)
 

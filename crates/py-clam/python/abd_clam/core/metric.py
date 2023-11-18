@@ -63,15 +63,15 @@ class Metric(abc.ABC):
         return self.name
 
     @abc.abstractmethod
-    def one_to_one(self, left: typing.Any, right: typing.Any) -> float:  # noqa: ANN401
+    def one_to_one(self, left: typing.Any, right: typing.Any) -> float:
         """Compute the distance between `left` and `right`."""
         pass
 
     @abc.abstractmethod
     def one_to_many(
         self,
-        left: typing.Any,  # noqa: ANN401
-        right: typing.Any,  # noqa: ANN401
+        left: typing.Any,
+        right: typing.Any,
     ) -> numpy.ndarray:
         """Compute distances from `left` to instances in `right`."""
         pass
@@ -79,14 +79,14 @@ class Metric(abc.ABC):
     @abc.abstractmethod
     def many_to_many(
         self,
-        left: typing.Any,  # noqa: ANN401
-        right: typing.Any,  # noqa: ANN401
+        left: typing.Any,
+        right: typing.Any,
     ) -> numpy.ndarray:
         """Compute distances from instances in `left` to those in `right`."""
         pass
 
     @abc.abstractmethod
-    def pairwise(self, instances: typing.Any) -> numpy.ndarray:  # noqa: ANN401
+    def pairwise(self, instances: typing.Any) -> numpy.ndarray:
         """Compute a 2d array of distances among each pair in `instances`."""
         pass
 
@@ -111,7 +111,7 @@ class ScipyMetric(Metric):
         self,
         left: numpy.ndarray,
         right: numpy.ndarray,
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> float:
         """Compute the distance between `left` and `right`."""
         left = left[None, :]
@@ -122,7 +122,7 @@ class ScipyMetric(Metric):
         self,
         left: numpy.ndarray,
         right: numpy.ndarray,
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> numpy.ndarray:
         """Compute a 1d array of distances.
 
@@ -135,7 +135,7 @@ class ScipyMetric(Metric):
         self,
         left: numpy.ndarray,
         right: numpy.ndarray,
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> numpy.ndarray:
         """Compute a 2d array of distances.
 
@@ -146,7 +146,7 @@ class ScipyMetric(Metric):
     def pairwise(
         self,
         instances: numpy.ndarray,
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> numpy.ndarray:
         """Compute a 2d array of distances among each pair in `instances`."""
         return self.many_to_many(instances, instances, **kwargs)

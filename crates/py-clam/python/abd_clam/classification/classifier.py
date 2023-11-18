@@ -22,7 +22,7 @@ class Classifier:
         self,
         labels: numpy.ndarray,
         metric_spaces: typing.Sequence[core.Space],
-        **kwargs,  # noqa: ANN003
+        **kwargs,
     ) -> None:
         """Creates and initializes a CLAM Classifier.
 
@@ -70,7 +70,7 @@ class Classifier:
 
         return self
 
-    def rank_single(self, query: typing.Any) -> list[tuple[int, float]]:  # noqa: ANN401
+    def rank_single(self, query: typing.Any) -> list[tuple[int, float]]:
         """Predicts the class rankings for a single query."""
         label_scores = []
         for label, bowl in self.__bowls.items():
@@ -87,7 +87,7 @@ class Classifier:
             label_scores.append(self.rank_single(queries[i]))
         return label_scores
 
-    def predict_single(self, query: typing.Any) -> tuple[int, float]:  # noqa: ANN401
+    def predict_single(self, query: typing.Any) -> tuple[int, float]:
         """Predicts the label for a single query."""
         label_scores = self.rank_single(query)
         best_label, best_score = min(label_scores, key=operator.itemgetter(1))

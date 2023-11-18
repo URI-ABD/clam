@@ -18,8 +18,8 @@ class MetaMLModel(abc.ABC):
 
     def __init__(
         self,
-        model_class: typing.Any,  # noqa: ANN401
-        **kwargs,  # noqa: ANN003
+        model_class: typing.Any,
+        **kwargs,
     ) -> None:
         """Creates a model and initializes it with the given key-word arguments."""
         self.model = model_class(**kwargs)
@@ -31,7 +31,7 @@ class MetaMLModel(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def fit(self, *args, **kwargs) -> "MetaMLModel":  # noqa: ANN002,ANN003
+    def fit(self, *args, **kwargs) -> "MetaMLModel":
         """Fits the model."""
         pass
 
@@ -43,8 +43,8 @@ class MetaMLModel(abc.ABC):
     @abc.abstractmethod
     def extract_python(
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,
+        **kwargs,
     ) -> tuple[list[str], str]:
         """Extracts the scoring function as a string which can be written to disk.
 

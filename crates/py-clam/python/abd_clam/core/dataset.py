@@ -23,7 +23,7 @@ class Dataset(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def data(self) -> typing.Any:  # noqa: ANN401
+    def data(self) -> typing.Any:
         """Returns the underlying data."""
         pass
 
@@ -59,7 +59,7 @@ class Dataset(abc.ABC):
     def __getitem__(
         self,
         item: typing.Union[int, typing.Iterable[int]],
-    ) -> typing.Any:  # noqa: ANN401
+    ) -> typing.Any:
         """Returns the instance(s) at the given index/indices."""
         pass
 

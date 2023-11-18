@@ -96,4 +96,4 @@ class TestSearch(unittest.TestCase):
         missing_depths = depths.union(depth_range) - depths.intersection(depth_range)
         assert (
             len(missing_depths) == 0
-        ), f"history should contain clusters from every depth. Did not contain: {missing_depths}"
+        ), f"history should contain clusters from every depth. Did not contain: {missing_depths}"  # noqa: E501

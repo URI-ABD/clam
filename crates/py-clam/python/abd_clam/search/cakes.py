@@ -98,7 +98,7 @@ class CAKES:
 
     def rnn_search(
         self,
-        query_instance: typing.Any,  # noqa: ANN401
+        query_instance: typing.Any,
         search_radius: float,
     ) -> IndexedHits:
         """Performs rho-nearest neighbors search around query with given radius.
@@ -123,7 +123,7 @@ class CAKES:
 
     def knn_search(
         self,
-        query_instance: typing.Any,  # noqa: ANN401
+        query_instance: typing.Any,
         k: int,
     ) -> IndexedHits:
         """Performs k-nearest neighbors search around query.
@@ -183,7 +183,7 @@ class CAKES:
 
     def tree_search(
         self,
-        query_instance: typing.Any,  # noqa: ANN401
+        query_instance: typing.Any,
         search_radius: float,
     ) -> list[cluster.Cluster]:
         """Performs tree-search for the query, starting at the root.
@@ -205,7 +205,7 @@ class CAKES:
 
     def tree_search_history(
         self,
-        query_instance: typing.Any,  # noqa: ANN401
+        query_instance: typing.Any,
         search_radius: float,
     ) -> tuple[ClusterHits, list[cluster.Cluster]]:
         """Performs tree-search for the query, starting at the root.
@@ -245,7 +245,7 @@ class CAKES:
 
     def leaf_search(
         self,
-        query_instance: typing.Any,  # noqa: ANN401
+        query_instance: typing.Any,
         search_radius: float,
         candidate_clusters: list[cluster.Cluster],
     ) -> IndexedHits:
