@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-abd-clam = { path = "../crates/abd-clam" }
-distances = { path = "../crates/distances" }
-symagen = { path = "../crates/SyMaGen" }
+abd-clam = { path = "../abd-clam" }
+distances = { path = "../distances" }
+symagen = { path = "../SyMaGen" }
 
 ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-npy = "0.8.1"
