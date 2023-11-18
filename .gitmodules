@@ -1,3 +1,0 @@
-[submodule "py-clam"]
-	path = crates/py-clam
-	url = https://github.com/URI-ABD/py-clam
