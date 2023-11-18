@@ -3,7 +3,6 @@ fail_fast: true
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
@@ -35,7 +34,7 @@ repos:
     rev: '23.3.0'
     hooks:
       - id: black
-        language_version: python3.9
+        language_version: python3.12
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: 'v0.0.272'

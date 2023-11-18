@@ -1,0 +1,22 @@
+VERSION 0.7
+FROM ../+chef-cook
+
+ARG --required DIR
+WORKDIR /usr/local/src/crates/$DIR
+CACHE ./target/
+
+test:
+    RUN cargo test
+
+publish:
+    ARG --required EARTHLY_PUSH
+    IF [ "$EARTHLY_PUSH" = "true" ]
+        ARG --required CARGO_REGISTRY_TOKEN
+        ENV CARGO_REGISTRY_TOKEN
+        RUN cargo publish
+    ELSE
+        RUN cargo publish --dry-run
+    END
+
+bash:
+    RUN --interactive bash
