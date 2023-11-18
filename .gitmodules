@@ -2,7 +2,7 @@
 	path = crates/distances
 	url = https://github.com/URI-ABD/distances.git
 [submodule "SyMaGen"]
-	path = SyMaGen
+	path = crates/SyMaGen
 	url = https://github.com/morganprior/SyMaGen.git
 [submodule "py-clam"]
 	path = py-clam
