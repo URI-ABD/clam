@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 abd-clam = { path = "../abd-clam" }
-distances = { path = "../distances" }
+distances = { path = "../crates/distances" }
 symagen = { path = "../SyMaGen" }
 
 ndarray = { version = "0.15.6", features = ["rayon"] }

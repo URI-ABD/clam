@@ -1,5 +1,5 @@
 [submodule "distances"]
-	path = distances
+	path = crates/distances
 	url = https://github.com/URI-ABD/distances.git
 [submodule "SyMaGen"]
 	path = SyMaGen
