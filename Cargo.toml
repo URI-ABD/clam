@@ -4,7 +4,7 @@ members = [
     "cakes-results",
     # "py-clam",  # TODO: re-enable when we have python bindings
     "crates/distances",
-    "SyMaGen"
+    "crates/SyMaGen"
 ]
 resolver = "2"
 
