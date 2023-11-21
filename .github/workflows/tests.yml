@@ -36,12 +36,13 @@ jobs:
       matrix:
         # TODO: Add macos-latest after figuring cc linker issue for symagen in github actions
         os: ["ubuntu-latest", "windows-latest", ] # "macos-latest"]
+        rust: ["stable"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - name: Setup | Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.rust }}
       - name: Clam | Tests
         run: cargo test --release --package abd-clam
