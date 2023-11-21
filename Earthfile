@@ -8,9 +8,8 @@ RUN rustup component add \
     clippy
 
 RUN cargo install \
-    cargo-chef
-
-RUN cargo install cross --git  https://github.com/cross-rs/cross
+    cargo-chef \
+    jaq
 
 chef-prepare:
     COPY --dir crates Cargo.lock Cargo.toml .
@@ -43,6 +42,7 @@ test:
 
 cross-test:
     FROM +fmt
+    RUN cargo install cross --git  https://github.com/cross-rs/cross
     WITH DOCKER
         RUN cross test --target aarch64-unknown-linux-gnu --all-features
     END
