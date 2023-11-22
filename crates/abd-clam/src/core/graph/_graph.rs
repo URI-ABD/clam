@@ -597,19 +597,6 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Arguments
     ///
-    /// * `c`: The cluster for which you want to determine the vertex degree.
-    ///
-    /// # Panics
-    ///
-    /// * If the specified cluster is not present in the graph.
-    // pub fn unchecked_vertex_degree(&'a self, c: &Cluster<U>) -> usize {
-    //     self.unchecked_neighbors_of(c).len()
-    // }
-
-    /// Returns the vertex degree (number of neighbors) of a given cluster.
-    ///
-    /// # Arguments
-    ///
     /// * `c`: The cluster for which the vertex degree is calculated.
     ///
     /// # Returns
@@ -625,21 +612,6 @@ impl<'a, U: Number> Graph<'a, U> {
             Err(e) => Err(e),
         }
     }
-
-    /// Returns a reference to the set of neighbors of a given cluster.
-    ///
-    /// # Arguments
-    ///
-    /// * `c`: The cluster for which neighbors are retrieved.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the specified cluster is not present in the graph.
-    // pub fn unchecked_neighbors_of(&'a self, c: &Cluster<U>) -> Result<&ClusterSet<U>, String> {
-    //     self.adjacency_map
-    //         .get(c)
-    //         .ok_or_else(|| format!("Cluster {} not found in adjacency_map", c))
-    // }
 
     /// Returns a reference to the set of neighbors of a given cluster.
     ///
@@ -702,51 +674,6 @@ impl<'a, U: Number> Graph<'a, U> {
         Ok((visited, frontier_sizes))
     }
 
-    /// Traverses the graph starting from the given cluster and returns visited clusters and frontier sizes as a `Result`.
-    ///
-    /// # Arguments
-    ///
-    /// * `start`: The cluster from which the graph traversal starts.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing a tuple of visited clusters and a vector of frontier sizes.
-    ///
-    /// # Errors
-    ///
-    /// If the given start cluster is not part of the graph.
-    // #[allow(clippy::type_complexity)]
-    // pub fn traverse(&'a self, start: &'a Cluster<U>) -> Result<(ClusterSet<U>, Vec<usize>), String> {
-    //     self.assert_contains(start)?;
-    //     Ok(self.unchecked_traverse(start))
-    // }
-
-    /// Returns the frontier sizes for a given cluster.
-    ///
-    /// The frontier sizes represent the number of clusters encountered at each level of traversal
-    /// starting from the given cluster. It is calculated and returned as a reference.
-    ///
-    /// # Panics
-    ///
-    /// * If `with_eccentricities` is not called before using this method
-    ///
-    /// # Arguments
-    ///
-    /// * `c`: The cluster for which frontier sizes are calculated.
-    ///
-    /// # Returns
-    ///
-    /// A reference to a slice of frontier sizes.
-    // pub const fn unchecked_frontier_sizes(&'a self, _c: &'a Cluster<U>) -> &[usize] {
-    //     todo!()
-    //
-    //     // self.frontier_sizes
-    //     //     .as_ref()
-    //     //     .expect("Please call `with_eccentricities` before using this method.")
-    //     //     .get(c)
-    //     //     .unwrap()
-    // }
-
     /// Retrieves the frontier sizes for a specified cluster.
     ///
     /// Frontier sizes indicate the number of clusters encountered at each level of traversal
@@ -776,18 +703,6 @@ impl<'a, U: Number> Graph<'a, U> {
             },
         )?)
     }
-
-    /// Returns the eccentricity of a given cluster as a `Result`.
-    ///
-    /// The eccentricity is calculated as the length of the frontier sizes starting from the given cluster.
-    ///
-    /// Panics:
-    ///
-    /// * If the specified cluster is not present in the graph.
-
-    // pub const fn unchecked_eccentricity(&'a self, c: &'a Cluster<U>) -> usize {
-    //     self.unchecked_frontier_sizes(c).len()
-    // }
 
     /// Calculates the eccentricity of a specified cluster.
     ///
