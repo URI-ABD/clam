@@ -27,7 +27,7 @@ pub use crate::{
     core::{
         cluster::{Cluster, PartitionCriteria, PartitionCriterion, Tree},
         dataset::{Dataset, Instance, VecDataset},
-        graph::{Edge, Graph},
+        graph::{builder, ClusterSet, Edge, EdgeSet, Graph},
     },
 };
 
