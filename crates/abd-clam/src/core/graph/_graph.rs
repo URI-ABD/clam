@@ -195,8 +195,7 @@ pub struct Graph<'a, U: Number> {
 
 impl<'a, U: Number> Graph<'a, U> {
     /// Create a new `Graph` from the given `clusters` and `edges`. The easiest
-    /// and most efficient way to construct a graph is from methods in
-    /// `Manifold`.
+    /// and most efficient way to construct a graph is from methods in `Manifold`.
     ///
     /// # Arguments
     ///
@@ -205,45 +204,58 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A new `Graph` instance constructed from the provided clusters and edges.
-    #[must_use]
-    pub fn new(_clusters: &ClusterSet<'a, U>, _edges: &EdgeSet<'a, U>) -> Self {
-        todo!()
+    /// Returns a `Result` with a new `Graph` instance constructed from the provided clusters and edges
+    /// if the operation succeeds. Otherwise, returns an `Err` containing an error message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the provided `clusters` set is empty, indicating that a graph cannot be
+    /// created with no clusters. Also returns an error if an edge refers to a cluster that is not in
+    /// the `clusters` set.
+    pub fn new(clusters: ClusterSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
+        if clusters.is_empty() {
+            return Err("Cannot create a graph with no clusters.".to_string());
+        }
 
-        // assert!(!clusters.is_empty());
-        //
-        // let (population, min_depth, max_depth) =
-        //     clusters
-        //         .iter()
-        //         .fold((0, usize::MAX, 0), |(population, min_depth, max_depth), &c| {
-        //             (
-        //                 population + c.cardinality(),
-        //                 std::cmp::min(min_depth, c.depth()),
-        //                 std::cmp::max(max_depth, c.depth()),
-        //             )
-        //         });
-        //
-        // let adjacency_map = {
-        //     let mut adjacency_map: AdjacencyMap<U> = clusters.iter().map(|&c| (c, HashSet::new())).collect();
-        //     edges.iter().for_each(|&e| {
-        //         adjacency_map.get_mut(e.left()).unwrap().insert(e.right());
-        //         adjacency_map.get_mut(e.right()).unwrap().insert(e.left());
-        //     });
-        //     adjacency_map
-        // };
-        //
-        // Self {
-        //     ordered_clusters: clusters.iter().copied().collect(),
-        //     clusters,
-        //     edges,
-        //     adjacency_map,
-        //     population,
-        //     min_depth,
-        //     max_depth,
-        //     distance_matrix: None,
-        //     adjacency_matrix: None,
-        //     frontier_sizes: None,
-        // }
+        let (population, min_depth, max_depth) =
+            clusters
+                .iter()
+                .fold((0, usize::MAX, 0), |(population, min_depth, max_depth), &c| {
+                    (
+                        population + c.cardinality(),
+                        std::cmp::min(min_depth, c.depth()),
+                        std::cmp::max(max_depth, c.depth()),
+                    )
+                });
+
+        let adjacency_map = {
+            let mut adjacency_map: AdjacencyMap<U> = clusters.iter().map(|&c| (c, HashSet::new())).collect();
+            for &e in &edges {
+                adjacency_map
+                    .get_mut(e.left())
+                    .ok_or_else(|| format!("Left cluster not found: {:?}", e.left()))?
+                    .insert(e.right());
+
+                adjacency_map
+                    .get_mut(e.right())
+                    .ok_or_else(|| format!("Right cluster not found: {:?}", e.right()))?
+                    .insert(e.left());
+            }
+            adjacency_map
+        };
+
+        Ok(Self {
+            ordered_clusters: clusters.iter().copied().collect(),
+            clusters,
+            edges,
+            adjacency_map,
+            population,
+            min_depth,
+            max_depth,
+            distance_matrix: None,
+            adjacency_matrix: None,
+            frontier_sizes: None,
+        })
     }
 
     /// Computes the distance matrix for the clusters in the graph.
@@ -258,16 +270,19 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// A two-dimensional vector representing the distance matrix.
     fn compute_distance_matrix(&self) -> Vec<Vec<U>> {
-        todo!()
-        // let indices: HashMap<_, _> = self.ordered_clusters.iter().enumerate().map(|(i, &c)| (c, i)).collect();
-        // let mut matrix: Vec<Vec<U>> = vec![vec![U::zero(); self.vertex_cardinality()]; self.vertex_cardinality()];
-        // self.edges.iter().for_each(|&e| {
-        //     let i = *indices.get(e.left()).unwrap();
-        //     let j = *indices.get(e.right()).unwrap();
-        //     matrix[i][j] = e.distance();
-        //     matrix[j][i] = e.distance();
-        // });
-        // matrix
+        let indices: HashMap<_, _> = self.ordered_clusters.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+        let mut matrix: Vec<Vec<U>> = vec![vec![U::zero(); self.vertex_cardinality()]; self.vertex_cardinality()];
+        self.edges.iter().for_each(|&e| {
+            let i = *indices
+                .get(e.left())
+                .unwrap_or_else(|| unreachable!("We asserted all clusters are in the edge set when building the graph"));
+            let j = *indices
+                .get(e.right())
+                .unwrap_or_else(|| unreachable!("We asserted all clusters are in the edge set when building the graph"));
+            matrix[i][j] = e.distance();
+            matrix[j][i] = e.distance();
+        });
+        matrix
     }
 
     /// Computes the distance matrix for the `Graph` and stores it as an
@@ -294,12 +309,18 @@ impl<'a, U: Number> Graph<'a, U> {
     /// This method panics if called before `with_distance_matrix`.
     #[must_use]
     pub fn with_adjacency_matrix(mut self) -> Self {
-        self.adjacency_matrix = Some(
-            self.distance_matrix()
-                .iter()
-                .map(|row| row.iter().map(|&v| v != U::zero()).collect())
-                .collect(),
-        );
+        self.adjacency_matrix = match self.distance_matrix() {
+            Ok(distance_matrix) => Some(
+                distance_matrix
+                    .iter()
+                    .map(|row| row.iter().map(|&v| v == U::zero()).collect())
+                    .collect(),
+            ),
+            Err(err) => {
+                format!("Error getting distance_matrix: {err}");
+                None
+            }
+        };
         self
     }
 
@@ -311,28 +332,20 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// A new `Graph` instance with added eccentricity information.
     #[must_use]
-    pub fn with_eccentricities(&'a self) -> Self {
-        todo!()
+    pub fn with_eccentricities(mut self) -> Self {
+        self.frontier_sizes = Some(
+            self.clusters
+                .iter()
+                .map(|&c| {
+                    let eccentricity = self
+                        .traverse(c)
+                        .unwrap_or_else(|_| unreachable!("Clusters are guaranteed to be in the graph"));
+                    (c, eccentricity.1)
+                })
+                .collect(),
+        );
 
-        // let frontier_sizes = Some(
-        //     self.clusters
-        //         .iter()
-        //         .map(|&c| (c, self.unchecked_traverse(c).1))
-        //         .collect(),
-        // );
-        //
-        // Self {
-        //     clusters: self.clusters.clone(),
-        //     edges: self.edges.clone(),
-        //     adjacency_map: self.adjacency_map.clone(),
-        //     population: self.population,
-        //     min_depth: self.min_depth,
-        //     max_depth: self.max_depth,
-        //     ordered_clusters: self.ordered_clusters.clone(),
-        //     distance_matrix: self.distance_matrix.clone(),
-        //     adjacency_matrix: self.adjacency_matrix.clone(),
-        //     frontier_sizes,
-        // }
+        self
     }
 
     /// Finds and returns connected component clusters within the graph.
@@ -342,26 +355,28 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A vector of sets where each set represents a connected component of clusters.
+    /// A `Result` where `Ok` contains a vector of sets where each set represents a connected component of clusters,
+    /// and `Err` contains an error message if there's an issue during the computation.
     #[must_use]
     pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, U>> {
-        todo!()
+        let mut components = Vec::new();
 
-        // let mut components = Vec::new();
-        //
-        // let mut unvisited = self.clusters.clone();
-        // while !unvisited.is_empty() {
-        //     let &start = unvisited.iter().next().unwrap();
-        //     let (visited, _) = self.unchecked_traverse(start);
-        //
-        //     // TODO: bench this using `unvisited.retain(|c| !visited.contains(c))`
-        //     unvisited = unvisited.into_iter().filter(|&c| !visited.contains(c)).collect();
-        //
-        //     // TODO: Also grab adjacency map, distance matrix, and adjacency matrix
-        //     components.push(visited);
-        // }
-        //
-        // components
+        let mut unvisited = self.clusters.clone();
+        while !unvisited.is_empty() {
+            let &start = unvisited
+                .iter()
+                .next()
+                .unwrap_or_else(|| (unreachable!("loop guarantees unvisited is not empty")));
+            let (visited, _) = self
+                .traverse(start)
+                .unwrap_or_else(|_| (unreachable!("Clusters are guaranteed to be in the graph")));
+
+            unvisited.retain(|&c| !visited.contains(c));
+
+            // TODO: Also grab adjacency map, distance matrix, and adjacency matrix
+            components.push(visited);
+        }
+        components
     }
 
     /// Returns a reference to the set of clusters in the graph.
@@ -498,14 +513,18 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A reference to the distance matrix, which is a 2D vector of the specified number type.
-    #[must_use]
-    pub const fn distance_matrix(&self) -> &[Vec<U>] {
-        todo!()
-
-        // self.distance_matrix
-        //     .as_ref()
-        //     .expect("Please call `with_distance_matrix` on the Graph before using `distance_matrix`.")
+    /// A `Result` where:
+    /// - `Ok` contains a reference to the distance matrix, which is a 2D vector of the specified number type.
+    /// - `Err` contains an error message if `with_distance_matrix` was not called before using this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error message if the distance matrix is not available, indicating that `with_distance_matrix`
+    /// should be called before using this method.
+    pub fn distance_matrix(&self) -> Result<&[Vec<U>], String> {
+        Ok(self.distance_matrix.as_ref().ok_or_else(|| {
+            "Please call `with_distance_matrix` on the Graph before using `distance_matrix`.".to_string()
+        })?)
     }
 
     /// Returns a reference to the adjacency matrix of the graph.
@@ -515,14 +534,18 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A reference to the adjacency matrix, which is a 2D vector of booleans.
-    #[must_use]
-    pub const fn adjacency_matrix(&self) -> &[Vec<bool>] {
-        todo!()
-
-        // self.adjacency_matrix
-        //     .as_ref()
-        //     .expect("Please call `with_adjacency_matrix` on the Graph before using `adjacency_matrix`.")
+    /// A `Result` where:
+    /// - `Ok` contains a reference to the adjacency matrix, which is a 2D vector of booleans.
+    /// - `Err` contains an error message if `with_adjacency_matrix` was not called before using this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error message if the adjacency matrix is not available, indicating that `with_adjacency_matrix`
+    /// should be called before using this method.
+    pub fn adjacency_matrix(&self) -> Result<&[Vec<bool>], String> {
+        Ok(self.adjacency_matrix.as_ref().ok_or_else(|| {
+            "Please call `with_adjacency_matrix` on the Graph before using `adjacency_matrix`.".to_string()
+        })?)
     }
 
     /// Calculates and returns the diameter of the graph.
@@ -533,14 +556,19 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Returns
     ///
     /// The diameter of the graph as a `usize` value.
-    #[must_use]
-    pub const fn diameter(&'a self) -> usize {
-        todo!()
-        // self.clusters
-        //     .iter()
-        //     .map(|&c| self.unchecked_eccentricity(c))
-        //     .max()
-        //     .unwrap()
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is an issue computing eccentricity for any cluster, or if there are no clusters in the graph.
+    pub fn diameter(&'a self) -> Result<usize, String> {
+        self.clusters
+            .iter()
+            .map(|&c| {
+                self.eccentricity(c)
+                    .map_err(|e| format!("Error computing eccentricity: {e}"))
+            })
+            .max()
+            .ok_or_else(|| "No clusters in the graph".to_string())?
     }
 
     /// Asserts whether a given cluster is contained within the graph.
@@ -574,9 +602,9 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Panics
     ///
     /// * If the specified cluster is not present in the graph.
-    pub fn unchecked_vertex_degree(&'a self, c: &Cluster<U>) -> usize {
-        self.unchecked_neighbors_of(c).len()
-    }
+    // pub fn unchecked_vertex_degree(&'a self, c: &Cluster<U>) -> usize {
+    //     self.unchecked_neighbors_of(c).len()
+    // }
 
     /// Returns the vertex degree (number of neighbors) of a given cluster.
     ///
@@ -592,8 +620,10 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// If the specified cluster is not present in the graph.
     pub fn vertex_degree(&'a self, c: &Cluster<U>) -> Result<usize, String> {
-        self.assert_contains(c)?;
-        Ok(self.unchecked_vertex_degree(c))
+        match self.neighbors_of(c) {
+            Ok(neighbors) => Ok(neighbors.len()),
+            Err(e) => Err(e),
+        }
     }
 
     /// Returns a reference to the set of neighbors of a given cluster.
@@ -605,10 +635,11 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Panics
     ///
     /// Panics if the specified cluster is not present in the graph.
-    pub fn unchecked_neighbors_of(&'a self, _c: &Cluster<U>) -> &ClusterSet<U> {
-        todo!()
-        // self.adjacency_map.get(c).unwrap()
-    }
+    // pub fn unchecked_neighbors_of(&'a self, c: &Cluster<U>) -> Result<&ClusterSet<U>, String> {
+    //     self.adjacency_map
+    //         .get(c)
+    //         .ok_or_else(|| format!("Cluster {} not found in adjacency_map", c))
+    // }
 
     /// Returns a reference to the set of neighbors of a given cluster.
     ///
@@ -624,8 +655,9 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// Returns an error if the given cluster is not present in the graph.
     pub fn neighbors_of(&'a self, c: &Cluster<U>) -> Result<&ClusterSet<U>, String> {
-        self.assert_contains(c)?;
-        Ok(self.unchecked_neighbors_of(c))
+        self.adjacency_map
+            .get(c)
+            .ok_or_else(|| format!("Cluster {c} not found in adjacency_map"))
     }
 
     /// Performs an unchecked traverse of the graph starting from the given cluster and returns visited clusters and frontier sizes.
@@ -645,26 +677,29 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Panics
     ///
     /// * If the start cluster is not present in the graph.
-    pub fn unchecked_traverse(&'a self, _start: &'a Cluster<U>) -> (ClusterSet<U>, Vec<usize>) {
-        todo!()
+    pub fn traverse(&'a self, start: &'a Cluster<U>) -> Result<(ClusterSet<U>, Vec<usize>), String> {
+        self.assert_contains(start)?;
 
-        // let mut visited: HashSet<&Cluster<U>> = HashSet::new();
-        // let mut frontier: HashSet<&Cluster<U>> = HashSet::new();
-        // frontier.insert(start);
-        // let mut frontier_sizes: Vec<usize> = Vec::new();
-        //
-        // while !frontier.is_empty() {
-        //     visited.extend(frontier.iter().copied());
-        //     frontier = frontier
-        //         .iter()
-        //         .flat_map(|&c| self.unchecked_neighbors_of(c))
-        //         .filter(|&n| !((visited.contains(n)) || (frontier.contains(n))))
-        //         .copied()
-        //         .collect();
-        //     frontier_sizes.push(frontier.len());
-        // }
-        //
-        // (visited, frontier_sizes)
+        let mut visited: HashSet<&Cluster<U>> = HashSet::new();
+        let mut frontier: HashSet<&Cluster<U>> = HashSet::new();
+        frontier.insert(start);
+        let mut frontier_sizes: Vec<usize> = Vec::new();
+
+        while !frontier.is_empty() {
+            visited.extend(frontier.iter().copied());
+            frontier = frontier
+                .iter()
+                .flat_map(|&c| {
+                    self.neighbors_of(c)
+                        .unwrap_or_else(|_| unreachable!("We asserted cluster is in the graph"))
+                })
+                .filter(|&n| !((visited.contains(n)) || (frontier.contains(n))))
+                .copied()
+                .collect();
+            frontier_sizes.push(frontier.len());
+        }
+
+        Ok((visited, frontier_sizes))
     }
 
     /// Traverses the graph starting from the given cluster and returns visited clusters and frontier sizes as a `Result`.
@@ -680,11 +715,11 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Errors
     ///
     /// If the given start cluster is not part of the graph.
-    #[allow(clippy::type_complexity)]
-    pub fn traverse(&'a self, start: &'a Cluster<U>) -> Result<(ClusterSet<U>, Vec<usize>), String> {
-        self.assert_contains(start)?;
-        Ok(self.unchecked_traverse(start))
-    }
+    // #[allow(clippy::type_complexity)]
+    // pub fn traverse(&'a self, start: &'a Cluster<U>) -> Result<(ClusterSet<U>, Vec<usize>), String> {
+    //     self.assert_contains(start)?;
+    //     Ok(self.unchecked_traverse(start))
+    // }
 
     /// Returns the frontier sizes for a given cluster.
     ///
@@ -702,15 +737,15 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Returns
     ///
     /// A reference to a slice of frontier sizes.
-    pub const fn unchecked_frontier_sizes(&'a self, _c: &'a Cluster<U>) -> &[usize] {
-        todo!()
-
-        // self.frontier_sizes
-        //     .as_ref()
-        //     .expect("Please call `with_eccentricities` before using this method.")
-        //     .get(c)
-        //     .unwrap()
-    }
+    // pub const fn unchecked_frontier_sizes(&'a self, _c: &'a Cluster<U>) -> &[usize] {
+    //     todo!()
+    //
+    //     // self.frontier_sizes
+    //     //     .as_ref()
+    //     //     .expect("Please call `with_eccentricities` before using this method.")
+    //     //     .get(c)
+    //     //     .unwrap()
+    // }
 
     /// Retrieves the frontier sizes for a specified cluster.
     ///
@@ -731,7 +766,15 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     pub fn frontier_sizes(&'a self, c: &'a Cluster<U>) -> Result<&[usize], String> {
         self.assert_contains(c)?;
-        Ok(self.unchecked_frontier_sizes(c))
+
+        Ok(self.frontier_sizes.as_ref().map_or_else(
+            || Err("Please call with_eccentricities before using this method".to_string()),
+            |sizes| {
+                sizes
+                    .get(c)
+                    .ok_or_else(|| unreachable!("We asserted cluster is in the graph"))
+            },
+        )?)
     }
 
     /// Returns the eccentricity of a given cluster as a `Result`.
@@ -742,9 +785,9 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// * If the specified cluster is not present in the graph.
 
-    pub const fn unchecked_eccentricity(&'a self, c: &'a Cluster<U>) -> usize {
-        self.unchecked_frontier_sizes(c).len()
-    }
+    // pub const fn unchecked_eccentricity(&'a self, c: &'a Cluster<U>) -> usize {
+    //     self.unchecked_frontier_sizes(c).len()
+    // }
 
     /// Calculates the eccentricity of a specified cluster.
     ///
@@ -760,9 +803,11 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Errors
     ///
-    /// If the specified cluster is not part of the graph, an error message is returned.
+    /// If the specified cluster is not part of the graph or if `with_eccentricities` was not called, an error message is returned.
     pub fn eccentricity(&'a self, c: &'a Cluster<U>) -> Result<usize, String> {
-        self.assert_contains(c)?;
-        Ok(self.unchecked_eccentricity(c))
+        self.frontier_sizes(c).map_or_else(
+            |_| Err("Please call with_eccentricities before using this method".to_string()),
+            |frontier_sizes| Ok(frontier_sizes.len()),
+        )
     }
 }
