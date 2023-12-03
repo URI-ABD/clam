@@ -1,14 +1,15 @@
+use crate::core::graph::EdgeSet;
 use crate::{Cluster, ClusterSet, Dataset, Edge, Instance};
 use distances::Number;
 use std::collections::HashSet;
 
 /// Filler function to select clusters for graph
-/// TODO! Replace with proper cluster selection algorithm
-pub fn select_clusters<U: Number>(root: &Cluster<U>) -> ClusterSet<U> {
-    let height = root.depth();
+#[allow(dead_code)]
+pub fn select_clusters<U: Number>(root: &Cluster<U>, depth: usize) -> ClusterSet<U> {
+    // TODO! Replace with proper cluster selection algorithm
     let mut selected_clusters = ClusterSet::new();
     for c in root.subtree() {
-        if c.depth() == height / 2 {
+        if c.depth() == depth / 2 {
             selected_clusters.insert(c);
         }
     }
@@ -29,13 +30,13 @@ pub fn select_clusters<U: Number>(root: &Cluster<U>) -> ClusterSet<U> {
 /// # Returns
 ///
 /// A `HashSet` containing the detected edges, represented by `Edge` instances.
-/// TODO! Refactor for better performance
-/// TODO! Generalize over different hashers?...
-#[allow(clippy::implicit_hasher)]
+#[allow(clippy::implicit_hasher, dead_code)]
 pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
     clusters: &ClusterSet<'a, U>,
     data: &D,
-) -> HashSet<Edge<'a, U>> {
+) -> EdgeSet<'a, U> {
+    // TODO! Refactor for better performance
+    // TODO! Generalize over different hashers?...
     let mut edges = HashSet::new();
     for (i, c1) in clusters.iter().enumerate() {
         for (j, c2) in clusters.iter().enumerate().skip(i + 1) {

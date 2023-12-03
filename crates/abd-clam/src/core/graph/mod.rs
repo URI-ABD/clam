@@ -5,6 +5,7 @@ mod _graph;
 pub mod builder;
 pub mod criteria;
 
-#[allow(unused_imports)]
-pub use _graph::{ClusterSet, Edge, EdgeSet, Graph};
+pub use _graph::{ClusterSet, EdgeSet};
+pub use _graph::{Edge, Graph};
+
 pub use criteria::MetaMLScorer;
