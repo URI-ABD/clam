@@ -27,9 +27,11 @@ pub use crate::{
     core::{
         cluster::{Cluster, PartitionCriteria, PartitionCriterion, Tree},
         dataset::{Dataset, Instance, VecDataset},
-        graph::{builder, ClusterSet, Edge, EdgeSet, Graph},
+        graph::{Edge, Graph},
     },
 };
 
+#[allow(unused_imports)]
+pub(crate) use crate::core::graph::{builder, ClusterSet, EdgeSet};
 /// The current version of the crate.
 pub const VERSION: &str = "0.26.0";
