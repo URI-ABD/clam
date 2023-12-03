@@ -725,7 +725,7 @@ impl<'a, U: Number> Graph<'a, U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{EdgeSet, Graph, PartitionCriteria, Tree, VecDataset};
+    use crate::{Graph, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
 
