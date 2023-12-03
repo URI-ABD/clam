@@ -9,7 +9,7 @@ pub fn select_clusters<U: Number>(root: &Cluster<U>, depth: usize) -> ClusterSet
     // TODO! Replace with proper cluster selection algorithm
     let mut selected_clusters = ClusterSet::new();
     for c in root.subtree() {
-        if c.depth() == depth / 2 {
+        if c.depth() == depth {
             selected_clusters.insert(c);
         }
     }
