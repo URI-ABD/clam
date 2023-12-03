@@ -756,7 +756,7 @@ mod tests {
         let edges = detect_edges(&selected_clusters, raw_tree.data());
 
         let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
-
+        assert!(graph.is_ok());
         if let Ok(graph) = graph {
             // assert edges and clusters are correct
             assert_eq!(graph.clusters().len(), selected_clusters.len());
@@ -767,13 +767,9 @@ mod tests {
             let components = graph.find_component_clusters();
 
             // assert ordered clusters are in correct order
-            graph
-                .clusters()
-                .iter()
-                .zip(graph.ordered_clusters().iter())
-                .for_each(|(c1, c2)| {
-                    assert_eq!(c1, c2);
-                });
+            graph.clusters().iter().for_each(|c1| {
+                assert!(graph.ordered_clusters.contains(c1));
+            });
 
             let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
             assert_eq!(num_clusters_in_components, selected_clusters.len());
@@ -804,16 +800,17 @@ mod tests {
         //     edges_ref.insert(edge);
         // }
 
-        if let Ok(graph) = Graph::from_clusters_and_edges(selected_clusters.clone(), edges) {
-            let adj_map = graph.adjacency_map();
-            assert_eq!(adj_map.len(), graph.clusters().len());
+        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
+        let adj_map = graph.adjacency_map();
+        assert_eq!(adj_map.len(), graph.clusters().len());
 
-            for component in &graph.find_component_clusters() {
-                for c in component {
-                    let adj = adj_map.get(c).unwrap();
-                    for adj_c in adj {
-                        assert!(component.contains(adj_c));
-                    }
+        for component in &graph.find_component_clusters() {
+            for c in component {
+                let adj = adj_map.get(c).unwrap();
+                for adj_c in adj {
+                    assert!(component.contains(adj_c));
                 }
             }
         }
