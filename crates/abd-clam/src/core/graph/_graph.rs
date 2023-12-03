@@ -11,7 +11,7 @@ use crate::core::cluster::Cluster;
 pub type ClusterSet<'a, U> = HashSet<&'a Cluster<U>>;
 
 /// A set of edges with references to edges in a graph.
-pub type EdgeSet<'a, U> = HashSet<&'a Edge<'a, U>>;
+pub type EdgeSet<'a, U> = HashSet<Edge<'a, U>>;
 
 /// A map that represents the adjacency relationship between clusters.
 pub type AdjacencyMap<'a, U> = HashMap<&'a Cluster<U>, ClusterSet<'a, U>>;
@@ -108,7 +108,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// A reference to the `Cluster` at the left end of the `Edge`.
-    pub const fn left(&self) -> &Cluster<U> {
+    pub const fn left(&self) -> &'a Cluster<U> {
         self.left
     }
 
@@ -117,7 +117,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// A reference to the `Cluster` at the right end of the `Edge`.
-    pub const fn right(&self) -> &Cluster<U> {
+    pub const fn right(&self) -> &'a Cluster<U> {
         self.right
     }
 
@@ -194,13 +194,12 @@ pub struct Graph<'a, U: Number> {
 }
 
 impl<'a, U: Number> Graph<'a, U> {
-    /// Create a new `Graph` from the given `clusters` and `edges`. The easiest
-    /// and most efficient way to construct a graph is from methods in `Manifold`.
+    /// Creates a new `Graph` from the provided set of `clusters` and `edges`.
     ///
     /// # Arguments
     ///
-    /// * `clusters`: The set of `Cluster`s with which to build the `Graph`.
-    /// * `edges`: The set of `Edge`s with which to build the `Graph`.
+    /// * `clusters`: The set of `Cluster`s used to build the `Graph`.
+    /// * `edges`: The set of `Edge`s used to build the `Graph`.
     ///
     /// # Returns
     ///
@@ -209,10 +208,12 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the provided `clusters` set is empty, indicating that a graph cannot be
-    /// created with no clusters. Also returns an error if an edge refers to a cluster that is not in
-    /// the `clusters` set.
-    pub fn new(clusters: ClusterSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
+    /// This function returns an error under the following conditions:
+    ///
+    /// - If the provided `clusters` set is empty, indicating that a graph cannot be created with no clusters.
+    /// - If an edge refers to a cluster that is not in the `clusters` set.
+    ///
+    pub fn from_clusters_and_edges(clusters: ClusterSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
         if clusters.is_empty() {
             return Err("Cannot create a graph with no clusters.".to_string());
         }
@@ -230,7 +231,7 @@ impl<'a, U: Number> Graph<'a, U> {
 
         let adjacency_map = {
             let mut adjacency_map: AdjacencyMap<U> = clusters.iter().map(|&c| (c, HashSet::new())).collect();
-            for &e in &edges {
+            for e in &edges {
                 adjacency_map
                     .get_mut(e.left())
                     .ok_or_else(|| format!("Left cluster not found: {:?}", e.left()))?
@@ -243,15 +244,17 @@ impl<'a, U: Number> Graph<'a, U> {
             }
             adjacency_map
         };
+        let mut ordered_clusters: Vec<&'a Cluster<U>> = clusters.iter().copied().collect();
+        ordered_clusters.sort();
 
         Ok(Self {
-            ordered_clusters: clusters.iter().copied().collect(),
             clusters,
             edges,
             adjacency_map,
             population,
             min_depth,
             max_depth,
+            ordered_clusters,
             distance_matrix: None,
             adjacency_matrix: None,
             frontier_sizes: None,
@@ -272,7 +275,7 @@ impl<'a, U: Number> Graph<'a, U> {
     fn compute_distance_matrix(&self) -> Vec<Vec<U>> {
         let indices: HashMap<_, _> = self.ordered_clusters.iter().enumerate().map(|(i, &c)| (c, i)).collect();
         let mut matrix: Vec<Vec<U>> = vec![vec![U::zero(); self.vertex_cardinality()]; self.vertex_cardinality()];
-        self.edges.iter().for_each(|&e| {
+        self.edges.iter().for_each(|e| {
             let i = *indices
                 .get(e.left())
                 .unwrap_or_else(|| unreachable!("We asserted all clusters are in the edge set when building the graph"));
@@ -309,18 +312,14 @@ impl<'a, U: Number> Graph<'a, U> {
     /// This method panics if called before `with_distance_matrix`.
     #[must_use]
     pub fn with_adjacency_matrix(mut self) -> Self {
-        self.adjacency_matrix = match self.distance_matrix() {
-            Ok(distance_matrix) => Some(
+        if let Some(distance_matrix) = self.distance_matrix() {
+            self.adjacency_matrix = Some(
                 distance_matrix
                     .iter()
-                    .map(|row| row.iter().map(|&v| v == U::zero()).collect())
+                    .map(|row| row.iter().map(|&v| v != U::zero()).collect())
                     .collect(),
-            ),
-            Err(err) => {
-                format!("Error getting distance_matrix: {err}");
-                None
-            }
-        };
+            );
+        }
         self
     }
 
@@ -513,18 +512,15 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A `Result` where:
-    /// - `Ok` contains a reference to the distance matrix, which is a 2D vector of the specified number type.
-    /// - `Err` contains an error message if `with_distance_matrix` was not called before using this method.
+    /// An `Option` containing:
+    /// - `Some` with a reference to the distance matrix, which is a 2D vector of the specified number type,
+    ///   if `with_distance_matrix` was called before using this method.
+    /// - `None` if the distance matrix is not available, indicating that `with_distance_matrix`
+    ///   should be called before using this method.
     ///
-    /// # Errors
-    ///
-    /// Returns an error message if the distance matrix is not available, indicating that `with_distance_matrix`
-    /// should be called before using this method.
-    pub fn distance_matrix(&self) -> Result<&[Vec<U>], String> {
-        Ok(self.distance_matrix.as_ref().ok_or_else(|| {
-            "Please call `with_distance_matrix` on the Graph before using `distance_matrix`.".to_string()
-        })?)
+    #[must_use]
+    pub fn distance_matrix(&self) -> Option<&[Vec<U>]> {
+        self.distance_matrix.as_deref()
     }
 
     /// Returns a reference to the adjacency matrix of the graph.
@@ -724,5 +720,102 @@ impl<'a, U: Number> Graph<'a, U> {
             |_| Err("Please call with_eccentricities before using this method".to_string()),
             |frontier_sizes| Ok(frontier_sizes.len()),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{EdgeSet, Graph, PartitionCriteria, Tree, VecDataset};
+    use distances::number::Float;
+    use distances::Number;
+
+    use crate::builder::{detect_edges, select_clusters};
+
+    /// Generate a dataset with the given cardinality and dimensionality.
+    pub fn gen_dataset(
+        cardinality: usize,
+        dimensionality: usize,
+        seed: u64,
+        metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
+    ) -> VecDataset<Vec<f32>, f32, bool> {
+        let data = symagen::random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, -1., 1., seed);
+        let name = "test".to_string();
+        VecDataset::new(name, data, metric, false, None)
+    }
+    /// Euclidean distance between two vectors.
+    pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
+        distances::vectors::euclidean(x, y)
+    }
+    #[test]
+    fn create_graph() {
+        let data = gen_dataset(1000, 10, 42, euclidean);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        let selected_clusters = select_clusters(raw_tree.root(), 4);
+
+        let edges = detect_edges(&selected_clusters, raw_tree.data());
+
+        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
+
+        if let Ok(graph) = graph {
+            // assert edges and clusters are correct
+            assert_eq!(graph.clusters().len(), selected_clusters.len());
+            assert_eq!(graph.edges().len(), edges.len());
+
+            let reference_population = selected_clusters.iter().fold(0, |acc, &c| acc + c.cardinality());
+            assert_eq!(graph.population(), reference_population);
+            let components = graph.find_component_clusters();
+
+            // assert ordered clusters are in correct order
+            graph
+                .clusters()
+                .iter()
+                .zip(graph.ordered_clusters().iter())
+                .for_each(|(c1, c2)| {
+                    assert_eq!(c1, c2);
+                });
+
+            let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
+            assert_eq!(num_clusters_in_components, selected_clusters.len());
+
+            // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
+            for component in &components {
+                for c in component {
+                    if let Ok(traversal_result) = graph.traverse(c) {
+                        assert_eq!(traversal_result.0.len(), component.len());
+                        // assert_eq!(traversal_result.1.len(), component.len());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adjacency_map() {
+        let data = gen_dataset(1000, 10, 42, euclidean);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        let selected_clusters = select_clusters(raw_tree.root(), 4);
+
+        let edges = detect_edges(&selected_clusters, raw_tree.data());
+
+        // let mut edges_ref = EdgeSet::new();
+        // for edge in edges.iter() {
+        //     edges_ref.insert(edge);
+        // }
+
+        if let Ok(graph) = Graph::from_clusters_and_edges(selected_clusters.clone(), edges) {
+            let adj_map = graph.adjacency_map();
+            assert_eq!(adj_map.len(), graph.clusters().len());
+
+            for component in &graph.find_component_clusters() {
+                for c in component {
+                    let adj = adj_map.get(c).unwrap();
+                    for adj_c in adj {
+                        assert!(component.contains(adj_c));
+                    }
+                }
+            }
+        }
     }
 }
