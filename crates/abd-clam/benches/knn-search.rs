@@ -1,5 +1,6 @@
 use criterion::*;
 
+use rand::prelude::*;
 use symagen::random_data;
 
 use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
@@ -20,7 +21,13 @@ fn cakes(c: &mut Criterion) {
     let (cardinality, dimensionality) = (100_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
-    let data = random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, min_val, max_val, seed);
+    let data = random_data::random_tabular_floats(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
+    );
 
     let query = vec![0.0; dimensionality];
 

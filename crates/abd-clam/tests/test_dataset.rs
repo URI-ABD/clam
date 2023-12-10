@@ -13,8 +13,13 @@ fn reordering() {
     let dimensionality = 10;
 
     for i in 0..10 {
-        let reference_data =
-            symagen::random_data::random_tabular_seedable::<u32>(cardinality, dimensionality, 0, 100_000, i);
+        let reference_data = symagen::random_data::random_tabular_integers(
+            cardinality,
+            dimensionality,
+            0,
+            100_000,
+            &mut rand::rngs::StdRng::seed_from_u64(i),
+        );
         let metadata = reference_data.iter().map(|x| x[0] > 50_000).collect::<Vec<_>>();
         for _ in 0..10 {
             let mut dataset = VecDataset::new(
@@ -81,8 +86,13 @@ fn save_load(cardinality: usize, dimensionality: usize) {
     let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
 
     for i in 0..5 {
-        let reference_data =
-            symagen::random_data::random_tabular_seedable::<u32>(cardinality, dimensionality, 0, 100_000, i);
+        let reference_data = symagen::random_data::random_tabular_integers(
+            cardinality,
+            dimensionality,
+            0,
+            100_000,
+            &mut rand::rngs::StdRng::seed_from_u64(i),
+        );
         let tmp_file = tmp_dir.path().join(format!("dataset_{}.save", i));
 
         let mut dataset = VecDataset::<_, _, bool>::new("test".to_string(), reference_data, metric, false, None);

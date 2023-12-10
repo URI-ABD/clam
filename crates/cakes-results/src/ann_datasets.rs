@@ -1,5 +1,7 @@
 //! Data sets for the ANN experiments.
 
+use rand::prelude::*;
+
 /// The data sets to use for the experiments.
 ///
 /// TODO: Add functions to read from hdf5 files.
@@ -126,20 +128,21 @@ impl AnnDatasets {
             let dimensionality = *d;
             let (min_val, max_val) = (-1.0, 1.0);
             let seed = 42;
+            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-            let train_data = symagen::random_data::random_tabular_seedable(
+            let train_data = symagen::random_data::random_tabular_floats(
                 1_000_000,
                 dimensionality,
                 min_val,
                 max_val,
-                seed,
+                &mut rng,
             );
-            let test_data = symagen::random_data::random_tabular_seedable(
+            let test_data = symagen::random_data::random_tabular_floats(
                 10_000,
                 dimensionality,
                 min_val,
                 max_val,
-                seed + 1,
+                &mut rng,
             );
 
             [train_data, test_data]

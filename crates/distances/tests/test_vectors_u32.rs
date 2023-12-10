@@ -1,5 +1,6 @@
 use core::f32::EPSILON;
 
+use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
@@ -57,12 +58,12 @@ fn lp_u32() {
     let (cardinality, dimensionality) = (100, 10_000);
     let (min_val, max_val) = (0, 10_000);
 
-    let data = random_data::random_tabular_seedable::<u32>(
+    let data = random_data::random_tabular_integers(
         cardinality,
         dimensionality,
         min_val,
         max_val,
-        seed,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
     );
 
     for x in data.iter() {

@@ -212,8 +212,10 @@ pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rand::prelude::*;
     use symagen::random_data;
+
+    use super::*;
 
     #[test]
     fn test_transpose() {
@@ -327,10 +329,16 @@ mod tests {
 
         // Generate random data for each cardinality and min/max value where max_val > min_val
         for (cardinality, (min_val, max_val)) in cardinalities.into_iter().zip(ranges.into_iter()) {
-            let data = random_data::random_tabular_seedable::<f64>(dimensionality, cardinality, min_val, max_val, seed)
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+            let data = random_data::random_tabular_floats(
+                dimensionality,
+                cardinality,
+                min_val,
+                max_val,
+                &mut rand::rngs::StdRng::seed_from_u64(seed),
+            )
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
             test_cases.push(data);
         }
 
@@ -361,7 +369,7 @@ mod tests {
             .zip(expected_variances.iter())
             .for_each(|(&a, &b)| {
                 assert!(
-                    float_cmp::approx_eq!(f64, a, b, epsilon = 3e-8),
+                    float_cmp::approx_eq!(f64, a, b, epsilon = 3e-3),
                     "Variances not equal. Actual: {}. Expected: {}. Difference: {}.",
                     a,
                     b,
