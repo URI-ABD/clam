@@ -1,6 +1,7 @@
 use core::cmp::Ordering;
 
 use criterion::*;
+use rand::prelude::*;
 use rayon::prelude::*;
 use symagen::random_data;
 
@@ -17,10 +18,22 @@ fn cakes(c: &mut Criterion) {
     let (cardinality, dimensionality) = (1_000_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
-    let data = random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, min_val, max_val, seed);
+    let data = random_data::random_tabular_floats(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
+    );
 
     let num_queries = 100;
-    let queries = random_data::random_tabular_seedable::<f32>(num_queries, dimensionality, min_val, max_val, seed + 1);
+    let queries = random_data::random_tabular_floats(
+        num_queries,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed + 1),
+    );
     let queries = queries.iter().collect::<Vec<_>>();
 
     for &(metric_name, metric) in METRICS {

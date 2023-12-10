@@ -2,6 +2,7 @@
 
 use criterion::{measurement, *};
 
+use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
@@ -38,12 +39,12 @@ fn big_f32(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_tabular_seedable(
+        let data = random_data::random_tabular_floats(
             cardinality,
             dimensionality,
             min_val,
             max_val,
-            d as u64,
+            &mut rand::rngs::StdRng::seed_from_u64(d as u64),
         );
 
         for &(name, metric) in metrics {
@@ -70,12 +71,12 @@ fn big_u32(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_tabular_seedable(
+        let data = random_data::random_tabular_integers(
             cardinality,
             dimensionality,
             min_val,
             max_val,
-            d as u64,
+            &mut rand::rngs::StdRng::seed_from_u64(d as u64),
         );
 
         let id = BenchmarkId::new("L1", dimensionality);

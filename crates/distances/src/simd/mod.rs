@@ -195,6 +195,8 @@ impl Vectorized for &Vec<f64> {
 
 #[cfg(test)]
 mod test {
+    use rand::prelude::*;
+
     use super::*;
 
     pub const XS: [f32; 72] = [
@@ -249,7 +251,13 @@ mod test {
         let input_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
 
         for i in input_sizes {
-            let data = random_data::random_tabular_seedable(2, i, -10_f32, 10.0, 42);
+            let data = random_data::random_tabular_floats(
+                2,
+                i,
+                -10_f32,
+                10.0,
+                &mut rand::rngs::StdRng::seed_from_u64(42),
+            );
             let (a, b) = (&data[0], &data[1]);
 
             let diff = (vector_euclidean(a, b) - scalar_euclidean(a, b)).abs();

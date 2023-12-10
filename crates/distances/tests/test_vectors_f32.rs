@@ -1,5 +1,6 @@
 use core::f32::EPSILON;
 
+use rand::prelude::*;
 use symagen::random_data;
 
 use distances::vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan};
@@ -47,12 +48,12 @@ fn lp_f32() {
     let (cardinality, dimensionality) = (100, 10_000);
     let (min_val, max_val) = (-10., 10.);
 
-    let data = random_data::random_tabular_seedable::<f32>(
+    let data = random_data::random_tabular_floats(
         cardinality,
         dimensionality,
         min_val,
         max_val,
-        seed,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
     );
 
     for x in data.iter() {

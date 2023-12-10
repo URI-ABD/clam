@@ -13,6 +13,7 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 
 ```rust
 use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
+use rand::prelude::*;
 
 /// The distance function with with to perform clustering and search.
 ///
@@ -29,14 +30,15 @@ fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
 /// We use the `symagen` crate for generating interesting datasets for examples
 /// and tests.
 let seed = 42;
+let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1.0, 1.0);
-let data: Vec<Vec<f32>> = symagen::random_data::random_tabular_seedable(
+let data: Vec<Vec<f32>> = symagen::random_data::random_tabular_floats(
     cardinality,
     dimensionality,
     min_val,
     max_val,
-    seed,
+    &mut rng,
 );
 
 // We will generate some random labels for each point.

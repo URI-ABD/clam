@@ -1,4 +1,5 @@
 use criterion::*;
+use rand::prelude::*;
 use symagen::random_data;
 
 use distances::simd;
@@ -12,12 +13,12 @@ fn simd_f32(c: &mut Criterion) {
 
     for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_tabular_seedable(
+        let vecs = random_data::random_tabular_floats(
             cardinality,
             dimensionality,
             min_val,
             max_val,
-            d as u64,
+            &mut rand::rngs::StdRng::seed_from_u64(d as u64),
         );
 
         let id = BenchmarkId::new("L2-generic", dimensionality);
@@ -50,12 +51,12 @@ fn simd_f64(c: &mut Criterion) {
 
     for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_tabular_seedable(
+        let vecs = random_data::random_tabular_floats(
             cardinality,
             dimensionality,
             min_val,
             max_val,
-            d as u64,
+            &mut rand::rngs::StdRng::seed_from_u64(d as u64),
         );
 
         let id = BenchmarkId::new("L2-generic", dimensionality);
