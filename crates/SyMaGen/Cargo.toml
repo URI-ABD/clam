@@ -1,6 +1,6 @@
 [package]
 name = "symagen"
-version = "0.2.2"
+version = "0.3.0"
 authors = [
     "Morgan Prior <meprior424@gmail.com>",
     "Najib Ishaq <najib_ishaq@zoho.com>",
@@ -21,7 +21,7 @@ name = "symagen"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-distances = "1.6.1"
+distances = { version = "1.6.2", path = "../distances" }
 rand = "0.8.4"
 rayon = "1.8.0"
 
