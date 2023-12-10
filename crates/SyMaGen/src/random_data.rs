@@ -1,38 +1,9 @@
 //! Generate random data for use in benchmarks and tests.
 
-use distances::Number;
+use distances::number::{Float, Int};
 use rand::prelude::*;
 
-/// Generate a randomized tabular dataset for use in benchmarks and tests with a
-/// given seed.
-///
-/// This uses the `rand` crate's `StdRng` as the random number generator.
-///
-/// # Arguments:
-///
-/// * `cardinality`: number of points to generate.
-/// * `dimensionality`: dimensionality of points to generate.
-/// * `min_val`: of each axis in the hypercube.
-/// * `max_val`: of each axis in the hypercube.
-/// * `seed`: for the random number generator.
-#[must_use]
-pub fn random_tabular_seedable<T: Number>(
-    cardinality: usize,
-    dimensionality: usize,
-    min_val: T,
-    max_val: T,
-    seed: u64,
-) -> Vec<Vec<T>> {
-    random_tabular(
-        cardinality,
-        dimensionality,
-        min_val,
-        max_val,
-        &mut rand::rngs::StdRng::seed_from_u64(seed),
-    )
-}
-
-/// Generate a randomized tabular dataset for use in benchmarks and tests.
+/// Generate a randomized tabular dataset of integers for use in benchmarks and tests.
 ///
 /// # Arguments:
 ///
@@ -42,7 +13,7 @@ pub fn random_tabular_seedable<T: Number>(
 /// * `max_val`: of each axis in the hypercube.
 /// * `rng`: random number generator.
 #[must_use]
-pub fn random_tabular<T: Number, R: Rng>(
+pub fn random_tabular_integers<T: Int, R: Rng>(
     cardinality: usize,
     dimensionality: usize,
     min_val: T,
@@ -54,6 +25,33 @@ pub fn random_tabular<T: Number, R: Rng>(
         .map(|_| {
             (0..dimensionality)
                 .map(|_| min_val + T::next_random(rng) % diff)
+                .collect()
+        })
+        .collect()
+}
+
+/// Generate a randomized tabular dataset of floats for use in benchmarks and tests.
+///
+/// # Arguments:
+///
+/// * `cardinality`: number of points to generate.
+/// * `dimensionality`: dimensionality of points to generate.
+/// * `min_val`: of each axis in the hypercube.
+/// * `max_val`: of each axis in the hypercube.
+/// * `rng`: random number generator.
+#[must_use]
+pub fn random_tabular_floats<T: Float, R: Rng>(
+    cardinality: usize,
+    dimensionality: usize,
+    min_val: T,
+    max_val: T,
+    rng: &mut R,
+) -> Vec<Vec<T>> {
+    let diff = max_val - min_val;
+    (0..cardinality)
+        .map(|_| {
+            (0..dimensionality)
+                .map(|_| min_val + T::next_random(rng) * diff)
                 .collect()
         })
         .collect()

@@ -22,9 +22,9 @@ fn simd_distances_f32(
     let mut rng = rand::thread_rng();
 
     let data_x =
-        random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
+        random_data::random_tabular_floats(cardinality, dimensionality, min_val, max_val, &mut rng);
     let data_y =
-        random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
+        random_data::random_tabular_floats(cardinality, dimensionality, min_val, max_val, &mut rng);
     let mut failures = Vec::new();
 
     for (i, x) in data_x.iter().enumerate() {
@@ -63,9 +63,9 @@ fn simd_distances_f64(
     let mut rng = rand::thread_rng();
 
     let data_x =
-        random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
+        random_data::random_tabular_floats(cardinality, dimensionality, min_val, max_val, &mut rng);
     let data_y =
-        random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
+        random_data::random_tabular_floats(cardinality, dimensionality, min_val, max_val, &mut rng);
     let mut failures = Vec::new();
 
     for (i, x) in data_x.iter().enumerate() {

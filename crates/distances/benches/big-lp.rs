@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use criterion::{measurement, *};
-
+use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
@@ -42,12 +42,12 @@ fn big_lp_norms(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_tabular_seedable(
+        let data = random_data::random_tabular_floats(
             cardinality,
             dimensionality,
             min_val,
             max_val,
-            d as u64,
+            &mut rand::rngs::StdRng::seed_from_u64(d as u64),
         );
 
         for (i, &metric) in metrics.iter().enumerate() {
