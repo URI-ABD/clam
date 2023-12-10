@@ -1,0 +1,30 @@
+[package]
+name = "symagen"
+version = "0.2.2"
+authors = [
+    "Morgan Prior <meprior424@gmail.com>",
+    "Najib Ishaq <najib_ishaq@zoho.com>",
+]
+edition = "2021"
+description = "Synthetic manifold generation."
+license = "MIT"
+readme = "README.md"
+
+# Publishing lock.
+# When you're ready to start publishing, set publish to true
+# and update the release github action.
+publish = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "symagen"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+distances = "1.6.1"
+rand = "0.8.4"
+rayon = "1.8.0"
+
+[dependencies.pyo3]
+version = "0.20.0"
+features = ["abi3-py311", "extension-module", "generate-import-lib"]

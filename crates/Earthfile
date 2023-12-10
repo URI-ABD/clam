@@ -1,0 +1,25 @@
+VERSION 0.7
+FROM ../+chef-cook
+
+ARG --global --required DIR
+WORKDIR /usr/local/src/crates/$DIR
+CACHE ./target/
+
+test:
+    RUN cargo test
+
+publish:
+    ARG --required EARTHLY_PUSH
+    RUN curl -s https://crates.io/api/v1/crates/$DIR | jaq -r '.versions[].num' > REMOTE_VERSIONS
+    IF cat REMOTE_VERSIONS | grep -q "$(cat VERSION)"
+        RUN echo "Version $(cat VERSION) already published"
+    ELSE IF [ "$EARTHLY_PUSH" = "true" ]
+        ARG --required CARGO_REGISTRY_TOKEN
+        ENV CARGO_REGISTRY_TOKEN
+        RUN --push cargo publish
+    ELSE
+        RUN cargo publish --dry-run
+    END
+
+bash:
+    RUN --interactive bash

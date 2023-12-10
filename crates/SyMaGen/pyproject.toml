@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+# "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
+features = ["pyo3/extension-module"]
+python-source = "python"
+
+[project]
+name = "symagen"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "bump2version",
+    "pre-commit",
+    "black",
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-sugar",
+    "pytest-xdist",
+    "pytest-cov",
+    "pytest-benchmark",
+]

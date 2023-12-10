@@ -1,0 +1,51 @@
+[package]
+name = "distances"
+version = "1.6.2"
+authors = [
+    "Najib Ishaq <najib_ishaq@zoho.com>",
+    "Noah Daniels <noah_daniels@uri.edu>",
+    "Tom Howard <info@tomhoward.codes>",
+]
+edition = "2021"
+description = "Fast and generic distance functions for high-dimensional data."
+license = "MIT"
+readme = "README.md"
+
+# Publishing lock.
+# When you're ready to start publishing, set publish to true
+# and update the release github action.
+publish = true
+
+[dependencies]
+rand = "0.8.5"
+# libm = "0.2.7"  # no-std
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+symagen = "0.2.1"
+# symagen = { version = "0.2.0", path = "../SyMaGen" }
+test-case = "3.2.1"
+
+[[bench]]
+name = "inv-sqrt"
+harness = false
+
+[[bench]]
+name = "big-vectors"
+harness = false
+
+[[bench]]
+name = "big-lp"
+harness = false
+
+[[bench]]
+name = "big-strings"
+harness = false
+
+[[bench]]
+name = "needleman-wunsch"
+harness = false
+
+[[bench]]
+name = "simd-euclidean"
+harness = false
