@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "abd-clam",
-    "cakes-results",
+    "crates/abd-clam",
+    "crates/cakes-results",
+    "crates/distances",
+    "crates/SyMaGen"
     # "py-clam",  # TODO: re-enable when we have python bindings
-    "distances",
-    "SyMaGen"
 ]
 resolver = "2"
 
