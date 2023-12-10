@@ -8,30 +8,37 @@ This means that the API is not yet stable and breaking changes may occur frequen
 
 ## Prerequisites
 
+- [`rust`](https://www.rust-lang.org/tools/install)
 - [`docker`](https://docs.docker.com/engine/install/)
+  - You will need this to test the CI/CD pipelines locally or to use Earthly to run various project commands.
 - [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
+  - This tool provides binaries you may want to have at hand to work on this repo.
+  - You can see the full list of tools in the `./bin` directory in the repo root.
+  - If you do not want to use hermit, you can install each tool manually.
+  - If you wish to use some tools from hermit, you may execute them directly with `./bin/<tool>`.
+  - (Recommended) If you wish to use all tools provided by earthly, we recommend installing the shell hooks (see [here](https://docs.earthly.dev/guides/shell-hooks) for more information).
 
 ## Getting Started
 
 1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
 2. Clone the repo from your fork.
    1. `git clone ...`
-3. Initialize submodules.
-   1. `git submodule update --init`
-4. Test that things work.
+3. Test that things work.
    1. `cargo test --release`
-5. Install pre-commit hooks
+   2. `earthly +test`
+4. Install pre-commit hooks
    1. `pre-commit install`
-6. Make a new branch.
+   2. `pre-commit run --all-files`
+5. Make a new branch.
    1. Make sure to branch from the head of the `master` branch.
    2. Have a plan and scope in mind for your changes.
    3. You may not have merge commits in your branch because we wish to keep a linear history on the `master` branch. Use `git rebase` to keep your branch up-to-date with the `master` branch.
-7. Make your changes.
+6. Make your changes.
    1. Remember to add tests and documentation.
-8. Bump the version.
+7. Bump the version.
    1. If you need help with this step, please ask.
-9. Commit and push your changes.
-10. Open a pull request.
+8.  Commit and push your changes.
+9.  Open a pull request.
 
 ### Python-Specific Work
 
