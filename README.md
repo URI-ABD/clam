@@ -5,6 +5,10 @@ The Rust implementation of CLAM.
 As of writing this document, the project is still in a pre-1.0 state.
 This means that the API is not yet stable and breaking changes may occur frequently.
 
+> :warning: In December 2023, this project moved to a monorepo structure.
+> While this should have no impact on the end-user, it will impact contributors.
+> Please be aware of these changes and report any issues you may encounter.
+
 ## Benchmarks
 
 ### CAKES: IEEE Big Data 2023
