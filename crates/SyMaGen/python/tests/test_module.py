@@ -6,7 +6,7 @@ import symagen
 
 
 def test_version() -> None:
-    assert symagen.__version__ == "0.2.2"
+    assert symagen.__version__ == "0.3.0"
 
 
 def test_module() -> None:
