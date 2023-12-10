@@ -1,3 +1,3 @@
-# SyMaGen (v0.2.2)
+# SyMaGen (v0.3.0)
 
 Synthetic manifold generation.
