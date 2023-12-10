@@ -12,14 +12,14 @@ RUN cargo install \
     jaq
 
 chef-prepare:
-    COPY --dir crates Cargo.lock Cargo.toml .
+    COPY --dir crates Cargo.toml .
     RUN cargo chef prepare
     SAVE ARTIFACT recipe.json
 
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY --dir crates Cargo.lock Cargo.toml .
+    COPY --dir crates Cargo.toml .
 
 build:
     FROM +chef-cook
