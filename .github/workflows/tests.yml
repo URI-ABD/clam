@@ -6,6 +6,7 @@ on:
     branches-ignore:
       - main
       - master
+      - dev
 
 permissions:
   contents: read

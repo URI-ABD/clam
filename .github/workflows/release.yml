@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-      - refactor/code-reorganization
+      - dev
 
 permissions:
   contents: read
