@@ -38,7 +38,7 @@ clippy:
 
 test:
     FROM +fmt
-    RUN cargo test --lib --bins --examples --tests --all-features
+    RUN cargo test --release --lib --bins --examples --tests --all-features
 
 cross-test:
     FROM +fmt
