@@ -32,6 +32,6 @@ pub use crate::{
 };
 
 #[allow(unused_imports)]
-pub(crate) use crate::core::graph::{builder, ClusterSet, EdgeSet};
+pub(crate) use crate::core::graph::{ClusterSet, EdgeSet};
 /// The current version of the crate.
 pub const VERSION: &str = "0.26.0";

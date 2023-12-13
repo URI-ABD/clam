@@ -2,8 +2,9 @@
 mod _graph;
 ///Helper functions for building graph
 /// Selects clusters and detects edges
-pub mod builder;
+mod cluster_selection;
 pub mod criteria;
+mod utils;
 
 pub use _graph::{ClusterSet, EdgeSet};
 pub use _graph::{Edge, Graph};

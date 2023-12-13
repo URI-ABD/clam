@@ -729,7 +729,8 @@ mod tests {
     use distances::number::Float;
     use distances::Number;
 
-    use crate::builder::{detect_edges, select_clusters};
+    use crate::core::graph::cluster_selection::select_optimal_graph_clusters;
+    use crate::core::graph::utils::detect_edges;
 
     /// Generate a dataset with the given cardinality and dimensionality.
     pub fn gen_dataset(
@@ -751,37 +752,42 @@ mod tests {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let selected_clusters = select_clusters(raw_tree.root(), 4);
+        match select_optimal_graph_clusters(raw_tree.root(), "lr_euclidean_cc".to_string()) {
+            Ok(selected_clusters) => {
+                let edges = detect_edges(&selected_clusters, raw_tree.data());
 
-        let edges = detect_edges(&selected_clusters, raw_tree.data());
+                let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
+                assert!(graph.is_ok());
+                if let Ok(graph) = graph {
+                    // assert edges and clusters are correct
+                    assert_eq!(graph.clusters().len(), selected_clusters.len());
+                    assert_eq!(graph.edges().len(), edges.len());
 
-        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
-        assert!(graph.is_ok());
-        if let Ok(graph) = graph {
-            // assert edges and clusters are correct
-            assert_eq!(graph.clusters().len(), selected_clusters.len());
-            assert_eq!(graph.edges().len(), edges.len());
+                    let reference_population = selected_clusters.iter().fold(0, |acc, &c| acc + c.cardinality());
+                    assert_eq!(graph.population(), reference_population);
+                    let components = graph.find_component_clusters();
 
-            let reference_population = selected_clusters.iter().fold(0, |acc, &c| acc + c.cardinality());
-            assert_eq!(graph.population(), reference_population);
-            let components = graph.find_component_clusters();
+                    // assert ordered clusters are in correct order
+                    graph.clusters().iter().for_each(|c1| {
+                        assert!(graph.ordered_clusters.contains(c1));
+                    });
 
-            // assert ordered clusters are in correct order
-            graph.clusters().iter().for_each(|c1| {
-                assert!(graph.ordered_clusters.contains(c1));
-            });
+                    let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
+                    assert_eq!(num_clusters_in_components, selected_clusters.len());
 
-            let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
-            assert_eq!(num_clusters_in_components, selected_clusters.len());
-
-            // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
-            for component in &components {
-                for c in component {
-                    if let Ok(traversal_result) = graph.traverse(c) {
-                        assert_eq!(traversal_result.0.len(), component.len());
-                        // assert_eq!(traversal_result.1.len(), component.len());
+                    // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
+                    for component in &components {
+                        for c in component {
+                            if let Ok(traversal_result) = graph.traverse(c) {
+                                assert_eq!(traversal_result.0.len(), component.len());
+                                // assert_eq!(traversal_result.1.len(), component.len());
+                            }
+                        }
                     }
                 }
+            }
+            Err(e) => {
+                panic!("Error: {}", e);
             }
         }
     }
@@ -791,27 +797,28 @@ mod tests {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let selected_clusters = select_clusters(raw_tree.root(), 4);
+        match select_optimal_graph_clusters(raw_tree.root(), "lr_euclidean_cc".to_string()) {
+            Ok(selected_clusters) => {
+                let edges = detect_edges(&selected_clusters, raw_tree.data());
 
-        let edges = detect_edges(&selected_clusters, raw_tree.data());
+                let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
+                assert!(graph.is_ok());
+                if let Ok(graph) = graph {
+                    let adjacency_map = graph.adjacency_map();
+                    assert_eq!(adjacency_map.len(), graph.clusters().len());
 
-        // let mut edges_ref = EdgeSet::new();
-        // for edge in edges.iter() {
-        //     edges_ref.insert(edge);
-        // }
-
-        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-        let adj_map = graph.adjacency_map();
-        assert_eq!(adj_map.len(), graph.clusters().len());
-
-        for component in &graph.find_component_clusters() {
-            for c in component {
-                let adj = adj_map.get(c).unwrap();
-                for adj_c in adj {
-                    assert!(component.contains(adj_c));
+                    for component in &graph.find_component_clusters() {
+                        for c in component {
+                            let adj = adjacency_map.get(c).unwrap();
+                            for adj_c in adj {
+                                assert!(component.contains(adj_c));
+                            }
+                        }
+                    }
                 }
+            }
+            Err(e) => {
+                panic!("Error: {}", e);
             }
         }
     }
