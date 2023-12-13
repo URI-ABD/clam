@@ -6,6 +6,9 @@ use distances::Number;
 
 // use crate::core::{cluster::Cluster, dataset::VecDataset};
 use crate::core::cluster::Cluster;
+use crate::core::graph::cluster_selection::select_optimal_graph_clusters;
+use crate::core::graph::utils::detect_edges;
+use crate::{Dataset, Instance, Tree};
 
 /// A set of clusters with references to clusters in a graph.
 pub type ClusterSet<'a, U> = HashSet<&'a Cluster<U>>;
@@ -194,6 +197,38 @@ pub struct Graph<'a, U: Number> {
 }
 
 impl<'a, U: Number> Graph<'a, U> {
+    /// Creates a new `Graph` using an optimal set of clusters and edges based on the provided `tree` and `scoring_function`.
+    ///
+    /// This function internally calls `select_optimal_graph_clusters` to determine the optimal set of clusters based on the provided decision tree (`tree`)
+    /// and the specified scoring function (`scoring_function`). It then uses the detected clusters to invoke `detect_edges` and constructs a new `Graph`
+    /// instance using `from_clusters_and_edges`.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree`: A reference to the decision tree used to derive the graph structure.
+    /// * `scoring_function`: A string specifying the scoring function used for cluster selection.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` with a new `Graph` instance constructed from the optimal clusters and detected edges
+    /// if the operation succeeds. Otherwise, returns an `Err` containing an error message.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error under the following conditions:
+    ///
+    /// - If the optimal set of clusters is empty, indicating that a graph cannot be created with no clusters.
+    /// - If an edge refers to a cluster that is not in the optimal set of clusters.
+    ///
+    pub fn new<I: Instance, D: Dataset<I, U>>(
+        tree: &'a Tree<I, U, D>,
+        scoring_function: &'a str,
+    ) -> Result<Self, String> {
+        let clusters = select_optimal_graph_clusters(tree.root(), scoring_function)?;
+        let edges = detect_edges(&clusters, tree.data());
+        Self::from_clusters_and_edges(clusters, edges)
+    }
+
     /// Creates a new `Graph` from the provided set of `clusters` and `edges`.
     ///
     /// # Arguments
@@ -743,16 +778,18 @@ mod tests {
         let name = "test".to_string();
         VecDataset::new(name, data, metric, false, None)
     }
+
     /// Euclidean distance between two vectors.
     pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
         distances::vectors::euclidean(x, y)
     }
+
     #[test]
     fn create_graph() {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        match select_optimal_graph_clusters(raw_tree.root(), "lr_euclidean_cc".to_string()) {
+        match select_optimal_graph_clusters(raw_tree.root(), "lr_euclidean_cc") {
             Ok(selected_clusters) => {
                 let edges = detect_edges(&selected_clusters, raw_tree.data());
 
@@ -797,7 +834,7 @@ mod tests {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        match select_optimal_graph_clusters(raw_tree.root(), "lr_euclidean_cc".to_string()) {
+        match select_optimal_graph_clusters(raw_tree.root(), "lr_euclidean_cc") {
             Ok(selected_clusters) => {
                 let edges = detect_edges(&selected_clusters, raw_tree.data());
 
@@ -817,6 +854,19 @@ mod tests {
                     }
                 }
             }
+            Err(e) => {
+                panic!("Error: {}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn new_graph() {
+        let data = gen_dataset(1000, 10, 42, euclidean);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        match Graph::new(&raw_tree, "lr_euclidean_cc") {
+            Ok(_graph) => {}
             Err(e) => {
                 panic!("Error: {}", e);
             }

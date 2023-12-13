@@ -374,27 +374,26 @@ fn dt_manhattan_cc(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Sub Graph Cardinality' graph.
-fn dt_manhattan_sc(_ratios: Ratios) -> f64 {
-    todo!()
-    // let [_, radius, _, cardinality_ema, _, lfd_ema] = ratios;
-    // if radius <= 5.148810e-03 {
-    //     7.500000e-01
-    // } else if cardinality_ema <= 6.438965e-01 {
-    //     if lfd_ema <= 9.120842e-01 {
-    //         9.709770e-01
-    //     } else {
-    //         9.303896e-01
-    //     }
-    // } else if lfd_ema <= 8.965069e-01 {
-    //     9.982470e-01
-    // } else {
-    //     9.858773e-01
-    // }
+fn dt_manhattan_sc(ratios: Ratios) -> f64 {
+    let [_, radius, _, cardinality_ema, _, lfd_ema] = ratios;
+    if radius <= 5.148810e-03 {
+        7.500000e-01
+    } else if cardinality_ema <= 6.438965e-01 {
+        if lfd_ema <= 9.120842e-01 {
+            9.709770e-01
+        } else {
+            9.303896e-01
+        }
+    } else if lfd_ema <= 8.965069e-01 {
+        9.982470e-01
+    } else {
+        9.858773e-01
+    }
 }
 
 /// Calculate cluster scores for 'Graph Neighborhood' graph analysis.
@@ -404,32 +403,30 @@ fn dt_manhattan_sc(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Graph Neighborhood' graph.
-fn dt_manhattan_gn(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, _, cardinality_ema, _, _] = ratios;
-    // if radius <= 5.148810e-03 {
-    //     if cardinality <= 2.540494e-02 {
-    //         4.437313e-01
-    //     } else {
-    //         7.500000e-01
-    //     }
-    // } else if cardinality_ema <= 6.354841e-01 {
-    //     if cardinality_ema <= 6.253555e-01 {
-    //         9.625763e-01
-    //     } else {
-    //         8.007593e-01
-    //     }
-    // } else if cardinality_ema <= 8.838843e-01 {
-    //     9.887261e-01
-    // } else {
-    //     9.979190e-01
-    // }
+fn dt_manhattan_gn(ratios: Ratios) -> f64 {
+    let [cardinality, radius, _, cardinality_ema, _, _] = ratios;
+    if radius <= 5.148810e-03 {
+        if cardinality <= 2.540494e-02 {
+            4.437313e-01
+        } else {
+            7.500000e-01
+        }
+    } else if cardinality_ema <= 6.354841e-01 {
+        if cardinality_ema <= 6.253555e-01 {
+            9.625763e-01
+        } else {
+            8.007593e-01
+        }
+    } else if cardinality_ema <= 8.838843e-01 {
+        9.887261e-01
+    } else {
+        9.979190e-01
+    }
 }
 
 /// Calculate cluster scores for 'Parent Cardinality' graph analysis.
@@ -439,38 +436,36 @@ fn dt_manhattan_gn(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Parent Cardinality' graph.
-fn dt_manhattan_cr(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, _, cardinality_ema, _, lfd_ema] = ratios;
-    // if radius <= 1.472459e-02 {
-    //     if cardinality <= 2.505734e-02 {
-    //         if radius <= 1.655350e-04 {
-    //             3.151504e-01
-    //         } else {
-    //             6.447252e-01
-    //         }
-    //     } else if cardinality <= 1.076636e-01 {
-    //         7.414646e-01
-    //     } else {
-    //         9.229898e-01
-    //     }
-    // } else if cardinality <= 5.942344e-01 {
-    //     if lfd_ema <= 9.527803e-01 {
-    //         9.468785e-01
-    //     } else {
-    //         8.911853e-01
-    //     }
-    // } else if cardinality_ema <= 9.790418e-01 {
-    //     9.705729e-01
-    // } else {
-    //     9.989975e-01
-    // }
+fn dt_manhattan_cr(ratios: Ratios) -> f64 {
+    let [cardinality, radius, _, cardinality_ema, _, lfd_ema] = ratios;
+    if radius <= 1.472459e-02 {
+        if cardinality <= 2.505734e-02 {
+            if radius <= 1.655350e-04 {
+                3.151504e-01
+            } else {
+                6.447252e-01
+            }
+        } else if cardinality <= 1.076636e-01 {
+            7.414646e-01
+        } else {
+            9.229898e-01
+        }
+    } else if cardinality <= 5.942344e-01 {
+        if lfd_ema <= 9.527803e-01 {
+            9.468785e-01
+        } else {
+            8.911853e-01
+        }
+    } else if cardinality_ema <= 9.790418e-01 {
+        9.705729e-01
+    } else {
+        9.989975e-01
+    }
 }
 
 /// Calculate cluster scores for 'Stationary Probabilities' graph analysis.
@@ -480,36 +475,34 @@ fn dt_manhattan_cr(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Stationary Probabilities' graph.
-fn dt_manhattan_sp(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [_, radius, _, cardinality_ema, radius_ema, _] = ratios;
-    // if radius <= 2.358828e-04 {
-    //     if radius_ema <= 1.177303e-02 {
-    //         if radius_ema <= 8.709679e-05 {
-    //             1.400713e-01
-    //         } else {
-    //             1.698153e-01
-    //         }
-    //     } else {
-    //         4.245149e-01
-    //     }
-    // } else if cardinality_ema <= 1.807206e-02 {
-    //     if radius_ema <= 7.669807e-01 {
-    //         5.307418e-01
-    //     } else {
-    //         9.984011e-01
-    //     }
-    // } else if cardinality_ema <= 4.135659e-01 {
-    //     9.372930e-01
-    // } else {
-    //     9.907336e-01
-    // }
+fn dt_manhattan_sp(ratios: Ratios) -> f64 {
+    let [_, radius, _, cardinality_ema, radius_ema, _] = ratios;
+    if radius <= 2.358828e-04 {
+        if radius_ema <= 1.177303e-02 {
+            if radius_ema <= 8.709679e-05 {
+                1.400713e-01
+            } else {
+                1.698153e-01
+            }
+        } else {
+            4.245149e-01
+        }
+    } else if cardinality_ema <= 1.807206e-02 {
+        if radius_ema <= 7.669807e-01 {
+            5.307418e-01
+        } else {
+            9.984011e-01
+        }
+    } else if cardinality_ema <= 4.135659e-01 {
+        9.372930e-01
+    } else {
+        9.907336e-01
+    }
 }
 
 /// Calculate cluster scores for 'Vertex Degree' graph analysis.
@@ -519,38 +512,36 @@ fn dt_manhattan_sp(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Vertex Degree' graph.
-fn dt_manhattan_vd(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, _, cardinality_ema, radius_ema, lfd_ema] = ratios;
-    // if radius <= 1.391490e-02 {
-    //     if lfd_ema <= 6.932603e-01 {
-    //         if cardinality <= 1.076636e-01 {
-    //             4.198158e-01
-    //         } else {
-    //             8.463385e-01
-    //         }
-    //     } else if cardinality <= 2.564081e-02 {
-    //         3.269299e-01
-    //     } else {
-    //         7.921413e-01
-    //     }
-    // } else if cardinality_ema <= 7.950329e-01 {
-    //     if cardinality <= 4.997393e-01 {
-    //         9.251187e-01
-    //     } else {
-    //         9.570666e-01
-    //     }
-    // } else if radius_ema <= 4.155880e-01 {
-    //     9.516691e-01
-    // } else {
-    //     9.928017e-01
-    // }
+fn dt_manhattan_vd(ratios: Ratios) -> f64 {
+    let [cardinality, radius, _, cardinality_ema, radius_ema, lfd_ema] = ratios;
+    if radius <= 1.391490e-02 {
+        if lfd_ema <= 6.932603e-01 {
+            if cardinality <= 1.076636e-01 {
+                4.198158e-01
+            } else {
+                8.463385e-01
+            }
+        } else if cardinality <= 2.564081e-02 {
+            3.269299e-01
+        } else {
+            7.921413e-01
+        }
+    } else if cardinality_ema <= 7.950329e-01 {
+        if cardinality <= 4.997393e-01 {
+            9.251187e-01
+        } else {
+            9.570666e-01
+        }
+    } else if radius_ema <= 4.155880e-01 {
+        9.516691e-01
+    } else {
+        9.928017e-01
+    }
 }
 
 /// Calculate cluster scores for 'Cluster Cardinality' graph analysis.
@@ -560,38 +551,36 @@ fn dt_manhattan_vd(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Cluster Cardinality' graph.
-fn dt_euclidean_cc(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, lfd, cardinality_ema, _, lfd_ema] = ratios;
-    // if radius <= 1.067198e-02 {
-    //     if cardinality <= 1.079019e-01 {
-    //         if lfd_ema <= 9.999740e-01 {
-    //             5.265128e-01
-    //         } else {
-    //             8.834613e-01
-    //         }
-    //     } else if cardinality <= 3.330053e-01 {
-    //         8.695605e-01
-    //     } else {
-    //         9.694478e-01
-    //     }
-    // } else if cardinality <= 4.997283e-01 {
-    //     if lfd <= 2.929797e-01 {
-    //         8.696701e-01
-    //     } else {
-    //         9.258335e-01
-    //     }
-    // } else if cardinality_ema <= 7.698584e-01 {
-    //     9.665650e-01
-    // } else {
-    //     9.917949e-01
-    // }
+fn dt_euclidean_cc(ratios: Ratios) -> f64 {
+    let [cardinality, radius, lfd, cardinality_ema, _, lfd_ema] = ratios;
+    if radius <= 1.067198e-02 {
+        if cardinality <= 1.079019e-01 {
+            if lfd_ema <= 9.999740e-01 {
+                5.265128e-01
+            } else {
+                8.834613e-01
+            }
+        } else if cardinality <= 3.330053e-01 {
+            8.695605e-01
+        } else {
+            9.694478e-01
+        }
+    } else if cardinality <= 4.997283e-01 {
+        if lfd <= 2.929797e-01 {
+            8.696701e-01
+        } else {
+            9.258335e-01
+        }
+    } else if cardinality_ema <= 7.698584e-01 {
+        9.665650e-01
+    } else {
+        9.917949e-01
+    }
 }
 
 /// Calculate cluster scores for 'Component (Sub graph) Cardinality' graph analysis.
@@ -601,32 +590,30 @@ fn dt_euclidean_cc(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Component (Sub graph) Cardinality' graph.
-fn dt_euclidean_sc(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, _, cardinality_ema, radius_ema, _] = ratios;
-    // if radius_ema <= 5.111776e-03 {
-    //     if radius <= 9.307770e-05 {
-    //         7.500000e-01
-    //     } else {
-    //         6.997932e-01
-    //     }
-    // } else if cardinality <= 1.494950e-01 {
-    //     if cardinality_ema <= 4.477562e-02 {
-    //         8.816036e-01
-    //     } else {
-    //         9.351654e-01
-    //     }
-    // } else if cardinality_ema <= 6.924688e-01 {
-    //     9.702070e-01
-    // } else {
-    //     9.932433e-01
-    // }
+fn dt_euclidean_sc(ratios: Ratios) -> f64 {
+    let [cardinality, radius, _, cardinality_ema, radius_ema, _] = ratios;
+    if radius_ema <= 5.111776e-03 {
+        if radius <= 9.307770e-05 {
+            7.500000e-01
+        } else {
+            6.997932e-01
+        }
+    } else if cardinality <= 1.494950e-01 {
+        if cardinality_ema <= 4.477562e-02 {
+            8.816036e-01
+        } else {
+            9.351654e-01
+        }
+    } else if cardinality_ema <= 6.924688e-01 {
+        9.702070e-01
+    } else {
+        9.932433e-01
+    }
 }
 
 /// Calculate cluster scores for 'Graph Neighborhood' graph analysis.
@@ -636,32 +623,30 @@ fn dt_euclidean_sc(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Graph Neighborhood' graph.
-fn dt_euclidean_gn(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [_, _, lfd, cardinality_ema, radius_ema, _] = ratios;
-    // if radius_ema <= 2.359367e-05 {
-    //     if lfd <= 3.415343e-01 {
-    //         1.299296e-01
-    //     } else {
-    //         4.405503e-01
-    //     }
-    // } else if cardinality_ema <= 1.619149e-02 {
-    //     if cardinality_ema <= 3.227095e-03 {
-    //         5.649648e-01
-    //     } else {
-    //         7.366586e-01
-    //     }
-    // } else if radius_ema <= 5.773949e-02 {
-    //     8.322585e-01
-    // } else {
-    //     9.700278e-01
-    // }
+fn dt_euclidean_gn(ratios: Ratios) -> f64 {
+    let [_, _, lfd, cardinality_ema, radius_ema, _] = ratios;
+    if radius_ema <= 2.359367e-05 {
+        if lfd <= 3.415343e-01 {
+            1.299296e-01
+        } else {
+            4.405503e-01
+        }
+    } else if cardinality_ema <= 1.619149e-02 {
+        if cardinality_ema <= 3.227095e-03 {
+            5.649648e-01
+        } else {
+            7.366586e-01
+        }
+    } else if radius_ema <= 5.773949e-02 {
+        8.322585e-01
+    } else {
+        9.700278e-01
+    }
 }
 
 /// Calculate cluster scores for 'Parent Cardinality' graph analysis.
@@ -671,38 +656,36 @@ fn dt_euclidean_gn(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Parent Cardinality' graph.
-fn dt_euclidean_cr(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, lfd, _, _, _] = ratios;
-    // if radius <= 1.067198e-02 {
-    //     if cardinality <= 2.828062e-02 {
-    //         if radius <= 9.307770e-05 {
-    //             3.440542e-01
-    //         } else {
-    //             6.220238e-01
-    //         }
-    //     } else if lfd <= 2.580366e-01 {
-    //         5.624770e-01
-    //     } else {
-    //         8.176447e-01
-    //     }
-    // } else if cardinality <= 3.860220e-02 {
-    //     if cardinality <= 3.826937e-02 {
-    //         8.636209e-01
-    //     } else {
-    //         5.281209e-01
-    //     }
-    // } else if cardinality <= 4.997400e-01 {
-    //     9.494346e-01
-    // } else {
-    //     9.803474e-01
-    // }
+fn dt_euclidean_cr(ratios: Ratios) -> f64 {
+    let [cardinality, radius, lfd, _, _, _] = ratios;
+    if radius <= 1.067198e-02 {
+        if cardinality <= 2.828062e-02 {
+            if radius <= 9.307770e-05 {
+                3.440542e-01
+            } else {
+                6.220238e-01
+            }
+        } else if lfd <= 2.580366e-01 {
+            5.624770e-01
+        } else {
+            8.176447e-01
+        }
+    } else if cardinality <= 3.860220e-02 {
+        if cardinality <= 3.826937e-02 {
+            8.636209e-01
+        } else {
+            5.281209e-01
+        }
+    } else if cardinality <= 4.997400e-01 {
+        9.494346e-01
+    } else {
+        9.803474e-01
+    }
 }
 
 /// Calculate cluster scores for 'Stationary Probabilities' graph analysis.
@@ -712,38 +695,36 @@ fn dt_euclidean_cr(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Stationary Probabilities' graph.
-fn dt_euclidean_sp(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, _, lfd, cardinality_ema, radius_ema, lfd_ema] = ratios;
-    // if radius_ema <= 3.118177e-02 {
-    //     if lfd <= 8.090920e-01 {
-    //         if lfd_ema <= 2.858897e-01 {
-    //             4.526594e-01
-    //         } else {
-    //             8.478856e-01
-    //         }
-    //     } else if lfd_ema <= 6.024930e-01 {
-    //         5.471349e-03
-    //     } else {
-    //         2.958559e-01
-    //     }
-    // } else if cardinality <= 1.494950e-01 {
-    //     if radius_ema <= 9.417503e-01 {
-    //         9.296579e-01
-    //     } else {
-    //         7.623177e-01
-    //     }
-    // } else if cardinality_ema <= 1.749870e-02 {
-    //     7.646179e-01
-    // } else {
-    //     9.863799e-01
-    // }
+fn dt_euclidean_sp(ratios: Ratios) -> f64 {
+    let [cardinality, _, lfd, cardinality_ema, radius_ema, lfd_ema] = ratios;
+    if radius_ema <= 3.118177e-02 {
+        if lfd <= 8.090920e-01 {
+            if lfd_ema <= 2.858897e-01 {
+                4.526594e-01
+            } else {
+                8.478856e-01
+            }
+        } else if lfd_ema <= 6.024930e-01 {
+            5.471349e-03
+        } else {
+            2.958559e-01
+        }
+    } else if cardinality <= 1.494950e-01 {
+        if radius_ema <= 9.417503e-01 {
+            9.296579e-01
+        } else {
+            7.623177e-01
+        }
+    } else if cardinality_ema <= 1.749870e-02 {
+        7.646179e-01
+    } else {
+        9.863799e-01
+    }
 }
 
 /// Calculate cluster scores for 'Vertex Degree' graph analysis.
@@ -753,36 +734,34 @@ fn dt_euclidean_sp(_ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Vertex Degree' graph.
-fn dt_euclidean_vd(_ratios: Ratios) -> f64 {
-    todo!()
-
-    // let [cardinality, radius, lfd, _, radius_ema, lfd_ema] = ratios;
-    // if radius <= 1.067198e-02 {
-    //     if lfd <= 9.634169e-01 {
-    //         if lfd_ema <= 9.999111e-01 {
-    //             4.713993e-01
-    //         } else {
-    //             9.783193e-01
-    //         }
-    //     } else if radius <= 1.020328e-02 {
-    //         9.089947e-01
-    //     } else {
-    //         4.464702e-01
-    //     }
-    // } else if cardinality <= 4.997769e-01 {
-    //     if lfd <= 9.999996e-01 {
-    //         9.335233e-01
-    //     } else {
-    //         7.793101e-01
-    //     }
-    // } else if radius_ema <= 7.430525e-01 {
-    //     9.627948e-01
-    // } else {
-    //     9.921575e-01
-    // }
+fn dt_euclidean_vd(ratios: Ratios) -> f64 {
+    let [cardinality, radius, lfd, _, radius_ema, lfd_ema] = ratios;
+    if radius <= 1.067198e-02 {
+        if lfd <= 9.634169e-01 {
+            if lfd_ema <= 9.999111e-01 {
+                4.713993e-01
+            } else {
+                9.783193e-01
+            }
+        } else if radius <= 1.020328e-02 {
+            9.089947e-01
+        } else {
+            4.464702e-01
+        }
+    } else if cardinality <= 4.997769e-01 {
+        if lfd <= 9.999996e-01 {
+            9.335233e-01
+        } else {
+            7.793101e-01
+        }
+    } else if radius_ema <= 7.430525e-01 {
+        9.627948e-01
+    } else {
+        9.921575e-01
+    }
 }

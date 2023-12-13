@@ -1,11 +1,10 @@
 use crate::chaoda::pretrained_models;
-use crate::core::cluster::Ratios;
 use crate::{Cluster, ClusterSet};
 use distances::Number;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 
-pub struct ClusterWrapper<'a, U: Number> {
+struct ClusterWrapper<'a, U: Number> {
     cluster: &'a Cluster<U>,
     pub score: f64,
 }
@@ -45,7 +44,7 @@ fn score_clusters<'a, U: Number>(
     root: &'a Cluster<U>,
     scoring_function: crate::core::graph::MetaMLScorer,
 ) -> BinaryHeap<ClusterWrapper<'a, U>> {
-    let mut clusters = root.subtree();
+    let clusters = root.subtree();
     let mut scored_clusters: BinaryHeap<ClusterWrapper<'a, U>> = BinaryHeap::new();
 
     for cluster in clusters {
@@ -92,13 +91,13 @@ fn get_function_by_name<'a>(
     None
 }
 
-pub fn select_optimal_graph_clusters<U: Number>(
-    root: &Cluster<U>,
-    scoring_function: String,
-) -> Result<ClusterSet<U>, String> {
+pub fn select_optimal_graph_clusters<'a, U: Number>(
+    root: &'a Cluster<U>,
+    scoring_function: &'a str,
+) -> Result<ClusterSet<'a, U>, String> {
     let scorers = pretrained_models::get_meta_ml_scorers();
 
-    return get_function_by_name(scoring_function.as_str(), &scorers).map_or_else(
+    return get_function_by_name(scoring_function, &scorers).map_or_else(
         || Err(format!("Scoring function {scoring_function} not found")),
         |scoring_function| {
             let scored_clusters = score_clusters(root, scoring_function);
