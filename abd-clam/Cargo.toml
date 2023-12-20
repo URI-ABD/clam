@@ -30,6 +30,7 @@ distances = { version = "1.6.2", path = "../distances" }
 rayon = "1.8.0"
 serde = { version = "1.0.188", features = ["derive"] }
 mt_logger = "3.0.2"
+statistical = "1.0.0"
 
 # TODO: Experiment with other serialization formats for performance.
 bincode = "1.3.3"
