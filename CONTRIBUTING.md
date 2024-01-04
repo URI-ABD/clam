@@ -11,6 +11,8 @@ This means that the API is not yet stable and breaking changes may occur frequen
 - [`rust`](https://www.rust-lang.org/tools/install)
 - [`docker`](https://docs.docker.com/engine/install/)
   - You will need this to test the CI/CD pipelines locally or to use Earthly to run various project commands.
+  - You may need to start the docker daemon before running any commands. You can do this with `sudo systemctl start docker`.
+  - You may need to add your user to the `docker` group to run docker commands without `sudo`. You can do this with `sudo usermod -aG docker $USER`.
 - [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
   - This tool provides binaries you may want to have at hand to work on this repo.
   - You can see the full list of tools in the `./bin` directory in the repo root.
@@ -18,11 +20,38 @@ This means that the API is not yet stable and breaking changes may occur frequen
   - If you wish to use some tools from hermit, you may execute them directly with `./bin/<tool>`.
   - (Recommended) If you wish to use all tools provided by earthly, we recommend installing the shell hooks (see [here](https://docs.earthly.dev/guides/shell-hooks) for more information).
 
+### Things included with `hermit`
+
+> Here are some of the tools we include by default with hermit that you may want to install on your own if you want all of the functionality of this repo.
+
+- [`earthly`](https://earthly.dev/get-earthly)
+  - This is the build tool used by the project.
+  - You can use it to run various commands, such as `cargo test` or `cargo fmt`.
+  - You can also use it to build the project, run the project, or build the documentation.
+  - Example commands:
+    - `earthly +test`
+    - `earthly +fmt`
+    - You can see all of the current targets available with `earthly ls`
+- [`make`](https://www.gnu.org/software/make/)
+  - This is a build tool that is used by the individual crates under the `crates/` directory.
+  - Earthly does not support wildcard imports, so we use `make` to access earthlfile targets dynamically.
+  - You can use it to run various commands, such as `make test` or `make publish`.
+  - Example commands:
+    - `make test`
+    - `make publish`
+    - All available make targets can be seen in the root makefile under `crates/Makefile`. Additionally, crates may override these targets or define new ones, so be sure to check the individual crate makefile before calling targets.
+- [`python`](https://www.python.org/)
+  - Some of our crates will offer python bindings, so we include python in hermit.
+  - You can use it to run various commands, such as `python -m pytest` or `python -m pip install -r requirements.txt`.
+  - Example commands:
+    - `python -m pytest`
+    - `python -m pip install -r requirements.txt`
+
 ## Getting Started
 
 1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
 2. Clone the repo from your fork.
-   1. `git clone ...`
+   1. `git clone ...` or `gh repo clone ...`
 3. Test that things work.
    1. `cargo test --release`
    2. `earthly +test`
