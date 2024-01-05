@@ -6,7 +6,7 @@ use distances::number::Float;
 
 /// Generates a vec of 10 million random non-negative f32s
 fn gen_f32s() -> Vec<Vec<f32>> {
-    random_data::random_tabular_floats(
+    random_data::random_tabular(
         1,
         10_000_000,
         0.0,
@@ -17,7 +17,7 @@ fn gen_f32s() -> Vec<Vec<f32>> {
 
 /// Generates a vec of 10 million random non-negative f64s
 fn gen_f64s() -> Vec<Vec<f64>> {
-    random_data::random_tabular_floats(
+    random_data::random_tabular(
         1,
         10_000_000,
         0.0,

@@ -21,7 +21,7 @@ pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec
 
     data.par_iter()
         .flat_map(|point| {
-            let perturbations = random_data::random_tabular_floats(
+            let perturbations = random_data::random_tabular(
                 multiplier,
                 dimensionality,
                 1.0 - dimensional_error,
@@ -45,10 +45,8 @@ pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec
 
 #[cfg(test)]
 mod tests {
-    use rand::prelude::*;
-
     use crate::augmentation::augment_data;
-    use crate::random_data::random_tabular_floats;
+    use crate::random_data::random_tabular_seedable;
 
     #[test]
     fn tiny() {
@@ -60,8 +58,7 @@ mod tests {
 
     #[test]
     fn big() {
-        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
-        let data = random_tabular_floats(10000, 20, 0.1, 100.1, &mut rng);
+        let data = random_tabular_seedable(10000, 20, 0.1, 100.1, 42);
         let augmented_data = augment_data(&data, 10, 0.2);
         assert_eq!(110000, augmented_data.len());
 

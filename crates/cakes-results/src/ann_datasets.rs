@@ -130,14 +130,14 @@ impl AnnDatasets {
             let seed = 42;
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-            let train_data = symagen::random_data::random_tabular_floats(
+            let train_data = symagen::random_data::random_tabular(
                 1_000_000,
                 dimensionality,
                 min_val,
                 max_val,
                 &mut rng,
             );
-            let test_data = symagen::random_data::random_tabular_floats(
+            let test_data = symagen::random_data::random_tabular(
                 10_000,
                 dimensionality,
                 min_val,

@@ -48,7 +48,7 @@ fn lp_f32() {
     let (cardinality, dimensionality) = (100, 10_000);
     let (min_val, max_val) = (-10., 10.);
 
-    let data = random_data::random_tabular_floats(
+    let data = random_data::random_tabular(
         cardinality,
         dimensionality,
         min_val,
