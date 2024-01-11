@@ -12,13 +12,16 @@ This means that the API is not yet stable and breaking changes may occur frequen
 - [`docker`](https://docs.docker.com/engine/install/)
   - You will need this to test the CI/CD pipelines locally or to use Earthly to run various project commands.
   - You may need to start the docker daemon before running any commands. You can do this with `sudo systemctl start docker`.
-  - You may need to add your user to the `docker` group to run docker commands without `sudo`. You can do this with `sudo usermod -aG docker $USER`.
+  - You may need to add your user to the `docker` group to run docker commands without `sudo`. You can do this with `sudo usermod -aG docker $USER`. You need to re-login or reboot after doing this.
 - [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
+  - Use the curl command in the hermit link above to install it
+  - You may need to add `/home/username/bin` to your $PATH if it's not already there.
   - This tool provides binaries you may want to have at hand to work on this repo.
   - You can see the full list of tools in the `./bin` directory in the repo root.
-  - If you do not want to use hermit, you can install each tool manually.
-  - If you wish to use some tools from hermit, you may execute them directly with `./bin/<tool>`.
-  - (Recommended) If you wish to use all tools provided by earthly, we recommend installing the shell hooks (see [here](https://docs.earthly.dev/guides/shell-hooks) for more information).
+  - Do one of the following options:
+    - Install each tool manually (do this if you do not want to use hermit).
+    - Execute the tools you want directly with `./bin/<tool>` (do this if you want to use *some* tools from hermit).
+    - (Recommended) Install shell hooks (see [here](https://cashapp.github.io/hermit/usage/shell/) for more information) (do this if you want to use *all* tools from hermit). Installing shell-hooks will eliminate the need to reactivate your hermit environment every time you open this repository.
 
 ### Things included with `hermit`
 
