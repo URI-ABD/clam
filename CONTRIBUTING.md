@@ -69,6 +69,7 @@ This means that the API is not yet stable and breaking changes may occur frequen
    1. Remember to add tests and documentation.
 7. Bump the version.
    1. If you need help with this step, please ask.
+   <!-- TODO: Add steps for setting up Bump2version and when to use each type (e.g., patch) -->
 8.  Commit and push your changes.
 9.  Open a pull request.
 
