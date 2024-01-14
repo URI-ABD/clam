@@ -23,6 +23,17 @@ This means that the API is not yet stable and breaking changes may occur frequen
     - Execute the tools you want directly with `./bin/<tool>` (do this if you want to use *some* tools from hermit).
     - (Recommended) Install shell hooks (see [here](https://cashapp.github.io/hermit/usage/shell/) for more information) (do this if you want to use *all* tools from hermit). Installing shell-hooks will eliminate the need to reactivate your hermit environment every time you open this repository.
 
+### Windows Users
+- [`wsl`](https://learn.microsoft.com/en-us/windows/wsl/install)
+  - You will need to enable systemd for docker to run
+    - Start your Ubuntu (or other Systemd) distribution under WSL
+    - Run command 'sudo -e /etc/wsl.conf'
+    - Add the following to the file:
+     [boot]
+     systemd=true
+    - Restart WSL
+    - If any issues occur, reference ['this'](https://askubuntu.com/questions/1379425/system-has-not-been-booted-with-systemd-as-init-system-pid-1-cant-operate).
+
 ### Things included with `hermit`
 
 > Here are some of the tools we include by default with hermit that you may want to install on your own if you want all of the functionality of this repo.
