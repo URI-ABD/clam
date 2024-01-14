@@ -28,11 +28,10 @@ This means that the API is not yet stable and breaking changes may occur frequen
   - You will need to enable systemd for docker to run
     - Start your Ubuntu (or other Systemd) distribution under WSL
     - Run command 'sudo -e /etc/wsl.conf'
-    - Add the following to the file:
-     [boot]
+    - Add the following to the file:<br>
+     [boot]<br>
      systemd=true
     - Restart WSL
-    - If any issues occur, reference ['this'](https://askubuntu.com/questions/1379425/system-has-not-been-booted-with-systemd-as-init-system-pid-1-cant-operate).
 
 ### Things included with `hermit`
 
