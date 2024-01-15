@@ -32,32 +32,39 @@ impl<'a, U: Number> PartialOrd for ClusterWrapper<'a, U> {
     }
 }
 
-/// Scores a cluster with a given scoring fuction
-///
+/// Scores a cluster using the provided scoring function.
 ///
 /// # Arguments
 ///
-/// * `root`: The root of the tree.
-/// * `scoring_function`: Function in which to score each cluster
+/// * `root`: The root of the tree as a `Cluster`.
+/// * `scoring_function`: The function used to score each cluster.
 ///
-/// # Returns:
+/// # Returns
 ///
-/// `BinaryHeap` of `ClusterWrappers`
+/// Returns a `Result` containing a `BinaryHeap` of `ClusterWrappers` if successful.
 ///
-#[must_use]
+/// # Errors
+///
+/// Returns an `Err` in the following cases:
+///
+/// * If `ratios()` on a cluster returns `None`, indicating ratios are not available.
+///
 pub fn score_clusters<'a, U: Number>(
     root: &'a Cluster<U>,
     scoring_function: &crate::core::graph::MetaMLScorer,
-) -> BinaryHeap<ClusterWrapper<'a, U>> {
+) -> Result<BinaryHeap<ClusterWrapper<'a, U>>, String> {
     let clusters = root.subtree();
     let mut scored_clusters: BinaryHeap<ClusterWrapper<'a, U>> = BinaryHeap::new();
 
     for cluster in clusters {
-        let score = cluster.ratios().map_or(0.0, scoring_function);
+        let score = match cluster.ratios() {
+            Some(ratios) => scoring_function(ratios),
+            None => return Err("Error: tree must be built with ratios".to_string()),
+        };
         scored_clusters.push(ClusterWrapper { cluster, score });
     }
 
-    scored_clusters
+    Ok(scored_clusters)
 }
 
 /// Gets scoring function from name
@@ -104,13 +111,13 @@ pub fn select_optimal_graph_clusters<'a, U: Number>(
 ) -> Result<ClusterSet<'a, U>, String> {
     let scorers = pretrained_models::get_meta_ml_scorers();
 
-    return get_function_by_name(scoring_function, &scorers).map_or_else(
+    get_function_by_name(scoring_function, &scorers).map_or_else(
         || Err(format!("Scoring function {scoring_function} not found")),
         |scoring_function| {
-            let scored_clusters = score_clusters(root, &scoring_function);
+            let scored_clusters = score_clusters(root, &scoring_function)?;
             select_optimal_clusters(scored_clusters)
         },
-    );
+    )
 }
 
 /// Gets `ClusterSet` from `BinaryHeap` of `ClusterWrappers`
@@ -127,10 +134,11 @@ pub fn select_optimal_graph_clusters<'a, U: Number>(
 ///
 /// If `ClusterWrapper` contains an invalid cluster-score pairing
 ///
-pub fn select_optimal_clusters<'a, U: Number>(
+fn select_optimal_clusters<'a, U: Number>(
     mut clusters: BinaryHeap<ClusterWrapper<'a, U>>,
 ) -> Result<ClusterSet<'a, U>, String> {
     let mut cluster_set: HashSet<&'a Cluster<U>> = HashSet::new();
+    clusters.retain(|item| item.cluster.depth() > 3);
 
     while !clusters.is_empty() {
         let Some(wrapper) = clusters.pop() else {

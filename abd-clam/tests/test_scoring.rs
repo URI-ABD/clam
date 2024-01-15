@@ -22,7 +22,10 @@ fn scoring() {
 
     let scorer_function = &pretrained_models::get_meta_ml_scorers()[0].1;
 
-    let mut priority_queue = score_clusters(&root, scorer_function);
+    let mut priority_queue = match score_clusters(&root, scorer_function) {
+        Ok(pq) => pq,
+        Err(err) => panic!("Error scoring clusters: {}", err),
+    };
 
     assert_eq!(priority_queue.len(), root.subtree().len());
 
@@ -36,8 +39,8 @@ fn scoring() {
         prev_value = curr_value;
     }
 
-    let priority_queue = score_clusters(&root, scorer_function);
-    let cluster_set = select_optimal_clusters(priority_queue).unwrap();
+    // let priority_queue = score_clusters(&root, scorer_function);
+    let cluster_set = select_optimal_graph_clusters(&root, "lr_manhattan_sc").unwrap();
     for i in &cluster_set {
         for j in &cluster_set {
             if i != j {
