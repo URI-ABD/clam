@@ -27,12 +27,14 @@ This means that the API is not yet stable and breaking changes may occur frequen
 - [`wsl`](https://learn.microsoft.com/en-us/windows/wsl/install)
   - You will need to enable systemd for docker to run
     - Start your Ubuntu (or other Systemd) distribution under WSL
-    - Run command 'sudo -e /etc/wsl.conf'
+    - Run the command `sudo -e /etc/wsl.conf`
     - Add the following to the file:<br>
-     [boot]<br>
-     systemd=true
-    - Restart WSL
-
+     `[boot]`<br>
+     `systemd=true`
+    - In powershell, restart wsl by running the commands `wsl --shutdown` and `wsl`
+    - In your wsl terminal, run the command `sudo systemctl start docker`
+    - If you run into any issues, see [`here`](https://askubuntu.com/questions/1379425/system-has-not-been-booted-with-systemd-as-init-system-pid-1-cant-operate) for help
+    
 ### Things included with `hermit`
 
 > Here are some of the tools we include by default with hermit that you may want to install on your own if you want all of the functionality of this repo.
