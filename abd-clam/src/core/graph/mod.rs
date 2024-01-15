@@ -2,7 +2,7 @@
 mod _graph;
 ///Helper functions for building graph
 /// Selects clusters from a graph based on their scores.
-mod cluster_selection;
+pub mod cluster_selection;
 pub mod criteria;
 ///Helper functions for building graph
 /// detect edges between clusters

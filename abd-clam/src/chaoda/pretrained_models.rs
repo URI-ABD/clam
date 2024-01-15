@@ -374,25 +374,25 @@ fn dt_manhattan_cc(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Sub Graph Cardinality' graph.
 fn dt_manhattan_sc(ratios: Ratios) -> f64 {
     let [_, radius, _, cardinality_ema, _, lfd_ema] = ratios;
-    if radius <= 5.148810e-03 {
-        7.500000e-01
-    } else if cardinality_ema <= 6.438965e-01 {
-        if lfd_ema <= 9.120842e-01 {
-            9.709770e-01
+    if radius <= 5.148_810e-03 {
+        7.500_000e-01
+    } else if cardinality_ema <= 6.438_965e-01 {
+        if lfd_ema <= 9.120_842e-01 {
+            9.709_770e-01
         } else {
-            9.303896e-01
+            9.303_896e-01
         }
-    } else if lfd_ema <= 8.965069e-01 {
-        9.982470e-01
+    } else if lfd_ema <= 8.965_069e-01 {
+        9.982_470e-01
     } else {
-        9.858773e-01
+        9.858_773e-01
     }
 }
 
@@ -403,29 +403,29 @@ fn dt_manhattan_sc(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Graph Neighborhood' graph.
 fn dt_manhattan_gn(ratios: Ratios) -> f64 {
     let [cardinality, radius, _, cardinality_ema, _, _] = ratios;
-    if radius <= 5.148810e-03 {
-        if cardinality <= 2.540494e-02 {
-            4.437313e-01
+    if radius <= 5.148_810e-03 {
+        if cardinality <= 2.540_494e-02 {
+            4.437_313e-01
         } else {
-            7.500000e-01
+            7.500_000e-01
         }
-    } else if cardinality_ema <= 6.354841e-01 {
-        if cardinality_ema <= 6.253555e-01 {
-            9.625763e-01
+    } else if cardinality_ema <= 6.354_841e-01 {
+        if cardinality_ema <= 6.253_555e-01 {
+            9.625_763e-01
         } else {
-            8.007593e-01
+            8.007_593e-01
         }
-    } else if cardinality_ema <= 8.838843e-01 {
-        9.887261e-01
+    } else if cardinality_ema <= 8.838_843e-01 {
+        9.887_261e-01
     } else {
-        9.979190e-01
+        9.979_190e-01
     }
 }
 
@@ -436,35 +436,35 @@ fn dt_manhattan_gn(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Parent Cardinality' graph.
 fn dt_manhattan_cr(ratios: Ratios) -> f64 {
     let [cardinality, radius, _, cardinality_ema, _, lfd_ema] = ratios;
-    if radius <= 1.472459e-02 {
-        if cardinality <= 2.505734e-02 {
-            if radius <= 1.655350e-04 {
-                3.151504e-01
+    if radius <= 1.472_459e-02 {
+        if cardinality <= 2.505_734e-02 {
+            if radius <= 1.655_350e-04 {
+                3.151_504e-01
             } else {
-                6.447252e-01
+                6.447_252e-01
             }
-        } else if cardinality <= 1.076636e-01 {
-            7.414646e-01
+        } else if cardinality <= 1.076_636e-01 {
+            7.414_646e-01
         } else {
-            9.229898e-01
+            9.229_898e-01
         }
-    } else if cardinality <= 5.942344e-01 {
-        if lfd_ema <= 9.527803e-01 {
-            9.468785e-01
+    } else if cardinality <= 5.942_344e-01 {
+        if lfd_ema <= 9.527_803e-01 {
+            9.468_785e-01
         } else {
-            8.911853e-01
+            8.911_853e-01
         }
-    } else if cardinality_ema <= 9.790418e-01 {
-        9.705729e-01
+    } else if cardinality_ema <= 9.790_418e-01 {
+        9.705_729e-01
     } else {
-        9.989975e-01
+        9.989_975e-01
     }
 }
 
@@ -475,33 +475,33 @@ fn dt_manhattan_cr(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Stationary Probabilities' graph.
 fn dt_manhattan_sp(ratios: Ratios) -> f64 {
     let [_, radius, _, cardinality_ema, radius_ema, _] = ratios;
-    if radius <= 2.358828e-04 {
-        if radius_ema <= 1.177303e-02 {
-            if radius_ema <= 8.709679e-05 {
-                1.400713e-01
+    if radius <= 2.358_828e-04 {
+        if radius_ema <= 1.177_303e-02 {
+            if radius_ema <= 8.709_679e-05 {
+                1.400_713e-01
             } else {
-                1.698153e-01
+                1.698_153e-01
             }
         } else {
-            4.245149e-01
+            4.245_149e-01
         }
-    } else if cardinality_ema <= 1.807206e-02 {
-        if radius_ema <= 7.669807e-01 {
-            5.307418e-01
+    } else if cardinality_ema <= 1.807_206e-02 {
+        if radius_ema <= 7.669_807e-01 {
+            5.307_418e-01
         } else {
-            9.984011e-01
+            9.984_011e-01
         }
-    } else if cardinality_ema <= 4.135659e-01 {
-        9.372930e-01
+    } else if cardinality_ema <= 4.135_659e-01 {
+        9.372_930e-01
     } else {
-        9.907336e-01
+        9.907_336e-01
     }
 }
 
@@ -512,35 +512,35 @@ fn dt_manhattan_sp(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Vertex Degree' graph.
 fn dt_manhattan_vd(ratios: Ratios) -> f64 {
     let [cardinality, radius, _, cardinality_ema, radius_ema, lfd_ema] = ratios;
-    if radius <= 1.391490e-02 {
-        if lfd_ema <= 6.932603e-01 {
-            if cardinality <= 1.076636e-01 {
-                4.198158e-01
+    if radius <= 1.391_490e-02 {
+        if lfd_ema <= 6.932_603e-01 {
+            if cardinality <= 1.076_636e-01 {
+                4.198_158e-01
             } else {
-                8.463385e-01
+                8.463_385e-01
             }
-        } else if cardinality <= 2.564081e-02 {
-            3.269299e-01
+        } else if cardinality <= 2.564_081e-02 {
+            3.269_299e-01
         } else {
-            7.921413e-01
+            7.921_413e-01
         }
-    } else if cardinality_ema <= 7.950329e-01 {
-        if cardinality <= 4.997393e-01 {
-            9.251187e-01
+    } else if cardinality_ema <= 7.950_329e-01 {
+        if cardinality <= 4.997_393e-01 {
+            9.251_187e-01
         } else {
-            9.570666e-01
+            9.570_666e-01
         }
-    } else if radius_ema <= 4.155880e-01 {
-        9.516691e-01
+    } else if radius_ema <= 4.155_880e-01 {
+        9.516_691e-01
     } else {
-        9.928017e-01
+        9.928_017e-01
     }
 }
 
@@ -551,35 +551,35 @@ fn dt_manhattan_vd(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Cluster Cardinality' graph.
 fn dt_euclidean_cc(ratios: Ratios) -> f64 {
     let [cardinality, radius, lfd, cardinality_ema, _, lfd_ema] = ratios;
-    if radius <= 1.067198e-02 {
-        if cardinality <= 1.079019e-01 {
-            if lfd_ema <= 9.999740e-01 {
-                5.265128e-01
+    if radius <= 1.067_198e-02 {
+        if cardinality <= 1.079_019e-01 {
+            if lfd_ema <= 9.999_740e-01 {
+                5.265_128e-01
             } else {
-                8.834613e-01
+                8.834_613e-01
             }
-        } else if cardinality <= 3.330053e-01 {
-            8.695605e-01
+        } else if cardinality <= 3.330_053e-01 {
+            8.695_605e-01
         } else {
-            9.694478e-01
+            9.694_478e-01
         }
-    } else if cardinality <= 4.997283e-01 {
-        if lfd <= 2.929797e-01 {
-            8.696701e-01
+    } else if cardinality <= 4.997_283e-01 {
+        if lfd <= 2.929_797e-01 {
+            8.696_701e-01
         } else {
-            9.258335e-01
+            9.258_335e-01
         }
-    } else if cardinality_ema <= 7.698584e-01 {
-        9.665650e-01
+    } else if cardinality_ema <= 7.698_584e-01 {
+        9.665_650e-01
     } else {
-        9.917949e-01
+        9.917_949e-01
     }
 }
 
@@ -590,29 +590,29 @@ fn dt_euclidean_cc(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Component (Sub graph) Cardinality' graph.
 fn dt_euclidean_sc(ratios: Ratios) -> f64 {
     let [cardinality, radius, _, cardinality_ema, radius_ema, _] = ratios;
-    if radius_ema <= 5.111776e-03 {
-        if radius <= 9.307770e-05 {
-            7.500000e-01
+    if radius_ema <= 5.111_776e-03 {
+        if radius <= 9.307_770e-05 {
+            7.500_000e-01
         } else {
-            6.997932e-01
+            6.997_932e-01
         }
-    } else if cardinality <= 1.494950e-01 {
-        if cardinality_ema <= 4.477562e-02 {
-            8.816036e-01
+    } else if cardinality <= 1.494_950e-01 {
+        if cardinality_ema <= 4.477_562e-02 {
+            8.816_036e-01
         } else {
-            9.351654e-01
+            9.351_654e-01
         }
-    } else if cardinality_ema <= 6.924688e-01 {
-        9.702070e-01
+    } else if cardinality_ema <= 6.924_688e-01 {
+        9.702_070e-01
     } else {
-        9.932433e-01
+        9.932_433e-01
     }
 }
 
@@ -623,29 +623,29 @@ fn dt_euclidean_sc(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Graph Neighborhood' graph.
 fn dt_euclidean_gn(ratios: Ratios) -> f64 {
     let [_, _, lfd, cardinality_ema, radius_ema, _] = ratios;
-    if radius_ema <= 2.359367e-05 {
-        if lfd <= 3.415343e-01 {
-            1.299296e-01
+    if radius_ema <= 2.359_367e-05 {
+        if lfd <= 3.415_343e-01 {
+            1.299_296e-01
         } else {
-            4.405503e-01
+            4.405_503e-01
         }
-    } else if cardinality_ema <= 1.619149e-02 {
-        if cardinality_ema <= 3.227095e-03 {
-            5.649648e-01
+    } else if cardinality_ema <= 1.619_149e-02 {
+        if cardinality_ema <= 3.227_095e-03 {
+            5.649_648e-01
         } else {
-            7.366586e-01
+            7.366_586e-01
         }
-    } else if radius_ema <= 5.773949e-02 {
-        8.322585e-01
+    } else if radius_ema <= 5.773_949e-02 {
+        8.322_585e-01
     } else {
-        9.700278e-01
+        9.700_278e-01
     }
 }
 
@@ -656,35 +656,35 @@ fn dt_euclidean_gn(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Parent Cardinality' graph.
 fn dt_euclidean_cr(ratios: Ratios) -> f64 {
     let [cardinality, radius, lfd, _, _, _] = ratios;
-    if radius <= 1.067198e-02 {
-        if cardinality <= 2.828062e-02 {
-            if radius <= 9.307770e-05 {
-                3.440542e-01
+    if radius <= 1.067_198e-02 {
+        if cardinality <= 2.828_062e-02 {
+            if radius <= 9.307_770e-05 {
+                3.440_542e-01
             } else {
-                6.220238e-01
+                6.220_238e-01
             }
-        } else if lfd <= 2.580366e-01 {
-            5.624770e-01
+        } else if lfd <= 2.580_366e-01 {
+            5.624_770e-01
         } else {
-            8.176447e-01
+            8.176_447e-01
         }
-    } else if cardinality <= 3.860220e-02 {
-        if cardinality <= 3.826937e-02 {
-            8.636209e-01
+    } else if cardinality <= 3.860_220e-02 {
+        if cardinality <= 3.826_937e-02 {
+            8.636_209e-01
         } else {
-            5.281209e-01
+            5.281_209e-01
         }
-    } else if cardinality <= 4.997400e-01 {
-        9.494346e-01
+    } else if cardinality <= 4.997_400e-01 {
+        9.494_346e-01
     } else {
-        9.803474e-01
+        9.803_474e-01
     }
 }
 
@@ -695,35 +695,35 @@ fn dt_euclidean_cr(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Stationary Probabilities' graph.
 fn dt_euclidean_sp(ratios: Ratios) -> f64 {
     let [cardinality, _, lfd, cardinality_ema, radius_ema, lfd_ema] = ratios;
-    if radius_ema <= 3.118177e-02 {
-        if lfd <= 8.090920e-01 {
-            if lfd_ema <= 2.858897e-01 {
-                4.526594e-01
+    if radius_ema <= 3.118_177e-02 {
+        if lfd <= 8.090_920e-01 {
+            if lfd_ema <= 2.858_897e-01 {
+                4.526_594e-01
             } else {
-                8.478856e-01
+                8.478_856e-01
             }
-        } else if lfd_ema <= 6.024930e-01 {
-            5.471349e-03
+        } else if lfd_ema <= 6.024_930e-01 {
+            5.471_349e-03
         } else {
-            2.958559e-01
+            2.958_559e-01
         }
-    } else if cardinality <= 1.494950e-01 {
-        if radius_ema <= 9.417503e-01 {
-            9.296579e-01
+    } else if cardinality <= 1.494_950e-01 {
+        if radius_ema <= 9.417_503e-01 {
+            9.296_579e-01
         } else {
-            7.623177e-01
+            7.623_177e-01
         }
-    } else if cardinality_ema <= 1.749870e-02 {
-        7.646179e-01
+    } else if cardinality_ema <= 1.749_870e-02 {
+        7.646_179e-01
     } else {
-        9.863799e-01
+        9.863_799e-01
     }
 }
 
@@ -734,34 +734,34 @@ fn dt_euclidean_sp(ratios: Ratios) -> f64 {
 ///
 /// # Arguments
 ///
-/// * `ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
+/// * `_ratios`: An array of 6 floats representing the relationship between a cluster and its parent.
 ///
 /// # Returns
 ///
 /// A floating-point value representing the cluster score. Higher scores indicate clusters that are better suited for inclusion in the 'Vertex Degree' graph.
 fn dt_euclidean_vd(ratios: Ratios) -> f64 {
     let [cardinality, radius, lfd, _, radius_ema, lfd_ema] = ratios;
-    if radius <= 1.067198e-02 {
-        if lfd <= 9.634169e-01 {
-            if lfd_ema <= 9.999111e-01 {
-                4.713993e-01
+    if radius <= 1.067_198e-02 {
+        if lfd <= 9.634_169e-01 {
+            if lfd_ema <= 9.999_111e-01 {
+                4.713_993e-01
             } else {
-                9.783193e-01
+                9.783_193e-01
             }
-        } else if radius <= 1.020328e-02 {
-            9.089947e-01
+        } else if radius <= 1.020_328e-02 {
+            9.089_947e-01
         } else {
-            4.464702e-01
+            4.464_702e-01
         }
-    } else if cardinality <= 4.997769e-01 {
-        if lfd <= 9.999996e-01 {
-            9.335233e-01
+    } else if cardinality <= 4.997_769e-01 {
+        if lfd <= 9.999_996e-01 {
+            9.335_233e-01
         } else {
-            7.793101e-01
+            7.793_101e-01
         }
-    } else if radius_ema <= 7.430525e-01 {
-        9.627948e-01
+    } else if radius_ema <= 7.430_525e-01 {
+        9.627_948e-01
     } else {
-        9.921575e-01
+        9.921_575e-01
     }
 }
