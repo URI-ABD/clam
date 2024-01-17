@@ -13,6 +13,7 @@ This means that the API is not yet stable and breaking changes may occur frequen
 The following tools are mandatory.
 
 - [`rust`](https://www.rust-lang.org/tools/install) for working on the project at all.
+  - Note that [`curl`](https://curl.se/download.html) is required to install `rust` on `*NIX` systems.
 - [`git`](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) for version control.
 - [`pre-commit`](https://pre-commit.com/#install) for running pre-commit hooks.
   - You will need this to run the pre-commit hooks, which will run various checks on your code when you commit to `git`.
@@ -20,36 +21,9 @@ The following tools are mandatory.
   - If your code does not pass these checks, your PR will not even be reviewed or considered for merging until you fix the issues.
   - `pre-commit` is available via `pip` (`python -m pip install pre-commit`), `brew` (`brew install pre-commit`) on macOS, or via [`snap`](https://snapcraft.io/install/pre-commit/ubuntu) for Linux users.
 
-#### Python Specific Work
-
-If you are working on the Python bindings, you will need:
-
-- [`python`](https://www.python.org/downloads/) 3.11.
-- [`poetry`](https://python-poetry.org/docs/#installation) for managing python dependencies.
-  - `python -m pip install poetry` will install poetry in the local python environment. You could also install it globally by following the instructions in the link above.
-  - To install the dependencies for a python package, `cd` into the package directory and run `poetry install`.
-
-### Optional
-
-The following tools are optional, but recommended.
-
-- [`docker`](https://docs.docker.com/engine/install/)
-  - You will need this to test the CI/CD pipelines locally or to use Earthly to run various project commands.
-  - You may need to start the docker daemon before running any commands. You can do this with `sudo systemctl start docker`.
-  - You may need to add your user to the `docker` group to run docker commands without `sudo`. You can do this with `sudo usermod -aG docker $USER`. You need to re-login or reboot after doing this.
-- [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
-  - Use the curl command in the hermit link above to install it
-  - You may need to add `/home/username/bin` to your $PATH if it's not already there.
-  - This tool provides binaries you may want to have at hand to work on this repo.
-  - You can see the full list of tools in the `./bin` directory in the repo root.
-  - Do one of the following options:
-    - Install each tool manually (do this if you do not want to use hermit).
-    - Execute the tools you want directly with `./bin/<tool>` (do this if you want to use *some* tools from hermit).
-    - (Recommended) Install shell hooks (see [here](https://cashapp.github.io/hermit/usage/shell/) for more information) (do this if you want to use *all* tools from hermit). Installing shell-hooks will eliminate the need to reactivate your hermit environment every time you open this repository.
-
-### Windows Users
-- [`wsl`](https://learn.microsoft.com/en-us/windows/wsl/install)
-  - You will need to enable systemd for docker to run
+#### Windows Users
+- [`wsl2`](https://learn.microsoft.com/en-us/windows/wsl/install) is required to work on this project on Windows.
+  - You will need to enable [`systemd`](https://learn.microsoft.com/en-us/windows/wsl/systemd) for docker to run
     - Start your Ubuntu (or other Systemd) distribution under WSL
     - Run the command `sudo -e /etc/wsl.conf`
     - Add the following to the file:
@@ -60,9 +34,53 @@ The following tools are optional, but recommended.
     - In powershell, restart WSL by running the commands `wsl --shutdown` and `wsl`.
     - In your WSL terminal, run the command `sudo systemctl start docker` to start the docker daemon.
     - You can have docker start automatically with WSL by running the command `sudo systemctl enable docker`.
-    - If you run into any issues, see [`here`](https://askubuntu.com/questions/1379425/system-has-not-been-booted-with-systemd-as-init-system-pid-1-cant-operate) for help
+    - If you run into any issues, see [`here`](https://askubuntu.com/questions/1379425/system-has-not-been-booted-with-systemd-as-init-system-pid-1-cant-operate) for help.
 
-### Things included with `hermit`
+#### Python Specific Work
+
+If you are working on the Python bindings we highly recommend that you use `docker` and `hermit` as described in the following section.
+Using `hermit` to manage your python environment will be a lot easier than trying to manage it yourself.
+
+If you know what you are doing, you can also install the following tools manually.
+
+- [`python`](https://www.python.org/downloads/) 3.11.
+- [`venv`](https://docs.python.org/3/library/venv.html) for managing python virtual environments.
+  - `python -m venv .venv` will create a virtual environment in the `.venv` directory.
+  - `source .venv/bin/activate` will activate the virtual environment.
+  - `deactivate` will deactivate the virtual environment.
+- [`pip`](https://pip.pypa.io/en/stable/installation/) for installing python dependencies.
+  - `python -m pip install --upgrade pip` will upgrade `pip` to the latest version.
+- [`poetry`](https://python-poetry.org/docs/#installation) for managing python dependencies.
+  - `python -m pip install poetry` will install poetry in the local python environment. You could also install it globally by following the instructions in the link above.
+  - To install the dependencies for a python package, change into the package directory (`cd clam/crates/<py-pkg>`) and run `poetry install`.
+
+### Optional
+
+The following tools are optional, but recommended.
+
+- [`docker`](https://docs.docker.com/engine/install/)
+  - For Windows and Mac users, you will should install [Docker Desktop](https://www.docker.com/products/docker-desktop). This will install both the docker daemon and the docker CLI.
+  - For Linux users, you do not need to install Docker Desktop. You can install the CLI and daemon separately if you wish.
+  - You will need `docker` to test the CI/CD pipelines locally or to use Earthly to run various project commands.
+  - You may need to start the docker daemon before running any commands. You can do this with `sudo systemctl start docker`.
+    - Running `sudo systemctl enable docker` once will make it so that the docker daemon will start automatically when you boot your machine.
+  - You may need to add your user to the `docker` group to run docker commands without `sudo`.
+    - You can do this with `sudo usermod -aG docker $USER`.
+    - You need to re-login or reboot after doing this.
+- [`hermit`](https://cashapp.github.io/hermit/usage/get-started/)
+  - Use the `curl` command in the hermit link above to install it
+  - You may need to add `$HOME/bin` to your `$PATH` if it's not already there.
+    - For bash: `echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc`
+    - For zsh: `echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc`
+    - For fish: `echo 'set PATH "$HOME/bin" $PATH' >> ~/.config/fish/config.fish`
+  - This tool provides binaries you may want to have at hand to work on this repo.
+  - You can see the full list of tools in the `./bin` directory in the repo root.
+  - Do *one* of the following:
+    - Install each tool manually (do this if you do not want to use hermit).
+    - Execute the tools you want directly with `./bin/<tool>` (do this if you want to use *some* tools from hermit).
+    - (Recommended) Install shell hooks (see [here](https://cashapp.github.io/hermit/usage/shell/) for more information) (do this if you want to use *all* tools from hermit). Installing shell-hooks will eliminate the need to reactivate your hermit environment every time you open this repository.
+
+#### Things included with `hermit`
 
 > Here are some of the tools we include by default with hermit that you may want to install on your own if you want all of the functionality of this repo.
 
@@ -93,7 +111,7 @@ The following tools are optional, but recommended.
 
 1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
 2. Clone the repo from your fork.
-   1. `git clone ...` or `gh repo clone ...`
+   1. `git clone ...`
 3. Test that things work.
    1. `cargo test --release`
    2. `earthly +test`
