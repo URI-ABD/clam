@@ -20,7 +20,7 @@ mod cakes;
 ///anomaly detection
 pub mod chaoda;
 mod core;
-pub(crate) mod utils;
+pub mod utils;
 
 pub use crate::{
     cakes::{knn, rnn, Cakes},
