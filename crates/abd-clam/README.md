@@ -1,4 +1,4 @@
-# CLAM: Clustering, Learning and Approximation with Manifolds (v0.26.0)
+# CLAM: Clustering, Learning and Approximation with Manifolds (v0.26.1)
 
 The Rust implementation of CLAM.
 
@@ -7,7 +7,7 @@ This means that the API is not yet stable and breaking changes may occur frequen
 
 ## Usage
 
-CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.26.0`.
+CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.26.1`.
 
 ### Cakes: Nearest Neighbor Search
 
