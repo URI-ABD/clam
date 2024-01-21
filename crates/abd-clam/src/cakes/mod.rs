@@ -140,6 +140,11 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
         }
     }
 
+    /// Returns the total cardinality of the dataset.
+    pub fn total_cardinality(&self) -> usize {
+        self.shard_cardinalities().iter().sum()
+    }
+
     /// Returns the tuned RNN algorithm.
     pub fn tuned_rnn_algorithm(&self) -> rnn::Algorithm {
         match self {

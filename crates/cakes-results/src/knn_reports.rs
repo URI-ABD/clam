@@ -152,19 +152,13 @@ fn make_reports(
             1_000_000
         };
 
-        let shards = VecDataset::<_, _, bool>::new(
-            dataset.name().to_string(),
-            train_data,
-            metric,
-            false,
-            None,
-        )
-        .make_shards(max_cardinality);
+        let shards = VecDataset::new(dataset.name().to_string(), train_data, metric, false)
+            .make_shards(max_cardinality);
         let mut cakes = Cakes::new_randomly_sharded(shards, seed, &PartitionCriteria::default());
         cakes.auto_tune_knn(tuning_k, tuning_depth);
         cakes
     } else {
-        let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false, None);
+        let data = VecDataset::new(dataset.name().to_string(), train_data, metric, false);
         let mut cakes = Cakes::new(data, seed, &PartitionCriteria::default());
         cakes.auto_tune_knn(tuning_k, tuning_depth);
         cakes

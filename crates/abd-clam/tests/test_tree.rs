@@ -20,7 +20,7 @@ fn leaf_indices() {
             vec![0.],
         ],
         utils::euclidean::<f32, f32>,
-        None,
+        vec![true, true, false, false, true, false, true, false],
     );
     let partition_criteria = PartitionCriteria::default();
 
@@ -46,7 +46,7 @@ fn reordering() {
             vec![0.],
         ],
         utils::euclidean::<f32, f32>,
-        None,
+        vec![true, true, false, false, true, false, true, false],
     );
     let partition_criteria = PartitionCriteria::default();
 
@@ -88,11 +88,11 @@ fn save_load() {
 }
 
 /// Asserts that two clusters are equal.
-fn assert_subtree_equal<I: Instance, U: Number>(
+fn assert_subtree_equal<I: Instance, U: Number, M: Instance>(
     raw_cluster: &Cluster<U>,
-    raw_data: &VecDataset<I, U, bool>,
+    raw_data: &VecDataset<I, U, M>,
     rec_cluster: &Cluster<U>,
-    rec_data: &VecDataset<I, U, bool>,
+    rec_data: &VecDataset<I, U, M>,
     metric: fn(&I, &I) -> U,
 ) {
     // Assert their cardinalities

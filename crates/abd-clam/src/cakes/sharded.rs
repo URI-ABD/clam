@@ -245,14 +245,13 @@ mod tests {
         );
 
         let name = format!("test-full");
-        let data = VecDataset::<_, _, bool>::new(name, data_vec.clone(), metric, false, None);
+        let data = VecDataset::new(name, data_vec.clone(), metric, false);
         let cakes = SingleShard::new(data, Some(seed), &PartitionCriteria::default());
 
         let num_shards = 10;
         let max_cardinality = cardinality / num_shards;
         let name = format!("test-sharded");
-        let data_shards =
-            VecDataset::<_, _, bool>::new(name, data_vec, metric, false, None).make_shards(max_cardinality);
+        let data_shards = VecDataset::new(name, data_vec, metric, false).make_shards(max_cardinality);
         let shards = data_shards
             .into_iter()
             .map(|d| SingleShard::new(d, Some(seed), &PartitionCriteria::default()))

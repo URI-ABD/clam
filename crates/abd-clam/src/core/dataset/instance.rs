@@ -5,7 +5,7 @@ use core::fmt::Debug;
 use distances::Number;
 
 /// Trait for individual data points.
-pub trait Instance: Debug + Send + Sync {
+pub trait Instance: Debug + Send + Sync + Clone {
     /// Convert the instance to a byte vector.
     fn to_bytes(&self) -> Vec<u8>;
 
@@ -145,4 +145,4 @@ macro_rules! impl_instance_number {
     }
 }
 
-impl_instance_number!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64);
+impl_instance_number!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, isize, i128, f32, f64);

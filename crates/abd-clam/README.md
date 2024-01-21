@@ -42,7 +42,7 @@ let data: Vec<Vec<f32>> = symagen::random_data::random_tabular_floats(
 );
 
 // We will generate some random labels for each point.
-let metadata: Vec<bool> = data.iter().map(|v| v[0] > 0.0).collect();
+let labels: Vec<bool> = data.iter().map(|v| v[0] > 0.0).collect();
 
 // We will use the origin as our query.
 let query: Vec<f32> = vec![0.0; dimensionality];
@@ -59,22 +59,31 @@ let name = "demo".to_string();
 // We will assume that our distance function is cheap to compute.
 let is_metric_expensive = false;
 
-// The metric function itself will be given to Cakes.
-let data = VecDataset::<Vec<f32>, f32, bool>::new(
+// We create the dataset from the data and distance function.
+let dataset = VecDataset::new(
     name,
     data,
     euclidean,
     is_metric_expensive,
-    Some(metadata),
 );
+
+// At this point, `dataset` has taken ownership of the `data`.
+
+// The default metadata is the indices of the points in the dataset. We will,
+// however, use our random labels as metadata.
+let dataset = dataset
+    .assign_metadata(labels)
+    .unwrap_or_else(|_| unreachable!("We made sure that there are as make labels as points."));
+
+// At this point, `dataset` has also taken ownership of `labels`.
 
 // We will use the default partition criteria for this example. This will partition
 // the data until each Cluster contains a single unique point.
 let criteria = PartitionCriteria::default();
 
-// The Cakes struct provides the functionality described in the CHESS paper.
+// The Cakes struct provides the functionality described in the paper.
 // We use a single shard here because the demo data is small.
-let model = Cakes::new(data, Some(seed), &criteria);
+let model = Cakes::new(dataset, Some(seed), &criteria);
 // This line performs a non-trivial amount of work. #understatement
 
 // At this point, the dataset has been reordered to improve search performance.
@@ -97,16 +106,16 @@ let knn_results: Vec<(usize, f32)> = model.knn_search(
 // the point in the dataset and the second element is the distance from the
 // query point.
 
-// We can get the reordered metadata from the model.
-let metadata: &[bool] = model.shards()[0].metadata().unwrap();
+// We can borrow the reordered labels from the model.
+let labels: &[bool] = model.shards()[0].metadata();
 
 // We can use the results to get the labels of the points that are within the
 // radius of the query point.
-let rnn_labels: Vec<bool> = rnn_results.iter().map(|&(i, _)| metadata[i]).collect();
+let rnn_labels: Vec<bool> = rnn_results.iter().map(|&(i, _)| labels[i]).collect();
 
 // We can use the results to get the labels of the points that are the k nearest
 // neighbors of the query point.
-let knn_labels: Vec<bool> = knn_results.iter().map(|&(i, _)| metadata[i]).collect();
+let knn_labels: Vec<bool> = knn_results.iter().map(|&(i, _)| labels[i]).collect();
 
 // TODO: Add snippets for saving/loading models.
 ```
