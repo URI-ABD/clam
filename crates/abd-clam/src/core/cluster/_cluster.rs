@@ -552,6 +552,12 @@ impl<U: Number> Cluster<U> {
     ) -> Self {
         let cardinality = indices.len();
 
+        let start = std::time::Instant::now();
+        mt_log!(
+            Level::Debug,
+            "Creating cluster with depth {depth} offset {offset} and cardinality {cardinality} ..."
+        );
+
         // TODO: Explore with different values for the threshold e.g. 10, 100, 1000, etc.
         let arg_samples = if cardinality < 100 {
             indices.to_vec()
@@ -572,9 +578,11 @@ impl<U: Number> Cluster<U> {
         let arg_radial = indices[arg_radial];
 
         let lfd = utils::compute_lfd(radius, &center_distances);
+
+        let end = start.elapsed().as_secs_f32();
         mt_log!(
             Level::Debug,
-            "Created cluster with depth {depth} offset {offset} and cardinality {cardinality}."
+            "Finished creating cluster with depth {depth} offset {offset} and cardinality {cardinality} in {end:2e} seconds."
         );
 
         Self {
@@ -613,11 +621,46 @@ impl<U: Number> Cluster<U> {
         (self, indices) = self._partition(data, criteria, indices);
 
         mt_log!(Level::Debug, "Finished building tree. Starting data permutation.");
-        data.permute_instances(&indices)
-            .unwrap_or_else(|_| unreachable!("All indices are valid."));
+        data.permute_instances(&indices).unwrap_or_else(|e| unreachable!("{e}"));
         mt_log!(Level::Debug, "Finished data permutation.");
 
         self
+    }
+
+    /// Checks that the partition is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `l_indices`: The indices of the left child.
+    /// * `r_indices`: The indices of the right child.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if all of the following conditions are met:
+    ///    * The `l_indices` are not empty.
+    ///    * The `r_indices` are not empty.
+    ///    * The total length of the `l_indices` and `r_indices` is equal to the
+    ///      cardinality of the `Cluster`.
+    const fn _check_partition(&self, l_indices: &[usize], r_indices: &[usize]) -> bool {
+        !l_indices.is_empty() && !r_indices.is_empty() && l_indices.len() + r_indices.len() == self.cardinality
+        // assert!(
+        //     !l_indices.is_empty(),
+        //     "Left child of {} at depth {} should not be empty.",
+        //     self.name(),
+        //     self.depth
+        // );
+        // assert!(
+        //     !r_indices.is_empty(),
+        //     "Right child of {} at depth {} should not be empty.",
+        //     self.name(),
+        //     self.depth
+        // );
+        // assert!(
+        //     l_indices.len() + r_indices.len() == self.cardinality,
+        //     "The sum of the left and right child of {} at depth {} should be equal to the cardinality of the cluster.",
+        //     self.name(),
+        //     self.depth
+        // );
     }
 
     /// Recursive helper function for `partition`.
@@ -628,52 +671,48 @@ impl<U: Number> Cluster<U> {
         mut indices: Vec<usize>,
     ) -> (Self, Vec<usize>) {
         if criteria.check(&self) {
-            mt_log!(
-                Level::Debug,
-                "Partitioning cluster at depth {} with offset {} and cardinality {}.",
-                self.depth,
-                self.offset,
-                self.cardinality
-            );
+            let ([(arg_l, l_indices), (arg_r, r_indices)], polar_distance) = self.partition_once(data, indices.clone());
+            if self._check_partition(&l_indices, &r_indices) {
+                core::mem::drop(indices);
 
-            let ([(arg_l, l_indices), (arg_r, r_indices)], polar_distance) = self.partition_once(data, indices);
+                let r_offset = self.offset + l_indices.len();
 
-            let r_offset = self.offset + l_indices.len();
+                let ((left, l_indices), (right, r_indices)) = rayon::join(
+                    || {
+                        Self::new(data, self.seed, self.offset, &l_indices, self.depth + 1)
+                            ._partition(data, criteria, l_indices)
+                    },
+                    || {
+                        Self::new(data, self.seed, r_offset, &r_indices, self.depth + 1)
+                            ._partition(data, criteria, r_indices)
+                    },
+                );
+                self._check_partition(&l_indices, &r_indices);
 
-            let ((left, l_indices), (right, r_indices)) = rayon::join(
-                || {
-                    Self::new(data, self.seed, self.offset, &l_indices, self.depth + 1)
-                        ._partition(data, criteria, l_indices)
-                },
-                || {
-                    Self::new(data, self.seed, r_offset, &r_indices, self.depth + 1)
-                        ._partition(data, criteria, r_indices)
-                },
-            );
+                let arg_l = utils::position_of(&l_indices, arg_l)
+                    .unwrap_or_else(|| unreachable!("We know the left pole is in the indices."));
+                let arg_r = utils::position_of(&r_indices, arg_r)
+                    .unwrap_or_else(|| unreachable!("We know the right pole is in the indices."));
 
-            let arg_l = utils::pos_val(&l_indices, arg_l)
-                .map_or_else(|| unreachable!("We know the left pole is in the indices."), |(i, _)| i);
-            let arg_r = utils::pos_val(&r_indices, arg_r)
-                .map_or_else(|| unreachable!("We know the right pole is in the indices."), |(i, _)| i);
+                self.children = Some(Children {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    arg_l: self.offset + arg_l,
+                    arg_r: r_offset + arg_r,
+                    polar_distance,
+                });
 
-            self.children = Some(Children {
-                left: Box::new(left),
-                right: Box::new(right),
-                arg_l: self.offset + arg_l,
-                arg_r: r_offset + arg_r,
-                polar_distance,
-            });
-
-            indices = l_indices.into_iter().chain(r_indices).collect::<Vec<_>>();
+                indices = l_indices.into_iter().chain(r_indices).collect::<Vec<_>>();
+            }
         }
 
         // reset the indices to center and radial indices for data reordering
-        let arg_center = utils::pos_val(&indices, self.arg_center)
-            .map_or_else(|| unreachable!("We know the center is in the indices."), |(i, _)| i);
+        let arg_center = utils::position_of(&indices, self.arg_center)
+            .unwrap_or_else(|| unreachable!("We know the center is in the indices."));
         self.arg_center = self.offset + arg_center;
 
-        let arg_radial = utils::pos_val(&indices, self.arg_radial)
-            .map_or_else(|| unreachable!("We know the radial is in the indices."), |(i, _)| i);
+        let arg_radial = utils::position_of(&indices, self.arg_radial)
+            .unwrap_or_else(|| unreachable!("We know the radial is in the indices."));
         self.arg_radial = self.offset + arg_radial;
 
         (self, indices)

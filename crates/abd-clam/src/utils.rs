@@ -5,7 +5,7 @@ use core::{
     f64::{consts::SQRT_2, EPSILON},
 };
 
-use distances::Number;
+use distances::{number::Float, Number};
 
 /// Return the index and value of the minimum value in the given slice of values.
 ///
@@ -33,58 +33,52 @@ pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
         .map(|(i, v)| (i, *v))
 }
 
-/// Calculate the mean value and standard deviation value of the given slice of values.
+/// Calculate the mean and variance of the given values.
 ///
-/// Calculates the mean and standard devitation of the given values using one pass,
-/// rather than requiring two passes. This is done by using the following formulas:
-///
-/// `sum` := `SUM(values)`
-/// `sum_squares` := `SUM(values^2)`
-/// `mean` := `sum / n`
-/// `variance` := `(sum_squares/n) - (sum^2)/(n^2)`
+/// Calculates the mean and standard deviation using a single pass algorithm.
 ///
 /// # Arguments:
 ///
-/// * `values` - The values to calculate the mean and standard deviation of.
+/// * `values` - The values to calculate the mean and variance of.
 ///
 /// # Returns:
 ///
-/// A tuple containing the mean and standard deviation of the given values.
-#[allow(dead_code)]
-pub fn mean_variance(values: &[f64]) -> (f64, f64) {
-    let n = values.len().as_f64();
-    let (sum, sum_squares): (f64, f64) = values
+/// A tuple containing the mean and variance of the given values.
+pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
+    let n = F::from(values.len());
+    let (sum, sum_squares) = values
         .iter()
-        .fold((0., 0.), |(sum, sum_squares), x| (sum + x, sum_squares + x.powi(2)));
+        .map(|&x| F::from(x))
+        .map(|x| (x, x.powi(2)))
+        .fold((F::zero(), F::zero()), |(sum, sum_squares), (x, xx)| {
+            (sum + x, sum_squares + xx)
+        });
 
     let mean = sum / n;
-    let variance = (sum_squares / n) - (sum.powi(2) / n.powi(2));
+    let variance = (sum_squares / n) - mean.powi(2);
 
     (mean, variance)
 }
 
 /// Return the mean value of the given slice of values.
-#[allow(dead_code)]
 pub fn mean<T: Number>(values: &[T]) -> f64 {
     values.iter().copied().sum::<T>().as_f64() / values.len().as_f64()
 }
 
-/// Return the standard deviation value of the given slice of values.
-#[allow(dead_code)]
-pub fn sd<T: Number>(values: &[T], mean: f64) -> f64 {
-    let var = values
+/// Return the variance of the given slice of values.
+pub fn variance<T: Number>(values: &[T], mean: f64) -> f64 {
+    values
         .iter()
         .map(|v| v.as_f64())
         .map(|v| v - mean)
         .map(|v| v.powi(2))
         .sum::<f64>()
-        / values.len().as_f64();
-    var.sqrt()
+        / values.len().as_f64()
 }
 
 /// Apply Gaussian normalization to the given values.
 #[allow(dead_code)]
-pub fn normalize_1d(values: &[f64], mean: f64, sd: f64) -> Vec<f64> {
+pub(crate) fn normalize_1d(values: &[f64], mean: f64, sd: f64) -> Vec<f64> {
     values
         .iter()
         .map(|&v| v - mean)
@@ -103,7 +97,7 @@ pub fn normalize_1d(values: &[f64], mean: f64, sd: f64) -> Vec<f64> {
 ///
 /// * `radius` - The radius used to compute the distances.
 /// * `distances` - The distances to compute the local fractal dimension of.
-pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
+pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
     if radius == T::zero() {
         1.
     } else {
@@ -127,15 +121,20 @@ pub fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
 ///
 /// * `ratio` - The ratio to compute the EMA of.
 /// * `parent_ema` - The parent EMA to use.
-pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
+pub(crate) fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
     let alpha = 2. / 11.;
     alpha.mul_add(ratio, (1. - alpha) * parent_ema)
 }
 
-/// Return the position and value of the given value in the given slice of values.
-pub fn pos_val<T: Eq + Copy>(values: &[T], v: T) -> Option<(usize, T)> {
-    values.iter().copied().enumerate().find(|&(_, x)| x == v)
+/// Return the index of the given value in the given slice of values.
+pub(crate) fn position_of<T: Eq + Copy>(values: &[T], v: T) -> Option<usize> {
+    values
+        .iter()
+        .copied()
+        .enumerate()
+        .find(|&(_, x)| x == v)
+        .map(|(i, _)| i)
 }
 
 /// Transpose a matrix represented as an array of arrays (slices) to an array of Vecs.
@@ -153,7 +152,7 @@ pub fn pos_val<T: Eq + Copy>(values: &[T], v: T) -> Option<(usize, T)> {
 ///
 /// An array of Vecs where each Vec represents a column of the original matrix.
 /// Note that all arrays in the input Vec must have 6 columns.
-pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
+pub(crate) fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
     let all_ratios: Vec<f64> = values.iter().flat_map(|arr| arr.iter().copied()).collect();
     let mut transposed: [Vec<f64>; 6] = Default::default();
 
@@ -177,8 +176,7 @@ pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
 /// # Returns
 ///
 /// An array of means, where each element represents the mean of a row.
-///
-pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
+pub(crate) fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
     values
         .iter()
         .map(|values| mean(values))
@@ -200,14 +198,101 @@ pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
 /// # Returns
 ///
 /// An array of standard deviations, where each element represents the standard deviation of a row.
-///
-pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
+pub(crate) fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
     values
         .iter()
-        .map(|values| mean_variance(values).1.sqrt())
+        .map(|values| (variance(values, mean(values))).sqrt())
         .collect::<Vec<_>>()
         .try_into()
         .unwrap_or_else(|_| unreachable!("Array always has a length of 6."))
+}
+
+/// A helper function for the median function below.
+///
+/// This function partitions the given data into three parts:
+/// - A slice of all values less than the pivot value.
+/// - The pivot value.
+/// - A slice of all values greater than the pivot value.
+///
+/// # Arguments
+///
+/// * `data` - The data to partition.
+fn partition<T: Number>(data: &[T]) -> Option<(Vec<T>, T, Vec<T>)> {
+    if data.is_empty() {
+        None
+    } else {
+        let (pivot_slice, tail) = data.split_at(1);
+        let pivot = pivot_slice[0];
+        let (left, right) = tail.iter().fold((vec![], vec![]), |mut splits, next| {
+            {
+                let (ref mut left, ref mut right) = &mut splits;
+                if next < &pivot {
+                    left.push(*next);
+                } else {
+                    right.push(*next);
+                }
+            }
+            splits
+        });
+
+        Some((left, pivot, right))
+    }
+}
+
+/// A helper function for the median function below.
+///
+/// This function selects the kth smallest element from the given data.
+///
+/// # Arguments
+///
+/// * `data` - The data to select the kth smallest element from.
+/// * `k` - The index of the element to select.
+fn select<T: Number>(data: &[T], k: usize) -> Option<T> {
+    let part = partition(data);
+
+    match part {
+        None => None,
+        Some((left, pivot, right)) => {
+            let pivot_idx = left.len();
+
+            match pivot_idx.cmp(&k) {
+                Ordering::Equal => Some(pivot),
+                Ordering::Greater => select(&left, k),
+                Ordering::Less => select(&right, k - (pivot_idx + 1)),
+            }
+        }
+    }
+}
+
+/// Find the median value using the quickselect algorithm.
+///
+/// If the number of elements is odd, the median is the middle element.
+/// If the number of elements is even, the median should be the average of the
+/// two middle elements, but this implementation returns the lower of the two
+/// middle elements.
+///
+/// Source: <https://rust-lang-nursery.github.io/rust-cookbook/science/mathematics/statistics.html>
+///
+/// # Arguments
+///
+/// * `data` - The data to find the median of.
+pub fn median<T: Number>(data: &[T]) -> Option<T> {
+    let size = data.len();
+
+    match size {
+        even if even % 2 == 0 => select(data, (even / 2) - 1),
+        // },
+        // even if even % 2 == 0 => {
+        //     let fst_med = select(data, (even / 2) - 1);
+        //     let snd_med = select(data, even / 2);
+
+        //     match (fst_med, snd_med) {
+        //         (Some(fst), Some(snd)) => Some((fst + snd) / T::from(2)),
+        //         _ => None
+        //     }
+        // },
+        odd => select(data, odd / 2),
+    }
 }
 
 #[cfg(test)]
@@ -342,8 +427,10 @@ mod tests {
             test_cases.push(data);
         }
 
-        let (actual_means, actual_variances): (Vec<f64>, Vec<f64>) =
-            test_cases.iter().map(|values| mean_variance(values)).unzip();
+        let (actual_means, actual_variances): (Vec<f64>, Vec<f64>) = test_cases
+            .iter()
+            .map(|values| mean_variance::<f64, f64>(values))
+            .unzip();
 
         // Calculate expected_means and expected_variances using
         // statistical::mean and statistical::population_variance
