@@ -32,4 +32,4 @@ pub use crate::{
 };
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.26.0";
+pub const VERSION: &str = "0.26.1";
