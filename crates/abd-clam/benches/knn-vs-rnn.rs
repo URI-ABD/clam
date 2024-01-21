@@ -44,7 +44,7 @@ fn cakes(c: &mut Criterion) {
             .throughput(Throughput::Elements(num_queries as u64))
             .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
-        let dataset = VecDataset::<_, _, bool>::new("knn".to_string(), data.clone(), metric, false, None);
+        let dataset = VecDataset::new("knn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
         let cakes = Cakes::new(dataset, Some(seed), &criteria);
 

@@ -4,7 +4,7 @@
 
 use core::cmp::Ordering;
 
-use abd_clam::VecDataset;
+use abd_clam::{Instance, VecDataset};
 use distances::{
     number::{Float, UInt},
     Number,
@@ -42,21 +42,23 @@ pub fn gen_dataset(
     dimensionality: usize,
     seed: u64,
     metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
-) -> VecDataset<Vec<f32>, f32, bool> {
+) -> VecDataset<Vec<f32>, f32, usize> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let data = symagen::random_data::random_tabular_floats(cardinality, dimensionality, -1., 1., &mut rng);
     let name = "test".to_string();
-    VecDataset::new(name, data, metric, false, None)
+    VecDataset::new(name, data, metric, false)
 }
 
 /// Generate a dataset from the given data.
-pub fn gen_dataset_from<T: Number, U: Number>(
+pub fn gen_dataset_from<T: Number, U: Number, M: Instance>(
     data: Vec<Vec<T>>,
     metric: fn(&Vec<T>, &Vec<T>) -> U,
-    metadata: Option<Vec<bool>>,
-) -> VecDataset<Vec<T>, U, bool> {
+    metadata: Vec<M>,
+) -> VecDataset<Vec<T>, U, M> {
     let name = "test".to_string();
-    VecDataset::new(name, data, metric, false, metadata)
+    VecDataset::new(name, data, metric, false)
+        .assign_metadata(metadata)
+        .unwrap_or_else(|_| unreachable!())
 }
 
 /// Compute the recall of the nearest neighbors found.

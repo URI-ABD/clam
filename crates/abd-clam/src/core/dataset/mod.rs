@@ -18,7 +18,7 @@ pub use vec2d::VecDataset;
 /// A common interface for datasets used in CLAM.
 pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Output = I> {
     /// Returns the name of the type of the dataset.
-    fn type_name(&self) -> String;
+    fn type_name() -> String;
 
     /// Returns the name of the dataset. This is used to identify the dataset in
     /// various places.

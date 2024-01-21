@@ -3,7 +3,7 @@
 use core::cmp::Ordering;
 use std::{path::Path, time::Instant};
 
-use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{knn, Cakes, Instance, PartitionCriteria, VecDataset};
 use clap::Parser;
 use distances::Number;
 use log::{debug, error, info, warn};
@@ -212,7 +212,7 @@ pub fn make_reports(
         );
 
         let data_name = format!("{}-{}", dataset.name(), multiplier + 1);
-        let data = VecDataset::new(data_name, data, metric, false, None);
+        let data = VecDataset::new(data_name, data, metric, false);
         let criteria = PartitionCriteria::default();
 
         let start = Instant::now();
@@ -309,8 +309,8 @@ pub fn make_reports(
 ///
 /// * A vector of the hits for each query.
 /// * The throughput of the algorithm.
-fn measure_algorithm<'a>(
-    cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32, bool>>,
+fn measure_algorithm<'a, M: Instance>(
+    cakes: &'a Cakes<Vec<f32>, f32, VecDataset<Vec<f32>, f32, M>>,
     queries: &'a [&Vec<f32>],
     k: usize,
     algorithm: knn::Algorithm,

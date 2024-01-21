@@ -9,6 +9,7 @@ use std::{
 };
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::Dataset;
 
@@ -22,6 +23,7 @@ use super::Instance;
 ///
 /// - `T`: The type of the instances in the `Dataset`.
 /// - `U`: The type of the distance values between instances.
+/// - `M`: The type of the metadata associated with each instance.
 #[derive(Debug)]
 pub struct VecDataset<I: Instance, U: Number, M: Instance> {
     /// The name of the dataset.
@@ -35,10 +37,10 @@ pub struct VecDataset<I: Instance, U: Number, M: Instance> {
     /// The reordering of the dataset after building the tree.
     permuted_indices: Option<Vec<usize>>,
     /// Metadata about the dataset.
-    metadata: Option<Vec<M>>,
+    metadata: Vec<M>,
 }
 
-impl<I: Instance, U: Number, M: Instance> VecDataset<I, U, M> {
+impl<I: Instance, U: Number> VecDataset<I, U, usize> {
     /// Creates a new dataset.
     ///
     /// # Arguments
@@ -47,13 +49,8 @@ impl<I: Instance, U: Number, M: Instance> VecDataset<I, U, M> {
     /// * `data`: The vector of instances.
     /// * `metric`: The metric for computing distances between instances.
     /// * `is_expensive`: Whether the metric is expensive to compute.
-    pub fn new(
-        name: String,
-        data: Vec<I>,
-        metric: fn(&I, &I) -> U,
-        is_expensive: bool,
-        metadata: Option<Vec<M>>,
-    ) -> Self {
+    pub fn new(name: String, data: Vec<I>, metric: fn(&I, &I) -> U, is_expensive: bool) -> Self {
+        let metadata = (0..data.len()).collect();
         Self {
             name,
             data,
@@ -61,6 +58,47 @@ impl<I: Instance, U: Number, M: Instance> VecDataset<I, U, M> {
             is_expensive,
             permuted_indices: None,
             metadata,
+        }
+    }
+}
+
+impl<I: Instance, U: Number, M: Instance> VecDataset<I, U, M> {
+    /// Assigns metadata to the dataset.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata`: The metadata to assign to the dataset.
+    ///
+    /// # Returns
+    ///
+    /// The dataset with the metadata assigned.
+    ///
+    /// # Errors
+    ///
+    /// * If the metadata is not the same length as the dataset.
+    pub fn assign_metadata<Mn: Instance>(self, metadata: Vec<Mn>) -> Result<VecDataset<I, U, Mn>, String> {
+        if metadata.len() == self.data.len() {
+            // If there is a permutation, permute the metadata as well.
+            let metadata = if let Some(permutation) = self.permuted_indices.as_ref() {
+                permutation.par_iter().map(|&index| metadata[index].clone()).collect()
+            } else {
+                metadata
+            };
+
+            Ok(VecDataset {
+                name: self.name,
+                data: self.data,
+                metric: self.metric,
+                is_expensive: self.is_expensive,
+                permuted_indices: self.permuted_indices,
+                metadata,
+            })
+        } else {
+            Err(format!(
+                "Invalid metadata. Expected metadata of length {}, got metadata of length {}",
+                self.cardinality(),
+                metadata.len()
+            ))
         }
     }
 
@@ -78,20 +116,20 @@ impl<I: Instance, U: Number, M: Instance> VecDataset<I, U, M> {
 
     /// A reference to the underlying metadata.
     #[must_use]
-    pub fn metadata(&self) -> Option<&[M]> {
-        self.metadata.as_deref()
+    pub fn metadata(&self) -> &[M] {
+        &self.metadata
     }
 
     /// Moves the underlying metadata out of the dataset.
     #[must_use]
-    pub fn metadata_owned(self) -> Option<Vec<M>> {
+    pub fn metadata_owned(self) -> Vec<M> {
         self.metadata
     }
 
     /// A reference to the metadata of a specific instance.
     #[must_use]
-    pub fn metadata_of(&self, index: usize) -> Option<&M> {
-        self.metadata().map(|m| &m[index])
+    pub fn metadata_of(&self, index: usize) -> &M {
+        &self.metadata[index]
     }
 }
 
@@ -104,8 +142,8 @@ impl<I: Instance, U: Number, M: Instance> Index<usize> for VecDataset<I, U, M> {
 }
 
 impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> {
-    fn type_name(&self) -> String {
-        format!("VecDataset<{}>", I::type_name())
+    fn type_name() -> String {
+        format!("VecDataset<{}, {}, {}>", I::type_name(), U::type_name(), M::type_name())
     }
 
     fn name(&self) -> &str {
@@ -130,9 +168,7 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
 
     fn swap(&mut self, left: usize, right: usize) -> Result<(), String> {
         self.data.swap(left, right);
-        if let Some(v) = self.metadata.as_mut() {
-            v.swap(left, right);
-        };
+        self.metadata.swap(left, right);
         Ok(())
     }
 
@@ -140,17 +176,46 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
         self.permuted_indices.as_deref()
     }
 
+    fn permute_instances(&mut self, permutation: &[usize]) -> Result<(), String> {
+        if permutation.len() != self.data.len() {
+            return Err(format!(
+                "Invalid permutation. Expected permutation of length {}, got permutation of length {}",
+                self.cardinality(),
+                permutation.len()
+            ));
+        }
+
+        self.data = permutation.par_iter().map(|&index| self.data[index].clone()).collect();
+        self.metadata = permutation
+            .par_iter()
+            .map(|&index| self.metadata[index].clone())
+            .collect();
+
+        self.set_permuted_indices(Some(permutation));
+
+        Ok(())
+    }
+
     fn make_shards(mut self, max_cardinality: usize) -> Vec<Self> {
         let mut shards = Vec::new();
+        let mut metadata = self.metadata.clone();
 
         while self.data.len() > max_cardinality {
-            let at = self.data.len() - max_cardinality;
-            let chunk = self.data.split_off(at);
-            let meta_chunk = self.metadata.as_mut().map(|m| m.split_off(at));
-
+            // Create a new name for the shard.
             let name = format!("{}-shard-{}", self.name, shards.len());
-            shards.push(Self::new(name, chunk, self.metric, self.is_expensive, meta_chunk));
+
+            // Split the data.
+            let at = self.data.len() - max_cardinality;
+            let data = self.data.split_off(at);
+
+            // Create the shard, assign the metadata, and add it to the list of shards.
+            shards.push(
+                VecDataset::new(name, data, self.metric, self.is_expensive)
+                    .assign_metadata(metadata.split_off(at))
+                    .unwrap_or_else(|_| unreachable!("We just split this dataset at the same indices.")),
+            );
         }
+
         self.name = format!("{}-shard-{}", self.name, shards.len());
         shards.push(self);
 
@@ -161,7 +226,7 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
         let mut handle = BufWriter::new(File::create(path).map_err(|e| e.to_string())?);
 
         // Write header (Basic protection against reading bad data)
-        let type_name = self.type_name();
+        let type_name = Self::type_name();
         handle
             .write_all(&type_name.len().to_le_bytes())
             .and_then(|()| handle.write_all(type_name.as_bytes()))
@@ -195,14 +260,11 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
         }
 
         // Write number of metadata
-        let num_metadata = self.metadata.as_ref().map_or(0, Vec::len).to_le_bytes();
-        handle.write_all(&num_metadata).map_err(|e| e.to_string())?;
+        handle.write_all(&cardinality_bytes).map_err(|e| e.to_string())?;
 
         // Write metadata
-        if let Some(metadata) = &self.metadata {
-            for meta in metadata {
-                meta.save(&mut handle)?;
-            }
+        for meta in &self.metadata {
+            meta.save(&mut handle)?;
         }
 
         Ok(())
@@ -211,7 +273,7 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
     fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
         let mut handle = File::open(path).map_err(|e| e.to_string())?;
 
-        // Check the type name.
+        // Check that the type name matches.
         {
             // Read the number of bytes in the type name
             let mut num_type_bytes = vec![0; usize::num_bytes()];
@@ -223,8 +285,8 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
             handle.read_exact(&mut type_buf).map_err(|e| e.to_string())?;
             let type_name = String::from_utf8(type_buf).map_err(|e| e.to_string())?;
 
-            // If the type name doesn't match, return an error
-            let actual_type_name = format!("VecDataset<{}>", I::type_name());
+            // Check that the type name matches.
+            let actual_type_name = Self::type_name();
             if type_name != actual_type_name {
                 return Err(format!(
                     "Invalid type. File has data of type {type_name} but dataset was constructed with type {actual_type_name}"
@@ -232,7 +294,7 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
             }
         };
 
-        // Read the name
+        // Read the given name of the dataset
         let name = {
             let mut num_name_bytes = vec![0; usize::num_bytes()];
             handle.read_exact(&mut num_name_bytes).map_err(|e| e.to_string())?;
@@ -280,14 +342,9 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
             <usize as Number>::from_le_bytes(&num_metadata_buf)
         };
 
-        let metadata = if num_metadata == 0 {
-            None
-        } else {
-            let metadata = (0..num_metadata)
-                .map(|_| M::load(&mut handle))
-                .collect::<Result<Vec<_>, _>>()?;
-            Some(metadata)
-        };
+        let metadata = (0..num_metadata)
+            .map(|_| M::load(&mut handle))
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
             name,
