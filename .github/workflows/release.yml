@@ -25,6 +25,7 @@ jobs:
         run: |
           cd crates \
           && earthly \
+            --push \
             +publish \
             --CARGO_REGISTRY_TOKEN=${{ secrets.CARGO_REGISTRY_TOKEN }} \
             --DIR=${{ matrix.package }}
