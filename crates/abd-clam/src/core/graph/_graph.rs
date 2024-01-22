@@ -5,7 +5,11 @@ use std::collections::{HashMap, HashSet};
 use distances::Number;
 
 // use crate::core::{cluster::Cluster, dataset::VecDataset};
-use crate::core::cluster::Cluster;
+use crate::core::graph::builder::{detect_edges, select_clusters};
+
+use crate::{core::cluster::Cluster, Dataset, Instance, Tree};
+
+use super::MetaMLScorer;
 
 /// A set of clusters with references to clusters in a graph.
 pub type ClusterSet<'a, U> = HashSet<&'a Cluster<U>>;
@@ -194,6 +198,37 @@ pub struct Graph<'a, U: Number> {
 }
 
 impl<'a, U: Number> Graph<'a, U> {
+    /// Creates a new `Graph` from the provided `tree`.
+    ///
+    /// This function takes a tree structure and produces a graph based on selected clusters and edges.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree`: The `Tree` instance used as the source data for building the `Graph`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` with a new `Graph` instance constructed from the selected clusters and edges
+    /// if the operation succeeds. Otherwise, returns an `Err` containing an error message.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error under the following conditions:
+    ///
+    /// - If the selected clusters are empty, indicating that a graph cannot be created with no clusters.
+    /// - If an edge refers to a cluster that is not part of the selected clusters.
+    ///
+    pub fn from_tree<I: Instance, D: Dataset<I, U>>(
+        tree: &'a Tree<I, U, D>,
+        scorer_function: &MetaMLScorer,
+    ) -> Result<Self, String> {
+        //TODO: this function will eventually accept a scorer function as a parameter once scoring functions are implemented
+        let selected_clusters = select_clusters(tree.root(), scorer_function, 4);
+
+        let edges = detect_edges(&selected_clusters, tree.data());
+        Graph::from_clusters_and_edges(selected_clusters.clone(), edges)
+    }
+
     /// Creates a new `Graph` from the provided set of `clusters` and `edges`.
     ///
     /// # Arguments
@@ -213,7 +248,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// - If the provided `clusters` set is empty, indicating that a graph cannot be created with no clusters.
     /// - If an edge refers to a cluster that is not in the `clusters` set.
     ///
-    pub fn from_clusters_and_edges(clusters: ClusterSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
+    fn from_clusters_and_edges(clusters: ClusterSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
         if clusters.is_empty() {
             return Err("Cannot create a graph with no clusters.".to_string());
         }
@@ -725,11 +760,12 @@ impl<'a, U: Number> Graph<'a, U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Graph, PartitionCriteria, Tree, VecDataset};
+    use crate::{chaoda::pretrained_models, Graph, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
+    use rand::SeedableRng;
 
-    use crate::builder::{detect_edges, select_clusters};
+    use crate::core::graph::builder::{detect_edges, select_clusters};
 
     /// Generate a dataset with the given cardinality and dimensionality.
     pub fn gen_dataset(
@@ -737,10 +773,11 @@ mod tests {
         dimensionality: usize,
         seed: u64,
         metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
-    ) -> VecDataset<Vec<f32>, f32, bool> {
-        let data = symagen::random_data::random_tabular_seedable::<f32>(cardinality, dimensionality, -1., 1., seed);
+    ) -> VecDataset<Vec<f32>, f32, usize> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let data = symagen::random_data::random_tabular_floats(cardinality, dimensionality, -1., 1., &mut rng);
         let name = "test".to_string();
-        VecDataset::new(name, data, metric, false, None)
+        VecDataset::new(name, data, metric, false)
     }
     /// Euclidean distance between two vectors.
     pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
@@ -751,7 +788,11 @@ mod tests {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let selected_clusters = select_clusters(raw_tree.root(), 4);
+        let selected_clusters = select_clusters(
+            raw_tree.root(),
+            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
+            4,
+        );
 
         let edges = detect_edges(&selected_clusters, raw_tree.data());
 
@@ -791,14 +832,13 @@ mod tests {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let selected_clusters = select_clusters(raw_tree.root(), 4);
+        let selected_clusters = select_clusters(
+            raw_tree.root(),
+            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
+            4,
+        );
 
         let edges = detect_edges(&selected_clusters, raw_tree.data());
-
-        // let mut edges_ref = EdgeSet::new();
-        // for edge in edges.iter() {
-        //     edges_ref.insert(edge);
-        // }
 
         let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges);
         assert!(graph.is_ok());
@@ -811,6 +851,34 @@ mod tests {
                 let adj = adj_map.get(c).unwrap();
                 for adj_c in adj {
                     assert!(component.contains(adj_c));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn create_graph_from_tree() {
+        let data = gen_dataset(1000, 10, 42, euclidean);
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+
+        let graph = Graph::from_tree(&raw_tree, &pretrained_models::get_meta_ml_scorers().first().unwrap().1);
+        assert!(graph.is_ok());
+        if let Ok(graph) = graph {
+            let components = graph.find_component_clusters();
+
+            // assert ordered clusters are in correct order
+            graph.clusters().iter().for_each(|c1| {
+                assert!(graph.ordered_clusters.contains(c1));
+            });
+
+            // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
+            for component in &components {
+                for c in component {
+                    if let Ok(traversal_result) = graph.traverse(c) {
+                        assert_eq!(traversal_result.0.len(), component.len());
+                        // assert_eq!(traversal_result.1.len(), component.len());
+                    }
                 }
             }
         }

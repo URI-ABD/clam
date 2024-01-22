@@ -1,11 +1,16 @@
-use crate::core::graph::EdgeSet;
-use crate::{Cluster, ClusterSet, Dataset, Edge, Instance};
+use crate::core::graph::_graph::{ClusterSet, EdgeSet};
+use crate::{Cluster, Dataset, Edge, Instance};
 use distances::Number;
 use std::collections::HashSet;
 
+use super::MetaMLScorer;
+
 /// Filler function to select clusters for graph
-#[allow(dead_code)]
-pub fn select_clusters<U: Number>(root: &Cluster<U>, depth: usize) -> ClusterSet<U> {
+pub fn select_clusters<'a, U: Number>(
+    root: &'a Cluster<U>,
+    _scorer_function: &MetaMLScorer,
+    depth: usize,
+) -> ClusterSet<'a, U> {
     // TODO! Replace with proper cluster selection algorithm
     let mut selected_clusters = ClusterSet::new();
     for c in root.subtree() {
@@ -30,7 +35,7 @@ pub fn select_clusters<U: Number>(root: &Cluster<U>, depth: usize) -> ClusterSet
 /// # Returns
 ///
 /// A `HashSet` containing the detected edges, represented by `Edge` instances.
-#[allow(clippy::implicit_hasher, dead_code)]
+#[allow(clippy::implicit_hasher)]
 pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
     clusters: &ClusterSet<'a, U>,
     data: &D,
