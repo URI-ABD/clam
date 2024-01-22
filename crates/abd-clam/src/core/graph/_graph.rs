@@ -222,11 +222,10 @@ impl<'a, U: Number> Graph<'a, U> {
         tree: &'a Tree<I, U, D>,
         scorer_function: &MetaMLScorer,
     ) -> Result<Self, String> {
-        //TODO: this function will eventually accept a scorer function as a parameter once scoring functions are implemented
         let selected_clusters = select_clusters(tree.root(), scorer_function, 4);
 
         let edges = detect_edges(&selected_clusters, tree.data());
-        Graph::from_clusters_and_edges(selected_clusters.clone(), edges)
+        Graph::from_clusters_and_edges(selected_clusters, edges)
     }
 
     /// Creates a new `Graph` from the provided set of `clusters` and `edges`.
