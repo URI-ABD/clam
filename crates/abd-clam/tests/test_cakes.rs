@@ -80,7 +80,7 @@ fn line() {
 fn vectors(cardinality: usize, dimensionality: usize) {
     let seed = 42;
 
-    let data = utils::gen_dataset(cardinality, dimensionality, seed, utils::euclidean);
+    let data: VecDataset<Vec<f32>, f32, usize> = utils::gen_dataset(cardinality, dimensionality, seed, utils::euclidean);
     let cakes = Cakes::new(data, Some(seed), &PartitionCriteria::default());
 
     let num_queries = 100;
