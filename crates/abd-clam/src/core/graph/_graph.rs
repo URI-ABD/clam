@@ -226,7 +226,7 @@ impl<'a, U: Number> Graph<'a, U> {
         let selected_clusters = select_clusters(tree.root(), scorer_function, 4);
 
         let edges = detect_edges(&selected_clusters, tree.data());
-        Graph::from_clusters_and_edges(selected_clusters.clone(), edges)
+        Graph::from_clusters_and_edges(selected_clusters, edges)
     }
 
     /// Creates a new `Graph` from the provided set of `clusters` and `edges`.
