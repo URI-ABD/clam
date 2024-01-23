@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use distances::Number;
 
 // use crate::core::{cluster::Cluster, dataset::VecDataset};
-use crate::core::graph::builder::{detect_edges, select_clusters};
+use crate::core::graph::criteria::{detect_edges, select_clusters};
 
 use crate::{core::cluster::Cluster, Dataset, Instance, Tree};
 
@@ -335,25 +335,29 @@ impl<'a, U: Number> Graph<'a, U> {
     }
 
     /// Computes the adjacency matrix for the `Graph` and stores it as an
-    /// internal property.
+    /// internal property. If the distance matrix is not already computed, it
+    /// calls `with_distance_matrix` to calculate it.
     ///
     /// # Returns
     ///
     /// A new `Graph` instance with the updated adjacency matrix.
     ///
-    /// # Panics
-    ///
-    /// This method panics if called before `with_distance_matrix`.
     #[must_use]
     pub fn with_adjacency_matrix(mut self) -> Self {
-        if let Some(distance_matrix) = self.distance_matrix() {
-            self.adjacency_matrix = Some(
-                distance_matrix
+        if self.distance_matrix.is_none() {
+            self = self.with_distance_matrix();
+        }
+
+        self.adjacency_matrix = Some(self.distance_matrix().map_or_else(
+            || unreachable!("with_distance_matrix is guaranteed to be called"),
+            |matrix| {
+                matrix
                     .iter()
                     .map(|row| row.iter().map(|&v| v != U::zero()).collect())
-                    .collect(),
-            );
-        }
+                    .collect()
+            },
+        ));
+
         self
     }
 
@@ -388,8 +392,8 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A `Result` where `Ok` contains a vector of sets where each set represents a connected component of clusters,
-    /// and `Err` contains an error message if there's an issue during the computation.
+    /// A vector of sets where each set represents a connected component of clusters,
+    ///
     #[must_use]
     pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, U>> {
         let mut components = Vec::new();
@@ -564,18 +568,13 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A `Result` where:
-    /// - `Ok` contains a reference to the adjacency matrix, which is a 2D vector of booleans.
-    /// - `Err` contains an error message if `with_adjacency_matrix` was not called before using this method.
+    /// An `Option` where:
+    /// - `Some` contains a reference to the adjacency matrix, which is a 2D vector of booleans.
+    /// - `None` indicates that `with_adjacency_matrix` was not called before using this method.
     ///
-    /// # Errors
-    ///
-    /// Returns an error message if the adjacency matrix is not available, indicating that `with_adjacency_matrix`
-    /// should be called before using this method.
-    pub fn adjacency_matrix(&self) -> Result<&[Vec<bool>], String> {
-        Ok(self.adjacency_matrix.as_ref().ok_or_else(|| {
-            "Please call `with_adjacency_matrix` on the Graph before using `adjacency_matrix`.".to_string()
-        })?)
+    #[must_use]
+    pub fn adjacency_matrix(&self) -> Option<&[Vec<bool>]> {
+        self.adjacency_matrix.as_deref()
     }
 
     /// Calculates and returns the diameter of the graph.
@@ -759,12 +758,14 @@ impl<'a, U: Number> Graph<'a, U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chaoda::pretrained_models, Graph, PartitionCriteria, Tree, VecDataset};
+    use std::collections::HashSet;
+
+    use crate::{chaoda::pretrained_models, Cluster, Edge, Graph, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
     use rand::SeedableRng;
 
-    use crate::core::graph::builder::{detect_edges, select_clusters};
+    use crate::core::graph::criteria::{detect_edges, select_clusters};
 
     /// Generate a dataset with the given cardinality and dimensionality.
     pub fn gen_dataset(
@@ -782,66 +783,80 @@ mod tests {
     pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
         distances::vectors::euclidean(x, y)
     }
+
     #[test]
-    fn create_graph() {
-        let data = gen_dataset(1000, 10, 42, euclidean);
-        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let selected_clusters = select_clusters(
-            raw_tree.root(),
-            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
-            4,
-        );
+    fn test_graph() {
+        let cardinality = 1000;
+        let data = gen_dataset(cardinality, 10, 42, euclidean);
 
-        let edges = detect_edges(&selected_clusters, raw_tree.data());
+        let raw_tree = Tree::new(data, Some(42)).partition(&PartitionCriteria::default());
+        for i in 4..raw_tree.depth() {
+            println!("{i}");
+            let selected_clusters = select_clusters(
+                raw_tree.root(),
+                &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
+                i,
+            );
 
-        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
-        assert!(graph.is_ok());
-        if let Ok(graph) = graph {
-            // assert edges and clusters are correct
-            assert_eq!(graph.clusters().len(), selected_clusters.len());
-            assert_eq!(graph.edges().len(), edges.len());
+            let edges = detect_edges(&selected_clusters, raw_tree.data());
 
-            let reference_population = selected_clusters.iter().fold(0, |acc, &c| acc + c.cardinality());
-            assert_eq!(graph.population(), reference_population);
-            let components = graph.find_component_clusters();
+            let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
+            assert!(graph.is_ok());
+            if let Ok(graph) = graph {
+                let graph = graph.with_adjacency_matrix().with_distance_matrix();
+                assert_eq!(graph.population(), cardinality);
 
-            // assert ordered clusters are in correct order
-            graph.clusters().iter().for_each(|c1| {
-                assert!(graph.ordered_clusters.contains(c1));
-            });
-
-            let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
-            assert_eq!(num_clusters_in_components, selected_clusters.len());
-
-            // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
-            for component in &components {
-                for c in component {
-                    if let Ok(traversal_result) = graph.traverse(c) {
-                        assert_eq!(traversal_result.0.len(), component.len());
-                        // assert_eq!(traversal_result.1.len(), component.len());
-                    }
-                }
+                test_properties(&graph, &selected_clusters, &edges);
+                test_adjacency_map(&graph);
+                test_matrix(&graph)
             }
         }
     }
 
     #[test]
-    fn adjacency_map() {
+    fn create_graph_from_tree() {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
-        let selected_clusters = select_clusters(
-            raw_tree.root(),
-            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
-            4,
-        );
 
-        let edges = detect_edges(&selected_clusters, raw_tree.data());
-
-        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges);
+        let graph = Graph::from_tree(&raw_tree, &pretrained_models::get_meta_ml_scorers().first().unwrap().1);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
+        let graph = graph.with_adjacency_matrix().with_distance_matrix();
+
+        test_adjacency_map(&graph);
+        test_matrix(&graph);
+    }
+
+    fn test_properties(graph: &Graph<f32>, selected_clusters: &HashSet<&Cluster<f32>>, edges: &HashSet<Edge<f32>>) {
+        // assert edges and clusters are correct
+        assert_eq!(graph.clusters().len(), selected_clusters.len());
+        assert_eq!(graph.edges().len(), edges.len());
+
+        let reference_population = selected_clusters.iter().fold(0, |acc, &c| acc + c.cardinality());
+        assert_eq!(graph.population(), reference_population);
+        let components = graph.find_component_clusters();
+
+        // assert ordered clusters are in correct order
+        graph.clusters().iter().for_each(|c1| {
+            assert!(graph.ordered_clusters.contains(c1));
+        });
+
+        let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
+        assert_eq!(num_clusters_in_components, selected_clusters.len());
+
+        // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
+        for component in &components {
+            for c in component {
+                if let Ok(traversal_result) = graph.traverse(c) {
+                    assert_eq!(traversal_result.0.len(), component.len());
+                    // assert_eq!(traversal_result.1.len(), component.len());
+                }
+            }
+        }
+    }
+
+    fn test_adjacency_map(graph: &Graph<f32>) {
         let adj_map = graph.adjacency_map();
         assert_eq!(adj_map.len(), graph.clusters().len());
 
@@ -855,31 +870,47 @@ mod tests {
         }
     }
 
-    #[test]
-    fn create_graph_from_tree() {
-        let data = gen_dataset(1000, 10, 42, euclidean);
-        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+    fn test_matrix(graph: &Graph<f32>) {
+        assert_eq!(graph.adjacency_map.len(), graph.distance_matrix().unwrap().len());
+        assert_eq!(graph.adjacency_map.len(), graph.adjacency_matrix().unwrap().len());
 
-        let graph = Graph::from_tree(&raw_tree, &pretrained_models::get_meta_ml_scorers().first().unwrap().1);
-        assert!(graph.is_ok());
-        if let Ok(graph) = graph {
-            let components = graph.find_component_clusters();
+        assert_eq!(
+            graph.distance_matrix().unwrap().first().unwrap().len(),
+            graph.adjacency_matrix().unwrap().first().unwrap().len()
+        );
 
-            // assert ordered clusters are in correct order
-            graph.clusters().iter().for_each(|c1| {
-                assert!(graph.ordered_clusters.contains(c1));
-            });
+        assert!(distance_mat_is_symmetric(&graph));
 
-            // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
-            for component in &components {
-                for c in component {
-                    if let Ok(traversal_result) = graph.traverse(c) {
-                        assert_eq!(traversal_result.0.len(), component.len());
-                        // assert_eq!(traversal_result.1.len(), component.len());
-                    }
+        let flat_adj_mat = graph.adjacency_matrix().unwrap().iter().flatten();
+        let flat_dist_mat = graph.distance_matrix().unwrap().iter().flatten();
+
+        for (has_edge, distance) in flat_adj_mat.zip(flat_dist_mat) {
+            if !has_edge {
+                assert!(float_cmp::approx_eq!(f32, *distance, 0.))
+            } else {
+                // possibly false fails if distance is actually 0?
+                assert!(!float_cmp::approx_eq!(f32, *distance, 0.))
+            }
+        }
+    }
+
+    fn distance_mat_is_symmetric(graph: &Graph<f32>) -> bool {
+        let matrix = graph.distance_matrix().unwrap();
+        let num_rows = matrix.len();
+        let num_cols = matrix[0].len();
+
+        if num_rows != num_cols {
+            return false; // Non-square matrix cannot be symmetric
+        }
+
+        for i in 0..num_rows {
+            for j in 0..num_cols {
+                if matrix[i][j] != matrix[j][i] {
+                    return false; // Elements at (i, j) and (j, i) are not equal, matrix is not symmetric
                 }
             }
         }
+
+        true
     }
 }

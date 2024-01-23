@@ -3,8 +3,6 @@ mod _graph;
 
 /// Helper functions for building graph
 /// Selects clusters and detects edges
-mod builder;
-
 pub mod criteria;
 pub use _graph::{Edge, Graph};
 
