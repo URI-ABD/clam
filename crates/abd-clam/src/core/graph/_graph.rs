@@ -837,10 +837,14 @@ mod tests {
         assert_eq!(graph.population(), reference_population);
         let components = graph.find_component_clusters();
 
-        // assert ordered clusters are in correct order
         graph.clusters().iter().for_each(|c1| {
             assert!(graph.ordered_clusters.contains(c1));
         });
+
+        // assert ordered clusters are in correct order
+        for i in 1..graph.ordered_clusters().len() {
+            assert!(graph.ordered_clusters().get(i) > graph.ordered_clusters().get(i - 1))
+        }
 
         let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
         assert_eq!(num_clusters_in_components, selected_clusters.len());
