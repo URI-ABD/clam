@@ -143,3 +143,86 @@ pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
 
     edges
 }
+
+#[cfg(test)]
+mod tests {
+    use distances::number::Float;
+    use distances::Number;
+    use rand::SeedableRng;
+
+    use crate::core::graph::criteria::{score_clusters, select_clusters};
+    use crate::{PartitionCriteria, Tree, VecDataset};
+
+    use crate::chaoda::pretrained_models;
+
+    /// Generate a dataset with the given cardinality and dimensionality.
+    pub fn gen_dataset(
+        cardinality: usize,
+        dimensionality: usize,
+        seed: u64,
+        metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
+    ) -> VecDataset<Vec<f32>, f32, usize> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let data = symagen::random_data::random_tabular_floats(cardinality, dimensionality, -1., 1., &mut rng);
+        let name = "test".to_string();
+        VecDataset::new(name, data, metric, false)
+    }
+    /// Euclidean distance between two vectors.
+    pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
+        distances::vectors::euclidean(x, y)
+    }
+
+    #[test]
+    fn scoring() {
+        let data = gen_dataset(1000, 10, 42, euclidean);
+
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(true);
+
+        let root = raw_tree.root();
+
+        let scorer_function = &pretrained_models::get_meta_ml_scorers()[0].1;
+
+        let mut priority_queue = match score_clusters(&root, scorer_function) {
+            Ok(pq) => pq,
+            Err(err) => panic!("Error scoring clusters: {}", err),
+        };
+
+        assert_eq!(priority_queue.len(), root.subtree().len());
+
+        let mut prev_value: f64;
+        let mut curr_value: f64;
+
+        prev_value = priority_queue.pop().unwrap().score;
+        while !priority_queue.is_empty() {
+            curr_value = priority_queue.pop().unwrap().score;
+            assert!(prev_value >= curr_value);
+            prev_value = curr_value;
+        }
+
+        let cluster_set = select_clusters(&root, scorer_function).unwrap();
+        for i in &cluster_set {
+            for j in &cluster_set {
+                if i != j {
+                    assert!(!i.is_descendant_of(j) && !i.is_ancestor_of(j));
+                }
+            }
+        }
+
+        for i in &root.subtree() {
+            let mut ancestor_of = false;
+            let mut descendant_of = false;
+            for j in &cluster_set {
+                if i.is_ancestor_of(j) {
+                    ancestor_of = true;
+                }
+                if i.is_descendant_of(j) {
+                    descendant_of = true
+                }
+            }
+            assert!(ancestor_of || descendant_of || cluster_set.contains(i))
+        }
+    }
+}
