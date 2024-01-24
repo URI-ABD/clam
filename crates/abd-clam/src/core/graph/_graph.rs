@@ -222,7 +222,7 @@ impl<'a, U: Number> Graph<'a, U> {
         tree: &'a Tree<I, U, D>,
         scorer_function: &MetaMLScorer,
     ) -> Result<Self, String> {
-        let selected_clusters = select_clusters(tree.root(), scorer_function, 4);
+        let selected_clusters = select_clusters(tree.root(), scorer_function)?;
 
         let edges = detect_edges(&selected_clusters, tree.data());
         Graph::from_clusters_and_edges(selected_clusters, edges)
@@ -789,14 +789,16 @@ mod tests {
         let cardinality = 1000;
         let data = gen_dataset(cardinality, 10, 42, euclidean);
 
-        let raw_tree = Tree::new(data, Some(42)).partition(&PartitionCriteria::default());
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&PartitionCriteria::default())
+            .with_ratios(true);
         for i in 4..raw_tree.depth() {
             println!("{i}");
             let selected_clusters = select_clusters(
                 raw_tree.root(),
                 &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
-                i,
-            );
+            )
+            .unwrap();
 
             let edges = detect_edges(&selected_clusters, raw_tree.data());
 
@@ -817,7 +819,9 @@ mod tests {
     fn create_graph_from_tree() {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(false);
 
         let graph = Graph::from_tree(&raw_tree, &pretrained_models::get_meta_ml_scorers().first().unwrap().1);
         assert!(graph.is_ok());
