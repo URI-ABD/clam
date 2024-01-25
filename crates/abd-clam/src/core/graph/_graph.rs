@@ -198,7 +198,7 @@ pub struct Graph<'a, U: Number> {
 }
 
 impl<'a, U: Number> Graph<'a, U> {
-    /// Creates a new `Graph` from the provided `tree`.
+    // Creates a new `Graph` from the provided `tree`.
     ///
     /// This function takes a tree structure and produces a graph based on selected clusters and edges.
     ///
@@ -222,7 +222,7 @@ impl<'a, U: Number> Graph<'a, U> {
         tree: &'a Tree<I, U, D>,
         scorer_function: &MetaMLScorer,
     ) -> Result<Self, String> {
-        let selected_clusters = select_clusters(tree.root(), scorer_function, 4);
+        let selected_clusters = select_clusters(tree.root(), scorer_function)?;
 
         let edges = detect_edges(&selected_clusters, tree.data());
         Graph::from_clusters_and_edges(selected_clusters, edges)
@@ -795,8 +795,8 @@ mod tests {
             let selected_clusters = select_clusters(
                 raw_tree.root(),
                 &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
-                i,
-            );
+            )
+            .unwrap();
 
             let edges = detect_edges(&selected_clusters, raw_tree.data());
 

@@ -3,25 +3,106 @@
 /// A `Box`ed function that assigns a score for a given `Cluster`.
 pub type MetaMLScorer = Box<fn(crate::core::cluster::Ratios) -> f64>;
 
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashSet};
+
 use crate::core::graph::_graph::{ClusterSet, EdgeSet};
 use crate::{Cluster, Dataset, Edge, Instance};
 use distances::Number;
-use std::collections::HashSet;
 
-/// Filler function to select clusters for graph
+/// A Wrapper that contains a cluster and its score
+pub struct ClusterWrapper<'a, U: Number> {
+    /// A cluster
+    pub cluster: &'a Cluster<U>,
+    /// An associated score
+    pub score: f64,
+}
+
+impl<'a, U: Number> PartialEq for ClusterWrapper<'a, U> {
+    fn eq(&self, other: &Self) -> bool {
+        self.score == other.score
+    }
+}
+
+impl<'a, U: Number> Eq for ClusterWrapper<'a, U> {}
+
+impl<'a, U: Number> Ord for ClusterWrapper<'a, U> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.score.partial_cmp(&other.score).unwrap_or(Ordering::Equal)
+    }
+}
+
+impl<'a, U: Number> PartialOrd for ClusterWrapper<'a, U> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Scores a cluster with a given scoring fuction
+///
+///
+/// # Arguments
+///
+/// * `root`: The root of the tree.
+/// * `scoring_function`: Function in which to score each cluster
+///
+/// # Returns:
+///
+/// `BinaryHeap` of `ClusterWrappers`
+///
+pub fn score_clusters<'a, U: Number>(
+    root: &'a Cluster<U>,
+    scoring_function: &crate::core::graph::MetaMLScorer,
+) -> Result<BinaryHeap<ClusterWrapper<'a, U>>, String> {
+    let mut scored_clusters: BinaryHeap<ClusterWrapper<'a, U>> = BinaryHeap::new();
+
+    for cluster in root.subtree() {
+        let score = match cluster.ratios() {
+            Some(ratios) => scoring_function(ratios),
+            None => return Err("Error: tree must be built with ratios".to_string()),
+        };
+        scored_clusters.push(ClusterWrapper { cluster, score });
+    }
+
+    Ok(scored_clusters)
+}
+
+/// Gets `ClusterSet` from `BinaryHeap` of `ClusterWrappers`
+///
+/// # Arguments
+///
+/// * clusters : `BinaryHeap` of `ClusterWrappers` containing a cluster and its score
+///
+/// # Returns:
+///
+/// `ClusterSet` of chosen clusters representing highest scored with no ancestors or descendants
+///
+/// # Errors
+///
+/// If `ClusterWrapper` contains an invalid cluster-score pairing
+///
 pub fn select_clusters<'a, U: Number>(
     root: &'a Cluster<U>,
-    _scorer_function: &MetaMLScorer,
-    depth: usize,
-) -> ClusterSet<'a, U> {
-    // TODO! Replace with proper cluster selection algorithm
-    let mut selected_clusters = ClusterSet::new();
-    for c in root.subtree() {
-        if c.depth() == depth || (c.depth() < depth && c.is_leaf()) {
-            selected_clusters.insert(c);
-        }
+    scoring_function: &MetaMLScorer,
+) -> Result<ClusterSet<'a, U>, String> {
+    let mut cluster_set: HashSet<&'a Cluster<U>> = HashSet::new();
+    let mut clusters = score_clusters(root, scoring_function)?;
+
+    clusters.retain(|item| item.cluster.depth() > 3);
+
+    while !clusters.is_empty() {
+        let Some(wrapper) = clusters.pop() else {
+            return Err("Invalid ClusterWrapper passed to `get_clusterset`".to_string());
+        };
+        let best = wrapper.cluster;
+        clusters = clusters
+            .into_iter()
+            .filter(|item| !item.cluster.is_ancestor_of(best) && !item.cluster.is_descendant_of(best))
+            .collect();
+        cluster_set.insert(best);
     }
-    selected_clusters
+
+    Ok(cluster_set)
 }
 
 /// Detects edges between clusters based on their spatial relationships.
@@ -58,4 +139,85 @@ pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
     }
 
     edges
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Cakes, Cluster, Dataset, Graph, PartitionCriteria, Tree, VecDataset};
+    use distances::number::Float;
+    use distances::Number;
+    use rand::SeedableRng;
+    use std::collections::HashSet;
+    use std::fmt::Debug;
+
+    use crate::chaoda::pretrained_models;
+    use crate::core::graph::criteria::{score_clusters, select_clusters};
+    use symagen::random_data;
+
+    pub fn gen_dataset(
+        cardinality: usize,
+        dimensionality: usize,
+        seed: u64,
+        metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
+    ) -> VecDataset<Vec<f32>, f32, usize> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let data = symagen::random_data::random_tabular_floats(cardinality, dimensionality, -1., 1., &mut rng);
+        let name = "test".to_string();
+        VecDataset::new(name, data, metric, false)
+    }
+
+    pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
+        distances::vectors::euclidean(x, y)
+    }
+
+    #[test]
+    fn scoring() {
+        let data = gen_dataset(1000, 10, 42, euclidean);
+        let metric = data.metric();
+
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(true);
+
+        let mut root = raw_tree.root();
+
+        let mut priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
+
+        assert_eq!(priority_queue.len(), root.subtree().len());
+
+        let mut prev_value: f64;
+        let mut curr_value: f64;
+
+        prev_value = priority_queue.pop().unwrap().score;
+        while !priority_queue.is_empty() {
+            curr_value = priority_queue.pop().unwrap().score;
+            assert!(prev_value >= curr_value);
+            prev_value = curr_value;
+        }
+
+        let priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
+        let cluster_set = select_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
+        for i in &cluster_set {
+            for j in &cluster_set {
+                if i != j {
+                    assert!(!i.is_descendant_of(j) && !i.is_ancestor_of(j));
+                }
+            }
+        }
+
+        for i in &root.subtree() {
+            let mut ancestor_of = false;
+            let mut descendant_of = false;
+            for j in &cluster_set {
+                if i.is_ancestor_of(j) {
+                    ancestor_of = true;
+                }
+                if i.is_descendant_of(j) {
+                    descendant_of = true
+                }
+            }
+            assert!(ancestor_of || descendant_of || cluster_set.contains(i))
+        }
+    }
 }
