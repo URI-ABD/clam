@@ -95,10 +95,7 @@ pub fn select_clusters<'a, U: Number>(
             return Err("Invalid ClusterWrapper passed to `get_clusterset`".to_string());
         };
         let best = wrapper.cluster;
-        clusters = clusters
-            .into_iter()
-            .filter(|item| !item.cluster.is_ancestor_of(best) && !item.cluster.is_descendant_of(best))
-            .collect();
+        clusters.retain(|item| !item.cluster.is_ancestor_of(best) && !item.cluster.is_descendant_of(best));
         cluster_set.insert(best);
     }
 
