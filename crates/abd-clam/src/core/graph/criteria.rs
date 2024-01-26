@@ -140,11 +140,10 @@ pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{Dataset, PartitionCriteria, Tree, VecDataset};
+    use crate::{PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
     use rand::SeedableRng;
-    use std::fmt::Debug;
 
     use crate::chaoda::pretrained_models;
     use crate::core::graph::criteria::{score_clusters, select_clusters};
