@@ -140,16 +140,14 @@ pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{Cakes, Cluster, Dataset, Graph, PartitionCriteria, Tree, VecDataset};
+    use crate::{Dataset, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
     use rand::SeedableRng;
-    use std::collections::HashSet;
     use std::fmt::Debug;
 
     use crate::chaoda::pretrained_models;
     use crate::core::graph::criteria::{score_clusters, select_clusters};
-    use symagen::random_data;
 
     pub fn gen_dataset(
         cardinality: usize,
@@ -170,14 +168,13 @@ mod tests {
     #[test]
     fn scoring() {
         let data = gen_dataset(1000, 10, 42, euclidean);
-        let metric = data.metric();
 
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
             .partition(&partition_criteria)
             .with_ratios(true);
 
-        let mut root = raw_tree.root();
+        let root = raw_tree.root();
 
         let mut priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
 
@@ -193,7 +190,6 @@ mod tests {
             prev_value = curr_value;
         }
 
-        let priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
         let cluster_set = select_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
         for i in &cluster_set {
             for j in &cluster_set {
