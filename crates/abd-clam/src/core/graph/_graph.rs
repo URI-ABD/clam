@@ -793,23 +793,25 @@ mod tests {
         let raw_tree = Tree::new(data, Some(42))
             .partition(&partition_criteria)
             .with_ratios(false);
-        let selected_clusters = select_clusters(
-            raw_tree.root(),
-            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
-            4,
-        )
-        .unwrap();
+        for i in 4..raw_tree.depth() {
+            let selected_clusters = select_clusters(
+                raw_tree.root(),
+                &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
+                i,
+            )
+            .unwrap();
 
-        let edges = detect_edges(&selected_clusters, raw_tree.data());
+            let edges = detect_edges(&selected_clusters, raw_tree.data());
 
-        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
-        assert!(graph.is_ok());
-        if let Ok(graph) = graph {
-            let graph = graph.with_adjacency_matrix().with_distance_matrix();
-            assert_eq!(graph.population(), cardinality);
-            test_properties(&graph, &selected_clusters, &edges);
-            test_adjacency_map(&graph);
-            test_matrix(&graph)
+            let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
+            assert!(graph.is_ok());
+            if let Ok(graph) = graph {
+                let graph = graph.with_adjacency_matrix().with_distance_matrix();
+                assert_eq!(graph.population(), cardinality);
+                test_properties(&graph, &selected_clusters, &edges);
+                test_adjacency_map(&graph);
+                test_matrix(&graph)
+            }
         }
     }
 
