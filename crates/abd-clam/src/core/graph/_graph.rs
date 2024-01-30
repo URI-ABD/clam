@@ -198,7 +198,7 @@ pub struct Graph<'a, U: Number> {
 }
 
 impl<'a, U: Number> Graph<'a, U> {
-    // Creates a new `Graph` from the provided `tree`.
+    /// Creates a new `Graph` from the provided `tree`.
     ///
     /// This function takes a tree structure and produces a graph based on selected clusters and edges.
     ///
@@ -222,7 +222,7 @@ impl<'a, U: Number> Graph<'a, U> {
         tree: &'a Tree<I, U, D>,
         scorer_function: &MetaMLScorer,
     ) -> Result<Self, String> {
-        let selected_clusters = select_clusters(tree.root(), scorer_function)?;
+        let selected_clusters = select_clusters(tree.root(), scorer_function, 4)?;
 
         let edges = detect_edges(&selected_clusters, tree.data());
         Graph::from_clusters_and_edges(selected_clusters, edges)
@@ -789,27 +789,27 @@ mod tests {
         let cardinality = 1000;
         let data = gen_dataset(cardinality, 10, 42, euclidean);
 
-        let raw_tree = Tree::new(data, Some(42)).partition(&PartitionCriteria::default());
-        for i in 4..raw_tree.depth() {
-            println!("{i}");
-            let selected_clusters = select_clusters(
-                raw_tree.root(),
-                &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
-            )
-            .unwrap();
+        let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(false);
+        let selected_clusters = select_clusters(
+            raw_tree.root(),
+            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
+            4,
+        )
+        .unwrap();
 
-            let edges = detect_edges(&selected_clusters, raw_tree.data());
+        let edges = detect_edges(&selected_clusters, raw_tree.data());
 
-            let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
-            assert!(graph.is_ok());
-            if let Ok(graph) = graph {
-                let graph = graph.with_adjacency_matrix().with_distance_matrix();
-                assert_eq!(graph.population(), cardinality);
-
-                test_properties(&graph, &selected_clusters, &edges);
-                test_adjacency_map(&graph);
-                test_matrix(&graph)
-            }
+        let graph = Graph::from_clusters_and_edges(selected_clusters.clone(), edges.clone());
+        assert!(graph.is_ok());
+        if let Ok(graph) = graph {
+            let graph = graph.with_adjacency_matrix().with_distance_matrix();
+            assert_eq!(graph.population(), cardinality);
+            test_properties(&graph, &selected_clusters, &edges);
+            test_adjacency_map(&graph);
+            test_matrix(&graph)
         }
     }
 
@@ -817,7 +817,9 @@ mod tests {
     fn create_graph_from_tree() {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+        let raw_tree = Tree::new(data, Some(42))
+            .partition(&partition_criteria)
+            .with_ratios(true);
 
         let graph = Graph::from_tree(&raw_tree, &pretrained_models::get_meta_ml_scorers().first().unwrap().1);
         assert!(graph.is_ok());

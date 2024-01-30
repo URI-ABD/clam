@@ -11,7 +11,7 @@ use crate::{Cluster, Dataset, Edge, Instance};
 use distances::Number;
 
 /// A Wrapper that contains a cluster and its score
-pub struct ClusterWrapper<'a, U: Number> {
+struct ClusterWrapper<'a, U: Number> {
     /// A cluster
     pub cluster: &'a Cluster<U>,
     /// An associated score
@@ -50,7 +50,7 @@ impl<'a, U: Number> PartialOrd for ClusterWrapper<'a, U> {
 ///
 /// `BinaryHeap` of `ClusterWrappers`
 ///
-pub fn score_clusters<'a, U: Number>(
+fn score_clusters<'a, U: Number>(
     root: &'a Cluster<U>,
     scoring_function: &crate::core::graph::MetaMLScorer,
 ) -> Result<BinaryHeap<ClusterWrapper<'a, U>>, String> {
@@ -71,7 +71,9 @@ pub fn score_clusters<'a, U: Number>(
 ///
 /// # Arguments
 ///
-/// * clusters : `BinaryHeap` of `ClusterWrappers` containing a cluster and its score
+/// * `clusters` : `BinaryHeap` of `ClusterWrappers` containing a cluster and its score
+/// * `scoring_functions` : `MetaMLScorer` to score the given clusters
+/// * `min_depth` : `usize` of the minimum depth to start selecting clusters
 ///
 /// # Returns:
 ///
@@ -84,11 +86,12 @@ pub fn score_clusters<'a, U: Number>(
 pub fn select_clusters<'a, U: Number>(
     root: &'a Cluster<U>,
     scoring_function: &MetaMLScorer,
+    min_depth: usize,
 ) -> Result<ClusterSet<'a, U>, String> {
     let mut cluster_set: HashSet<&'a Cluster<U>> = HashSet::new();
     let mut clusters = score_clusters(root, scoring_function)?;
 
-    clusters.retain(|item| item.cluster.depth() > 3);
+    clusters.retain(|item| item.cluster.depth() >= min_depth);
 
     while !clusters.is_empty() {
         let Some(wrapper) = clusters.pop() else {
@@ -189,7 +192,7 @@ mod tests {
             prev_value = curr_value;
         }
 
-        let cluster_set = select_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
+        let cluster_set = select_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1, 4).unwrap();
         for i in &cluster_set {
             for j in &cluster_set {
                 if i != j {
