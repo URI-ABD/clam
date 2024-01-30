@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.repository == 'URI-ABD/clam'
     strategy:
       matrix:
         package: [abd-clam, distances, SyMaGen]
