@@ -205,6 +205,8 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Arguments
     ///
     /// * `tree`: The `Tree` instance used as the source data for building the `Graph`.
+    /// * `scorer_function`:  A function that assigns a score to a cluster indicating its suitability for inclusion in the graph.
+    /// * `min_depth`: The minimum depth of clusters to be considered in the graph. It is recommended to use a default `min_depth` value of 4 if unsure.
     ///
     /// # Returns
     ///
@@ -221,8 +223,9 @@ impl<'a, U: Number> Graph<'a, U> {
     pub fn from_tree<I: Instance, D: Dataset<I, U>>(
         tree: &'a Tree<I, U, D>,
         scorer_function: &MetaMLScorer,
+        min_depth: usize,
     ) -> Result<Self, String> {
-        let selected_clusters = select_clusters(tree.root(), scorer_function, 4)?;
+        let selected_clusters = select_clusters(tree.root(), scorer_function, min_depth)?;
 
         let edges = detect_edges(&selected_clusters, tree.data());
         Graph::from_clusters_and_edges(selected_clusters, edges)
@@ -823,7 +826,11 @@ mod tests {
             .partition(&partition_criteria)
             .with_ratios(true);
 
-        let graph = Graph::from_tree(&raw_tree, &pretrained_models::get_meta_ml_scorers().first().unwrap().1);
+        let graph = Graph::from_tree(
+            &raw_tree,
+            &pretrained_models::get_meta_ml_scorers().first().unwrap().1,
+            4,
+        );
         assert!(graph.is_ok());
         let graph = graph.unwrap();
         let graph = graph.with_adjacency_matrix().with_distance_matrix();
