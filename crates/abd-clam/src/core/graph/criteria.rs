@@ -26,9 +26,27 @@ impl<'a, U: Number> PartialEq for ClusterWrapper<'a, U> {
 
 impl<'a, U: Number> Eq for ClusterWrapper<'a, U> {}
 
+// impl<'a, U: Number> Ord for ClusterWrapper<'a, U> {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         self.score.partial_cmp(&other.score).unwrap_or(Ordering::Equal)
+//     }
+// }
+
 impl<'a, U: Number> Ord for ClusterWrapper<'a, U> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.score.partial_cmp(&other.score).unwrap_or(Ordering::Equal)
+        match self.score.partial_cmp(&other.score).unwrap_or(Ordering::Equal) {
+            Ordering::Equal => {
+                // If scores are equal, use a tiebreaker comparison based on offset - lower offset wins
+                match self.cluster.offset().cmp(&other.cluster.offset()) {
+                    Ordering::Equal => {
+                        // If offsets are equal, use a tiebreaker comparison based on cardinality
+                        self.cluster.cardinality().cmp(&other.cluster.cardinality())
+                    }
+                    ord => ord.reverse(),
+                }
+            }
+            ord => ord,
+        }
     }
 }
 
@@ -89,18 +107,14 @@ pub fn select_clusters<'a, U: Number>(
     min_depth: usize,
 ) -> Result<ClusterSet<'a, U>, String> {
     let mut cluster_set: HashSet<&'a Cluster<U>> = HashSet::new();
-    let scored_clusters = score_clusters(root, scoring_function)?;
-
-    let (mut candidate_clusters, _): (Vec<_>, Vec<_>) = scored_clusters
-        .into_iter()
-        .partition(|item| item.cluster.depth() >= min_depth || item.cluster.is_leaf());
-
-    while !candidate_clusters.is_empty() {
-        let Some(wrapper) = candidate_clusters.pop() else {
+    let mut scored_clusters = score_clusters(root, scoring_function)?;
+    scored_clusters.retain(|item| item.cluster.depth() >= min_depth || item.cluster.is_leaf());
+    while !scored_clusters.is_empty() {
+        let Some(wrapper) = scored_clusters.pop() else {
             return Err("Invalid ClusterWrapper passed to `get_clusterset`".to_string());
         };
         let best = wrapper.cluster;
-        candidate_clusters.retain(|item| !item.cluster.is_ancestor_of(best) && !item.cluster.is_descendant_of(best));
+        scored_clusters.retain(|item| !item.cluster.is_ancestor_of(best) && !item.cluster.is_descendant_of(best));
         cluster_set.insert(best);
     }
 
