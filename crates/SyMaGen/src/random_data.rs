@@ -96,8 +96,23 @@ pub fn random_string(cardinality: usize, min_len: usize, max_len: usize, alphabe
 /// # Returns:
 ///
 /// * `Vec<T>`: the generated point
-pub fn n_ball<T: Number, R: Rng>(dim: usize, _radius: f64, rng: &mut R) -> Vec<T> {
-    let _angles: Vec<T> = (0..dim).map(|_| T::next_random(rng) % T::from(PI)).collect();
+pub fn n_ball<R: Rng>(_dim: usize, radius: f64, _rng: &mut R) -> Vec<f64> {
+    // let _angles: Vec<f64> = (0..dim).map(|_| f64::next_random(rng) % f64::from(PI)).collect();
+    // let angles = random_tabular(1,dim, 0, 2.*PI,  &mut 42);
+    let angles = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
 
-    [T::from(0.1)].to_vec()
+    let sine_products = angles.iter().scan(1., |sine_product, &x| {
+        // each iteration, we'll multiply the state by the element ...
+        *sine_product *= f64::sin(x);
+        Some(*sine_product)
+    });
+
+    let cosines = angles.iter().map(|&x| f64::cos(x)).collect::<Vec<_>>();
+
+    let cartesian_points = sine_products
+        .zip(cosines.iter())
+        .map(|(sine_product, &cosine)| sine_product * cosine * radius)
+        .collect::<Vec<_>>();
+
+    cartesian_points
 }
