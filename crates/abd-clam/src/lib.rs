@@ -25,9 +25,10 @@ pub mod utils;
 pub use crate::{
     cakes::{knn, rnn, Cakes},
     core::{
-        cluster::{Cluster, PartitionCriteria, PartitionCriterion, Tree},
+        cluster::{Cluster, PartitionCriteria, PartitionCriterion},
         dataset::{Dataset, Instance, VecDataset},
         graph::{criteria::MetaMLScorer, Edge, Graph},
+        tree::Tree,
     },
 };
 
