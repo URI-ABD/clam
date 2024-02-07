@@ -85,7 +85,12 @@ pub fn random_string(cardinality: usize, min_len: usize, max_len: usize, alphabe
         .collect()
 }
 
-/// Generate a single point (in Cartesian coordinates) from a uniform distribution over an n-dimensional ball of given radius.
+/// Generate a single point (in Cartesian coordinates) from a uniform distribution
+/// inside an n-dimensional ball of given radius.
+///
+/// This function produces points in a uniform distribution inside the n-ball, and does
+/// so in linear time in the dimensionality of the ball. The algorithm is based on the
+/// method described in [this wikipedia article](https://en.wikipedia.org/wiki/N-sphere#Spherical_coordinates).
 ///
 /// # Arguments:
 ///
@@ -97,20 +102,27 @@ pub fn random_string(cardinality: usize, min_len: usize, max_len: usize, alphabe
 ///
 /// * `Vec<T>`: the generated point
 pub fn n_ball<R: Rng>(dim: usize, radius: f64, rng: &mut R) -> Vec<f64> {
-    let angles: Vec<f64> = (0..dim).map(|_| f64::next_random(rng) % (2. * PI)).collect();
+    // sample random angles from 0 to 2π for the last angle and from 0 to π for the other angles.
+    let angles = {
+        let mut angles = (0..dim).map(|_| f64::next_random(rng) * PI).collect::<Vec<_>>();
+        angles[dim - 1] *= 2.;
+        angles
+    };
 
+    // The `scan` method is used to accumulate the product of the sine of the angles.
     let sine_products = angles.iter().scan(1., |sine_product, &x| {
         // each iteration, we'll multiply the state by the element ...
         *sine_product *= f64::sin(x);
         Some(*sine_product)
     });
 
-    let cosines = angles.iter().map(|&x| f64::cos(x)).collect::<Vec<_>>();
+    let cosines = angles.iter().map(|&x| f64::cos(x));
 
-    let cartesian_points = sine_products
-        .zip(cosines.iter())
-        .map(|(sine_product, &cosine)| sine_product * cosine * radius)
-        .collect::<Vec<_>>();
+    // sample a random radius value from 0 to the given radius
+    let r = radius * f64::next_random(rng);
 
-    cartesian_points
+    sine_products
+        .zip(cosines)
+        .map(|(sine_product, cosine)| r * sine_product * cosine)
+        .collect()
 }
