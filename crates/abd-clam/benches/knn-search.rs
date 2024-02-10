@@ -21,7 +21,7 @@ fn cakes(c: &mut Criterion) {
     let (cardinality, dimensionality) = (100_000, 10);
     let (min_val, max_val) = (-1., 1.);
 
-    let data = random_data::random_tabular_floats(
+    let data = random_data::random_tabular(
         cardinality,
         dimensionality,
         min_val,

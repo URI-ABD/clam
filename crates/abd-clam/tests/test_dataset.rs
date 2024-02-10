@@ -13,7 +13,7 @@ fn reordering() {
     let dimensionality = 10;
 
     for i in 0..10 {
-        let reference_data = symagen::random_data::random_tabular_integers(
+        let reference_data = symagen::random_data::random_tabular(
             cardinality,
             dimensionality,
             0,
@@ -86,7 +86,7 @@ fn save_load(cardinality: usize, dimensionality: usize) {
     let tmp_dir = TempDir::new("save_load_deterministic").unwrap();
 
     for i in 0..5 {
-        let reference_data = symagen::random_data::random_tabular_integers(
+        let reference_data = symagen::random_data::random_tabular(
             cardinality,
             dimensionality,
             0,

@@ -58,7 +58,7 @@ fn lp_u32() {
     let (cardinality, dimensionality) = (100, 10_000);
     let (min_val, max_val) = (0, 10_000);
 
-    let data = random_data::random_tabular_integers(
+    let data = random_data::random_tabular(
         cardinality,
         dimensionality,
         min_val,

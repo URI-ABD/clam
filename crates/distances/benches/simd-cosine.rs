@@ -13,7 +13,7 @@ fn simd_f32(c: &mut Criterion) {
 
     for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_tabular_floats(
+        let vecs = random_data::random_tabular(
             cardinality,
             dimensionality,
             min_val,
@@ -41,7 +41,7 @@ fn simd_f64(c: &mut Criterion) {
 
     for d in 0..=5 {
         let dimensionality = 1_000 * 2_u32.pow(d) as usize;
-        let vecs = random_data::random_tabular_floats(
+        let vecs = random_data::random_tabular(
             cardinality,
             dimensionality,
             min_val,

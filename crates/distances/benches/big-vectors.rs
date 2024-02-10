@@ -39,7 +39,7 @@ fn big_f32(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_tabular_floats(
+        let data = random_data::random_tabular(
             cardinality,
             dimensionality,
             min_val,
@@ -71,7 +71,7 @@ fn big_u32(c: &mut Criterion) {
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_tabular_integers(
+        let data = random_data::random_tabular(
             cardinality,
             dimensionality,
             min_val,

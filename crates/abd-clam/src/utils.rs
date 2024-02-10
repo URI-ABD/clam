@@ -414,7 +414,7 @@ mod tests {
 
         // Generate random data for each cardinality and min/max value where max_val > min_val
         for (cardinality, (min_val, max_val)) in cardinalities.into_iter().zip(ranges.into_iter()) {
-            let data = random_data::random_tabular_floats(
+            let data = random_data::random_tabular(
                 dimensionality,
                 cardinality,
                 min_val,

@@ -174,7 +174,7 @@ mod tests {
         metric: fn(&Vec<f32>, &Vec<f32>) -> f32,
     ) -> VecDataset<Vec<f32>, f32, usize> {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-        let data = symagen::random_data::random_tabular_floats(cardinality, dimensionality, -1., 1., &mut rng);
+        let data = symagen::random_data::random_tabular(cardinality, dimensionality, -1., 1., &mut rng);
         let name = "test".to_string();
         VecDataset::new(name, data, metric, false)
     }

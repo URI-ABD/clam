@@ -227,7 +227,7 @@ mod tests {
         let (cardinality, dimensionality) = (10_000, 10);
         let (min_val, max_val) = (-1., 1.);
 
-        let data_vec = random_data::random_tabular_floats(
+        let data_vec = random_data::random_tabular(
             cardinality,
             dimensionality,
             min_val,
@@ -236,7 +236,7 @@ mod tests {
         );
 
         let num_queries = 100;
-        let queries = random_data::random_tabular_floats(
+        let queries = random_data::random_tabular(
             num_queries,
             dimensionality,
             min_val,

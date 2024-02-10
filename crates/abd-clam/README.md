@@ -33,7 +33,7 @@ let seed = 42;
 let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1.0, 1.0);
-let data: Vec<Vec<f32>> = symagen::random_data::random_tabular_floats(
+let data: Vec<Vec<f32>> = symagen::random_data::random_tabular(
     cardinality,
     dimensionality,
     min_val,
