@@ -20,13 +20,14 @@ use super::{OrdNumber, RevNumber};
 /// and the second element is the distance from the query to the instance.
 ///
 /// Contrast this to `SieveV1` and `SieveV2`, which use a (mostly) decreasing threshold.
-pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D, C>(tree: &Tree<I, U, D, C>, query: &I, k: usize) -> Vec<(usize, U)>
 where
     I: Instance,
     U: Number,
     D: Dataset<I, U>,
+    C: Cluster<U>,
 {
-    let mut candidates = priority_queue::PriorityQueue::<&Cluster<U>, RevNumber<U>>::new();
+    let mut candidates = priority_queue::PriorityQueue::<&C, RevNumber<U>>::new();
     let mut hits = priority_queue::PriorityQueue::<usize, OrdNumber<U>>::new();
 
     let (data, root) = (tree.data(), &tree.root);
@@ -53,7 +54,7 @@ where
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
-fn d_min<U: Number>(c: &Cluster<U>, d: U) -> U {
+fn d_min<U: Number, C: Cluster<U>>(c: &C, d: U) -> U {
     if d < c.radius() {
         U::zero()
     } else {
@@ -62,11 +63,16 @@ fn d_min<U: Number>(c: &Cluster<U>, d: U) -> U {
 }
 
 /// Pops from the top of `candidates` until the top candidate is a leaf cluster.
-fn pop_till_leaf<I: Instance, U: Number, D: Dataset<I, U>>(
-    tree: &Tree<I, U, D>,
+fn pop_till_leaf<I, U, D, C>(
+    tree: &Tree<I, U, D, C>,
     query: &I,
-    candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
-) {
+    candidates: &mut priority_queue::PriorityQueue<&C, RevNumber<U>>,
+) where
+    I: Instance,
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<U>,
+{
     while !candidates
         .peek()
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(c, _)| c.is_leaf())
@@ -85,12 +91,17 @@ fn pop_till_leaf<I: Instance, U: Number, D: Dataset<I, U>>(
 }
 
 /// Pops a single leaf from the top of candidates and add those points to hits.
-fn leaf_into_hits<I: Instance, U: Number, D: Dataset<I, U>>(
-    tree: &Tree<I, U, D>,
+fn leaf_into_hits<I, U, D, C>(
+    tree: &Tree<I, U, D, C>,
     query: &I,
     hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>,
-    candidates: &mut priority_queue::PriorityQueue<&Cluster<U>, RevNumber<U>>,
-) {
+    candidates: &mut priority_queue::PriorityQueue<&C, RevNumber<U>>,
+) where
+    I: Instance,
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<U>,
+{
     let (leaf, RevNumber(d)) = candidates
         .pop()
         .unwrap_or_else(|| unreachable!("candidates is non-empty"));

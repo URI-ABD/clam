@@ -12,7 +12,7 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 ### Cakes: Nearest Neighbor Search
 
 ```rust
-use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset, UniBall};
 use rand::prelude::*;
 
 /// The distance function with with to perform clustering and search.
@@ -79,7 +79,7 @@ let dataset = dataset
 
 // We will use the default partition criteria for this example. This will partition
 // the data until each Cluster contains a single unique point.
-let criteria = PartitionCriteria::default();
+let criteria = PartitionCriteria::<f32, UniBall<f32>>::default();
 
 // The Cakes struct provides the functionality described in the paper.
 // We use a single shard here because the demo data is small.

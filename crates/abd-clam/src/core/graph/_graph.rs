@@ -1,27 +1,32 @@
+//! The `Graph` module contains the `Graph` struct and related types, which are used to represent
+//! a collection of clusters and edges, i.e. connections between overlapping clusters.
+//!
+//! The `Graph`s are used in anomaly detection and visualization.
+
 use core::hash::{Hash, Hasher};
 
 use std::collections::{HashMap, HashSet};
 
 use distances::Number;
 
-// use crate::core::{cluster::Cluster, dataset::VecDataset};
-use crate::core::graph::criteria::{detect_edges, select_clusters};
+use crate::{Cluster, Dataset, Instance, Tree, Vertex};
 
-use crate::{core::cluster::Cluster, Dataset, Instance, Tree};
-
-use super::MetaMLScorer;
+use super::{
+    criteria::{detect_edges, select_clusters},
+    MetaMLScorer,
+};
 
 /// A set of clusters with references to clusters in a graph.
-pub type ClusterSet<'a, U> = HashSet<&'a Cluster<U>>;
+pub type VertexSet<'a, U> = HashSet<&'a Vertex<U>>;
 
 /// A set of edges with references to edges in a graph.
 pub type EdgeSet<'a, U> = HashSet<Edge<'a, U>>;
 
 /// A map that represents the adjacency relationship between clusters.
-pub type AdjacencyMap<'a, U> = HashMap<&'a Cluster<U>, ClusterSet<'a, U>>;
+pub type AdjacencyMap<'a, U> = HashMap<&'a Vertex<U>, VertexSet<'a, U>>;
 
 /// A map that associates clusters with lists of frontier sizes.
-pub type FrontierSizes<'a, U> = HashMap<&'a Cluster<U>, Vec<usize>>;
+pub type FrontierSizes<'a, U> = HashMap<&'a Vertex<U>, Vec<usize>>;
 
 /// Two `Cluster`s have an `Edge` between them if they have overlapping volumes.
 ///
@@ -29,9 +34,9 @@ pub type FrontierSizes<'a, U> = HashMap<&'a Cluster<U>, Vec<usize>>;
 #[derive(Debug, Clone)]
 pub struct Edge<'a, U: Number> {
     /// A reference to the first `Cluster` connected by this `Edge`.
-    left: &'a Cluster<U>,
+    left: &'a Vertex<U>,
     /// A reference to the second `Cluster` connected by this `Edge`.
-    right: &'a Cluster<U>,
+    right: &'a Vertex<U>,
 
     /// The distance between the two `Cluster`s connected by this `Edge`.
     distance: U,
@@ -73,7 +78,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// A new `Edge` connecting the provided `Cluster`s with the given distance.
-    pub fn new(left: &'a Cluster<U>, right: &'a Cluster<U>, distance: U) -> Self {
+    pub fn new(left: &'a Vertex<U>, right: &'a Vertex<U>, distance: U) -> Self {
         if left < right {
             Self { left, right, distance }
         } else {
@@ -94,7 +99,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// Returns `true` if the `Cluster` is found at either end of the edge, `false` otherwise.
-    pub fn contains(&self, c: &Cluster<U>) -> bool {
+    pub fn contains(&self, c: &Vertex<U>) -> bool {
         c == self.left || c == self.right
     }
 
@@ -103,7 +108,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// A 2-slice containing the `Cluster`s at the left and right ends of the edge.
-    pub const fn clusters(&self) -> [&Cluster<U>; 2] {
+    pub const fn clusters(&self) -> [&Vertex<U>; 2] {
         [self.left, self.right]
     }
 
@@ -112,7 +117,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// A reference to the `Cluster` at the left end of the `Edge`.
-    pub const fn left(&self) -> &'a Cluster<U> {
+    pub const fn left(&self) -> &'a Vertex<U> {
         self.left
     }
 
@@ -121,7 +126,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Returns
     ///
     /// A reference to the `Cluster` at the right end of the `Edge`.
-    pub const fn right(&self) -> &'a Cluster<U> {
+    pub const fn right(&self) -> &'a Vertex<U> {
         self.right
     }
 
@@ -157,7 +162,7 @@ impl<'a, U: Number> Edge<'a, U> {
     /// # Errors
     ///
     /// Returns an error if `c` is not one of the `Cluster`s connected by this `Edge`.
-    pub fn neighbor(&self, c: &Cluster<U>) -> Result<&Cluster<U>, String> {
+    pub fn neighbor(&self, c: &Vertex<U>) -> Result<&Vertex<U>, String> {
         if c == self.left {
             Ok(self.right)
         } else if c == self.right {
@@ -175,7 +180,7 @@ impl<'a, U: Number> Edge<'a, U> {
 #[derive(Debug, Clone)]
 pub struct Graph<'a, U: Number> {
     /// A set of `Cluster`s in the graph.
-    clusters: ClusterSet<'a, U>,
+    clusters: VertexSet<'a, U>,
     /// A set of `Edge`s representing connections between `Cluster`s in the graph.
     edges: EdgeSet<'a, U>,
     /// A map that represents the adjacency relationships between clusters.
@@ -187,7 +192,7 @@ pub struct Graph<'a, U: Number> {
     /// The maximum depth in the hierarchy of clusters.
     max_depth: usize,
     /// An ordered list of references to `Cluster`s in the graph.
-    ordered_clusters: Vec<&'a Cluster<U>>,
+    ordered_clusters: Vec<&'a Vertex<U>>,
     /// A distance matrix representing distances between clusters.
     distance_matrix: Option<Vec<Vec<U>>>,
     /// An adjacency matrix representing adjacency relationships between clusters.
@@ -221,7 +226,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// - If an edge refers to a cluster that is not part of the selected clusters.
     ///
     pub fn from_tree<I: Instance, D: Dataset<I, U>>(
-        tree: &'a Tree<I, U, D>,
+        tree: &'a Tree<I, U, D, Vertex<U>>,
         scorer_function: &MetaMLScorer,
         min_depth: usize,
     ) -> Result<Self, String> {
@@ -250,7 +255,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// - If the provided `clusters` set is empty, indicating that a graph cannot be created with no clusters.
     /// - If an edge refers to a cluster that is not in the `clusters` set.
     ///
-    fn from_clusters_and_edges(clusters: ClusterSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
+    fn from_clusters_and_edges(clusters: VertexSet<'a, U>, edges: EdgeSet<'a, U>) -> Result<Self, String> {
         if clusters.is_empty() {
             return Err("Cannot create a graph with no clusters.".to_string());
         }
@@ -281,7 +286,7 @@ impl<'a, U: Number> Graph<'a, U> {
             }
             adjacency_map
         };
-        let mut ordered_clusters: Vec<&'a Cluster<U>> = clusters.iter().copied().collect();
+        let mut ordered_clusters = clusters.iter().copied().collect::<Vec<_>>();
         ordered_clusters.sort();
 
         Ok(Self {
@@ -398,7 +403,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// A vector of sets where each set represents a connected component of clusters,
     ///
     #[must_use]
-    pub fn find_component_clusters(&'a self) -> Vec<ClusterSet<'a, U>> {
+    pub fn find_component_clusters(&'a self) -> Vec<VertexSet<'a, U>> {
         let mut components = Vec::new();
 
         let mut unvisited = self.clusters.clone();
@@ -427,7 +432,7 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// A reference to the set of clusters in the graph.
     #[must_use]
-    pub const fn clusters(&self) -> &ClusterSet<'a, U> {
+    pub const fn clusters(&self) -> &VertexSet<'a, U> {
         &self.clusters
     }
 
@@ -542,7 +547,7 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// A slice of references to clusters in their insertion order.
     #[must_use]
-    pub fn ordered_clusters(&self) -> &[&Cluster<U>] {
+    pub fn ordered_clusters(&self) -> &[&Vertex<U>] {
         &self.ordered_clusters
     }
 
@@ -617,7 +622,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Errors
     ///
     /// An error is returned when the specified cluster is not present in the graph.
-    fn assert_contains(&self, c: &Cluster<U>) -> Result<(), String> {
+    fn assert_contains(&self, c: &Vertex<U>) -> Result<(), String> {
         if self.clusters.contains(&c) {
             Ok(())
         } else {
@@ -638,7 +643,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Errors
     ///
     /// If the specified cluster is not present in the graph.
-    pub fn vertex_degree(&'a self, c: &Cluster<U>) -> Result<usize, String> {
+    pub fn vertex_degree(&'a self, c: &Vertex<U>) -> Result<usize, String> {
         match self.neighbors_of(c) {
             Ok(neighbors) => Ok(neighbors.len()),
             Err(e) => Err(e),
@@ -658,7 +663,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Errors
     ///
     /// Returns an error if the given cluster is not present in the graph.
-    pub fn neighbors_of(&'a self, c: &Cluster<U>) -> Result<&ClusterSet<U>, String> {
+    pub fn neighbors_of(&'a self, c: &Vertex<U>) -> Result<&VertexSet<U>, String> {
         self.adjacency_map
             .get(c)
             .ok_or_else(|| format!("Cluster {c} not found in adjacency_map"))
@@ -681,11 +686,11 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Panics
     ///
     /// * If the start cluster is not present in the graph.
-    pub fn traverse(&'a self, start: &'a Cluster<U>) -> Result<(ClusterSet<U>, Vec<usize>), String> {
+    pub fn traverse(&'a self, start: &'a Vertex<U>) -> Result<(VertexSet<U>, Vec<usize>), String> {
         self.assert_contains(start)?;
 
-        let mut visited: HashSet<&Cluster<U>> = HashSet::new();
-        let mut frontier: HashSet<&Cluster<U>> = HashSet::new();
+        let mut visited: HashSet<&Vertex<U>> = HashSet::new();
+        let mut frontier: HashSet<&Vertex<U>> = HashSet::new();
         frontier.insert(start);
         let mut frontier_sizes: Vec<usize> = Vec::new();
 
@@ -723,7 +728,7 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// If the specified cluster is not part of the graph, an error message is returned.
     ///
-    pub fn frontier_sizes(&'a self, c: &'a Cluster<U>) -> Result<&[usize], String> {
+    pub fn frontier_sizes(&'a self, c: &'a Vertex<U>) -> Result<&[usize], String> {
         self.assert_contains(c)?;
 
         Ok(self.frontier_sizes.as_ref().map_or_else(
@@ -751,7 +756,7 @@ impl<'a, U: Number> Graph<'a, U> {
     /// # Errors
     ///
     /// If the specified cluster is not part of the graph or if `with_eccentricities` was not called, an error message is returned.
-    pub fn eccentricity(&'a self, c: &'a Cluster<U>) -> Result<usize, String> {
+    pub fn eccentricity(&'a self, c: &'a Vertex<U>) -> Result<usize, String> {
         self.frontier_sizes(c).map_or_else(
             |_| Err("Please call with_eccentricities before using this method".to_string()),
             |frontier_sizes| Ok(frontier_sizes.len()),
@@ -763,7 +768,7 @@ impl<'a, U: Number> Graph<'a, U> {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::{chaoda::pretrained_models, Cluster, Edge, Graph, PartitionCriteria, Tree, VecDataset};
+    use crate::{chaoda::pretrained_models, Cluster, Edge, Graph, PartitionCriteria, Tree, VecDataset, Vertex};
     use distances::number::Float;
     use distances::Number;
     use rand::SeedableRng;
@@ -794,7 +799,7 @@ mod tests {
 
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
+            .partition(&partition_criteria, Some(42))
             .with_ratios(false);
         for i in 4..raw_tree.depth() {
             let selected_clusters = select_clusters(
@@ -823,7 +828,7 @@ mod tests {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
+            .partition(&partition_criteria, Some(42))
             .with_ratios(true);
 
         let graph = Graph::from_tree(
@@ -839,7 +844,7 @@ mod tests {
         test_matrix(&graph);
     }
 
-    fn test_properties(graph: &Graph<f32>, selected_clusters: &HashSet<&Cluster<f32>>, edges: &HashSet<Edge<f32>>) {
+    fn test_properties(graph: &Graph<f32>, selected_clusters: &HashSet<&Vertex<f32>>, edges: &HashSet<Edge<f32>>) {
         // assert edges and clusters are correct
         assert_eq!(graph.clusters().len(), selected_clusters.len());
         assert_eq!(graph.edges().len(), edges.len());

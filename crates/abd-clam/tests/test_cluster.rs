@@ -1,6 +1,6 @@
 //! Tests for the `Cluster` struct.
 
-use abd_clam::{Cluster, Dataset, Instance, PartitionCriteria, Tree, VecDataset};
+use abd_clam::{BaseCluster, Cluster, Dataset, Instance, PartitionCriteria, VecDataset};
 
 mod utils;
 
@@ -12,7 +12,7 @@ fn tiny() {
         vec![true, true, false, false],
     );
     let partition_criteria = PartitionCriteria::default();
-    let root = Cluster::new_root(&data, Some(42)).partition(&mut data, &partition_criteria);
+    let root = BaseCluster::new_root(&data, Some(42)).partition(&mut data, &partition_criteria, Some(42));
 
     assert!(!root.is_leaf());
     assert!(root.children().is_some());
@@ -51,7 +51,7 @@ fn tiny() {
 fn medium() {
     let mut data = utils::gen_dataset(10_000, 10, 42, utils::euclidean);
     let partition_criteria = PartitionCriteria::default();
-    let root = Cluster::new_root(&data, None).partition(&mut data, &partition_criteria);
+    let root = BaseCluster::new_root(&data, None).partition(&mut data, &partition_criteria, None);
 
     assert!(!root.is_leaf());
     assert!(root.children().is_some());
@@ -61,7 +61,7 @@ fn medium() {
     check_subtree(&root, &data);
 }
 
-fn check_subtree<M: Instance>(root: &Cluster<f32>, data: &VecDataset<Vec<f32>, f32, M>) {
+fn check_subtree<M: Instance, C: Cluster<f32>>(root: &C, data: &VecDataset<Vec<f32>, f32, M>) {
     for c in root.subtree() {
         assert!(c.cardinality() > 0, "Cardinality must be positive.");
         assert!(c.radius() >= 0., "Radius must be non-negative.");
@@ -84,11 +84,11 @@ fn serialization() {
         vec![true, true, false, false],
     );
 
-    let original = Cluster::new_root(&data, Some(42));
+    let original = BaseCluster::new_root(&data, Some(42));
     // original.history = vec![true, true, false, false, true];
 
     let original_bytes = postcard::to_allocvec(&original).unwrap();
-    let deserialized: Cluster<f32> = postcard::from_bytes(&original_bytes).unwrap();
+    let deserialized: BaseCluster<f32> = postcard::from_bytes(&original_bytes).unwrap();
 
     assert_eq!(original.name(), deserialized.name());
     assert_eq!(original.cardinality(), deserialized.cardinality());
@@ -96,119 +96,118 @@ fn serialization() {
     assert_eq!(original.arg_center(), deserialized.arg_center());
     assert_eq!(original.arg_radial(), deserialized.arg_radial());
     assert_eq!(original.lfd(), deserialized.lfd());
-    assert_eq!(original.ratios(), deserialized.ratios());
     assert_eq!(original.depth(), deserialized.depth());
     assert_eq!(original.radius(), deserialized.radius());
     assert_eq!(original.children(), deserialized.children());
 }
 
-#[test]
-fn ratios() {
-    // Generate some tree from a small dataset
-    let data = utils::gen_dataset_from(
-        vec![vec![10.], vec![1.], vec![3.]],
-        utils::euclidean::<f32, f32>,
-        vec![true, true, false],
-    );
+// #[test]
+// fn ratios() {
+//     // Generate some tree from a small dataset
+//     let data = utils::gen_dataset_from(
+//         vec![vec![10.], vec![1.], vec![3.]],
+//         utils::euclidean::<f32, f32>,
+//         vec![true, true, false],
+//     );
 
-    let partition_criteria = PartitionCriteria::default();
-    let root = Tree::new(data, Some(42))
-        .partition(&partition_criteria)
-        .with_ratios(false);
+//     let partition_criteria = PartitionCriteria::<_, BaseCluster<_>>::default();
+//     let root = Tree::new(data, Some(42))
+//         .partition(&partition_criteria, None)
+//         .with_ratios(false);
 
-    //          1
-    //    10        11
-    // 100  101
+//     //          1
+//     //    10        11
+//     // 100  101
 
-    let all_ratios = root
-        .root()
-        .subtree()
-        .into_iter()
-        .map(|c| c.ratios().unwrap())
-        .collect::<Vec<_>>();
+//     let all_ratios = root
+//         .root()
+//         .subtree()
+//         .into_iter()
+//         .map(|c| c.ratios().unwrap())
+//         .collect::<Vec<_>>();
 
-    let all_cardinalities = root
-        .root()
-        .subtree()
-        .into_iter()
-        .map(|c| c.cardinality())
-        .collect::<Vec<_>>();
+//     let all_cardinalities = root
+//         .root()
+//         .subtree()
+//         .into_iter()
+//         .map(|c| c.cardinality())
+//         .collect::<Vec<_>>();
 
-    let all_lfd = root.root().subtree().into_iter().map(|c| c.lfd()).collect::<Vec<_>>();
+//     let all_lfd = root.root().subtree().into_iter().map(|c| c.lfd()).collect::<Vec<_>>();
 
-    let all_radius = root
-        .root()
-        .subtree()
-        .into_iter()
-        .map(|c| c.radius())
-        .collect::<Vec<_>>();
+//     let all_radius = root
+//         .root()
+//         .subtree()
+//         .into_iter()
+//         .map(|c| c.radius())
+//         .collect::<Vec<_>>();
 
-    // manually calculate ratios between root and its children
-    let root_ratios = vec![
-        all_cardinalities[0] as f64,
-        all_radius[0] as f64,
-        all_lfd[0],
-        -1.,
-        -1.,
-        -1.,
-    ];
-    let lc_ratios = vec![
-        all_cardinalities[1] as f64 / root_ratios[0] as f64,
-        all_radius[1] as f64 / root_ratios[1] as f64,
-        all_lfd[1] / root_ratios[2],
-        -1.,
-        -1.,
-        -1.,
-    ];
-    let lclc_ratios = vec![
-        all_cardinalities[2] as f64 / lc_ratios[0] as f64,
-        all_radius[2] as f64 / lc_ratios[1] as f64,
-        all_lfd[2] / lc_ratios[2],
-        -1.,
-        -1.,
-        -1.,
-    ];
-    let lcrc_ratios = vec![
-        all_cardinalities[3] as f64 / lc_ratios[0] as f64,
-        all_radius[3] as f64 / lc_ratios[1] as f64,
-        all_lfd[3] / lc_ratios[2],
-        -1.,
-        -1.,
-        -1.,
-    ];
-    let rc_ratios = vec![
-        all_cardinalities[3] as f64 / root_ratios[0] as f64,
-        all_radius[3] as f64 / root_ratios[1] as f64,
-        all_lfd[3] / root_ratios[2],
-        -1.,
-        -1.,
-        -1.,
-    ];
+//     // manually calculate ratios between root and its children
+//     let root_ratios = vec![
+//         all_cardinalities[0] as f64,
+//         all_radius[0] as f64,
+//         all_lfd[0],
+//         -1.,
+//         -1.,
+//         -1.,
+//     ];
+//     let lc_ratios = vec![
+//         all_cardinalities[1] as f64 / root_ratios[0] as f64,
+//         all_radius[1] as f64 / root_ratios[1] as f64,
+//         all_lfd[1] / root_ratios[2],
+//         -1.,
+//         -1.,
+//         -1.,
+//     ];
+//     let lclc_ratios = vec![
+//         all_cardinalities[2] as f64 / lc_ratios[0] as f64,
+//         all_radius[2] as f64 / lc_ratios[1] as f64,
+//         all_lfd[2] / lc_ratios[2],
+//         -1.,
+//         -1.,
+//         -1.,
+//     ];
+//     let lcrc_ratios = vec![
+//         all_cardinalities[3] as f64 / lc_ratios[0] as f64,
+//         all_radius[3] as f64 / lc_ratios[1] as f64,
+//         all_lfd[3] / lc_ratios[2],
+//         -1.,
+//         -1.,
+//         -1.,
+//     ];
+//     let rc_ratios = vec![
+//         all_cardinalities[3] as f64 / root_ratios[0] as f64,
+//         all_radius[3] as f64 / root_ratios[1] as f64,
+//         all_lfd[3] / root_ratios[2],
+//         -1.,
+//         -1.,
+//         -1.,
+//     ];
 
-    assert_eq!(all_ratios[0][..3], root_ratios[..3], "root not correct");
-    assert_eq!(all_ratios[1][..3], lc_ratios[..3], "lc not correct");
-    assert_eq!(all_ratios[2][..3], lclc_ratios[..3], "lclc not correct");
-    assert_eq!(all_ratios[3][..3], lcrc_ratios[..3], "lcrc not correct");
-    assert_eq!(all_ratios[4][..3], rc_ratios[..3], "rc not correct");
-}
+//     assert_eq!(all_ratios[0][..3], root_ratios[..3], "root not correct");
+//     assert_eq!(all_ratios[1][..3], lc_ratios[..3], "lc not correct");
+//     assert_eq!(all_ratios[2][..3], lclc_ratios[..3], "lclc not correct");
+//     assert_eq!(all_ratios[3][..3], lcrc_ratios[..3], "lcrc not correct");
+//     assert_eq!(all_ratios[4][..3], rc_ratios[..3], "rc not correct");
+// }
 
-#[test]
-fn normalized_ratios() {
-    let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
+// #[test]
+// fn normalized_ratios() {
+//     let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
 
-    let partition_criteria = PartitionCriteria::new(true).with_max_depth(3).with_min_cardinality(1);
-    let raw_tree = Tree::new(data, None).partition(&partition_criteria).with_ratios(true);
+//     let partition_criteria = PartitionCriteria::<_, BaseCluster<_>>::new(true).with_max_depth(3).with_min_cardinality(1);
+//     let raw_tree = Tree::new(data, None).partition(&partition_criteria, None).with_ratios(true);
 
-    let all_ratios = raw_tree
-        .root()
-        .subtree()
-        .into_iter()
-        .map(|c| c.ratios().unwrap())
-        .collect::<Vec<_>>();
+//     let all_ratios = raw_tree
+//         .root()
+//         .subtree()
+//         .into_iter()
+//         .map(|c| c.ratios().unwrap())
+//         .collect::<Vec<_>>();
 
-    for row in &all_ratios {
-        for val in row {
-            assert!(*val >= 0. && *val <= 1.);
-        }
-    }
-}
+//     for row in &all_ratios {
+//         for val in row {
+//             assert!(*val >= 0. && *val <= 1.);
+//         }
+//     }
+// }

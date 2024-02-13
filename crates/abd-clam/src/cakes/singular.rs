@@ -7,7 +7,7 @@ use std::path::Path;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{knn, rnn, Cluster, Dataset, Instance, PartitionCriteria, Tree};
+use crate::{knn, rnn, Cluster, Dataset, Instance, PartitionCriterion, Tree};
 
 use super::Search;
 
@@ -21,16 +21,16 @@ use super::Search;
 /// * `U` - The type of the distance value.
 /// * `D` - The type of the dataset.
 #[derive(Debug)]
-pub struct SingleShard<I: Instance, U: Number, D: Dataset<I, U>> {
+pub struct SingleShard<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> {
     /// The tree used for the search.
-    tree: Tree<I, U, D>,
+    tree: Tree<I, U, D, C>,
     /// Best rnn-search algorithm.
     best_rnn: Option<rnn::Algorithm>,
     /// Best knn-search algorithm.
     best_knn: Option<knn::Algorithm>,
 }
 
-impl<I: Instance, U: Number, D: Dataset<I, U>> SingleShard<I, U, D> {
+impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> SingleShard<I, U, D, C> {
     /// Creates a new CAKES instance.
     ///
     /// # Arguments
@@ -38,9 +38,9 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> SingleShard<I, U, D> {
     /// * `data` - The dataset to search.
     /// * `seed` - The seed to use for the random number generator.
     /// * `criteria` - The criteria to use for partitioning the tree.
-    pub fn new(data: D, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
+    pub fn new<P: PartitionCriterion<U>>(data: D, seed: Option<u64>, criteria: &P) -> Self {
         Self {
-            tree: Tree::new(data, seed).partition(criteria),
+            tree: Tree::new(data, seed).partition(criteria, seed),
             best_rnn: None,
             best_knn: None,
         }
@@ -52,7 +52,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> SingleShard<I, U, D> {
     }
 
     /// Returns a reference to the tree.
-    pub const fn tree(&self) -> &Tree<I, U, D> {
+    pub const fn tree(&self) -> &Tree<I, U, D, C> {
         &self.tree
     }
 
@@ -76,7 +76,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> SingleShard<I, U, D> {
     }
 }
 
-impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for SingleShard<I, U, D> {
+impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Search<I, U, D, C> for SingleShard<I, U, D, C> {
     #[allow(clippy::similar_names)]
     fn save(&self, path: &Path) -> Result<(), String> {
         if !path.exists() {
@@ -146,7 +146,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for SingleShard<I
         };
 
         let tree_dir = path.join("tree");
-        let tree = Tree::<I, U, D>::load(&tree_dir, metric, is_expensive)?;
+        let tree = Tree::<I, U, D, C>::load(&tree_dir, metric, is_expensive)?;
 
         Ok(Self {
             tree,

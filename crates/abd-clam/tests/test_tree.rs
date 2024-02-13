@@ -1,6 +1,6 @@
 //! Tests on the tree module.
 
-use abd_clam::{Cluster, Dataset, Instance, PartitionCriteria, Tree, VecDataset};
+use abd_clam::{BaseCluster, Cluster, Dataset, Instance, PartitionCriteria, Tree, VecDataset};
 use distances::Number;
 use tempdir::TempDir;
 
@@ -22,9 +22,9 @@ fn leaf_indices() {
         utils::euclidean::<f32, f32>,
         vec![true, true, false, false, true, false, true, false],
     );
-    let partition_criteria = PartitionCriteria::default();
+    let criteria = PartitionCriteria::default();
 
-    let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+    let tree = Tree::<_, _, _, BaseCluster<_>>::new(data, Some(42)).partition(&criteria, Some(42));
 
     let leaf_indices = tree.root().indices().collect::<Vec<_>>();
     let tree_indices = (0..tree.cardinality()).collect::<Vec<_>>();
@@ -48,9 +48,9 @@ fn reordering() {
         utils::euclidean::<f32, f32>,
         vec![true, true, false, false, true, false, true, false],
     );
-    let partition_criteria = PartitionCriteria::default();
+    let criteria = PartitionCriteria::default();
 
-    let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+    let tree = Tree::<_, _, _, BaseCluster<_>>::new(data, Some(42)).partition(&criteria, Some(42));
 
     let tree_indices = (0..tree.cardinality()).collect::<Vec<_>>();
     // Assert that the root's indices actually cover the whole dataset.
@@ -65,8 +65,8 @@ fn save_load() {
     let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
     let metric = data.metric();
 
-    let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-    let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+    let criteria = PartitionCriteria::default();
+    let raw_tree = Tree::new(data, Some(42)).partition(&criteria, Some(42));
 
     let tree_dir = TempDir::new("tree_medium").unwrap();
 
@@ -89,9 +89,9 @@ fn save_load() {
 
 /// Asserts that two clusters are equal.
 fn assert_subtree_equal<I: Instance, U: Number, M: Instance>(
-    raw_cluster: &Cluster<U>,
+    raw_cluster: &BaseCluster<U>,
     raw_data: &VecDataset<I, U, M>,
-    rec_cluster: &Cluster<U>,
+    rec_cluster: &BaseCluster<U>,
     rec_data: &VecDataset<I, U, M>,
     metric: fn(&I, &I) -> U,
 ) {
@@ -130,8 +130,8 @@ fn assert_subtree_equal<I: Instance, U: Number, M: Instance>(
 fn get_cluster() {
     let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
 
-    let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-    let tree = Tree::new(data, Some(42)).partition(&partition_criteria);
+    let criteria = PartitionCriteria::default();
+    let tree = Tree::<_, _, _, BaseCluster<_>>::new(data, Some(42)).partition(&criteria, Some(42));
 
     let clusters = tree.root().subtree();
 

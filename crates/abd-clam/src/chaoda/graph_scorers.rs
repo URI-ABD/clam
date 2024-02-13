@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::core::cluster::Cluster;
+// use crate::core::cluster::Cluster;
 use crate::core::graph::Graph;
+use crate::Vertex;
 use distances::Number;
 
 /// Type alias for cluster scores associated with clusters in a graph.
-pub type ClusterScores<'a, U> = HashMap<&'a Cluster<U>, f64>;
+pub type ClusterScores<'a, U> = HashMap<&'a Vertex<U>, f64>;
 /// Type alias for scores associated with individual instances or elements.
 pub type InstanceScores = HashMap<usize, f64>;
 
@@ -315,7 +316,7 @@ impl<'a, U: Number> GraphScorer<'a, U> for VertexDegree {
 pub struct ParentCardinality<'a, U: Number> {
     /// The root cluster in the hierarchical structure.
     #[allow(dead_code)]
-    root: &'a Cluster<U>,
+    root: &'a Vertex<U>,
     /// User-defined weight function for hierarchy levels.
     #[allow(dead_code)]
     weight: Box<dyn (Fn(usize) -> f64) + Send + Sync>,
@@ -334,7 +335,7 @@ impl<'a, U: Number> ParentCardinality<'a, U> {
     /// # Returns
     ///
     /// A new instance of the `ParentCardinality` scorer with the specified root cluster and weight function.
-    pub fn new(_root: &'a Cluster<U>) -> Self {
+    pub fn new(_root: &'a Vertex<U>) -> Self {
         todo!()
         // let weight = Box::new(|d: usize| 1. / (d as f64).sqrt());
         // Self { root, weight }
@@ -356,7 +357,7 @@ impl<'a, U: Number> ParentCardinality<'a, U> {
     /// This method computes the ancestry of a cluster by traversing the hierarchical structure, starting from
     /// the root cluster and following parent-child relationships until the given cluster is reached.
     /// The resulting vector contains references to clusters that form the ancestry of the specified cluster.
-    pub fn ancestry(&self, _c: &'a Cluster<U>) -> Vec<&'a Cluster<U>> {
+    pub fn ancestry(&self, _c: &'a Vertex<U>) -> Vec<&'a Vertex<U>> {
         todo!()
 
         // c.history().into_iter().fold(vec![self.root], |mut ancestors, turn| {
@@ -468,7 +469,7 @@ impl GraphNeighborhood {
     ///
     /// The number of steps for neighborhood computation as a `usize` value.
     #[allow(dead_code)]
-    fn num_steps<'a, U: Number>(&self, _graph: &'a Graph<'a, U>, _c: &'a Cluster<U>) -> usize {
+    fn num_steps<'a, U: Number>(&self, _graph: &'a Graph<'a, U>, _c: &'a Vertex<U>) -> usize {
         todo!()
 
         // let steps = graph.unchecked_eccentricity(c) as f64 * self.eccentricity_fraction;

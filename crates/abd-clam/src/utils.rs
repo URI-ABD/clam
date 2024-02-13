@@ -121,7 +121,8 @@ pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
 ///
 /// * `ratio` - The ratio to compute the EMA of.
 /// * `parent_ema` - The parent EMA to use.
-pub(crate) fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
+#[must_use]
+pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
     let alpha = 2. / 11.;
     alpha.mul_add(ratio, (1. - alpha) * parent_ema)
@@ -152,7 +153,8 @@ pub(crate) fn position_of<T: Eq + Copy>(values: &[T], v: T) -> Option<usize> {
 ///
 /// An array of Vecs where each Vec represents a column of the original matrix.
 /// Note that all arrays in the input Vec must have 6 columns.
-pub(crate) fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
+#[must_use]
+pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
     let all_ratios: Vec<f64> = values.iter().flat_map(|arr| arr.iter().copied()).collect();
     let mut transposed: [Vec<f64>; 6] = Default::default();
 
@@ -176,7 +178,8 @@ pub(crate) fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
 /// # Returns
 ///
 /// An array of means, where each element represents the mean of a row.
-pub(crate) fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
+#[must_use]
+pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
     values
         .iter()
         .map(|values| mean(values))
@@ -198,7 +201,8 @@ pub(crate) fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
 /// # Returns
 ///
 /// An array of standard deviations, where each element represents the standard deviation of a row.
-pub(crate) fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
+#[must_use]
+pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
     values
         .iter()
         .map(|values| (variance(values, mean(values))).sqrt())

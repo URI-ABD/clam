@@ -18,11 +18,12 @@ use super::linear;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, radius: U) -> Vec<(usize, U)>
+pub fn search<I, U, D, C>(tree: &Tree<I, U, D, C>, query: &I, radius: U) -> Vec<(usize, U)>
 where
     I: Instance,
     U: Number,
     D: Dataset<I, U>,
+    C: Cluster<U>,
 {
     let [confirmed, straddlers] = tree_search(tree.data(), &tree.root, query, radius);
     leaf_search(tree.data(), confirmed, straddlers, query, radius)
@@ -44,11 +45,12 @@ where
 /// query ball, and the second element is the straddlers, i.e. those that
 /// overlap the query ball. The 2-tuples are the clusters and the distance
 /// from the query to the cluster center.
-pub fn tree_search<'a, I, U, D>(data: &D, root: &'a Cluster<U>, query: &I, radius: U) -> [Vec<(&'a Cluster<U>, U)>; 2]
+pub fn tree_search<'a, I, U, D, C>(data: &D, root: &'a C, query: &I, radius: U) -> [Vec<(&'a C, U)>; 2]
 where
     I: Instance,
     U: Number,
     D: Dataset<I, U>,
+    C: Cluster<U>,
 {
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
@@ -83,10 +85,10 @@ where
 }
 
 /// Perform fine-grained leaf search
-pub fn leaf_search<I, U, D>(
+pub fn leaf_search<I, U, D, C>(
     data: &D,
-    confirmed: Vec<(&Cluster<U>, U)>,
-    straddlers: Vec<(&Cluster<U>, U)>,
+    confirmed: Vec<(&C, U)>,
+    straddlers: Vec<(&C, U)>,
     query: &I,
     radius: U,
 ) -> Vec<(usize, U)>
@@ -94,6 +96,7 @@ where
     I: Instance,
     U: Number,
     D: Dataset<I, U>,
+    C: Cluster<U>,
 {
     let hits = confirmed.into_iter().flat_map(|(c, d)| {
         let distances = if c.is_singleton() {

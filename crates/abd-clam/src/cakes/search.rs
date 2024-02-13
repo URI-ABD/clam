@@ -4,10 +4,10 @@ use std::path::Path;
 
 use distances::Number;
 
-use crate::{knn, rnn, Dataset, Instance};
+use crate::{knn, rnn, Cluster, Dataset, Instance};
 
 /// A trait for performing RNN- and KNN-Search.
-pub trait Search<I: Instance, U: Number, D: Dataset<I, U>>: Send + Sync {
+pub trait Search<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>>: Send + Sync {
     /// Saves the search structure to a file.
     ///
     /// # Arguments

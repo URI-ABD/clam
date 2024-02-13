@@ -1,9 +1,9 @@
-///TODO! Add documentation on graph module
+//! TODO: Add documentation on graph module
+
 mod _graph;
+mod criteria;
+mod vertex;
 
-/// Helper functions for building graph
-/// Selects clusters and detects edges
-pub mod criteria;
 pub use _graph::{Edge, Graph};
-
 pub use criteria::MetaMLScorer;
+pub use vertex::{Ratios, Vertex};

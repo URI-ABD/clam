@@ -9,7 +9,7 @@ use crate::{Cluster, Dataset, Instance, Tree};
 
 /// A Grain is an element of the sieve. It is either a hit or a cluster.
 #[derive(Debug)]
-enum Grain<'a, U: Number> {
+enum Grain<'a, U: Number, C: Cluster<U>> {
     /// A `Hit` is a single instance.
     Hit {
         /// Distance from the query to the instance.
@@ -21,7 +21,7 @@ enum Grain<'a, U: Number> {
     /// A `Cluster`.
     Cluster {
         /// The cluster.
-        c: &'a Cluster<U>,
+        c: &'a C,
         /// Theoretical worst case distance from the query to a point in the cluster.
         d_max: U,
         /// Theoretical best case distance from the query to a point in the cluster.
@@ -39,9 +39,9 @@ enum Grain<'a, U: Number> {
     },
 }
 
-impl<'a, U: Number> Grain<'a, U> {
+impl<'a, U: Number, C: Cluster<U>> Grain<'a, U, C> {
     /// Creates a new `Grain` from a cluster.
-    fn new_cluster(c: &'a Cluster<U>, d: U) -> Self {
+    fn new_cluster(c: &'a C, d: U) -> Self {
         let r = c.radius();
         Self::Cluster {
             c,
@@ -63,7 +63,7 @@ impl<'a, U: Number> Grain<'a, U> {
     }
 
     /// Creates center and cluster grains from a cluster.
-    fn new_grains<I: Instance, D: Dataset<I, U>>(c: &'a Cluster<U>, data: &D, query: &I) -> Vec<Self> {
+    fn new_grains<I: Instance, D: Dataset<I, U>>(c: &'a C, data: &D, query: &I) -> Vec<Self> {
         if c.is_singleton() {
             let d = c.distance_to_instance(data, query);
             c.indices().map(|i| Self::new_hit(d, i)).collect()
@@ -130,7 +130,7 @@ impl<'a, U: Number> Grain<'a, U> {
     }
 
     /// Returns the children of the cluster if the `Grain` is of the `Cluster`
-    fn cluster_to_children(self) -> [&'a Cluster<U>; 2] {
+    fn cluster_to_children(self) -> [&'a C; 2] {
         match self {
             Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on Clusters."),
             Grain::Cluster { c, .. } => c
@@ -244,11 +244,12 @@ impl<'a, U: Number> Grain<'a, U> {
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D, C>(tree: &Tree<I, U, D, C>, query: &I, k: usize) -> Vec<(usize, U)>
 where
     I: Instance,
     U: Number,
     D: Dataset<I, U>,
+    C: Cluster<U>,
 {
     let data = tree.data();
     let mut grains = Grain::new_grains(&tree.root, data, query);

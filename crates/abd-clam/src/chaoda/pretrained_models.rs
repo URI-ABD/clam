@@ -2,7 +2,7 @@
 //! paper. The meta-ml models were first trained in Python and the decision
 //! functions were extracted and then translated into Rust.
 
-use crate::core::cluster::Ratios;
+use crate::Ratios;
 
 /// Returns a list of available `MetaML` scorers as tuples containing their names and boxed functions.
 ///

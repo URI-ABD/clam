@@ -1,6 +1,6 @@
 //! Tests for the RNN-search algorithms.
 
-use abd_clam::{knn, rnn, PartitionCriteria, Tree};
+use abd_clam::{knn, rnn, BaseCluster, PartitionCriteria, Tree};
 use distances::Number;
 use float_cmp::assert_approx_eq;
 use test_case::test_case;
@@ -16,7 +16,7 @@ fn linear() {
     let query = &vec![0.0];
 
     let criteria = PartitionCriteria::default();
-    let tree = Tree::new(data, None).partition(&criteria);
+    let tree = Tree::<_, _, _, BaseCluster<_>>::new(data, None).partition(&criteria, None);
 
     let linear_knn = knn::Algorithm::Linear.search(&tree, query, 3);
     let linear_rnn = rnn::Algorithm::Linear.search(query, 1.5, &tree);
@@ -48,7 +48,7 @@ fn variants(cardinality: usize, dimensionality: usize) {
     let query = &vec![0.; dimensionality];
 
     let criteria = PartitionCriteria::default();
-    let tree = Tree::new(data, None).partition(&criteria);
+    let tree = Tree::<_, _, _, BaseCluster<_>>::new(data, None).partition(&criteria, None);
 
     for k in (0..3).map(|i| 10_usize.pow(i)) {
         let linear_nn = knn::Algorithm::Linear.search(&tree, query, k);

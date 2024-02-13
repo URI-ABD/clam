@@ -1,30 +1,32 @@
 //! Criteria used for selecting `Cluster`s for `Graph`s.
 
-/// A `Box`ed function that assigns a score for a given `Cluster`.
-pub type MetaMLScorer = Box<fn(crate::core::cluster::Ratios) -> f64>;
-
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 
-use crate::core::graph::_graph::{ClusterSet, EdgeSet};
-use crate::{Cluster, Dataset, Edge, Instance};
 use distances::Number;
 
+use super::_graph::{EdgeSet, VertexSet};
+use super::vertex::Ratios;
+use crate::{Cluster, Dataset, Edge, Instance, Vertex};
+
+/// A `Box`ed function that assigns a score for a given `Cluster`.
+pub type MetaMLScorer = Box<fn(Ratios) -> f64>;
+
 /// A Wrapper that contains a cluster and its score
-struct ClusterWrapper<'a, U: Number> {
+struct VertexWrapper<'a, U: Number> {
     /// A cluster
-    pub cluster: &'a Cluster<U>,
+    pub cluster: &'a Vertex<U>,
     /// An associated score
     pub score: f64,
 }
 
-impl<'a, U: Number> PartialEq for ClusterWrapper<'a, U> {
+impl<'a, U: Number> PartialEq for VertexWrapper<'a, U> {
     fn eq(&self, other: &Self) -> bool {
         self.score == other.score
     }
 }
 
-impl<'a, U: Number> Eq for ClusterWrapper<'a, U> {}
+impl<'a, U: Number> Eq for VertexWrapper<'a, U> {}
 
 // impl<'a, U: Number> Ord for ClusterWrapper<'a, U> {
 //     fn cmp(&self, other: &Self) -> Ordering {
@@ -32,7 +34,7 @@ impl<'a, U: Number> Eq for ClusterWrapper<'a, U> {}
 //     }
 // }
 
-impl<'a, U: Number> Ord for ClusterWrapper<'a, U> {
+impl<'a, U: Number> Ord for VertexWrapper<'a, U> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.score.partial_cmp(&other.score).unwrap_or(Ordering::Equal) {
             Ordering::Equal => {
@@ -50,14 +52,13 @@ impl<'a, U: Number> Ord for ClusterWrapper<'a, U> {
     }
 }
 
-impl<'a, U: Number> PartialOrd for ClusterWrapper<'a, U> {
+impl<'a, U: Number> PartialOrd for VertexWrapper<'a, U> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-/// Scores a cluster with a given scoring fuction
-///
+/// Scores a cluster with a given scoring function
 ///
 /// # Arguments
 ///
@@ -67,22 +68,18 @@ impl<'a, U: Number> PartialOrd for ClusterWrapper<'a, U> {
 /// # Returns:
 ///
 /// `BinaryHeap` of `ClusterWrappers`
-///
 fn score_clusters<'a, U: Number>(
-    root: &'a Cluster<U>,
-    scoring_function: &crate::core::graph::MetaMLScorer,
-) -> Result<BinaryHeap<ClusterWrapper<'a, U>>, String> {
-    let mut scored_clusters: BinaryHeap<ClusterWrapper<'a, U>> = BinaryHeap::new();
+    root: &'a Vertex<U>,
+    scoring_function: &super::MetaMLScorer,
+) -> BinaryHeap<VertexWrapper<'a, U>> {
+    let mut scored_clusters: BinaryHeap<VertexWrapper<'a, U>> = BinaryHeap::new();
 
     for cluster in root.subtree() {
-        let score = match cluster.ratios() {
-            Some(ratios) => scoring_function(ratios),
-            None => return Err("Error: tree must be built with ratios".to_string()),
-        };
-        scored_clusters.push(ClusterWrapper { cluster, score });
+        let score = scoring_function(cluster.ratios());
+        scored_clusters.push(VertexWrapper { cluster, score });
     }
 
-    Ok(scored_clusters)
+    scored_clusters
 }
 
 /// Gets `ClusterSet` from `BinaryHeap` of `ClusterWrappers`
@@ -102,12 +99,12 @@ fn score_clusters<'a, U: Number>(
 /// If `ClusterWrapper` contains an invalid cluster-score pairing
 ///
 pub fn select_clusters<'a, U: Number>(
-    root: &'a Cluster<U>,
+    root: &'a Vertex<U>,
     scoring_function: &MetaMLScorer,
     min_depth: usize,
-) -> Result<ClusterSet<'a, U>, String> {
-    let mut cluster_set: HashSet<&'a Cluster<U>> = HashSet::new();
-    let mut scored_clusters = score_clusters(root, scoring_function)?;
+) -> Result<VertexSet<'a, U>, String> {
+    let mut cluster_set: HashSet<&'a Vertex<U>> = HashSet::new();
+    let mut scored_clusters = score_clusters(root, scoring_function);
     scored_clusters.retain(|item| item.cluster.depth() >= min_depth || item.cluster.is_leaf());
     while !scored_clusters.is_empty() {
         let Some(wrapper) = scored_clusters.pop() else {
@@ -137,7 +134,7 @@ pub fn select_clusters<'a, U: Number>(
 /// A `HashSet` containing the detected edges, represented by `Edge` instances.
 #[allow(clippy::implicit_hasher)]
 pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
-    clusters: &ClusterSet<'a, U>,
+    clusters: &VertexSet<'a, U>,
     data: &D,
 ) -> EdgeSet<'a, U> {
     // TODO! Refactor for better performance
@@ -159,7 +156,7 @@ pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{PartitionCriteria, Tree, VecDataset};
+    use crate::{Cluster, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
     use rand::SeedableRng;
@@ -189,12 +186,12 @@ mod tests {
 
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
+            .partition(&partition_criteria, Some(42))
             .with_ratios(true);
 
         let root = raw_tree.root();
 
-        let mut priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1).unwrap();
+        let mut priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1);
 
         assert_eq!(priority_queue.len(), root.subtree().len());
 
