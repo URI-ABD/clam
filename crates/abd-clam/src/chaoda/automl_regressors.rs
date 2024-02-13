@@ -2,7 +2,10 @@
 
 use std::path::Path;
 
+use automl::settings::Algorithm;
 use automl::SupervisedModel;
+
+use smartcore::tree::decision_tree_regressor::DecisionTreeRegressorParameters;
 
 use super::metaml::{MetaMLDataset, MetaMLModel};
 
@@ -31,20 +34,18 @@ impl MetaMLModel for LinearRegressor {
     ///
     /// # Arguments
     ///
-    /// * `_data`: The dataset used for training the linear regressor.
+    /// * `data`: The dataset used for training the linear regressor.
     ///
-    fn train(&mut self, _data: MetaMLDataset) {
-        todo!()
+    fn train(&mut self, data: MetaMLDataset) {
+        let settings = automl::Settings::default_regression().only(Algorithm::Linear);
 
-        // Create the settings and model
-        // let settings = automl::Settings::default_regression().only(Algorithm::Linear);
-        // let mut model = SupervisedModel::new(data, settings);
-        //
-        // // Train the model
-        // model.train();
-        //
-        // // Store the model
-        // self.model = Some(model);
+        let mut model = SupervisedModel::new(data, settings);
+
+        // Train the model
+        model.train();
+
+        // Store the model
+        self.model = Some(model);
     }
     /// Predict the target value given input features.
     ///
@@ -53,15 +54,12 @@ impl MetaMLModel for LinearRegressor {
     ///
     /// # Returns
     /// The predicted target value.
-    fn predict(&self, _features: &[f32; 6]) -> f32 {
-        todo!()
+    fn predict(&self, features: &[f32; 6]) -> Result<f32, String> {
+        let Some(model) = self.model.as_ref() else {
+            return Err("Model must be trained before being saved".to_string());
+        };
 
-        // let model = self
-        //     .model
-        //     .as_ref()
-        //     .expect("Model must be trained before making predictions");
-        //
-        // model.predict(vec![features.to_vec()])[0]
+        Ok(model.predict(vec![features.to_vec()])[0])
     }
     /// Load a trained model from a file.
     ///
@@ -78,12 +76,14 @@ impl MetaMLModel for LinearRegressor {
     /// Returns an error message if any of the following conditions occur:
     /// * The provided `path` cannot be converted to a string.
     /// * Loading the model from the file fails for any reason.
-    fn load(_path: &Path) -> Result<Self, String> {
-        todo!()
+    fn load(path: &Path) -> Result<Self, String> {
+        let Some(path_str) = path.to_str() else {
+            return Err("Failed to convert path to a string".to_string());
+        };
 
-        // let path_str = path.to_str().ok_or("Failed to convert path to a string")?;
-        // let model = SupervisedModel::new_from_file(path_str);
-        // Ok(LinearRegressor { model: Some(model) })
+        let model = SupervisedModel::new_from_file(path_str);
+
+        Ok(Self { model: Some(model) })
     }
 
     /// Save the trained model to a file.
@@ -102,13 +102,18 @@ impl MetaMLModel for LinearRegressor {
     /// * The provided `path` cannot be converted to a string.
     /// * The model has not been trained or is missing when attempting to save it.
     /// * Saving the model to the specified path fails for any reason.
-    fn save(&self, _path: &Path) -> Result<(), String> {
-        todo!()
-        // let model = self.model.as_ref().expect("Model must be trained before being saved.");
-        // let path_str = path.to_str().ok_or("Failed to convert path to a string")?;
-        // model.save(path_str);
-        //
-        // Ok(())
+    fn save(&self, path: &Path) -> Result<(), String> {
+        let Some(model) = self.model.as_ref() else {
+            return Err("Model must be trained before being saved".to_string());
+        };
+
+        let Some(path_str) = path.to_str() else {
+            return Err("Failed to convert path to a string".to_string());
+        };
+
+        model.save(path_str);
+
+        Ok(())
     }
 }
 
@@ -140,24 +145,22 @@ impl MetaMLModel for DecisionTreeRegressor {
     ///
     /// # Arguments
     ///
-    /// * `_data`: The dataset used for training the decision tree regressor.
+    /// * `data`: The dataset used for training the decision tree regressor.
     ///
-    fn train(&mut self, _data: MetaMLDataset) {
-        todo!()
+    fn train(&mut self, data: MetaMLDataset) {
+        let settings = automl::Settings::default_regression()
+            .only(Algorithm::DecisionTreeRegressor)
+            .with_decision_tree_regressor_settings(
+                DecisionTreeRegressorParameters::default().with_max_depth(Self::MAX_DEPTH),
+            );
 
-        // Create the settings and model
-        // let settings = automl::Settings::default_regression()
-        //     .only(Algorithm::DecisionTreeRegressor)
-        //     .with_decision_tree_regressor_settings(
-        //         DecisionTreeRegressorParameters::default().with_max_depth(Self::MAX_DEPTH),
-        //     );
-        // let mut model = SupervisedModel::new(data, settings);
-        //
-        // // Train the model
-        // model.train();
-        //
-        // // Store the model
-        // self.model = Some(model);
+        let mut model = SupervisedModel::new(data, settings);
+
+        // Train the model
+        model.train();
+
+        // Store the model
+        self.model = Some(model);
     }
 
     /// Predict the target value given input features.
@@ -167,15 +170,12 @@ impl MetaMLModel for DecisionTreeRegressor {
     ///
     /// # Returns
     /// The predicted target value.
-    fn predict(&self, _features: &[f32; 6]) -> f32 {
-        todo!()
+    fn predict(&self, features: &[f32; 6]) -> Result<f32, String> {
+        let Some(model) = self.model.as_ref() else {
+            return Err("Model must be trained before being saved".to_string());
+        };
 
-        // let model = self
-        //     .model
-        //     .as_ref()
-        //     .expect("Model must be trained before making predictions");
-        //
-        // model.predict(vec![features.to_vec()])[0]
+        Ok(model.predict(vec![features.to_vec()])[0])
     }
 
     /// Load a trained model from a file.
@@ -193,12 +193,14 @@ impl MetaMLModel for DecisionTreeRegressor {
     /// Returns an error message if any of the following conditions occur:
     /// * The provided `path` cannot be converted to a string.
     /// * Loading the model from the file fails for any reason.
-    fn load(_path: &Path) -> Result<Self, String> {
-        todo!()
+    fn load(path: &Path) -> Result<Self, String> {
+        let Some(path_str) = path.to_str() else {
+            return Err("Failed to convert path to a string".to_string());
+        };
 
-        // let path_str = path.to_str().ok_or("Failed to convert path to a string")?;
-        // let model = SupervisedModel::new_from_file(path_str);
-        // Ok(DecisionTreeRegressor { model: Some(model) })
+        let model = SupervisedModel::new_from_file(path_str);
+
+        Ok(Self { model: Some(model) })
     }
 
     /// Save the trained model to a file.
@@ -217,11 +219,17 @@ impl MetaMLModel for DecisionTreeRegressor {
     /// * The provided `path` cannot be converted to a string.
     /// * The model has not been trained or is missing when attempting to save it.
     /// * Saving the model to the specified path fails for any reason.
-    fn save(&self, _path: &Path) -> Result<(), String> {
-        todo!()
-        // let model = self.model.as_ref().expect("Model must be trained before being saved");
-        // let path_str = path.to_str().ok_or("Failed to convert path to a string")?;
-        // model.save(path_str);
-        // Ok(())
+    fn save(&self, path: &Path) -> Result<(), String> {
+        let Some(model) = &self.model.as_ref() else {
+            return Err("Model must be trained before being saved".to_string());
+        };
+
+        let Some(path_str) = path.to_str() else {
+            return Err("Failed to convert path to a string".to_string());
+        };
+
+        model.save(path_str);
+
+        Ok(())
     }
 }

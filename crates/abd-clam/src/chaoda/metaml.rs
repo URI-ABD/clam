@@ -36,7 +36,11 @@ pub trait MetaMLModel {
     ///
     /// * If the model hasn't been trained.
     ///
-    fn predict(&self, features: &[f32; 6]) -> f32;
+    /// # Errors
+    ///
+    /// Will throw error if model is not saved
+    ///
+    fn predict(&self, features: &[f32; 6]) -> Result<f32, String>;
 
     /// Loads a trained meta-ml model from disk.
     ///
