@@ -56,6 +56,8 @@ libm = "0.2.7"
 # memmap2 = "0.8.0"
 smartcore = "0.2.1"
 
+statistical = "1.0.0"
+
 
 [dev-dependencies]
 symagen = { path = "../SyMaGen" }
@@ -64,7 +66,6 @@ tempdir = "0.3.7"
 float-cmp = "0.9.0"
 test-case = "3.2.1"
 postcard = { version = "1.0.8", features = ["alloc"] }
-statistical = "1.0.0"
 
 [[bench]]
 name = "genomic"
