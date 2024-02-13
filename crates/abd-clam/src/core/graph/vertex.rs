@@ -14,7 +14,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::{core::cluster::Children, BaseCluster, Cluster, Dataset, Instance, PartitionCriterion};
+use crate::{core::cluster::Children, utils, BaseCluster, Cluster, Dataset, Instance, PartitionCriterion};
 
 /// The ratios used for anomaly detection.
 pub type Ratios = [f64; 6];
@@ -41,16 +41,111 @@ impl<U: Number> Vertex<U> {
     }
 
     /// Creates a new `Vertex` tree.
-    pub const fn from_base_tree(base_cluster: BaseCluster<U>) -> Self {
-        let ratios = [0.0; 6];
-        // TODO: Calculate the ratios
-        Self::new(base_cluster, ratios, None)
+    pub fn from_base_tree(root: BaseCluster<U>) -> Self {
+        Self::from_base_cluster(root).set_child_parent_ratios([1.0; 6])
+    }
+
+    /// Recursively creates a new `Vertex` tree.
+    fn from_base_cluster(mut base_cluster: BaseCluster<U>) -> Self {
+        match base_cluster.children {
+            Some(children) => {
+                base_cluster.children = None;
+                let left = Box::new(Self::from_base_cluster(*children.left));
+                let right = Box::new(Self::from_base_cluster(*children.right));
+                let children = Children {
+                    left,
+                    right,
+                    arg_l: children.arg_l,
+                    arg_r: children.arg_r,
+                    polar_distance: children.polar_distance,
+                };
+                Self::new(base_cluster, [1.0; 6], Some(children))
+            }
+            None => Self::new(base_cluster, [1.0; 6], None),
+        }
+    }
+
+    /// Set the child-parent ratios.
+    #[must_use]
+    #[allow(clippy::similar_names)]
+    pub(crate) fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
+        let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
+
+        let c = self.cardinality().as_f64() / pc;
+        let r = self.radius().as_f64() / pr;
+        let l = self.lfd() / pl;
+
+        let c_ = utils::next_ema(c, pc_);
+        let r_ = utils::next_ema(r, pr_);
+        let l_ = utils::next_ema(l, pl_);
+
+        let ratios = [c, r, l, c_, r_, l_];
+        self.ratios = ratios;
+
+        if let Some(Children {
+            left,
+            right,
+            arg_l,
+            arg_r,
+            polar_distance,
+        }) = self.children
+        {
+            let left = Box::new(left.set_child_parent_ratios(ratios));
+            let right = Box::new(right.set_child_parent_ratios(ratios));
+            let children = Children {
+                left,
+                right,
+                arg_l,
+                arg_r,
+                polar_distance,
+            };
+            self.children = Some(children);
+        }
+
+        self
     }
 
     /// Normalizes the ratios in the subtree.
     #[must_use]
-    pub fn normalize_ratios(self) -> Self {
-        todo!()
+    pub fn normalize_ratios(mut self) -> Self {
+        let all_ratios = self.subtree().into_iter().map(Self::ratios).collect::<Vec<_>>();
+
+        let all_ratios = utils::rows_to_cols(&all_ratios);
+
+        // mean of each column
+        let means = utils::calc_row_means(&all_ratios);
+
+        // sd of each column
+        let sds = utils::calc_row_sds(&all_ratios);
+
+        self.set_normalized_ratios(means, sds);
+
+        self
+    }
+
+    /// Recursively applies Gaussian error normalization to the ratios in the subtree.
+    fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
+        let normalized_ratios: Vec<_> = self
+            .ratios
+            .into_iter()
+            .zip(means)
+            .zip(sds)
+            .map(|((value, mean), std)| (value - mean) / std.mul_add(core::f64::consts::SQRT_2, f64::EPSILON))
+            .map(libm::erf)
+            .map(|v| (1. + v) / 2.)
+            .collect();
+
+        if let Ok(normalized_ratios) = normalized_ratios.try_into() {
+            self.ratios = normalized_ratios;
+        }
+
+        match &mut self.children {
+            Some(children) => {
+                children.left.set_normalized_ratios(means, sds);
+                children.right.set_normalized_ratios(means, sds);
+            }
+            None => (),
+        }
     }
 
     /// The base `BaseCluster` of the `Vertex`.

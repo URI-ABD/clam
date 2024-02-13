@@ -42,7 +42,7 @@ pub struct BaseCluster<U: Number> {
     /// The local fractal dimension of the `UniBall`.
     lfd: f64,
     /// The children of the `UniBall`.
-    children: Option<Children<U, Self>>,
+    pub(crate) children: Option<Children<U, Self>>,
 }
 
 impl<U: Number> PartialEq for BaseCluster<U> {

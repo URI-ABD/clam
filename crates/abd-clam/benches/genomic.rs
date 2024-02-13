@@ -2,7 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{rnn, BaseCluster, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
 
 fn hamming(x: &String, y: &String) -> u16 {
     distances::strings::hamming(x, y)
@@ -39,7 +39,7 @@ fn genomic(c: &mut Criterion) {
         let data_name = format!("{metric_name}-{cardinality}");
         let dataset = VecDataset::new(data_name, data.clone(), metric, true);
         let criteria = PartitionCriteria::default();
-        let cakes = Cakes::<_, _, _, BaseCluster<_>>::new(dataset, Some(seed), &criteria);
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         let radii = [50, 25, 10, 1];
         println!("Running benchmark for {metric_name} ...");

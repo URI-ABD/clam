@@ -6,7 +6,7 @@ use distances::Number;
 use rayon::prelude::*;
 
 use super::{Search, SingleShard};
-use crate::{knn, rnn, Cluster, Dataset, Instance};
+use crate::{knn, rnn, Dataset, Instance};
 
 /// Cakes search with sharded datasets.
 ///
@@ -19,23 +19,23 @@ use crate::{knn, rnn, Cluster, Dataset, Instance};
 /// - `D`: The type of the dataset.
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct RandomlySharded<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> {
+pub struct RandomlySharded<I: Instance, U: Number, D: Dataset<I, U>> {
     /// A random sample of the full dataset.
-    sample_shard: SingleShard<I, U, D, C>,
+    sample_shard: SingleShard<I, U, D>,
     /// The full shards.
-    shards: Vec<SingleShard<I, U, D, C>>,
+    shards: Vec<SingleShard<I, U, D>>,
     /// The Dataset.
     offsets: Vec<usize>,
 }
 
-impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> RandomlySharded<I, U, D, C> {
+impl<I: Instance, U: Number, D: Dataset<I, U>> RandomlySharded<I, U, D> {
     /// Creates a new `ShardedCakes` instance.
     ///
     /// # Arguments
     ///
     /// * `shards` - The shards to use.
     #[must_use]
-    pub fn new(mut shards: Vec<SingleShard<I, U, D, C>>) -> Self {
+    pub fn new(mut shards: Vec<SingleShard<I, U, D>>) -> Self {
         let new_shards = shards.split_off(1);
         let sample_shard = shards
             .pop()
@@ -57,7 +57,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> RandomlySharded<I,
     }
 
     /// Returns the shards.
-    pub fn shards(&self) -> Vec<&SingleShard<I, U, D, C>> {
+    pub fn shards(&self) -> Vec<&SingleShard<I, U, D>> {
         core::iter::once(&self.sample_shard).chain(self.shards.iter()).collect()
     }
 
@@ -67,7 +67,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> RandomlySharded<I,
     }
 }
 
-impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Search<I, U, D, C> for RandomlySharded<I, U, D, C> {
+impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for RandomlySharded<I, U, D> {
     #[allow(clippy::similar_names)]
     fn save(&self, path: &std::path::Path) -> Result<(), String> {
         if !path.exists() {
@@ -212,7 +212,7 @@ mod tests {
 
     use crate::{
         cakes::{Search, SingleShard},
-        knn, rnn, BaseCluster, Dataset, PartitionCriteria, VecDataset,
+        knn, rnn, Dataset, PartitionCriteria, VecDataset,
     };
 
     use super::RandomlySharded;
@@ -247,7 +247,7 @@ mod tests {
         let name = format!("test-full");
         let data = VecDataset::new(name, data_vec.clone(), metric, false);
         let criteria = PartitionCriteria::default();
-        let cakes = SingleShard::<_, _, _, BaseCluster<_>>::new(data, Some(seed), &criteria);
+        let cakes = SingleShard::new(data, Some(seed), &criteria);
 
         let num_shards = 10;
         let max_cardinality = cardinality / num_shards;
@@ -255,7 +255,7 @@ mod tests {
         let data_shards = VecDataset::new(name, data_vec, metric, false).make_shards(max_cardinality);
         let shards = data_shards
             .into_iter()
-            .map(|d| SingleShard::<_, _, _, BaseCluster<_>>::new(d, Some(seed), &criteria))
+            .map(|d| SingleShard::new(d, Some(seed), &criteria))
             .collect::<Vec<_>>();
         let sharded_cakes = {
             let mut cakes = RandomlySharded::new(shards);

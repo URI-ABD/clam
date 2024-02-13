@@ -3,7 +3,7 @@ use criterion::*;
 use rand::prelude::*;
 use symagen::random_data;
 
-use abd_clam::{rnn, BaseCluster, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
 
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::vectors::euclidean(x, y)
@@ -44,7 +44,7 @@ fn cakes(c: &mut Criterion) {
 
         let dataset = VecDataset::new("rnn".to_string(), data.clone(), metric, false);
         let criteria = PartitionCriteria::default();
-        let cakes = Cakes::<_, _, _, BaseCluster<_>>::new(dataset, Some(seed), &criteria);
+        let cakes = Cakes::new(dataset, Some(seed), &criteria);
 
         let mut radius = 0.;
         for n in (0..=100).step_by(25) {

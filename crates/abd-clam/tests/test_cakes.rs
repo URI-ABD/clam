@@ -1,6 +1,6 @@
 //! Tests for Cakes.
 
-use abd_clam::{knn, rnn, BaseCluster, Cakes, Instance, PartitionCriteria, VecDataset};
+use abd_clam::{knn, rnn, Cakes, Instance, PartitionCriteria, VecDataset};
 use distances::Number;
 use float_cmp::approx_eq;
 use test_case::test_case;
@@ -15,7 +15,7 @@ fn tiny() {
         vec![true, false, true, false],
     );
     let criteria = PartitionCriteria::default();
-    let cakes = Cakes::<_, _, _, BaseCluster<_>>::new(data, None, &criteria);
+    let cakes = Cakes::new(data, None, &criteria);
 
     let query = vec![0., 1.];
     let (results, _): (Vec<_>, Vec<_>) = cakes
@@ -44,7 +44,7 @@ fn line() {
     let metadata = data.iter().map(|x| x[0] > 0.0).collect();
     let data = utils::gen_dataset_from(data, utils::euclidean, metadata);
     let criteria = PartitionCriteria::default();
-    let cakes = Cakes::<_, _, _, BaseCluster<_>>::new(data, Some(42), &criteria);
+    let cakes = Cakes::new(data, Some(42), &criteria);
 
     let queries = (-10..=10).step_by(2).map(|x| vec![x.as_f32()]).collect::<Vec<_>>();
     for v in [2, 10, 50] {
@@ -114,7 +114,7 @@ fn strings(cardinality: usize, alphabet: &str, metric: fn(&String, &String) -> u
 
 fn check_search_quality<I: Instance, U: Number, M: Instance>(
     queries: &[&I],
-    cakes: &Cakes<I, U, VecDataset<I, U, M>, BaseCluster<U>>,
+    cakes: &Cakes<I, U, VecDataset<I, U, M>>,
     radii: &[U],
     ks: &[usize],
 ) {
@@ -185,7 +185,7 @@ fn get_trees(num_shards: u64) {
     let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
 
     let criteria = PartitionCriteria::default();
-    let cakes = Cakes::<_, _, _, BaseCluster<_>>::new(data, None, &criteria);
+    let cakes = Cakes::new(data, None, &criteria);
 
     let shards = cakes.shards();
     assert_eq!(shards.len(), 1);
@@ -197,7 +197,7 @@ fn get_trees(num_shards: u64) {
         .map(|i| utils::gen_dataset(100, 10, i, utils::euclidean))
         .collect();
 
-    let cakes = Cakes::<_, _, _, BaseCluster<_>>::new_randomly_sharded(shards, None, &criteria);
+    let cakes = Cakes::new_randomly_sharded(shards, None, &criteria);
 
     let shards = cakes.shards();
     assert_eq!(shards.len(), num_shards as usize);
@@ -211,14 +211,12 @@ fn save_load_single() {
     let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
 
     let criteria = PartitionCriteria::default();
-    let cakes = Cakes::<_, _, _, BaseCluster<_>>::new(data, None, &criteria);
+    let cakes = Cakes::new(data, None, &criteria);
 
     let tmp_dir = tempdir::TempDir::new("cakes-test").unwrap();
     cakes.save(tmp_dir.path()).unwrap();
 
-    let cakes =
-        Cakes::<Vec<f32>, f32, VecDataset<_, _, usize>, BaseCluster<_>>::load(tmp_dir.path(), utils::euclidean, false)
-            .unwrap();
+    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _, usize>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
 
     let shards = cakes.shards();
     assert_eq!(shards.len(), 1);
@@ -235,14 +233,12 @@ fn save_load_sharded(num_shards: u64) {
         .collect();
 
     let criteria = PartitionCriteria::default();
-    let cakes = Cakes::<_, _, _, BaseCluster<_>>::new_randomly_sharded(shards, None, &criteria);
+    let cakes = Cakes::new_randomly_sharded(shards, None, &criteria);
 
     let tmp_dir = tempdir::TempDir::new("sharded-cakes-test").unwrap();
     cakes.save(tmp_dir.path()).unwrap();
 
-    let cakes =
-        Cakes::<Vec<f32>, f32, VecDataset<_, _, usize>, BaseCluster<_>>::load(tmp_dir.path(), utils::euclidean, false)
-            .unwrap();
+    let cakes = Cakes::<Vec<f32>, f32, VecDataset<_, _, usize>>::load(tmp_dir.path(), utils::euclidean, false).unwrap();
 
     let shards = cakes.shards();
     assert_eq!(shards.len(), num_shards as usize);

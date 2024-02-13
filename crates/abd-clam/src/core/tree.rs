@@ -188,48 +188,16 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Tree<I, U, D, C> {
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D, Vertex<U>> {
-    /// Sets the `Cluster` ratios for anomaly detection and related applications.
+    /// Sets the `Vertex` ratios for anomaly detection and related applications.
     ///
     /// This should only be called on the root `Cluster` after calling `partition`.
     ///
     /// # Arguments
     ///
     /// * `normalized`: Whether to apply Gaussian error normalization to the ratios.
-    ///
-    /// # Panics
-    ///
-    /// * If this method is called on a non-root `Cluster`.
-    /// * If this method is called before calling `partition` on the root `Cluster`.
-    #[allow(unused_variables, unused_mut)]
     #[must_use]
-    pub fn with_ratios(mut self, normalize: bool) -> Self {
-        todo!()
-        // TODO: Let's move this to a method on Cluster.
-
-        // self.root = self.root.set_child_parent_ratios([1.0; 6]);
-
-        // if normalize {
-        //     let all_ratios = self
-        //         .root
-        //         .subtree()
-        //         .iter()
-        //         .map(|c| {
-        //             c.ratios()
-        //                 .unwrap_or_else(|| unreachable!("We just set the ratios above."))
-        //         })
-        //         .collect::<Vec<_>>();
-
-        //     let all_ratios = utils::rows_to_cols(&all_ratios);
-
-        //     // mean of each column
-        //     let means: [f64; 6] = utils::calc_row_means(&all_ratios);
-
-        //     // sd of each column
-        //     let sds: [f64; 6] = utils::calc_row_sds(&all_ratios);
-
-        //     self.root.set_normalized_ratios(means, sds);
-        // }
-
-        // self
+    pub fn normalize_ratios(mut self) -> Self {
+        self.root = self.root.normalize_ratios();
+        self
     }
 }

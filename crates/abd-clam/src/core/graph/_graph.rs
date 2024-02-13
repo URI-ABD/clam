@@ -798,9 +798,7 @@ mod tests {
         let data = gen_dataset(cardinality, 10, 42, euclidean);
 
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-        let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria, Some(42))
-            .with_ratios(false);
+        let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria, Some(42));
         for i in 4..raw_tree.depth() {
             let selected_clusters = select_clusters(
                 raw_tree.root(),
@@ -829,7 +827,7 @@ mod tests {
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
             .partition(&partition_criteria, Some(42))
-            .with_ratios(true);
+            .normalize_ratios();
 
         let graph = Graph::from_tree(
             &raw_tree,

@@ -16,17 +16,17 @@ use search::Search;
 use sharded::RandomlySharded;
 use singular::SingleShard;
 
-use crate::{Cluster, Dataset, Instance, PartitionCriterion, Tree};
+use crate::{BaseCluster, Dataset, Instance, PartitionCriterion, Tree};
 
 /// CAKES search.
-pub enum Cakes<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> {
+pub enum Cakes<I: Instance, U: Number, D: Dataset<I, U>> {
     /// Search with a single shard.
-    SingleShard(SingleShard<I, U, D, C>),
+    SingleShard(SingleShard<I, U, D>),
     /// Search with multiple shards.
-    RandomlySharded(RandomlySharded<I, U, D, C>),
+    RandomlySharded(RandomlySharded<I, U, D>),
 }
 
-impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Cakes<I, U, D, C> {
+impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// Creates a new CAKES instance with a single shard dataset.
     ///
     /// # Arguments
@@ -93,7 +93,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Cakes<I, U, D, C> 
     }
 
     /// Returns the references to the tree(s) of the dataset.
-    pub fn trees(&self) -> Vec<&Tree<I, U, D, C>> {
+    pub fn trees(&self) -> Vec<&Tree<I, U, D, BaseCluster<U>>> {
         match self {
             Self::SingleShard(ss) => vec![ss.tree()],
             Self::RandomlySharded(rs) => rs.shards().into_iter().map(SingleShard::tree).collect(),
@@ -390,12 +390,11 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Cakes<I, U, D, C> 
     }
 }
 
-impl<I, U, D, C> Index<usize> for Cakes<I, U, D, C>
+impl<I, U, D> Index<usize> for Cakes<I, U, D>
 where
     I: Instance,
     U: Number,
     D: Dataset<I, U>,
-    C: Cluster<U>,
 {
     type Output = I;
 

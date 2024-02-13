@@ -187,7 +187,7 @@ mod tests {
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
             .partition(&partition_criteria, Some(42))
-            .with_ratios(true);
+            .normalize_ratios();
 
         let root = raw_tree.root();
 
