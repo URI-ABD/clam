@@ -40,7 +40,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Tree<I, U, D, C> {
     /// # Arguments
     /// dataset: The dataset from which the tree will be built
     pub fn new(data: D, seed: Option<u64>) -> Self {
-        let root: C = Cluster::new_root(&data, seed);
+        let root = C::new_root(&data, seed);
         let depth = root.max_leaf_depth();
         Self {
             data,
@@ -178,7 +178,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Tree<I, U, D, C> {
         }
 
         let data = D::load(&dataset_path, metric, is_expensive)?;
-        let root: C = Cluster::<U>::load(&cluster_path)?;
+        let root = C::load(&cluster_path)?;
 
         Ok(Self {
             data,
