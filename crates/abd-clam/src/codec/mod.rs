@@ -1,5 +1,5 @@
 //! Compression and Decompression
 
-mod squished_ball;
+mod squishy_ball;
 
-pub use squished_ball::SquishedBall;
+pub use squishy_ball::SquishyBall;
