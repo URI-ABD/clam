@@ -7,7 +7,7 @@ use core::{
     marker::PhantomData,
 };
 
-use distances::Number;
+use distances::{number::Int, Number};
 use serde::{
     de::{MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
@@ -16,23 +16,25 @@ use serde::{
 
 use crate::{core::cluster::Children, BaseCluster, Cluster, Dataset, Instance, PartitionCriterion};
 
+use super::SquishyDataset;
+
 /// A `SquishedBall` is a `Cluster` that supports compression.
 #[derive(Debug)]
-pub struct SquishyBall<U: Number> {
+pub struct SquishyBall<U: Int> {
     /// The `BaseCluster` for the underlying `Cluster`.
     base_cluster: BaseCluster<U>,
     /// Expected memory cost, in bytes, of recursive compression.
-    recursive_cost: usize,
+    recursive_cost: u64,
     /// Expected memory cost, in bytes, of unitary compression.
-    unitary_cost: usize,
+    unitary_cost: u64,
     /// Child Clusters
     children: Option<Children<U, Self>>,
 }
 
-impl<U: Number> SquishyBall<U> {
+impl<U: Int> SquishyBall<U> {
     /// Creates a new `SquishedBall` tree.
     pub fn from_base_tree(root: BaseCluster<U>) -> Self {
-        Self::from_base_cluster(root).set_costs()
+        Self::from_base_cluster(root)
     }
 
     /// Recursively creates a new `SquishedBall` tree.
@@ -65,46 +67,62 @@ impl<U: Number> SquishyBall<U> {
         }
     }
 
-    /// Recursively sets the costs of recursive and unitary compression in the subtree.
-    fn set_costs(self) -> Self {
-        todo!()
-    }
-
     /// The base `BaseCluster` of the `Vertex`.
     pub const fn base_cluster(&self) -> &BaseCluster<U> {
         &self.base_cluster
     }
 
     /// Returns the expected memory cost, in bytes, of recursive compression.
-    pub const fn recursive_cost(&self) -> usize {
+    pub const fn recursive_cost(&self) -> u64 {
         self.recursive_cost
     }
 
     /// Returns the expected memory cost, in bytes, of unitary compression.
-    pub const fn unitary_cost(&self) -> usize {
+    pub const fn unitary_cost(&self) -> u64 {
         self.unitary_cost
     }
 
-    /// Compresses the `SquishedBall` recursively by descending a level into the subtree.
+    /// Estimates the memory cost of unitary compression.
     ///
-    /// The centers of the children are encoded in terms of the center of the `SquishedBall`.
-    #[must_use]
-    pub fn compress_recursive(&self) -> Self {
-        // TODO: Implement encode/decode for metrics, probably as an extension trait for `Dataset`.
-        todo!()
+    /// The cost is estimated as the number of bytes required to encode all instances in the cluster
+    /// in terms of the center of the cluster.
+    pub(crate) fn estimate_unitary_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
+        data.bytes_per_unit_distance() * self.radius().as_u64() * self.cardinality() as u64
     }
 
-    /// Compresses the `SquishedBall` without descending into the subtree.
-    ///
-    /// Every `Instance` is encoded in terms of the center of the `SquishedBall`.
-    #[must_use]
-    pub fn compress_unitary(&self) -> Self {
-        // TODO: Implement encode/decode for metrics, probably as an extension trait for `Dataset`.
-        todo!()
+    /// Estimates the memory cost of recursive compression, i.e. the cost of compressing the
+    /// centers of the children in terms of the center of the cluster.
+    pub(crate) fn estimate_recursive_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
+        match self.children() {
+            Some([left, right]) => {
+                let left_center = left.arg_center();
+                let right_center = right.arg_center();
+                let [left, right, center] = [&data[left_center], &data[right_center], &data[self.arg_center()]];
+                let left_cost = data.encode_instance(center, left).len().as_u64();
+                let right_cost = data.encode_instance(center, right).len().as_u64();
+                left_cost + right_cost
+            }
+            None => {
+                // If there are no children, the cost is zero.
+                0
+            }
+        }
+    }
+
+    /// Recursively estimates and sets the costs of recursive and unitary compression in the subtree.
+    pub(crate) fn estimate_costs<I: Instance, D: SquishyDataset<I, U>>(&mut self, data: &D) {
+        if let Some(children) = self.children.as_mut() {
+            children.left.estimate_costs(data);
+            children.right.estimate_costs(data);
+            self.recursive_cost = self.estimate_recursive_cost(data);
+        } else {
+            self.recursive_cost = 0;
+        }
+        self.unitary_cost = self.estimate_unitary_cost(data);
     }
 }
 
-impl<U: Number> Cluster<U> for SquishyBall<U> {
+impl<U: Int> Cluster<U> for SquishyBall<U> {
     fn new_root<I: Instance, D: Dataset<I, U>>(data: &D, seed: Option<u64>) -> Self {
         let base_cluster = BaseCluster::new_root(data, seed);
         Self {
@@ -166,39 +184,39 @@ impl<U: Number> Cluster<U> for SquishyBall<U> {
     }
 }
 
-impl<U: Number> PartialEq for SquishyBall<U> {
+impl<U: Int> PartialEq for SquishyBall<U> {
     fn eq(&self, other: &Self) -> bool {
         self.base_cluster.eq(&other.base_cluster)
     }
 }
 
-impl<U: Number> Eq for SquishyBall<U> {}
+impl<U: Int> Eq for SquishyBall<U> {}
 
-impl<U: Number> PartialOrd for SquishyBall<U> {
+impl<U: Int> PartialOrd for SquishyBall<U> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<U: Number> Ord for SquishyBall<U> {
+impl<U: Int> Ord for SquishyBall<U> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.base_cluster.cmp(&other.base_cluster)
     }
 }
 
-impl<U: Number> Hash for SquishyBall<U> {
+impl<U: Int> Hash for SquishyBall<U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.base_cluster.hash(state);
     }
 }
 
-impl<U: Number> Display for SquishyBall<U> {
+impl<U: Int> Display for SquishyBall<U> {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self.base_cluster)
     }
 }
 
-impl<U: Number> Serialize for SquishyBall<U> {
+impl<U: Int> Serialize for SquishyBall<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("SquishedBall", 4)?;
         state.serialize_field("base_cluster", &self.base_cluster)?;
@@ -209,7 +227,7 @@ impl<U: Number> Serialize for SquishyBall<U> {
     }
 }
 
-impl<'de, U: Number> Deserialize<'de> for SquishyBall<U> {
+impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         /// The fields in the `SquishedBall` struct.
         #[derive(Deserialize)]
@@ -226,9 +244,9 @@ impl<'de, U: Number> Deserialize<'de> for SquishyBall<U> {
         }
 
         /// The `Visitor` for the `SquishedBall` struct.
-        struct SquishedBallVisitor<U: Number>(PhantomData<U>);
+        struct SquishedBallVisitor<U: Int>(PhantomData<U>);
 
-        impl<'de, U: Number> Visitor<'de> for SquishedBallVisitor<U> {
+        impl<'de, U: Int> Visitor<'de> for SquishedBallVisitor<U> {
             type Value = SquishyBall<U>;
 
             fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
