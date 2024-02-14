@@ -6,10 +6,13 @@ use std::path::Path;
 
 use distances::Number;
 
-use crate::{Cluster, Dataset, Instance, PartitionCriterion, Vertex};
+use crate::{Cluster, Dataset, Instance, PartitionCriterion};
 
 /// A `Tree` represents a hierarchy of `Cluster`s, i.e. "similar" instances
 /// from a metric-`Space`.
+///
+/// The `Tree` has other implementation blocks spread across the crate. These
+/// are used for specific functionality for the concrete `Cluster` types we provide.
 ///
 /// # Type Parameters
 ///
@@ -184,20 +187,5 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Tree<I, U, D, C> {
             _i: PhantomData,
             _u: PhantomData,
         })
-    }
-}
-
-impl<I: Instance, U: Number, D: Dataset<I, U>> Tree<I, U, D, Vertex<U>> {
-    /// Sets the `Vertex` ratios for anomaly detection and related applications.
-    ///
-    /// This should only be called on the root `Cluster` after calling `partition`.
-    ///
-    /// # Arguments
-    ///
-    /// * `normalized`: Whether to apply Gaussian error normalization to the ratios.
-    #[must_use]
-    pub fn normalize_ratios(mut self) -> Self {
-        self.root = self.root.normalize_ratios();
-        self
     }
 }

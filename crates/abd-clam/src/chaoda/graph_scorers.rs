@@ -1,9 +1,11 @@
+//! Different ways to score clustered graphs based on their properties.
+
 use std::collections::HashMap;
 use std::hash::Hash;
 
 // use crate::core::cluster::Cluster;
-use crate::core::graph::Graph;
-use crate::Vertex;
+use super::graph::Graph;
+use super::Vertex;
 use distances::Number;
 
 /// Type alias for cluster scores associated with clusters in a graph.

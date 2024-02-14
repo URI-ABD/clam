@@ -1,3 +1,5 @@
+//! A trait to be implemented by machine learning regressors.
+
 use automl::IntoSupervisedData;
 use smartcore::linalg::naive::dense_matrix::DenseMatrix;
 use std::path::Path;

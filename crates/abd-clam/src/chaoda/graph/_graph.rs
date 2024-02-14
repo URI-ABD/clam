@@ -9,11 +9,11 @@ use std::collections::{HashMap, HashSet};
 
 use distances::Number;
 
-use crate::{Cluster, Dataset, Instance, Tree, Vertex};
+use crate::{Cluster, Dataset, Instance, Tree};
 
 use super::{
     criteria::{detect_edges, select_clusters},
-    MetaMLScorer,
+    MetaMLScorer, Vertex,
 };
 
 /// A set of clusters with references to clusters in a graph.
@@ -430,19 +430,6 @@ impl<'a, U: Number> Graph<'a, U> {
     ///
     /// # Returns
     ///
-    /// A reference to the set of clusters in the graph.
-    #[must_use]
-    pub const fn clusters(&self) -> &VertexSet<'a, U> {
-        &self.clusters
-    }
-
-    /// Returns a reference to the set of edges in the graph.
-    ///
-    /// This method returns a reference to the set of edges representing connections between clusters
-    /// in the graph.
-    ///
-    /// # Returns
-    ///
     /// A reference to the set of edges in the graph.
     #[must_use]
     pub const fn edges(&self) -> &EdgeSet<'a, U> {
@@ -768,12 +755,12 @@ impl<'a, U: Number> Graph<'a, U> {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::{chaoda::pretrained_models, Cluster, Edge, Graph, PartitionCriteria, Tree, VecDataset, Vertex};
+    use crate::{chaoda::pretrained_models, Cluster, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
     use distances::Number;
     use rand::SeedableRng;
 
-    use crate::core::graph::criteria::{detect_edges, select_clusters};
+    use super::*;
 
     /// Generate a dataset with the given cardinality and dimensionality.
     pub fn gen_dataset(
@@ -844,14 +831,14 @@ mod tests {
 
     fn test_properties(graph: &Graph<f32>, selected_clusters: &HashSet<&Vertex<f32>>, edges: &HashSet<Edge<f32>>) {
         // assert edges and clusters are correct
-        assert_eq!(graph.clusters().len(), selected_clusters.len());
+        assert_eq!(graph.clusters.len(), selected_clusters.len());
         assert_eq!(graph.edges().len(), edges.len());
 
         let reference_population = selected_clusters.iter().fold(0, |acc, &c| acc + c.cardinality());
         assert_eq!(graph.population(), reference_population);
         let components = graph.find_component_clusters();
 
-        graph.clusters().iter().for_each(|c1| {
+        graph.clusters.iter().for_each(|c1| {
             assert!(graph.ordered_clusters.contains(c1));
         });
 
@@ -876,7 +863,7 @@ mod tests {
 
     fn test_adjacency_map(graph: &Graph<f32>) {
         let adj_map = graph.adjacency_map();
-        assert_eq!(adj_map.len(), graph.clusters().len());
+        assert_eq!(adj_map.len(), graph.clusters.len());
 
         for component in &graph.find_component_clusters() {
             for c in component {

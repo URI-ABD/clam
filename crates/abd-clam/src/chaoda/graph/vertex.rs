@@ -30,6 +30,21 @@ pub struct Vertex<U: Number> {
     children: Option<Children<U, Self>>,
 }
 
+impl<I: Instance, U: Number, D: Dataset<I, U>> crate::Tree<I, U, D, Vertex<U>> {
+    /// Sets the `Vertex` ratios for anomaly detection and related applications.
+    ///
+    /// This should only be called on the root `Cluster` after calling `partition`.
+    ///
+    /// # Arguments
+    ///
+    /// * `normalized`: Whether to apply Gaussian error normalization to the ratios.
+    #[must_use]
+    pub fn normalize_ratios(mut self) -> Self {
+        self.root = self.root.normalize_ratios();
+        self
+    }
+}
+
 impl<U: Number> Vertex<U> {
     /// Creates a new `Vertex`.
     pub const fn new(base_cluster: BaseCluster<U>, ratios: Ratios, children: Option<Children<U, Self>>) -> Self {

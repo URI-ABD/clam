@@ -24,10 +24,10 @@ pub mod utils;
 
 pub use crate::{
     cakes::{knn, rnn, Cakes},
+    chaoda::graph,
     core::{
         cluster::{BaseCluster, Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion},
         dataset::{Dataset, Instance, VecDataset},
-        graph::{Edge, Graph, MetaMLScorer, Ratios, Vertex},
         tree::Tree,
     },
 };

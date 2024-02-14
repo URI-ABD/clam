@@ -5,9 +5,8 @@ use std::collections::{BinaryHeap, HashSet};
 
 use distances::Number;
 
-use super::_graph::{EdgeSet, VertexSet};
-use super::vertex::Ratios;
-use crate::{Cluster, Dataset, Edge, Instance, Vertex};
+use super::{Edge, EdgeSet, Ratios, Vertex, VertexSet};
+use crate::{Cluster, Dataset, Instance};
 
 /// A `Box`ed function that assigns a score for a given `Cluster`.
 pub type MetaMLScorer = Box<fn(Ratios) -> f64>;
@@ -161,8 +160,8 @@ mod tests {
     use distances::Number;
     use rand::SeedableRng;
 
+    use super::*;
     use crate::chaoda::pretrained_models;
-    use crate::core::graph::criteria::{score_clusters, select_clusters};
 
     pub fn gen_dataset(
         cardinality: usize,

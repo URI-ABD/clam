@@ -1,4 +1,6 @@
 //! Meta-ML regressors built on the [automl] crate
+//!
+//! These relate to various aspects of machine learning and data analysis.
 
 use std::path::Path;
 
