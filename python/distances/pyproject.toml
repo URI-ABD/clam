@@ -26,6 +26,7 @@ dev = [
     "pytest-benchmark",
     "pytest-cov",
     "pytest-sugar",
+    "scipy",
 ]
 
 [tool.maturin]
