@@ -23,10 +23,9 @@ dev = [
     "pre-commit",
     "bump2version",
     "pytest",
-    "pytest-benchmark",
-    "pytest-cov",
     "pytest-sugar",
     "scipy",
+    "richbench",
 ]
 
 [tool.maturin]
