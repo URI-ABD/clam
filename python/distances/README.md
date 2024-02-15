@@ -12,10 +12,12 @@ pip install distances@0.1.1-dev0
 ## Usage
 
 ```python
+import numpy
+
 from distances.vectors import euclidean_f32
 
-a = [1.0, 2.0, 3.0]
-b = [4.0, 5.0, 6.0]
+a = numpy.array([1.0, 2.0, 3.0], dtype=numpy.float32)
+b = a + 3.0
 
 distance = euclidean_f32(a, b)
 
