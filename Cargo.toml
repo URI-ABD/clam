@@ -3,7 +3,8 @@ members = [
     "crates/abd-clam",
     # "crates/cakes-results",
     "crates/distances",
-    "crates/SyMaGen"
+    "crates/SyMaGen",
+    "python/distances",
     # "py-clam",  # TODO: re-enable when we have python bindings
 ]
 resolver = "2"

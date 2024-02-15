@@ -1,0 +1,12 @@
+[package]
+name = "abd-distances"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "abd_distances"
+crate-type = ["cdylib"]
+
+[dependencies]
+distances = { version = "1.6.2", path = "../../crates/distances" }
+pyo3 = { version = "0.20.2", features = ["extension-module", "abi3-py39"] }

@@ -1,0 +1,3 @@
+def euclidean_f32(a: list[float], b: list[float]) -> float:
+    """Compute the Euclidean distance between two lists."""
+    ...
