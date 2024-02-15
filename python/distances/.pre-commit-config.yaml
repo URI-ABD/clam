@@ -16,16 +16,15 @@ repos:
     - id: check-added-large-files
     - id: check-merge-conflict
 
-- repo: https://github.com/psf/black
-  rev: '23.3.0'
-  hooks:
-    - id: black
-      language_version: python3.9
-
 - repo: https://github.com/charliermarsh/ruff-pre-commit
   rev: 'v0.0.272'
   hooks:
     - id: ruff
+      exclude: |
+        (?x)(
+          [a-zA-Z0-9]+.pyi$|
+          py.typed$
+        )
       args: [--fix]
 
 - repo: https://github.com/pre-commit/mirrors-mypy
@@ -33,6 +32,11 @@ repos:
   hooks:
     - id: mypy
       additional_dependencies: [types-requests==2.28.11.8]
+      exclude: |
+        (?x)(
+          [a-zA-Z0-9]+.pyi$|
+          py.typed$
+        )
 
 - repo: local
   hooks:
