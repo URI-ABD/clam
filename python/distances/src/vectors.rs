@@ -4,7 +4,7 @@ use distances::vectors;
 use numpy::PyReadonlyArray1;
 use pyo3::prelude::*;
 
-pub fn register_vectors(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
+pub fn register(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
     let vectors_module = PyModule::new(py, "vectors")?;
     vectors_module.add_function(wrap_pyfunction!(chebyshev_f32, vectors_module)?)?;
     vectors_module.add_function(wrap_pyfunction!(chebyshev_f64, vectors_module)?)?;
