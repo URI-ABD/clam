@@ -32,7 +32,7 @@ The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 ### SIMD-Accelerated Vector Distances
 
 These benchmarks were run on vectors of 1,000 dimensions, and each benchmark was run at least 10,000 times.
-The multiplication factor, in the Min, Max, and Mean columns, is the factor by which the Rust implementation is faster than the SciPy implementation.
+The multiplication factors, in the right half of the table, show the speed of the Rust implementation relative to the SciPy implementation.
 
 |              Benchmark | Min     | Max     | Mean    | Min (+)         | Max (+)         | Mean (+)        |
 |------------------------|---------|---------|---------|-----------------|-----------------|-----------------|
@@ -46,7 +46,7 @@ The multiplication factor, in the Min, Max, and Mean columns, is the factor by w
 ### Vector Distance Benchmarks (No SIMD)
 
 These benchmarks were run on vectors of 1,000 dimensions, and each benchmark was run at least 10,000 times.
-The multiplication factor, in the Min, Max, and Mean columns, is the factor by which the Rust implementation is faster than the SciPy implementation.
+The multiplication factors, in the right half of the table, show the speed of the Rust implementation relative to the SciPy implementation.
 
 |              Benchmark | Min     | Max     | Mean    | Min (+)         | Max (+)         | Mean (+)        |
 |------------------------|---------|---------|---------|-----------------|-----------------|-----------------|
