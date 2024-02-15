@@ -6,7 +6,7 @@ It is a thin Python wrapper around the `distances` crate, in Rust.
 ## Installation
 
 ```bash
-pip install distances@0.1.0
+pip install distances@0.1.1-dev0
 ```
 
 ## Usage
