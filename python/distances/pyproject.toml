@@ -26,6 +26,7 @@ dev = [
     "pytest-sugar",
     "scipy",
     "richbench",
+    "tqdm",
     "seaborn",
 ]
 

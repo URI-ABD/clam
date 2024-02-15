@@ -5,7 +5,7 @@ from . import plots_simd
 
 def main() -> None:
     """Run the CLI."""
-    plots_simd.plot_simd_f32()
+    plots_simd.make_plots()
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ def make_plot(
     dt_name: str,
 ) -> None:
     """Create and save a plot."""
-    seaborn.set_theme(style="whitegrid", rc={"figure.figsize": (12, 7.5)})
+    seaborn.set_theme(style="whitegrid", rc={"figure.figsize": (8, 5)})
 
     # Add lines with dots for markers
     plot = seaborn.lineplot(x=x, y=y_abd, marker="o", label="ABD")
@@ -73,5 +73,5 @@ def make_plot(
     plot.figure.tight_layout()
 
     # Save with 300 DPI
-    plot.figure.savefig(IMAGES_DIR / f"{fn_name}_{dt_name}.png", dpi=300)
+    plot.figure.savefig(IMAGES_DIR / f"{fn_name}_{dt_name}.png", dpi=200)
     plot.figure.clf()

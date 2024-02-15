@@ -31,7 +31,28 @@ The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 ### SIMD-Accelerated Vector Distances
 
-![Euclidean f32](images/euclidean_f32.png)
+<table>
+<tr>
+<th> F32 </th>
+<th> F64 </th>
+</tr>
+<tr>
+<td>
+
+![Euclidean f32](images/Euclidean_f32.png)
+![Squared Euclidean f32](images/SquaredEuclidean_f32.png)
+![Cosine f32](images/Cosine_f32.png)
+
+</td>
+<td>
+
+![Euclidean f64](images/Euclidean_f64.png)
+![Squared Euclidean f64](images/SquaredEuclidean_f64.png)
+![Cosine f64](images/Cosine_f64.png)
+
+</td>
+</tr>
+</table>
 
 ### Vector Distance Benchmarks (No SIMD)
 
