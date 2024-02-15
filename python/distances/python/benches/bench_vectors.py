@@ -6,7 +6,7 @@ import utils
 from abd_distances import vectors
 
 DIM = 1_000
-NUM_RUNS = 1_000
+NUM_RUNS = 10_000
 
 
 def scipy_chebyshev_f32() -> None:
