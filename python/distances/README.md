@@ -29,6 +29,20 @@ print(distance)
 These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using a single thread.
 The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
+### SIMD-Accelerated Vector Distances
+
+These benchmarks were run on vectors of 1,000 dimensions, and each benchmark was run at least 10,000 times.
+The multiplication factor, in the Min, Max, and Mean columns, is the factor by which the Rust implementation is faster than the SciPy implementation.
+
+|              Benchmark | Min     | Max     | Mean    | Min (+)         | Max (+)         | Mean (+)        |
+|------------------------|---------|---------|---------|-----------------|-----------------|-----------------|
+|         Euclidean, f32 | 0.201   | 0.216   | 0.205   | 0.018 (10.9x)   | 0.019 (11.6x)   | 0.019 (11.1x)   |
+|         Euclidean, f64 | 0.217   | 0.241   | 0.226   | 0.024 (9.1x)    | 0.024 (10.1x)   | 0.024 (9.5x)    |
+| Euclidean squared, f32 | 0.151   | 0.155   | 0.152   | 0.019 (8.1x)    | 0.019 (8.2x)    | 0.019 (8.1x)    |
+| Euclidean squared, f64 | 0.155   | 0.160   | 0.157   | 0.024 (6.5x)    | 0.024 (6.7x)    | 0.024 (6.6x)    |
+|            Cosine, f32 | 0.189   | 0.190   | 0.189   | 0.033 (5.6x)    | 0.034 (5.7x)    | 0.033 (5.7x)    |
+|            Cosine, f64 | 0.140   | 0.141   | 0.140   | 0.035 (3.9x)    | 0.035 (4.0x)    | 0.035 (4.0x)    |
+
 ### Vector Distance Benchmarks (No SIMD)
 
 These benchmarks were run on vectors of 1,000 dimensions, and each benchmark was run at least 10,000 times.
@@ -56,20 +70,6 @@ The multiplication factor, in the Min, Max, and Mean columns, is the factor by w
 |            Cosine, f64 | 0.137   | 0.137   | 0.137   | 0.133 (1.0x)    | 0.134 (1.0x)    | 0.133 (1.0x)    |
 |           Hamming, i32 | 0.282   | 0.285   | 0.284   | 0.017 (16.6x)   | 0.017 (16.7x)   | 0.017 (16.7x)   |
 |           Hamming, i64 | 0.291   | 0.294   | 0.292   | 0.023 (12.6x)   | 0.023 (12.7x)   | 0.023 (12.7x)   |
-
-### SIMD-Accelerated Vector Distances
-
-These benchmarks were run on vectors of 1,000 dimensions, and each benchmark was run at least 10,000 times.
-The multiplication factor, in the Min, Max, and Mean columns, is the factor by which the Rust implementation is faster than the SciPy implementation.
-
-|              Benchmark | Min     | Max     | Mean    | Min (+)         | Max (+)         | Mean (+)        |
-|------------------------|---------|---------|---------|-----------------|-----------------|-----------------|
-|         Euclidean, f32 | 0.201   | 0.216   | 0.205   | 0.018 (10.9x)   | 0.019 (11.6x)   | 0.019 (11.1x)   |
-|         Euclidean, f64 | 0.217   | 0.241   | 0.226   | 0.024 (9.1x)    | 0.024 (10.1x)   | 0.024 (9.5x)    |
-| Euclidean squared, f32 | 0.151   | 0.155   | 0.152   | 0.019 (8.1x)    | 0.019 (8.2x)    | 0.019 (8.1x)    |
-| Euclidean squared, f64 | 0.155   | 0.160   | 0.157   | 0.024 (6.5x)    | 0.024 (6.7x)    | 0.024 (6.6x)    |
-|            Cosine, f32 | 0.189   | 0.190   | 0.189   | 0.033 (5.6x)    | 0.034 (5.7x)    | 0.033 (5.7x)    |
-|            Cosine, f64 | 0.140   | 0.141   | 0.140   | 0.035 (3.9x)    | 0.035 (4.0x)    | 0.035 (4.0x)    |
 
 ## License
 
