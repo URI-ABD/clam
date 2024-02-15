@@ -1,4 +1,4 @@
-# Algorithms for Big Data: Distances
+# Algorithms for Big Data: Distances (v0.1.1-dev0)
 
 This package contains algorithms for computing distances between data points.
 It is a thin Python wrapper around the `distances` crate, in Rust.
@@ -6,7 +6,7 @@ It is a thin Python wrapper around the `distances` crate, in Rust.
 ## Installation
 
 ```bash
-pip install distances@0.1.1-dev0
+pip install abd_distances@0.1.1-dev0
 ```
 
 ## Usage
@@ -14,7 +14,7 @@ pip install distances@0.1.1-dev0
 ```python
 import numpy
 
-from distances.vectors import euclidean_f32
+from abd_distances.simd import euclidean_f32
 
 a = numpy.array([1.0, 2.0, 3.0], dtype=numpy.float32)
 b = a + 3.0
