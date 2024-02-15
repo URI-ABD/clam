@@ -5,8 +5,8 @@ import scipy.spatial.distance as scipy_distance
 import utils
 from abd_distances import vectors
 
-DIM = 1000
-NUM_RUNS = 1000
+DIM = 1_000
+NUM_RUNS = 1_000
 
 
 def scipy_chebyshev_f32() -> None:

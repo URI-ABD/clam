@@ -31,3 +31,6 @@ dev = [
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]
+
+[tool.ruff]
+exclude = ["*.pyi"]

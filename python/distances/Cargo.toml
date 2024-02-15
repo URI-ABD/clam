@@ -10,4 +10,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 distances = { version = "1.6.2", path = "../../crates/distances" }
+numpy = "0.20.0"
 pyo3 = { version = "0.20.2", features = ["extension-module", "abi3-py39"] }
