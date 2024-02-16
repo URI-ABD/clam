@@ -48,7 +48,7 @@ convention = "google"
 
 [per-file-ignores]
 "__init__.py" = ["F401"] # Unused import.
-"python/tests/**/*.py" = [
+"python/**/test_*.py" = [
   "ANN001", # Missing type annotation for function argument.
   "ANN003", # Missing type annotation for **kwargs.
   "ANN201", # Missing return type annotation for public function.
@@ -72,7 +72,6 @@ convention = "google"
 "python/abd_clam/anomaly_detection/pretrained_models.py" = [
   "PLR5501", # Use `elif` instead of `else` then `if`.
   "RET505",  # Unecessary `else` after `return`.
-
 ]
 
 [isort]
