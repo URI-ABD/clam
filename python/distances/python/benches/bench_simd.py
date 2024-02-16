@@ -2,7 +2,7 @@
 
 import numpy
 import scipy.spatial.distance as scipy_distance
-import utils
+import utils  # type: ignore[import]
 from abd_distances import simd
 
 DIM = 1_000
