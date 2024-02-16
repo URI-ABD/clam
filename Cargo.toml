@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/abd-clam",
-    # "crates/cakes-results",
     "crates/distances",
     "crates/SyMaGen",
     "python/distances",

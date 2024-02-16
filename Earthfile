@@ -15,9 +15,13 @@ RUN cargo install \
     cargo-chef \
     jaq
 
+RUN cargo install cargo-binstall
+
+RUN cargo install maturin --locked
+
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
-    COPY --dir crates Cargo.toml .
+    COPY --dir crates python Cargo.toml .
     RUN cargo chef prepare
     SAVE ARTIFACT recipe.json
 
@@ -25,7 +29,7 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY --dir crates Cargo.toml .
+    COPY --dir crates python Cargo.toml .
 
 # This target builds the project using the cached dependencies.
 build:
@@ -38,6 +42,7 @@ fmt:
     FROM +chef-cook
     RUN cargo fmt --all
     SAVE ARTIFACT crates AS LOCAL ./
+    SAVE ARTIFACT python AS LOCAL ./
     RUN cargo fmt --all -- --check
 
 # This target lints the project.

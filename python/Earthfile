@@ -1,0 +1,14 @@
+VERSION 0.7
+FROM ../+chef-cook
+
+ARG --global --required DIR
+WORKDIR /usr/local/src/python/$DIR
+CACHE ./target/
+
+test:
+    RUN maturin develop -r --extras=dev
+    RUN cargo test --release
+    RUN pytest
+
+bash:
+    RUN --interactive bash
