@@ -61,17 +61,18 @@ def make_plot(  # noqa: PLR0913
     y_abd: list[float],
     fn_name: str,
     dt_name: str,
-    y_scipy: typing.Optional[list[float]] = None,
     y_units: str = "µs",
+    y_comp: typing.Optional[list[float]] = None,
     x_label: str = "Dimension",
+    y_comp_label: str = "SciPy",
 ) -> None:
     """Create and save a plot."""
     seaborn.set_theme(style="whitegrid", rc={"figure.figsize": (8, 5)})
 
     # Add lines with dots for markers
     plot = seaborn.lineplot(x=x, y=y_abd, marker="o", label="ABD")
-    if y_scipy is not None:
-        plot = seaborn.lineplot(x=x, y=y_scipy, marker="o", label="SciPy")
+    if y_comp is not None:
+        plot = seaborn.lineplot(x=x, y=y_comp, marker="o", label=y_comp_label)
 
     # Set the axis labels.
     # The x-axis is the dimension and the y-axis is the time.

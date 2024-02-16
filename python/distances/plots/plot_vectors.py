@@ -97,7 +97,7 @@ def make_plots() -> None:
         utils.make_plot(
             x=x,
             y_abd=y_abd,
-            y_scipy=y_scipy,
+            y_comp=y_scipy,
             fn_name=dist_name,
             dt_name=dtype,
         )

@@ -28,6 +28,7 @@ dev = [
     "richbench",
     "tqdm",
     "seaborn",
+    "editdistance",
 ]
 
 [tool.maturin]
