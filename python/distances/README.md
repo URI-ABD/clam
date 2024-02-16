@@ -134,9 +134,30 @@ The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 All string distances were computed 100 times each, among different pairs of strings, and the average time was taken.
 
+<table>
+<tr>
+<th> Hamming </th>
+<th> Levenshtein </th>
+<th> Needleman-Wunsch </th>
+</tr>
+<tr>
+<td>
+
 ![Hamming](images/Hamming_str.png)
+
+</td>
+<td>
+
 ![Levenshtein](images/Levenshtein_str.png)
+
+</td>
+<td>
+
 ![Needleman-Wunsch](images/Needleman-Wunsch_str.png)
+
+</td>
+</tr>
+</table>
 
 
 ## License
