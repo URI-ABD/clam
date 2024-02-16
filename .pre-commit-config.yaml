@@ -48,6 +48,7 @@ repos:
         exclude: |
           (?x)(
             [a-zA-Z0-9]+.pyi$|
+            tests/__init__.py$|
             py.typed$
           )
         additional_dependencies: [types-requests==2.28.11.8]
