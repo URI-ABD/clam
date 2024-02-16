@@ -1,4 +1,4 @@
-//!SIMD accelerated distance functions for vectors.
+//! SIMD accelerated distance functions for vectors.
 
 use distances::simd;
 use numpy::PyReadonlyArray1;

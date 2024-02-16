@@ -1,6 +1,7 @@
 //! Python wrappers for distance functions implemented in Rust.
 
 mod simd;
+mod strings;
 mod vectors;
 
 use pyo3::prelude::*;
@@ -9,6 +10,7 @@ use pyo3::prelude::*;
 #[pymodule]
 fn abd_distances(py: Python, m: &PyModule) -> PyResult<()> {
     simd::register(py, m)?;
+    strings::register(py, m)?;
     vectors::register(py, m)?;
     Ok(())
 }
