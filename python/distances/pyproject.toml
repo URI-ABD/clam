@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "abd-distances"
 description = "Distance functions: A wrapper around the Rust crate `distances`."
-version = "0.1.1-dev0"
+version = "1.0.0-dev0"
 requires-python = ">=3.9"
 keywords = ["distance", "metric", "simd"]
 classifiers = [
