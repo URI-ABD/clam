@@ -1,6 +1,7 @@
 """Plotting utilities for the benchmarks."""
 
 import pathlib
+import typing
 
 import numpy
 import seaborn
@@ -48,23 +49,33 @@ def data_u64(car: int, dim: int) -> numpy.ndarray:
     return rng.integers(0, 2, (car, dim)).astype(numpy.uint64)
 
 
-def make_plot(
+def gen_strings(car: int, dim: int, alphabet: str) -> list[str]:
+    """Return a list of random strings."""
+    rng = numpy.random.default_rng()
+    return ["".join(rng.choice(list(alphabet), dim)) for _ in range(car)]
+
+
+def make_plot(  # noqa: PLR0913
+    *,
     x: list[int],
     y_abd: list[float],
-    y_scipy: list[float],
     fn_name: str,
     dt_name: str,
+    y_scipy: typing.Optional[list[float]] = None,
+    y_units: str = "µs",
+    x_label: str = "Dimension",
 ) -> None:
     """Create and save a plot."""
     seaborn.set_theme(style="whitegrid", rc={"figure.figsize": (8, 5)})
 
     # Add lines with dots for markers
     plot = seaborn.lineplot(x=x, y=y_abd, marker="o", label="ABD")
-    plot = seaborn.lineplot(x=x, y=y_scipy, marker="o", label="SciPy")
+    if y_scipy is not None:
+        plot = seaborn.lineplot(x=x, y=y_scipy, marker="o", label="SciPy")
 
     # Set the axis labels.
-    # The x-axis is the dimension and the y-axis is the time in microseconds.
-    plot.set(xlabel="Dimension", ylabel="Time per distance call (µs)")
+    # The x-axis is the dimension and the y-axis is the time.
+    plot.set(xlabel=x_label, ylabel=f"Time per distance call ({y_units})")
 
     # Set the title
     plot.set_title(f"{fn_name} ({dt_name})")
