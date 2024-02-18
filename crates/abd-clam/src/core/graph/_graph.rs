@@ -1004,7 +1004,7 @@ mod tests {
     }
 
     #[test]
-    fn test_triangles2() {
+    fn test_triangles() {
         let data = gen_dataset(1000, 10, 42, euclidean);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
