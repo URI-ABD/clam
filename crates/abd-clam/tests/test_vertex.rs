@@ -57,6 +57,11 @@ fn assert_subtree_equal<I: Instance, U: Number, M: Instance>(
     let (raw_center, rec_center) = (&raw_data[raw_cluster.arg_center()], &rec_data[rec_cluster.arg_center()]);
     let (raw_radial, rec_radial) = (&raw_data[raw_cluster.arg_radial()], &rec_data[rec_cluster.arg_radial()]);
 
+    // assert ratios are equal
+    for (r1, r2) in raw_cluster.ratios().iter().zip(rec_cluster.ratios()) {
+        float_cmp::assert_approx_eq!(f64, *r1, r2, epsilon = 0.00000003);
+    }
+
     // Assert centers and radials are equal
     assert_eq!(metric(raw_center, rec_center), U::zero(), "Centers are not equal.");
     assert_eq!(metric(raw_radial, rec_radial), U::zero(), "Radials are not equal.");
