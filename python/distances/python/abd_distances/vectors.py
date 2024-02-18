@@ -22,6 +22,18 @@ cosine_f32 = abd_vectors.cosine_f32
 cosine_f64 = abd_vectors.cosine_f64
 hamming_i32 = abd_vectors.hamming_i32
 hamming_i64 = abd_vectors.hamming_i64
+cdist_f32 = abd_vectors.cdist_f32
+cdist_f64 = abd_vectors.cdist_f64
+cdist_u32 = abd_vectors.cdist_u32
+cdist_u64 = abd_vectors.cdist_u64
+cdist_i32 = abd_vectors.cdist_i32
+cdist_i64 = abd_vectors.cdist_i64
+pdist_f32 = abd_vectors.pdist_f32
+pdist_f64 = abd_vectors.pdist_f64
+pdist_u32 = abd_vectors.pdist_u32
+pdist_u64 = abd_vectors.pdist_u64
+pdist_i32 = abd_vectors.pdist_i32
+pdist_i64 = abd_vectors.pdist_i64
 
 
 __all__ = [
@@ -45,4 +57,16 @@ __all__ = [
     "cosine_f64",
     "hamming_i32",
     "hamming_i64",
+    "cdist_f32",
+    "cdist_f64",
+    "cdist_u32",
+    "cdist_u64",
+    "cdist_i32",
+    "cdist_i64",
+    "pdist_f32",
+    "pdist_f64",
+    "pdist_u32",
+    "pdist_u64",
+    "pdist_i32",
+    "pdist_i64",
 ]

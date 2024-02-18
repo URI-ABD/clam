@@ -1,8 +1,8 @@
 //! Python wrappers for distance functions implemented in Rust.
 
-mod simd;
-mod strings;
-mod vectors;
+pub(crate) mod simd;
+pub(crate) mod strings;
+pub(crate) mod vectors;
 
 use pyo3::prelude::*;
 

@@ -1,8 +1,8 @@
 //! SIMD accelerated distance functions for vectors.
 
 use distances::simd;
-use numpy::PyReadonlyArray1;
-use pyo3::prelude::*;
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+use pyo3::{exceptions::PyValueError, prelude::*};
 
 pub fn register(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
     let simd_module = PyModule::new(py, "simd")?;
@@ -12,6 +12,10 @@ pub fn register(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
     simd_module.add_function(wrap_pyfunction!(euclidean_sq_f64, simd_module)?)?;
     simd_module.add_function(wrap_pyfunction!(cosine_f32, simd_module)?)?;
     simd_module.add_function(wrap_pyfunction!(cosine_f64, simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(cdist_f32, simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(cdist_f64, simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(pdist_f32, simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(pdist_f64, simd_module)?)?;
     parent_module.add_submodule(simd_module)?;
     Ok(())
 }
@@ -50,4 +54,70 @@ fn cosine_f32(a: PyReadonlyArray1<'_, f32>, b: PyReadonlyArray1<'_, f32>) -> PyR
 #[pyfunction]
 fn cosine_f64(a: PyReadonlyArray1<'_, f64>, b: PyReadonlyArray1<'_, f64>) -> PyResult<f64> {
     Ok(simd::cosine_f64(a.as_slice()?, b.as_slice()?))
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_f32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f32>,
+    b: PyReadonlyArray2<'_, f32>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<f32>>> {
+    let func = match metric {
+        "euclidean" => simd::euclidean_f32,
+        "euclidean_sq" => simd::euclidean_sq_f32,
+        "cosine" => simd::cosine_f32,
+        _ => return Err(PyValueError::new_err("Invalid metric")),
+    };
+    Ok(PyArray2::from_vec2(py, &super::vectors::cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_f64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f64>,
+    b: PyReadonlyArray2<'_, f64>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<f64>>> {
+    let func = match metric {
+        "euclidean" => simd::euclidean_f64,
+        "euclidean_sq" => simd::euclidean_sq_f64,
+        "cosine" => simd::cosine_f64,
+        _ => return Err(PyValueError::new_err("Invalid metric")),
+    };
+    Ok(PyArray2::from_vec2(py, &super::vectors::cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_f32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f32>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<f32>>> {
+    let func = match metric {
+        "euclidean" => simd::euclidean_f32,
+        "euclidean_sq" => simd::euclidean_sq_f32,
+        "cosine" => simd::cosine_f32,
+        _ => return Err(PyValueError::new_err("Invalid metric")),
+    };
+    Ok(super::vectors::pdist_helper(py, a, func))
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_f64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f64>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let func = match metric {
+        "euclidean" => simd::euclidean_f64,
+        "euclidean_sq" => simd::euclidean_sq_f64,
+        "cosine" => simd::cosine_f64,
+        _ => return Err(PyValueError::new_err("Invalid metric")),
+    };
+    Ok(super::vectors::pdist_helper(py, a, func))
 }

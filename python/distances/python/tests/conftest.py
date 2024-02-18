@@ -18,21 +18,21 @@ def gen_data(car: int, dim: int) -> numpy.ndarray:
 def data_f32(request: pytest.FixtureRequest) -> numpy.ndarray:
     """Return a random array of the given dimension."""
     dim: int = request.param
-    return gen_data(2, dim).astype(numpy.float32)
+    return gen_data(20, dim).astype(numpy.float32)
 
 
 @pytest.fixture(params=PARAMS, ids=IDS)
 def data_f64(request: pytest.FixtureRequest) -> numpy.ndarray:
     """Return a random array of the given dimension."""
     dim: int = request.param
-    return gen_data(2, dim)
+    return gen_data(20, dim)
 
 
 @pytest.fixture(params=PARAMS, ids=IDS)
 def data_i32(request: pytest.FixtureRequest) -> numpy.ndarray:
     """Return a random array of the given dimension."""
     dim: int = request.param
-    data = (gen_data(2, dim) > 0.5).astype(numpy.int32)
+    data = (gen_data(20, dim) > 0.5).astype(numpy.int32)
     data[data == 0] = -1
     return data
 
@@ -41,7 +41,7 @@ def data_i32(request: pytest.FixtureRequest) -> numpy.ndarray:
 def data_i64(request: pytest.FixtureRequest) -> numpy.ndarray:
     """Return a random array of the given dimension."""
     dim: int = request.param
-    data = (gen_data(2, dim) > 0.5).astype(numpy.int64)
+    data = (gen_data(20, dim) > 0.5).astype(numpy.int64)
     data[data == 0] = -1
     return data
 
@@ -50,11 +50,11 @@ def data_i64(request: pytest.FixtureRequest) -> numpy.ndarray:
 def data_u32(request: pytest.FixtureRequest) -> numpy.ndarray:
     """Return a random array of the given dimension."""
     dim: int = request.param
-    return (gen_data(2, dim) > 0.5).astype(numpy.uint32)
+    return (gen_data(20, dim) > 0.5).astype(numpy.uint32)
 
 
 @pytest.fixture(params=PARAMS, ids=IDS)
 def data_u64(request: pytest.FixtureRequest) -> numpy.ndarray:
     """Return a random array of the given dimension."""
     dim: int = request.param
-    return (gen_data(2, dim) > 0.5).astype(numpy.uint64)
+    return (gen_data(20, dim) > 0.5).astype(numpy.uint64)

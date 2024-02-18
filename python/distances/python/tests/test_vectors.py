@@ -133,3 +133,119 @@ def test_hamming_i64(data_i64: numpy.ndarray):
         expected,
         rel_tol=rel_tol,
     ), f"Expected: {expected}, got: {dist}"
+
+
+def test_cdist_f32(data_f32: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for abd_name, scipy_name in [
+        ("chebyshev", "chebyshev"),
+        ("euclidean", "euclidean"),
+        ("euclidean_sq", "sqeuclidean"),
+        ("manhattan", "cityblock"),
+        ("canberra", "canberra"),
+        ("cosine", "cosine"),
+    ]:
+        _cdist_helper(
+            data_f32,
+            data_f32,
+            abd_name,
+            vector_distances.cdist_f32,
+            scipy_name,
+            1e-4,
+        )
+
+
+def test_cdist_f64(data_f64: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for abd_name, scipy_name in [
+        ("chebyshev", "chebyshev"),
+        ("euclidean", "euclidean"),
+        ("euclidean_sq", "sqeuclidean"),
+        ("manhattan", "cityblock"),
+        ("canberra", "canberra"),
+        ("cosine", "cosine"),
+    ]:
+        _cdist_helper(
+            data_f64,
+            data_f64,
+            abd_name,
+            vector_distances.cdist_f64,
+            scipy_name,
+            1e-8,
+        )
+
+
+def _cdist_helper(  # noqa: PLR0913
+    a: numpy.ndarray,
+    b: numpy.ndarray,
+    abd_name: str,
+    simd_func: typing.Callable[[numpy.ndarray, numpy.ndarray, str], numpy.ndarray],
+    scipy_name: str,
+    abs_tol: float,
+) -> None:
+    """Helper function for the SIMD-accelerated distance functions."""
+    dist = simd_func(a, b, abd_name)
+    assert dist.shape == (a.shape[0], b.shape[0])
+    expected = scipy_distance.cdist(a, b, scipy_name)
+    abs_tol = abs_tol * expected if "cosine" not in abd_name.lower() else abs_tol
+    assert numpy.allclose(
+        dist,
+        expected,
+        rtol=abs_tol,
+    ), f"{abd_name}: Expected: {expected}, got: {dist}, rel_tol: {abs_tol}"
+
+
+def test_pdist_f32(data_f32: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for abd_name, scipy_name in [
+        ("chebyshev", "chebyshev"),
+        ("euclidean", "euclidean"),
+        ("euclidean_sq", "sqeuclidean"),
+        ("manhattan", "cityblock"),
+        ("canberra", "canberra"),
+        ("cosine", "cosine"),
+    ]:
+        _pdist_helper(
+            data_f32,
+            abd_name,
+            vector_distances.pdist_f32,
+            scipy_name,
+            1e-4,
+        )
+
+
+def test_pdist_f64(data_f64: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for abd_name, scipy_name in [
+        ("chebyshev", "chebyshev"),
+        ("euclidean", "euclidean"),
+        ("euclidean_sq", "sqeuclidean"),
+        ("manhattan", "cityblock"),
+        ("canberra", "canberra"),
+        ("cosine", "cosine"),
+    ]:
+        _pdist_helper(
+            data_f64,
+            abd_name,
+            vector_distances.pdist_f64,
+            scipy_name,
+            1e-8,
+        )
+
+
+def _pdist_helper(
+    a: numpy.ndarray,
+    abd_name: str,
+    simd_func: typing.Callable[[numpy.ndarray, str], numpy.ndarray],
+    scipy_name: str,
+    abs_tol: float,
+) -> None:
+    """Helper function for the SIMD-accelerated distance functions."""
+    dist = simd_func(a, abd_name)
+    expected = scipy_distance.pdist(a, scipy_name)
+    abs_tol = abs_tol * expected if "cosine" not in abd_name.lower() else abs_tol
+    assert numpy.allclose(
+        dist,
+        expected,
+        rtol=abs_tol,
+    ), f"{abd_name}: Expected: {expected}, got: {dist}, rel_tol: {abs_tol}"

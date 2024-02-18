@@ -1,8 +1,8 @@
 //! Distance functions for vectors.
 
-use distances::vectors;
-use numpy::PyReadonlyArray1;
-use pyo3::prelude::*;
+use distances::{vectors, Number};
+use numpy::{ndarray::Axis, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+use pyo3::{exceptions::PyValueError, prelude::*};
 
 pub fn register(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
     let vectors_module = PyModule::new(py, "vectors")?;
@@ -26,6 +26,18 @@ pub fn register(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
     vectors_module.add_function(wrap_pyfunction!(cosine_f64, vectors_module)?)?;
     vectors_module.add_function(wrap_pyfunction!(hamming_i32, vectors_module)?)?;
     vectors_module.add_function(wrap_pyfunction!(hamming_i64, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(cdist_f32, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(cdist_f64, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(cdist_u32, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(cdist_u64, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(cdist_i32, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(cdist_i64, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(pdist_f32, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(pdist_f64, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(pdist_u32, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(pdist_u64, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(pdist_i32, vectors_module)?)?;
+    vectors_module.add_function(wrap_pyfunction!(pdist_i64, vectors_module)?)?;
     parent_module.add_submodule(vectors_module)?;
     Ok(())
 }
@@ -148,4 +160,239 @@ fn hamming_i32(a: PyReadonlyArray1<'_, i32>, b: PyReadonlyArray1<'_, i32>) -> Py
 #[pyfunction]
 fn hamming_i64(a: PyReadonlyArray1<'_, i64>, b: PyReadonlyArray1<'_, i64>) -> PyResult<u64> {
     Ok(vectors::hamming(a.as_slice()?, b.as_slice()?))
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_f32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f32>,
+    b: PyReadonlyArray2<'_, f32>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<f32>>> {
+    let func = match metric {
+        "chebyshev" => vectors::chebyshev,
+        "euclidean" => vectors::euclidean,
+        "euclidean_sq" => vectors::euclidean_sq,
+        "l3" => vectors::l3_norm,
+        "l4" => vectors::l4_norm,
+        "manhattan" => vectors::manhattan,
+        "canberra" => vectors::canberra,
+        "cosine" => vectors::cosine,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(PyArray2::from_vec2(py, &cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_f64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f64>,
+    b: PyReadonlyArray2<'_, f64>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<f64>>> {
+    let func = match metric {
+        "chebyshev" => vectors::chebyshev,
+        "euclidean" => vectors::euclidean,
+        "euclidean_sq" => vectors::euclidean_sq,
+        "l3" => vectors::l3_norm,
+        "l4" => vectors::l4_norm,
+        "manhattan" => vectors::manhattan,
+        "canberra" => vectors::canberra,
+        "cosine" => vectors::cosine,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(PyArray2::from_vec2(py, &cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_u32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, u32>,
+    b: PyReadonlyArray2<'_, u32>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<f32>>> {
+    let func = match metric {
+        "braycurtis" => vectors::bray_curtis,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(PyArray2::from_vec2(py, &cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_u64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, u64>,
+    b: PyReadonlyArray2<'_, u64>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<f64>>> {
+    let func = match metric {
+        "braycurtis" => vectors::bray_curtis,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(PyArray2::from_vec2(py, &cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_i32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, i32>,
+    b: PyReadonlyArray2<'_, i32>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<u32>>> {
+    let func = match metric {
+        "hamming" => vectors::hamming,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(PyArray2::from_vec2(py, &cdist_helper(a, b, func))?.to_owned())
+}
+
+/// Computes the distance each pair of the two collections of inputs.
+#[pyfunction]
+fn cdist_i64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, i64>,
+    b: PyReadonlyArray2<'_, i64>,
+    metric: &str,
+) -> PyResult<Py<PyArray2<u64>>> {
+    let func = match metric {
+        "hamming" => vectors::hamming,
+        _ => return Err(PyValueError::new_err("Invalid metric")),
+    };
+    Ok(PyArray2::from_vec2(py, &cdist_helper(a, b, func))?.to_owned())
+}
+
+pub fn cdist_helper<T: Number + numpy::Element, U: Number>(
+    a: PyReadonlyArray2<'_, T>,
+    b: PyReadonlyArray2<'_, T>,
+    func: fn(&[T], &[T]) -> U,
+) -> Vec<Vec<U>> {
+    a.as_array()
+        .axis_iter(Axis(0))
+        .map(|row| {
+            b.as_array()
+                .axis_iter(Axis(0))
+                .map(|col| func(row.as_slice().unwrap(), col.as_slice().unwrap()))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_f32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f32>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<f32>>> {
+    let func = match metric {
+        "chebyshev" => vectors::chebyshev,
+        "euclidean" => vectors::euclidean,
+        "euclidean_sq" => vectors::euclidean_sq,
+        "l3" => vectors::l3_norm,
+        "l4" => vectors::l4_norm,
+        "manhattan" => vectors::manhattan,
+        "canberra" => vectors::canberra,
+        "cosine" => vectors::cosine,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(pdist_helper(py, a, func))
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_f64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f64>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let func = match metric {
+        "chebyshev" => vectors::chebyshev,
+        "euclidean" => vectors::euclidean,
+        "euclidean_sq" => vectors::euclidean_sq,
+        "l3" => vectors::l3_norm,
+        "l4" => vectors::l4_norm,
+        "manhattan" => vectors::manhattan,
+        "canberra" => vectors::canberra,
+        "cosine" => vectors::cosine,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(pdist_helper(py, a, func))
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_u32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, u32>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<f32>>> {
+    let func = match metric {
+        "braycurtis" => vectors::bray_curtis,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(pdist_helper(py, a, func))
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_u64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, u64>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<f64>>> {
+    let func = match metric {
+        "braycurtis" => vectors::bray_curtis,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(pdist_helper(py, a, func))
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_i32(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, i32>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<u32>>> {
+    let func = match metric {
+        "hamming" => vectors::hamming,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(pdist_helper(py, a, func))
+}
+
+/// Computes the pairwise distances between all vectors in the collection.
+#[pyfunction]
+fn pdist_i64(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, i64>,
+    metric: &str,
+) -> PyResult<Py<PyArray1<u64>>> {
+    let func = match metric {
+        "hamming" => vectors::hamming,
+        _ => return Err(PyValueError::new_err(format!("Invalid metric: {metric}"))),
+    };
+    Ok(pdist_helper(py, a, func))
+}
+
+pub fn pdist_helper<T: Number + numpy::Element, U: Number + numpy::Element>(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, T>,
+    func: fn(&[T], &[T]) -> U,
+) -> Py<PyArray1<U>> {
+    let a = a.as_array();
+    PyArray1::from_iter(
+        py,
+        a.axis_iter(Axis(0)).enumerate().flat_map(|(i, row)| {
+            a.axis_iter(Axis(0))
+                .skip(i + 1)
+                .map(move |col| func(row.as_slice().unwrap(), col.as_slice().unwrap()))
+        }),
+    )
+    .to_owned()
 }

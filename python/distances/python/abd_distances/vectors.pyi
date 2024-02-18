@@ -92,3 +92,93 @@ def hamming_i32(a: npt.NDArray[np.int32], b: npt.NDArray[np.int32]) -> np.float3
 def hamming_i64(a: npt.NDArray[np.int64], b: npt.NDArray[np.int64]) -> np.float64:
     """Compute the Hamming distance between two 1d-arrays of signed integers."""
     ...
+
+def cdist_f32(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    metric: str,
+) -> npt.NDArray[np.float32]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def cdist_f64(
+    a: npt.NDArray[np.float64],
+    b: npt.NDArray[np.float64],
+    metric: str,
+) -> npt.NDArray[np.float64]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def cdist_u32(
+    a: npt.NDArray[np.uint32],
+    b: npt.NDArray[np.uint32],
+    metric: str,
+) -> npt.NDArray[np.float32]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def cdist_u64(
+    a: npt.NDArray[np.uint64],
+    b: npt.NDArray[np.uint64],
+    metric: str,
+) -> npt.NDArray[np.float64]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def cdist_i32(
+    a: npt.NDArray[np.int32],
+    b: npt.NDArray[np.int64],
+    metric: str,
+) -> npt.NDArray[np.uint32]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def cdist_i64(
+    a: npt.NDArray[np.int64],
+    b: npt.NDArray[np.int64],
+    metric: str,
+) -> npt.NDArray[np.uint64]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def pdist_f32(
+    a: npt.NDArray[np.float32],
+    metric: str,
+) -> npt.NDArray[np.float32]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def pdist_f64(
+    a: npt.NDArray[np.float64],
+    metric: str,
+) -> npt.NDArray[np.float64]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def pdist_u32(
+    a: npt.NDArray[np.uint32],
+    metric: str,
+) -> npt.NDArray[np.float32]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def pdist_u64(
+    a: npt.NDArray[np.uint64],
+    metric: str,
+) -> npt.NDArray[np.float64]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def pdist_i32(
+    a: npt.NDArray[np.int32],
+    metric: str,
+) -> npt.NDArray[np.uint32]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
+
+def pdist_i64(
+    a: npt.NDArray[np.int64],
+    metric: str,
+) -> npt.NDArray[np.uint64]:
+    """Compute the distance between each pair of the two collections of inputs."""
+    ...
