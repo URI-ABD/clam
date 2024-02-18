@@ -312,17 +312,17 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
             }
 
             fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
-                let mut uni_ball = None;
+                let mut base_cluster = None;
                 let mut ratios = None;
                 let mut children = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::BaseCluster => {
-                            if uni_ball.is_some() {
-                                return Err(serde::de::Error::duplicate_field("uni_ball"));
+                            if base_cluster.is_some() {
+                                return Err(serde::de::Error::duplicate_field("base_cluster"));
                             }
-                            uni_ball = Some(map.next_value()?);
+                            base_cluster = Some(map.next_value()?);
                         }
                         Field::Ratios => {
                             if ratios.is_some() {
@@ -339,7 +339,7 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
                     }
                 }
 
-                let uni_ball = uni_ball.ok_or_else(|| serde::de::Error::missing_field("uni_ball"))?;
+                let uni_ball = base_cluster.ok_or_else(|| serde::de::Error::missing_field("base_cluster"))?;
                 let ratios = ratios.ok_or_else(|| serde::de::Error::missing_field("ratios"))?;
                 let children = children.ok_or_else(|| serde::de::Error::missing_field("children"))?;
 
@@ -348,7 +348,7 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
         }
 
         /// The `Field` names.
-        const FIELDS: &[&str] = &["uni_ball", "ratios"];
+        const FIELDS: &[&str] = &["base_cluster", "ratios", "children"];
         deserializer.deserialize_struct("Vertex", FIELDS, VertexVisitor(PhantomData))
     }
 }
