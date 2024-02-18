@@ -824,6 +824,8 @@ impl<'a, U: Number> Graph<'a, U> {
 
             if found_edges.len() == 3 {
                 edge_triangles.push((found_edges[0], found_edges[1], found_edges[2]));
+            } else {
+                // maybe error should be here - this shouldnt be reachable
             }
         }
 
