@@ -7,6 +7,7 @@ use distances::Number;
 // use crate::core::{cluster::Cluster, dataset::VecDataset};
 use crate::core::graph::criteria::{detect_edges, select_clusters};
 
+use crate::VecDataset;
 use crate::{core::cluster::Cluster, Dataset, Instance, Tree};
 
 use super::MetaMLScorer;
@@ -831,6 +832,33 @@ impl<'a, U: Number> Graph<'a, U> {
 
         return edge_triangles;
     }
+
+    /// Converts tuple of clusters to tuple of edges
+    ///
+    /// A triangle consists of three clusters where each cluster is connected to the other two.
+    /// This function finds triangles in the graph and returns them as tuples of edges.
+    /// Note: The edges are not references to edges in the graph
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of tuples, where each tuple represents a triangle found in the graph.
+    /// Each tuple contains references to three edges forming the triangle.
+    pub fn triangle_clusters_to_edges<I: Instance, M: Instance>(
+        triangles: Vec<(&'a Cluster<U>, &'a Cluster<U>, &'a Cluster<U>)>,
+        data: &VecDataset<I, U, M>,
+    ) -> Vec<(Edge<'a, U>, Edge<'a, U>, Edge<'a, U>)> {
+        let mut edge_triangles: Vec<(Edge<U>, Edge<U>, Edge<U>)> = Vec::with_capacity(triangles.len());
+
+        for (a, b, c) in triangles {
+            let e1 = Edge::new(a, b, a.distance_to_other(data, b));
+            let e2 = Edge::new(a, c, a.distance_to_other(data, c));
+            let e3 = Edge::new(b, c, b.distance_to_other(data, c));
+
+            edge_triangles.push((e1, e2, e3));
+        }
+
+        return edge_triangles;
+    }
 }
 
 #[cfg(test)]
@@ -843,6 +871,8 @@ mod tests {
     use rand::SeedableRng;
 
     use crate::core::graph::criteria::{detect_edges, select_clusters};
+
+    use super::AdjacencyMap;
 
     /// Generate a dataset with the given cardinality and dimensionality.
     pub fn gen_dataset(
@@ -1041,39 +1071,119 @@ mod tests {
         let triangles2 = graph.find_triangle_clusters_to_edges();
 
         for (e1, e2, e3) in &triangles2 {
-            let [a, b] = e1.clusters();
-            let i = indices.get(a).unwrap();
-            let j = indices.get(b).unwrap();
+            assert_edges_are_triangle(e1, e2, e3, &indices, adj_mat);
 
-            assert_eq!(adj_mat[*i][*j], true);
+            // let [a, b] = e1.clusters();
+            // let i = indices.get(a).unwrap();
+            // let j = indices.get(b).unwrap();
 
-            let [a, b] = e2.clusters();
+            // assert_eq!(adj_mat[*i][*j], true);
 
-            let i = indices.get(a).unwrap();
-            let j = indices.get(b).unwrap();
+            // let [a, b] = e2.clusters();
 
-            assert_eq!(adj_mat[*i][*j], true);
+            // let i = indices.get(a).unwrap();
+            // let j = indices.get(b).unwrap();
 
-            let [a, b] = e3.clusters();
+            // assert_eq!(adj_mat[*i][*j], true);
 
-            let i = indices.get(a).unwrap();
-            let j = indices.get(b).unwrap();
+            // let [a, b] = e3.clusters();
 
-            assert_eq!(adj_mat[*i][*j], true);
+            // let i = indices.get(a).unwrap();
+            // let j = indices.get(b).unwrap();
 
-            assert!(e1.contains(e2.left()) || e1.contains(e2.right()));
-            assert!(e1.contains(e3.left()) || e1.contains(e3.right()));
+            // assert_eq!(adj_mat[*i][*j], true);
 
-            assert!(e2.contains(e3.left()) || e2.contains(e3.right()));
-            assert!(e2.contains(e1.left()) || e2.contains(e1.right()));
+            // assert!(e1.contains(e2.left()) || e1.contains(e2.right()));
+            // assert!(e1.contains(e3.left()) || e1.contains(e3.right()));
 
-            assert!(e3.contains(e1.left()) || e3.contains(e1.right()));
-            assert!(e3.contains(e2.left()) || e3.contains(e2.right()));
+            // assert!(e2.contains(e3.left()) || e2.contains(e3.right()));
+            // assert!(e2.contains(e1.left()) || e2.contains(e1.right()));
 
-            assert!(is_equal(e1, e2) == false);
-            assert!(is_equal(e1, e3) == false);
-            assert!(is_equal(e2, e3) == false);
+            // assert!(e3.contains(e1.left()) || e3.contains(e1.right()));
+            // assert!(e3.contains(e2.left()) || e3.contains(e2.right()));
+
+            // assert!(is_equal(e1, e2) == false);
+            // assert!(is_equal(e1, e3) == false);
+            // assert!(is_equal(e2, e3) == false);
         }
+
+        let triangles3 = Graph::triangle_clusters_to_edges(triangles, raw_tree.data());
+        for (e1, e2, e3) in &triangles3 {
+            assert_edges_are_triangle(e1, e2, e3, &indices, adj_mat);
+            // let [a, b] = e1.clusters();
+            // let i = indices.get(a).unwrap();
+            // let j = indices.get(b).unwrap();
+
+            // assert_eq!(adj_mat[*i][*j], true);
+
+            // let [a, b] = e2.clusters();
+
+            // let i = indices.get(a).unwrap();
+            // let j = indices.get(b).unwrap();
+
+            // assert_eq!(adj_mat[*i][*j], true);
+
+            // let [a, b] = e3.clusters();
+
+            // let i = indices.get(a).unwrap();
+            // let j = indices.get(b).unwrap();
+
+            // assert_eq!(adj_mat[*i][*j], true);
+
+            // assert!(e1.contains(e2.left()) || e1.contains(e2.right()));
+            // assert!(e1.contains(e3.left()) || e1.contains(e3.right()));
+
+            // assert!(e2.contains(e3.left()) || e2.contains(e3.right()));
+            // assert!(e2.contains(e1.left()) || e2.contains(e1.right()));
+
+            // assert!(e3.contains(e1.left()) || e3.contains(e1.right()));
+            // assert!(e3.contains(e2.left()) || e3.contains(e2.right()));
+
+            // assert!(is_equal(e1, e2) == false);
+            // assert!(is_equal(e1, e3) == false);
+            // assert!(is_equal(e2, e3) == false);
+        }
+    }
+
+    fn assert_edges_are_triangle<U: Number>(
+        e1: &Edge<U>,
+        e2: &Edge<U>,
+        e3: &Edge<U>,
+        indices: &HashMap<&Cluster<U>, usize>,
+        adj_mat: &[Vec<bool>],
+    ) {
+        let [a, b] = e1.clusters();
+        let i = indices.get(a).unwrap();
+        let j = indices.get(b).unwrap();
+
+        assert_eq!(adj_mat[*i][*j], true);
+
+        let [a, b] = e2.clusters();
+
+        let i = indices.get(a).unwrap();
+        let j = indices.get(b).unwrap();
+
+        assert_eq!(adj_mat[*i][*j], true);
+
+        let [a, b] = e3.clusters();
+
+        let i = indices.get(a).unwrap();
+        let j = indices.get(b).unwrap();
+
+        assert_eq!(adj_mat[*i][*j], true);
+
+        assert!(e1.contains(e2.left()) || e1.contains(e2.right()));
+        assert!(e1.contains(e3.left()) || e1.contains(e3.right()));
+
+        assert!(e2.contains(e3.left()) || e2.contains(e3.right()));
+        assert!(e2.contains(e1.left()) || e2.contains(e1.right()));
+
+        assert!(e3.contains(e1.left()) || e3.contains(e1.right()));
+        assert!(e3.contains(e2.left()) || e3.contains(e2.right()));
+
+        assert!(is_equal(e1, e2) == false);
+        assert!(is_equal(e1, e3) == false);
+        assert!(is_equal(e2, e3) == false);
     }
 
     fn is_equal<'a, U: Number>(e1: &'a Edge<U>, e2: &'a Edge<U>) -> bool {
