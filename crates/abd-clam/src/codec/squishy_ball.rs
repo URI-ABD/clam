@@ -218,7 +218,7 @@ impl<U: Int> Display for SquishyBall<U> {
 
 impl<U: Int> Serialize for SquishyBall<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("SquishedBall", 4)?;
+        let mut state = serializer.serialize_struct("SquishyBall", 4)?;
         state.serialize_field("base_cluster", &self.base_cluster)?;
         state.serialize_field("recursive_cost", &self.recursive_cost)?;
         state.serialize_field("unitary_cost", &self.unitary_cost)?;
@@ -250,7 +250,7 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
             type Value = SquishyBall<U>;
 
             fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
-                formatter.write_str("struct SquishedBall")
+                formatter.write_str("struct SquishyBall")
             }
 
             fn visit_seq<V: SeqAccess<'de>>(self, mut seq: V) -> Result<Self::Value, V::Error> {

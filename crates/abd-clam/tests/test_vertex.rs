@@ -1,5 +1,5 @@
 use abd_clam::{graph::Vertex, Cluster, PartitionCriteria, Tree};
-use abd_clam::{BaseCluster, Dataset, Instance, VecDataset};
+use abd_clam::{Dataset, Instance, VecDataset};
 use distances::Number;
 use tempdir::TempDir;
 
@@ -8,13 +8,16 @@ mod utils;
 type Vertexf32 = Vertex<f32>;
 type DataSetf32 = VecDataset<Vec<f32>, f32, usize>;
 type Treef32 = Tree<Vec<f32>, f32, DataSetf32, Vertexf32>;
+
 #[test]
 fn save_load_vertex() {
     let data = utils::gen_dataset(1000, 10, 42, utils::euclidean);
     let metric = data.metric();
 
     let criteria = PartitionCriteria::default();
-    let raw_tree: Treef32 = Tree::new(data, Some(42)).partition(&criteria, Some(42));
+    let raw_tree = Treef32::new(data, Some(42))
+        .partition(&criteria, Some(42))
+        .normalize_ratios();
 
     let tree_dir = TempDir::new("tree_medium_vertex").unwrap();
 
@@ -22,7 +25,7 @@ fn save_load_vertex() {
     raw_tree.save(tree_dir.path()).unwrap();
 
     // Recover the tree
-    let rec_tree: Treef32 = Tree::load(tree_dir.path(), metric, false).unwrap();
+    let rec_tree = Treef32::load(tree_dir.path(), metric, false).unwrap();
 
     // Assert recovering was successful
     assert_eq!(raw_tree.depth(), rec_tree.depth(), "Tree depths not equal.");

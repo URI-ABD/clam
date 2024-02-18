@@ -335,7 +335,7 @@ impl<U: Number> Cluster<U> for BaseCluster<U> {
 
 impl<U: Number> Serialize for BaseCluster<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("UniBall", 10)?;
+        let mut state = serializer.serialize_struct("BaseCluster", 8)?;
         state.serialize_field("depth", &self.depth)?;
         state.serialize_field("offset", &self.offset)?;
         state.serialize_field("cardinality", &self.cardinality)?;
@@ -380,7 +380,7 @@ impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
             type Value = BaseCluster<U>;
 
             fn expecting(&self, formatter: &mut Formatter) -> core::fmt::Result {
-                formatter.write_str("struct Cluster")
+                formatter.write_str("struct BaseCluster")
             }
 
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {

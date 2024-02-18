@@ -9,7 +9,7 @@ members = [
 resolver = "2"
 
 [profile.test]
-opt-level = 3
+opt-level = 0
 debug = true
 overflow-checks = true
 

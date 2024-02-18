@@ -267,7 +267,7 @@ impl<U: Number> Display for Vertex<U> {
 impl<U: Number> Serialize for Vertex<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("Vertex", 3)?;
-        state.serialize_field("uni_ball", &self.base_cluster)?;
+        state.serialize_field("base_cluster", &self.base_cluster)?;
         state.serialize_field("ratios", &self.ratios)?;
         state.serialize_field("children", &self.children)?;
         state.end()
