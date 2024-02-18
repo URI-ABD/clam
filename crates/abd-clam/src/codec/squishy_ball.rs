@@ -1,4 +1,4 @@
-//! A `SquishedBall` is a `Cluster` that supports compression.
+//! A `SquishyBall` is a `Cluster` that supports compression.
 
 use core::{
     cmp::Ordering,
@@ -18,7 +18,7 @@ use crate::{core::cluster::Children, BaseCluster, Cluster, Dataset, Instance, Pa
 
 use super::SquishyDataset;
 
-/// A `SquishedBall` is a `Cluster` that supports compression.
+/// A `SquishyBall` is a `Cluster` that supports compression.
 #[derive(Debug)]
 pub struct SquishyBall<U: Int> {
     /// The `BaseCluster` for the underlying `Cluster`.
@@ -32,12 +32,12 @@ pub struct SquishyBall<U: Int> {
 }
 
 impl<U: Int> SquishyBall<U> {
-    /// Creates a new `SquishedBall` tree.
+    /// Creates a new `SquishyBall` tree.
     pub fn from_base_tree(root: BaseCluster<U>) -> Self {
         Self::from_base_cluster(root)
     }
 
-    /// Recursively creates a new `SquishedBall` tree.
+    /// Recursively creates a new `SquishyBall` tree.
     fn from_base_cluster(mut base_cluster: BaseCluster<U>) -> Self {
         match base_cluster.children {
             Some(children) => {
@@ -229,24 +229,24 @@ impl<U: Int> Serialize for SquishyBall<U> {
 
 impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        /// The fields in the `SquishedBall` struct.
+        /// The fields in the `SquishyBall` struct.
         #[derive(Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
-            /// The base `BaseCluster` of the `SquishedBall`.
+            /// The base `BaseCluster` of the `SquishyBall`.
             BaseCluster,
             /// The expected memory cost, in bytes, of recursive compression.
             RecursiveCost,
             /// The expected memory cost, in bytes, of unitary compression.
             UnitaryCost,
-            /// The children of the `SquishedBall`.
+            /// The children of the `SquishyBall`.
             Children,
         }
 
-        /// The `Visitor` for the `SquishedBall` struct.
-        struct SquishedBallVisitor<U: Int>(PhantomData<U>);
+        /// The `Visitor` for the `SquishyBall` struct.
+        struct SquishyBallVisitor<U: Int>(PhantomData<U>);
 
-        impl<'de, U: Int> Visitor<'de> for SquishedBallVisitor<U> {
+        impl<'de, U: Int> Visitor<'de> for SquishyBallVisitor<U> {
             type Value = SquishyBall<U>;
 
             fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -325,6 +325,6 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
 
         /// The `Field` names.
         const FIELDS: &[&str] = &["base_cluster", "recursive_cost", "unitary_cost", "children"];
-        deserializer.deserialize_struct("SquishedBall", FIELDS, SquishedBallVisitor(PhantomData))
+        deserializer.deserialize_struct("SquishyBall", FIELDS, SquishyBallVisitor(PhantomData))
     }
 }

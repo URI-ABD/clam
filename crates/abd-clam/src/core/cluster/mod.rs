@@ -1,7 +1,5 @@
-//! Provides the `Cluster` trait, which defines the most basic functionality of a cluster.
-//!
-//! It provides an implementation of `Cluster` for the `UniBall` struct, which behaves as
-//! clusters used to before the introduction of the `Cluster` trait.
+//! Provides the `Cluster` trait, which defines the most basic functionality of
+//! a cluster.
 //!
 //! It also provides the `PartitionCriterion` trait, and implementations for
 //! `PartitionCriterion` for `MaxDepth` and `MinCardinality` which are used to
