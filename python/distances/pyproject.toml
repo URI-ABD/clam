@@ -24,6 +24,7 @@ dev = [
     "bump2version",
     "pytest",
     "pytest-sugar",
+    "pytest-xdist",
     "scipy",
     "richbench",
     "tqdm",
