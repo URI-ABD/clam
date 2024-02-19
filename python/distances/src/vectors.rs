@@ -1,6 +1,7 @@
 //! Distance functions for vectors.
 
 use distances::{vectors, Number};
+use ndarray::parallel::prelude::*;
 use numpy::{ndarray::Axis, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
@@ -271,11 +272,13 @@ pub fn cdist_helper<T: Number + numpy::Element, U: Number>(
     b: PyReadonlyArray2<'_, T>,
     func: fn(&[T], &[T]) -> U,
 ) -> Vec<Vec<U>> {
-    a.as_array()
-        .axis_iter(Axis(0))
+    let a = a.as_array();
+    let b = b.as_array();
+    a.axis_iter(Axis(0))
+        .into_par_iter()
         .map(|row| {
-            b.as_array()
-                .axis_iter(Axis(0))
+            b.axis_iter(Axis(0))
+                .into_par_iter()
                 .map(|col| func(row.as_slice().unwrap(), col.as_slice().unwrap()))
                 .collect::<Vec<_>>()
         })
@@ -386,13 +389,16 @@ pub fn pdist_helper<T: Number + numpy::Element, U: Number + numpy::Element>(
     func: fn(&[T], &[T]) -> U,
 ) -> Py<PyArray1<U>> {
     let a = a.as_array();
-    PyArray1::from_iter(
-        py,
-        a.axis_iter(Axis(0)).enumerate().flat_map(|(i, row)| {
+    let result = a
+        .axis_iter(Axis(0))
+        .into_par_iter()
+        .enumerate()
+        .flat_map(|(i, row)| {
             a.axis_iter(Axis(0))
+                .into_par_iter()
                 .skip(i + 1)
                 .map(move |col| func(row.as_slice().unwrap(), col.as_slice().unwrap()))
-        }),
-    )
-    .to_owned()
+        })
+        .collect::<Vec<_>>();
+    PyArray1::from_vec(py, result).to_owned()
 }

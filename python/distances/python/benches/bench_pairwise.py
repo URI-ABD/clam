@@ -9,76 +9,76 @@ import utils  # type: ignore[import]
 from abd_distances import simd
 
 DIM = 1_000
-NUM_RUNS = 1_000
+NUM_RUNS = 100
 
 FUNCTIONS = {
-    "cdist SIMD Euclidean, f32": (
+    "cdist Euclidean, f32": (
         partial(scipy_distance.cdist, metric="euclidean"),
         partial(simd.cdist_f32, metric="euclidean"),
         utils.data_f32,
         utils.data_f32,
     ),
-    "cdist SIMD Euclidean, f64": (
+    "cdist Euclidean, f64": (
         partial(scipy_distance.cdist, metric="euclidean"),
         partial(simd.cdist_f64, metric="euclidean"),
         utils.data_f64,
         utils.data_f64,
     ),
-    "cdist SIMD Euclidean squared, f32": (
+    "cdist SqEuclidean, f32": (
         partial(scipy_distance.cdist, metric="sqeuclidean"),
         partial(simd.cdist_f32, metric="euclidean_sq"),
         utils.data_f32,
         utils.data_f32,
     ),
-    "cdist SIMD Euclidean squared, f64": (
+    "cdist SqEuclidean, f64": (
         partial(scipy_distance.cdist, metric="sqeuclidean"),
         partial(simd.cdist_f64, metric="euclidean_sq"),
         utils.data_f64,
         utils.data_f64,
     ),
-    "cdist SIMD Cosine, f32": (
+    "cdist Cosine, f32": (
         partial(scipy_distance.cdist, metric="cosine"),
         partial(simd.cdist_f32, metric="cosine"),
         utils.data_f32,
         utils.data_f32,
     ),
-    "cdist SIMD Cosine, f64": (
+    "cdist Cosine, f64": (
         partial(scipy_distance.cdist, metric="cosine"),
         partial(simd.cdist_f64, metric="cosine"),
         utils.data_f64,
         utils.data_f64,
     ),
-    "pdist SIMD Euclidean, f32": (
+    "pdist Euclidean, f32": (
         partial(scipy_distance.pdist, metric="euclidean"),
         partial(simd.pdist_f32, metric="euclidean"),
         utils.data_f32,
         None,
     ),
-    "pdist SIMD Euclidean, f64": (
+    "pdist Euclidean, f64": (
         partial(scipy_distance.pdist, metric="euclidean"),
         partial(simd.pdist_f64, metric="euclidean"),
         utils.data_f64,
         None,
     ),
-    "pdist SIMD Euclidean squared, f32": (
+    "pdist SqEuclidean, f32": (
         partial(scipy_distance.pdist, metric="sqeuclidean"),
         partial(simd.pdist_f32, metric="euclidean_sq"),
         utils.data_f32,
         None,
     ),
-    "pdist SIMD Euclidean squared, f64": (
+    "pdist SqEuclidean, f64": (
         partial(scipy_distance.pdist, metric="sqeuclidean"),
         partial(simd.pdist_f64, metric="euclidean_sq"),
         utils.data_f64,
         None,
     ),
-    "pdist SIMD Cosine, f32": (
+    "pdist Cosine, f32": (
         partial(scipy_distance.pdist, metric="cosine"),
         partial(simd.pdist_f32, metric="cosine"),
         utils.data_f32,
         None,
     ),
-    "pdist SIMD Cosine, f64": (
+    "pdist Cosine, f64": (
         partial(scipy_distance.pdist, metric="cosine"),
         partial(simd.pdist_f64, metric="cosine"),
         utils.data_f64,
