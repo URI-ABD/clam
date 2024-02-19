@@ -8,6 +8,7 @@ import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import simd
 
+CAR = 100
 DIM = 1_000
 NUM_RUNS = 100
 
@@ -89,16 +90,16 @@ FUNCTIONS = {
 
 def bench_func(
     func: typing.Callable[[numpy.ndarray, numpy.ndarray], numpy.ndarray],
-    gen_data_x: typing.Callable[[int], numpy.ndarray],
-    gen_data_y: typing.Optional[typing.Callable[[int], numpy.ndarray]],
+    gen_data_x: typing.Callable[[int, int], numpy.ndarray],
+    gen_data_y: typing.Optional[typing.Callable[[int, int], numpy.ndarray]],
 ) -> None:
     """Benchmark a distance function."""
-    data_x = gen_data_x(DIM)
+    data_x = gen_data_x(CAR, DIM)
     if gen_data_y is None:
         for _ in range(NUM_RUNS):
             func(data_x)  # type: ignore[call-arg]
     else:
-        data_y = gen_data_y(DIM)
+        data_y = gen_data_y(CAR, DIM)
         for _ in range(NUM_RUNS):
             func(data_x, data_y)
 
