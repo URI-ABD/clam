@@ -5,8 +5,16 @@ It is a thin Python wrapper around the `distances` crate, in Rust.
 
 ## Installation
 
+### From PyPI
+
 ```bash
-pip install abd_distances@1.0.0-dev0
+pip install abd-distances
+```
+
+### From Source
+
+```bash
+pip install --no-cache-dir git+https://github.com/nishaq503/clam.git@python/distances#python/distances
 ```
 
 ## Usage
