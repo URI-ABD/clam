@@ -4,6 +4,7 @@ import math
 import typing
 
 import numpy
+import pytest
 import scipy.spatial.distance as scipy_distance
 from abd_distances import simd as simd_distances
 
@@ -26,22 +27,24 @@ SIMD_F64: dict[str, Functions] = {
 }
 
 
-def test_simd_f32(data_f32: numpy.ndarray):
+@pytest.mark.xfail(reason="The type-mismatch will raise an error from the Rust code.")
+def test_simd_f32(data_f64: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for a in data_f64:
+        for b in data_f64:
+            for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
+                for name, (simd_func, scipy_func) in SIMD_F32.items():
+                    _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-4)
+
+
+@pytest.mark.xfail(reason="The type-mismatch will raise an error from the Rust code.")
+def test_simd_f64(data_f32: numpy.ndarray):
     """Test the SIMD-accelerated distance functions."""
     for a in data_f32:
         for b in data_f32:
             for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
                 for name, (simd_func, scipy_func) in SIMD_F32.items():
-                    _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-5)
-
-
-def test_simd_f64(data_f64: numpy.ndarray):
-    """Test the SIMD-accelerated distance functions."""
-    for a in data_f64:
-        for b in data_f64:
-            for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-                for name, (simd_func, scipy_func) in SIMD_F64.items():
-                    _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-10)
+                    _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-8)
 
 
 def _simd_helper(  # noqa: PLR0913

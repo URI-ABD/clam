@@ -48,18 +48,20 @@ VECTOR_F64: dict[str, Functions] = {
 
 def test_vector_f32(data_f32: numpy.ndarray):
     """Test the vector distance functions."""
-    a, b = data_f32[0], data_f32[1]
-    for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-        for name, (simd_func, scipy_func) in VECTOR_F32.items():
-            _vector_helper(a_, b_, name, simd_func, scipy_func, 1e-5)
+    for a in data_f32:
+        for b in data_f32:
+            for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
+                for name, (simd_func, scipy_func) in VECTOR_F32.items():
+                    _vector_helper(a_, b_, name, simd_func, scipy_func, 1e-5)
 
 
 def test_vector_f64(data_f64: numpy.ndarray):
     """Test the vector distance functions."""
-    a, b = data_f64[0], data_f64[1]
-    for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-        for name, (simd_func, scipy_func) in VECTOR_F64.items():
-            _vector_helper(a_, b_, name, simd_func, scipy_func, 1e-10)
+    for a in data_f64:
+        for b in data_f64:
+            for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
+                for name, (simd_func, scipy_func) in VECTOR_F64.items():
+                    _vector_helper(a_, b_, name, simd_func, scipy_func, 1e-10)
 
 
 def _vector_helper(  # noqa: PLR0913
