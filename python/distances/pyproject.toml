@@ -25,6 +25,7 @@ dev = [
     "pytest",
     "pytest-sugar",
     "pytest-xdist",
+    "pytest-cov",
     "scipy",
     "richbench",
     "tqdm",
