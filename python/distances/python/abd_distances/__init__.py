@@ -1,8 +1,12 @@
 """A package for computing distances."""
 
+from . import simd
+from . import strings
 from . import vectors
 
 __all__ = [
+    "simd",
+    "strings",
     "vectors",
 ]
 
