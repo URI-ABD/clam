@@ -6,7 +6,7 @@ import utils  # type: ignore[import]
 from abd_distances import simd
 
 DIM = 1_000
-NUM_RUNS = 10_000
+NUM_RUNS = 1_000
 
 
 def scipy_euclidean_f32() -> None:
