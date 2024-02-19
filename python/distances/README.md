@@ -34,12 +34,9 @@ print(distance)
 
 ## Benchmarks
 
-These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using a single thread.
-The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
-
 ### Pairwise Distance Benchmarks
 
-These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using all 16 threads.
+These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using **all 16 threads**.
 The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 The "Min", "Max", and "Mean" columns show the minimum, maximum, and mean times (in seconds), respectively, taken to compute the pairwise distances using the functions from `scipy.spatial.distance`.
@@ -65,7 +62,7 @@ These benchmarks were run using the `richbench` package.
 
 ### SIMD-Accelerated Vector Distances
 
-These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using a single thread.
+These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using **a single thread**.
 The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 <table>
@@ -93,7 +90,7 @@ The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 ### Vector Distance Benchmarks (No SIMD)
 
-These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using a single thread.
+These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using **a single thread**.
 The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 <table>
@@ -169,7 +166,7 @@ The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 ### String Distance Benchmarks
 
-These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using a single thread.
+These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using **a single thread**.
 The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
 
 All string distances were computed 100 times each, among different pairs of strings, and the average time was taken.
