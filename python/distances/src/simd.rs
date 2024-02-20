@@ -66,7 +66,7 @@ fn cdist_f32(
 ) -> PyResult<Py<PyArray2<f32>>> {
     let func = match metric {
         "euclidean" => simd::euclidean_f32,
-        "euclidean_sq" => simd::euclidean_sq_f32,
+        "sqeuclidean" => simd::euclidean_sq_f32,
         "cosine" => simd::cosine_f32,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
@@ -83,7 +83,7 @@ fn cdist_f64(
 ) -> PyResult<Py<PyArray2<f64>>> {
     let func = match metric {
         "euclidean" => simd::euclidean_f64,
-        "euclidean_sq" => simd::euclidean_sq_f64,
+        "sqeuclidean" => simd::euclidean_sq_f64,
         "cosine" => simd::cosine_f64,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
@@ -99,7 +99,7 @@ fn pdist_f32(
 ) -> PyResult<Py<PyArray1<f32>>> {
     let func = match metric {
         "euclidean" => simd::euclidean_f32,
-        "euclidean_sq" => simd::euclidean_sq_f32,
+        "sqeuclidean" => simd::euclidean_sq_f32,
         "cosine" => simd::cosine_f32,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
@@ -115,7 +115,7 @@ fn pdist_f64(
 ) -> PyResult<Py<PyArray1<f64>>> {
     let func = match metric {
         "euclidean" => simd::euclidean_f64,
-        "euclidean_sq" => simd::euclidean_sq_f64,
+        "sqeuclidean" => simd::euclidean_sq_f64,
         "cosine" => simd::cosine_f64,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };

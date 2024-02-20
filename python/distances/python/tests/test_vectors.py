@@ -13,6 +13,14 @@ Functions = tuple[
 ]
 
 
+setattr(scipy_distance, "manhattan_f32", scipy_distance.cityblock)  # noqa: B010
+setattr(scipy_distance, "manhattan_f64", scipy_distance.cityblock)  # noqa: B010
+setattr(scipy_distance, "manhattan", scipy_distance.cityblock)  # noqa: B010
+
+
+METRICS = ["chebyshev", "euclidean", "sqeuclidean", "cityblock", "canberra", "cosine"]
+
+
 def scipy_l3(a: numpy.ndarray, b: numpy.ndarray) -> float:
     """Compute the L3 norm using scipy."""
     return scipy_distance.minkowski(a, b, 3)
@@ -26,7 +34,7 @@ def scipy_l4(a: numpy.ndarray, b: numpy.ndarray) -> float:
 VECTOR_F32: dict[str, Functions] = {
     "Chebyshev f32": (vector_distances.chebyshev_f32, scipy_distance.chebyshev),
     "Euclidean f32": (vector_distances.euclidean_f32, scipy_distance.euclidean),
-    "SqEuclidean f32": (vector_distances.euclidean_sq_f32, scipy_distance.sqeuclidean),
+    "SqEuclidean f32": (vector_distances.sqeuclidean_f32, scipy_distance.sqeuclidean),
     "L3 f32": (vector_distances.l3_distance_f32, scipy_l3),
     "L4 f32": (vector_distances.l4_distance_f32, scipy_l4),
     "Manhattan f32": (vector_distances.manhattan_f32, scipy_distance.cityblock),
@@ -37,7 +45,7 @@ VECTOR_F32: dict[str, Functions] = {
 VECTOR_F64: dict[str, Functions] = {
     "Chebyshev f64": (vector_distances.chebyshev_f64, scipy_distance.chebyshev),
     "Euclidean f64": (vector_distances.euclidean_f64, scipy_distance.euclidean),
-    "SqEuclidean f64": (vector_distances.euclidean_sq_f64, scipy_distance.sqeuclidean),
+    "SqEuclidean f64": (vector_distances.sqeuclidean_f64, scipy_distance.sqeuclidean),
     "L3 f64": (vector_distances.l3_distance_f64, scipy_l3),
     "L4 f64": (vector_distances.l4_distance_f64, scipy_l4),
     "Manhattan f64": (vector_distances.manhattan_f64, scipy_distance.cityblock),
@@ -86,7 +94,7 @@ def _vector_helper(  # noqa: PLR0913
 def test_bray_curtis_u32(data_u32: numpy.ndarray):
     """Test the `bray_curtis_u32` function."""
     a, b = data_u32[0], data_u32[1]
-    dist = vector_distances.bray_curtis_u32(a, b)
+    dist = vector_distances.braycurtis_u32(a, b)
     expected = scipy_distance.braycurtis(a, b)
     rel_tol = 1e-6 * expected
     assert math.isclose(
@@ -99,7 +107,7 @@ def test_bray_curtis_u32(data_u32: numpy.ndarray):
 def test_bray_curtis_u64(data_u64: numpy.ndarray):
     """Test the `bray_curtis_u64` function."""
     a, b = data_u64[0], data_u64[1]
-    dist = vector_distances.bray_curtis_u64(a, b)
+    dist = vector_distances.braycurtis_u64(a, b)
     expected = scipy_distance.braycurtis(a, b)
     rel_tol = 1e-12 * expected
     assert math.isclose(
@@ -139,115 +147,81 @@ def test_hamming_i64(data_i64: numpy.ndarray):
 
 def test_cdist_f32(data_f32: numpy.ndarray):
     """Test the SIMD-accelerated distance functions."""
-    for abd_name, scipy_name in [
-        ("chebyshev", "chebyshev"),
-        ("euclidean", "euclidean"),
-        ("euclidean_sq", "sqeuclidean"),
-        ("manhattan", "cityblock"),
-        ("canberra", "canberra"),
-        ("cosine", "cosine"),
-    ]:
+    for metric in METRICS:
         _cdist_helper(
             data_f32,
             data_f32,
-            abd_name,
+            metric,
             vector_distances.cdist_f32,
-            scipy_name,
             1e-4,
         )
 
 
 def test_cdist_f64(data_f64: numpy.ndarray):
     """Test the SIMD-accelerated distance functions."""
-    for abd_name, scipy_name in [
-        ("chebyshev", "chebyshev"),
-        ("euclidean", "euclidean"),
-        ("euclidean_sq", "sqeuclidean"),
-        ("manhattan", "cityblock"),
-        ("canberra", "canberra"),
-        ("cosine", "cosine"),
-    ]:
+    for metric in METRICS:
         _cdist_helper(
             data_f64,
             data_f64,
-            abd_name,
+            metric,
             vector_distances.cdist_f64,
-            scipy_name,
             1e-8,
         )
 
 
-def _cdist_helper(  # noqa: PLR0913
+def _cdist_helper(
     a: numpy.ndarray,
     b: numpy.ndarray,
-    abd_name: str,
+    metric: str,
     simd_func: typing.Callable[[numpy.ndarray, numpy.ndarray, str], numpy.ndarray],
-    scipy_name: str,
     abs_tol: float,
 ) -> None:
     """Helper function for the SIMD-accelerated distance functions."""
-    dist = simd_func(a, b, abd_name)
+    dist = simd_func(a, b, metric)
     assert dist.shape == (a.shape[0], b.shape[0])
-    expected = scipy_distance.cdist(a, b, scipy_name)
-    abs_tol = abs_tol * expected if "cosine" not in abd_name.lower() else abs_tol
+    expected = scipy_distance.cdist(a, b, metric)
+    abs_tol = abs_tol * expected if "cosine" not in metric.lower() else abs_tol
     assert numpy.allclose(
         dist,
         expected,
         rtol=abs_tol,
-    ), f"{abd_name}: Expected: {expected}, got: {dist}, rel_tol: {abs_tol}"
+    ), f"{metric}: Expected: {expected}, got: {dist}, rel_tol: {abs_tol}"
 
 
 def test_pdist_f32(data_f32: numpy.ndarray):
     """Test the SIMD-accelerated distance functions."""
-    for abd_name, scipy_name in [
-        ("chebyshev", "chebyshev"),
-        ("euclidean", "euclidean"),
-        ("euclidean_sq", "sqeuclidean"),
-        ("manhattan", "cityblock"),
-        ("canberra", "canberra"),
-        ("cosine", "cosine"),
-    ]:
+    for metric in METRICS:
         _pdist_helper(
             data_f32,
-            abd_name,
+            metric,
             vector_distances.pdist_f32,
-            scipy_name,
             1e-4,
         )
 
 
 def test_pdist_f64(data_f64: numpy.ndarray):
     """Test the SIMD-accelerated distance functions."""
-    for abd_name, scipy_name in [
-        ("chebyshev", "chebyshev"),
-        ("euclidean", "euclidean"),
-        ("euclidean_sq", "sqeuclidean"),
-        ("manhattan", "cityblock"),
-        ("canberra", "canberra"),
-        ("cosine", "cosine"),
-    ]:
+    for metric in METRICS:
         _pdist_helper(
             data_f64,
-            abd_name,
+            metric,
             vector_distances.pdist_f64,
-            scipy_name,
             1e-8,
         )
 
 
 def _pdist_helper(
     a: numpy.ndarray,
-    abd_name: str,
+    metric: str,
     simd_func: typing.Callable[[numpy.ndarray, str], numpy.ndarray],
-    scipy_name: str,
     abs_tol: float,
 ) -> None:
     """Helper function for the SIMD-accelerated distance functions."""
-    dist = simd_func(a, abd_name)
-    expected = scipy_distance.pdist(a, scipy_name)
-    abs_tol = abs_tol * expected if "cosine" not in abd_name.lower() else abs_tol
+    dist = simd_func(a, metric)
+    expected = scipy_distance.pdist(a, metric)
+    abs_tol = abs_tol * expected if "cosine" not in metric.lower() else abs_tol
     assert numpy.allclose(
         dist,
         expected,
         rtol=abs_tol,
-    ), f"{abd_name}: Expected: {expected}, got: {dist}, rel_tol: {abs_tol}"
+    ), f"{metric}: Expected: {expected}, got: {dist}, rel_tol: {abs_tol}"

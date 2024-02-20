@@ -27,13 +27,13 @@ FUNCTIONS = {
     ),
     "cdist SqEuclidean, f32": (
         partial(scipy_distance.cdist, metric="sqeuclidean"),
-        partial(simd.cdist_f32, metric="euclidean_sq"),
+        partial(simd.cdist_f32, metric="sqeuclidean"),
         utils.data_f32,
         utils.data_f32,
     ),
     "cdist SqEuclidean, f64": (
         partial(scipy_distance.cdist, metric="sqeuclidean"),
-        partial(simd.cdist_f64, metric="euclidean_sq"),
+        partial(simd.cdist_f64, metric="sqeuclidean"),
         utils.data_f64,
         utils.data_f64,
     ),
@@ -63,13 +63,13 @@ FUNCTIONS = {
     ),
     "pdist SqEuclidean, f32": (
         partial(scipy_distance.pdist, metric="sqeuclidean"),
-        partial(simd.pdist_f32, metric="euclidean_sq"),
+        partial(simd.pdist_f32, metric="sqeuclidean"),
         utils.data_f32,
         None,
     ),
     "pdist SqEuclidean, f64": (
         partial(scipy_distance.pdist, metric="sqeuclidean"),
-        partial(simd.pdist_f64, metric="euclidean_sq"),
+        partial(simd.pdist_f64, metric="sqeuclidean"),
         utils.data_f64,
         None,
     ),
