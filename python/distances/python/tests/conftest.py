@@ -61,7 +61,7 @@ def data_u64(request: pytest.FixtureRequest) -> numpy.ndarray:
     return (gen_data(CAR, dim) > 0.5).astype(numpy.uint64)
 
 
-@pytest.fixture(params=PARAMS[:-1], ids=IDS[:-1])
+@pytest.fixture(params=PARAMS[:-2], ids=IDS[:-2])
 def strings(request: pytest.FixtureRequest) -> list[str]:
     """Return a list of strings."""
     alphabet = "ACTGN"

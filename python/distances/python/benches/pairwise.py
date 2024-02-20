@@ -1,4 +1,4 @@
-"""Pytest configuration file."""
+"""Benchmark cdist and pdist functions."""
 
 import typing
 from functools import partial
