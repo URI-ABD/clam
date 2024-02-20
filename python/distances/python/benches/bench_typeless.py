@@ -9,6 +9,10 @@ import utils  # type: ignore[import]
 from abd_distances import typeless_vectors as vectors
 
 setattr(scipy_distance, "manhattan", scipy_distance.cityblock)  # noqa: B010
+setattr(scipy_distance, "minkowski-3", partial(scipy_distance.minkowski, p=3))
+setattr(scipy_distance, "minkowski-4", partial(scipy_distance.minkowski, p=4))
+setattr(vectors, "minkowski-3", partial(vectors.minkowski, p=3))
+setattr(vectors, "minkowski-4", partial(vectors.minkowski, p=4))
 
 CAR = 10
 DIM = 1_000
@@ -24,6 +28,8 @@ METRICS = [
     "euclidean",
     "sqeuclidean",
     "manhattan",
+    "minkowski-3",
+    "minkowski-4",
     "cosine",
 ]
 

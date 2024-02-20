@@ -25,6 +25,11 @@ def manhattan(a: numpy.ndarray, b: numpy.ndarray) -> float:
     return abd_vectors.manhattan(a, b)
 
 
+def minkowski(a: numpy.ndarray, b: numpy.ndarray, p: float) -> float:
+    """Minkowski distance between two vectors."""
+    return abd_vectors.minkowski(a, b, p)
+
+
 def cosine(a: numpy.ndarray, b: numpy.ndarray) -> float:
     """Cosine similarity between two vectors."""
     return abd_vectors.cosine(a, b)
@@ -45,6 +50,7 @@ __all__ = [
     "euclidean",
     "sqeuclidean",
     "manhattan",
+    "minkowski",
     "cosine",
     "cdist",
     "pdist",

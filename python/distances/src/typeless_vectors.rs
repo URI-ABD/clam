@@ -1,12 +1,10 @@
 //! Distance functions for vectors.
 
-#![allow(unused_imports)]
-
-use distances::{number::Float, simd, vectors, Number};
+use distances::{simd, vectors, Number};
 use ndarray::parallel::prelude::*;
 use numpy::{ndarray::Axis, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::{
-    exceptions::{PyTypeError, PyValueError},
+    exceptions::{PyNotImplementedError, PyTypeError, PyValueError},
     prelude::*,
 };
 
@@ -16,6 +14,7 @@ pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(euclidean, m)?)?;
     m.add_function(wrap_pyfunction!(sqeuclidean, m)?)?;
     m.add_function(wrap_pyfunction!(manhattan, m)?)?;
+    m.add_function(wrap_pyfunction!(minkowski, m)?)?;
     m.add_function(wrap_pyfunction!(cosine, m)?)?;
     m.add_function(wrap_pyfunction!(cdist, m)?)?;
     m.add_function(wrap_pyfunction!(pdist, m)?)?;
@@ -39,7 +38,9 @@ enum Vector2<'py> {
 #[pyfunction]
 fn chebyshev(a: Vector1, b: Vector1) -> PyResult<f64> {
     match (a, b) {
-        (Vector1::F32(a), Vector1::F32(b)) => Ok(vectors::chebyshev(a.as_slice()?, b.as_slice()?)),
+        (Vector1::F32(a), Vector1::F32(b)) => {
+            Ok(vectors::chebyshev(a.as_slice()?, b.as_slice()?).as_f64())
+        }
         (Vector1::F64(a), Vector1::F64(b)) => Ok(vectors::chebyshev(a.as_slice()?, b.as_slice()?)),
         _ => Err(PyTypeError::new_err("Mismatched types")),
     }
@@ -50,7 +51,7 @@ fn chebyshev(a: Vector1, b: Vector1) -> PyResult<f64> {
 fn euclidean(a: Vector1, b: Vector1) -> PyResult<f64> {
     match (a, b) {
         (Vector1::F32(a), Vector1::F32(b)) => {
-            Ok(simd::euclidean_f32(a.as_slice()?, b.as_slice()?) as f64)
+            Ok(simd::euclidean_f32(a.as_slice()?, b.as_slice()?).as_f64())
         }
         (Vector1::F64(a), Vector1::F64(b)) => Ok(simd::euclidean_f64(a.as_slice()?, b.as_slice()?)),
         _ => Err(PyTypeError::new_err("Mismatched types")),
@@ -62,7 +63,7 @@ fn euclidean(a: Vector1, b: Vector1) -> PyResult<f64> {
 fn sqeuclidean(a: Vector1, b: Vector1) -> PyResult<f64> {
     match (a, b) {
         (Vector1::F32(a), Vector1::F32(b)) => {
-            Ok(simd::euclidean_sq_f32(a.as_slice()?, b.as_slice()?) as f64)
+            Ok(simd::euclidean_sq_f32(a.as_slice()?, b.as_slice()?).as_f64())
         }
         (Vector1::F64(a), Vector1::F64(b)) => {
             Ok(simd::euclidean_sq_f64(a.as_slice()?, b.as_slice()?))
@@ -75,8 +76,23 @@ fn sqeuclidean(a: Vector1, b: Vector1) -> PyResult<f64> {
 #[pyfunction]
 fn manhattan(a: Vector1, b: Vector1) -> PyResult<f64> {
     match (a, b) {
-        (Vector1::F32(a), Vector1::F32(b)) => Ok(vectors::manhattan(a.as_slice()?, b.as_slice()?)),
+        (Vector1::F32(a), Vector1::F32(b)) => {
+            Ok(vectors::manhattan(a.as_slice()?, b.as_slice()?).as_f64())
+        }
         (Vector1::F64(a), Vector1::F64(b)) => Ok(vectors::manhattan(a.as_slice()?, b.as_slice()?)),
+        _ => Err(PyTypeError::new_err("Mismatched types")),
+    }
+}
+
+#[pyfunction]
+fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<f64> {
+    match (a, b) {
+        (Vector1::F32(a), Vector1::F32(b)) => {
+            Ok(vectors::minkowski::<_, f32>(p)(a.as_slice()?, b.as_slice()?).as_f64())
+        }
+        (Vector1::F64(a), Vector1::F64(b)) => {
+            Ok(vectors::minkowski(p)(a.as_slice()?, b.as_slice()?))
+        }
         _ => Err(PyTypeError::new_err("Mismatched types")),
     }
 }
@@ -86,7 +102,7 @@ fn manhattan(a: Vector1, b: Vector1) -> PyResult<f64> {
 fn cosine(a: Vector1, b: Vector1) -> PyResult<f64> {
     match (a, b) {
         (Vector1::F32(a), Vector1::F32(b)) => {
-            Ok(simd::cosine_f32(a.as_slice()?, b.as_slice()?) as f64)
+            Ok(simd::cosine_f32(a.as_slice()?, b.as_slice()?).as_f64())
         }
         (Vector1::F64(a), Vector1::F64(b)) => Ok(simd::cosine_f64(a.as_slice()?, b.as_slice()?)),
         _ => Err(PyTypeError::new_err("Mismatched types")),
@@ -95,45 +111,83 @@ fn cosine(a: Vector1, b: Vector1) -> PyResult<f64> {
 
 /// Compute the pairwise distances between two collections of vectors.
 #[pyfunction]
-fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str) -> PyResult<Py<PyArray2<f64>>> {
-    match (a, b) {
-        (Vector2::F32(a), Vector2::F32(b)) => {
-            let metric = parse_func(metric)?;
-            Ok(PyArray2::from_vec2(py, &_cdist(a, b, metric))?.to_owned())
+fn cdist(
+    py: Python<'_>,
+    a: Vector2,
+    b: Vector2,
+    metric: &str,
+    p: Option<i32>,
+) -> PyResult<Py<PyArray2<f64>>> {
+    match p {
+        Some(_) => {
+            if metric.to_lowercase() != "minkowski" {
+                return Err(PyValueError::new_err(
+                    "p is only valid for Minkowski distance",
+                ));
+            }
+            Err(PyNotImplementedError::new_err(
+                "Minkowski distance is not implemented for cdist",
+            ))
         }
-        (Vector2::F64(a), Vector2::F64(b)) => {
-            let metric = parse_func(metric)?;
-            Ok(PyArray2::from_vec2(py, &_cdist(a, b, metric))?.to_owned())
-        }
-        _ => Err(PyTypeError::new_err("Mismatched types")),
+        _ => match (a, b) {
+            (Vector2::F32(a), Vector2::F32(b)) => {
+                let metric = parse_func(metric)?;
+                Ok(PyArray2::from_vec2(py, &_cdist(a, b, metric))?.to_owned())
+            }
+            (Vector2::F64(a), Vector2::F64(b)) => {
+                let metric = parse_func(metric)?;
+                Ok(PyArray2::from_vec2(py, &_cdist(a, b, metric))?.to_owned())
+            }
+            _ => Err(PyTypeError::new_err("Mismatched types")),
+        },
     }
 }
 
 /// Compute the pairwise distances between all vectors in a collection.
 #[pyfunction]
-fn pdist(py: Python<'_>, a: Vector2, metric: &str) -> PyResult<Py<PyArray1<f64>>> {
-    match a {
-        Vector2::F32(a) => {
-            let metric = parse_func(metric)?;
-            Ok(_pdist(py, a, metric))
+fn pdist(py: Python<'_>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<Py<PyArray1<f64>>> {
+    match p {
+        Some(_) => {
+            if metric.to_lowercase() != "minkowski" {
+                return Err(PyValueError::new_err(
+                    "p is only valid for Minkowski distance",
+                ));
+            }
+            Err(PyNotImplementedError::new_err(
+                "Minkowski distance is not implemented for pdist",
+            ))
         }
-        Vector2::F64(a) => {
-            let metric = parse_func(metric)?;
-            Ok(_pdist(py, a, metric))
-        }
+        _ => match a {
+            Vector2::F32(a) => {
+                let metric = parse_func(metric)?;
+                Ok(_pdist(py, a, metric))
+            }
+            Vector2::F64(a) => {
+                let metric = parse_func(metric)?;
+                Ok(_pdist(py, a, metric))
+            }
+        },
     }
 }
 
 #[allow(clippy::type_complexity)]
 fn parse_func<T: Number>(metric: &str) -> PyResult<fn(&[T], &[T]) -> f64> {
     match metric.to_lowercase().as_str() {
-        "chebyshev" => Ok(vectors::chebyshev),
+        "chebyshev" => Ok(_chebyshev),
         "euclidean" => Ok(vectors::euclidean),
         "sqeuclidean" => Ok(vectors::euclidean_sq),
-        "manhattan" | "cityblock" => Ok(vectors::manhattan),
+        "manhattan" | "cityblock" => Ok(_manhattan),
         "cosine" => Ok(vectors::cosine),
         _ => Err(PyValueError::new_err(format!("Unknown metric: {}", metric))),
     }
+}
+
+fn _chebyshev<T: Number>(a: &[T], b: &[T]) -> f64 {
+    vectors::chebyshev(a, b).as_f64()
+}
+
+fn _manhattan<T: Number>(a: &[T], b: &[T]) -> f64 {
+    vectors::manhattan(a, b).as_f64()
 }
 
 fn _cdist<T: Number + numpy::Element>(

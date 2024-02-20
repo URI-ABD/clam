@@ -2,6 +2,7 @@
 
 import math
 import typing
+from functools import partial
 
 import numpy
 import scipy.spatial.distance as scipy_distance
@@ -49,6 +50,70 @@ def test_f64(data_f64: numpy.ndarray):
                     _check_distances(a_, b_, name, simd_func, scipy_func, 1e-10)
 
 
+def test_minkowski_f32(data_f32: numpy.ndarray):
+    """Test the Minkowski distance function."""
+    for p in range(3, 7):
+        abd_mink = partial(abd_distances.minkowski, p=p)
+        scipy_mink = partial(scipy_distance.minkowski, p=p)
+        for a in data_f32:
+            for b in data_f32:
+                for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
+                    _check_distances(a_, b_, f"Minkowski, p={p}", abd_mink, scipy_mink, 1e-5)  # noqa: E501
+
+
+def test_minkowski_f64(data_f64: numpy.ndarray):
+    """Test the Minkowski distance function."""
+    for p in range(3, 7):
+        abd_mink = partial(abd_distances.minkowski, p=p)
+        scipy_mink = partial(scipy_distance.minkowski, p=p)
+        for a in data_f64:
+            for b in data_f64:
+                for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
+                    _check_distances(a_, b_, f"Minkowski, p={p}", abd_mink, scipy_mink, 1e-10)  # noqa: E501
+
+
+def test_cdist_f32(data_f32: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for metric in METRICS:
+        _cdist_helper(
+            data_f32,
+            data_f32,
+            metric,
+            1e-5,
+        )
+
+
+def test_cdist_f64(data_f64: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for metric in METRICS:
+        _cdist_helper(
+            data_f64,
+            data_f64,
+            metric,
+            1e-10,
+        )
+
+
+def test_pdist_f32(data_f32: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for metric in METRICS:
+        _pdist_helper(
+            data_f32,
+            metric,
+            1e-5,
+        )
+
+
+def test_pdist_f64(data_f64: numpy.ndarray):
+    """Test the SIMD-accelerated distance functions."""
+    for metric in METRICS:
+        _pdist_helper(
+            data_f64,
+            metric,
+            1e-10,
+        )
+
+
 def _check_distances(  # noqa: PLR0913
     a: numpy.ndarray,
     b: numpy.ndarray,
@@ -76,28 +141,6 @@ def _check_distances(  # noqa: PLR0913
         ), f"{name}: Expected: {expected:.8e}, got: {dist:.8e}, rel_tol: {rel_tol:.8e}"
 
 
-def test_cdist_f32(data_f32: numpy.ndarray):
-    """Test the SIMD-accelerated distance functions."""
-    for metric in METRICS:
-        _cdist_helper(
-            data_f32,
-            data_f32,
-            metric,
-            1e-5,
-        )
-
-
-def test_cdist_f64(data_f64: numpy.ndarray):
-    """Test the SIMD-accelerated distance functions."""
-    for metric in METRICS:
-        _cdist_helper(
-            data_f64,
-            data_f64,
-            metric,
-            1e-10,
-        )
-
-
 def _cdist_helper(
     a: numpy.ndarray,
     b: numpy.ndarray,
@@ -122,26 +165,6 @@ def _cdist_helper(
             expected,
             rtol=rel_tol,
         ), f"{metric}: Expected: {expected}, got: {distances}, rel_tol: {rel_tol:.8e}"
-
-
-def test_pdist_f32(data_f32: numpy.ndarray):
-    """Test the SIMD-accelerated distance functions."""
-    for metric in METRICS:
-        _pdist_helper(
-            data_f32,
-            metric,
-            1e-5,
-        )
-
-
-def test_pdist_f64(data_f64: numpy.ndarray):
-    """Test the SIMD-accelerated distance functions."""
-    for metric in METRICS:
-        _pdist_helper(
-            data_f64,
-            metric,
-            1e-10,
-        )
 
 
 def _pdist_helper(
