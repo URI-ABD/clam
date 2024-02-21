@@ -4,7 +4,7 @@ use distances::{simd, vectors, Number};
 use ndarray::parallel::prelude::*;
 use numpy::{ndarray::Axis, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::{
-    exceptions::{PyNotImplementedError, PyTypeError, PyValueError},
+    exceptions::{PyTypeError, PyValueError},
     prelude::*,
 };
 
@@ -119,15 +119,24 @@ fn cdist(
     p: Option<i32>,
 ) -> PyResult<Py<PyArray2<f64>>> {
     match p {
-        Some(_) => {
+        Some(p) => {
             if metric.to_lowercase() != "minkowski" {
                 return Err(PyValueError::new_err(
                     "p is only valid for Minkowski distance",
                 ));
             }
-            Err(PyNotImplementedError::new_err(
-                "Minkowski distance is not implemented for cdist",
-            ))
+            match (a, b) {
+                (Vector2::F32(a), Vector2::F32(b)) => {
+                    let metric =
+                        |a: &[f32], b: &[f32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                    Ok(PyArray2::from_vec2(py, &_cdist(a, b, metric))?.to_owned())
+                }
+                (Vector2::F64(a), Vector2::F64(b)) => {
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    Ok(PyArray2::from_vec2(py, &_cdist(a, b, metric))?.to_owned())
+                }
+                _ => Err(PyTypeError::new_err("Mismatched types")),
+            }
         }
         _ => match (a, b) {
             (Vector2::F32(a), Vector2::F32(b)) => {
@@ -147,15 +156,23 @@ fn cdist(
 #[pyfunction]
 fn pdist(py: Python<'_>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<Py<PyArray1<f64>>> {
     match p {
-        Some(_) => {
+        Some(p) => {
             if metric.to_lowercase() != "minkowski" {
                 return Err(PyValueError::new_err(
                     "p is only valid for Minkowski distance",
                 ));
             }
-            Err(PyNotImplementedError::new_err(
-                "Minkowski distance is not implemented for pdist",
-            ))
+            match a {
+                Vector2::F32(a) => {
+                    let metric =
+                        |a: &[f32], b: &[f32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                    Ok(_pdist(py, a, metric))
+                }
+                Vector2::F64(a) => {
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    Ok(_pdist(py, a, metric))
+                }
+            }
         }
         _ => match a {
             Vector2::F32(a) => {
@@ -190,10 +207,10 @@ fn _manhattan<T: Number>(a: &[T], b: &[T]) -> f64 {
     vectors::manhattan(a, b).as_f64()
 }
 
-fn _cdist<T: Number + numpy::Element>(
+fn _cdist<T: Number + numpy::Element, F: Fn(&[T], &[T]) -> f64 + Send + Sync + Copy>(
     a: PyReadonlyArray2<'_, T>,
     b: PyReadonlyArray2<'_, T>,
-    metric: fn(&[T], &[T]) -> f64,
+    metric: F,
 ) -> Vec<Vec<f64>> {
     let a = a.as_array();
     let b = b.as_array();
@@ -208,10 +225,10 @@ fn _cdist<T: Number + numpy::Element>(
         .collect::<Vec<_>>()
 }
 
-fn _pdist<T: Number + numpy::Element>(
+fn _pdist<T: Number + numpy::Element, F: Fn(&[T], &[T]) -> f64 + Send + Sync + Copy>(
     py: Python<'_>,
     a: PyReadonlyArray2<'_, T>,
-    metric: fn(&[T], &[T]) -> f64,
+    metric: F,
 ) -> Py<PyArray1<f64>> {
     let a = a.as_array();
     let result = a
