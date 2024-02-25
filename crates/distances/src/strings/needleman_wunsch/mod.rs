@@ -7,7 +7,10 @@ mod helpers;
 use super::Penalties;
 use crate::number::UInt;
 
-use helpers::{compute_edits, compute_table, trace_back_iterative, trace_back_recursive, Edit};
+pub use helpers::{
+    _x_to_y, compute_edits, compute_table, trace_back_iterative, trace_back_recursive,
+    unaligned_x_to_y, Edit,
+};
 
 /// Use a custom set of penalties to create a function to that calculates the
 /// Needleman-Wunsch edit distance between two strings using the specified
