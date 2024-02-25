@@ -1,6 +1,6 @@
-//! Tests for the `BaseCluster` struct.
+//! Tests for the `UniBall` struct.
 
-use abd_clam::{BaseCluster, Cluster, Dataset, Instance, PartitionCriteria, VecDataset};
+use abd_clam::{Cluster, Dataset, Instance, PartitionCriteria, UniBall, VecDataset};
 
 mod utils;
 
@@ -12,7 +12,7 @@ fn tiny() {
         vec![true, true, false, false],
     );
     let partition_criteria = PartitionCriteria::default();
-    let root = BaseCluster::new_root(&data, Some(42)).partition(&mut data, &partition_criteria, Some(42));
+    let root = UniBall::new_root(&data, Some(42)).partition(&mut data, &partition_criteria, Some(42));
 
     assert!(!root.is_leaf());
     assert!(root.children().is_some());
@@ -51,7 +51,7 @@ fn tiny() {
 fn medium() {
     let mut data = utils::gen_dataset(10_000, 10, 42, utils::euclidean);
     let partition_criteria = PartitionCriteria::default();
-    let root = BaseCluster::new_root(&data, None).partition(&mut data, &partition_criteria, None);
+    let root = UniBall::new_root(&data, None).partition(&mut data, &partition_criteria, None);
 
     assert!(!root.is_leaf());
     assert!(root.children().is_some());
@@ -84,11 +84,11 @@ fn serialization() {
         vec![true, true, false, false],
     );
 
-    let original = BaseCluster::new_root(&data, Some(42));
+    let original = UniBall::new_root(&data, Some(42));
     // original.history = vec![true, true, false, false, true];
 
     let original_bytes = postcard::to_allocvec(&original).unwrap();
-    let deserialized: BaseCluster<f32> = postcard::from_bytes(&original_bytes).unwrap();
+    let deserialized: UniBall<f32> = postcard::from_bytes(&original_bytes).unwrap();
 
     assert_eq!(original.name(), deserialized.name());
     assert_eq!(original.cardinality(), deserialized.cardinality());

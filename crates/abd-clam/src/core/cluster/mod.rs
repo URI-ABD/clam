@@ -5,14 +5,14 @@
 //! `PartitionCriterion` for `MaxDepth` and `MinCardinality` which are used to
 //! determine when to stop partitioning the tree.
 
-mod base;
 mod children;
 mod criteria;
+mod uni;
 
-#[allow(clippy::module_name_repetitions)]
-pub use base::BaseCluster;
 pub use children::Children;
 pub use criteria::{MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion};
+#[allow(clippy::module_name_repetitions)]
+pub use uni::UniBall;
 
 use core::{
     fmt::{Debug, Display},

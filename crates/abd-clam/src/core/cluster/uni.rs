@@ -20,46 +20,46 @@ use crate::{utils, Cluster, Dataset, Instance, PartitionCriterion};
 
 use super::Children;
 
-/// A `BaseCluster` is a cluster that behaves as clusters used to before the introduction
+/// A `UniBall` is a cluster that behaves as clusters used to before the introduction
 /// of the `Cluster` trait.
 ///
-/// A `BaseCluster` has a center and a radius, and (optionally) has two children.
+/// A `UniBall` has a center and a radius, and (optionally) has two children.
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct BaseCluster<U: Number> {
-    /// The depth of the `BaseCluster` in the tree.
+pub struct UniBall<U: Number> {
+    /// The depth of the `UniBall` in the tree.
     depth: usize,
-    /// The offset of the indices of the `BaseCluster`'s instances in the dataset.
+    /// The offset of the indices of the `UniBall`'s instances in the dataset.
     offset: usize,
-    /// The number of instances in the `BaseCluster`.
+    /// The number of instances in the `UniBall`.
     cardinality: usize,
-    /// The index of the instance at the `center` of the `BaseCluster`.
+    /// The index of the instance at the `center` of the `UniBall`.
     arg_center: usize,
     /// The index of the instance with the maximum distance from the `center`
     arg_radial: usize,
-    /// The radius of the `BaseCluster`.
+    /// The radius of the `UniBall`.
     radius: U,
-    /// The local fractal dimension of the `BaseCluster`.
+    /// The local fractal dimension of the `UniBall`.
     lfd: f64,
-    /// The children of the `BaseCluster`.
+    /// The children of the `UniBall`.
     pub(crate) children: Option<Children<U, Self>>,
 }
 
-impl<U: Number> PartialEq for BaseCluster<U> {
+impl<U: Number> PartialEq for UniBall<U> {
     fn eq(&self, other: &Self) -> bool {
         self.offset == other.offset && self.cardinality == other.cardinality
     }
 }
 
-impl<U: Number> Eq for BaseCluster<U> {}
+impl<U: Number> Eq for UniBall<U> {}
 
-impl<U: Number> PartialOrd for BaseCluster<U> {
+impl<U: Number> PartialOrd for UniBall<U> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<U: Number> Ord for BaseCluster<U> {
+impl<U: Number> Ord for UniBall<U> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.depth().cmp(&other.depth()) {
             Ordering::Equal => self.offset.cmp(&other.offset),
@@ -68,20 +68,20 @@ impl<U: Number> Ord for BaseCluster<U> {
     }
 }
 
-impl<U: Number> Hash for BaseCluster<U> {
+impl<U: Number> Hash for UniBall<U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.offset, self.cardinality).hash(state);
     }
 }
 
-impl<U: Number> Display for BaseCluster<U> {
+impl<U: Number> Display for UniBall<U> {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<U: Number> BaseCluster<U> {
-    /// Create a new `BaseCluster`.
+impl<U: Number> UniBall<U> {
+    /// Create a new `UniBall`.
     fn new<I: Instance, D: Dataset<I, U>>(
         data: &D,
         seed: Option<u64>,
@@ -94,7 +94,7 @@ impl<U: Number> BaseCluster<U> {
         let start = Instant::now();
         mt_log!(
             Level::Debug,
-            "Creating a BaseCluster with depth {depth} and cardinality {cardinality} ..."
+            "Creating a UniBall with depth {depth} and cardinality {cardinality} ..."
         );
 
         let arg_samples = if cardinality < 100 {
@@ -106,12 +106,12 @@ impl<U: Number> BaseCluster<U> {
         };
 
         let Some(arg_center) = data.median(&arg_samples) else {
-            unreachable!("The BaseCluster has at least one instance.")
+            unreachable!("The UniBall has at least one instance.")
         };
 
         let center_distances = data.one_to_many(arg_center, indices);
         let Some((arg_radial, radius)) = utils::arg_max(&center_distances).map(|(i, r)| (indices[i], r)) else {
-            unreachable!("The BaseCluster has at least one instance.")
+            unreachable!("The UniBall has at least one instance.")
         };
 
         let lfd = utils::compute_lfd(radius, &center_distances);
@@ -119,7 +119,7 @@ impl<U: Number> BaseCluster<U> {
         let end = start.elapsed().as_secs_f32();
         mt_log!(
             Level::Debug,
-            "Finished creating a BaseCluster with depth {depth}, offset {offset} and cardinality {cardinality} in {end:.2e} seconds."
+            "Finished creating a UniBall with depth {depth}, offset {offset} and cardinality {cardinality} in {end:.2e} seconds."
         );
 
         Self {
@@ -147,7 +147,7 @@ impl<U: Number> BaseCluster<U> {
     ///    * The `l_indices` are not empty.
     ///    * The `r_indices` are not empty.
     ///    * The total length of the `l_indices` and `r_indices` is equal to the
-    ///      cardinality of the `BaseCluster`.
+    ///      cardinality of the `UniBall`.
     const fn _check_partition(&self, l_indices: &[usize], r_indices: &[usize]) -> bool {
         !l_indices.is_empty() && !r_indices.is_empty() && l_indices.len() + r_indices.len() == self.cardinality
         // assert!(
@@ -226,7 +226,7 @@ impl<U: Number> BaseCluster<U> {
         (self, indices)
     }
 
-    /// Partitions the `BaseCluster` into two children once.
+    /// Partitions the `UniBall` into two children once.
     fn partition_once<I: Instance, D: Dataset<I, U>>(
         &self,
         data: &D,
@@ -270,7 +270,7 @@ impl<U: Number> BaseCluster<U> {
     }
 }
 
-impl<U: Number> Cluster<U> for BaseCluster<U> {
+impl<U: Number> Cluster<U> for UniBall<U> {
     fn new_root<I: Instance, D: Dataset<I, U>>(data: &D, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<usize>>();
         Self::new(data, seed, 0, &indices, 0)
@@ -333,9 +333,9 @@ impl<U: Number> Cluster<U> for BaseCluster<U> {
     }
 }
 
-impl<U: Number> Serialize for BaseCluster<U> {
+impl<U: Number> Serialize for UniBall<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("BaseCluster", 8)?;
+        let mut state = serializer.serialize_struct("UniBall", 8)?;
         state.serialize_field("depth", &self.depth)?;
         state.serialize_field("offset", &self.offset)?;
         state.serialize_field("cardinality", &self.cardinality)?;
@@ -348,18 +348,18 @@ impl<U: Number> Serialize for BaseCluster<U> {
     }
 }
 
-impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
+impl<'de, U: Number> Deserialize<'de> for UniBall<U> {
     #[allow(clippy::too_many_lines)]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        /// The fields in the `BaseCluster` struct.
+        /// The fields in the `UniBall` struct.
         #[derive(Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
-            /// The depth of this `BaseCluster` in the tree.
+            /// The depth of this `UniBall` in the tree.
             Depth,
-            /// The offset of the indices of the `BaseCluster`'s instances in the dataset.
+            /// The offset of the indices of the `UniBall`'s instances in the dataset.
             Offset,
-            /// The number of instances in the `BaseCluster`.
+            /// The number of instances in the `UniBall`.
             Cardinality,
             /// The index of the `center` instance in the dataset.
             ArgCenter,
@@ -367,20 +367,20 @@ impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
             ArgRadial,
             /// The distance from the `center` to the `radial` instance.
             Radius,
-            /// The local fractal dimension of the `BaseCluster`.
+            /// The local fractal dimension of the `UniBall`.
             Lfd,
-            /// The children of the `BaseCluster`.
+            /// The children of the `UniBall`.
             Children,
         }
 
-        /// The `BaseCluster` visitor for deserialization.
-        struct BaseClusterVisitor<U: Number>(PhantomData<U>);
+        /// The `UniBall` visitor for deserialization.
+        struct UniBallVisitor<U: Number>(PhantomData<U>);
 
-        impl<'de, U: Number> Visitor<'de> for BaseClusterVisitor<U> {
-            type Value = BaseCluster<U>;
+        impl<'de, U: Number> Visitor<'de> for UniBallVisitor<U> {
+            type Value = UniBall<U>;
 
             fn expecting(&self, formatter: &mut Formatter) -> core::fmt::Result {
-                formatter.write_str("struct BaseCluster")
+                formatter.write_str("struct UniBall")
             }
 
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
@@ -412,7 +412,7 @@ impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(8, &self))?;
 
-                Ok(BaseCluster {
+                Ok(UniBall {
                     depth,
                     offset,
                     cardinality,
@@ -499,7 +499,7 @@ impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
                 let lfd = lfd.ok_or_else(|| serde::de::Error::missing_field("lfd"))?;
                 let children = children.ok_or_else(|| serde::de::Error::missing_field("children"))?;
 
-                Ok(BaseCluster {
+                Ok(UniBall {
                     depth,
                     offset,
                     cardinality,
@@ -512,7 +512,7 @@ impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
             }
         }
 
-        /// The fields in the `BaseCluster` struct.
+        /// The fields in the `UniBall` struct.
         const FIELDS: &[&str] = &[
             "depth",
             "offset",
@@ -523,6 +523,6 @@ impl<'de, U: Number> Deserialize<'de> for BaseCluster<U> {
             "lfd",
             "children",
         ];
-        deserializer.deserialize_struct("BaseCluster", FIELDS, BaseClusterVisitor(PhantomData))
+        deserializer.deserialize_struct("UniBall", FIELDS, UniBallVisitor(PhantomData))
     }
 }

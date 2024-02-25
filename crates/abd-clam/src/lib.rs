@@ -26,7 +26,7 @@ pub use crate::{
     cakes::{knn, rnn, Cakes},
     chaoda::graph,
     core::{
-        cluster::{BaseCluster, Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion},
+        cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
         dataset::{Dataset, Instance, VecDataset},
         tree::Tree,
     },

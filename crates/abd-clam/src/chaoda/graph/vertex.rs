@@ -14,7 +14,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::{core::cluster::Children, utils, BaseCluster, Cluster, Dataset, Instance, PartitionCriterion};
+use crate::{core::cluster::Children, utils, Cluster, Dataset, Instance, PartitionCriterion, UniBall};
 
 /// The ratios used for anomaly detection.
 pub type Ratios = [f64; 6];
@@ -22,8 +22,8 @@ pub type Ratios = [f64; 6];
 /// A `Vertex` for a `Graph`.
 #[derive(Debug)]
 pub struct Vertex<U: Number> {
-    /// The base `BaseCluster` of the `Vertex`.
-    base_cluster: BaseCluster<U>,
+    /// The base `UniBall` of the `Vertex`.
+    uni_ball: UniBall<U>,
     /// The ratios used for anomaly detection.
     ratios: Ratios,
     /// Child Vertices
@@ -47,26 +47,26 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> crate::Tree<I, U, D, Vertex<U>> {
 
 impl<U: Number> Vertex<U> {
     /// Creates a new `Vertex`.
-    pub const fn new(base_cluster: BaseCluster<U>, ratios: Ratios, children: Option<Children<U, Self>>) -> Self {
+    pub const fn new(uni_ball: UniBall<U>, ratios: Ratios, children: Option<Children<U, Self>>) -> Self {
         Self {
-            base_cluster,
+            uni_ball,
             ratios,
             children,
         }
     }
 
     /// Creates a new `Vertex` tree.
-    pub fn from_base_tree(root: BaseCluster<U>) -> Self {
-        Self::from_base_cluster(root).set_child_parent_ratios([1.0; 6])
+    pub fn from_base_tree(root: UniBall<U>) -> Self {
+        Self::from_uni_ball(root).set_child_parent_ratios([1.0; 6])
     }
 
     /// Recursively creates a new `Vertex` tree.
-    fn from_base_cluster(mut base_cluster: BaseCluster<U>) -> Self {
-        match base_cluster.children {
+    fn from_uni_ball(mut uni_ball: UniBall<U>) -> Self {
+        match uni_ball.children {
             Some(children) => {
-                base_cluster.children = None;
-                let left = Box::new(Self::from_base_cluster(*children.left));
-                let right = Box::new(Self::from_base_cluster(*children.right));
+                uni_ball.children = None;
+                let left = Box::new(Self::from_uni_ball(*children.left));
+                let right = Box::new(Self::from_uni_ball(*children.right));
                 let children = Children {
                     left,
                     right,
@@ -74,9 +74,9 @@ impl<U: Number> Vertex<U> {
                     arg_r: children.arg_r,
                     polar_distance: children.polar_distance,
                 };
-                Self::new(base_cluster, [1.0; 6], Some(children))
+                Self::new(uni_ball, [1.0; 6], Some(children))
             }
-            None => Self::new(base_cluster, [1.0; 6], None),
+            None => Self::new(uni_ball, [1.0; 6], None),
         }
     }
 
@@ -163,9 +163,9 @@ impl<U: Number> Vertex<U> {
         }
     }
 
-    /// The base `BaseCluster` of the `Vertex`.
-    pub const fn uni_ball(&self) -> &BaseCluster<U> {
-        &self.base_cluster
+    /// The base `UniBall` of the `Vertex`.
+    pub const fn uni_ball(&self) -> &UniBall<U> {
+        &self.uni_ball
     }
 
     /// The ratios of the `Vertex`.
@@ -176,7 +176,7 @@ impl<U: Number> Vertex<U> {
 
 impl<U: Number> Cluster<U> for Vertex<U> {
     fn new_root<I: Instance, D: Dataset<I, U>>(data: &D, seed: Option<u64>) -> Self {
-        let uni_ball = BaseCluster::new_root(data, seed);
+        let uni_ball = UniBall::new_root(data, seed);
         let ratios = [0.0; 6];
         Self::new(uni_ball, ratios, None)
     }
@@ -187,36 +187,36 @@ impl<U: Number> Cluster<U> for Vertex<U> {
         D: Dataset<I, U>,
         P: PartitionCriterion<U>,
     {
-        let base_cluster = self.base_cluster.partition(data, criteria, seed);
-        Self::from_base_tree(base_cluster)
+        let uni_ball = self.uni_ball.partition(data, criteria, seed);
+        Self::from_base_tree(uni_ball)
     }
 
     fn offset(&self) -> usize {
-        self.base_cluster.offset()
+        self.uni_ball.offset()
     }
 
     fn cardinality(&self) -> usize {
-        self.base_cluster.cardinality()
+        self.uni_ball.cardinality()
     }
 
     fn depth(&self) -> usize {
-        self.base_cluster.depth()
+        self.uni_ball.depth()
     }
 
     fn arg_center(&self) -> usize {
-        self.base_cluster.arg_center()
+        self.uni_ball.arg_center()
     }
 
     fn radius(&self) -> U {
-        self.base_cluster.radius()
+        self.uni_ball.radius()
     }
 
     fn arg_radial(&self) -> usize {
-        self.base_cluster.arg_radial()
+        self.uni_ball.arg_radial()
     }
 
     fn lfd(&self) -> f64 {
-        self.base_cluster.lfd()
+        self.uni_ball.lfd()
     }
 
     fn children(&self) -> Option<[&Self; 2]> {
@@ -224,17 +224,17 @@ impl<U: Number> Cluster<U> for Vertex<U> {
     }
 
     fn polar_distance(&self) -> Option<U> {
-        self.base_cluster.polar_distance()
+        self.uni_ball.polar_distance()
     }
 
     fn arg_poles(&self) -> Option<[usize; 2]> {
-        self.base_cluster.arg_poles()
+        self.uni_ball.arg_poles()
     }
 }
 
 impl<U: Number> PartialEq for Vertex<U> {
     fn eq(&self, other: &Self) -> bool {
-        self.base_cluster.eq(&other.base_cluster)
+        self.uni_ball.eq(&other.uni_ball)
     }
 }
 
@@ -248,26 +248,26 @@ impl<U: Number> PartialOrd for Vertex<U> {
 
 impl<U: Number> Ord for Vertex<U> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.base_cluster.cmp(&other.base_cluster)
+        self.uni_ball.cmp(&other.uni_ball)
     }
 }
 
 impl<U: Number> Hash for Vertex<U> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.base_cluster.hash(state);
+        self.uni_ball.hash(state);
     }
 }
 
 impl<U: Number> Display for Vertex<U> {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "{}", self.base_cluster)
+        write!(f, "{}", self.uni_ball)
     }
 }
 
 impl<U: Number> Serialize for Vertex<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("Vertex", 3)?;
-        state.serialize_field("base_cluster", &self.base_cluster)?;
+        state.serialize_field("uni_ball", &self.uni_ball)?;
         state.serialize_field("ratios", &self.ratios)?;
         state.serialize_field("children", &self.children)?;
         state.end()
@@ -280,8 +280,8 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
         #[derive(Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
         enum Field {
-            /// The base `BaseCluster` of the `Vertex`.
-            BaseCluster,
+            /// The base `UniBall` of the `Vertex`.
+            UniBall,
             /// The ratios of the `Vertex`.
             Ratios,
             /// The children of the `Vertex`.
@@ -312,17 +312,17 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
             }
 
             fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
-                let mut base_cluster = None;
+                let mut uni_ball = None;
                 let mut ratios = None;
                 let mut children = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
-                        Field::BaseCluster => {
-                            if base_cluster.is_some() {
-                                return Err(serde::de::Error::duplicate_field("base_cluster"));
+                        Field::UniBall => {
+                            if uni_ball.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uni_ball"));
                             }
-                            base_cluster = Some(map.next_value()?);
+                            uni_ball = Some(map.next_value()?);
                         }
                         Field::Ratios => {
                             if ratios.is_some() {
@@ -339,7 +339,7 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
                     }
                 }
 
-                let uni_ball = base_cluster.ok_or_else(|| serde::de::Error::missing_field("base_cluster"))?;
+                let uni_ball = uni_ball.ok_or_else(|| serde::de::Error::missing_field("uni_ball"))?;
                 let ratios = ratios.ok_or_else(|| serde::de::Error::missing_field("ratios"))?;
                 let children = children.ok_or_else(|| serde::de::Error::missing_field("children"))?;
 
@@ -348,7 +348,7 @@ impl<'de, U: Number> Deserialize<'de> for Vertex<U> {
         }
 
         /// The `Field` names.
-        const FIELDS: &[&str] = &["base_cluster", "ratios", "children"];
+        const FIELDS: &[&str] = &["uni_ball", "ratios", "children"];
         deserializer.deserialize_struct("Vertex", FIELDS, VertexVisitor(PhantomData))
     }
 }

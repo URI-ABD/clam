@@ -2,12 +2,12 @@
 
 use distances::Number;
 
-use crate::{BaseCluster, Cluster};
+use crate::{Cluster, UniBall};
 
 /// A criterion used to decide when to partition a `Cluster`.
 pub trait PartitionCriterion<U: Number>: Send + Sync {
     /// Check whether a `Cluster` meets the criterion for partitioning.
-    fn check(&self, c: &BaseCluster<U>) -> bool;
+    fn check(&self, c: &UniBall<U>) -> bool;
 }
 
 /// The maximum depth of a `Cluster` beyond which it may not be partitioned.
@@ -15,7 +15,7 @@ pub trait PartitionCriterion<U: Number>: Send + Sync {
 pub struct MaxDepth(usize);
 
 impl<U: Number> PartitionCriterion<U> for MaxDepth {
-    fn check(&self, c: &BaseCluster<U>) -> bool {
+    fn check(&self, c: &UniBall<U>) -> bool {
         c.depth() < self.0
     }
 }
@@ -25,7 +25,7 @@ impl<U: Number> PartitionCriterion<U> for MaxDepth {
 pub struct MinCardinality(usize);
 
 impl<U: Number> PartitionCriterion<U> for MinCardinality {
-    fn check(&self, c: &BaseCluster<U>) -> bool {
+    fn check(&self, c: &UniBall<U>) -> bool {
         c.cardinality() > self.0
     }
 }
@@ -41,7 +41,7 @@ pub struct PartitionCriteria<U: Number> {
 }
 
 impl<U: Number> PartitionCriterion<U> for PartitionCriteria<U> {
-    fn check(&self, cluster: &BaseCluster<U>) -> bool {
+    fn check(&self, cluster: &UniBall<U>) -> bool {
         !cluster.is_singleton()
             && if self.check_all {
                 self.criteria.iter().all(|c| c.check(cluster))

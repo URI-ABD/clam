@@ -7,7 +7,7 @@ use std::path::Path;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{knn, rnn, BaseCluster, Cluster, Dataset, Instance, PartitionCriterion, Tree};
+use crate::{knn, rnn, Cluster, Dataset, Instance, PartitionCriterion, Tree, UniBall};
 
 use super::Search;
 
@@ -23,7 +23,7 @@ use super::Search;
 #[derive(Debug)]
 pub struct SingleShard<I: Instance, U: Number, D: Dataset<I, U>> {
     /// The tree used for the search.
-    tree: Tree<I, U, D, BaseCluster<U>>,
+    tree: Tree<I, U, D, UniBall<U>>,
     /// Best rnn-search algorithm.
     best_rnn: Option<rnn::Algorithm>,
     /// Best knn-search algorithm.
@@ -52,7 +52,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> SingleShard<I, U, D> {
     }
 
     /// Returns a reference to the tree.
-    pub const fn tree(&self) -> &Tree<I, U, D, BaseCluster<U>> {
+    pub const fn tree(&self) -> &Tree<I, U, D, UniBall<U>> {
         &self.tree
     }
 
@@ -146,7 +146,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Search<I, U, D> for SingleShard<I
         };
 
         let tree_dir = path.join("tree");
-        let tree = Tree::<I, U, D, BaseCluster<_>>::load(&tree_dir, metric, is_expensive)?;
+        let tree = Tree::<I, U, D, UniBall<_>>::load(&tree_dir, metric, is_expensive)?;
 
         Ok(Self {
             tree,

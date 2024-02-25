@@ -16,7 +16,7 @@ use search::Search;
 use sharded::RandomlySharded;
 use singular::SingleShard;
 
-use crate::{BaseCluster, Dataset, Instance, PartitionCriterion, Tree};
+use crate::{Dataset, Instance, PartitionCriterion, Tree, UniBall};
 
 /// CAKES search.
 pub enum Cakes<I: Instance, U: Number, D: Dataset<I, U>> {
@@ -93,7 +93,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     }
 
     /// Returns the references to the tree(s) of the dataset.
-    pub fn trees(&self) -> Vec<&Tree<I, U, D, BaseCluster<U>>> {
+    pub fn trees(&self) -> Vec<&Tree<I, U, D, UniBall<U>>> {
         match self {
             Self::SingleShard(ss) => vec![ss.tree()],
             Self::RandomlySharded(rs) => rs.shards().into_iter().map(SingleShard::tree).collect(),
