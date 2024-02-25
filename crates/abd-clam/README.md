@@ -1,4 +1,4 @@
-# CLAM: Clustering, Learning and Approximation with Manifolds (v0.28.0)
+# CLAM: Clustering, Learning and Approximation with Manifolds (v0.29.0)
 
 The Rust implementation of CLAM.
 
@@ -7,7 +7,7 @@ This means that the API is not yet stable and breaking changes may occur frequen
 
 ## Usage
 
-CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.28.0`.
+CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.29.0`.
 
 ### Cakes: Nearest Neighbor Search
 
@@ -79,7 +79,7 @@ let dataset = dataset
 
 // We will use the default partition criteria for this example. This will partition
 // the data until each Cluster contains a single unique point.
-let criteria = PartitionCriteria::default();
+let criteria = PartitionCriteria::<f32>::default();
 
 // The Cakes struct provides the functionality described in the paper.
 // We use a single shard here because the demo data is small.

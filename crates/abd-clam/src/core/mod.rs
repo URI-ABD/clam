@@ -2,5 +2,4 @@
 
 pub mod cluster;
 pub mod dataset;
-///TODO!: Add documentation for graph
-pub mod graph;
+pub mod tree;

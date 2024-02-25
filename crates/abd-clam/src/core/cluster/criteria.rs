@@ -2,18 +2,32 @@
 
 use distances::Number;
 
-use crate::Cluster;
+use crate::{Cluster, UniBall};
 
 /// A criterion used to decide when to partition a `Cluster`.
-///
-/// # Type Parameters
-///
-/// - `T`: The type of the instances in the `Cluster`.
-/// - `U`: The type of the distance values between instances.
 pub trait PartitionCriterion<U: Number>: Send + Sync {
     /// Check whether a `Cluster` meets the criterion for partitioning.
-    // TODO: Figure out how to have this not leak `Cluster` or make `Cluster` public.
-    fn check(&self, c: &Cluster<U>) -> bool;
+    fn check(&self, c: &UniBall<U>) -> bool;
+}
+
+/// The maximum depth of a `Cluster` beyond which it may not be partitioned.
+#[derive(Debug, Clone)]
+pub struct MaxDepth(usize);
+
+impl<U: Number> PartitionCriterion<U> for MaxDepth {
+    fn check(&self, c: &UniBall<U>) -> bool {
+        c.depth() < self.0
+    }
+}
+
+/// The minimum cardinality of a `Cluster` below which it may not be partitioned.
+#[derive(Debug, Clone)]
+pub struct MinCardinality(usize);
+
+impl<U: Number> PartitionCriterion<U> for MinCardinality {
+    fn check(&self, c: &UniBall<U>) -> bool {
+        c.cardinality() > self.0
+    }
 }
 
 /// A collection of criteria used to decide when to partition a `Cluster`.
@@ -24,6 +38,17 @@ pub struct PartitionCriteria<U: Number> {
     /// Whether all criteria must be met for a `Cluster` to be partitioned or if any one criterion
     /// is sufficient.
     check_all: bool,
+}
+
+impl<U: Number> PartitionCriterion<U> for PartitionCriteria<U> {
+    fn check(&self, cluster: &UniBall<U>) -> bool {
+        !cluster.is_singleton()
+            && if self.check_all {
+                self.criteria.iter().all(|c| c.check(cluster))
+            } else {
+                self.criteria.iter().any(|c| c.check(cluster))
+            }
+    }
 }
 
 impl<U: Number> Default for PartitionCriteria<U> {
@@ -78,36 +103,5 @@ impl<U: Number> PartitionCriteria<U> {
     pub(crate) fn with_custom(mut self, c: Box<dyn PartitionCriterion<U>>) -> Self {
         self.criteria.push(c);
         self
-    }
-}
-
-impl<U: Number> PartitionCriterion<U> for PartitionCriteria<U> {
-    fn check(&self, cluster: &Cluster<U>) -> bool {
-        !cluster.is_singleton()
-            && if self.check_all {
-                self.criteria.iter().all(|c| c.check(cluster))
-            } else {
-                self.criteria.iter().any(|c| c.check(cluster))
-            }
-    }
-}
-
-/// The maximum depth of a `Cluster` beyond which it may not be partitioned.
-#[derive(Debug, Clone)]
-pub struct MaxDepth(usize);
-
-impl<U: Number> PartitionCriterion<U> for MaxDepth {
-    fn check(&self, c: &Cluster<U>) -> bool {
-        c.depth() < self.0
-    }
-}
-
-/// The minimum cardinality of a `Cluster` below which it may not be partitioned.
-#[derive(Debug, Clone)]
-pub struct MinCardinality(usize);
-
-impl<U: Number> PartitionCriterion<U> for MinCardinality {
-    fn check(&self, c: &Cluster<U>) -> bool {
-        c.cardinality() > self.0
     }
 }

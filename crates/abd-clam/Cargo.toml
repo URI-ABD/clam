@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.28.0"
+version = "0.29.0"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -10,7 +10,7 @@ authors = [
     "Oliver McLaughlin <olwmcjp@gmail.com>",
 ]
 edition = "2021"
-rust-version = "1.72"
+rust-version = "1.75"
 description = "Clustering, Learning and Approximation with Manifolds"
 license = "MIT"
 readme = "./README.md"

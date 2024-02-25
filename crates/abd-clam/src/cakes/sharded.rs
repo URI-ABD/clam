@@ -246,7 +246,8 @@ mod tests {
 
         let name = format!("test-full");
         let data = VecDataset::new(name, data_vec.clone(), metric, false);
-        let cakes = SingleShard::new(data, Some(seed), &PartitionCriteria::default());
+        let criteria = PartitionCriteria::default();
+        let cakes = SingleShard::new(data, Some(seed), &criteria);
 
         let num_shards = 10;
         let max_cardinality = cardinality / num_shards;
@@ -254,7 +255,7 @@ mod tests {
         let data_shards = VecDataset::new(name, data_vec, metric, false).make_shards(max_cardinality);
         let shards = data_shards
             .into_iter()
-            .map(|d| SingleShard::new(d, Some(seed), &PartitionCriteria::default()))
+            .map(|d| SingleShard::new(d, Some(seed), &criteria))
             .collect::<Vec<_>>();
         let sharded_cakes = {
             let mut cakes = RandomlySharded::new(shards);

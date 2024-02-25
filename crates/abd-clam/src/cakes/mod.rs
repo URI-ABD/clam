@@ -16,7 +16,7 @@ use search::Search;
 use sharded::RandomlySharded;
 use singular::SingleShard;
 
-use crate::{Dataset, Instance, PartitionCriteria, Tree};
+use crate::{Dataset, Instance, PartitionCriterion, Tree, UniBall};
 
 /// CAKES search.
 pub enum Cakes<I: Instance, U: Number, D: Dataset<I, U>> {
@@ -34,7 +34,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// * `data` - The dataset to search.
     /// * `seed` - The seed to use for the random number generator.
     /// * `criteria` - The criteria to use for partitioning the tree.
-    pub fn new(data: D, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
+    pub fn new<P: PartitionCriterion<U>>(data: D, seed: Option<u64>, criteria: &P) -> Self {
         Self::SingleShard(SingleShard::new(data, seed, criteria))
     }
 
@@ -93,7 +93,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     }
 
     /// Returns the references to the tree(s) of the dataset.
-    pub fn trees(&self) -> Vec<&Tree<I, U, D>> {
+    pub fn trees(&self) -> Vec<&Tree<I, U, D, UniBall<U>>> {
         match self {
             Self::SingleShard(ss) => vec![ss.tree()],
             Self::RandomlySharded(rs) => rs.shards().into_iter().map(SingleShard::tree).collect(),
@@ -116,7 +116,7 @@ impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
     /// * `seed` - The seed to use for the random number generator.
     /// * `criteria` - The criteria to use for partitioning the tree.
     #[must_use]
-    pub fn new_randomly_sharded(shards: Vec<D>, seed: Option<u64>, criteria: &PartitionCriteria<U>) -> Self {
+    pub fn new_randomly_sharded<P: PartitionCriterion<U>>(shards: Vec<D>, seed: Option<u64>, criteria: &P) -> Self {
         let shards = shards
             .into_iter()
             .map(|d| SingleShard::new(d, seed, criteria))

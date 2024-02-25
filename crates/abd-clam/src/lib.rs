@@ -17,19 +17,20 @@
 #![doc = include_str!("../README.md")]
 
 mod cakes;
-///anomaly detection
 pub mod chaoda;
+pub mod codec;
 mod core;
 pub mod utils;
 
 pub use crate::{
     cakes::{knn, rnn, Cakes},
+    chaoda::graph,
     core::{
-        cluster::{Cluster, PartitionCriteria, PartitionCriterion, Tree},
+        cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
         dataset::{Dataset, Instance, VecDataset},
-        graph::{criteria::MetaMLScorer, Edge, Graph},
+        tree::Tree,
     },
 };
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.28.0";
+pub const VERSION: &str = "0.29.0";

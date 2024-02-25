@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{cakes::rnn::clustered, utils, Cluster, Instance, Tree};
+use crate::{cakes::rnn::clustered, utils, Cluster, Dataset, Instance, Tree};
 
 use super::Hits;
 
@@ -21,11 +21,12 @@ const MULTIPLIER: f64 = 2.0;
 ///
 /// A vector of 2-tuples, where the first element is the index of the instance
 /// and the second element is the distance from the query to the instance.
-pub fn search<I, U, D>(tree: &Tree<I, U, D>, query: &I, k: usize) -> Vec<(usize, U)>
+pub fn search<I, U, D, C>(tree: &Tree<I, U, D, C>, query: &I, k: usize) -> Vec<(usize, U)>
 where
     I: Instance,
     U: Number,
-    D: crate::Dataset<I, U>,
+    D: Dataset<I, U>,
+    C: Cluster<U>,
 {
     let mut radius = f64::EPSILON + tree.radius().as_f64() / tree.cardinality().as_f64();
     let [mut confirmed, mut straddlers] = clustered::tree_search(tree.data(), &tree.root, query, U::from(radius));
@@ -61,6 +62,6 @@ where
 }
 
 /// Count the total cardinality of the clusters.
-fn count_hits<U: Number>(clusters: &[(&Cluster<U>, U)]) -> usize {
+fn count_hits<U: Number, C: Cluster<U>>(clusters: &[(&C, U)]) -> usize {
     clusters.iter().map(|(c, _)| c.cardinality()).sum()
 }
