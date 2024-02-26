@@ -10,3 +10,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.20.2", features = ["extension-module"] }
+ndarray-npy = { version = "0.8.1", default-features = false , features=['num-complex-0_4'] }
+ndarray = "0.15.6"
+
+[dev-dependencies]
+tempdir = "0.3.7"
