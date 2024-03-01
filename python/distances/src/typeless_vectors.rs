@@ -22,16 +22,21 @@ pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-#[derive(FromPyObject)]
 enum Vector1<'py> {
     F32(PyReadonlyArray1<'py, f32>),
     F64(PyReadonlyArray1<'py, f64>),
 }
 
-#[derive(FromPyObject)]
-enum Vector2<'py> {
-    F32(PyReadonlyArray2<'py, f32>),
-    F64(PyReadonlyArray2<'py, f64>),
+impl<'a> FromPyObject<'a> for Vector1<'a> {
+    fn extract(ob: &'a PyAny) -> PyResult<Self> {
+        if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f32>>() {
+            Ok(Vector1::F32(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f64>>() {
+            Ok(Vector1::F64(a))
+        } else {
+            Err(PyTypeError::new_err("Invalid type"))
+        }
+    }
 }
 
 /// Compute the Chebyshev distance between two vectors.
@@ -106,6 +111,23 @@ fn cosine(a: Vector1, b: Vector1) -> PyResult<f64> {
         }
         (Vector1::F64(a), Vector1::F64(b)) => Ok(simd::cosine_f64(a.as_slice()?, b.as_slice()?)),
         _ => Err(PyTypeError::new_err("Mismatched types")),
+    }
+}
+
+enum Vector2<'py> {
+    F32(PyReadonlyArray2<'py, f32>),
+    F64(PyReadonlyArray2<'py, f64>),
+}
+
+impl<'a> FromPyObject<'a> for Vector2<'a> {
+    fn extract(ob: &'a PyAny) -> PyResult<Self> {
+        if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f32>>() {
+            Ok(Vector2::F32(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f64>>() {
+            Ok(Vector2::F64(a))
+        } else {
+            Err(PyTypeError::new_err("Invalid type"))
+        }
     }
 }
 

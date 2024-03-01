@@ -11,6 +11,7 @@ from abd_distances import typeless_vectors as vectors
 setattr(scipy_distance, "manhattan", scipy_distance.cityblock)  # noqa: B010
 setattr(scipy_distance, "minkowski-3", partial(scipy_distance.minkowski, p=3))
 setattr(scipy_distance, "minkowski-4", partial(scipy_distance.minkowski, p=4))
+setattr(vectors, "cityblock", vectors.manhattan)  # noqa: B010
 setattr(vectors, "minkowski-3", partial(vectors.minkowski, p=3))
 setattr(vectors, "minkowski-4", partial(vectors.minkowski, p=4))
 
@@ -27,7 +28,7 @@ METRICS = [
     "chebyshev",
     "euclidean",
     "sqeuclidean",
-    "manhattan",
+    "cityblock",
     "minkowski-3",
     "minkowski-4",
     "cosine",
@@ -56,6 +57,43 @@ def bench_func(
                 _ = func(a, b)
 
 
+PAIR_METRICS = [
+    "cdist",
+    "pdist",
+]
+
+PAIR_FUNCTIONS = {
+    f"{name}-{metric}, {dtype}": (
+        getattr(scipy_distance, name),
+        getattr(vectors, name),
+        metric,
+        gen_data_x,
+        gen_data_x if name == "cdist" else None,
+    )
+    for name in PAIR_METRICS
+    for dtype, gen_data_x in GEN_DATA.items()
+    for metric in METRICS if "minkowski" not in metric
+}
+
+def bench_pair_func(
+    func: typing.Callable[[numpy.ndarray, numpy.ndarray], numpy.ndarray],
+    metric: str,
+    gen_data_x: typing.Callable[[int, int], numpy.ndarray],
+    gen_data_y: typing.Optional[typing.Callable[[int, int], numpy.ndarray]],
+) -> None:
+    """Benchmark a pair distance function."""
+    data_x = gen_data_x(CAR * 10, DIM)
+
+    if gen_data_y is None:
+        for _ in range(NUM_RUNS):
+            _ = func(data_x, metric=metric)  # type: ignore[call-arg]
+        return
+
+    data_y = gen_data_y(CAR * 10, DIM)
+    for _ in range(NUM_RUNS):
+        _ = func(data_x, data_y, metric=metric)  # type: ignore[call-arg]
+
+
 __benchmarks__ = [
     (
         partial(bench_func, scipy_func, gen_data),
@@ -63,4 +101,12 @@ __benchmarks__ = [
         name,
     )
     for name, (scipy_func, abd_func, gen_data) in FUNCTIONS.items()
+] + [
+    (
+        partial(bench_pair_func, scipy_func, metric, gen_data_x, gen_data_y),
+        partial(bench_pair_func, abd_func, metric, gen_data_x, gen_data_y),
+        name,
+    )
+    for name, (scipy_func, abd_func, metric, gen_data_x, gen_data_y)
+    in PAIR_FUNCTIONS.items()
 ]
