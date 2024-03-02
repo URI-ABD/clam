@@ -70,15 +70,15 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
     }
 }
 
-///.
+/// 
 pub struct ChunkSettings {
-    ///.
+    /// The axis we'll chunk along
     chunk_along: usize,
-    ///.
+    /// The size (number of indices along the dimesion) of each chunk
     size: usize,
-    ///.
+    /// The path of the containing folder
     path: String,
-    ///.
+    /// True iff. the containing directory should be deleted before chunks are written
     delete_dir: bool,
 }
 
@@ -102,7 +102,7 @@ impl ChunkSettings {
 }
 
 /// .
-pub struct ChunkedArray<T: ReadableElement, D: Dimension> {
+pub struct ChunkedArray<T: ReadableElement> {
     /// The axis along which this Array was chunked along
     pub chunked_along: usize,
     /// The size of each chunk
@@ -114,13 +114,14 @@ pub struct ChunkedArray<T: ReadableElement, D: Dimension> {
 
     ///.
     _t: PhantomData<T>,
-    _d: PhantomData<D>,
 }
 
-impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimension>
-    ChunkedArray<T, D>
+impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArray<T>
 {
-    /// Returns a given slice from the ChunkedArray
+    /// Returns a given slice from the `ChunkedArray`
+    /// # Panics
+    /// This function will panic if chunk files are malformed or if conversions break
+    /// TODO: Improve these docs
     #[must_use]
     #[allow(clippy::unwrap_used)]
     pub fn get(&self, idxs: &[SliceInfoElem]) -> Array<T, IxDyn> {
@@ -156,8 +157,15 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimensio
             // Which chunk is this in?
             let chunk_index = index / self.chunk_size;
 
+            // Adjust the chunk index to be relative to the chunks we loaded
+            // To do this we just note that if we start at chunk n, then the first
+            // chunk is loaded in some chunk n+k. So we just subtract to get the
+            // index k we want
+            let chunk_index = chunk_index - start_chunk;
+
             // What index within that chunk is this in?
             let chunked_axis_index = index % self.chunk_size;
+
 
             // Now, let `idxs` reflect that
             idxs[self.chunked_along] = SliceInfoElem::Index(chunked_axis_index as isize);
@@ -203,7 +211,6 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimensio
             shape,
             path: folder.to_owned(),
             _t: PhantomData,
-            _d: PhantomData,
         })
     }
 
@@ -241,7 +248,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimensio
 
     /// .
     /// # Errors
-    pub fn chunk(arr: &Array<T, D>, settings: &ChunkSettings) -> Result<(), String> {
+    pub fn chunk<D: Dimension>(arr: &Array<T, D>, settings: &ChunkSettings) -> Result<(), String> {
         let path = Path::new(&settings.path);
 
         // Create the directory, etc.
@@ -278,7 +285,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimensio
 
     #[allow(clippy::cast_possible_truncation)]
     /// .
-    fn generate_metadata<A: WritableElement>(
+    fn generate_metadata<A: WritableElement, D: Dimension>(
         arr: &Array<A, D>,
         chunk_along: usize,
         size: usize,

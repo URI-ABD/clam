@@ -37,11 +37,11 @@ fn test_write_simple_array() {
 
     assert_eq!(filenum, files.len());
 
-    let ca = ChunkedArray::<f32, IxDyn>::new(tmp.path().to_str().unwrap()).unwrap();
+    let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
     assert_eq!(ca.chunked_along, chunk_along);
     assert_eq!(ca.chunk_size, size);
     assert_eq!(&ca.shape, &shape);
     assert_eq!(ca.num_chunks(), 3);
 
-    println!("{:?}", ca.get(s![0, .., 0].as_ref()));
+    println!("{:?}", ca.get(s![.., .., 0].as_ref()));
 }
