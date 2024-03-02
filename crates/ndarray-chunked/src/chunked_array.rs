@@ -128,33 +128,33 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         let end_chunk = slice_axis_indices[slice_axis_indices.len() - 1] / self.chunk_size;
 
         // Now load in the actual chunks
-        let chunks: Vec<Array<T, IxDyn>> = (start_chunk..=end_chunk)
-            .map(|n| {
-                let path = self.path.join(format!("chunk{n}.npy"));
-                read_npy(path).unwrap()
-            })
-            .collect();
+        let chunks = (start_chunk..=end_chunk).map(|n| {
+            let path = self.path.join(format!("chunk{n}.npy"));
+            read_npy(path).unwrap()
+        });
 
         // This is just all our chunks concatenated together.
         let chunk: Option<ArrayBase<OwnedRepr<_>, _>> =
-            chunks.into_iter().fold(None, |acc, c| {
-                if let Some(partial) = acc {
-                    let bound =
-                        concatenate(Axis(self.chunked_along), &[partial.view(), c.view()]).unwrap();
-                    Some(bound)
-                } else {
-                    Some(c.to_owned())
-                }
+            chunks.into_iter().fold(None, |acc, c: Array<T, IxDyn>| {
+                acc.map_or_else(
+                    || Some(c.to_owned()),
+                    |partial| {
+                        let bound =
+                            concatenate(Axis(self.chunked_along), &[partial.view(), c.view()])
+                                .unwrap();
+                        Some(bound)
+                    },
+                )
             });
 
-        // Collate all the loaded chunks
+        // TODO: Fix this. I used an option in the fold because its the simplest way of doing it
         let chunk = chunk.unwrap();
 
         // Align the chunked_along axis slicing info to match new `chunk`
+        #[allow(clippy::match_on_vec_items, clippy::cast_possible_wrap)]
         let adjusted_chunk_info = match idxs[self.chunked_along] {
-            #[allow(clippy::cast_possible_wrap)]
             SliceInfoElem::Slice { start, end, step } => {
-                let adj_end = end.map_or(None, |e| Some(e - start));
+                let adj_end = end.map(|e| e - start);
                 SliceInfoElem::Slice {
                     start: start % (self.chunk_size as isize),
                     end: adj_end,
