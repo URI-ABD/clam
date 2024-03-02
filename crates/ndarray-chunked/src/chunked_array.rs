@@ -125,8 +125,7 @@ pub struct ChunkedArray<T: ReadableElement> {
     pub shape: Vec<usize>,
     /// Path to folder containing chunks
     path: PathBuf,
-
-    ///.
+    /// Type of the data associated with the array
     _t: PhantomData<T>,
 }
 
