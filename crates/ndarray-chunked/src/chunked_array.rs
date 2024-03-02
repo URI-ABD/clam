@@ -43,17 +43,6 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
                 (end as isize + *start) as usize
             };
 
-            // let adjusted_stop: usize = match stop {
-            //     Some(s) => {
-            //         if *s >= 0 {
-            //             *s as usize
-            //         } else {
-            //             (end as isize + s) as usize
-            //         }
-            //     }
-            //     None => end,
-            // };
-
             let adjusted_stop: usize = stop.as_ref().map_or(end, |s| {
                 // Again, these are fine
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
@@ -92,8 +81,6 @@ pub struct ChunkSettings {
     size: usize,
     /// The path of the containing folder
     path: String,
-    /// True iff. the containing directory should be deleted before chunks are written
-    delete_dir: bool,
 }
 
 impl ChunkSettings {
@@ -104,14 +91,7 @@ impl ChunkSettings {
             chunk_along,
             size,
             path: path.to_string(),
-            delete_dir: false,
         }
-    }
-
-    /// Warning. Only set this to true you are sure the directory you're pointing to is safe to delete
-    /// Turning this on will delete the directory at `path` if it already exists when writing the new array.
-    pub fn set_delete_dir(&mut self, value: bool) {
-        self.delete_dir = value;
     }
 }
 
@@ -203,13 +183,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         slice.map_or_else(|| ArrayBase::default(vec![0]), |partial| partial)
     }
 
-    ///.
-    #[must_use]
-    pub fn num_chunks(&self) -> usize {
-        let total_along_axis = self.shape[self.chunked_along];
-        (total_along_axis / self.chunk_size) + (total_along_axis % self.chunk_size)
-    }
-
+    /// Attempts to create a new `ChunkedArray` from a given directory
     /// # Errors
     pub fn new(folder: &str) -> Result<Self, String> {
         let folder = Path::new(folder);
@@ -227,11 +201,9 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         })
     }
 
-    ///.
+    /// Loads in `ChunkedArray` metadata from a given directory
     /// # Errors
     fn load_metadata(folder: &Path) -> Result<(Vec<usize>, usize, usize), String> {
-        // Everything is u32
-        //ndim; shape; axis along which the array was split; the max size of each chunk
         let mut handle = File::open(folder.join(METADATA_FILENAME)).map_err(|e| e.to_string())?;
 
         // Buffer
@@ -259,13 +231,13 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         Ok((shape, chunked_along, chunk_size))
     }
 
-    /// .
+    /// Chunks and writes out a given array. Chunking is specified by a `ChunkSettings` instance.
     /// # Errors
     pub fn chunk<D: Dimension>(arr: &Array<T, D>, settings: &ChunkSettings) -> Result<(), String> {
         let path = Path::new(&settings.path);
 
         // Create the directory, etc.
-        Self::handle_directory(path, settings.delete_dir)?;
+        Self::handle_directory(path)?;
 
         // Basic settings
         let (chunk_along, size) = (settings.chunk_along, settings.size);
@@ -296,8 +268,8 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         Ok(())
     }
 
+    /// Generates metadata file for a given array
     #[allow(clippy::cast_possible_truncation)]
-    /// .
     fn generate_metadata<A: WritableElement, D: Dimension>(
         arr: &Array<A, D>,
         chunk_along: usize,
@@ -323,20 +295,17 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             .collect()
     }
 
-    /// Creates the new directory (if necesary)
-    fn handle_directory(path: &Path, delete_dir: bool) -> Result<(), String> {
+    /// Creates the new directory (if necesary) and handles basic errors
+    fn handle_directory(path: &Path) -> Result<(), String> {
         if path.exists() {
             if !path.is_dir() {
                 return Err("Path exists and is not a directory".to_string());
             }
 
             // At this point we know its a directory so we can just check if we're allowed to delete it
-            if !delete_dir && !directory_is_empty(path)? {
-                return Err("Directory exists and `delete_dir` is set to false".to_string());
+            if !directory_is_empty(path)? {
+                return Err("Directory exists".to_string());
             }
-
-            // If we're here, then we can delete the directory and its contents
-            // TODO
         } else {
             // If we're here then we can create the directory
             create_dir(path).map_err(|e| e.to_string())?;

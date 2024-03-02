@@ -2,7 +2,7 @@
 
 use std::fs::read_dir;
 
-use ndarray::{s, Array, Dim, IxDyn};
+use ndarray::{s, Array};
 use ndarray_chunked::chunked_array::{ChunkSettings, ChunkedArray};
 use tempdir::TempDir;
 
@@ -41,7 +41,6 @@ fn test_write_simple_array() {
     assert_eq!(ca.chunked_along, chunk_along);
     assert_eq!(ca.chunk_size, size);
     assert_eq!(&ca.shape, &shape);
-    assert_eq!(ca.num_chunks(), 3);
-
-    println!("{:?}", ca.get(s![.., .., 0].as_ref()));
+    
+    println!("{:?}", ca.get(s![0..; 2, .., ..].as_ref()));
 }
