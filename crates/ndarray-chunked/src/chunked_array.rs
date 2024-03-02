@@ -8,8 +8,7 @@ use std::{
 };
 
 use ndarray::{
-    concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, OwnedRepr, SliceInfo,
-    SliceInfoElem,
+    concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, OwnedRepr, SliceInfo, SliceInfoElem,
 };
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
@@ -26,7 +25,7 @@ fn directory_is_empty(path: &Path) -> Result<bool, String> {
     }
 }
 
-/// Returns the intended list of indices specified by a SliceInfoElem
+/// Returns the intended list of indices specified by a `SliceInfoElem`
 fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
     match info {
         // Need to account for negative indexing
@@ -35,30 +34,45 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
             end: stop,
             step,
         } => {
-            // TODO: This can be fucked up and negative and it shouldnt be
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
             let adjusted_start = if *start >= 0 {
+                // This conversion is fine because we require it to be nonnegative to get here
                 (*start) as usize
             } else {
+                // This conversion is also fine because this value is assumed to be less than `-end`.
                 (end as isize + *start) as usize
             };
 
-            // TODO: Again
-            let adjusted_stop: usize = match stop {
-                Some(s) => {
-                    if *s >= 0 {
-                        *s as usize
-                    } else {
-                        (end as isize + s) as usize
-                    }
-                }
-                None => end,
-            };
+            // let adjusted_stop: usize = match stop {
+            //     Some(s) => {
+            //         if *s >= 0 {
+            //             *s as usize
+            //         } else {
+            //             (end as isize + s) as usize
+            //         }
+            //     }
+            //     None => end,
+            // };
 
+            let adjusted_stop: usize = stop.as_ref().map_or(end, |s| {
+                // Again, these are fine
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+                if *s >= 0 {
+                    *s as usize
+                } else {
+                    (end as isize + s) as usize
+                }
+            });
+
+            // TODO: Negative stepping
+            #[allow(clippy::cast_sign_loss)]
             (adjusted_start..adjusted_stop)
                 .step_by(*step as usize)
                 .collect()
         }
+
         SliceInfoElem::Index(x) => {
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
             let x = if *x >= 0 {
                 *x as usize
             } else {
@@ -70,7 +84,7 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
     }
 }
 
-/// 
+///
 pub struct ChunkSettings {
     /// The axis we'll chunk along
     chunk_along: usize,
@@ -116,8 +130,7 @@ pub struct ChunkedArray<T: ReadableElement> {
     _t: PhantomData<T>,
 }
 
-impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArray<T>
-{
+impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArray<T> {
     /// Returns a given slice from the `ChunkedArray`
     /// # Panics
     /// This function will panic if chunk files are malformed or if conversions break
@@ -166,9 +179,10 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             // What index within that chunk is this in?
             let chunked_axis_index = index % self.chunk_size;
 
-
-            // Now, let `idxs` reflect that
-            idxs[self.chunked_along] = SliceInfoElem::Index(chunked_axis_index as isize);
+            // Now, let `idxs` reflect that. Casting here is fine because `chunked_axis_index` isn't going to overflow
+            #[allow(clippy::cast_possible_wrap)]
+            let new_index = SliceInfoElem::Index(chunked_axis_index as isize);
+            idxs[self.chunked_along] = new_index;
 
             // Create our SliceInfo
             let sliceinfo: SliceInfo<_, IxDyn, IxDyn> =
