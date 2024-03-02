@@ -10,6 +10,7 @@ use std::{
 use ndarray::{
     concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, OwnedRepr, SliceInfo, SliceInfoElem,
 };
+
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
 ///.
@@ -84,7 +85,7 @@ pub struct ChunkSettings {
 }
 
 impl ChunkSettings {
-    /// .
+    /// Constructs a new `ChunkSettings`
     #[must_use]
     pub fn new(chunk_along: usize, size: usize, path: &str) -> Self {
         Self {
@@ -95,7 +96,7 @@ impl ChunkSettings {
     }
 }
 
-/// .
+/// The `ChunkedArray` data structure. Currently without any caching
 pub struct ChunkedArray<T: ReadableElement> {
     /// The axis along which this Array was chunked along
     pub chunked_along: usize,
@@ -136,40 +137,33 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             })
             .collect();
 
-        // So now our array is a subset of \bigcup_{c\in chunks} c.
-        // chunk is equal to our original array sliced with [.., ..,start_chunk..end_chunk,...,...] along
-        // the original chunked axis.
+        // So now the array we want is a subset of \bigcup_{c\in chunks} c.
         //
         // Now, all we need to do is find each index along the chunking axis that we want, get that chunk
-        // and that index, and concatenate everything together. To do that, we're gonna modify the chunked_along
-        // slice to just an index that corresponds to `slice_axis_indices`
-
+        // at that index, and concatenate everything together. For that, we're going to slice each index
+        // individually and then glue them all together along that axis.
         let mut slice: Option<ArrayBase<OwnedRepr<_>, _>> = None;
         for index in slice_axis_indices {
             // Which chunk is this in?
-            let chunk_index = index / self.chunk_size;
-
-            // Adjust the chunk index to be relative to the chunks we loaded
-            // To do this we just note that if we start at chunk n, then the first
-            // chunk is loaded in some chunk n+k. So we just subtract to get the
-            // index k we want
-            let chunk_index = chunk_index - start_chunk;
+            // We subtract `start_chunk` because `chunk_index` should be relative to `start_chunk`
+            let chunk_index = (index / self.chunk_size) - start_chunk;
 
             // What index within that chunk is this in?
             let chunked_axis_index = index % self.chunk_size;
 
-            // Now, let `idxs` reflect that. Casting here is fine because `chunked_axis_index` isn't going to overflow
+            // Now, we're going to set up our slice to be at location `index` along the chunked axis
             #[allow(clippy::cast_possible_wrap)]
             let new_index = SliceInfoElem::Index(chunked_axis_index as isize);
             idxs[self.chunked_along] = new_index;
 
-            // Create our SliceInfo
+            // Create our sliceinfo so we can actually slice
             let sliceinfo: SliceInfo<_, IxDyn, IxDyn> =
                 (idxs.as_ref() as &[SliceInfoElem]).try_into().unwrap();
 
-            // Then, we can just slice at the chunk
+            // Grab the slice
             let chunk_slice = chunks[chunk_index].slice(sliceinfo);
 
+            // Finally, we want to concat the slice to our current collection of slices
             if let Some(partial) = slice {
                 let bound =
                     concatenate(Axis(self.chunked_along), &[partial.view(), chunk_slice]).unwrap();
