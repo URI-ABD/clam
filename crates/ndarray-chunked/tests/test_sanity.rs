@@ -41,6 +41,6 @@ fn test_write_simple_array() {
     assert_eq!(ca.chunked_along, chunk_along);
     assert_eq!(ca.chunk_size, size);
     assert_eq!(&ca.shape, &shape);
-    
+
     println!("{:?}", ca.get(s![0..; 2, .., ..].as_ref()));
 }
