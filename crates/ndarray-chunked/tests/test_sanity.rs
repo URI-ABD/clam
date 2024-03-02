@@ -2,7 +2,7 @@
 
 use std::fs::read_dir;
 
-use ndarray::{s, Array, Dim};
+use ndarray::{s, Array, Dim, IxDyn};
 use ndarray_chunked::chunked_array::{ChunkSettings, ChunkedArray};
 use tempdir::TempDir;
 
@@ -25,8 +25,8 @@ fn generate_dummy_data(dirname: &str, chunk_along: usize, size: usize, shape: &[
 #[test]
 fn test_write_simple_array() {
     let chunk_along = 0;
-    let size = 1;
-    let shape = [3, 3, 3];
+    let size = 3;
+    let shape = [9, 3, 3];
     let filenum = shape[chunk_along] / size + 1;
     let dirname = "test_chunked_arr";
 
@@ -37,11 +37,11 @@ fn test_write_simple_array() {
 
     assert_eq!(filenum, files.len());
 
-    let ca = ChunkedArray::<f32, Dim<[usize; 3]>>::new(tmp.path().to_str().unwrap()).unwrap();
+    let ca = ChunkedArray::<f32, IxDyn>::new(tmp.path().to_str().unwrap()).unwrap();
     assert_eq!(ca.chunked_along, chunk_along);
     assert_eq!(ca.chunk_size, size);
     assert_eq!(&ca.shape, &shape);
     assert_eq!(ca.num_chunks(), 3);
 
-    ca.get(s![0, 0, 0]);
+    println!("{:?}", ca.get(s![0, .., 0].as_ref()));
 }

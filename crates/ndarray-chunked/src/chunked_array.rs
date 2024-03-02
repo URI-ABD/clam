@@ -7,7 +7,10 @@ use std::{
     vec,
 };
 
-use ndarray::{Array, Axis, Dim, Dimension, IxDyn, SliceInfo, SliceInfoElem};
+use ndarray::{
+    concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, OwnedRepr, SliceInfo,
+    SliceInfoElem,
+};
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
 ///.
@@ -114,14 +117,14 @@ pub struct ChunkedArray<T: ReadableElement, D: Dimension> {
     _d: PhantomData<D>,
 }
 
-impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimension> ChunkedArray<T, D> {
+impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimension>
+    ChunkedArray<T, D>
+{
     /// Returns a given slice from the ChunkedArray
     #[must_use]
-    pub fn get<Dout: Dimension, const N: usize>(
-        &self,
-        idxs: SliceInfo<[SliceInfoElem; N], D, Dout>,
-    ) -> Array<T, Dout> {
-        let idxs = idxs.as_ref();
+    #[allow(clippy::unwrap_used)]
+    pub fn get(&self, idxs: &[SliceInfoElem]) -> Array<T, IxDyn> {
+        let mut idxs = idxs.to_owned();
 
         // Now we need to resolve which chunks we actually need
         let info = idxs[self.chunked_along];
@@ -130,30 +133,53 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimensio
 
         // Before we load in the chunks we first need to calculate which chunks we'll even need
         let start_chunk = slice_axis_indices[0] / self.chunk_size;
-        let end_chunk = slice_axis_indices[slice_axis_indices.len()] / self.chunk_size;
+        let end_chunk = slice_axis_indices[slice_axis_indices.len() - 1] / self.chunk_size;
 
         // Now load in the actual chunks
-        let chunks: Vec<Array<T, D>> = (start_chunk..end_chunk)
+        let chunks: Vec<Array<T, IxDyn>> = (start_chunk..=end_chunk)
             .map(|n| {
                 let path = self.path.join(format!("chunk{n}.npy"));
                 read_npy(path).unwrap()
             })
             .collect();
 
-        // Now we need to iterate along the sliced axis and slice correctly
-        //Todo this, we need to generate a new list of SliceInfoElems
-        
-        for n in slice_axis_indices {
-            let n = n - start_chunk;
-            idxs[self.chunked_along] = SliceInfoElem::Index(n as isize);
+        // So now our array is a subset of \bigcup_{c\in chunks} c.
+        // chunk is equal to our original array sliced with [.., ..,start_chunk..end_chunk,...,...] along
+        // the original chunked axis.
+        //
+        // Now, all we need to do is find each index along the chunking axis that we want, get that chunk
+        // and that index, and concatenate everything together. To do that, we're gonna modify the chunked_along
+        // slice to just an index that corresponds to `slice_axis_indices`
 
-            let chunk_needed = 0;
-            chunks[chunk_needed].slice(idxs);
+        let mut slice: Option<ArrayBase<OwnedRepr<_>, _>> = None;
+        for index in slice_axis_indices {
+            // Which chunk is this in?
+            let chunk_index = index / self.chunk_size;
+
+            // What index within that chunk is this in?
+            let chunked_axis_index = index % self.chunk_size;
+
+            // Now, let `idxs` reflect that
+            idxs[self.chunked_along] = SliceInfoElem::Index(chunked_axis_index as isize);
+
+            // Create our SliceInfo
+            let sliceinfo: SliceInfo<_, IxDyn, IxDyn> =
+                (idxs.as_ref() as &[SliceInfoElem]).try_into().unwrap();
+
+            // Then, we can just slice at the chunk
+            let chunk_slice = chunks[chunk_index].slice(sliceinfo);
+
+            if let Some(partial) = slice {
+                let bound =
+                    concatenate(Axis(self.chunked_along), &[partial.view(), chunk_slice]).unwrap();
+                slice = Some(bound);
+            } else {
+                slice = Some(chunk_slice.to_owned());
+            }
         }
 
-        // Then, for each index we actually need, we want to change the slice
-
-        Default::default()
+        // Clippy suggested this but I don't like it over a match or an if let
+        slice.map_or_else(|| ArrayBase::default(vec![0]), |partial| partial)
     }
 
     ///.
@@ -215,10 +241,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimensio
 
     /// .
     /// # Errors
-    pub fn chunk(
-        arr: &Array<T, D>,
-        settings: &ChunkSettings,
-    ) -> Result<(), String> {
+    pub fn chunk(arr: &Array<T, D>, settings: &ChunkSettings) -> Result<(), String> {
         let path = Path::new(&settings.path);
 
         // Create the directory, etc.
