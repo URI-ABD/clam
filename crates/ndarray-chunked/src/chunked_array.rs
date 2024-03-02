@@ -1,19 +1,13 @@
 use std::{
-    collections::{btree_map::Range, HashSet},
     fmt::Debug,
     fs::{create_dir, File},
     io::{Read, Write},
     marker::PhantomData,
-    ops::RangeInclusive,
     path::{Path, PathBuf},
     vec,
 };
 
-/*
-    Need to understand how slicing is going to work.
-*/
-
-use ndarray::{concatenate, Array, ArrayD, Axis, Dim, Dimension, IxDyn};
+use ndarray::{Array, Axis, Dim, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
 ///.
@@ -26,6 +20,50 @@ fn directory_is_empty(path: &Path) -> Result<bool, String> {
         Ok(path.read_dir().map_err(|e| e.to_string())?.next().is_none())
     } else {
         Ok(false)
+    }
+}
+
+/// Returns the intended list of indices specified by a SliceInfoElem
+fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
+    match info {
+        // Need to account for negative indexing
+        SliceInfoElem::Slice {
+            start,
+            end: stop,
+            step,
+        } => {
+            // TODO: This can be fucked up and negative and it shouldnt be
+            let adjusted_start = if *start >= 0 {
+                (*start) as usize
+            } else {
+                (end as isize + *start) as usize
+            };
+
+            // TODO: Again
+            let adjusted_stop: usize = match stop {
+                Some(s) => {
+                    if *s >= 0 {
+                        *s as usize
+                    } else {
+                        (end as isize + s) as usize
+                    }
+                }
+                None => end,
+            };
+
+            (adjusted_start..adjusted_stop)
+                .step_by(*step as usize)
+                .collect()
+        }
+        SliceInfoElem::Index(x) => {
+            let x = if *x >= 0 {
+                *x as usize
+            } else {
+                (end as isize + x) as usize
+            };
+            vec![x]
+        }
+        SliceInfoElem::NewAxis => todo!(),
     }
 }
 
@@ -60,125 +98,66 @@ impl ChunkSettings {
     }
 }
 
-///.
-pub enum SliceIdx {
-    ///.
-    Range(std::ops::Range<usize>),
-    /// From a to end
-    RangeFrom(std::ops::RangeFrom<usize>),
-    /// ...
-    RangeFull,
-    /// To a to =b
-    RangeInclusive(std::ops::RangeInclusive<usize>),
-    /// From 0 to a
-    RangeTo(std::ops::RangeTo<usize>),
-    /// From 0 to =a
-    RangeToInclusive(std::ops::RangeToInclusive<usize>),
-    ///.
-    Index(usize),
-}
-
-impl SliceIdx {
-    ///.
-    fn to_range_inclusive(&self, lower: usize, upper: usize) -> RangeInclusive<usize> {
-        match &self {
-            Self::Index(i) => *i..=*i,
-            Self::Range(r) => r.start..=(r.end - 1),
-            Self::RangeFrom(r) => r.start..=upper,
-            Self::RangeFull => lower..=(upper - 1),
-            Self::RangeInclusive(r) => r.clone(),
-            Self::RangeTo(r) => lower..=(r.end - 1),
-            Self::RangeToInclusive(r) => lower..=r.end,
-        }
-    }
-}
-
 /// .
-pub struct ChunkedArray<T: ReadableElement> {
-    ///.
+pub struct ChunkedArray<T: ReadableElement, D: Dimension> {
+    /// The axis along which this Array was chunked along
     pub chunked_along: usize,
-    ///.
+    /// The size of each chunk
     pub chunk_size: usize,
-    ///.
+    /// The overall shape of the original array
     pub shape: Vec<usize>,
     /// Path to folder containing chunks
-    _path: PathBuf,
+    path: PathBuf,
 
-    _t: PhantomData<T>,
-}
-
-impl From<usize> for SliceIdx {
-    fn from(value: usize) -> Self {
-        Self::Index(value)
-    }
-}
-
-impl From<std::ops::Range<usize>> for SliceIdx {
-    fn from(value: std::ops::Range<usize>) -> Self {
-        Self::Range(value)
-    }
-}
-
-impl From<std::ops::RangeFrom<usize>> for SliceIdx {
-    fn from(value: std::ops::RangeFrom<usize>) -> Self {
-        Self::RangeFrom(value)
-    }
-}
-impl From<std::ops::RangeFull> for SliceIdx {
-    fn from(_value: std::ops::RangeFull) -> Self {
-        Self::RangeFull
-    }
-}
-impl From<std::ops::RangeInclusive<usize>> for SliceIdx {
-    fn from(value: std::ops::RangeInclusive<usize>) -> Self {
-        Self::RangeInclusive(value)
-    }
-}
-impl From<std::ops::RangeTo<usize>> for SliceIdx {
-    fn from(value: std::ops::RangeTo<usize>) -> Self {
-        Self::RangeTo(value)
-    }
-}
-impl From<std::ops::RangeToInclusive<usize>> for SliceIdx {
-    fn from(value: std::ops::RangeToInclusive<usize>) -> Self {
-        Self::RangeToInclusive(value)
-    }
-}
-impl<T: ReadableElement + Clone + Default + Debug> ChunkedArray<T> {
     ///.
-    pub fn get(&self, idxs: &[SliceIdx]) -> Vec<usize> {
-        assert!(idxs.len() == self.shape.len());
+    _t: PhantomData<T>,
+    _d: PhantomData<D>,
+}
 
-        let split_slice = &idxs[self.chunked_along];
-        let split_length = self.shape[self.chunked_along];
-        let chunk_range = split_slice.to_range_inclusive(0, split_length);
+impl<T: ReadableElement + WritableElement + Clone + Default + Debug, D: Dimension> ChunkedArray<T, D> {
+    /// Returns a given slice from the ChunkedArray
+    #[must_use]
+    pub fn get<Dout: Dimension, const N: usize>(
+        &self,
+        idxs: SliceInfo<[SliceInfoElem; N], D, Dout>,
+    ) -> Array<T, Dout> {
+        let idxs = idxs.as_ref();
 
-        let begin = chunk_range.start() / self.chunk_size;
-        let end = chunk_range.end() / self.chunk_size;
+        // Now we need to resolve which chunks we actually need
+        let info = idxs[self.chunked_along];
+        let slice_axis_indices: Vec<usize> =
+            slice_info_to_vec(&info, self.shape[self.chunked_along]);
 
-        let needed: Vec<_> = (begin..=end).collect();
+        // Before we load in the chunks we first need to calculate which chunks we'll even need
+        let start_chunk = slice_axis_indices[0] / self.chunk_size;
+        let end_chunk = slice_axis_indices[slice_axis_indices.len()] / self.chunk_size;
 
-        println!("{needed:?}");
-
-        let chunks: Vec<Array<T, IxDyn>> = needed
-            .iter()
-            .map(|ix| {
-                read_npy::<PathBuf, Array<T, IxDyn>>(self._path.join(format!("chunk{ix}.npy")))
-                    .unwrap()
+        // Now load in the actual chunks
+        let chunks: Vec<Array<T, D>> = (start_chunk..end_chunk)
+            .map(|n| {
+                let path = self.path.join(format!("chunk{n}.npy"));
+                read_npy(path).unwrap()
             })
             .collect();
 
-        let mut end = chunks[0].to_owned();
-        for chunk in &chunks[1..] {
-            end = concatenate(Axis(self.chunked_along), &[end.view(), chunk.view()])
-                .unwrap()
-                .to_owned();
+        // Now we need to iterate along the sliced axis and slice correctly
+        //Todo this, we need to generate a new list of SliceInfoElems
+        
+        for n in slice_axis_indices {
+            let n = n - start_chunk;
+            idxs[self.chunked_along] = SliceInfoElem::Index(n as isize);
+
+            let chunk_needed = 0;
+            chunks[chunk_needed].slice(idxs);
         }
 
-        vec![]
+        // Then, for each index we actually need, we want to change the slice
+
+        Default::default()
     }
 
     ///.
+    #[must_use]
     pub fn num_chunks(&self) -> usize {
         let total_along_axis = self.shape[self.chunked_along];
         (total_along_axis / self.chunk_size) + (total_along_axis % self.chunk_size)
@@ -196,8 +175,9 @@ impl<T: ReadableElement + Clone + Default + Debug> ChunkedArray<T> {
             chunked_along,
             chunk_size,
             shape,
-            _path: folder.to_owned(),
+            path: folder.to_owned(),
             _t: PhantomData,
+            _d: PhantomData,
         })
     }
 
@@ -235,8 +215,8 @@ impl<T: ReadableElement + Clone + Default + Debug> ChunkedArray<T> {
 
     /// .
     /// # Errors
-    pub fn chunk<A: WritableElement, D: Dimension>(
-        arr: &Array<A, D>,
+    pub fn chunk(
+        arr: &Array<T, D>,
         settings: &ChunkSettings,
     ) -> Result<(), String> {
         let path = Path::new(&settings.path);
@@ -275,7 +255,7 @@ impl<T: ReadableElement + Clone + Default + Debug> ChunkedArray<T> {
 
     #[allow(clippy::cast_possible_truncation)]
     /// .
-    fn generate_metadata<A: WritableElement, D: Dimension>(
+    fn generate_metadata<A: WritableElement>(
         arr: &Array<A, D>,
         chunk_along: usize,
         size: usize,
