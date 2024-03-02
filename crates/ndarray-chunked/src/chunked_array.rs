@@ -33,7 +33,7 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
         SliceInfoElem::Slice {
             start,
             end: stop,
-            step,
+            step: _,
         } => {
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
             let adjusted_start = if *start >= 0 {
@@ -56,9 +56,7 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
 
             // TODO: Negative stepping
             #[allow(clippy::cast_sign_loss)]
-            (adjusted_start..adjusted_stop)
-                .step_by(*step as usize)
-                .collect()
+            (adjusted_start..adjusted_stop).collect()
         }
 
         SliceInfoElem::Index(x) => {
@@ -137,44 +135,47 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             })
             .collect();
 
-        // So now the array we want is a subset of \bigcup_{c\in chunks} c.
-        //
-        // Now, all we need to do is find each index along the chunking axis that we want, get that chunk
-        // at that index, and concatenate everything together. For that, we're going to slice each index
-        // individually and then glue them all together along that axis.
-        let mut slice: Option<ArrayBase<OwnedRepr<_>, _>> = None;
-        for index in slice_axis_indices {
-            // Which chunk is this in?
-            // We subtract `start_chunk` because `chunk_index` should be relative to `start_chunk`
-            let chunk_index = (index / self.chunk_size) - start_chunk;
+        // This is just all our chunks concatenated together.
+        let chunk: Option<ArrayBase<OwnedRepr<_>, _>> =
+            chunks.into_iter().fold(None, |acc, c| {
+                if let Some(partial) = acc {
+                    let bound =
+                        concatenate(Axis(self.chunked_along), &[partial.view(), c.view()]).unwrap();
+                    Some(bound)
+                } else {
+                    Some(c.to_owned())
+                }
+            });
 
-            // What index within that chunk is this in?
-            let chunked_axis_index = index % self.chunk_size;
+        // Collate all the loaded chunks
+        let chunk = chunk.unwrap();
 
-            // Now, we're going to set up our slice to be at location `index` along the chunked axis
+        // Align the chunked_along axis slicing info to match new `chunk`
+        let adjusted_chunk_info = match idxs[self.chunked_along] {
             #[allow(clippy::cast_possible_wrap)]
-            let new_index = SliceInfoElem::Index(chunked_axis_index as isize);
-            idxs[self.chunked_along] = new_index;
-
-            // Create our sliceinfo so we can actually slice
-            let sliceinfo: SliceInfo<_, IxDyn, IxDyn> =
-                (idxs.as_ref() as &[SliceInfoElem]).try_into().unwrap();
-
-            // Grab the slice
-            let chunk_slice = chunks[chunk_index].slice(sliceinfo);
-
-            // Finally, we want to concat the slice to our current collection of slices
-            if let Some(partial) = slice {
-                let bound =
-                    concatenate(Axis(self.chunked_along), &[partial.view(), chunk_slice]).unwrap();
-                slice = Some(bound);
-            } else {
-                slice = Some(chunk_slice.to_owned());
+            SliceInfoElem::Slice { start, end, step } => {
+                let adj_end = end.map_or(None, |e| Some(e - start));
+                SliceInfoElem::Slice {
+                    start: start % (self.chunk_size as isize),
+                    end: adj_end,
+                    step,
+                }
             }
-        }
 
-        // Clippy suggested this but I don't like it over a match or an if let
-        slice.map_or_else(|| ArrayBase::default(vec![0]), |partial| partial)
+            #[allow(clippy::cast_possible_wrap)]
+            SliceInfoElem::Index(i) => SliceInfoElem::Index(i % (self.chunk_size as isize)),
+            SliceInfoElem::NewAxis => todo!(),
+        };
+
+        // Align the axis beginning
+        idxs[self.chunked_along] = adjusted_chunk_info;
+
+        // Generate the slice info
+        let sliceinfo: SliceInfo<_, IxDyn, IxDyn> =
+            (idxs.as_ref() as &[SliceInfoElem]).try_into().unwrap();
+
+        // Slice the chunk
+        chunk.slice(sliceinfo).to_owned()
     }
 
     /// Attempts to create a new `ChunkedArray` from a given directory
