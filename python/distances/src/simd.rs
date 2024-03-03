@@ -70,7 +70,7 @@ fn cdist_f32(
         "cosine" => simd::cosine_f32,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
-    Ok(PyArray2::from_vec2(py, &super::vectors::cdist_helper(a, b, func))?.to_owned())
+    Ok(PyArray2::from_vec2(py, &super::utils::_cdist(a, b, func))?.to_owned())
 }
 
 /// Computes the distance each pair of the two collections of inputs.
@@ -87,7 +87,7 @@ fn cdist_f64(
         "cosine" => simd::cosine_f64,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
-    Ok(PyArray2::from_vec2(py, &super::vectors::cdist_helper(a, b, func))?.to_owned())
+    Ok(PyArray2::from_vec2(py, &super::utils::_cdist(a, b, func))?.to_owned())
 }
 
 /// Computes the pairwise distances between all vectors in the collection.
@@ -103,7 +103,7 @@ fn pdist_f32(
         "cosine" => simd::cosine_f32,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
-    Ok(super::vectors::pdist_helper(py, a, func))
+    Ok(super::utils::_pdist(py, a, func))
 }
 
 /// Computes the pairwise distances between all vectors in the collection.
@@ -119,5 +119,5 @@ fn pdist_f64(
         "cosine" => simd::cosine_f64,
         _ => return Err(PyValueError::new_err("Invalid metric")),
     };
-    Ok(super::vectors::pdist_helper(py, a, func))
+    Ok(super::utils::_pdist(py, a, func))
 }

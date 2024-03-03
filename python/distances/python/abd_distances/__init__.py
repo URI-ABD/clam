@@ -2,12 +2,12 @@
 
 from . import simd
 from . import strings
-from . import vectors
+from . import typeless_vectors
 
 __all__ = [
     "simd",
     "strings",
-    "vectors",
+    "typeless_vectors",
 ]
 
 __version__ = "1.0.0-dev0"
