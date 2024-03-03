@@ -31,7 +31,7 @@ jobs:
             rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.9'
       - uses: pre-commit/action@v3.0.0
 
   tests:
