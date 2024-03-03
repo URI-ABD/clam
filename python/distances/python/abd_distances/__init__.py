@@ -2,12 +2,14 @@
 
 from . import simd
 from . import strings
-from . import typeless_vectors
+from . import vectors
+
+setattr(vectors, "cityblock", vectors.manhattan)  # noqa: B010
 
 __all__ = [
     "simd",
     "strings",
-    "typeless_vectors",
+    "vectors",
 ]
 
 __version__ = "1.0.0-dev0"

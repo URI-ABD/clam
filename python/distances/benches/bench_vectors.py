@@ -6,7 +6,7 @@ from functools import partial
 import numpy
 import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
-from abd_distances import typeless_vectors as vectors
+from abd_distances import vectors
 
 setattr(scipy_distance, "manhattan", scipy_distance.cityblock)  # noqa: B010
 setattr(scipy_distance, "minkowski-3", partial(scipy_distance.minkowski, p=3))

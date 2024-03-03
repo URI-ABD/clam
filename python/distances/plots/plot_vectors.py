@@ -18,16 +18,6 @@ Functions = tuple[
 ]
 
 
-def scipy_l3(a: numpy.ndarray, b: numpy.ndarray) -> float:
-    """Compute the L3 norm using scipy."""
-    return scipy_distance.minkowski(a, b, 3)
-
-
-def scipy_l4(a: numpy.ndarray, b: numpy.ndarray) -> float:
-    """Compute the L4 norm using scipy."""
-    return scipy_distance.minkowski(a, b, 4)
-
-
 FUNCTION_PAIRS: dict[str, Functions] = {
     "SIMD Euclidean, f32": (simd_distances.euclidean_f32, scipy_distance.euclidean, utils.data_f32),  # noqa: E501
     "SIMD Euclidean, f64": (simd_distances.euclidean_f64, scipy_distance.euclidean, utils.data_f64),  # noqa: E501
@@ -35,26 +25,22 @@ FUNCTION_PAIRS: dict[str, Functions] = {
     "SIMD Squared Euclidean, f64": (simd_distances.sqeuclidean_f64, scipy_distance.sqeuclidean, utils.data_f64),  # noqa: E501
     "SIMD Cosine, f32": (simd_distances.cosine_f32, scipy_distance.cosine, utils.data_f32),  # noqa: E501
     "SIMD Cosine, f64": (simd_distances.cosine_f64, scipy_distance.cosine, utils.data_f64),  # noqa: E501
-    "Chebyshev, f32": (vector_distances.chebyshev_f32, scipy_distance.chebyshev, utils.data_f32),  # noqa: E501
-    "Chebyshev, f64": (vector_distances.chebyshev_f64, scipy_distance.chebyshev, utils.data_f64),  # noqa: E501
-    "Euclidean, f32": (vector_distances.euclidean_f32, scipy_distance.euclidean, utils.data_f32),  # noqa: E501
-    "Euclidean, f64": (vector_distances.euclidean_f64, scipy_distance.euclidean, utils.data_f64),  # noqa: E501
-    "Squared Euclidean, f32": (vector_distances.sqeuclidean_f32, scipy_distance.sqeuclidean, utils.data_f32),  # noqa: E501
-    "Squared Euclidean, f64": (vector_distances.sqeuclidean_f64, scipy_distance.sqeuclidean, utils.data_f64),  # noqa: E501
-    "L3, f32": (vector_distances.l3_distance_f32, scipy_l3, utils.data_f32),  # noqa: E501
-    "L3, f64": (vector_distances.l3_distance_f64, scipy_l3, utils.data_f64),  # noqa: E501
-    "L4, f32": (vector_distances.l4_distance_f32, scipy_l4, utils.data_f32),  # noqa: E501
-    "L4, f64": (vector_distances.l4_distance_f64, scipy_l4, utils.data_f64),  # noqa: E501
-    "Manhattan, f32": (vector_distances.manhattan_f32, scipy_distance.cityblock, utils.data_f32),  # noqa: E501
-    "Manhattan, f64": (vector_distances.manhattan_f64, scipy_distance.cityblock, utils.data_f64),  # noqa: E501
-    "Canberra, f32": (vector_distances.canberra_f32, scipy_distance.canberra, utils.data_f32),  # noqa: E501
-    "Canberra, f64": (vector_distances.canberra_f64, scipy_distance.canberra, utils.data_f64),  # noqa: E501
-    "Cosine, f32": (vector_distances.cosine_f32, scipy_distance.cosine, utils.data_f32),  # noqa: E501
-    "Cosine, f64": (vector_distances.cosine_f64, scipy_distance.cosine, utils.data_f64),  # noqa: E501
-    "Bray-Curtis, u32": (vector_distances.braycurtis_u32, scipy_distance.braycurtis, utils.data_u32),  # noqa: E501
-    "Bray-Curtis, u64": (vector_distances.braycurtis_u64, scipy_distance.braycurtis, utils.data_u64),  # noqa: E501
-    "Hamming, i32": (vector_distances.hamming_i32, scipy_distance.hamming, utils.data_i32),  # noqa: E501
-    "Hamming, i64": (vector_distances.hamming_i64, scipy_distance.hamming, utils.data_i64),  # noqa: E501
+    "Chebyshev, f32": (vector_distances.chebyshev, scipy_distance.chebyshev, utils.data_f32),  # noqa: E501
+    "Chebyshev, f64": (vector_distances.chebyshev, scipy_distance.chebyshev, utils.data_f64),  # noqa: E501
+    "Euclidean, f32": (vector_distances.euclidean, scipy_distance.euclidean, utils.data_f32),  # noqa: E501
+    "Euclidean, f64": (vector_distances.euclidean, scipy_distance.euclidean, utils.data_f64),  # noqa: E501
+    "Squared Euclidean, f32": (vector_distances.sqeuclidean, scipy_distance.sqeuclidean, utils.data_f32),  # noqa: E501
+    "Squared Euclidean, f64": (vector_distances.sqeuclidean, scipy_distance.sqeuclidean, utils.data_f64),  # noqa: E501
+    "Manhattan, f32": (vector_distances.manhattan, scipy_distance.cityblock, utils.data_f32),  # noqa: E501
+    "Manhattan, f64": (vector_distances.manhattan, scipy_distance.cityblock, utils.data_f64),  # noqa: E501
+    "Canberra, f32": (vector_distances.canberra, scipy_distance.canberra, utils.data_f32),  # type: ignore[attr-defined]  # noqa: E501
+    "Canberra, f64": (vector_distances.canberra, scipy_distance.canberra, utils.data_f64),  # type: ignore[attr-defined]  # noqa: E501
+    "Cosine, f32": (vector_distances.cosine, scipy_distance.cosine, utils.data_f32),  # noqa: E501
+    "Cosine, f64": (vector_distances.cosine, scipy_distance.cosine, utils.data_f64),  # noqa: E501
+    "Bray-Curtis, u32": (vector_distances.braycurtis, scipy_distance.braycurtis, utils.data_u32),  # type: ignore[attr-defined]  # noqa: E501
+    "Bray-Curtis, u64": (vector_distances.braycurtis, scipy_distance.braycurtis, utils.data_u64),  # type: ignore[attr-defined]  # noqa: E501
+    "Hamming, i32": (vector_distances.hamming, scipy_distance.hamming, utils.data_i32),  # type: ignore[attr-defined]  # noqa: E501
+    "Hamming, i64": (vector_distances.hamming, scipy_distance.hamming, utils.data_i64),  # type: ignore[attr-defined]  # noqa: E501
 }
 
 

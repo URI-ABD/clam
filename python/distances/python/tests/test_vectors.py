@@ -6,7 +6,7 @@ from functools import partial
 
 import numpy
 import scipy.spatial.distance as scipy_distance
-from abd_distances import typeless_vectors as abd_distances
+from abd_distances import vectors as abd_distances
 
 Functions = tuple[
     typing.Callable[[numpy.ndarray, numpy.ndarray], float],

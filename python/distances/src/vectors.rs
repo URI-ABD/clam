@@ -12,7 +12,7 @@ use crate::utils::Scalar;
 use super::utils::{parse_metric, Vector1, Vector2, _cdist, _pdist};
 
 pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "typeless_vectors")?;
+    let m = PyModule::new(py, "vectors")?;
     m.add_function(wrap_pyfunction!(chebyshev, m)?)?;
     m.add_function(wrap_pyfunction!(euclidean, m)?)?;
     m.add_function(wrap_pyfunction!(sqeuclidean, m)?)?;
