@@ -2,6 +2,8 @@
 
 from .abd_distances import vectors
 
+braycurtis = vectors.braycurtis
+canberra = vectors.canberra
 chebyshev = vectors.chebyshev
 euclidean = vectors.euclidean
 sqeuclidean = vectors.sqeuclidean
@@ -13,6 +15,8 @@ pdist = vectors.pdist
 
 
 __all__ = [
+    "braycurtis",
+    "canberra",
     "chebyshev",
     "euclidean",
     "sqeuclidean",

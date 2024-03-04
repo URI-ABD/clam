@@ -5,6 +5,16 @@ import typing
 import numpy
 
 
+def braycurtis(a: numpy.ndarray, b: numpy.ndarray) -> float:
+    """Bray-Curtis distance between two vectors."""
+    ...
+
+
+def canberra(a: numpy.ndarray, b: numpy.ndarray) -> float:
+    """Canberra distance between two vectors."""
+    ...
+
+
 def chebyshev(a: numpy.ndarray, b: numpy.ndarray) -> float:
     """Chebyshev distance between two vectors."""
     ...

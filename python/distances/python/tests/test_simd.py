@@ -15,16 +15,10 @@ Functions = tuple[
 METRICS = ["euclidean", "sqeuclidean", "cosine"]
 
 
-SIMD_F32: dict[str, Functions] = {
-    "Euclidean f32": (simd_distances.euclidean_f32, scipy_distance.euclidean),
-    "SqEuclidean f32": (simd_distances.sqeuclidean_f32, scipy_distance.sqeuclidean),
-    "Cosine f32": (simd_distances.cosine_f32, scipy_distance.cosine),
-}
-
-SIMD_F64: dict[str, Functions] = {
-    "Euclidean f64": (simd_distances.euclidean_f64, scipy_distance.euclidean),
-    "SqEuclidean f64": (simd_distances.sqeuclidean_f64, scipy_distance.sqeuclidean),
-    "Cosine f64": (simd_distances.cosine_f64, scipy_distance.cosine),
+FUNCTIONS: dict[str, Functions] = {
+    "Euclidean": (simd_distances.euclidean, scipy_distance.euclidean),
+    "SqEuclidean": (simd_distances.sqeuclidean, scipy_distance.sqeuclidean),
+    "Cosine": (simd_distances.cosine, scipy_distance.cosine),
 }
 
 
@@ -33,7 +27,7 @@ def test_simd_f32(data_f32: numpy.ndarray):
     for a in data_f32:
         for b in data_f32:
             for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-                for name, (simd_func, scipy_func) in SIMD_F32.items():
+                for name, (simd_func, scipy_func) in FUNCTIONS.items():
                     _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-5)
 
 
@@ -42,7 +36,7 @@ def test_simd_f64(data_f64: numpy.ndarray):
     for a in data_f64:
         for b in data_f64:
             for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-                for name, (simd_func, scipy_func) in SIMD_F64.items():
+                for name, (simd_func, scipy_func) in FUNCTIONS.items():
                     _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-10)
 
 
@@ -53,7 +47,7 @@ def test_cdist_f32(data_f32: numpy.ndarray):
             data_f32,
             data_f32,
             metric,
-            simd_distances.cdist_f32,
+            simd_distances.cdist,
             1e-5,
         )
 
@@ -65,7 +59,7 @@ def test_cdist_f64(data_f64: numpy.ndarray):
             data_f64,
             data_f64,
             metric,
-            simd_distances.cdist_f64,
+            simd_distances.cdist,
             1e-10,
         )
 
@@ -76,7 +70,7 @@ def test_pdist_f32(data_f32: numpy.ndarray):
         _pdist_helper(
             data_f32,
             metric,
-            simd_distances.pdist_f32,
+            simd_distances.pdist,
             1e-5,
         )
 
@@ -87,7 +81,7 @@ def test_pdist_f64(data_f64: numpy.ndarray):
         _pdist_helper(
             data_f64,
             metric,
-            simd_distances.pdist_f64,
+            simd_distances.pdist,
             1e-10,
         )
 

@@ -19,12 +19,12 @@ Functions = tuple[
 
 
 FUNCTION_PAIRS: dict[str, Functions] = {
-    "SIMD Euclidean, f32": (simd_distances.euclidean_f32, scipy_distance.euclidean, utils.data_f32),  # noqa: E501
-    "SIMD Euclidean, f64": (simd_distances.euclidean_f64, scipy_distance.euclidean, utils.data_f64),  # noqa: E501
-    "SIMD Squared Euclidean, f32": (simd_distances.sqeuclidean_f32, scipy_distance.sqeuclidean, utils.data_f32),  # noqa: E501
-    "SIMD Squared Euclidean, f64": (simd_distances.sqeuclidean_f64, scipy_distance.sqeuclidean, utils.data_f64),  # noqa: E501
-    "SIMD Cosine, f32": (simd_distances.cosine_f32, scipy_distance.cosine, utils.data_f32),  # noqa: E501
-    "SIMD Cosine, f64": (simd_distances.cosine_f64, scipy_distance.cosine, utils.data_f64),  # noqa: E501
+    "SIMD Euclidean, f32": (simd_distances.euclidean, scipy_distance.euclidean, utils.data_f32),  # noqa: E501
+    "SIMD Euclidean, f64": (simd_distances.euclidean, scipy_distance.euclidean, utils.data_f64),  # noqa: E501
+    "SIMD Squared Euclidean, f32": (simd_distances.sqeuclidean, scipy_distance.sqeuclidean, utils.data_f32),  # noqa: E501
+    "SIMD Squared Euclidean, f64": (simd_distances.sqeuclidean, scipy_distance.sqeuclidean, utils.data_f64),  # noqa: E501
+    "SIMD Cosine, f32": (simd_distances.cosine, scipy_distance.cosine, utils.data_f32),  # noqa: E501
+    "SIMD Cosine, f64": (simd_distances.cosine, scipy_distance.cosine, utils.data_f64),  # noqa: E501
     "Chebyshev, f32": (vector_distances.chebyshev, scipy_distance.chebyshev, utils.data_f32),  # noqa: E501
     "Chebyshev, f64": (vector_distances.chebyshev, scipy_distance.chebyshev, utils.data_f64),  # noqa: E501
     "Euclidean, f32": (vector_distances.euclidean, scipy_distance.euclidean, utils.data_f32),  # noqa: E501
@@ -39,8 +39,8 @@ FUNCTION_PAIRS: dict[str, Functions] = {
     "Cosine, f64": (vector_distances.cosine, scipy_distance.cosine, utils.data_f64),  # noqa: E501
     "Bray-Curtis, u32": (vector_distances.braycurtis, scipy_distance.braycurtis, utils.data_u32),  # type: ignore[attr-defined]  # noqa: E501
     "Bray-Curtis, u64": (vector_distances.braycurtis, scipy_distance.braycurtis, utils.data_u64),  # type: ignore[attr-defined]  # noqa: E501
-    "Hamming, i32": (vector_distances.hamming, scipy_distance.hamming, utils.data_i32),  # type: ignore[attr-defined]  # noqa: E501
-    "Hamming, i64": (vector_distances.hamming, scipy_distance.hamming, utils.data_i64),  # type: ignore[attr-defined]  # noqa: E501
+    # "Hamming, i32": (vector_distances.hamming, scipy_distance.hamming, utils.data_i32),  # type: ignore[attr-defined]  # noqa: E501
+    # "Hamming, i64": (vector_distances.hamming, scipy_distance.hamming, utils.data_i64),  # type: ignore[attr-defined]  # noqa: E501
 }
 
 
