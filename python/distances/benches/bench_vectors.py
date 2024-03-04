@@ -8,8 +8,6 @@ import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import vectors
 
-setattr(vectors, "cityblock", vectors.manhattan)  # noqa: B010
-
 CAR = 20
 DIM = 500
 NUM_RUNS = 100

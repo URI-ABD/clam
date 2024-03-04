@@ -41,14 +41,14 @@ __benchmarks__ = [
         partial(bench_func, partial(simd.cdist, metric=name), gen_data, gen_data),
         f"SIMD, cdist, {name}, {dtype}",
     )
-    for name in METRICS
     for dtype, gen_data in GEN_DATA.items()
+    for name in METRICS
 ] + [
     (
         partial(bench_func, partial(scipy_distance.pdist, metric=name), gen_data, None),
         partial(bench_func, partial(simd.pdist, metric=name), gen_data, None),
         f"SIMD, pdist, {name}, {dtype}",
     )
-    for name in METRICS
     for dtype, gen_data in GEN_DATA.items()
+    for name in METRICS
 ]

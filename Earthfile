@@ -1,4 +1,4 @@
-VERSION 0.7
+VERSION 0.8
 FROM ubuntu:latest
 WORKDIR /usr/local/src
 
@@ -85,14 +85,16 @@ test:
     RUN cargo test --release --lib --bins --examples --tests --all-features
 
 pytest:
+    ARG --required PKG
     FROM +fmt
-    WORKDIR /usr/local/src/python/distances
+    WORKDIR /usr/local/src/python/$PKG
     RUN maturin develop --release --strip --extras=dev
     RUN . ../../.venv/bin/activate && python -m pytest -v
 
 pybench:
+    ARG --required PKG
     FROM +pytest
-    WORKDIR /usr/local/src/python/distances
+    WORKDIR /usr/local/src/python/$PKG
     RUN . ../../.venv/bin/activate && python -m richbench benches --markdown
 
 # This target runs the tests on aarch64, it can be expanded to run tests on additional platforms, but it is SLOW.

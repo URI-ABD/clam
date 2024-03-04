@@ -20,18 +20,20 @@ pip install --no-cache-dir git+https://github.com/nishaq503/clam.git@python/dist
 ## Usage
 
 ```python
-import numpy
+import math
 
+import numpy
 import abd_distances.simd as distance
 
-a = numpy.array([i for i in range(1_000)], dtype=numpy.float32)
-b = a + 3.0
+a = numpy.array([i for i in range(10_000)], dtype=numpy.float32)
+b = a + 1.0
 
 dist = distance.euclidean(a, b)
-assert (dist - 3 * 1_000 ** 0.5) < 1e-6
+
+assert math.fabs(dist - 100.0) < 1e-6
 
 print(dist)
-> 94.86833190917969
+# 100.0
 ```
 
 ## Benchmarks
