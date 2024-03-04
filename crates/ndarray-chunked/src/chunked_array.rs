@@ -6,9 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ndarray::{
-    concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, OwnedRepr, SliceInfo, SliceInfoElem,
-};
+use ndarray::{concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
@@ -54,7 +52,6 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
             });
 
             // TODO: Negative stepping
-            #[allow(clippy::cast_sign_loss)]
             (adjusted_start..adjusted_stop).collect()
         }
 
@@ -132,36 +129,28 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             read_npy(path).unwrap()
         });
 
-        // This is just all our chunks concatenated together.
-        let chunk: Option<ArrayBase<OwnedRepr<_>, _>> =
-            chunks.into_iter().fold(None, |acc, c: Array<T, IxDyn>| {
-                acc.map_or_else(
-                    || Some(c.to_owned()),
-                    |partial| {
-                        let bound =
-                            concatenate(Axis(self.chunked_along), &[partial.view(), c.view()])
-                                .unwrap();
-                        Some(bound)
-                    },
-                )
-            });
-
-        // TODO: Fix this. I used an option in the fold because its the simplest way of doing it
-        let chunk = chunk.unwrap();
+        let chunk = chunks
+            .into_iter()
+            .reduce(|a: ArrayBase<_, _>, b| {
+                concatenate(Axis(self.chunked_along), &[a.view(), b.view()]).unwrap()
+            })
+            .unwrap();
 
         // Align the chunked_along axis slicing info to match new `chunk`
         #[allow(clippy::match_on_vec_items, clippy::cast_possible_wrap)]
         let adjusted_chunk_info = match idxs[self.chunked_along] {
             SliceInfoElem::Slice { start, end, step } => {
                 // We have to do some adjusting here. We need to adjust the start and end to be relative to the chunk
-                // because the slice might not be perfect.
+                // because the slice might not be perfect. I.e. if your starting index is `i` and you have chunks of
+                // size `k`, then i = n * k + r for some n and r. We have already resolved `n` (by loading in the
+                // chunk `i` is in) so we just need `r` to resolve the correct index relative to the chunk.
                 let adj_start = start % (self.chunk_size as isize);
 
-                // Originally, the range was relative to `start` but we're shifting it around
-                // to reflect that our chunk might not start at `start`. I.e. end = start + k
-                // to begin with, but now we want end = adj_start + k. To do this we just
-                // subtract `start` to get `k` and then add `adj_start`.
-                let adj_end = end.map(|e| e  - start + adj_start);
+                // Then, we have to resolve the end index. Basically, end = start + k for some k but start has been
+                // adjusted so we need to adjust end as well. We want to shift end by the same amount start was
+                // shifted, so basically just adj_end = (start + k) - start + adj_start = adj_start + k shifts
+                // end to the right spot.
+                let adj_end = end.map(|e| e - start + adj_start);
                 SliceInfoElem::Slice {
                     start: adj_start,
                     end: adj_end,
