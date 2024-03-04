@@ -4,7 +4,6 @@ use std::{
     io::{Read, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
-    vec,
 };
 
 use ndarray::{
@@ -154,9 +153,17 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         #[allow(clippy::match_on_vec_items, clippy::cast_possible_wrap)]
         let adjusted_chunk_info = match idxs[self.chunked_along] {
             SliceInfoElem::Slice { start, end, step } => {
-                let adj_end = end.map(|e| e - start);
+                // We have to do some adjusting here. We need to adjust the start and end to be relative to the chunk
+                // because the slice might not be perfect.
+                let adj_start = start % (self.chunk_size as isize);
+
+                // Originally, the range was relative to `start` but we're shifting it around
+                // to reflect that our chunk might not start at `start`. I.e. end = start + k
+                // to begin with, but now we want end = adj_start + k. To do this we just
+                // subtract `start` to get `k` and then add `adj_start`.
+                let adj_end = end.map(|e| e - start + adj_start);
                 SliceInfoElem::Slice {
-                    start: start % (self.chunk_size as isize),
+                    start: adj_start,
                     end: adj_end,
                     step,
                 }

@@ -2,7 +2,7 @@
 
 use std::fs::read_dir;
 
-use ndarray::{s, Array0, SliceInfoElem};
+use ndarray::s;
 use ndarray::{Array, IxDyn};
 use ndarray_chunked::chunked_array::{ChunkSettings, ChunkedArray};
 use rand::Rng;
@@ -29,70 +29,164 @@ fn generate_dummy_data(
     (tmp, arr)
 }
 
-#[test]
-fn test_simple_array() {
-    let chunk_along = 0;
-    let size = 3;
-    let shape = [9, 3, 3];
-    let filenum = shape[chunk_along] / size + 1;
-    let dirname = "test_chunked_arr";
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+    #[test]
+    fn test_large_array() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [100, 100, 100];
 
-    // Assert that the correct number of chunks were written
-    let files = read_dir(tmp.path()).unwrap().collect::<Vec<_>>();
+        // The number of files is the number of chunks + 1 for the metadata
+        let filenum = shape[chunk_along] / size + 1;
+        let dirname = "test_chunked_arr_large";
 
-    assert_eq!(filenum, files.len());
+        let (tmp, _) = generate_dummy_data(dirname, chunk_along, size, &shape);
 
-    let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
-    assert_eq!(ca.chunked_along, chunk_along);
-    assert_eq!(ca.chunk_size, size);
-    assert_eq!(&ca.shape, &shape);
+        // Assert that the correct number of chunks were written
+        let files = read_dir(tmp.path()).unwrap().collect::<Vec<_>>();
 
-    // Smoke test
-    assert_eq!(arr, ca.get(s![.., .., ..].as_ref()));
+        assert_eq!(filenum, files.len() - 1);
 
-    // A randomized slice of our 3d array
-    let mut rng = rand::thread_rng();
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
+        assert_eq!(ca.chunked_along, chunk_along);
+        assert_eq!(ca.chunk_size, size);
+        assert_eq!(&ca.shape, &shape);
+    }
+    #[test]
+    fn test_get_single_chunk() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [9, 3, 3];
+        let dirname = "test_chunked_arr";
 
-    let slice = s![
-        rng.gen_range(0..shape[0] / 2)..rng.gen_range(shape[0] / 2..shape[0]),
-        rng.gen_range(0..shape[1] / 2)..rng.gen_range(shape[1] / 2..shape[1]),
-        rng.gen_range(0..shape[2] / 2)..rng.gen_range(shape[2] / 2..shape[2]),
-    ];
-    // Assert they're equal
-    // assert_eq!(arr.slice(rand_slice), ca.get(rand_slice.as_ref())[0]);
-    let have = arr.slice(slice);
+        let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
 
-    let got = ca.get(slice.as_ref());
+        let slice = s![0..3, .., ..];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.get(slice.as_ref());
 
-    // assert_eq!(got.ndim(), 0);
-    assert_eq!(got.shape(), have.shape());
-    assert_eq!(
-        got.iter().collect::<Vec<&f32>>(),
-        have.iter().collect::<Vec<&f32>>()
-    );
-}
+        assert_eq!(result, expected);
+    }
 
-#[test]
-fn test_large_array() {
-    let chunk_along = 0;
-    let size = 3;
-    let shape = [100, 100, 100];
-    let filenum = shape[chunk_along] / size + 1;
-    let dirname = "test_chunked_arr_large";
+    #[test]
+    fn test_get_multiple_chunks() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [9, 3, 3];
+        let dirname = "test_chunked_arr";
 
-    let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+        let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
 
-    // Assert that the correct number of chunks were written
-    let files = read_dir(tmp.path()).unwrap().collect::<Vec<_>>();
+        let slice = s![0..9, .., ..];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.get(slice.as_ref());
 
-    assert_eq!(filenum, files.len());
+        assert_eq!(result, expected);
+    }
 
-    let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
-    assert_eq!(ca.chunked_along, chunk_along);
-    assert_eq!(ca.chunk_size, size);
-    assert_eq!(&ca.shape, &shape);
+    #[test]
+    fn test_get_sliced() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [9, 3, 3];
+        let dirname = "test_chunked_arr";
 
-    println!("{:?}", ca.get(s![8, 2, ..].as_ref()));
+        let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
+
+        let slice = s![1..4, 1..3, 1..3];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.get(slice.as_ref());
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_get_random_slice() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [9, 3, 3];
+        let filenum = shape[chunk_along] / size + 1;
+        let dirname = "test_chunked_arr";
+
+        let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+
+        // Assert that the correct number of chunks were written
+        let files = read_dir(tmp.path()).unwrap().collect::<Vec<_>>();
+
+        assert_eq!(filenum, files.len());
+
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
+        assert_eq!(ca.chunked_along, chunk_along);
+        assert_eq!(ca.chunk_size, size);
+        assert_eq!(&ca.shape, &shape);
+
+        // Smoke test
+        assert_eq!(arr, ca.get(s![.., .., ..].as_ref()));
+
+        // A randomized slice of our 3d array
+        let mut rng = rand::thread_rng();
+
+        let slice = s![
+            rng.gen_range(0..shape[0] / 2)..rng.gen_range(shape[0] / 2..shape[0]),
+            rng.gen_range(0..shape[1] / 2)..rng.gen_range(shape[1] / 2..shape[1]),
+            rng.gen_range(0..shape[2] / 2)..rng.gen_range(shape[2] / 2..shape[2]),
+        ];
+        // Assert they're equal
+        let have = arr.slice(slice);
+        let got = ca.get(slice.as_ref());
+
+        assert_eq!(got.shape(), have.shape());
+        assert_eq!(
+            got.iter().collect::<Vec<&f32>>(),
+            have.iter().collect::<Vec<&f32>>()
+        );
+    }
+
+    #[test]
+    fn test_get_random_slice_stepped() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [9, 3, 3];
+        let filenum = shape[chunk_along] / size + 1;
+        let dirname = "test_chunked_arr";
+
+        let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+
+        // Assert that the correct number of chunks were written
+        let files = read_dir(tmp.path()).unwrap().collect::<Vec<_>>();
+
+        assert_eq!(filenum, files.len());
+
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
+        assert_eq!(ca.chunked_along, chunk_along);
+        assert_eq!(ca.chunk_size, size);
+        assert_eq!(&ca.shape, &shape);
+
+        // Smoke test
+        assert_eq!(arr, ca.get(s![.., .., ..].as_ref()));
+
+        // A randomized slice of our 3d array
+        let mut rng = rand::thread_rng();
+
+        let slice = s![
+            rng.gen_range(0..shape[0] / 2)..rng.gen_range(shape[0] / 2..shape[0]);rng.gen_range(1..shape[0]),
+            rng.gen_range(0..shape[1] / 2)..rng.gen_range(shape[1] / 2..shape[1]);rng.gen_range(1..shape[1]),
+            rng.gen_range(0..shape[2] / 2)..rng.gen_range(shape[2] / 2..shape[2]);rng.gen_range(1..shape[2]),
+        ];
+        // Assert they're equal
+        let have = arr.slice(slice);
+        let got = ca.get(slice.as_ref());
+
+        assert_eq!(got.shape(), have.shape());
+        assert_eq!(
+            got.iter().collect::<Vec<&f32>>(),
+            have.iter().collect::<Vec<&f32>>()
+        );
+    }
 }
