@@ -28,9 +28,9 @@ a = numpy.array([i for i in range(1_000)], dtype=numpy.float32)
 b = a + 3.0
 
 distance = distance.euclidean(a, b)
+assert (distance - 3 * 1_000 ** 0.5) < 1e-6
 
 print(distance)
-
 > 94.86833190917969
 ```
 
@@ -157,8 +157,6 @@ These benchmarks were run using the `richbench` package.
 ![Chebyshev f32](images/Chebyshev_f32.png)
 ![Euclidean f32](images/Euclidean_f32.png)
 ![Squared Euclidean f32](images/Squared-Euclidean_f32.png)
-![L3 f32](images/L3_f32.png)
-![L4 f32](images/L4_f32.png)
 ![Manhattan f32](images/Manhattan_f32.png)
 ![Canberra f32](images/Canberra_f32.png)
 ![Cosine f32](images/Cosine_f32.png)
@@ -169,8 +167,6 @@ These benchmarks were run using the `richbench` package.
 ![Chebyshev f64](images/Chebyshev_f64.png)
 ![Euclidean f64](images/Euclidean_f64.png)
 ![Squared Euclidean f64](images/Squared-Euclidean_f64.png)
-![L3 f64](images/L3_f64.png)
-![L4 f64](images/L4_f64.png)
 ![Manhattan f64](images/Manhattan_f64.png)
 ![Canberra f64](images/Canberra_f64.png)
 ![Cosine f64](images/Cosine_f64.png)
@@ -197,24 +193,6 @@ These benchmarks were run using the `richbench` package.
 </td>
 </tr>
 </table>
-
-<table>
-<tr>
-<th> i32 </th>
-<th> i64 </th>
-</tr>
-<tr>
-<td>
-
-![Hamming i32](images/Hamming_i32.png)
-
-</td>
-<td>
-
-![Hamming i64](images/Hamming_i64.png)
-
-</td>
-</tr>
 </table>
 
 ### String Distance Benchmarks
