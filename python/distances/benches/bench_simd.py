@@ -8,8 +8,6 @@ import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import simd
 
-setattr(scipy_distance, "manhattan", scipy_distance.cityblock)  # noqa: B010
-
 CAR = 10
 DIM = 1_000
 NUM_RUNS = 100
@@ -28,7 +26,7 @@ METRICS = [
 FUNCTIONS = {
     f"{name}, {dtype}": (
         getattr(scipy_distance, name),
-        getattr(simd, f"{name}_{dtype}"),
+        getattr(simd, name),
         gen_data,
     )
     for name in METRICS
@@ -52,7 +50,7 @@ __benchmarks__ = [
     (
         partial(bench_func, scipy_func, gen_data),
         partial(bench_func, abd_func, gen_data),
-        name,
+        f"SIMD, {name}",
     )
     for name, (scipy_func, abd_func, gen_data) in FUNCTIONS.items()
 ]

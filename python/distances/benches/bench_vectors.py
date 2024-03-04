@@ -8,12 +8,7 @@ import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import vectors
 
-setattr(scipy_distance, "manhattan", scipy_distance.cityblock)  # noqa: B010
-setattr(scipy_distance, "minkowski-3", partial(scipy_distance.minkowski, p=3))
-setattr(scipy_distance, "minkowski-4", partial(scipy_distance.minkowski, p=4))
 setattr(vectors, "cityblock", vectors.manhattan)  # noqa: B010
-setattr(vectors, "minkowski-3", partial(vectors.minkowski, p=3))
-setattr(vectors, "minkowski-4", partial(vectors.minkowski, p=4))
 
 CAR = 10
 DIM = 1_000
@@ -25,12 +20,12 @@ GEN_DATA = {
 }
 
 METRICS = [
+    "braycurtis",
+    "canberra",
     "chebyshev",
     "euclidean",
     "sqeuclidean",
     "cityblock",
-    "minkowski-3",
-    "minkowski-4",
     "cosine",
 ]
 
@@ -63,7 +58,7 @@ PAIR_METRICS = [
 ]
 
 PAIR_FUNCTIONS = {
-    f"{name}-{metric}, {dtype}": (
+    f"{name}, {metric}, {dtype}": (
         getattr(scipy_distance, name),
         getattr(vectors, name),
         metric,

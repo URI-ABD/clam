@@ -154,6 +154,8 @@ impl<'a> FromPyObject<'a> for Vector2<'a> {
 #[allow(clippy::type_complexity)]
 pub fn parse_metric<T: Number>(metric: &str) -> PyResult<fn(&[T], &[T]) -> f64> {
     match metric.to_lowercase().as_str() {
+        "braycurtis" => Ok(vectors::bray_curtis),
+        "canberra" => Ok(vectors::canberra),
         "chebyshev" => Ok(vectors::chebyshev),
         "euclidean" => Ok(vectors::euclidean),
         "sqeuclidean" => Ok(vectors::euclidean_sq),
