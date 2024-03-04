@@ -24,7 +24,10 @@ fn directory_is_empty(path: &Path) -> Result<bool, String> {
 }
 
 /// Returns the intended list of indices specified by a `SliceInfoElem`
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
+    let end = end as isize;
+
     match info {
         // Need to account for negative indexing
         SliceInfoElem::Slice {
@@ -32,38 +35,15 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
             end: stop,
             step: _,
         } => {
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
-            let adjusted_start = if *start >= 0 {
-                // This conversion is fine because we require it to be nonnegative to get here
-                (*start) as usize
-            } else {
-                // This conversion is also fine because this value is assumed to be less than `-end`.
-                (end as isize + *start) as usize
-            };
+            // Resolve indexing. If it's negative then it'll wrap around as expected
+            let adjusted_start = start.rem_euclid(end);
+            let adjusted_stop = stop.map_or(end, |e| e.rem_euclid(end + 1));
 
-            let adjusted_stop: usize = stop.as_ref().map_or(end, |s| {
-                // Again, these are fine
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
-                if *s >= 0 {
-                    *s as usize
-                } else {
-                    (end as isize + s) as usize
-                }
-            });
-
-            // TODO: Negative stepping
-            (adjusted_start..adjusted_stop).collect()
+            // These casts are fine because rem_euclid is positive.
+            ((adjusted_start as usize)..(adjusted_stop as usize)).collect()
         }
 
-        SliceInfoElem::Index(x) => {
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
-            let x = if *x >= 0 {
-                *x as usize
-            } else {
-                (end as isize + x) as usize
-            };
-            vec![x]
-        }
+        SliceInfoElem::Index(x) => vec![x.rem_euclid(end) as usize],
         SliceInfoElem::NewAxis => todo!(),
     }
 }
@@ -112,16 +92,16 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
     #[must_use]
     #[allow(clippy::unwrap_used)]
     pub fn slice(&self, idxs: &[SliceInfoElem]) -> Array<T, IxDyn> {
-        let mut idxs = idxs.to_owned();
-
         // Now we need to resolve which chunks we actually need
-        let info = idxs[self.chunked_along];
         let slice_axis_indices: Vec<usize> =
-            slice_info_to_vec(&info, self.shape[self.chunked_along]);
+            slice_info_to_vec(&idxs[self.chunked_along], self.shape[self.chunked_along]);
 
         // Before we load in the chunks we first need to calculate which chunks we'll even need
         let start_chunk = slice_axis_indices[0] / self.chunk_size;
-        let end_chunk = slice_axis_indices[slice_axis_indices.len() - 1] / self.chunk_size;
+
+        // This is fine because we're guaranteed at least one element in `slice_axis_indices`
+        #[allow(clippy::unwrap_used)]
+        let end_chunk = slice_axis_indices.last().unwrap() / self.chunk_size;
 
         // Now load in the actual chunks
         let chunks = (start_chunk..=end_chunk).map(|n| {
@@ -129,6 +109,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             read_npy(path).unwrap()
         });
 
+        // Concatenate the chunks
         let chunk = chunks
             .into_iter()
             .reduce(|a: ArrayBase<_, _>, b| {
@@ -137,7 +118,9 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
             .unwrap();
 
         // Align the chunked_along axis slicing info to match new `chunk`
-        #[allow(clippy::match_on_vec_items, clippy::cast_possible_wrap)]
+        // Allowing this here is fine because both of the wraps only fail if chunk size is close to isize::MAX, which
+        // is unlikely to happen.
+        #[allow(clippy::cast_possible_wrap)]
         let adjusted_chunk_info = match idxs[self.chunked_along] {
             SliceInfoElem::Slice { start, end, step } => {
                 // We have to do some adjusting here. We need to adjust the start and end to be relative to the chunk
@@ -158,10 +141,12 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
                 }
             }
 
-            #[allow(clippy::cast_possible_wrap)]
             SliceInfoElem::Index(i) => SliceInfoElem::Index(i % (self.chunk_size as isize)),
             SliceInfoElem::NewAxis => todo!(),
         };
+
+        // We'll take ownership here because we're going to be modifying the slice info
+        let mut idxs = idxs.to_owned();
 
         // Align the axis beginning
         idxs[self.chunked_along] = adjusted_chunk_info;
@@ -180,7 +165,6 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         let folder = Path::new(folder);
 
         // Handle metadata
-        //ndim; shape; axis along which the array was split; the max size of each chunk
         let (shape, chunked_along, chunk_size) = Self::load_metadata(folder)?;
 
         Ok(Self {
@@ -192,7 +176,9 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         })
     }
 
-    /// Loads in `ChunkedArray` metadata from a given directory
+    /// Loads in `ChunkedArray` metadata from a given directory.
+    /// The format is simple: ndim; shape; axis along which the array was split; the max size of each chunk. Each
+    /// data point is a u32 and is little endian. Shape is a list of u32s of length ndim.
     /// # Errors
     fn load_metadata(folder: &Path) -> Result<(Vec<usize>, usize, usize), String> {
         let mut handle = File::open(folder.join(METADATA_FILENAME)).map_err(|e| e.to_string())?;
@@ -266,9 +252,6 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         chunk_along: usize,
         size: usize,
     ) -> Vec<u8> {
-        // Format is simple. everything is taken as a u32
-        // ndim; shape; axis along which the array was split; the max size of each chunk
-
         // Convert everything to u32 and then little endian bytes
         let ndim_bytes = (arr.ndim() as u32).to_le_bytes().to_vec();
         let shape_bytes = arr
@@ -293,7 +276,6 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
                 return Err("Path exists and is not a directory".to_string());
             }
 
-            // At this point we know its a directory so we can just check if we're allowed to delete it
             if !directory_is_empty(path)? {
                 return Err("Directory exists".to_string());
             }
