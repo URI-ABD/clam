@@ -2,6 +2,7 @@
 
 use distances::{vectors, Number};
 use ndarray::parallel::prelude::*;
+use ndarray::{Array1, Array2};
 use numpy::{ndarray::Axis, PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
@@ -37,6 +38,31 @@ impl IntoPy<PyObject> for Scalar {
 pub enum Vector1<'py> {
     F32(PyReadonlyArray1<'py, f32>),
     F64(PyReadonlyArray1<'py, f64>),
+    U8(PyReadonlyArray1<'py, u8>),
+    U16(PyReadonlyArray1<'py, u16>),
+    U32(PyReadonlyArray1<'py, u32>),
+    U64(PyReadonlyArray1<'py, u64>),
+    I8(PyReadonlyArray1<'py, i8>),
+    I16(PyReadonlyArray1<'py, i16>),
+    I32(PyReadonlyArray1<'py, i32>),
+    I64(PyReadonlyArray1<'py, i64>),
+}
+
+impl<'a> Vector1<'a> {
+    pub fn cast<T: Number + numpy::Element>(&self) -> Array1<T> {
+        match self {
+            Vector1::F32(a) => a.as_array().mapv(T::from),
+            Vector1::F64(a) => a.as_array().mapv(T::from),
+            Vector1::U8(a) => a.as_array().mapv(T::from),
+            Vector1::U16(a) => a.as_array().mapv(T::from),
+            Vector1::U32(a) => a.as_array().mapv(T::from),
+            Vector1::U64(a) => a.as_array().mapv(T::from),
+            Vector1::I8(a) => a.as_array().mapv(T::from),
+            Vector1::I16(a) => a.as_array().mapv(T::from),
+            Vector1::I32(a) => a.as_array().mapv(T::from),
+            Vector1::I64(a) => a.as_array().mapv(T::from),
+        }
+    }
 }
 
 impl<'a> FromPyObject<'a> for Vector1<'a> {
@@ -45,6 +71,22 @@ impl<'a> FromPyObject<'a> for Vector1<'a> {
             Ok(Vector1::F32(a))
         } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f64>>() {
             Ok(Vector1::F64(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u8>>() {
+            Ok(Vector1::U8(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u16>>() {
+            Ok(Vector1::U16(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u32>>() {
+            Ok(Vector1::U32(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u64>>() {
+            Ok(Vector1::U64(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i8>>() {
+            Ok(Vector1::I8(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i16>>() {
+            Ok(Vector1::I16(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i32>>() {
+            Ok(Vector1::I32(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i64>>() {
+            Ok(Vector1::I64(a))
         } else {
             Err(PyTypeError::new_err("Invalid type"))
         }
@@ -54,6 +96,31 @@ impl<'a> FromPyObject<'a> for Vector1<'a> {
 pub enum Vector2<'py> {
     F32(PyReadonlyArray2<'py, f32>),
     F64(PyReadonlyArray2<'py, f64>),
+    U8(PyReadonlyArray2<'py, u8>),
+    U16(PyReadonlyArray2<'py, u16>),
+    U32(PyReadonlyArray2<'py, u32>),
+    U64(PyReadonlyArray2<'py, u64>),
+    I8(PyReadonlyArray2<'py, i8>),
+    I16(PyReadonlyArray2<'py, i16>),
+    I32(PyReadonlyArray2<'py, i32>),
+    I64(PyReadonlyArray2<'py, i64>),
+}
+
+impl<'a> Vector2<'a> {
+    pub fn cast<T: Number + numpy::Element>(&self) -> Array2<T> {
+        match self {
+            Vector2::F32(a) => a.as_array().mapv(T::from),
+            Vector2::F64(a) => a.as_array().mapv(T::from),
+            Vector2::U8(a) => a.as_array().mapv(T::from),
+            Vector2::U16(a) => a.as_array().mapv(T::from),
+            Vector2::U32(a) => a.as_array().mapv(T::from),
+            Vector2::U64(a) => a.as_array().mapv(T::from),
+            Vector2::I8(a) => a.as_array().mapv(T::from),
+            Vector2::I16(a) => a.as_array().mapv(T::from),
+            Vector2::I32(a) => a.as_array().mapv(T::from),
+            Vector2::I64(a) => a.as_array().mapv(T::from),
+        }
+    }
 }
 
 impl<'a> FromPyObject<'a> for Vector2<'a> {
@@ -62,6 +129,22 @@ impl<'a> FromPyObject<'a> for Vector2<'a> {
             Ok(Vector2::F32(a))
         } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f64>>() {
             Ok(Vector2::F64(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u8>>() {
+            Ok(Vector2::U8(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u16>>() {
+            Ok(Vector2::U16(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u32>>() {
+            Ok(Vector2::U32(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u64>>() {
+            Ok(Vector2::U64(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i8>>() {
+            Ok(Vector2::I8(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i16>>() {
+            Ok(Vector2::I16(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i32>>() {
+            Ok(Vector2::I32(a))
+        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i64>>() {
+            Ok(Vector2::I64(a))
         } else {
             Err(PyTypeError::new_err("Invalid type"))
         }
@@ -71,26 +154,18 @@ impl<'a> FromPyObject<'a> for Vector2<'a> {
 #[allow(clippy::type_complexity)]
 pub fn parse_metric<T: Number>(metric: &str) -> PyResult<fn(&[T], &[T]) -> f64> {
     match metric.to_lowercase().as_str() {
-        "chebyshev" => Ok(_chebyshev),
+        "chebyshev" => Ok(vectors::chebyshev),
         "euclidean" => Ok(vectors::euclidean),
         "sqeuclidean" => Ok(vectors::euclidean_sq),
-        "manhattan" | "cityblock" => Ok(_manhattan),
+        "manhattan" | "cityblock" => Ok(vectors::manhattan),
         "cosine" => Ok(vectors::cosine),
         _ => Err(PyValueError::new_err(format!("Unknown metric: {}", metric))),
     }
 }
 
-fn _chebyshev<T: Number>(a: &[T], b: &[T]) -> f64 {
-    vectors::chebyshev(a, b).as_f64()
-}
-
-fn _manhattan<T: Number>(a: &[T], b: &[T]) -> f64 {
-    vectors::manhattan(a, b).as_f64()
-}
-
 pub fn _cdist<T, U, F>(
-    a: PyReadonlyArray2<'_, T>,
-    b: PyReadonlyArray2<'_, T>,
+    a: ndarray::ArrayView2<T>,
+    b: ndarray::ArrayView2<T>,
     metric: F,
 ) -> Vec<Vec<U>>
 where
@@ -98,8 +173,6 @@ where
     U: Number + numpy::Element,
     F: Fn(&[T], &[T]) -> U + Send + Sync + Copy,
 {
-    let a = a.as_array();
-    let b = b.as_array();
     a.axis_iter(Axis(0))
         .into_par_iter()
         .map(|row| {
@@ -111,13 +184,12 @@ where
         .collect::<Vec<_>>()
 }
 
-pub fn _pdist<T, U, F>(py: Python<'_>, a: PyReadonlyArray2<'_, T>, metric: F) -> Py<PyArray1<U>>
+pub fn _pdist<T, U, F>(py: Python<'_>, a: ndarray::ArrayView2<T>, metric: F) -> Py<PyArray1<U>>
 where
     T: Number + numpy::Element,
     U: Number + numpy::Element,
     F: Fn(&[T], &[T]) -> U + Send + Sync + Copy,
 {
-    let a = a.as_array();
     let result = a
         .axis_iter(Axis(0))
         .into_par_iter()
