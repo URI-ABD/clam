@@ -67,7 +67,7 @@ mod tests {
 
         let slice = s![0..3, .., ..];
         let expected = arr.slice(slice.as_ref());
-        let result = ca.get(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
 
         assert_eq!(result, expected);
     }
@@ -84,7 +84,7 @@ mod tests {
 
         let slice = s![0..9, .., ..];
         let expected = arr.slice(slice.as_ref());
-        let result = ca.get(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
 
         assert_eq!(result, expected);
     }
@@ -101,7 +101,7 @@ mod tests {
 
         let slice = s![1..4, 1..3, 1..3];
         let expected = arr.slice(slice.as_ref());
-        let result = ca.get(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
 
         assert_eq!(expected, result);
     }
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(&ca.shape, &shape);
 
         // Smoke test
-        assert_eq!(arr, ca.get(s![.., .., ..].as_ref()));
+        assert_eq!(arr, ca.slice(s![.., .., ..].as_ref()));
 
         // A randomized slice of our 3d array
         let mut rng = rand::thread_rng();
@@ -139,7 +139,7 @@ mod tests {
         ];
         // Assert they're equal
         let have = arr.slice(slice);
-        let got = ca.get(slice.as_ref());
+        let got = ca.slice(slice.as_ref());
 
         assert_eq!(got.shape(), have.shape());
         assert_eq!(
@@ -169,7 +169,7 @@ mod tests {
         assert_eq!(&ca.shape, &shape);
 
         // Smoke test
-        assert_eq!(arr, ca.get(s![.., .., ..].as_ref()));
+        assert_eq!(arr, ca.slice(s![.., .., ..].as_ref()));
 
         // A randomized slice of our 3d array
         let mut rng = rand::thread_rng();
@@ -181,7 +181,7 @@ mod tests {
         ];
         // Assert they're equal
         let have = arr.slice(slice);
-        let got = ca.get(slice.as_ref());
+        let got = ca.slice(slice.as_ref());
 
         assert_eq!(got.shape(), have.shape());
         assert_eq!(

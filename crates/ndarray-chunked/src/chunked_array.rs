@@ -12,7 +12,7 @@ use ndarray::{
 
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
-///.
+/// The filename for the metadata file of a `ChunkedArray`
 static METADATA_FILENAME: &str = "metadata.bin";
 
 /// Returns false if the given path is either not a directory or is a directory and is nonempty
@@ -71,7 +71,7 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
     }
 }
 
-///
+/// Controls chunking settings for `ChunkedArray`
 pub struct ChunkSettings {
     /// The axis we'll chunk along
     chunk_along: usize,
@@ -114,7 +114,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
     /// TODO: Improve these docs
     #[must_use]
     #[allow(clippy::unwrap_used)]
-    pub fn get(&self, idxs: &[SliceInfoElem]) -> Array<T, IxDyn> {
+    pub fn slice(&self, idxs: &[SliceInfoElem]) -> Array<T, IxDyn> {
         let mut idxs = idxs.to_owned();
 
         // Now we need to resolve which chunks we actually need
@@ -161,7 +161,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
                 // to reflect that our chunk might not start at `start`. I.e. end = start + k
                 // to begin with, but now we want end = adj_start + k. To do this we just
                 // subtract `start` to get `k` and then add `adj_start`.
-                let adj_end = end.map(|e| e - start + adj_start);
+                let adj_end = end.map(|e| e  - start + adj_start);
                 SliceInfoElem::Slice {
                     start: adj_start,
                     end: adj_end,
