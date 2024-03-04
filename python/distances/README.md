@@ -27,10 +27,10 @@ import abd_distances.simd as distance
 a = numpy.array([i for i in range(1_000)], dtype=numpy.float32)
 b = a + 3.0
 
-distance = distance.euclidean(a, b)
-assert (distance - 3 * 1_000 ** 0.5) < 1e-6
+dist = distance.euclidean(a, b)
+assert (dist - 3 * 1_000 ** 0.5) < 1e-6
 
-print(distance)
+print(dist)
 > 94.86833190917969
 ```
 
