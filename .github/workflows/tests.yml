@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup | Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -39,7 +39,7 @@ jobs:
     name: Rust | Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: earthly/actions-setup@v1
         with:
           version: v0.8.4

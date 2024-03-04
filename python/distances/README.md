@@ -2,19 +2,14 @@
 
 This package contains algorithms for computing distances between data points.
 It is a thin Python wrapper around the `distances` crate, in Rust.
+It provides drop-in replacements for the distance functions in `scipy.spatial.distance`.
+
+## Supported Distance Functions
 
 ## Installation
 
-### From PyPI
-
 ```bash
 pip install abd-distances
-```
-
-### From Source
-
-```bash
-pip install --no-cache-dir git+https://github.com/nishaq503/clam.git@python/distances#python/distances
 ```
 
 ## Usage
@@ -35,6 +30,53 @@ assert math.fabs(dist - 100.0) < 1e-6
 print(dist)
 # 100.0
 ```
+
+### Vector Distances
+
+- [x] Bray-Curtis: `abd_distances.vector.braycurtis`
+- [x] Canberra: `abd_distances.vector.canberra`
+- [x] Chebyshev: `abd_distances.vector.chebyshev`
+- [ ] Correlation
+- [x] Cosine: `abd_distances.vector.cosine`
+- [x] Euclidean: `abd_distances.vector.euclidean`
+- [ ] Jensen-Shannon
+- [ ] Mahalanobis
+- [x] Manhattan: `abd_distances.vector.manhattan` and `abd_distances.vector.cityblock`
+- [x] Minkowski: `abd_distances.vector.minkowski`
+- [ ] Standardized Euclidean
+- [x] Squared Euclidean: `abd_distances.vector.sqeuclidean`
+- [x] Pairwise Distances: `abd_distances.vector.cdist` and `abd_distances.vector.pdist`
+- [ ] ...
+
+#### Boolean Distances
+
+- [ ] Dice
+- [ ] Hamming
+- [ ] Jaccard
+- [ ] Kulczynski 1D
+- [ ] Rogers-Tanimoto
+- [ ] Russell-Rao
+- [ ] Sokal-Michener
+- [ ] Sokal-Sneath
+- [ ] Yule
+- [ ] ...
+
+### SIMD-Accelerated Vector Distances
+
+- [x] Euclidean: `abd_distances.simd.euclidean`
+- [x] Squared Euclidean: `abd_distances.simd.sqeuclidean`
+- [x] Cosine: `abd_distances.simd.cosine`
+- [x] Pairwise Distances: `abd_distances.simd.cdist` and `abd_distances.simd.pdist`
+- [ ] ...
+
+### String Distances
+
+- [x] Hamming: `abd_distances.strings.hamming`
+- [x] Levenshtein: `abd_distances.strings.levenshtein`
+- [x] Needleman-Wunsch: `abd_distances.strings.needleman_wunsch`
+- [ ] Smith-Waterman
+- [ ] Pairwise Distances
+- [ ] ...
 
 ## Benchmarks
 
