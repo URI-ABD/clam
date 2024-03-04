@@ -140,13 +140,6 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 
 /// Computes the Bray-Curtis distance between two vectors.
 ///
-/// The Bray-Curtis dissimilarity is typically used in ecology to
-/// measure biodiversity between two sites. Each entry in a vector
-/// typically represents the number of observations of a particular
-/// species. The distance is defined as 1 minus twice the sum of
-/// the minimum observations component-wise divided by the sum all the
-/// observations.
-///
 /// # Arguments
 ///
 /// * `x`: A slice of numbers.
@@ -162,28 +155,23 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// let distance: f32 =  bray_curtis(&x, &y);
 ///
-/// assert_eq!(distance, 0.39393938);
+/// assert!((distance - 13.0 / 33.0).abs() <= f32::EPSILON);
 /// ```
 ///
 /// # References
 ///
-/// * [Bray-Curtis dissimilarity](https://en.wikipedia.org/wiki/Bray%E2%80%93Curtis_dissimilarity)
-pub fn bray_curtis<T: UInt, U: Float>(x: &[T], y: &[T]) -> U {
-    let [sum_x, sum_y, sum_min] = x
+/// * [Bray-Curtis Distance](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.braycurtis.html#scipy.spatial.distance.braycurtis)
+pub fn bray_curtis<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
+    let [numerator, denominator] = x
         .iter()
         .zip(y.iter())
-        .fold([T::zero(); 3], |[sum_a, sum_b, sum_min], (&a, &b)| {
-            [a + sum_a, b + sum_b, min(a, b) + sum_min]
+        .fold([T::zero(); 2], |[n, d], (&a, &b)| {
+            [n + a.abs_diff(b), d + (a + b).abs()]
         });
 
-    if sum_x == T::zero() || sum_y == T::zero() || sum_min == T::zero() {
-        U::one()
+    if denominator <= numerator {
+        U::zero()
     } else {
-        let (numerator, denominator) = (sum_min + sum_min, sum_x + sum_y);
-        if denominator <= numerator {
-            U::zero()
-        } else {
-            U::one() - U::from(numerator) / U::from(denominator)
-        }
+        U::from(numerator) / U::from(denominator)
     }
 }

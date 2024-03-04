@@ -15,6 +15,8 @@ Functions = tuple[
 
 
 FUNCTIONS: dict[str, Functions] = {
+    "BrayCurtis": (abd_distances.braycurtis, scipy_distance.braycurtis),
+    "Canberra": (abd_distances.canberra, scipy_distance.canberra),
     "Chebyshev": (abd_distances.chebyshev, scipy_distance.chebyshev),
     "Euclidean": (abd_distances.euclidean, scipy_distance.euclidean),
     "SqEuclidean": (abd_distances.sqeuclidean, scipy_distance.sqeuclidean),
@@ -24,6 +26,8 @@ FUNCTIONS: dict[str, Functions] = {
 
 
 METRICS = [
+    "braycurtis",
+    "canberra",
     "chebyshev",
     "euclidean",
     "sqeuclidean",
