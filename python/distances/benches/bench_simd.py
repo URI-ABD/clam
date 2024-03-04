@@ -8,8 +8,8 @@ import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import simd
 
-CAR = 10
-DIM = 1_000
+CAR = 20
+DIM = 500
 NUM_RUNS = 100
 
 GEN_DATA = {
