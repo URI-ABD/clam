@@ -6,7 +6,7 @@ WORKDIR /usr/local/src/crates/$DIR
 CACHE ./target/
 
 test:
-    RUN cargo test
+    RUN cargo test --release
 
 publish:
     ARG --required EARTHLY_PUSH
