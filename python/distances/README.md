@@ -80,7 +80,7 @@ print(dist)
 
 ## Benchmarks
 
-### SIMD-Accelerated Vector Distances
+### SIMD-Accelerated Vector Distance Benchmarks
 
 These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using **a single thread**.
 The OS was Arch Linux, with kernel version 6.7.4-arch1-1.
