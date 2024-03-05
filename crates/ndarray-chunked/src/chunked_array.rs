@@ -7,7 +7,6 @@ use std::{
 };
 
 use ndarray::{concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
-
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
 /// The filename for the metadata file of a `ChunkedArray`
@@ -48,28 +47,6 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
     }
 }
 
-/// Controls chunking settings for `ChunkedArray`
-pub struct ChunkSettings {
-    /// The axis we'll chunk along
-    chunk_along: usize,
-    /// The size (number of indices along the dimesion) of each chunk
-    size: usize,
-    /// The path of the containing folder
-    path: String,
-}
-
-impl ChunkSettings {
-    /// Constructs a new `ChunkSettings`
-    #[must_use]
-    pub fn new(chunk_along: usize, size: usize, path: &str) -> Self {
-        Self {
-            chunk_along,
-            size,
-            path: path.to_string(),
-        }
-    }
-}
-
 /// The `ChunkedArray` data structure. Currently without any caching
 pub struct ChunkedArray<T: ReadableElement> {
     /// The axis along which this Array was chunked along
@@ -100,7 +77,6 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         let start_chunk = slice_axis_indices[0] / self.chunk_size;
 
         // This is fine because we're guaranteed at least one element in `slice_axis_indices`
-        #[allow(clippy::unwrap_used)]
         let end_chunk = slice_axis_indices.last().unwrap() / self.chunk_size;
 
         // Now load in the actual chunks
@@ -124,9 +100,10 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         let adjusted_chunk_info = match idxs[self.chunked_along] {
             SliceInfoElem::Slice { start, end, step } => {
                 // We have to do some adjusting here. We need to adjust the start and end to be relative to the chunk
-                // because the slice might not be perfect. I.e. if your starting index is `i` and you have chunks of
-                // size `k`, then i = n * k + r for some n and r. We have already resolved `n` (by loading in the
-                // chunk `i` is in) so we just need `r` to resolve the correct index relative to the chunk.
+                // because the slice might not be perfect and it might not start at 0. I.e. if your starting index is
+                // `i` and you have chunks of size `k`, then i = n * k + r for some n and r. We have already resolved
+                // `n` (by loading in the chunk `i` is in) so we just need `r` to resolve the correct index relative
+                // to the chunk.
                 let adj_start = start % (self.chunk_size as isize);
 
                 // Then, we have to resolve the end index. Basically, end = start + k for some k but start has been
@@ -208,16 +185,18 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         Ok((shape, chunked_along, chunk_size))
     }
 
-    /// Chunks and writes out a given array. Chunking is specified by a `ChunkSettings` instance.
+    /// Chunks and writes out a given array
     /// # Errors
-    pub fn chunk<D: Dimension>(arr: &Array<T, D>, settings: &ChunkSettings) -> Result<(), String> {
-        let path = Path::new(&settings.path);
+    pub fn chunk<D: Dimension>(
+        arr: &Array<T, D>,
+        chunk_along: usize,
+        size: usize,
+        path: &str,
+    ) -> Result<(), String> {
+        let path = Path::new(path);
 
         // Create the directory, etc.
         Self::handle_directory(path)?;
-
-        // Basic settings
-        let (chunk_along, size) = (settings.chunk_along, settings.size);
 
         // Write out metadata
         {
@@ -235,10 +214,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         // Write out each chunk
         for (ix, chunk) in chunk_iter.enumerate() {
             let chunk_path = path.join(format!("chunk{ix}.npy"));
-            let chunk_path_name = chunk_path
-                .to_str()
-                .ok_or_else(|| "Could not convert path name to UTF-8".to_string())?;
-
+            let chunk_path_name = chunk_path.to_str().ok_or("Path is not valid UTF-8")?;
             write_npy(chunk_path_name, &chunk).map_err(|e| e.to_string())?;
         }
 

@@ -4,7 +4,7 @@ use std::fs::read_dir;
 
 use ndarray::s;
 use ndarray::{Array, IxDyn};
-use ndarray_chunked::chunked_array::{ChunkSettings, ChunkedArray};
+use ndarray_chunked::chunked_array::ChunkedArray;
 use rand::Rng;
 use tempdir::TempDir;
 
@@ -21,10 +21,9 @@ fn generate_dummy_data(
 
     // Create our temp directory and settings
     let tmp = TempDir::new(dirname).unwrap();
-    let settings = ChunkSettings::new(chunk_along, size, tmp.path().to_str().unwrap());
 
     // Write out the chunks
-    ChunkedArray::chunk(&arr, &settings).unwrap();
+    ChunkedArray::chunk(&arr, chunk_along, size, tmp.path().to_str().unwrap()).unwrap();
 
     (tmp, arr)
 }
