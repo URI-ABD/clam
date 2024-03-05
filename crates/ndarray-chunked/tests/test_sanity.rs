@@ -37,7 +37,7 @@ mod tests {
     // fn a() {
     //     let chunk_along = 0;
     //     let size = 3;
-    //     let shape = [100, 100, 100];
+    //     let shape = [9, 3, 3];
 
     //     // Dummy array
     //     let arr = Array::range(0., shape.iter().fold(1., |acc, x| acc * (*x as f32)), 1.)

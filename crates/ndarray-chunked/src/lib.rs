@@ -16,7 +16,9 @@
 )]
 #![doc = include_str!("../README.md")]
 
+use numpy::convert::ToPyArray;
 use pyo3::prelude::*;
+use pyo3::types::PySlice;
 
 /// Array chunking
 pub mod chunked_array;
@@ -41,8 +43,6 @@ pub fn sum_as_string(a: usize, b: usize) -> String {
 pub fn py_sum_as_string(a: usize, b: usize) -> PyResult<String> {
     Ok((a + b).to_string())
 }
-
-use pyo3::exceptions::PyBaseException;
 
 /// Defines a chunked array for arbitrary type. This is necessary because pyo3 does not support
 /// generics.
@@ -69,6 +69,51 @@ macro_rules! def_chunked_array {
             pub fn shape(&self) -> Vec<usize> {
                 self.ca.shape.clone()
             }
+
+            ///.
+            fn __getitem__(&self, py: Python, key: &PyTuple) -> pyo3::Py<PyArray<f32, Dim<IxDynImpl>>>{
+                // We need to build the slice array from the tuple, converting the tuple elements to SliceInfoElems
+                let mut slices = key.iter().enumerate().map(|(i, k)| {
+                    // If it's an integer, just treat it like a normal index. No problem.
+                    if PyAny::is_exact_instance_of::<PyInt>(k) {
+                        let k = k.extract::<isize>().unwrap();
+                        SliceInfoElem::Index(k)
+
+                    // Otherwise we hav a slice, in which we want to build the slice from
+                    // the pyslice
+                    } else if PyAny::is_exact_instance_of::<PySlice>(k) {
+                        let k = k.extract::<&PySlice>().unwrap();
+                        let length = self.ca.shape[i];
+                        let indices = k.indices(length as i64).unwrap();
+                        SliceInfoElem::Slice {
+                            start: indices.start,
+                            end: Some(indices.stop),
+                            step: indices.step,
+                        }
+
+                    // Otherwise (for now) we just panic
+                    } else {
+                        panic!("Invalid index type")
+                    }
+                }).collect::<Vec<SliceInfoElem>>();
+
+
+                // It might be the case that the user only gives us k < n of the full
+                // dimensionality for a slice. In this case, we need to fill the rest
+                // with full slices.
+                let n = self.ca.shape.len();
+                if slices.len() < n {
+                    slices.extend((slices.len()..n).map(|_| SliceInfoElem::Slice {
+                        start: 0,
+                        end: None,
+                        step: 1,
+                    }));
+                }
+
+                // Slice the actual array
+                let sliced = self.ca.slice(&slices);
+                sliced.to_pyarray(py).to_owned()
+            }
         }
 
         // Add the class to the module
@@ -85,11 +130,17 @@ macro_rules! def_chunked_array {
 #[pymodule]
 #[allow(clippy::unnecessary_wraps)]
 pub fn ndarray_chunked(_py: Python, m: &PyModule) -> PyResult<()> {
+    use ndarray::IxDynImpl;
+    use ndarray::{Dim, SliceInfoElem};
+    use numpy::PyArray;
+    use pyo3::exceptions::PyBaseException;
+    use pyo3::types::{PyInt, PyTuple};
+
     def_chunked_array!(ChunkedArrayF32, f32, m);
-    def_chunked_array!(ChunkedArrayF64, f64, m);
-    def_chunked_array!(ChunkedArrayI32, i32, m);
-    def_chunked_array!(ChunkedArrayI64, i64, m);
-    def_chunked_array!(ChunkedArrayU32, u32, m);
-    def_chunked_array!(ChunkedArrayU64, u64, m);
+    // def_chunked_array!(ChunkedArrayF64, f64, m);
+    // def_chunked_array!(ChunkedArrayI32, i32, m);
+    // def_chunked_array!(ChunkedArrayI64, i64, m);
+    // def_chunked_array!(ChunkedArrayU32, u32, m);
+    // def_chunked_array!(ChunkedArrayU64, u64, m);
     Ok(())
 }
