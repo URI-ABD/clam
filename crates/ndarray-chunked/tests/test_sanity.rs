@@ -32,6 +32,22 @@ fn generate_dummy_data(
 mod tests {
     use super::*;
 
+    // Using this to generate dummy data. Ignore.
+    // #[test]
+    // fn a() {
+    //     let chunk_along = 0;
+    //     let size = 3;
+    //     let shape = [100, 100, 100];
+
+    //     // Dummy array
+    //     let arr = Array::range(0., shape.iter().fold(1., |acc, x| acc * (*x as f32)), 1.)
+    //         .into_shape(shape)
+    //         .unwrap();
+
+    //     // Write out the chunks
+    //     ChunkedArray::chunk(&arr, chunk_along, size, "/tmp/given/").unwrap();
+    // }
+
     #[test]
     fn test_large_array() {
         let chunk_along = 0;

@@ -42,6 +42,40 @@ pub fn py_sum_as_string(a: usize, b: usize) -> PyResult<String> {
     Ok((a + b).to_string())
 }
 
+use pyo3::exceptions::PyBaseException;
+
+/// Defines a chunked array for arbitrary type. This is necessary because pyo3 does not support
+/// generics.
+macro_rules! def_chunked_array {
+    ($struct_name:ident, $t:ty, $module:expr) => {
+        #[pyclass]
+        ///.
+        pub struct $struct_name {
+            ///.
+            pub ca: chunked_array::ChunkedArray<$t>,
+        }
+
+        #[pymethods]
+        impl $struct_name {
+            #[new]
+            ///.
+            pub fn new(path: &str) -> PyResult<Self> {
+                let ca = chunked_array::ChunkedArray::new(path)
+                    .map_err(|e| PyBaseException::new_err(e))?;
+                Ok(Self { ca })
+            }
+
+            ///.
+            pub fn shape(&self) -> Vec<usize> {
+                self.ca.shape.clone()
+            }
+        }
+
+        // Add the class to the module
+        $module.add_class::<$struct_name>()?;
+    };
+}
+
 /// A Python module implemented in Rust.
 ///
 /// # Errors
@@ -51,6 +85,11 @@ pub fn py_sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 #[allow(clippy::unnecessary_wraps)]
 pub fn ndarray_chunked(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(py_sum_as_string, m)?)?;
+    def_chunked_array!(ChunkedArrayF32, f32, m);
+    def_chunked_array!(ChunkedArrayF64, f64, m);
+    def_chunked_array!(ChunkedArrayI32, i32, m);
+    def_chunked_array!(ChunkedArrayI64, i64, m);
+    def_chunked_array!(ChunkedArrayU32, u32, m);
+    def_chunked_array!(ChunkedArrayU64, u64, m);
     Ok(())
 }
