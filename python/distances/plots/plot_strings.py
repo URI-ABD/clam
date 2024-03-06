@@ -1,5 +1,7 @@
 """Create and save plots for SIMD-Accelerated Distance computations."""
 
+from __future__ import annotations
+
 import time
 import typing
 
@@ -32,7 +34,7 @@ def make_plots() -> None:  # noqa: C901
         x: list[int] = []
         y_abd: list[float] = []
 
-        y_comp: typing.Optional[list[float]] = None
+        y_comp: list[float] | None = None
         if comp_name:
             y_comp = []
 
