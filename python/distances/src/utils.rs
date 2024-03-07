@@ -156,13 +156,23 @@ pub fn parse_metric<T: Number>(metric: &str) -> PyResult<fn(&[T], &[T]) -> f64> 
     match metric.to_lowercase().as_str() {
         "braycurtis" => Ok(vectors::bray_curtis),
         "canberra" => Ok(vectors::canberra),
-        "chebyshev" => Ok(vectors::chebyshev),
+        "chebyshev" => Ok(_chebyshev),
         "euclidean" => Ok(vectors::euclidean),
         "sqeuclidean" => Ok(vectors::euclidean_sq),
-        "manhattan" | "cityblock" => Ok(vectors::manhattan),
+        "manhattan" | "cityblock" => Ok(_manhattan),
         "cosine" => Ok(vectors::cosine),
         _ => Err(PyValueError::new_err(format!("Unknown metric: {}", metric))),
     }
+}
+
+pub fn _chebyshev<T: Number, U: Number>(a: &[T], b: &[T]) -> U {
+    let d = vectors::chebyshev(a, b);
+    U::from(d)
+}
+
+pub fn _manhattan<T: Number, U: Number>(a: &[T], b: &[T]) -> U {
+    let d = vectors::manhattan(a, b);
+    U::from(d)
 }
 
 pub fn _cdist<T, U, F>(

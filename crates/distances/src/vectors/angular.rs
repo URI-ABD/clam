@@ -1,7 +1,5 @@
 //! Angular distances between vectors.
 
-use core::cmp::min;
-
 use crate::{
     number::{Float, Int, UInt},
     Number,

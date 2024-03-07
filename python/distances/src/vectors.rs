@@ -6,7 +6,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 
 use crate::utils::Scalar;
 
-use super::utils::{parse_metric, Vector1, Vector2, _cdist, _pdist};
+use super::utils::{parse_metric, Vector1, Vector2, _cdist, _chebyshev, _manhattan, _pdist};
 
 pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "vectors")?;
@@ -25,51 +25,41 @@ pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
 }
 
 macro_rules! build_fn {
-    ($name:tt, $generic_name:tt) => {
+    ($name:tt, $func:expr) => {
         #[pyfunction]
         fn $name(a: Vector1, b: Vector1) -> PyResult<Scalar> {
             match (&a, &b) {
                 // The types are the same
-                (Vector1::F32(a), Vector1::F32(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::F64(a), Vector1::F64(b)) => Ok(Scalar::F64(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::U8(a), Vector1::U8(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::U16(a), Vector1::U16(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::U32(a), Vector1::U32(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::U64(a), Vector1::U64(b)) => Ok(Scalar::F64(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::I8(a), Vector1::I8(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::I16(a), Vector1::I16(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::I32(a), Vector1::I32(b)) => Ok(Scalar::F32(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
-                (Vector1::I64(a), Vector1::I64(b)) => Ok(Scalar::F64(vectors::$generic_name(
-                    a.as_slice()?,
-                    b.as_slice()?,
-                ))),
+                (Vector1::F32(a), Vector1::F32(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::F64(a), Vector1::F64(b)) => {
+                    Ok(Scalar::F64($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::U8(a), Vector1::U8(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::U16(a), Vector1::U16(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::U32(a), Vector1::U32(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::U64(a), Vector1::U64(b)) => {
+                    Ok(Scalar::F64($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::I8(a), Vector1::I8(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::I16(a), Vector1::I16(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::I32(a), Vector1::I32(b)) => {
+                    Ok(Scalar::F32($func(a.as_slice()?, b.as_slice()?)))
+                }
+                (Vector1::I64(a), Vector1::I64(b)) => {
+                    Ok(Scalar::F64($func(a.as_slice()?, b.as_slice()?)))
+                }
                 // The types are different
                 (Vector1::F64(a), _) => {
                     let b = b.cast::<f64>();
@@ -77,7 +67,7 @@ macro_rules! build_fn {
                         Some(b) => Ok(b),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F64(vectors::$generic_name(a.as_slice()?, b)))
+                    Ok(Scalar::F64($func(a.as_slice()?, b)))
                 }
                 (_, Vector1::F64(b)) => {
                     let a = a.cast::<f64>();
@@ -85,7 +75,7 @@ macro_rules! build_fn {
                         Some(a) => Ok(a),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F64(vectors::$generic_name(a, b.as_slice()?)))
+                    Ok(Scalar::F64($func(a, b.as_slice()?)))
                 }
                 (Vector1::U64(_), _) | (Vector1::I64(_), _) => {
                     let a = a.cast::<f64>();
@@ -98,7 +88,7 @@ macro_rules! build_fn {
                         Some(b) => Ok(b),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F64(vectors::$generic_name(a, b)))
+                    Ok(Scalar::F64($func(a, b)))
                 }
                 (_, Vector1::U64(_)) | (_, Vector1::I64(_)) => {
                     let a = a.cast::<f64>();
@@ -111,7 +101,7 @@ macro_rules! build_fn {
                         Some(b) => Ok(b),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F64(vectors::$generic_name(a, b)))
+                    Ok(Scalar::F64($func(a, b)))
                 }
                 (Vector1::F32(a), _) => {
                     let b = b.cast::<f32>();
@@ -119,7 +109,7 @@ macro_rules! build_fn {
                         Some(b) => Ok(b),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F32(vectors::$generic_name(a.as_slice()?, b)))
+                    Ok(Scalar::F32($func(a.as_slice()?, b)))
                 }
                 (_, Vector1::F32(b)) => {
                     let a = a.cast::<f32>();
@@ -127,7 +117,7 @@ macro_rules! build_fn {
                         Some(a) => Ok(a),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F32(vectors::$generic_name(a, b.as_slice()?)))
+                    Ok(Scalar::F32($func(a, b.as_slice()?)))
                 }
                 _ => {
                     let a = a.cast::<f32>();
@@ -140,20 +130,20 @@ macro_rules! build_fn {
                         Some(b) => Ok(b),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F32(vectors::$generic_name(a, b)))
+                    Ok(Scalar::F32($func(a, b)))
                 }
             }
         }
     };
 }
 
-build_fn!(braycurtis, bray_curtis);
-build_fn!(canberra, canberra);
-build_fn!(chebyshev, chebyshev);
-build_fn!(euclidean, euclidean);
-build_fn!(sqeuclidean, euclidean_sq);
-build_fn!(manhattan, manhattan);
-build_fn!(cosine, cosine);
+build_fn!(braycurtis, vectors::bray_curtis);
+build_fn!(canberra, vectors::canberra);
+build_fn!(chebyshev, _chebyshev);
+build_fn!(euclidean, vectors::euclidean);
+build_fn!(sqeuclidean, vectors::euclidean_sq);
+build_fn!(manhattan, _manhattan);
+build_fn!(cosine, vectors::cosine);
 
 #[pyfunction]
 fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
