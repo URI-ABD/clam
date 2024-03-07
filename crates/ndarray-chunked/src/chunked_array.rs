@@ -1,12 +1,14 @@
 use std::{
-    fmt::Debug,
     fs::{create_dir, File},
     io::{Read, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
 };
 
-use ndarray::{concatenate, Array, ArrayBase, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
+use ndarray::{
+    concatenate, Array, ArrayBase, ArrayView, Axis, Dimension, IxDyn, OwnedRepr, SliceInfo,
+    SliceInfoElem,
+};
 use ndarray_npy::{read_npy, write_npy, ReadableElement, WritableElement};
 
 /// The filename for the metadata file of a `ChunkedArray`
@@ -48,7 +50,7 @@ fn slice_info_to_vec(info: &SliceInfoElem, end: usize) -> Vec<usize> {
 }
 
 /// The `ChunkedArray` data structure. Currently without any caching
-pub struct ChunkedArray<T: ReadableElement> {
+pub struct ChunkedArray<T> {
     /// The axis along which this Array was chunked along
     pub chunked_along: usize,
     /// The size of each chunk
@@ -61,7 +63,7 @@ pub struct ChunkedArray<T: ReadableElement> {
     _t: PhantomData<T>,
 }
 
-impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArray<T> {
+impl<T: Clone + ReadableElement + WritableElement> ChunkedArray<T> {
     /// Returns a given slice from the `ChunkedArray`
     /// # Panics
     /// This function will panic if chunk files are malformed or if conversions break
@@ -88,7 +90,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
         // Concatenate the chunks
         let chunk = chunks
             .into_iter()
-            .reduce(|a: ArrayBase<_, _>, b| {
+            .reduce(|a: ArrayBase<OwnedRepr<T>, _>, b| {
                 concatenate(Axis(self.chunked_along), &[a.view(), b.view()]).unwrap()
             })
             .unwrap();
@@ -156,6 +158,8 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
     /// Loads in `ChunkedArray` metadata from a given directory.
     /// The format is simple: ndim; shape; axis along which the array was split; the max size of each chunk. Each
     /// data point is a u32 and is little endian. Shape is a list of u32s of length ndim.
+    /// TODO: Complex nums
+    ///
     /// # Errors
     fn load_metadata(folder: &Path) -> Result<(Vec<usize>, usize, usize), String> {
         let mut handle = File::open(folder.join(METADATA_FILENAME)).map_err(|e| e.to_string())?;
@@ -188,7 +192,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
     /// Chunks and writes out a given array
     /// # Errors
     pub fn chunk<D: Dimension>(
-        arr: &Array<T, D>,
+        arr: &ArrayView<'_, T, D>,
         chunk_along: usize,
         size: usize,
         path: &str,
@@ -200,11 +204,11 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
 
         // Write out metadata
         {
-            let metdata_bytes = Self::generate_metadata(arr, chunk_along, size);
+            let metadata_bytes = Self::generate_metadata(arr, chunk_along, size);
             let mut handle =
                 File::create(path.join(METADATA_FILENAME)).map_err(|e| e.to_string())?;
             handle
-                .write_all(&metdata_bytes)
+                .write_all(&metadata_bytes)
                 .map_err(|e| e.to_string())?;
         }
 
@@ -224,7 +228,7 @@ impl<T: ReadableElement + WritableElement + Clone + Default + Debug> ChunkedArra
     /// Generates metadata file for a given array
     #[allow(clippy::cast_possible_truncation)]
     fn generate_metadata<A: WritableElement, D: Dimension>(
-        arr: &Array<A, D>,
+        arr: &ArrayView<'_, A, D>,
         chunk_along: usize,
         size: usize,
     ) -> Vec<u8> {

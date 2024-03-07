@@ -23,7 +23,7 @@ fn generate_dummy_data(
     let tmp = TempDir::new(dirname).unwrap();
 
     // Write out the chunks
-    ChunkedArray::chunk(&arr, chunk_along, size, tmp.path().to_str().unwrap()).unwrap();
+    ChunkedArray::chunk(&arr.view(), chunk_along, size, tmp.path().to_str().unwrap()).unwrap();
 
     (tmp, arr)
 }
