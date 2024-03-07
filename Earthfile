@@ -1,29 +1,8 @@
 VERSION 0.8
-FROM ubuntu:latest
+FROM rust:latest
 WORKDIR /usr/local/src
 
 ENV DEBIAN_FRONTEND noninteractive
-
-# Run updates
-RUN apt-get update && \
-    apt-get install software-properties-common -y && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    python3.9 \
-    python3.9-dev \
-    python3.9-distutils \
-    python3.9-venv \
-    python3-pip && \
-    apt-get update
-
-# Install rust
-RUN curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
 
 # The cache directive creates a buildkit cache mount point. This allows us to cache the dependencies between builds.
 CACHE ./target/
@@ -39,10 +18,6 @@ RUN cargo install \
     jaq
 
 RUN cargo install maturin --locked
-
-# Create a virtual environment for the python dependencies.
-RUN python3.9 -m venv .venv
-RUN . .venv/bin/activate && pip install --upgrade pip
 
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
@@ -86,9 +61,13 @@ test:
 
 pytest:
     ARG --required PKG
-    FROM +fmt
+    FROM ghcr.io/pyo3/maturin:latest
+    COPY --dir crates .
+    COPY --dir python .
+    COPY Cargo.toml .
+    RUN python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip
     WORKDIR /usr/local/src/python/$PKG
-    RUN maturin develop --release --strip --extras=dev
+    RUN . ../../.venv/bin/activate && maturin develop --release --strip --extras=dev
     RUN . ../../.venv/bin/activate && python -m pytest -v
 
 pybench:
