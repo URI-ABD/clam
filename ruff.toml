@@ -1,3 +1,6 @@
+target-version = "py39" # Assume Python 3.9.
+
+[lint]
 select = [ "ALL" ]
 ignore = [
   "ANN101",  # Missing type annotation for self in method
@@ -7,16 +10,18 @@ ignore = [
   "ICN001",  # {name} should be imported as {asname}  # I like my numpy imports
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
-target-version = "py39" # Assume Python 3.9.
 
-[mccabe]
+[lint.mccabe]
 # Default to a complexity level of 10.
 max-complexity = 10
 
-[pydocstyle]
+[lint.isort]
+force-single-line = true
+
+[lint.pydocstyle]
 convention = "google"
 
-[per-file-ignores]
+[lint.per-file-ignores]
 "__init__.py" = ["F401"] # Unused import.
 "pypi/**/test_*.py" = [
   "ANN001", # Missing type annotation for function argument.
@@ -43,6 +48,3 @@ convention = "google"
   "PLR5501", # Use `elif` instead of `else` then `if`.
   "RET505",  # Unecessary `else` after `return`.
 ]
-
-[isort]
-force-single-line = true

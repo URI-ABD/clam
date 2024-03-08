@@ -1,3 +1,6 @@
+target-version = "py311" # Assume Python 3.11
+
+[lint]
 select = [
   "F",   # pyflakes
   "E",   # pycodestyle errors
@@ -36,16 +39,18 @@ ignore = [
   "PLR2004", # Use of magic value in comparison
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
-target-version = "py311" # Assume Python 3.11
 
-[mccabe]
+[lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10
 max-complexity = 10
 
-[pydocstyle]
+[lint.isort]
+force-single-line = true
+
+[lint.pydocstyle]
 convention = "google"
 
-[per-file-ignores]
+[lint.per-file-ignores]
 "__init__.py" = [
   "F401", # Unused import.
 ]
@@ -56,6 +61,3 @@ convention = "google"
   "D103", # Missing docstring in public function.
   "S101", # Use of assert detected.
 ]
-
-[isort]
-force-single-line = true

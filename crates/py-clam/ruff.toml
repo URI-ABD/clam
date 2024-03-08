@@ -1,3 +1,6 @@
+target-version = "py39" # Assume Python 3.9.
+
+[lint]
 select = [
   "F",   # pyflakes
   "E",   # pycodestyle errors
@@ -37,16 +40,18 @@ ignore = [
   "ANN401",  # Dynamically typed expressions are disallowed
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
-target-version = "py39" # Assume Python 3.9.
 
-[mccabe]
+[lint.mccabe]
 # Default to a complexity level of 10.
 max-complexity = 10
 
-[pydocstyle]
+[lint.isort]
+force-single-line = true
+
+[lint.pydocstyle]
 convention = "google"
 
-[per-file-ignores]
+[lint.per-file-ignores]
 "__init__.py" = ["F401"] # Unused import.
 "python/tests/**/*.py" = [
   "ANN001", # Missing type annotation for function argument.
@@ -74,6 +79,3 @@ convention = "google"
   "RET505",  # Unecessary `else` after `return`.
 
 ]
-
-[isort]
-force-single-line = true
