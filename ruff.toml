@@ -18,7 +18,7 @@ convention = "google"
 
 [per-file-ignores]
 "__init__.py" = ["F401"] # Unused import.
-"python/**/test_*.py" = [
+"pypi/**/test_*.py" = [
   "ANN001", # Missing type annotation for function argument.
   "ANN003", # Missing type annotation for **kwargs.
   "ANN201", # Missing return type annotation for public function.
@@ -32,14 +32,14 @@ convention = "google"
   "RET504", # Unecessary variable assignment before `return` statement.
   "S101",   # Use of assert detected.
 ]
-"python/abd_clam/**/*.py" = [
+"pypi/abd_clam/**/*.py" = [
   "ANN002",  # Missing type annotation for *args.
   "ANN003",  # Missing type annotation for **kwargs.
   "D100",    # Missing docstring in public module.
   "D103",    # Missing docstring in public function.
   "PLR0911", # Too many return statements
 ]
-"python/abd_clam/anomaly_detection/pretrained_models.py" = [
+"pypi/abd_clam/anomaly_detection/pretrained_models.py" = [
   "PLR5501", # Use `elif` instead of `else` then `if`.
   "RET505",  # Unecessary `else` after `return`.
 ]

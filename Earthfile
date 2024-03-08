@@ -21,8 +21,7 @@ RUN cargo install maturin --locked
 
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
-    COPY --dir crates .
-    COPY --dir python .
+    COPY --dir crates pypi .
     COPY Cargo.toml .
     RUN cargo chef prepare
     SAVE ARTIFACT recipe.json
@@ -31,8 +30,7 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY --dir crates .
-    COPY --dir python .
+    COPY --dir crates pypi .
     COPY Cargo.toml .
 
 # This target builds the project using the cached dependencies.
@@ -46,7 +44,7 @@ fmt:
     FROM +chef-cook
     RUN cargo fmt --all
     SAVE ARTIFACT crates AS LOCAL ./
-    SAVE ARTIFACT python AS LOCAL ./
+    SAVE ARTIFACT pypi AS LOCAL ./
     RUN cargo fmt --all -- --check
 
 # This target lints the project.
@@ -62,8 +60,7 @@ test:
 pytest:
     ARG --required PKG
     FROM ghcr.io/pyo3/maturin:latest
-    COPY --dir crates .
-    COPY --dir python .
+    COPY --dir crates pypi .
     COPY Cargo.toml .
     RUN python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip
     WORKDIR /usr/local/src/python/$PKG
