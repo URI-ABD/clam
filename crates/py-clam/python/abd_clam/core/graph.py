@@ -58,7 +58,7 @@ class Edge:
 
     def __contains__(self, c: cluster.Cluster) -> bool:
         """Returns whether the given cluster is in the edge."""
-        return (c == self.__left) or (c == self.__right)
+        return c in (self.__left, self.__right)
 
     @property
     def clusters(self) -> tuple[cluster.Cluster, cluster.Cluster]:

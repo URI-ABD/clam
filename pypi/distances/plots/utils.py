@@ -1,7 +1,8 @@
 """Plotting utilities for the benchmarks."""
 
+from __future__ import annotations
+
 import pathlib
-import typing
 
 import numpy
 import seaborn
@@ -62,7 +63,7 @@ def make_plot(  # noqa: PLR0913
     fn_name: str,
     dt_name: str,
     y_units: str = "µs",
-    y_comp: typing.Optional[list[float]] = None,
+    y_comp: list[float] | None = None,
     x_label: str = "Dimension",
     y_comp_label: str = "SciPy",
 ) -> None:

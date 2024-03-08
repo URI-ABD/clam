@@ -33,7 +33,7 @@ def test_levenshtein(strings: list[str]):
 def test_needleman_wunsch(strings: list[str]):
     """Test the Needleman-Wunsch distance function."""
     assert abd_strings.needleman_wunsch("NAJIBEATSPEPPERS", "NAJIBPEPPERSEATS") == 8
-    assert abd_strings.needleman_wunsch("TOMEATSWHATFOODEATS", "FOODEATSWHATTOMEATS") == 6  # noqa: E501
+    assert abd_strings.needleman_wunsch("TOMEATSWHATFOODEATS", "FOODEATSWHATTOMEATS") == 6
 
     for a in strings:
         for b in strings:

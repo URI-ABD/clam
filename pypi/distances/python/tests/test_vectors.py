@@ -62,7 +62,7 @@ def test_minkowski_f32(data_f32: numpy.ndarray):
         for a in data_f32:
             for b in data_f32:
                 for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-                    _check_distances(a_, b_, f"Minkowski, p={p}", abd_mink, scipy_mink, 1e-5)  # noqa: E501
+                    _check_distances(a_, b_, f"Minkowski, p={p}", abd_mink, scipy_mink, 1e-5)
 
 
 def test_minkowski_f64(data_f64: numpy.ndarray):
@@ -73,7 +73,7 @@ def test_minkowski_f64(data_f64: numpy.ndarray):
         for a in data_f64:
             for b in data_f64:
                 for a_, b_ in [(a, a), (a, b), (b, a), (b, b)]:
-                    _check_distances(a_, b_, f"Minkowski, p={p}", abd_mink, scipy_mink, 1e-10)  # noqa: E501
+                    _check_distances(a_, b_, f"Minkowski, p={p}", abd_mink, scipy_mink, 1e-10)
 
 
 def test_cdist_f32(data_f32: numpy.ndarray):

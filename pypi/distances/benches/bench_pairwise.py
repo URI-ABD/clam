@@ -1,12 +1,16 @@
 """Benchmark cdist and pdist functions."""
 
+from __future__ import annotations
+
 import typing
 from functools import partial
 
-import numpy
 import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import simd
+
+if typing.TYPE_CHECKING:
+    import numpy
 
 CAR = 200
 DIM = 500
@@ -22,7 +26,7 @@ GEN_DATA = {
 def bench_func(
     func: typing.Callable[[numpy.ndarray, numpy.ndarray], numpy.ndarray],
     gen_data_x: typing.Callable[[int, int], numpy.ndarray],
-    gen_data_y: typing.Optional[typing.Callable[[int, int], numpy.ndarray]],
+    gen_data_y: typing.Callable[[int, int], numpy.ndarray] | None,
 ) -> None:
     """Benchmark a distance function."""
     data_x = gen_data_x(CAR, DIM)
@@ -37,7 +41,7 @@ def bench_func(
 
 __benchmarks__ = [
     (
-        partial(bench_func, partial(scipy_distance.cdist, metric=name), gen_data, gen_data),  # noqa: E501
+        partial(bench_func, partial(scipy_distance.cdist, metric=name), gen_data, gen_data),
         partial(bench_func, partial(simd.cdist, metric=name), gen_data, gen_data),
         f"SIMD, cdist, {name}, {dtype}",
     )

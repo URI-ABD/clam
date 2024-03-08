@@ -33,6 +33,7 @@ FUNCTIONS = {
     for dtype, gen_data in GEN_DATA.items()
 }
 
+
 def bench_func(
     func: typing.Callable[[numpy.ndarray, numpy.ndarray], float],
     gen_data: typing.Callable[[int, int], numpy.ndarray],

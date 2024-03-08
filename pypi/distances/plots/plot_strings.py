@@ -53,7 +53,7 @@ def make_plots() -> None:  # noqa: C901
             end = float(time.perf_counter() - start) * 1000
             if "hamming" in name.lower():
                 end *= 1000
-            end = end / (car ** 2)
+            end = end / (car**2)
             y_abd.append(end)
 
             if y_comp is not None:
@@ -64,7 +64,7 @@ def make_plots() -> None:  # noqa: C901
                 end_comp = float(time.perf_counter() - start) * 1000
                 if "hamming" in name.lower():
                     end_comp *= 1000
-                end_comp = end_comp / (car ** 2)
+                end_comp = end_comp / (car**2)
                 y_comp.append(end_comp)
 
         y_units = "µs" if "hamming" in name.lower() else "ms"

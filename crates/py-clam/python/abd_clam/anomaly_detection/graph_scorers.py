@@ -422,9 +422,7 @@ class StationaryProbabilities(GraphScorer):
             else:  # Component with only one Cluster means the Cluster is anomalous.
                 scores.update({c: 0 for c in component.clusters})
 
-        scores = {c: -s for c, s in scores.items()}
-
-        return scores
+        return {c: -s for c, s in scores.items()}
 
 
 __all__ = [

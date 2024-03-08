@@ -59,7 +59,7 @@ def xor(n: int = 5_000) -> Data:
     """Generate a 2D XOR dataset."""
     rng = numpy.random.default_rng()
     data = rng.random(n)
-    labels = [int((x > 0.5) != (y > 0.5)) for x, y, in data]
+    labels = [int((x > 0.5) != (y > 0.5)) for x, y in data]
     return numpy.asarray(data, dtype=numpy.float64), labels
 
 

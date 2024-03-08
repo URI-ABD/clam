@@ -73,6 +73,7 @@ convention = "google"
   "D100",    # Missing docstring in public module.
   "D103",    # Missing docstring in public function.
   "PLR0911", # Too many return statements
+  "PLR0912", # Too many branches
 ]
 "python/abd_clam/anomaly_detection/pretrained_models.py" = [
   "PLR5501", # Use `elif` instead of `else` then `if`.

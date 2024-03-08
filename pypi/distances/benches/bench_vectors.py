@@ -1,12 +1,17 @@
 """Benchmark vector distances."""
 
+from __future__ import annotations
+
 import typing
 from functools import partial
 
-import numpy
 import scipy.spatial.distance as scipy_distance
 import utils  # type: ignore[import]
 from abd_distances import vectors
+
+if typing.TYPE_CHECKING:
+    import numpy
+
 
 CAR = 20
 DIM = 500
@@ -37,6 +42,7 @@ FUNCTIONS = {
     for dtype, gen_data in GEN_DATA.items()
 }
 
+
 def bench_func(
     func: typing.Callable[[numpy.ndarray, numpy.ndarray], float],
     gen_data: typing.Callable[[int, int], numpy.ndarray],
@@ -65,14 +71,16 @@ PAIR_FUNCTIONS = {
     )
     for name in PAIR_METRICS
     for dtype, gen_data_x in GEN_DATA.items()
-    for metric in METRICS if "minkowski" not in metric
+    for metric in METRICS
+    if "minkowski" not in metric
 }
+
 
 def bench_pair_func(
     func: typing.Callable[[numpy.ndarray, numpy.ndarray], numpy.ndarray],
     metric: str,
     gen_data_x: typing.Callable[[int, int], numpy.ndarray],
-    gen_data_y: typing.Optional[typing.Callable[[int, int], numpy.ndarray]],
+    gen_data_y: typing.Callable[[int, int], numpy.ndarray] | None,
 ) -> None:
     """Benchmark a pair distance function."""
     data_x = gen_data_x(CAR * 10, DIM)
@@ -100,6 +108,5 @@ __benchmarks__ = [
         partial(bench_pair_func, abd_func, metric, gen_data_x, gen_data_y),
         name,
     )
-    for name, (scipy_func, abd_func, metric, gen_data_x, gen_data_y)
-    in PAIR_FUNCTIONS.items()
+    for name, (scipy_func, abd_func, metric, gen_data_x, gen_data_y) in PAIR_FUNCTIONS.items()
 ]

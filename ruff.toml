@@ -1,4 +1,5 @@
 target-version = "py39" # Assume Python 3.9.
+line-length = 100
 
 [lint]
 select = [ "ALL" ]
@@ -37,14 +38,17 @@ convention = "google"
   "RET504", # Unecessary variable assignment before `return` statement.
   "S101",   # Use of assert detected.
 ]
-"pypi/abd_clam/**/*.py" = [
+"crates/abd_clam/**/*.py" = [
   "ANN002",  # Missing type annotation for *args.
   "ANN003",  # Missing type annotation for **kwargs.
   "D100",    # Missing docstring in public module.
   "D103",    # Missing docstring in public function.
   "PLR0911", # Too many return statements
 ]
-"pypi/abd_clam/anomaly_detection/pretrained_models.py" = [
+"crates/abd_clam/anomaly_detection/pretrained_models.py" = [
   "PLR5501", # Use `elif` instead of `else` then `if`.
   "RET505",  # Unecessary `else` after `return`.
+]
+"pypi/distances/**/*.pyi" = [
+  "PYI021", # Docstrings should not be included in stubs
 ]
