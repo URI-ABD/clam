@@ -38,8 +38,8 @@ chef-cook:
     COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
     COPY --dir pypi .
-    RUN rye sync --no-lock
     COPY --dir crates .
+    RUN rye sync --no-lock
 
 # This target builds the project using the cached dependencies.
 build:
