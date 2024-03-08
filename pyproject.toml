@@ -1,0 +1,19 @@
+[project]
+name = "clam"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Najib Ishaq", email = "najib@najib.com" },
+    { name = "Tom", email = "info@tomhoward.codes" },
+]
+dependencies = []
+readme = "README.md"
+requires-python = ">= 3.9"
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = ["pytest>=8.0.2"]
+
+[tool.rye.workspace]
+members = ["pypi/*"]

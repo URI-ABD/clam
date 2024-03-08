@@ -3,12 +3,13 @@ FROM ../+chef-cook
 
 ARG --global --required DIR
 CACHE ./target/
-WORKDIR /usr/local/src/python/$DIR
+WORKDIR /usr/local/src/pypi/$DIR
 
-pytest:
-    FROM ../+chef-cook
-    RUN maturin develop --release --strip --extras=dev
-    RUN python -m pytest -v
+test:
+    RUN rye test
+
+bench:
+    RUN rye run richbench benches --markdown
 
 bash:
     RUN --interactive bash

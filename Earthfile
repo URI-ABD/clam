@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 # The cache directive creates a buildkit cache mount point. This allows us to cache the dependencies between builds.
 CACHE ./target/
+CACHE ./.venv/
 
 # Add any additional rustup components here. They are available in all targets.
 RUN rustup component add \
@@ -19,6 +20,10 @@ RUN cargo install \
 
 RUN cargo install maturin --locked
 
+ENV RYE_HOME="/opt/rye"
+RUN curl -sSf https://rye-up.com/get | RYE_INSTALL_OPTION="--yes" bash
+ENV PATH="${RYE_HOME}/shims:${PATH}"
+
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
     COPY --dir crates pypi .
@@ -30,42 +35,39 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY --dir crates pypi .
-    COPY Cargo.toml .
+    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock .
+    # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
+    COPY --dir pypi .
+    RUN rye sync --no-lock
+    COPY --dir crates .
 
 # This target builds the project using the cached dependencies.
 build:
     FROM +chef-cook
     RUN cargo build --release
+    RUN rye build --all --out target/release/pypi
     SAVE ARTIFACT target/release AS LOCAL ./target/
 
 # This target formats the project.
 fmt:
     FROM +chef-cook
-    RUN cargo fmt --all
+    RUN cargo fmt --all && rye fmt --all
     SAVE ARTIFACT crates AS LOCAL ./
     SAVE ARTIFACT pypi AS LOCAL ./
-    RUN cargo fmt --all -- --check
+    RUN cargo fmt --all -- --check && rye fmt --all --check
 
 # This target lints the project.
-clippy:
+lint:
     FROM +fmt
     RUN cargo clippy --all-targets --all-features
+    RUN rye lint --all --fix
 
 # This target runs the tests.
 test:
     FROM +fmt
     RUN cargo test --release --lib --bins --examples --tests --all-features
-
-pytest:
-    ARG --required PKG
-    FROM ghcr.io/pyo3/maturin:latest
-    COPY --dir crates pypi .
-    COPY Cargo.toml .
-    RUN python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip
-    WORKDIR /usr/local/src/python/$PKG
-    RUN . ../../.venv/bin/activate && maturin develop --release --strip --extras=dev
-    RUN . ../../.venv/bin/activate && python -m pytest -v
+    # TODO: switch to --all, blocked on https://github.com/astral-sh/rye/issues/853
+    RUN rye test --package abd-distances
 
 pybench:
     ARG --required PKG
