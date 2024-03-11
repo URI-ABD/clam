@@ -52,16 +52,23 @@ build:
 # This target formats the project.
 fmt:
     FROM +chef-cook
-    RUN cargo fmt --all && rye fmt --all
-    SAVE ARTIFACT crates AS LOCAL ./
-    SAVE ARTIFACT pypi AS LOCAL ./
     RUN cargo fmt --all -- --check && rye fmt --all --check
 
 # This target lints the project.
 lint:
-    FROM +fmt
+    FROM +chef-cook
     RUN cargo clippy --all-targets --all-features
+    RUN rye lint --all
+
+# Apply any automated fixes.
+fix:
+    FROM +chef-cook
+    RUN cargo fmt --all
+    RUN rye fmt --all
+    RUN cargo clippy --fix --allow-no-vcs
     RUN rye lint --all --fix
+    SAVE ARTIFACT crates AS LOCAL ./
+    SAVE ARTIFACT pypi AS LOCAL ./
 
 # This target runs the tests.
 test:
@@ -72,7 +79,7 @@ test:
 
 # This target runs the tests on aarch64, it can be expanded to run tests on additional platforms, but it is SLOW.
 cross-test:
-    FROM +fmt
+    FROM +chef-cook
     RUN cargo install cross --git  https://github.com/cross-rs/cross
     WITH DOCKER
         RUN cross test --target aarch64-unknown-linux-gnu --all-features
@@ -80,7 +87,7 @@ cross-test:
 
 # This target runs the benchmarks.
 bench:
-    FROM +fmt
+    FROM +chef-cook
     # TODO: This is currently broken.
     # RUN cargo bench --all-features
     FOR project IN $(cd pypi && ls -d */ | sed '/\./d;s%/$%%')
