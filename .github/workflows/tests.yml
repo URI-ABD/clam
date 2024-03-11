@@ -34,9 +34,9 @@ jobs:
           python-version: '3.9'
       - uses: pre-commit/action@v3.0.0
 
-  rs-tests:
+  test:
     needs: pre-commit
-    name: Rust | Tests
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,17 +45,3 @@ jobs:
           version: v0.8.4
       - name: Test
         run: earthly +test
-  py-tests:
-    needs: pre-commit
-    name: Python | Tests
-    strategy:
-      matrix:
-        package: [distances]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: earthly/actions-setup@v1
-        with:
-          version: v0.8.4
-      - name: Test
-        run: earthly +pytest --PKG=${{ matrix.package }}
