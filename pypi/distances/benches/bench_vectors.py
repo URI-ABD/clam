@@ -108,5 +108,11 @@ __benchmarks__ = [
         partial(bench_pair_func, abd_func, metric, gen_data_x, gen_data_y),
         name,
     )
-    for name, (scipy_func, abd_func, metric, gen_data_x, gen_data_y) in PAIR_FUNCTIONS.items()
+    for name, (
+        scipy_func,
+        abd_func,
+        metric,
+        gen_data_x,
+        gen_data_y,
+    ) in PAIR_FUNCTIONS.items()
 ]

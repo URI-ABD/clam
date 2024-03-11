@@ -244,14 +244,14 @@ mod tests {
             &mut rand::rngs::StdRng::seed_from_u64(43),
         );
 
-        let name = format!("test-full");
+        let name = "test-full".to_string();
         let data = VecDataset::new(name, data_vec.clone(), metric, false);
         let criteria = PartitionCriteria::default();
         let cakes = SingleShard::new(data, Some(seed), &criteria);
 
         let num_shards = 10;
         let max_cardinality = cardinality / num_shards;
-        let name = format!("test-sharded");
+        let name = "test-sharded".to_string();
         let data_shards = VecDataset::new(name, data_vec, metric, false).make_shards(max_cardinality);
         let shards = data_shards
             .into_iter()

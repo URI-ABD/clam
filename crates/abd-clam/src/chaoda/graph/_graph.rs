@@ -803,7 +803,7 @@ mod tests {
                 assert_eq!(graph.population(), cardinality);
                 test_properties(&graph, &selected_clusters, &edges);
                 test_adjacency_map(&graph);
-                test_matrix(&graph)
+                test_matrix(&graph);
             }
         }
     }
@@ -844,10 +844,10 @@ mod tests {
 
         // assert ordered clusters are in correct order
         for i in 1..graph.ordered_clusters().len() {
-            assert!(graph.ordered_clusters().get(i) > graph.ordered_clusters().get(i - 1))
+            assert!(graph.ordered_clusters().get(i) > graph.ordered_clusters().get(i - 1));
         }
 
-        let num_clusters_in_components = components.iter().map(|c| c.len()).sum::<usize>();
+        let num_clusters_in_components = components.iter().map(std::collections::HashSet::len).sum::<usize>();
         assert_eq!(num_clusters_in_components, selected_clusters.len());
 
         // assert the number of clusters in a component is equal to the number of clusters in each of its cluster's traversals
@@ -884,17 +884,17 @@ mod tests {
             graph.adjacency_matrix().unwrap().first().unwrap().len()
         );
 
-        assert!(distance_mat_is_symmetric(&graph));
+        assert!(distance_mat_is_symmetric(graph));
 
         let flat_adj_mat = graph.adjacency_matrix().unwrap().iter().flatten();
         let flat_dist_mat = graph.distance_matrix().unwrap().iter().flatten();
 
         for (has_edge, distance) in flat_adj_mat.zip(flat_dist_mat) {
             if !has_edge {
-                assert!(float_cmp::approx_eq!(f32, *distance, 0.))
+                assert!(float_cmp::approx_eq!(f32, *distance, 0.));
             } else {
                 // possibly false fails if distance is actually 0?
-                assert!(!float_cmp::approx_eq!(f32, *distance, 0.))
+                assert!(!float_cmp::approx_eq!(f32, *distance, 0.));
             }
         }
     }

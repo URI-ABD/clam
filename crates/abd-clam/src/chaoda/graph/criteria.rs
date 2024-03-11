@@ -190,7 +190,7 @@ mod tests {
 
         let root = raw_tree.root();
 
-        let mut priority_queue = score_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1);
+        let mut priority_queue = score_clusters(root, &pretrained_models::get_meta_ml_scorers()[0].1);
 
         assert_eq!(priority_queue.len(), root.subtree().len());
 
@@ -204,7 +204,7 @@ mod tests {
             prev_value = curr_value;
         }
 
-        let cluster_set = select_clusters(&root, &pretrained_models::get_meta_ml_scorers()[0].1, 4).unwrap();
+        let cluster_set = select_clusters(root, &pretrained_models::get_meta_ml_scorers()[0].1, 4).unwrap();
         for i in &cluster_set {
             for j in &cluster_set {
                 if i != j {
@@ -221,10 +221,10 @@ mod tests {
                     ancestor_of = true;
                 }
                 if i.is_descendant_of(j) {
-                    descendant_of = true
+                    descendant_of = true;
                 }
             }
-            assert!(ancestor_of || descendant_of || cluster_set.contains(i))
+            assert!(ancestor_of || descendant_of || cluster_set.contains(i));
         }
     }
 }

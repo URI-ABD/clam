@@ -60,9 +60,9 @@ mod tests {
     fn big() {
         let data = random_tabular_seedable(10000, 20, 0.1, 100.1, 42);
         let augmented_data = augment_data(&data, 10, 0.2);
-        assert_eq!(110000, augmented_data.len());
+        assert_eq!(110_000, augmented_data.len());
 
         let augmented_data = augment_data(&data, 100, 0.2);
-        assert_eq!(1010000, augmented_data.len());
+        assert_eq!(1_010_000, augmented_data.len());
     }
 }
