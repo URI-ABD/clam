@@ -36,7 +36,7 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock .
+    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
     COPY --dir pypi .
     COPY --dir crates .
@@ -66,7 +66,7 @@ fix:
     RUN cargo fmt --all
     RUN rye fmt --all
     RUN cargo clippy --fix --allow-no-vcs
-    RUN rye lint --all --fix
+    RUN rye lint --fix
     SAVE ARTIFACT crates AS LOCAL ./
     SAVE ARTIFACT pypi AS LOCAL ./
 
