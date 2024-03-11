@@ -5,8 +5,9 @@ WORKDIR /usr/local/src
 ENV DEBIAN_FRONTEND noninteractive
 
 # The cache directive creates a buildkit cache mount point. This allows us to cache the dependencies between builds.
-CACHE ./target/
-CACHE ./.venv/
+CACHE --persist ./target/
+# TODO: https://github.com/astral-sh/rye/issues/868
+# CACHE --persist ./.venv/
 
 # Add any additional rustup components here. They are available in all targets.
 RUN rustup component add \
@@ -69,12 +70,6 @@ test:
     # TODO: switch to --all, blocked on https://github.com/astral-sh/rye/issues/853
     RUN rye test --package abd-distances
 
-pybench:
-    ARG --required PKG
-    FROM +pytest
-    WORKDIR /usr/local/src/python/$PKG
-    RUN . ../../.venv/bin/activate && python -m richbench benches --markdown
-
 # This target runs the tests on aarch64, it can be expanded to run tests on additional platforms, but it is SLOW.
 cross-test:
     FROM +fmt
@@ -86,4 +81,15 @@ cross-test:
 # This target runs the benchmarks.
 bench:
     FROM +fmt
-    RUN cargo bench --all-features
+    # TODO: This is currently broken.
+    # RUN cargo bench --all-features
+    FOR project IN $(cd pypi && ls -d */ | sed '/\./d;s%/$%%')
+        BUILD "./pypi+bench" --DIR=$project
+    END
+
+# Helper target to check the most important other targets.
+all:
+    BUILD +build
+    BUILD +fmt
+    BUILD +lint
+    BUILD +test
