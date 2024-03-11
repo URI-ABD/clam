@@ -13,22 +13,13 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
+dependencies = ["numpy>=1.16.0,<2.0.0"]
 
-[tool.rye.dependencies]
-numpy = ">=1.16.0,<2.0.0"
-
-[tool.rye.dev-dependencies]
-pre-commit = "*"
-bump2version = "*"
-pytest = "*"
-pytest-sugar = "*"
-pytest-xdist = "*"
-pytest-cov = "*"
-scipy = "*"
-richbench = "*"
-tqdm = "*"
-seaborn = "*"
-editdistance = "*"
+[tool.rye]
+dev-dependencies = [
+    "seaborn>=0.13.2",
+    "editdistance>=0.8.1",
+]
 
 [tool.maturin]
 python-source = "python"
