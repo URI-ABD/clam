@@ -171,11 +171,8 @@ impl<'a, U: Number> GraphScorer<'a, U> for ClusterCardinality {
     }
 
     /// Indicates whether normalization should be performed based on clusters for `ClusterCardinality`.
-    ///
-    /// TODO!
     fn normalize_on_clusters(&self) -> bool {
-        todo!()
-        //true
+        true
     }
 
     /// Computes and returns cluster scores based on cluster cardinality.
@@ -196,7 +193,7 @@ impl<'a, U: Number> GraphScorer<'a, U> for ClusterCardinality {
         let scores = graph
             .ordered_clusters()
             .iter()
-            .map(|&c| (c, c.cardinality().as_f64()))
+            .map(|&c| (c, -c.cardinality().as_f64()))
             .collect();
         Ok(scores)
     }
@@ -230,11 +227,8 @@ impl<'a, U: Number> GraphScorer<'a, U> for ComponentCardinality {
     }
 
     /// Indicates whether normalization should be performed based on clusters for `ComponentCardinality`.
-    ///
-    /// TODO!
     fn normalize_on_clusters(&self) -> bool {
-        todo!()
-        //true
+        true
     }
 
     /// Computes and returns cluster scores based on component cardinality.
@@ -255,7 +249,7 @@ impl<'a, U: Number> GraphScorer<'a, U> for ComponentCardinality {
             .find_component_clusters()
             .iter()
             .flat_map(|clusters| {
-                let score = clusters.len().as_f64();
+                let score = -clusters.len().as_f64();
                 clusters.iter().map(move |&c| (c, score))
             })
             .collect();
@@ -291,11 +285,8 @@ impl<'a, U: Number> GraphScorer<'a, U> for VertexDegree {
     }
 
     /// Indicates whether normalization should be performed based on clusters for `VertexDegree`.
-    ///
-    /// TODO!
     fn normalize_on_clusters(&self) -> bool {
-        todo!()
-        //true
+        true
     }
 
     /// Computes and returns cluster scores based on vertex degree.
@@ -316,7 +307,7 @@ impl<'a, U: Number> GraphScorer<'a, U> for VertexDegree {
         let scores: Result<ClusterScores<'a, U>, String> = graph
             .ordered_clusters()
             .iter()
-            .map(|&c| graph.vertex_degree(c).map(|degree| (c, degree as f64)))
+            .map(|&c| graph.vertex_degree(c).map(|degree| (c, -(degree as f64))))
             .collect();
         scores
     }
