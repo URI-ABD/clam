@@ -1,4 +1,5 @@
 use crate::chunked_array;
+use numpy::borrow::PyReadonlyArray;
 use numpy::convert::ToPyArray;
 use pyo3::prelude::*;
 use pyo3::types::PySlice;
@@ -24,12 +25,20 @@ macro_rules! def_chunked_array {
                 Ok(Self { ca })
             }
 
-            ///.
+            /// Returns the shape of the array
             fn shape(&self) -> Vec<usize> {
                 self.ca.shape.clone()
             }
 
-            ///.
+            /// Overloads the '[.]' operator for `ChunkedArray`
+            ///
+            /// This function expects a tuple of any of either types or python slices. Any remaining dimensions
+            /// not explicitly sliced over are taken as full slices.
+            ///
+            /// # Panics
+            /// This function will panic in a similar manner to Numpy slicing. If any elements in the key tuple
+            /// are not either slices or ints, the function will panic. If the integers in any slice or int don't
+            /// fit into an isize.
             fn __getitem__(&self, py: Python, key: &PyTuple) -> pyo3::Py<PyArray<$t, Dim<IxDynImpl>>>{
                 // We need to build the slice array from the tuple, converting the tuple elements to SliceInfoElems
                 let mut slices = key.iter().enumerate().map(|(i, k)| {
@@ -79,13 +88,13 @@ macro_rules! def_chunked_array {
         $module.add_class::<$struct_name>()?;
 
         #[pyfunction]
+        /// This function takes in a Numpy array and splits it into chunks placed in `path`.
         fn $fn_name(arr: &PyAny, chunk_along: usize, size: usize, path: &str) -> PyResult<()> {
-            let arr = arr.extract::<&PyArray<$t, Dim<IxDynImpl>>>()
+            let arr = arr.extract::<PyReadonlyArray<$t, Dim<IxDynImpl>>>()
                 .map_err(|e| PyBaseException::new_err(e))?;
 
-            let arr = unsafe {
-                arr.as_array()
-            };
+            // Convert it to an Array
+            let arr = arr.as_array();
 
             chunked_array::ChunkedArray::chunk(&arr.view(), chunk_along, size, path)
                 .map_err(|e| PyBaseException::new_err(e))?;
@@ -111,10 +120,13 @@ pub fn ndarray_chunked(_py: Python, m: &PyModule) -> PyResult<()> {
     use pyo3::types::{PyInt, PyTuple};
 
     def_chunked_array!(ChunkedArrayF32, chunk_f32, f32, m);
-    // def_chunked_array!(ChunkedArrayF64, chunk_f64, f64, m);
-    // def_chunked_array!(ChunkedArrayI32, chunk_i32, i32, m);
-    // def_chunked_array!(ChunkedArrayI64, chunk_i64, i64, m);
-    // def_chunked_array!(ChunkedArrayU32, chunk_u32, u32, m);
-    // def_chunked_array!(ChunkedArrayU64, chunk_u64, u64, m);
+    def_chunked_array!(ChunkedArrayF64, chunk_f64, f64, m);
+    def_chunked_array!(ChunkedArrayI32, chunk_i32, i32, m);
+    def_chunked_array!(ChunkedArrayI64, chunk_i64, i64, m);
+    def_chunked_array!(ChunkedArrayU32, chunk_u32, u32, m);
+    def_chunked_array!(ChunkedArrayU64, chunk_u64, u64, m);
+
+    def_chunked_array!(ChunkedArrayC32, chunk_c32, numpy::Complex32, m);
+    def_chunked_array!(ChunkedArrayC64, chunk_c64, numpy::Complex64, m);
     Ok(())
 }

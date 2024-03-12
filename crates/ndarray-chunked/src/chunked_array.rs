@@ -67,7 +67,6 @@ impl<T: Clone + ReadableElement + WritableElement> ChunkedArray<T> {
     /// Returns a given slice from the `ChunkedArray`
     /// # Panics
     /// This function will panic if chunk files are malformed or if conversions break
-    /// TODO: Improve these docs
     #[must_use]
     #[allow(clippy::unwrap_used)]
     pub fn slice(&self, idxs: &[SliceInfoElem]) -> Array<T, IxDyn> {
