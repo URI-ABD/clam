@@ -1,6 +1,8 @@
 use abd_clam::chaoda::graph_scorers::{ClusterCardinality, ComponentCardinality, GraphScorer, VertexDegree};
-use abd_clam::chaoda::pretrained_models;
-use abd_clam::{Cluster, Graph, PartitionCriteria, Tree, VecDataset};
+use abd_clam::chaoda::{pretrained_models, Vertex};
+use abd_clam::graph::Graph;
+use abd_clam::utils::{mean, standard_deviation};
+use abd_clam::{Cluster, PartitionCriteria, Tree, VecDataset};
 use distances::number::Float;
 use distances::Number;
 use rand::SeedableRng;
@@ -32,9 +34,7 @@ pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
 fn test_score_graph_basics() {
     let data = gen_dataset_with_anomaly(1000, 10, 42, euclidean, 1);
     let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
-    let raw_tree = Tree::new(data, Some(42))
-        .partition(&partition_criteria)
-        .with_ratios(true);
+    let raw_tree = Tree::new(data, Some(42)).partition(&partition_criteria, Some(42));
 
     let graph = Graph::from_tree(
         &raw_tree,
@@ -45,7 +45,7 @@ fn test_score_graph_basics() {
     let scorer = VertexDegree;
     let mut results = scorer.call(&graph).unwrap();
 
-    assert_eq!(results.0.len(), graph.clusters().len());
+    assert_eq!(results.0.len(), graph.ordered_clusters().len());
     assert_eq!(results.1.len(), graph.population());
 }
 
@@ -55,8 +55,8 @@ fn test_vertex_scorer() {
         let data = gen_dataset_with_anomaly(1000, 10, 42, euclidean, anomaly_count);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
-            .with_ratios(true);
+            .partition(&partition_criteria, Some(42))
+            .normalize_ratios();
 
         let graph = Graph::from_tree(
             &raw_tree,
@@ -67,9 +67,8 @@ fn test_vertex_scorer() {
         let scorer = VertexDegree;
         let mut results = scorer.call(&graph).unwrap();
 
-        let mut mean = results.1.sum() / results.1.len().as_f64();
-        let mut means_sqr = results.1.iter().map(|score| score.powi(2)).sum::<f64>() / results.1.len().as_f64();
-        let standard_dev = (means_sqr - mean.powi(2)).sqrt();
+        let mean = mean(&*results.1);
+        let standard_dev = standard_deviation(&*results.1);
 
         let outliers: Vec<f64> = results
             .1
@@ -91,8 +90,8 @@ fn test_component_scorer() {
         let data = gen_dataset_with_anomaly(1000, 10, 42, euclidean, anomaly_count);
         let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
         let raw_tree = Tree::new(data, Some(42))
-            .partition(&partition_criteria)
-            .with_ratios(true);
+            .partition(&partition_criteria, Some(42))
+            .normalize_ratios();
 
         let graph = Graph::from_tree(
             &raw_tree,
@@ -103,9 +102,8 @@ fn test_component_scorer() {
         let scorer = ComponentCardinality;
         let mut results = scorer.call(&graph).unwrap();
 
-        let mut mean = results.1.sum() / results.1.len().as_f64();
-        let mut means_sqr = results.1.iter().map(|score| score.powi(2)).sum::<f64>() / results.1.len().as_f64();
-        let standard_dev = (means_sqr - mean.powi(2)).sqrt();
+        let mean = mean(&*results.1);
+        let standard_dev = standard_deviation(&*results.1);
 
         let outliers: Vec<f64> = results
             .1
@@ -127,8 +125,8 @@ fn test_cluster_scorer() {
     let data = gen_dataset_with_anomaly(10000, 10, 42, euclidean, anomaly_count);
     let partition_criteria: PartitionCriteria<f32> = PartitionCriteria::default();
     let raw_tree = Tree::new(data, Some(42))
-        .partition(&partition_criteria)
-        .with_ratios(true);
+        .partition(&partition_criteria, Some(42))
+        .normalize_ratios();
 
     let graph = Graph::from_tree(
         &raw_tree,
@@ -139,7 +137,7 @@ fn test_cluster_scorer() {
 
     let scorer = ClusterCardinality;
     let call_results = scorer.call(&graph).unwrap();
-    let mut highest_score: Option<(&Cluster<f32>, f64)> = None;
+    let mut highest_score: Option<(&Vertex<f32>, f64)> = None;
     for i in call_results.0 {
         if highest_score == None {
             highest_score = Some(i)

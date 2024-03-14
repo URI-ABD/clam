@@ -5,8 +5,9 @@ use std::hash::Hash;
 
 use super::graph::Graph;
 use super::Vertex;
+use crate::utils::{mean, standard_deviation};
 use distances::Number;
-use statistical::{mean, population_standard_deviation};
+
 use crate::Cluster;
 
 /// Type alias for cluster scores associated with clusters in a graph.
@@ -46,7 +47,7 @@ pub trait GraphScorer<'a, U: Number>: Hash {
                     .zip(crate::utils::normalize_1d(
                         &scores,
                         mean(&scores),
-                        population_standard_deviation(&scores, None),
+                        standard_deviation(&scores),
                     ))
                     .collect();
             }
@@ -62,7 +63,7 @@ pub trait GraphScorer<'a, U: Number>: Hash {
                     .zip(crate::utils::normalize_1d(
                         &scores,
                         mean(&scores),
-                        population_standard_deviation(&scores, None),
+                        standard_deviation(&scores),
                     ))
                     .collect();
             }
