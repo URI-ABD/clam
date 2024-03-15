@@ -3,10 +3,12 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-// use crate::core::cluster::Cluster;
 use super::graph::Graph;
 use super::Vertex;
+use crate::utils::{mean, standard_deviation};
 use distances::Number;
+
+use crate::Cluster;
 
 /// Type alias for cluster scores associated with clusters in a graph.
 pub type ClusterScores<'a, U> = HashMap<&'a Vertex<U>, f64>;
@@ -30,35 +32,47 @@ pub trait GraphScorer<'a, U: Number>: Hash {
     /// * `ClusterScores`: A structure that holds scores associated with individual clusters in the graph.
     /// * `Vec<f64>`: An array of scores, where each element corresponds to a specific aspect or metric.
     ///
-    fn call(&self, _graph: &'a Graph<'a, U>) -> (ClusterScores<'a, U>, Vec<f64>) {
-        todo!()
-        // let cluster_scores = {
-        //     let mut cluster_scores = self.score_graph(graph);
-        //     if self.normalize_on_clusters() {
-        //         let (clusters, scores): (Vec<_>, Vec<_>) = cluster_scores.into_iter().unzip();
-        //         cluster_scores = clusters
-        //             .into_iter()
-        //             .zip(crate::utils::normalize_1d(&scores,statistical::mean(&scores),statistical::population_standard_deviation(&scores, None)).into_iter())
-        //             .collect();
-        //     }
-        //     cluster_scores
-        // };
-        //
-        // let instance_scores = {
-        //     let mut instance_scores = self.inherit_scores(&cluster_scores);
-        //     if !self.normalize_on_clusters() {
-        //         let (indices, scores): (Vec<_>, Vec<_>) = instance_scores.into_iter().unzip();
-        //         instance_scores = indices
-        //             .into_iter()
-        //             .zip(crate::utils::normalize_1d(&scores,statistical::mean(&scores),statistical::population_standard_deviation(&scores, None)).into_iter())
-        //             .collect();
-        //     }
-        //     instance_scores
-        // };
-        //
-        // let scores_array = self.ordered_scores(&instance_scores);
-        //
-        // (cluster_scores, scores_array)
+    /// # Errors
+    ///
+    /// Throws an error if unable to compute scores for the given graph
+    ///
+    fn call(&self, graph: &'a Graph<'a, U>) -> Result<(ClusterScores<'a, U>, Vec<f64>), String> {
+        let cluster_scores = {
+            let scores = self.score_graph(graph)?;
+            let mut cluster_scores: ClusterScores<'a, U> = scores;
+            if self.normalize_on_clusters() {
+                let (clusters, scores): (Vec<_>, Vec<_>) = cluster_scores.into_iter().unzip();
+                cluster_scores = clusters
+                    .into_iter()
+                    .zip(crate::utils::normalize_1d(
+                        &scores,
+                        mean(&scores),
+                        standard_deviation(&scores),
+                    ))
+                    .collect();
+            }
+            cluster_scores
+        };
+
+        let instance_scores = {
+            let mut instance_scores = self.inherit_scores(&cluster_scores);
+            if !self.normalize_on_clusters() {
+                let (indices, scores): (Vec<_>, Vec<_>) = instance_scores.into_iter().unzip();
+                instance_scores = indices
+                    .into_iter()
+                    .zip(crate::utils::normalize_1d(
+                        &scores,
+                        mean(&scores),
+                        standard_deviation(&scores),
+                    ))
+                    .collect();
+            }
+            instance_scores
+        };
+
+        let scores_array = self.ordered_scores(&instance_scores);
+
+        Ok((cluster_scores, scores_array))
     }
 
     /// Returns the name of the graph scorer.
@@ -82,7 +96,12 @@ pub trait GraphScorer<'a, U: Number>: Hash {
     /// # Returns
     ///
     /// A `ClusterScores` mapping clusters in the input graph to their associated scores.
-    fn score_graph(&self, graph: &'a Graph<'a, U>) -> ClusterScores<'a, U>;
+    ///
+    /// # Errors
+    ///
+    /// Throws an error if unable to compute a score for a cluster within a given graph.
+    ///
+    fn score_graph(&self, graph: &'a Graph<'a, U>) -> Result<ClusterScores<'a, U>, String>;
 
     /// Inherits cluster scores and computes scores for individual instances.
     ///
@@ -97,13 +116,11 @@ pub trait GraphScorer<'a, U: Number>: Hash {
     /// # Returns
     ///
     /// An `InstanceScores` mapping instances to their computed scores.
-    fn inherit_scores(&self, _scores: &ClusterScores<U>) -> InstanceScores {
-        todo!()
-
-        // scores
-        //     .iter()
-        //     .flat_map(|(&c, &s)| c.indices().into_iter().map(move |i| (i, s)))
-        //     .collect()
+    fn inherit_scores(&self, scores: &ClusterScores<U>) -> InstanceScores {
+        scores
+            .iter()
+            .flat_map(|(&c, &s)| c.indices().map(move |i| (i, s)))
+            .collect()
     }
 
     /// Orders the scores for individual instances.
@@ -119,13 +136,11 @@ pub trait GraphScorer<'a, U: Number>: Hash {
     /// # Returns
     ///
     /// A sorted vector of scores for instances in ascending order.
-    fn ordered_scores(&self, _scores: &InstanceScores) -> Vec<f64> {
-        todo!()
-
-        // let mut scores: Vec<_> = scores.iter().map(|(&i, &s)| (i, s)).collect();
-        // scores.sort_by_key(|(i, _)| *i);
-        // let (_, scores): (Vec<_>, Vec<f64>) = scores.into_iter().unzip();
-        // scores
+    fn ordered_scores(&self, scores: &InstanceScores) -> Vec<f64> {
+        let mut scores: Vec<_> = scores.iter().map(|(&i, &s)| (i, s)).collect();
+        scores.sort_by_key(|(i, _)| *i);
+        let (_, scores): (Vec<_>, Vec<f64>) = scores.into_iter().unzip();
+        scores
     }
 }
 
@@ -157,11 +172,8 @@ impl<'a, U: Number> GraphScorer<'a, U> for ClusterCardinality {
     }
 
     /// Indicates whether normalization should be performed based on clusters for `ClusterCardinality`.
-    ///
-    /// TODO!
     fn normalize_on_clusters(&self) -> bool {
-        todo!()
-        //true
+        true
     }
 
     /// Computes and returns cluster scores based on cluster cardinality.
@@ -178,14 +190,13 @@ impl<'a, U: Number> GraphScorer<'a, U> for ClusterCardinality {
     /// # Returns
     ///
     /// A `ClusterScores` mapping clusters to their calculated scores based on their cardinality.
-    fn score_graph(&self, _graph: &'a Graph<'a, U>) -> ClusterScores<'a, U> {
-        todo!()
-
-        // graph
-        //     .ordered_clusters()
-        //     .iter()
-        //     .map(|&c| (c, c.cardinality() as f64))
-        //     .collect()
+    fn score_graph(&self, graph: &'a Graph<'a, U>) -> Result<ClusterScores<'a, U>, String> {
+        let scores = graph
+            .ordered_clusters()
+            .iter()
+            .map(|&c| (c, -c.cardinality().as_f64()))
+            .collect();
+        Ok(scores)
     }
 }
 
@@ -217,11 +228,8 @@ impl<'a, U: Number> GraphScorer<'a, U> for ComponentCardinality {
     }
 
     /// Indicates whether normalization should be performed based on clusters for `ComponentCardinality`.
-    ///
-    /// TODO!
     fn normalize_on_clusters(&self) -> bool {
-        todo!()
-        //true
+        true
     }
 
     /// Computes and returns cluster scores based on component cardinality.
@@ -237,17 +245,16 @@ impl<'a, U: Number> GraphScorer<'a, U> for ComponentCardinality {
     /// # Returns
     ///
     /// A `ClusterScores` mapping clusters to their calculated scores based on the cardinality of their components.
-    fn score_graph(&self, _graph: &'a Graph<'a, U>) -> ClusterScores<'a, U> {
-        todo!()
-
-        // graph
-        //     .find_component_clusters()
-        //     .iter()
-        //     .flat_map(|clusters| {
-        //         let score = clusters.len() as f64;
-        //         clusters.iter().map(move |&c| (c, score))
-        //     })
-        //     .collect()
+    fn score_graph(&self, graph: &'a Graph<'a, U>) -> Result<ClusterScores<'a, U>, String> {
+        let scores = graph
+            .find_component_clusters()
+            .iter()
+            .flat_map(|clusters| {
+                let score = -clusters.len().as_f64();
+                clusters.iter().map(move |&c| (c, score))
+            })
+            .collect();
+        Ok(scores)
     }
 }
 
@@ -279,11 +286,8 @@ impl<'a, U: Number> GraphScorer<'a, U> for VertexDegree {
     }
 
     /// Indicates whether normalization should be performed based on clusters for `VertexDegree`.
-    ///
-    /// TODO!
     fn normalize_on_clusters(&self) -> bool {
-        todo!()
-        //true
+        true
     }
 
     /// Computes and returns cluster scores based on vertex degree.
@@ -299,14 +303,14 @@ impl<'a, U: Number> GraphScorer<'a, U> for VertexDegree {
     /// # Returns
     ///
     /// A `ClusterScores` mapping clusters to their calculated scores based on the vertex degrees of their vertices.
-    fn score_graph(&self, _graph: &'a Graph<'a, U>) -> ClusterScores<'a, U> {
-        todo!()
-
-        // graph
-        //     .ordered_clusters()
-        //     .iter()
-        //     .map(|&c| (c, graph.unchecked_vertex_degree(c) as f64))
-        //     .collect()
+    #[allow(clippy::cast_precision_loss)]
+    fn score_graph(&self, graph: &'a Graph<'a, U>) -> Result<ClusterScores<'a, U>, String> {
+        let scores: Result<ClusterScores<'a, U>, String> = graph
+            .ordered_clusters()
+            .iter()
+            .map(|&c| graph.vertex_degree(c).map(|degree| (c, -(degree as f64))))
+            .collect();
+        scores
     }
 }
 
@@ -337,10 +341,9 @@ impl<'a, U: Number> ParentCardinality<'a, U> {
     /// # Returns
     ///
     /// A new instance of the `ParentCardinality` scorer with the specified root cluster and weight function.
-    pub fn new(_root: &'a Vertex<U>) -> Self {
-        todo!()
-        // let weight = Box::new(|d: usize| 1. / (d as f64).sqrt());
-        // Self { root, weight }
+    pub fn new(root: &'a Vertex<U>) -> Self {
+        let weight = Box::new(|d: usize| 1. / (d.as_f64()).sqrt());
+        Self { root, weight }
     }
 
     /// Computes the ancestry of a given cluster.
@@ -416,26 +419,25 @@ impl<'a, U: Number> GraphScorer<'a, U> for ParentCardinality<'a, U> {
     /// # Returns
     ///
     /// A map of cluster indices to their respective scores as floating-point values.
-    fn score_graph(&self, _graph: &'a Graph<'a, U>) -> ClusterScores<'a, U> {
-        todo!()
-
-        // graph
-        //     .ordered_clusters()
-        //     .iter()
-        //     .map(|&c| {
-        //         let ancestry = self.ancestry(c);
-        //         let score: f64 = ancestry
-        //             .iter()
-        //             .skip(1)
-        //             .zip(ancestry.iter())
-        //             .enumerate()
-        //             .map(|(i, (child, parent))| {
-        //                 (self.weight)(i + 1) * parent.cardinality() as f64 / child.cardinality() as f64
-        //             })
-        //             .sum();
-        //         (c, -score)
-        //     })
-        //     .collect()
+    fn score_graph(&self, graph: &'a Graph<'a, U>) -> Result<ClusterScores<'a, U>, String> {
+        let scores = graph
+            .ordered_clusters()
+            .iter()
+            .map(|&c| {
+                let ancestry = self.ancestry(c);
+                let score: f64 = ancestry
+                    .iter()
+                    .skip(1)
+                    .zip(ancestry.iter())
+                    .enumerate()
+                    .map(|(i, (child, parent))| {
+                        (self.weight)(i + 1) * parent.cardinality().as_f64() / child.cardinality().as_f64()
+                    })
+                    .sum();
+                (c, -score)
+            })
+            .collect();
+        Ok(scores)
     }
 }
 
@@ -523,7 +525,7 @@ impl<'a, U: Number> GraphScorer<'a, U> for GraphNeighborhood {
     /// # Returns
     ///
     /// A map of cluster indices to their respective scores as floating-point values.
-    fn score_graph(&self, _graph: &'a Graph<'a, U>) -> ClusterScores<'a, U> {
+    fn score_graph(&self, _graph: &'a Graph<'a, U>) -> Result<ClusterScores<'a, U>, String> {
         todo!()
 
         // graph
@@ -606,7 +608,7 @@ impl<'a, U: Number> GraphScorer<'a, U> for StationaryProbabilities {
     /// # Returns
     ///
     /// A map of cluster indices to their respective scores as floating-point values.
-    fn score_graph(&self, graph: &'a Graph<U>) -> ClusterScores<'a, U> {
+    fn score_graph(&self, graph: &'a Graph<U>) -> Result<ClusterScores<'a, U>, String> {
         todo!()
     }
 }
