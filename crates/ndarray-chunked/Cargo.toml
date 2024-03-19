@@ -1,0 +1,19 @@
+[package]
+name = "ndarray-chunked"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "ndarray_chunked"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.20.2", features = ["extension-module"] }
+ndarray-npy = { version = "0.8.1", default-features = false , features=['num-complex-0_4'] }
+ndarray = "0.15.6"
+numpy = "0.20.0"
+
+[dev-dependencies]
+rand = "0.8.5"
+tempdir = "0.3.7"
