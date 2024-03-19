@@ -9,7 +9,7 @@ use pyo3::types::PySlice;
 macro_rules! def_chunked_array {
     ($struct_name:ident, $fn_name:ident, $t:ty, $module:expr) => {
         #[pyclass]
-        ///.
+        /// Wrapper struct for ChunkedArray<$t>
         struct $struct_name {
             ///.
             ca: chunked_array::ChunkedArray<$t>,
@@ -18,14 +18,16 @@ macro_rules! def_chunked_array {
         #[pymethods]
         impl $struct_name {
             #[new]
-            ///.
+            /// Constructs a new ChunkedArray<$t> from a given directory
+            /// # Errors
+            /// Errors out if any problems happen in the ChunkedArray constructor
             fn new(path: &str) -> PyResult<Self> {
                 let ca = chunked_array::ChunkedArray::new(path)
                     .map_err(|e| PyBaseException::new_err(e))?;
                 Ok(Self { ca })
             }
 
-            /// Returns the shape of the array
+            /// Returns the shape of the array as a vector of dimension size
             fn shape(&self) -> Vec<usize> {
                 self.ca.shape.clone()
             }
@@ -60,6 +62,7 @@ macro_rules! def_chunked_array {
                         }
 
                     // Otherwise (for now) we just panic
+                    // TODO: Should this be a result?
                     } else {
                         panic!("Invalid index type")
                     }
@@ -69,7 +72,7 @@ macro_rules! def_chunked_array {
                 // It might be the case that the user only gives us k < n of the full
                 // dimensionality for a slice. In this case, we need to fill the rest
                 // with full slices.
-                let n = self.ca.shape.len();
+                let n = self.ca.ndim();
                 if slices.len() < n {
                     slices.extend((slices.len()..n).map(|_| SliceInfoElem::Slice {
                         start: 0,
@@ -125,8 +128,8 @@ pub fn ndarray_chunked(_py: Python, m: &PyModule) -> PyResult<()> {
     def_chunked_array!(ChunkedArrayI64, chunk_i64, i64, m);
     def_chunked_array!(ChunkedArrayU32, chunk_u32, u32, m);
     def_chunked_array!(ChunkedArrayU64, chunk_u64, u64, m);
-
     def_chunked_array!(ChunkedArrayC32, chunk_c32, numpy::Complex32, m);
     def_chunked_array!(ChunkedArrayC64, chunk_c64, numpy::Complex64, m);
+
     Ok(())
 }

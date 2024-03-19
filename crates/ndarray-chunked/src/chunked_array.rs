@@ -154,12 +154,21 @@ impl<T: Clone + ReadableElement + WritableElement> ChunkedArray<T> {
         })
     }
 
+    /// Returns the number of dimensions the `ChunkedArray` has
+    #[must_use]
+    pub fn ndim(&self) -> usize {
+        self.shape.len()
+    }
+
     /// Loads in `ChunkedArray` metadata from a given directory.
     /// The format is simple: ndim; shape; axis along which the array was split; the max size of each chunk. Each
     /// data point is a u32 and is little endian. Shape is a list of u32s of length ndim.
-    /// TODO: Complex nums
     ///
     /// # Errors
+    /// This function will error our if
+    ///     - The metadata file cannot be opened
+    ///     - Any file read errors happen
+    ///     - Any metadata cannot be converted to the correct type
     fn load_metadata(folder: &Path) -> Result<(Vec<usize>, usize, usize), String> {
         let mut handle = File::open(folder.join(METADATA_FILENAME)).map_err(|e| e.to_string())?;
 

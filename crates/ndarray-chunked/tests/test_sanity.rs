@@ -204,4 +204,67 @@ mod tests {
             have.iter().collect::<Vec<&f32>>()
         );
     }
+
+    #[test]
+    fn test_general() {
+        let chunk_along = 0;
+        let size = 3;
+        let shape = [9, 3, 3];
+        let dirname = "test_chunked_arr";
+
+        let (tmp, arr) = generate_dummy_data(dirname, chunk_along, size, &shape);
+        let ca = ChunkedArray::<f32>::new(tmp.path().to_str().unwrap()).unwrap();
+
+        // Smoke test
+        assert_eq!(arr, ca.slice(s![.., .., ..].as_ref()));
+
+        // Edge cases
+        let slice = s![0..1, 0..1, 0..1];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..1, 0..3];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..3, 0..3];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..3, 0..1];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..3, 0..2];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..2, 0..3];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..2, 0..1];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+
+        let slice = s![0..1, 0..2, 0..2];
+        let expected = arr.slice(slice.as_ref());
+        let result = ca.slice(slice.as_ref());
+
+        assert_eq!(result, expected);
+    }
 }
