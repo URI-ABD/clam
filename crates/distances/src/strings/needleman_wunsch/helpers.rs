@@ -2,6 +2,8 @@
 
 use crate::{number::UInt, strings::Penalties};
 
+use serde::{Deserialize, Serialize};
+
 /// The direction of best alignment at a given position in the DP table
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
@@ -14,7 +16,7 @@ pub enum Direction {
 }
 
 /// The type of edit needed to turn one sequence into another.
-#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy, Serialize, Deserialize)]
 pub enum Edit {
     /// Delete a character at the given index.
     Del(usize),
@@ -102,6 +104,7 @@ fn min2<U: UInt>(a: (U, Direction), b: (U, Direction)) -> (U, Direction) {
 ///
 /// A 2-slice of Vec<Edit>, each containing the edits needed to convert one
 /// sequence into the other
+#[must_use]
 pub fn compute_edits(x: &str, y: &str) -> [Vec<Edit>; 2] {
     [_x_to_y(x, y), _x_to_y(y, x)]
 }
@@ -119,6 +122,7 @@ pub fn compute_edits(x: &str, y: &str) -> [Vec<Edit>; 2] {
 /// # Returns
 ///
 /// A vector of edits needed to convert `x` into `y`.
+#[must_use]
 pub fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
     x.chars()
         .zip(y.chars())
@@ -141,6 +145,7 @@ pub fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// # Returns
 ///
 /// A vector of edits to transform the unaligned version of `x` into the unaligned version of `y`.
+#[must_use]
 pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
     let mut unaligned_x_to_y = Vec::new();
     let mut modifier = 0;
@@ -162,7 +167,7 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
             }
         });
 
-    return unaligned_x_to_y;
+    unaligned_x_to_y
 }
 
 /// Iteratively traces back through the Needleman-Wunsch table to get the alignment of two sequences.
@@ -179,6 +184,7 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// # Returns
 ///
 /// A tuple of the two aligned sequences.
+#[must_use]
 pub fn trace_back_iterative<U: UInt>(
     table: &[Vec<(U, Direction)>],
     [x, y]: [&str; 2],
@@ -234,6 +240,7 @@ pub fn trace_back_iterative<U: UInt>(
 /// # Returns
 ///
 /// A tuple of the two aligned sequences.
+#[must_use]
 pub fn trace_back_recursive<U: UInt>(
     table: &[Vec<(U, Direction)>],
     [x, y]: [&str; 2],
