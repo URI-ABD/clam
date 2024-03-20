@@ -3,7 +3,7 @@
 #
 #    maturin generate-ci github --pytest -m pypi/distances/Cargo.toml
 
-name: CI
+name: Release | PyPI | abd-distances
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: dist
@@ -56,7 +56,7 @@ jobs:
           args: --release --out dist --manifest-path pypi/distances/Cargo.toml
           sccache: 'true'
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: dist
@@ -78,7 +78,7 @@ jobs:
           args: --release --out dist --manifest-path pypi/distances/Cargo.toml
           sccache: 'true'
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: dist
@@ -93,7 +93,7 @@ jobs:
           command: sdist
           args: --out dist --manifest-path pypi/distances/Cargo.toml
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: dist
@@ -103,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [linux, windows, macos, sdist]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: wheels
       - name: Publish to PyPI
