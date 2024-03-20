@@ -344,12 +344,19 @@ mod tests {
         let transposed = rows_to_cols(&all_ratios);
         let means = calc_row_means(&transposed);
 
-        let expected_means: [f64; 6] = [3.3333333333333335, 4.0, 6.333333333333334, 6.0, 8.0, 8.666666666666668];
+        let expected_means: [f64; 6] = [
+            3.333_333_333_333_333_5,
+            4.0,
+            6.333_333_333_333_334,
+            6.0,
+            8.0,
+            8.666_666_666_666_668,
+        ];
 
         means
             .iter()
             .zip(expected_means.iter())
-            .for_each(|(&a, &b)| assert!(float_cmp::approx_eq!(f64, a, b, ulps = 2), "{}, {} not equal", a, b));
+            .for_each(|(&a, &b)| assert!(float_cmp::approx_eq!(f64, a, b, ulps = 2), "{a}, {b} not equal"));
     }
 
     #[test]
@@ -361,12 +368,12 @@ mod tests {
         ];
 
         let expected_standard_deviations: [f64; 6] = [
-            1.2472191289246,
-            0.81649658092773,
-            1.2472191289246,
-            1.6329931618555,
-            0.81649658092773,
-            5.7927157323276,
+            1.247_219_128_924_6,
+            0.816_496_580_927_73,
+            1.247_219_128_924_6,
+            1.632_993_161_855_5,
+            0.816_496_580_927_73,
+            5.792_715_732_327_6,
         ];
         let sds = calc_row_sds(&rows_to_cols(&all_ratios));
 
@@ -374,11 +381,9 @@ mod tests {
             .zip(expected_standard_deviations.iter())
             .for_each(|(&a, &b)| {
                 assert!(
-                    float_cmp::approx_eq!(f64, a, b, epsilon = 0.00000003),
-                    "{}, {} not equal",
-                    a,
-                    b
-                )
+                    float_cmp::approx_eq!(f64, a, b, epsilon = 0.000_000_03),
+                    "{a}, {b} not equal"
+                );
             });
     }
 
@@ -452,7 +457,7 @@ mod tests {
                 a,
                 b,
                 a - b
-            )
+            );
         });
 
         actual_variances
@@ -465,7 +470,7 @@ mod tests {
                     a,
                     b,
                     a - b
-                )
+                );
             });
     }
 }

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "abd-distances"
+description = "Distance functions: A wrapper around the Rust crate `distances`."
+version = "1.0.0"
+requires-python = ">=3.9"
+keywords = ["distance", "metric", "simd"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = ["numpy>=1.16.0,<2.0.0"]
+
+[tool.rye]
+dev-dependencies = [
+    "seaborn>=0.13.2",
+    "editdistance>=0.8.1",
+]
+
+[tool.maturin]
+python-source = "python"
+features = ["pyo3/extension-module"]
+profile = "release"

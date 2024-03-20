@@ -43,16 +43,19 @@ Using `hermit` to manage your python environment will be a lot easier than tryin
 
 If you know what you are doing, you can also install the following tools manually.
 
-- [`python`](https://www.python.org/downloads/) 3.11.
+- [`python`](https://www.python.org/downloads/) version 3.9.
 - [`venv`](https://docs.python.org/3/library/venv.html) for managing python virtual environments.
   - `python -m venv .venv` will create a virtual environment in the `.venv` directory.
   - `source .venv/bin/activate` will activate the virtual environment.
   - `deactivate` will deactivate the virtual environment.
 - [`pip`](https://pip.pypa.io/en/stable/installation/) for installing python dependencies.
   - `python -m pip install --upgrade pip` will upgrade `pip` to the latest version.
-- [`poetry`](https://python-poetry.org/docs/#installation) for managing python dependencies.
-  - `python -m pip install poetry` will install poetry in the local python environment. You could also install it globally by following the instructions in the link above.
-  - To install the dependencies for a python package, change into the package directory (`cd clam/crates/<py-pkg>`) and run `poetry install`.
+- `maturin` for the `rust`-`python` bindings:
+  - `cargo install maturin --locked`
+- Compile and install the python wrappers to work on them. For example, with the `abd-distances` package:
+  - `cd crates/abd-distances`
+  - `maturin develop --release --extras=dev`
+  - `python -m pytest -v`
 
 ### Optional
 

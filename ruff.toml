@@ -1,0 +1,54 @@
+target-version = "py39" # Assume Python 3.9.
+line-length = 100
+
+[lint]
+select = [ "ALL" ]
+ignore = [
+  "ANN101",  # Missing type annotation for self in method
+  "ANN102",  # Missing type annotation for cls in classmethod
+  "PLR2004", # Use of magic value in comparison
+  "ANN401",  # Dynamically typed expressions are disallowed
+  "ICN001",  # {name} should be imported as {asname}  # I like my numpy imports
+]
+unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
+
+[lint.mccabe]
+# Default to a complexity level of 10.
+max-complexity = 10
+
+[lint.isort]
+force-single-line = true
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"] # Unused import.
+"pypi/**/test_*.py" = [
+  "ANN001", # Missing type annotation for function argument.
+  "ANN003", # Missing type annotation for **kwargs.
+  "ANN201", # Missing return type annotation for public function.
+  "ANN205", # Missing return type annotation for staticmethod.
+  "D101",   # Missing docstring in public class.
+  "D102",   # Missing docstring in public method.
+  "D103",   # Missing docstring in public function.
+  "D100",   # Missing docstring in public module.
+  "NPY002", # Replace legacy `np.random.randn` call with `np.random.Generator`.
+  "PT009",  # Use of a regular `assert` instead of unittest-style.
+  "RET504", # Unecessary variable assignment before `return` statement.
+  "S101",   # Use of assert detected.
+]
+"crates/abd_clam/**/*.py" = [
+  "ANN002",  # Missing type annotation for *args.
+  "ANN003",  # Missing type annotation for **kwargs.
+  "D100",    # Missing docstring in public module.
+  "D103",    # Missing docstring in public function.
+  "PLR0911", # Too many return statements
+]
+"crates/abd_clam/anomaly_detection/pretrained_models.py" = [
+  "PLR5501", # Use `elif` instead of `else` then `if`.
+  "RET505",  # Unecessary `else` after `return`.
+]
+"pypi/distances/**/*.pyi" = [
+  "PYI021", # Docstrings should not be included in stubs
+]

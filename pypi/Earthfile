@@ -1,0 +1,15 @@
+VERSION 0.8
+FROM ../+chef-cook
+
+ARG --global --required DIR
+CACHE ./target/
+WORKDIR /usr/local/src/pypi/$DIR
+
+test:
+    RUN rye test
+
+bench:
+    RUN rye run richbench benches --markdown
+
+bash:
+    RUN --interactive bash

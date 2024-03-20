@@ -1,0 +1,28 @@
+[project]
+name = "clam"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Najib Ishaq", email = "najib_ishaq@zoho.com" },
+    { name = "Tom", email = "info@tomhoward.codes" },
+]
+dependencies = []
+readme = "README.md"
+requires-python = ">= 3.9"
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = [
+    "pytest>=8.0.2",
+    "pytest-sugar>=1.0.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-cov>=4.1.0",
+    "richbench>=1.0.3",
+    "bump2version>=1.0.1",
+    "scipy>=1.12.0",
+    "tqdm>=4.66.2",
+]
+
+[tool.rye.workspace]
+members = ["pypi/*"]

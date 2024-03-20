@@ -118,7 +118,7 @@ fn ratios() {
         .collect::<Vec<_>>();
 
     // manually calculate ratios between root and its children
-    let root_ratios = vec![
+    let root_ratios = [
         all_cardinalities[0] as f64,
         all_radius[0] as f64,
         all_lfd[0],
@@ -126,7 +126,7 @@ fn ratios() {
         -1.,
         -1.,
     ];
-    let lc_ratios = vec![
+    let lc_ratios = [
         all_cardinalities[1] as f64 / root_ratios[0] as f64,
         all_radius[1] as f64 / root_ratios[1] as f64,
         all_lfd[1] / root_ratios[2],
@@ -134,7 +134,7 @@ fn ratios() {
         -1.,
         -1.,
     ];
-    let lclc_ratios = vec![
+    let lclc_ratios = [
         all_cardinalities[2] as f64 / lc_ratios[0] as f64,
         all_radius[2] as f64 / lc_ratios[1] as f64,
         all_lfd[2] / lc_ratios[2],
@@ -142,7 +142,7 @@ fn ratios() {
         -1.,
         -1.,
     ];
-    let lcrc_ratios = vec![
+    let lcrc_ratios = [
         all_cardinalities[3] as f64 / lc_ratios[0] as f64,
         all_radius[3] as f64 / lc_ratios[1] as f64,
         all_lfd[3] / lc_ratios[2],
@@ -150,7 +150,7 @@ fn ratios() {
         -1.,
         -1.,
     ];
-    let rc_ratios = vec![
+    let rc_ratios = [
         all_cardinalities[4] as f64 / root_ratios[0] as f64,
         all_radius[4] as f64 / root_ratios[1] as f64,
         all_lfd[4] / root_ratios[2],

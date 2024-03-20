@@ -79,9 +79,12 @@ class TestSearch(unittest.TestCase):
             random_state=42,
         )
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".npy",
-        ) as train_file, tempfile.NamedTemporaryFile(suffix=".npy") as test_file:
+        with (
+            tempfile.NamedTemporaryFile(
+                suffix=".npy",
+            ) as train_file,
+            tempfile.NamedTemporaryFile(suffix=".npy") as test_file,
+        ):
             numpy.save(train_file.name, train_x_, allow_pickle=False, fix_imports=False)
             numpy.save(test_file.name, test_x_, allow_pickle=False, fix_imports=False)
 

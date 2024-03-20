@@ -141,7 +141,7 @@ class CHAODA:
         if self.__voting_mode == "mean":
             scores = numpy.mean(scores, axis=0)
         elif self.__voting_mode == "product":
-            scores = numpy.product(scores, axis=0)
+            scores = numpy.prod(scores, axis=0)
         elif self.__voting_mode == "median":
             scores = numpy.median(scores, axis=0)
         elif self.__voting_mode == "min":

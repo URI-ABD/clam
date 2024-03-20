@@ -30,7 +30,7 @@ class TestCluster(unittest.TestCase):
             name=f"{__name__}.init_cluster",
             parent=None,
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError):  # noqa: PT027
             abd_clam.Cluster(
                 self.metric_space,
                 indices=[],
