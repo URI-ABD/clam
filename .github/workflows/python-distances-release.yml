@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - master
-      - chore/version-bump
   workflow_dispatch:
 
 permissions:
