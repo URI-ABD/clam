@@ -299,6 +299,19 @@ pub fn median<T: Number>(data: &[T]) -> Option<T> {
     }
 }
 
+/// Finds the standard deviation
+///
+/// A helper function to find the standard deviation from a list of values
+///
+/// Source: <https://en.wikipedia.org/wiki/Standard_deviation>
+///
+/// # Arguments
+///
+/// * `values` - The data to find the STD of.
+pub fn standard_deviation<T: Number>(values: &[T]) -> f64 {
+    variance(values, mean(values)).sqrt()
+}
+
 #[cfg(test)]
 mod tests {
     use rand::prelude::*;
@@ -472,5 +485,12 @@ mod tests {
                     a - b
                 );
             });
+    }
+
+    #[test]
+    fn test_standard_deviation() {
+        let data = [2., 4., 4., 4., 5., 5., 7., 9.];
+        let std = standard_deviation::<f32>(&data);
+        assert_eq!(std, 2.);
     }
 }
