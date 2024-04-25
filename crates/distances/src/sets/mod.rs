@@ -77,7 +77,7 @@ pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let intersection_size = U::from(x.iter().filter(|v| y.contains(v)).count());
     let size = U::from(x.len() + y.len());
 
-    if size == U::zero(){
+    if size == U::zero() {
         return U::one();
     }
 
