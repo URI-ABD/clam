@@ -46,3 +46,40 @@ pub fn jaccard<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
         U::one() - intersection / union
     }
 }
+
+/// Dice distance.
+///
+/// Dice distance, between two sets, measures how dissimilar they are by considering the proportion
+/// of elements they don't share in common.  The Dice distance is calculated as twice the ratio of
+/// the number of shared elements between two sets to the total number of elements in both sets.
+///
+/// # Arguments
+///
+/// * `x`: A set represented as a slice of `Int`s, i.e. a type generic over integers.
+/// * `y`: A set represented as a slice of `Int`s, i.e. a type generic over integers.
+///
+/// # Examples
+///
+/// ```
+/// use distances::sets::dice;
+///
+/// let x: Vec<u32> = vec![1, 2, 3, 4];
+/// let y: Vec<u32> = vec![3, 4, 5, 6];
+///
+/// let distance: f32 = dice(&x, &y);
+///
+/// assert!((distance - 0.5).abs() < f32::EPSILON);
+/// ```
+pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
+    if x.is_empty() || y.is_empty() {
+        return U::one();
+    }
+    let intersection_size = U::from(x.iter().filter(|v| y.contains(v)).count());
+    let size = U::from(x.len() + y.len());
+
+    if size == U::zero(){
+        return U::one();
+    }
+
+    U::one() - (U::from(2) * intersection_size / size)
+}
