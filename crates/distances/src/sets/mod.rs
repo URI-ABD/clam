@@ -74,7 +74,11 @@ pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     if x.is_empty() || y.is_empty() {
         return U::one();
     }
-    let intersection_size = U::from(x.iter().filter(|v| y.contains(v)).count());
+
+    let x = x.iter().copied().collect::<BTreeSet<_>>();
+    let y = y.iter().copied().collect::<BTreeSet<_>>();
+
+    let intersection_size = U::from(x.intersection(&y).count());
     let size = U::from(x.len() + y.len());
 
     if size == U::zero() {
