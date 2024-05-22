@@ -12,8 +12,16 @@ pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
     /// Encodes an instance in the dataset into a byte array using a reference instance.
     fn encode_instance(&self, reference: &I, target: &I) -> Box<[u8]>;
 
+    // align with NW
+    // edits to convert unaligned into each other (edits to turn reference into target)
+    // serde to get bytes of edits
+
     /// Decodes an instance from a byte array using a reference instance.
     fn decode_instance(&self, reference: &I, encoding: &[u8]) -> I;
+
+    // serde to turn bytes into vec of edits
+    // apply edits to reference to get target
+    // return target
 
     /// Returns the number of bytes required to encode an instance in terms of a reference instance.
     ///
@@ -167,4 +175,45 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
     fn index(&self, index: usize) -> &Self::Output {
         &self.base_data[index]
     }
+}
+
+#[allow(unused_variables)]
+#[allow(dead_code)]
+/// Encodes a reference and target string into a byte array.
+///
+/// # Arguments
+///
+/// * `reference`: The reference string.
+/// * `target`: The target string.
+///
+/// # Returns
+///
+/// A byte array encoding the reference and target strings.
+pub fn encode_general(reference: &str, target: &str) -> Box<[u8]> {
+    todo!()
+
+    // align with NW
+    // edits to convert unaligned into each other (edits to turn reference into target)
+    // serde to get bytes of edits
+    // return bytes of edits
+}
+
+#[allow(unused_variables)]
+#[allow(dead_code)]
+/// Decodes a reference string from a byte array.
+///
+/// # Arguments
+///
+/// * `reference`: The reference string.
+/// * `encoding`: The byte array encoding the target string.
+///
+/// # Returns
+///
+/// The target string.
+pub fn decode_general(reference: &str, encoding: &[u8]) -> String {
+    todo!()
+
+    // serde to turn bytes into vec of edits
+    // apply edits to reference to get target
+    // return target
 }

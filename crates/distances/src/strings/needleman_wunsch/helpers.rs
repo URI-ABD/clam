@@ -103,7 +103,7 @@ fn min2<U: UInt>(a: (U, Direction), b: (U, Direction)) -> (U, Direction) {
 /// # Returns
 ///
 /// A 2-slice of Vec<Edit>, each containing the edits needed to convert one
-/// sequence into the other
+/// sequence into the other (substitutions only since they are both aligned).
 #[must_use]
 pub fn compute_edits(x: &str, y: &str) -> [Vec<Edit>; 2] {
     [_x_to_y(x, y), _x_to_y(y, x)]
@@ -147,6 +147,10 @@ pub fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// A vector of edits to transform the unaligned version of `x` into the unaligned version of `y`.
 #[must_use]
 pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
+    // env_logger::Builder::from_default_env()
+    // .filter_level(log::LevelFilter::Info)
+    // .init();
+
     let mut unaligned_x_to_y = Vec::new();
     let mut modifier = 0;
 
@@ -155,13 +159,13 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
         .enumerate()
         .filter(|(_, (x, y))| x != y)
         .for_each(|(index, (c_x, c_y))| {
-            let i = index + modifier;
+            let i = index - modifier;
 
             if c_x == '-' {
                 unaligned_x_to_y.push(Edit::Ins(i, c_y));
             } else if c_y == '-' {
                 unaligned_x_to_y.push(Edit::Del(i));
-                modifier -= 1;
+                modifier += 1;
             } else {
                 unaligned_x_to_y.push(Edit::Sub(i, c_y));
             }
@@ -169,6 +173,8 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 
     unaligned_x_to_y
 }
+
+// pub fn subs_to_general_edits(x: )
 
 /// Iteratively traces back through the Needleman-Wunsch table to get the alignment of two sequences.
 ///
