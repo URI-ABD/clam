@@ -2,7 +2,10 @@
 
 use std::ops::Index;
 
-use distances::{number::UInt, Number};
+use distances::{
+    number::UInt, strings::needleman_wunsch::compute_table, strings::needleman_wunsch::trace_back_recursive,
+    strings::needleman_wunsch::unaligned_x_to_y, strings::Penalties, Number,
+};
 
 use crate::{Dataset, Instance, VecDataset};
 
@@ -177,7 +180,6 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
     }
 }
 
-#[allow(unused_variables)]
 #[allow(dead_code)]
 /// Encodes a reference and target string into a byte array.
 ///
@@ -189,13 +191,19 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
 /// # Returns
 ///
 /// A byte array encoding the reference and target strings.
-pub fn encode_general(reference: &str, target: &str) -> Box<[u8]> {
-    todo!()
-
+pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Box<[u8]> {
     // align with NW
+    let table = compute_table::<U>(reference, target, Penalties::default());
+    let (aligned_x, aligned_y) = trace_back_recursive(&table, [reference, target]);
+
     // edits to convert unaligned into each other (edits to turn reference into target)
+    let edits = unaligned_x_to_y(&aligned_x, &aligned_y);
+
     // serde to get bytes of edits
+    let bytes = bincode::serialize(&edits).unwrap();
+
     // return bytes of edits
+    bytes.into_boxed_slice()
 }
 
 #[allow(unused_variables)]
