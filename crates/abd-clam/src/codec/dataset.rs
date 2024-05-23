@@ -3,8 +3,12 @@
 use std::ops::Index;
 
 use distances::{
-    number::UInt, strings::needleman_wunsch::compute_table, strings::needleman_wunsch::trace_back_recursive,
-    strings::needleman_wunsch::unaligned_x_to_y, strings::needleman_wunsch::Edit, strings::Penalties, Number,
+    number::UInt,
+    strings::{
+        needleman_wunsch::apply_edits, needleman_wunsch::compute_table, needleman_wunsch::trace_back_recursive,
+        needleman_wunsch::unaligned_x_to_y, needleman_wunsch::Edit, Penalties,
+    },
+    Number,
 };
 
 use crate::{Dataset, Instance, VecDataset};
@@ -211,8 +215,5 @@ pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Box<[u8]> {
 pub fn decode_general(reference: &str, encoding: &[u8]) -> String {
     let edits: Vec<Edit> = bincode::deserialize(encoding).unwrap();
 
-    todo!()
-
-    // apply edits to reference to get target
-    // return target
+    apply_edits(reference, &edits)
 }

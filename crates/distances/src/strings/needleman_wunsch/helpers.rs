@@ -315,7 +315,7 @@ fn _trace_back_recursive<U: UInt>(
 /// # Returns
 ///
 /// The target string.
-#[allow(dead_code)]
+#[must_use]
 pub fn apply_edits(x: &str, edits: &[Edit]) -> String {
     let mut x: Vec<char> = x.chars().collect();
 
