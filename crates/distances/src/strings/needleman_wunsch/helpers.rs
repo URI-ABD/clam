@@ -395,4 +395,21 @@ mod tests {
         assert_eq!(aligned_x, "NOTGUILTY");
         assert_eq!(aligned_y, "NOTGUILTY");
     }
+
+    #[test]
+    fn test_apply_edits() {
+        let x = "ACBAAB";
+        let edits: Vec<Edit> = vec![
+            Edit::Ins(1, 'A'),
+            Edit::Sub(3, 'A'),
+            Edit::Del(4),
+            Edit::Sub(5, 'C'),
+        ];
+
+        let actual = apply_edits(x, &edits);
+
+        let expected = "AACAAC";
+
+        assert_eq!(actual, expected);
+    }
 }
