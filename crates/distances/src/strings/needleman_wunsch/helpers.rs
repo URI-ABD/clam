@@ -305,6 +305,36 @@ fn _trace_back_recursive<U: UInt>(
     }
 }
 
+/// Applies a set of edits to a reference (unaligned) string to get a target (unaligned) string.
+///
+/// # Arguments
+///
+/// * `x`: The reference string.
+/// * `edits`: The edits to apply to the reference string.
+///
+/// # Returns
+///
+/// The target string.
+#[allow(dead_code)]
+pub fn apply_edits(x: &str, edits: &[Edit]) -> String {
+    let mut x: Vec<char> = x.chars().collect();
+
+    for edit in edits {
+        match edit {
+            Edit::Sub(i, c) => {
+                x[*i] = *c;
+            }
+            Edit::Ins(i, c) => {
+                x.insert(*i, *c);
+            }
+            Edit::Del(i) => {
+                x.remove(*i);
+            }
+        }
+    }
+    x.into_iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

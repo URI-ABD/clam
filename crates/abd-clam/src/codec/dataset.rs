@@ -4,7 +4,7 @@ use std::ops::Index;
 
 use distances::{
     number::UInt, strings::needleman_wunsch::compute_table, strings::needleman_wunsch::trace_back_recursive,
-    strings::needleman_wunsch::unaligned_x_to_y, strings::Penalties, Number,
+    strings::needleman_wunsch::unaligned_x_to_y, strings::needleman_wunsch::Edit, strings::Penalties, Number,
 };
 
 use crate::{Dataset, Instance, VecDataset};
@@ -15,16 +15,8 @@ pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
     /// Encodes an instance in the dataset into a byte array using a reference instance.
     fn encode_instance(&self, reference: &I, target: &I) -> Box<[u8]>;
 
-    // align with NW
-    // edits to convert unaligned into each other (edits to turn reference into target)
-    // serde to get bytes of edits
-
     /// Decodes an instance from a byte array using a reference instance.
     fn decode_instance(&self, reference: &I, encoding: &[u8]) -> I;
-
-    // serde to turn bytes into vec of edits
-    // apply edits to reference to get target
-    // return target
 
     /// Returns the number of bytes required to encode an instance in terms of a reference instance.
     ///
@@ -181,6 +173,7 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
 }
 
 #[allow(dead_code)]
+#[allow(clippy::unwrap_used)]
 /// Encodes a reference and target string into a byte array.
 ///
 /// # Arguments
@@ -192,22 +185,19 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
 ///
 /// A byte array encoding the reference and target strings.
 pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Box<[u8]> {
-    // align with NW
     let table = compute_table::<U>(reference, target, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_recursive(&table, [reference, target]);
 
-    // edits to convert unaligned into each other (edits to turn reference into target)
     let edits = unaligned_x_to_y(&aligned_x, &aligned_y);
 
-    // serde to get bytes of edits
     let bytes = bincode::serialize(&edits).unwrap();
 
-    // return bytes of edits
     bytes.into_boxed_slice()
 }
 
 #[allow(unused_variables)]
 #[allow(dead_code)]
+#[allow(clippy::unwrap_used)]
 /// Decodes a reference string from a byte array.
 ///
 /// # Arguments
@@ -219,9 +209,10 @@ pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Box<[u8]> {
 ///
 /// The target string.
 pub fn decode_general(reference: &str, encoding: &[u8]) -> String {
+    let edits: Vec<Edit> = bincode::deserialize(encoding).unwrap();
+
     todo!()
 
-    // serde to turn bytes into vec of edits
     // apply edits to reference to get target
     // return target
 }
