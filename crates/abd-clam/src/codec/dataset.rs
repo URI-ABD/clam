@@ -217,3 +217,19 @@ pub fn decode_general(reference: &str, encoding: &[u8]) -> String {
 
     apply_edits(reference, &edits)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_decode() {
+        let reference = "NAJIBPEPPERSEATS";
+        let target = "NAJIBEATSPEPPERS";
+
+        let encoding = encode_general::<u8>(reference, target);
+        let decoded = decode_general(reference, &encoding);
+
+        assert_eq!(decoded, target);
+    }
+}
