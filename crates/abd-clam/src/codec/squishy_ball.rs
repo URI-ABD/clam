@@ -103,16 +103,8 @@ impl<U: Int> SquishyBall<U> {
             let left_center = children.left.arg_center();
             let right_center = children.right.arg_center();
             let [left, right, center] = [&data[left_center], &data[right_center], &data[arg_center]];
-            let left_cost = data
-                .encode_instance(center, left)
-                .unwrap_or_else(|_| unreachable!("We control the instances."))
-                .len()
-                .as_u64();
-            let right_cost = data
-                .encode_instance(center, right)
-                .unwrap_or_else(|_| unreachable!("We control the instances."))
-                .len()
-                .as_u64();
+            let left_cost = data.metric()(center, left).as_u64();
+            let right_cost = data.metric()(center, right).as_u64();
             // TODO: Calculate the recursive cost using more depth into the tree.
             self.recursive_cost = left_cost + right_cost + children.left.unitary_cost + children.right.unitary_cost;
         } else {
@@ -124,16 +116,12 @@ impl<U: Int> SquishyBall<U> {
 
     /// Estimates the memory cost of unitary compression.
     ///
-    /// The cost is estimated as the number of bytes required to encode all instances in the cluster
-    /// in terms of the center of the cluster.
+    /// The cost is estimated as the sum of distances from the center to all instances in the cluster.
     pub(crate) fn calculate_unitary_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
         let center = &data[self.arg_center()];
         let instances = self.indices().map(|i| &data[i]);
         let distances = instances.map(|i| data.metric()(center, i)).map(Number::as_u64);
-        let costs = distances.map(|d| d * data.bytes_per_unit_distance());
-        costs.sum()
-        // // TODO: Calculate the exact cost of unitary compression.
-        // data.bytes_per_unit_distance() * self.radius().as_u64() * self.cardinality() as u64
+        distances.sum()
     }
 }
 
@@ -379,10 +367,14 @@ mod tests {
     #[test]
     fn test_squishy() {
         let strings = vec![
-            "NAJIBPEPPERSEATS".to_string(),
-            "NAJIBEATSPEPPERS".to_string(),
-            "TOMEATSWHATFOODEATS".to_string(),
-            "FOODEATSWHATTOMEATS".to_string(),
+            "NAJIBPEPPERS-EATS".to_string(),
+            "NAJIB-PEPPERSEATS".to_string(),
+            "NAJIB-EATSPEPPERS".to_string(),
+            "NAJIBEATS-PEPPERS".to_string(),
+            "TOM-EATSWHATFOODEATS".to_string(),
+            "TOMEATSWHATFOOD-EATS".to_string(),
+            "FOODEATS-WHATTOMEATS".to_string(),
+            "FOODEATSWHAT-TOMEATS".to_string(),
         ];
 
         let base_data = VecDataset::new("test-genomic".to_string(), strings.clone(), lev_metric, true);
