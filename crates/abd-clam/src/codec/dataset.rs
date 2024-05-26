@@ -30,7 +30,7 @@ pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
     /// * If the instance cannot be decoded from the given encoding.
     fn decode_instance(&self, reference: &I, encoding: &[u8]) -> Result<I, String>;
 
-    /// Returns the number of bytes required to encode an instance in terms of a reference instance.
+    /// Returns the number of bytes required to encode one edit operation.
     ///
     /// Ideally, this should be proportional to the distance between the two instances.
     ///
