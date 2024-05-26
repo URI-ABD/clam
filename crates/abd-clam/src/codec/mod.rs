@@ -14,7 +14,7 @@ impl<I: Instance, U: Int, D: SquishyDataset<I, U>> Tree<I, U, D, SquishyBall<U>>
     /// Recursively estimates and sets the costs of recursive and unitary compression in the subtree.
     #[must_use]
     pub fn estimate_costs(mut self, data: &D) -> Self {
-        self.root.estimate_costs(data);
+        self.root.calculate_costs(data);
         self
     }
 

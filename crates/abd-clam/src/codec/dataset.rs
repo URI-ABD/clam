@@ -71,18 +71,18 @@ pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 #[allow(clippy::type_complexity)]
-pub struct GenomicDataset<U: UInt> {
+pub struct GenomicDataset<U: UInt, M: Instance> {
     /// The base dataset.
-    base_data: VecDataset<String, U, String>,
+    pub base_data: VecDataset<String, U, M>,
     /// The number of bytes required to encode an instance in terms of a reference instance.
-    bytes_per_unit_distance: u64,
+    pub bytes_per_unit_distance: u64,
     /// The encoding function.
-    encoder: fn(&String, &String) -> Result<Box<[u8]>, String>,
+    pub encoder: fn(&String, &String) -> Result<Box<[u8]>, String>,
     /// The decoding function.
-    decoder: fn(&String, &[u8]) -> Result<String, String>,
+    pub decoder: fn(&String, &[u8]) -> Result<String, String>,
 }
 
-impl<U: UInt> SquishyDataset<String, U> for GenomicDataset<U> {
+impl<U: UInt, M: Instance> SquishyDataset<String, U> for GenomicDataset<U, M> {
     fn encode_instance(&self, reference: &String, target: &String) -> Result<Box<[u8]>, String> {
         (self.encoder)(reference, target)
     }
@@ -115,7 +115,7 @@ impl<U: UInt> SquishyDataset<String, U> for GenomicDataset<U> {
     }
 }
 
-impl<U: UInt> Dataset<String, U> for GenomicDataset<U> {
+impl<U: UInt, M: Instance> Dataset<String, U> for GenomicDataset<U, M> {
     fn type_name() -> String {
         format!("GenomicDataset<{}>", U::type_name())
     }
@@ -178,7 +178,7 @@ impl<U: UInt> Dataset<String, U> for GenomicDataset<U> {
     }
 }
 
-impl<U: UInt> Index<usize> for GenomicDataset<U> {
+impl<U: UInt, M: Instance> Index<usize> for GenomicDataset<U, M> {
     type Output = String;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -186,7 +186,6 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
     }
 }
 
-#[allow(dead_code)]
 /// Encodes a reference and target string into a byte array.
 ///
 /// # Arguments
@@ -197,7 +196,8 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
 /// # Returns
 ///
 /// A byte array encoding the reference and target strings.
-pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Result<Box<[u8]>, String> {
+#[allow(dead_code, clippy::ptr_arg)]
+pub fn encode_general<U: UInt>(reference: &String, target: &String) -> Result<Box<[u8]>, String> {
     let table = compute_table::<U>(reference, target, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_recursive(&table, [reference, target]);
 
@@ -208,7 +208,6 @@ pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Result<Box<[u8]
     Ok(bytes.into_boxed_slice())
 }
 
-#[allow(dead_code)]
 /// Decodes a reference string from a byte array.
 ///
 /// # Arguments
@@ -219,7 +218,8 @@ pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Result<Box<[u8]
 /// # Returns
 ///
 /// The target string.
-pub fn decode_general(reference: &str, encoding: &[u8]) -> Result<String, String> {
+#[allow(dead_code, clippy::ptr_arg)]
+pub fn decode_general(reference: &String, encoding: &[u8]) -> Result<String, String> {
     let edits: Vec<Edit> = bincode::deserialize(encoding).map_err(|e| e.to_string())?;
 
     Ok(apply_edits(reference, &edits))
@@ -227,16 +227,54 @@ pub fn decode_general(reference: &str, encoding: &[u8]) -> Result<String, String
 
 #[cfg(test)]
 mod tests {
+    use distances::strings::levenshtein;
+
     use super::*;
+
+    fn lev_metric(x: &String, y: &String) -> u16 {
+        levenshtein(x, y)
+    }
 
     #[test]
     fn test_encode_decode() {
-        let reference = "NAJIBPEPPERSEATS";
-        let target = "NAJIBEATSPEPPERS";
+        let reference = "NAJIBPEPPERSEATS".to_string();
+        let target = "NAJIBEATSPEPPERS".to_string();
 
-        let encoding = encode_general::<u8>(reference, target).unwrap();
-        let decoded = decode_general(reference, &encoding).unwrap();
+        let encoding = encode_general::<u8>(&reference, &target).unwrap();
+        let decoded = decode_general(&reference, &encoding).unwrap();
 
         assert_eq!(decoded, target);
+    }
+
+    #[test]
+    fn test_genomic() {
+        let strings = vec![
+            "NAJIBPEPPERSEATS".to_string(),
+            "NAJIBEATSPEPPERS".to_string(),
+            "TOMEATSWHATFOODEATS".to_string(),
+            "FOODEATSWHATTOMEATS".to_string(),
+        ];
+
+        let base_data = VecDataset::new("test-genomic".to_string(), strings.clone(), lev_metric, true);
+
+        let dataset = GenomicDataset {
+            base_data,
+            bytes_per_unit_distance: 1,
+            encoder: encode_general::<u16>,
+            decoder: decode_general,
+        };
+
+        for i in 0..strings.len() {
+            for j in 0..strings.len() {
+                let encoding = dataset.encode_instance(&strings[i], &strings[j]).unwrap();
+                if i == j {
+                    let edits = bincode::deserialize::<Vec<Edit>>(&encoding).unwrap();
+                    assert!(edits.is_empty());
+                } else {
+                    let decoded = dataset.decode_instance(&strings[i], &encoding).unwrap();
+                    assert_eq!(decoded, strings[j]);
+                }
+            }
+        }
     }
 }

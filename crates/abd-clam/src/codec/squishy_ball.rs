@@ -27,6 +27,8 @@ pub struct SquishyBall<U: Int> {
     recursive_cost: u64,
     /// Expected memory cost, in bytes, of unitary compression.
     unitary_cost: u64,
+    /// The minimum expected memory cost, in bytes, of compression.
+    min_cost: u64,
     /// Child Clusters
     children: Option<Children<U, Self>>,
 }
@@ -55,6 +57,7 @@ impl<U: Int> SquishyBall<U> {
                     uni_ball,
                     recursive_cost: 0,
                     unitary_cost: 0,
+                    min_cost: 0,
                     children: Some(children),
                 }
             }
@@ -62,6 +65,7 @@ impl<U: Int> SquishyBall<U> {
                 uni_ball,
                 recursive_cost: 0,
                 unitary_cost: 0,
+                min_cost: 0,
                 children: None,
             },
         }
@@ -82,51 +86,54 @@ impl<U: Int> SquishyBall<U> {
         self.unitary_cost
     }
 
+    /// Returns the lowest expected memory cost, in bytes, of compression.
+    /// This is the minimum of the recursive and unitary costs.
+    pub const fn min_cost(&self) -> u64 {
+        self.min_cost
+    }
+
+    /// Recursively estimates and sets the costs of recursive and unitary compression in the subtree.
+    pub fn calculate_costs<I: Instance, D: SquishyDataset<I, U>>(&mut self, data: &D) {
+        self.unitary_cost = self.calculate_unitary_cost(data);
+        let arg_center = self.arg_center();
+        if let Some(children) = self.children.as_mut() {
+            children.left.calculate_costs(data);
+            children.right.calculate_costs(data);
+
+            let left_center = children.left.arg_center();
+            let right_center = children.right.arg_center();
+            let [left, right, center] = [&data[left_center], &data[right_center], &data[arg_center]];
+            let left_cost = data
+                .encode_instance(center, left)
+                .unwrap_or_else(|_| unreachable!("We control the instances."))
+                .len()
+                .as_u64();
+            let right_cost = data
+                .encode_instance(center, right)
+                .unwrap_or_else(|_| unreachable!("We control the instances."))
+                .len()
+                .as_u64();
+            // TODO: Calculate the recursive cost using more depth into the tree.
+            self.recursive_cost = left_cost + right_cost + children.left.unitary_cost + children.right.unitary_cost;
+        } else {
+            self.recursive_cost = self.unitary_cost;
+        }
+
+        self.min_cost = self.recursive_cost.min(self.unitary_cost);
+    }
+
     /// Estimates the memory cost of unitary compression.
     ///
     /// The cost is estimated as the number of bytes required to encode all instances in the cluster
     /// in terms of the center of the cluster.
-    pub(crate) fn estimate_unitary_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
-        data.bytes_per_unit_distance() * self.radius().as_u64() * self.cardinality() as u64
-    }
-
-    /// Estimates the memory cost of recursive compression, i.e. the cost of compressing the
-    /// centers of the children in terms of the center of the cluster.
-    pub(crate) fn estimate_recursive_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
-        match self.children() {
-            Some([left, right]) => {
-                let left_center = left.arg_center();
-                let right_center = right.arg_center();
-                let [left, right, center] = [&data[left_center], &data[right_center], &data[self.arg_center()]];
-                let left_cost = data
-                    .encode_instance(center, left)
-                    .unwrap_or_else(|_| unreachable!("We control the instances."))
-                    .len()
-                    .as_u64();
-                let right_cost = data
-                    .encode_instance(center, right)
-                    .unwrap_or_else(|_| unreachable!("We control the instances."))
-                    .len()
-                    .as_u64();
-                left_cost + right_cost
-            }
-            None => {
-                // If there are no children, the cost is zero.
-                0
-            }
-        }
-    }
-
-    /// Recursively estimates and sets the costs of recursive and unitary compression in the subtree.
-    pub(crate) fn estimate_costs<I: Instance, D: SquishyDataset<I, U>>(&mut self, data: &D) {
-        if let Some(children) = self.children.as_mut() {
-            children.left.estimate_costs(data);
-            children.right.estimate_costs(data);
-            self.recursive_cost = self.estimate_recursive_cost(data);
-        } else {
-            self.recursive_cost = 0;
-        }
-        self.unitary_cost = self.estimate_unitary_cost(data);
+    pub(crate) fn calculate_unitary_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
+        let center = &data[self.arg_center()];
+        let instances = self.indices().map(|i| &data[i]);
+        let distances = instances.map(|i| data.metric()(center, i)).map(Number::as_u64);
+        let costs = distances.map(|d| d * data.bytes_per_unit_distance());
+        costs.sum()
+        // // TODO: Calculate the exact cost of unitary compression.
+        // data.bytes_per_unit_distance() * self.radius().as_u64() * self.cardinality() as u64
     }
 }
 
@@ -137,6 +144,7 @@ impl<U: Int> Cluster<U> for SquishyBall<U> {
             uni_ball,
             recursive_cost: 0,
             unitary_cost: 0,
+            min_cost: 0,
             children: None,
         }
     }
@@ -226,10 +234,11 @@ impl<U: Int> Display for SquishyBall<U> {
 
 impl<U: Int> Serialize for SquishyBall<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("SquishyBall", 4)?;
+        let mut state = serializer.serialize_struct("SquishyBall", 5)?;
         state.serialize_field("uni_ball", &self.uni_ball)?;
         state.serialize_field("recursive_cost", &self.recursive_cost)?;
         state.serialize_field("unitary_cost", &self.unitary_cost)?;
+        state.serialize_field("min_cost", &self.min_cost)?;
         state.serialize_field("children", &self.children)?;
         state.end()
     }
@@ -247,6 +256,8 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
             RecursiveCost,
             /// The expected memory cost, in bytes, of unitary compression.
             UnitaryCost,
+            /// The minimum expected memory cost, in bytes, of compression.
+            MinCost,
             /// The children of the `SquishyBall`.
             Children,
         }
@@ -271,6 +282,9 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
                 let unitary_cost = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(2, &self))?;
+                let min_cost = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
                 let children = seq
                     .next_element()?
                     .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
@@ -278,6 +292,7 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
                     uni_ball,
                     recursive_cost,
                     unitary_cost,
+                    min_cost,
                     children,
                 })
             }
@@ -286,6 +301,7 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
                 let mut uni_ball = None;
                 let mut recursive_cost = None;
                 let mut unitary_cost = None;
+                let mut min_cost = None;
                 let mut children = None;
 
                 while let Some(key) = map.next_key()? {
@@ -308,6 +324,12 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
                             }
                             unitary_cost = Some(map.next_value()?);
                         }
+                        Field::MinCost => {
+                            if min_cost.is_some() {
+                                return Err(serde::de::Error::duplicate_field("min_cost"));
+                            }
+                            min_cost = Some(map.next_value()?);
+                        }
                         Field::Children => {
                             if children.is_some() {
                                 return Err(serde::de::Error::duplicate_field("children"));
@@ -320,19 +342,76 @@ impl<'de, U: Int> Deserialize<'de> for SquishyBall<U> {
                 let uni_ball = uni_ball.ok_or_else(|| serde::de::Error::missing_field("uni_ball"))?;
                 let recursive_cost = recursive_cost.ok_or_else(|| serde::de::Error::missing_field("recursive_cost"))?;
                 let unitary_cost = unitary_cost.ok_or_else(|| serde::de::Error::missing_field("unitary_cost"))?;
+                let min_cost = min_cost.ok_or_else(|| serde::de::Error::missing_field("min_cost"))?;
                 let children = children.ok_or_else(|| serde::de::Error::missing_field("children"))?;
 
                 Ok(SquishyBall {
                     uni_ball,
                     recursive_cost,
                     unitary_cost,
+                    min_cost,
                     children,
                 })
             }
         }
 
         /// The `Field` names.
-        const FIELDS: &[&str] = &["uni_ball", "recursive_cost", "unitary_cost", "children"];
+        const FIELDS: &[&str] = &["uni_ball", "recursive_cost", "unitary_cost", "min_cost", "children"];
         deserializer.deserialize_struct("SquishyBall", FIELDS, SquishyBallVisitor(PhantomData))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use distances::strings::levenshtein;
+
+    use crate::{
+        codec::dataset::{decode_general, encode_general, GenomicDataset},
+        PartitionCriteria, VecDataset,
+    };
+
+    use super::*;
+
+    fn lev_metric(x: &String, y: &String) -> u16 {
+        levenshtein(x, y)
+    }
+
+    #[test]
+    fn test_squishy() {
+        let strings = vec![
+            "NAJIBPEPPERSEATS".to_string(),
+            "NAJIBEATSPEPPERS".to_string(),
+            "TOMEATSWHATFOODEATS".to_string(),
+            "FOODEATSWHATTOMEATS".to_string(),
+        ];
+
+        let base_data = VecDataset::new("test-genomic".to_string(), strings.clone(), lev_metric, true);
+
+        let mut dataset = GenomicDataset {
+            base_data,
+            bytes_per_unit_distance: 10,
+            encoder: encode_general::<u16>,
+            decoder: decode_general,
+        };
+
+        let criteria = PartitionCriteria::default();
+        let seed = Some(42);
+        let mut root = SquishyBall::new_root(&dataset, None).partition(&mut dataset, &criteria, seed);
+        root.calculate_costs(&dataset);
+
+        let clusters = root.subtree();
+        let unitary_costs = clusters.iter().map(|c| c.unitary_cost).collect::<Vec<_>>();
+        let recursive_costs = clusters.iter().map(|c| c.recursive_cost).collect::<Vec<_>>();
+        let min_costs = clusters.iter().map(|c| c.min_cost).collect::<Vec<_>>();
+
+        for (c, (&u, (&r, &m))) in clusters
+            .iter()
+            .zip(unitary_costs.iter().zip(recursive_costs.iter().zip(min_costs.iter())))
+        {
+            assert!(m <= r, "min_cost: {m} > recursive_cost: {r} for cluster: {}", c.name());
+            assert!(m <= u, "min_cost: {m} > unitary_cost: {u} for cluster: {}", c.name());
+        }
+
+        // assert_eq!(unitary_costs, recursive_costs);  // This is just for a sanity check. It is not always true.
     }
 }
