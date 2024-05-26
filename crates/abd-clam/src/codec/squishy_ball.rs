@@ -98,8 +98,16 @@ impl<U: Int> SquishyBall<U> {
                 let left_center = left.arg_center();
                 let right_center = right.arg_center();
                 let [left, right, center] = [&data[left_center], &data[right_center], &data[self.arg_center()]];
-                let left_cost = data.encode_instance(center, left).len().as_u64();
-                let right_cost = data.encode_instance(center, right).len().as_u64();
+                let left_cost = data
+                    .encode_instance(center, left)
+                    .unwrap_or_else(|_| unreachable!("We control the instances."))
+                    .len()
+                    .as_u64();
+                let right_cost = data
+                    .encode_instance(center, right)
+                    .unwrap_or_else(|_| unreachable!("We control the instances."))
+                    .len()
+                    .as_u64();
                 left_cost + right_cost
             }
             None => {

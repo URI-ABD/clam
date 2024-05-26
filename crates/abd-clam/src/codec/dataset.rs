@@ -17,10 +17,18 @@ use crate::{Dataset, Instance, VecDataset};
 #[allow(clippy::module_name_repetitions)]
 pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
     /// Encodes an instance in the dataset into a byte array using a reference instance.
-    fn encode_instance(&self, reference: &I, target: &I) -> Box<[u8]>;
+    ///
+    /// # Errors
+    ///
+    /// * If the instance cannot be encoded into the given encoding.
+    fn encode_instance(&self, reference: &I, target: &I) -> Result<Box<[u8]>, String>;
 
     /// Decodes an instance from a byte array using a reference instance.
-    fn decode_instance(&self, reference: &I, encoding: &[u8]) -> I;
+    ///
+    /// # Errors
+    ///
+    /// * If the instance cannot be decoded from the given encoding.
+    fn decode_instance(&self, reference: &I, encoding: &[u8]) -> Result<I, String>;
 
     /// Returns the number of bytes required to encode an instance in terms of a reference instance.
     ///
@@ -47,12 +55,13 @@ pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
     /// * If the dataset cannot be loaded from the given path.
     /// * If the dataset is not the same type as the one that was saved.
     /// * If the file was corrupted.
+    #[allow(clippy::type_complexity)]
     fn load(
         path: &std::path::Path,
         metric: fn(&String, &String) -> U,
         is_expensive: bool,
-        encoder: fn(&String, &String) -> Box<[u8]>,
-        decoder: fn(&String, &[u8]) -> String,
+        encoder: fn(&String, &String) -> Result<Box<[u8]>, String>,
+        decoder: fn(&String, &[u8]) -> Result<String, String>,
     ) -> Result<Self, String>
     where
         Self: Sized;
@@ -61,23 +70,24 @@ pub trait SquishyDataset<I: Instance, U: Number>: Dataset<I, U> {
 /// A dataset that stores genomic data, and has encoding and decoding methods for the metric involved.
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
+#[allow(clippy::type_complexity)]
 pub struct GenomicDataset<U: UInt> {
     /// The base dataset.
     base_data: VecDataset<String, U, String>,
     /// The number of bytes required to encode an instance in terms of a reference instance.
     bytes_per_unit_distance: u64,
     /// The encoding function.
-    encoder: fn(&String, &String) -> Box<[u8]>,
+    encoder: fn(&String, &String) -> Result<Box<[u8]>, String>,
     /// The decoding function.
-    decoder: fn(&String, &[u8]) -> String,
+    decoder: fn(&String, &[u8]) -> Result<String, String>,
 }
 
 impl<U: UInt> SquishyDataset<String, U> for GenomicDataset<U> {
-    fn encode_instance(&self, reference: &String, target: &String) -> Box<[u8]> {
+    fn encode_instance(&self, reference: &String, target: &String) -> Result<Box<[u8]>, String> {
         (self.encoder)(reference, target)
     }
 
-    fn decode_instance(&self, reference: &String, encoding: &[u8]) -> String {
+    fn decode_instance(&self, reference: &String, encoding: &[u8]) -> Result<String, String> {
         (self.decoder)(reference, encoding)
     }
 
@@ -95,8 +105,8 @@ impl<U: UInt> SquishyDataset<String, U> for GenomicDataset<U> {
         path: &std::path::Path,
         metric: fn(&String, &String) -> U,
         is_expensive: bool,
-        encoder: fn(&String, &String) -> Box<[u8]>,
-        decoder: fn(&String, &[u8]) -> String,
+        encoder: fn(&String, &String) -> Result<Box<[u8]>, String>,
+        decoder: fn(&String, &[u8]) -> Result<String, String>,
     ) -> Result<Self, String>
     where
         Self: Sized,
@@ -177,7 +187,6 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
 }
 
 #[allow(dead_code)]
-#[allow(clippy::unwrap_used)]
 /// Encodes a reference and target string into a byte array.
 ///
 /// # Arguments
@@ -188,20 +197,18 @@ impl<U: UInt> Index<usize> for GenomicDataset<U> {
 /// # Returns
 ///
 /// A byte array encoding the reference and target strings.
-pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Box<[u8]> {
+pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Result<Box<[u8]>, String> {
     let table = compute_table::<U>(reference, target, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_recursive(&table, [reference, target]);
 
     let edits = unaligned_x_to_y(&aligned_x, &aligned_y);
 
-    let bytes = bincode::serialize(&edits).unwrap();
+    let bytes = bincode::serialize(&edits).map_err(|e| e.to_string())?;
 
-    bytes.into_boxed_slice()
+    Ok(bytes.into_boxed_slice())
 }
 
-#[allow(unused_variables)]
 #[allow(dead_code)]
-#[allow(clippy::unwrap_used)]
 /// Decodes a reference string from a byte array.
 ///
 /// # Arguments
@@ -212,10 +219,10 @@ pub fn encode_general<U: UInt>(reference: &str, target: &str) -> Box<[u8]> {
 /// # Returns
 ///
 /// The target string.
-pub fn decode_general(reference: &str, encoding: &[u8]) -> String {
-    let edits: Vec<Edit> = bincode::deserialize(encoding).unwrap();
+pub fn decode_general(reference: &str, encoding: &[u8]) -> Result<String, String> {
+    let edits: Vec<Edit> = bincode::deserialize(encoding).map_err(|e| e.to_string())?;
 
-    apply_edits(reference, &edits)
+    Ok(apply_edits(reference, &edits))
 }
 
 #[cfg(test)]
@@ -227,8 +234,8 @@ mod tests {
         let reference = "NAJIBPEPPERSEATS";
         let target = "NAJIBEATSPEPPERS";
 
-        let encoding = encode_general::<u8>(reference, target);
-        let decoded = decode_general(reference, &encoding);
+        let encoding = encode_general::<u8>(reference, target).unwrap();
+        let decoded = decode_general(reference, &encoding).unwrap();
 
         assert_eq!(decoded, target);
     }
