@@ -1,13 +1,12 @@
 use distances::strings::Edit;
 use distances::strings::_x_to_y;
 use distances::strings::needleman_wunsch::apply_edits;
+use distances::strings::needleman_wunsch::compute_table;
+use distances::strings::needleman_wunsch::trace_back_recursive;
 use distances::strings::unaligned_x_to_y;
+use distances::strings::Penalties;
 
-#[allow(dead_code)]
-/// Applies a random edit to a given string. The edit is either an insertion, deletion, or substitution.
-/// If the edit is a deletion or substitution, the index can be any index in the string. If the
-/// edit is an insertion, the index can be the index before any character in the string, an index
-/// between characters in the string, or the index after the last character in the string.
+/// Applies a random edit to a given string.
 /// The character (if applicable) for the edit is a random character from the given alphabet.
 ///
 /// # Arguments
@@ -18,19 +17,15 @@ use distances::strings::unaligned_x_to_y;
 /// # Returns
 ///
 /// A string with a random edit applied.
-fn apply_random_edit(string: &str, alphabet: Vec<char>) -> String {
+fn apply_random_edit(string: &str, alphabet: &Vec<char>) -> String {
     let edit_type = rand::random::<u8>() % 3;
     let length = string.len();
     let char = alphabet[rand::random::<usize>() % alphabet.len()];
 
     match edit_type {
         0 => {
-            let index = rand::random::<usize>() % (length + 2);
-            if index < length + 2 {
-                apply_edits(string, &[Edit::Ins(index, char)])
-            } else {
-                char.to_string() + string
-            }
+            let index = rand::random::<usize>() % (length + 1);
+            apply_edits(string, &[Edit::Ins(index, char)])
         }
         1 => apply_edits(string, &[Edit::Del(rand::random::<usize>() % length)]),
         2 => apply_edits(string, &[Edit::Sub(rand::random::<usize>() % length, char)]),
@@ -94,4 +89,25 @@ fn small_unaligned() {
     ];
 
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn random_reference() {
+    let alphabet = vec!['A', 'C', 'G', 'T'];
+    let x = "ACCCGAGTCGTTT";
+
+    for _ in 0..50 {
+        let mut y = x.to_string();
+
+        for _ in 0..5 {
+            y = apply_random_edit(&y, &alphabet);
+        }
+
+        let table = compute_table::<u16>(x, &y, Penalties::default());
+        let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, &y]);
+
+        let actual_edits = unaligned_x_to_y(&aligned_x, &aligned_y);
+
+        assert!(actual_edits.len() <= 5);
+    }
 }
