@@ -132,7 +132,7 @@ pub fn _x_to_y(x: &str, y: &str) -> Vec<Edit> {
         .collect()
 }
 
-/// Converts two aligned strings into a sequence of edits to transform one into the other if they were unaligned.
+/// Given two aligned strings, returns into a sequence of edits to transform the unaligned version of one into the unaligned version of the other.
 ///
 /// Requires that gaps are never aligned with gaps (our NW implementation, with the default penalties ensures this).
 /// Expects to receive two strings which were aligned using either `trace_back_iterative` or `trace_back_recursive`.
