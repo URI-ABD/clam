@@ -1,13 +1,35 @@
-use distances::strings::Edit;
-use distances::strings::_x_to_y;
-use distances::strings::needleman_wunsch::apply_edits;
-use distances::strings::needleman_wunsch::compute_table;
-use distances::strings::needleman_wunsch::trace_back_recursive;
-use distances::strings::unaligned_x_to_y;
-use distances::strings::Penalties;
+use distances::strings::needleman_wunsch::{apply_edits, compute_table, trace_back_recursive};
+use distances::strings::{Edit, _x_to_y, unaligned_x_to_y, Penalties};
+
+/// Generates (but does not apply) a random edit to a given string.
+/// The character (if applicable) for the edit is a random character from the given alphabet.
+///
+/// # Arguments
+///
+/// * `string`: The string to apply the edit to.
+/// * `alphabet`: The alphabet to choose the character from.
+///
+/// # Returns
+///
+/// A random edit (Deletion, Insertion, or Substitution) based on the given string and alphabet.
+fn generate_random_edit(string: &str, alphabet: &Vec<char>) -> Edit {
+    let edit_type = rand::random::<u8>() % 3;
+    let length = string.len();
+    let char = alphabet[rand::random::<usize>() % alphabet.len()];
+
+    match edit_type {
+        0 => {
+            let index = rand::random::<usize>() % (length + 1);
+            Edit::Ins(index, char)
+        }
+        1 => Edit::Del(rand::random::<usize>() % length),
+        2 => Edit::Sub(rand::random::<usize>() % length, char),
+        _ => unreachable!(),
+    }
+}
 
 /// Applies a random edit to a given string.
-/// The character (if applicable) for the edit is a random character from the given alphabet.
+///
 ///
 /// # Arguments
 ///
@@ -18,19 +40,9 @@ use distances::strings::Penalties;
 ///
 /// A string with a random edit applied.
 fn apply_random_edit(string: &str, alphabet: &Vec<char>) -> String {
-    let edit_type = rand::random::<u8>() % 3;
-    let length = string.len();
-    let char = alphabet[rand::random::<usize>() % alphabet.len()];
+    let random_edit = generate_random_edit(string, alphabet);
 
-    match edit_type {
-        0 => {
-            let index = rand::random::<usize>() % (length + 1);
-            apply_edits(string, &[Edit::Ins(index, char)])
-        }
-        1 => apply_edits(string, &[Edit::Del(rand::random::<usize>() % length)]),
-        2 => apply_edits(string, &[Edit::Sub(rand::random::<usize>() % length, char)]),
-        _ => unreachable!(),
-    }
+    apply_edits(string, &[random_edit])
 }
 
 #[test]
