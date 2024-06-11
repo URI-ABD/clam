@@ -27,17 +27,17 @@ use super::Instance;
 #[derive(Debug)]
 pub struct VecDataset<I: Instance, U: Number, M: Instance> {
     /// The name of the dataset.
-    name: String,
+    pub(crate) name: String,
     /// The data of the dataset.
-    data: Vec<I>,
+    pub(crate) data: Vec<I>,
     /// The metric of the dataset.
-    metric: fn(&I, &I) -> U,
+    pub(crate) metric: fn(&I, &I) -> U,
     /// Whether the metric is expensive to compute.
-    is_expensive: bool,
+    pub(crate) is_expensive: bool,
     /// The reordering of the dataset after building the tree.
-    permuted_indices: Option<Vec<usize>>,
+    pub(crate) permuted_indices: Option<Vec<usize>>,
     /// Metadata about the dataset.
-    metadata: Vec<M>,
+    pub(crate) metadata: Vec<M>,
 }
 
 impl<I: Instance, U: Number> VecDataset<I, U, usize> {
