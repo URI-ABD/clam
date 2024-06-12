@@ -1,8 +1,8 @@
 use distances::strings::levenshtein_custom;
 use distances::strings::needleman_wunsch::{compute_table, trace_back_recursive};
 use distances::strings::{unaligned_x_to_y, Penalties};
-use symagen::random_edits::apply_random_edit;
-use symagen::random_edits::are_we_there_yet;
+use std::collections::HashMap;
+use symagen::random_edits::{apply_random_edit, are_we_there_yet, create_batch};
 
 #[test]
 fn random_reference() {
@@ -41,4 +41,25 @@ fn random_edits() {
         10,
         "Distance between {x} and {new_string} is not 10"
     );
+}
+
+#[test]
+fn random_batch() {
+    // let alphabet = vec!['N', 'A', 'J', 'I', 'B', 'P', 'E', 'R', 'S', 'T'];
+    // let x = "NAJIBEATSPEPPERSNAJIBEATSPEPPERSNAJIBEATSPEPPERSNAJIBEATSPEPPERSNAJI";
+    let x = "ACGGTTTGCGTA";
+    let alphabet = vec!['A', 'C', 'G', 'T'];
+
+    let penalties = Penalties::new(0, 1, 1);
+
+    let batch = create_batch::<u16>(x, penalties, 2, &alphabet, 50);
+    let mut strings: HashMap<String, usize> = HashMap::new();
+    for n in batch.iter() {
+        strings
+            .entry(n.to_string())
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+    }
+
+    assert_eq!(strings.len(), 50, "Batch is {:?}: ", strings);
 }
