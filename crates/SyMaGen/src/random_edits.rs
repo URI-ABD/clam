@@ -107,3 +107,35 @@ pub fn create_batch<U: UInt>(
         .map(|_| are_we_there_yet(seed_string, penalties, target_distance, alphabet))
         .collect()
 }
+
+#[must_use]
+/// Generates a random batch of strings in distinct clumps.
+/// Distance between clumps is 10 times the `clump_radius`.
+///
+/// # Arguments
+///
+/// * `seed_string`: A baseline string to serve as the center of one clump.
+/// * `penalties`: The penalties for the edit operations.
+/// * `alphabet`: The alphabet to choose characters from.
+/// * `num_clumps`: The number of clumps to generate.
+/// * `clump_size`: The number of strings in each clump.
+/// * `clump_radius`: The target distance from the seed string for each clump.
+///
+/// # Returns
+///
+/// A vector of randomly generated strings in distinct clumps.
+pub fn generate_clumped_data(
+    seed_string: &str,
+    penalties: Penalties<u16>,
+    alphabet: &[char],
+    num_clumps: usize,
+    clump_size: usize,
+    clump_radius: u16,
+) -> Vec<String> {
+    let clump_seeds = create_batch(seed_string, penalties, clump_radius * 10, alphabet, num_clumps);
+
+    clump_seeds
+        .iter()
+        .flat_map(|seed| create_batch(seed, penalties, clump_radius, alphabet, clump_size))
+        .collect()
+}
