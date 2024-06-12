@@ -6,3 +6,6 @@ rustflags = [
     "-C", "link-arg=-undefined",
     "-C", "link-arg=dynamic_lookup",
 ]
+
+[env]
+RUST_BACKTRACE = "full"

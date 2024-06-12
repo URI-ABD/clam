@@ -159,6 +159,8 @@ impl<U: UInt, M: Instance> GenomicDataset<U, M> {
     where
         W: ?Sized + std::io::Write,
     {
+        // TODO: Move most of this method to the `SquishyDataset` trait instead.
+
         // Write the header for basic protection against corruption.
         let type_name = Self::type_name();
         writer
@@ -308,6 +310,8 @@ impl<U: UInt, M: Instance> GenomicDataset<U, M> {
     where
         R: ?Sized + std::io::Read,
     {
+        // TODO: Move most of this method to the `SquishyDataset` trait instead.
+
         // Read the header and check if it is the same as the type name.
         {
             let mut type_name_len = vec![0u8; usize::num_bytes()];
@@ -712,7 +716,12 @@ pub fn decode_general(reference: &String, encoding: &[u8]) -> Result<String, Str
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufReader, Write};
+
     use distances::strings::levenshtein;
+    use tempdir::TempDir;
+
+    use crate::{codec::criteria::CompressionCriteria, PartitionCriteria, UniBall};
 
     use super::*;
 
@@ -761,5 +770,63 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_save_load() {
+        let strings = vec![
+            "NAJIBPEPPERSEATS".to_string(),
+            "NAJIBEATSPEPPERS".to_string(),
+            "TOMEATSWHATFOODEATS".to_string(),
+            "FOODEATSWHATTOMEATS".to_string(),
+        ];
+
+        let base_data = VecDataset::new("test-genomic".to_string(), strings.clone(), lev_metric, true);
+
+        let mut data = GenomicDataset {
+            base_data,
+            bytes_per_unit_distance: 1,
+            encoder: encode_general::<u16>,
+            decoder: decode_general,
+        };
+
+        let seed = Some(42);
+        let criteria = PartitionCriteria::default();
+        let root = UniBall::new_root(&data, seed).partition(&mut data, &criteria, seed);
+        let root = {
+            let mut root = SquishyBall::from_base_tree(root);
+            let criteria = CompressionCriteria::new(false).with_fixed_depth(2);
+            root.apply_criteria(&criteria);
+            root
+        };
+
+        // Create a temporary directory for the dataset.
+        let temp_dir = TempDir::new("test-genomic").unwrap();
+        let temp_path = temp_dir.path().join("dataset");
+
+        // Save the dataset.
+        let mut writer = BufWriter::new(File::create(&temp_path).unwrap());
+        data.save(&mut writer, &root).unwrap();
+        writer.flush().unwrap();
+
+        // Load the dataset.
+        let mut reader = BufReader::new(File::open(&temp_path).unwrap());
+        let loaded = GenomicDataset::<u16, usize>::load(
+            &mut reader,
+            lev_metric,
+            true,
+            encode_general::<u16>,
+            decode_general,
+            &root,
+        )
+        .unwrap();
+
+        // Check that the loaded dataset is the same as the original.
+        assert_eq!(data.name(), loaded.name());
+        assert_eq!(data.base_data.name(), loaded.base_data.name());
+        assert_eq!(data.base_data.cardinality(), loaded.base_data.cardinality());
+        assert_eq!(data.base_data.metadata, loaded.base_data.metadata);
+        assert_eq!(data.bytes_per_unit_distance, loaded.bytes_per_unit_distance);
+        assert_eq!(data.base_data.permuted_indices(), loaded.base_data.permuted_indices());
     }
 }
