@@ -3,6 +3,7 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/SyMaGen",
+    "crates/pancakes-results",
     "pypi/distances",
     # "py-clam",  # TODO: re-enable when we have python bindings
 ]

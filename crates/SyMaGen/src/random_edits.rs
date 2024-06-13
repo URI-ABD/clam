@@ -6,6 +6,23 @@ use distances::strings::needleman_wunsch::apply_edits;
 use distances::strings::Edit;
 use distances::strings::Penalties;
 
+/// Generates a random string of a given length from a given alphabet.
+///
+/// # Arguments
+///
+/// * `length`: The length of the string to generate.
+/// * `alphabet`: The alphabet to choose characters from.
+///
+/// # Returns
+///
+/// A random string of the given length from the given alphabet.
+#[must_use]
+pub fn generate_random_string(length: usize, alphabet: &[char]) -> String {
+    (0..length)
+        .map(|_| alphabet[rand::random::<usize>() % alphabet.len()])
+        .collect()
+}
+
 /// Generates (but does not apply) a random edit to a given string.
 /// The character (if applicable) for the edit is a random character from the given alphabet.
 ///
@@ -110,7 +127,6 @@ pub fn create_batch<U: UInt>(
 
 #[must_use]
 /// Generates a random batch of strings in distinct clumps.
-/// Distance between clumps is 10 times the `clump_radius`.
 ///
 /// # Arguments
 ///
@@ -124,16 +140,18 @@ pub fn create_batch<U: UInt>(
 /// # Returns
 ///
 /// A vector of randomly generated strings in distinct clumps.
-pub fn generate_clumped_data(
+pub fn generate_clumped_data<U: UInt>(
     seed_string: &str,
-    penalties: Penalties<u16>,
+    penalties: Penalties<U>,
     alphabet: &[char],
     num_clumps: usize,
     clump_size: usize,
-    clump_radius: u16,
+    clump_radius: U,
 ) -> Vec<String> {
-    let clump_seeds = create_batch(seed_string, penalties, clump_radius * 10, alphabet, num_clumps);
+    // Vector of seed strings for each clump (can think of as the ``center''s of each clump)
+    let clump_seeds = create_batch(seed_string, penalties, clump_radius * U::from(10), alphabet, num_clumps);
 
+    // Generate the clumps
     clump_seeds
         .iter()
         .flat_map(|seed| create_batch(seed, penalties, clump_radius, alphabet, clump_size))
