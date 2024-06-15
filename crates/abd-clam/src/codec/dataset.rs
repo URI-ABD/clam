@@ -232,13 +232,13 @@ impl<U: UInt, M: Instance> GenomicDataset<U, M> {
     {
         if let Some([left, right]) = c.children() {
             // Get the centers of the current cluster and its children.
-            let p_center = &self.base_data[c.arg_center()];
-            let l_center = &self.base_data[c.arg_center()];
-            let r_center = &self.base_data[c.arg_center()];
+            let c_center = &self.base_data[c.arg_center()];
+            let l_center = &self.base_data[left.arg_center()];
+            let r_center = &self.base_data[right.arg_center()];
 
             // Encode the centers of the children in terms of the center of the parent.
-            let l_encoding = self.encode_instance(p_center, l_center)?;
-            let r_encoding = self.encode_instance(p_center, r_center)?;
+            let l_encoding = self.encode_instance(c_center, l_center)?;
+            let r_encoding = self.encode_instance(c_center, r_center)?;
 
             // Write the header.
             let header = b"Parent";
@@ -797,6 +797,7 @@ mod tests {
             let mut root = SquishyBall::from_base_tree(root);
             let criteria = CompressionCriteria::new(false).with_fixed_depth(2);
             root.apply_criteria(&criteria);
+            root.trim();
             root
         };
 

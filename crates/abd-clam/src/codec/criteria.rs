@@ -28,7 +28,7 @@ pub struct MaxCardinality(usize);
 
 impl<U: UInt> CompressionCriterion<U> for MaxCardinality {
     fn check(&self, b: &SquishyBall<U>) -> bool {
-        b.cardinality() > self.0
+        b.cardinality() < self.0
     }
 }
 

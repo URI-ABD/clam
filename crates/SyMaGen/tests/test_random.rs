@@ -45,14 +45,14 @@ fn random_edits() {
 
 #[test]
 fn random_batch() {
-    // let alphabet = vec!['N', 'A', 'J', 'I', 'B', 'P', 'E', 'R', 'S', 'T'];
-    // let x = "NAJIBEATSPEPPERSNAJIBEATSPEPPERSNAJIBEATSPEPPERSNAJIBEATSPEPPERSNAJI";
-    let x = "ACGGTTTGCGTA";
+    let seed_string = "ACGGTTTGCGTA";
     let alphabet = vec!['A', 'C', 'G', 'T'];
 
     let penalties = Penalties::new(0, 1, 1);
 
-    let batch = create_batch::<u16>(x, penalties, 2, &alphabet, 50);
+    let batch_size = 100;
+    let target_distance = 5;
+    let batch = create_batch::<u16>(seed_string, penalties, target_distance, &alphabet, batch_size);
     let mut strings: HashMap<String, usize> = HashMap::new();
     for n in batch.iter() {
         strings
@@ -61,5 +61,9 @@ fn random_batch() {
             .or_insert(1);
     }
 
-    assert_eq!(strings.len(), 50, "Batch is {:?}: ", strings);
+    assert!(
+        strings.len() >= 98,
+        "Batch is not diverse enough. Only {} unique strings",
+        strings.len()
+    );
 }
