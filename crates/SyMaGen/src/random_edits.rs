@@ -147,13 +147,23 @@ pub fn generate_clumped_data<U: UInt>(
     num_clumps: usize,
     clump_size: usize,
     clump_radius: U,
-) -> Vec<String> {
+) -> Vec<(String, String)> {
+    // TODO(Morgan): add min length and max length for strings as inputs here
+
     // Vector of seed strings for each clump (can think of as the ``center''s of each clump)
+
+    // TODO(Morgan): change 10 to input parameter inter-clump distance
     let clump_seeds = create_batch(seed_string, penalties, clump_radius * U::from(10), alphabet, num_clumps);
 
     // Generate the clumps
     clump_seeds
         .iter()
-        .flat_map(|seed| create_batch(seed, penalties, clump_radius, alphabet, clump_size))
+        .enumerate()
+        .flat_map(|(i, seed)| {
+            create_batch(seed, penalties, clump_radius, alphabet, clump_size)
+                .into_iter()
+                .enumerate()
+                .map(move |(j, string)| (format!("{i}x{j}"), string))
+        })
         .collect()
 }
