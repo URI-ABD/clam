@@ -794,7 +794,7 @@ mod tests {
         let criteria = PartitionCriteria::default();
         let root = UniBall::new_root(&data, seed).partition(&mut data, &criteria, seed);
         let root = {
-            let mut root = SquishyBall::from_base_tree(root);
+            let mut root = SquishyBall::from_base_tree(root, &data);
             let criteria = CompressionCriteria::new(false).with_fixed_depth(2);
             root.apply_criteria(&criteria);
             root.trim();

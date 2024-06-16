@@ -16,10 +16,7 @@ use serde::{
 
 use crate::{core::cluster::Children, Cluster, Dataset, Instance, PartitionCriterion, UniBall};
 
-use super::{
-    criteria::{CompressionCriteria, CompressionCriterion},
-    SquishyDataset,
-};
+use super::criteria::{CompressionCriteria, CompressionCriterion};
 
 /// A `SquishyBall` is a `Cluster` that supports compression.
 #[derive(Debug)]
@@ -40,17 +37,33 @@ pub struct SquishyBall<U: UInt> {
 
 impl<U: UInt> SquishyBall<U> {
     /// Creates a new `SquishyBall` tree.
-    pub fn from_base_tree(root: UniBall<U>) -> Self {
-        Self::from_uni_ball(root)
+    pub fn from_base_tree<I: Instance, D: Dataset<I, U>>(root: UniBall<U>, data: &D) -> Self {
+        Self::from_uni_ball(root, data)
     }
 
     /// Recursively creates a new `SquishyBall` tree.
-    fn from_uni_ball(mut uni_ball: UniBall<U>) -> Self {
+    fn from_uni_ball<I: Instance, D: Dataset<I, U>>(mut uni_ball: UniBall<U>, data: &D) -> Self {
+        let unitary_cost = Self::calculate_unitary_cost(&uni_ball, data);
         match uni_ball.children {
             Some(children) => {
                 uni_ball.children = None;
-                let left = Box::new(Self::from_uni_ball(*children.left));
-                let right = Box::new(Self::from_uni_ball(*children.right));
+                let left = Box::new(Self::from_uni_ball(*children.left, data));
+                let right = Box::new(Self::from_uni_ball(*children.right, data));
+
+                let recursive_cost = {
+                    // TODO: Incorporate the `bytes_per_unit_distance` into the cost calculation.
+                    let [l_center, r_center, c_center] = [
+                        &data[left.arg_center()],
+                        &data[right.arg_center()],
+                        &data[uni_ball.arg_center()],
+                    ];
+                    let l_cost = Number::as_u64(data.metric()(c_center, l_center));
+                    let r_cost = Number::as_u64(data.metric()(c_center, r_center));
+                    l_cost + left.unitary_cost + r_cost + right.unitary_cost
+                };
+
+                let min_cost = recursive_cost.min(unitary_cost);
+
                 let children = Children {
                     left,
                     right,
@@ -58,11 +71,12 @@ impl<U: UInt> SquishyBall<U> {
                     arg_r: children.arg_r,
                     polar_distance: children.polar_distance,
                 };
+
                 Self {
                     uni_ball,
-                    recursive_cost: 0,
-                    unitary_cost: 0,
-                    min_cost: 0,
+                    recursive_cost,
+                    unitary_cost,
+                    min_cost,
                     children: Some(children),
                     squish: false,
                 }
@@ -70,8 +84,8 @@ impl<U: UInt> SquishyBall<U> {
             None => Self {
                 uni_ball,
                 recursive_cost: 0,
-                unitary_cost: 0,
-                min_cost: 0,
+                unitary_cost,
+                min_cost: unitary_cost,
                 children: None,
                 squish: true,
             },
@@ -104,57 +118,26 @@ impl<U: UInt> SquishyBall<U> {
         self.squish
     }
 
-    /// Recursively estimates and sets the costs of recursive and unitary compression in the subtree.
-    pub fn calculate_costs<I: Instance, D: SquishyDataset<I, U>>(&mut self, data: &D) {
-        self.unitary_cost = self.calculate_unitary_cost(data);
-        let arg_center = self.arg_center();
-        if let Some(children) = self.children.as_mut() {
-            children.left.calculate_costs(data);
-            children.right.calculate_costs(data);
-
-            let left_center = children.left.arg_center();
-            let right_center = children.right.arg_center();
-            let [left, right, center] = [&data[left_center], &data[right_center], &data[arg_center]];
-            let left_cost = UInt::as_u64(data.metric()(center, left));
-            let right_cost = UInt::as_u64(data.metric()(center, right));
-            // TODO: Calculate the recursive cost using more depth into the tree.
-            self.recursive_cost = left_cost + right_cost + children.left.unitary_cost + children.right.unitary_cost;
-        } else {
-            self.recursive_cost = self.unitary_cost;
-        }
-
-        self.min_cost = self.recursive_cost.min(self.unitary_cost);
-    }
-
     /// Estimates the memory cost of unitary compression.
     ///
     /// The cost is estimated as the sum of distances from the center to all instances in the cluster.
-    pub(crate) fn calculate_unitary_cost<I: Instance, D: SquishyDataset<I, U>>(&self, data: &D) -> u64 {
-        let center = &data[self.arg_center()];
-        let instances = self.indices().map(|i| &data[i]);
+    fn calculate_unitary_cost<I: Instance, D: Dataset<I, U>>(c: &UniBall<U>, data: &D) -> u64 {
+        // TODO: Incorporate the `bytes_per_unit_distance` into the cost calculation.
+        let center = &data[c.arg_center()];
+        let instances = c.indices().map(|i| &data[i]);
         let distances = instances.map(|i| data.metric()(center, i)).map(Number::as_u64);
         distances.sum()
     }
 
     /// Apply the compression criterion to the cluster tree.
     pub fn apply_criteria(&mut self, c: &CompressionCriteria<U>) {
-        match self.children {
-            Some(_) => {
-                if c.check(self) {
-                    self.squish = true;
-                } else {
-                    let children = self
-                        .children
-                        .as_mut()
-                        .unwrap_or_else(|| unreachable!("We just checked for Some"));
-                    // TODO: Use rayon to parallelize this.
-                    children.left.apply_criteria(c);
-                    children.right.apply_criteria(c);
-                }
-            }
-            None => {
-                self.squish = true;
-            }
+        if c.check(self) {
+            self.squish = true;
+        } else if let Some(children) = self.children.as_mut() {
+            children.left.apply_criteria(c);
+            children.right.apply_criteria(c);
+        } else {
+            self.squish = true;
         }
     }
 
@@ -189,7 +172,7 @@ impl<U: UInt> Cluster<U> for SquishyBall<U> {
         P: PartitionCriterion<U>,
     {
         let uni_ball = self.uni_ball.partition(data, criteria, seed);
-        Self::from_base_tree(uni_ball)
+        Self::from_base_tree(uni_ball, data)
     }
 
     fn offset(&self) -> usize {
@@ -457,8 +440,7 @@ mod tests {
 
         let criteria = PartitionCriteria::default();
         let seed = Some(42);
-        let mut root = SquishyBall::new_root(&dataset, None).partition(&mut dataset, &criteria, seed);
-        root.calculate_costs(&dataset);
+        let root = SquishyBall::new_root(&dataset, None).partition(&mut dataset, &criteria, seed);
 
         let clusters = root.subtree();
         let unitary_costs = clusters.iter().map(|c| c.unitary_cost).collect::<Vec<_>>();
@@ -471,8 +453,13 @@ mod tests {
         {
             assert!(m <= r, "min_cost: {m} > recursive_cost: {r} for cluster: {}", c.name());
             assert!(m <= u, "min_cost: {m} > unitary_cost: {u} for cluster: {}", c.name());
+            assert!(
+                r <= u,
+                "recursive_cost: {r} > unitary_cost: {u} for cluster: {}",
+                c.name()
+            );
         }
 
-        // assert_eq!(unitary_costs, recursive_costs);  // This is just for a sanity check. It is not always true.
+        // assert_eq!(unitary_costs, recursive_costs); // This is just for a sanity check. It is not always true.
     }
 }
