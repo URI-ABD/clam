@@ -59,7 +59,7 @@ impl<U: UInt> SquishyBall<U> {
                     ];
                     let l_cost = Number::as_u64(data.metric()(c_center, l_center));
                     let r_cost = Number::as_u64(data.metric()(c_center, r_center));
-                    l_cost + left.unitary_cost + r_cost + right.unitary_cost
+                    l_cost + left.min_cost + r_cost + right.min_cost
                 };
 
                 let min_cost = recursive_cost.min(unitary_cost);
