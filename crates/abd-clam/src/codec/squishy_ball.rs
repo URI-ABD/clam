@@ -8,6 +8,7 @@ use core::{
 };
 
 use distances::{number::UInt, Number};
+use rayon::prelude::*;
 use serde::{
     de::{MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
@@ -47,8 +48,10 @@ impl<U: UInt> SquishyBall<U> {
         match uni_ball.children {
             Some(children) => {
                 uni_ball.children = None;
-                let left = Box::new(Self::from_uni_ball(*children.left, data));
-                let right = Box::new(Self::from_uni_ball(*children.right, data));
+                let (left, right) = rayon::join(
+                    || Box::new(Self::from_uni_ball(*children.left, data)),
+                    || Box::new(Self::from_uni_ball(*children.right, data)),
+                );
 
                 let recursive_cost = {
                     // TODO: Incorporate the `bytes_per_unit_distance` into the cost calculation.
@@ -57,8 +60,10 @@ impl<U: UInt> SquishyBall<U> {
                         &data[right.arg_center()],
                         &data[uni_ball.arg_center()],
                     ];
-                    let l_cost = Number::as_u64(data.metric()(c_center, l_center));
-                    let r_cost = Number::as_u64(data.metric()(c_center, r_center));
+                    let (l_cost, r_cost) = rayon::join(
+                        || Number::as_u64(data.metric()(c_center, l_center)),
+                        || Number::as_u64(data.metric()(c_center, r_center)),
+                    );
                     l_cost + left.min_cost + r_cost + right.min_cost
                 };
 
@@ -124,7 +129,7 @@ impl<U: UInt> SquishyBall<U> {
     fn calculate_unitary_cost<I: Instance, D: Dataset<I, U>>(c: &UniBall<U>, data: &D) -> u64 {
         // TODO: Incorporate the `bytes_per_unit_distance` into the cost calculation.
         let center = &data[c.arg_center()];
-        let instances = c.indices().map(|i| &data[i]);
+        let instances = c.indices().into_par_iter().map(|i| &data[i]);
         let distances = instances.map(|i| data.metric()(center, i)).map(Number::as_u64);
         distances.sum()
     }
@@ -134,8 +139,7 @@ impl<U: UInt> SquishyBall<U> {
         if c.check(self) {
             self.squish = true;
         } else if let Some(children) = self.children.as_mut() {
-            children.left.apply_criteria(c);
-            children.right.apply_criteria(c);
+            rayon::join(|| children.left.apply_criteria(c), || children.right.apply_criteria(c));
         } else {
             self.squish = true;
         }
@@ -146,8 +150,7 @@ impl<U: UInt> SquishyBall<U> {
         if self.squish {
             self.children = None;
         } else if let Some(children) = self.children.as_mut() {
-            children.left.trim();
-            children.right.trim();
+            rayon::join(|| children.left.trim(), || children.right.trim());
         }
     }
 }

@@ -179,13 +179,24 @@ fn main() -> Result<(), String> {
         // }
 
         // Write the dataset to a binary file
-        let bin_path = dataset_dir.join(format!("{n}-{m}.bin"));
-        let mut writer = std::fs::File::create(&bin_path).map_err(|e| e.to_string())?;
+        let bin_dir = dataset_dir.join(format!("tree-{n}-{m}"));
+        if !bin_dir.exists() {
+            std::fs::create_dir(&bin_dir).map_err(|e| e.to_string())?;
+        } else if !bin_dir.is_dir() {
+            return Err(format!("{bin_dir:?} is not a directory"));
+        }
+        let data_path = bin_dir.join("data.bin");
+        let mut writer = std::fs::File::create(&data_path).map_err(|e| e.to_string())?;
         data.save(&mut writer, &root)?;
         writer.flush().map_err(|e| e.to_string())?;
+        let tree_path = bin_dir.join("tree.bin");
+        root.save(&tree_path)?;
 
         // Get the size of the binary file
-        let bin_size = bin_path.metadata().map_err(|e| e.to_string())?.len();
+        let bin_size = {
+            data_path.metadata().map_err(|e| e.to_string())?.len()
+                + tree_path.metadata().map_err(|e| e.to_string())?.len()
+        };
 
         // Get the size of the text file
         let txt_size = expected_path.metadata().map_err(|e| e.to_string())?.len();
