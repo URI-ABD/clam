@@ -103,14 +103,14 @@ fn main() -> Result<(), String> {
         return Err(format!("Parent of {dataset_dir:?} does not exist."));
     }
 
-    // If dataset_dir does not exist, create it. Otherwise, delete all files in it.
+    // If dataset_dir does not exist, create it.
     if !dataset_dir.exists() {
         std::fs::create_dir(&dataset_dir).map_err(|e| e.to_string())?;
     }
 
     let alphabet = ['A', 'C', 'G', 'T'];
     let seed_string = generate_random_string(100, &alphabet);
-    let penalties: Penalties<u16> = Penalties::new(0, 1, 1);
+    let penalties = Penalties::<u16>::new(0, 1, 1);
 
     let sizes = [
         (16, 16),
@@ -123,7 +123,7 @@ fn main() -> Result<(), String> {
         (32, 512),
         (32, 1024),
     ];
-    for &(n, m) in &sizes {
+    for &(n, m) in &sizes[..] {
         let expected_name = format!("{n}-{m}.txt");
         let expected_path = dataset_dir.join(&expected_name);
         let clumped_data = if !expected_path.exists() {
@@ -189,6 +189,15 @@ fn main() -> Result<(), String> {
             "Trimmed {} of {num_clusters} clusters",
             num_clusters - num_clusters_after_trim
         );
+        // for c in root.subtree().into_iter().filter(|c| c.is_leaf()) {
+        //     println!(
+        //         "Leaf: {}, Depth: {}, Center: {}, Unitary Cost: {}",
+        //         c.name(),
+        //         c.depth(),
+        //         data.base_data.metadata_of(c.arg_center()),
+        //         c.unitary_cost()
+        //     );
+        // }
         println!();
     }
 
