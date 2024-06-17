@@ -4,6 +4,7 @@ mod criteria;
 mod dataset;
 mod squishy_ball;
 
+pub use criteria::{CompressionCriteria, CompressionCriterion};
 pub use dataset::{decode_general, encode_general, GenomicDataset, SquishyDataset};
 pub use squishy_ball::SquishyBall;
 

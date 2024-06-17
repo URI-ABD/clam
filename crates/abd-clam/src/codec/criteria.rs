@@ -12,6 +12,16 @@ pub trait CompressionCriterion<U: UInt>: Send + Sync {
     fn check(&self, b: &SquishyBall<U>) -> bool;
 }
 
+/// Compress based on recursive cost vs unitary cost.
+#[derive(Debug, Clone)]
+pub struct MinCost;
+
+impl<U: UInt> CompressionCriterion<U> for MinCost {
+    fn check(&self, b: &SquishyBall<U>) -> bool {
+        b.unitary_cost() <= b.recursive_cost()
+    }
+}
+
 /// Compress all `SquishyBall`s at a fixed depth.
 #[derive(Debug, Clone)]
 pub struct FixedDepth(usize);
@@ -54,12 +64,16 @@ impl<U: UInt> CompressionCriterion<U> for CompressionCriteria<U> {
 
 impl<U: UInt> Default for CompressionCriteria<U> {
     fn default() -> Self {
-        Self::new(true).with_fixed_depth(4)
+        Self {
+            criteria: vec![Box::new(MinCost)],
+            check_all: true,
+        }
     }
 }
 
 impl<U: UInt> CompressionCriteria<U> {
     /// Create a new `CompressionCriteria`.
+    #[must_use]
     pub fn new(check_all: bool) -> Self {
         Self {
             criteria: Vec::new(),
@@ -82,6 +96,7 @@ impl<U: UInt> CompressionCriteria<U> {
     }
 
     /// Add a criterion to the `CompressionCriteria`.
+    #[must_use]
     pub fn with_custom<C: CompressionCriterion<U> + 'static>(mut self, c: C) -> Self {
         self.criteria.push(Box::new(c));
         self
