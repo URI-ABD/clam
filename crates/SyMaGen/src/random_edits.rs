@@ -5,6 +5,7 @@ use distances::strings::levenshtein_custom;
 use distances::strings::needleman_wunsch::apply_edits;
 use distances::strings::Edit;
 use distances::strings::Penalties;
+use rayon::prelude::*;
 
 /// Generates a random string of a given length from a given alphabet.
 ///
@@ -65,7 +66,6 @@ pub fn generate_random_edit(string: &str, alphabet: &[char]) -> Edit {
 #[must_use]
 pub fn apply_random_edit(string: &str, alphabet: &[char]) -> String {
     let random_edit = generate_random_edit(string, alphabet);
-
     apply_edits(string, &[random_edit])
 }
 
@@ -120,9 +120,16 @@ pub fn create_batch<U: UInt>(
     alphabet: &[char],
     batch_size: usize,
 ) -> Vec<String> {
-    (0..batch_size)
-        .map(|_| are_we_there_yet(seed_string, penalties, target_distance, alphabet))
-        .collect()
+    let mut others = (1..batch_size)
+        .into_par_iter()
+        .map(|_| {
+            // Randomly sample a distance between 1 and `target_distance`, inclusive
+            let d = 1 + rand::random::<u64>() % UInt::as_u64(target_distance);
+            are_we_there_yet(seed_string, penalties, U::from(d), alphabet)
+        })
+        .collect::<Vec<_>>();
+    others.push(seed_string.to_string());
+    others
 }
 
 #[must_use]

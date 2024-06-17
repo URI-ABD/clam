@@ -108,8 +108,8 @@ fn main() -> Result<(), String> {
         std::fs::create_dir(&dataset_dir).map_err(|e| e.to_string())?;
     }
 
-    let alphabet = ['A', 'C', 'G', 'T'];
-    let seed_string = generate_random_string(100, &alphabet);
+    let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect::<Vec<_>>();
+    let seed_string = generate_random_string(1024, &alphabet);
     let penalties = Penalties::<u16>::new(0, 1, 1);
 
     let sizes = [
@@ -127,7 +127,7 @@ fn main() -> Result<(), String> {
         let expected_name = format!("{n}-{m}.txt");
         let expected_path = dataset_dir.join(&expected_name);
         let clumped_data = if !expected_path.exists() {
-            let clumped_data = generate_clumped_data(&seed_string, penalties, &alphabet, n, m, 5);
+            let clumped_data = generate_clumped_data(&seed_string, penalties, &alphabet, n, m, 10);
             write_data(&clumped_data, &dataset_dir)?;
             clumped_data
         } else {
@@ -178,17 +178,32 @@ fn main() -> Result<(), String> {
         //     println!("{i}: {c}");
         // }
 
+        // Write the dataset to a binary file
+        let bin_path = dataset_dir.join(format!("{n}-{m}.bin"));
+        let mut writer = std::fs::File::create(&bin_path).map_err(|e| e.to_string())?;
+        data.save(&mut writer, &root)?;
+        writer.flush().map_err(|e| e.to_string())?;
+
+        // Get the size of the binary file
+        let bin_size = bin_path.metadata().map_err(|e| e.to_string())?.len();
+
+        // Get the size of the text file
+        let txt_size = expected_path.metadata().map_err(|e| e.to_string())?.len();
+
         println!("{expected_name}: Dataset: {}, Root: {root}, Clusters: {num_clusters}, Trimmed: {num_clusters_after_trim}", data.name());
+
         println!(
-            "Recursive cost: {}, Unitary cost: {}, factor: {:.2e}",
+            "Recursive cost: {}, Unitary cost: {}, Estimated Factor: {:.2e}",
             root.recursive_cost(),
             root.unitary_cost(),
             root.recursive_cost().as_f64() / root.unitary_cost().as_f64()
         );
+
         println!(
-            "Trimmed {} of {num_clusters} clusters",
-            num_clusters - num_clusters_after_trim
+            "File sizes: Text: {txt_size}, Binary: {bin_size}, Actual Factor: {:.2e}",
+            bin_size.as_f64() / txt_size.as_f64()
         );
+
         // for c in root.subtree().into_iter().filter(|c| c.is_leaf()) {
         //     println!(
         //         "Leaf: {}, Depth: {}, Center: {}, Unitary Cost: {}",
