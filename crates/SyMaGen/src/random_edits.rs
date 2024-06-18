@@ -116,7 +116,8 @@ pub fn are_we_there_yet<U: UInt>(
 pub fn create_batch<U: UInt>(
     seed_string: &str,
     penalties: Penalties<U>,
-    target_distance: U,
+    min_distance: U,
+    max_distance: U,
     alphabet: &[char],
     batch_size: usize,
 ) -> Vec<String> {
@@ -124,7 +125,8 @@ pub fn create_batch<U: UInt>(
         .into_par_iter()
         .map(|_| {
             // Randomly sample a distance between 1 and `target_distance`, inclusive
-            let d = 1 + rand::random::<u64>() % UInt::as_u64(target_distance);
+            let d = UInt::as_u64(min_distance)
+                + rand::random::<u64>() % UInt::as_u64(max_distance - min_distance + U::one());
             are_we_there_yet(seed_string, penalties, U::from(d), alphabet)
         })
         .collect::<Vec<_>>();
@@ -160,14 +162,16 @@ pub fn generate_clumped_data<U: UInt>(
     // Vector of seed strings for each clump (can think of as the ``center''s of each clump)
 
     // TODO(Morgan): change 10 to input parameter inter-clump distance
-    let clump_seeds = create_batch(seed_string, penalties, clump_radius * U::from(10), alphabet, num_clumps);
+    let min_distance = clump_radius * U::from(7);
+    let max_distance = clump_radius * U::from(10);
+    let clump_seeds = create_batch(seed_string, penalties, min_distance, max_distance, alphabet, num_clumps);
 
     // Generate the clumps
     clump_seeds
         .iter()
         .enumerate()
         .flat_map(|(i, seed)| {
-            create_batch(seed, penalties, clump_radius, alphabet, clump_size)
+            create_batch(seed, penalties, U::one(), clump_radius, alphabet, clump_size)
                 .into_iter()
                 .enumerate()
                 .map(move |(j, string)| (format!("{i}x{j}"), string))

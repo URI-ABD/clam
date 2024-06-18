@@ -123,7 +123,7 @@ fn main() -> Result<(), String> {
         (32, 512),
         (32, 1024),
     ];
-    for &(n, m) in &sizes[..2] {
+    for &(n, m) in &sizes[..] {
         let expected_name = format!("{n}-{m}.txt");
         let expected_path = dataset_dir.join(&expected_name);
         let clumped_data = if !expected_path.exists() {
@@ -185,6 +185,13 @@ fn main() -> Result<(), String> {
         assert_eq!(data.name(), re_data.name());
         assert_eq!(data.cardinality(), re_data.cardinality());
         assert_eq!(data.base_data.metadata(), re_data.base_data.metadata());
+        for i in 0..data.cardinality() {
+            assert_eq!(
+                data.base_data.metadata_of(i),
+                re_data.base_data.metadata_of(i)
+            );
+            assert_eq!(data[i], re_data[i]);
+        }
 
         for i in 0..data.cardinality() {
             assert_eq!(

@@ -45,14 +45,13 @@ fn random_edits() {
 
 #[test]
 fn random_batch() {
-    let seed_string = "ACGGTTTGCGTA";
+    let seed_string = "ACGGTTTGCGTAACGGTTTGCGTAACGGTTTGCGTA";
     let alphabet = vec!['A', 'C', 'G', 'T'];
 
     let penalties = Penalties::new(0, 1, 1);
 
     let batch_size = 100;
-    let target_distance = 5;
-    let batch = create_batch::<u16>(seed_string, penalties, target_distance, &alphabet, batch_size);
+    let batch = create_batch::<u16>(seed_string, penalties, 10, 15, &alphabet, batch_size);
     let mut strings: HashMap<String, usize> = HashMap::new();
     for n in batch.iter() {
         strings
