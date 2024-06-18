@@ -123,7 +123,7 @@ fn main() -> Result<(), String> {
         (32, 512),
         (32, 1024),
     ];
-    for &(n, m) in &sizes[..] {
+    for &(n, m) in &sizes[..2] {
         let expected_name = format!("{n}-{m}.txt");
         let expected_path = dataset_dir.join(&expected_name);
         let clumped_data = if !expected_path.exists() {
@@ -153,31 +153,6 @@ fn main() -> Result<(), String> {
 
         let (data, root) = (data, root);
 
-        // let subtree = root.subtree();
-        // let costs = subtree
-        //     .into_iter()
-        //     .map(|c| {
-        //         let r = c.recursive_cost();
-        //         let u = c.unitary_cost();
-
-        //         let start = format!(
-        //             "Cluster: {}, Depth: {}, Center: {}, Recursive: {r}, Unitary: {u}",
-        //             c.name(),
-        //             c.depth(),
-        //             data.base_data.metadata_of(c.arg_center())
-        //         );
-
-        //         if c.cardinality() == 1 {
-        //             format!("{start},      Leaf!")
-        //         } else {
-        //             start
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-        // for (i, c) in costs.into_iter().enumerate() {
-        //     println!("{i}: {c}");
-        // }
-
         // Write the dataset to a binary file
         let bin_dir = dataset_dir.join(format!("tree-{n}-{m}"));
         if !bin_dir.exists() {
@@ -192,6 +167,33 @@ fn main() -> Result<(), String> {
         let tree_path = bin_dir.join("tree.bin");
         root.save(&tree_path)?;
 
+        // Reload the dataset and tree, and check that they are the same
+        let (re_root, re_data) = {
+            let re_root = SquishyBall::<u16>::load(&tree_path)?;
+            let mut reader = std::fs::File::open(&data_path).map_err(|e| e.to_string())?;
+            let re_data = GenomicDataset::<u16, String>::load(
+                &mut reader,
+                lev_metric,
+                true,
+                encode_general::<u16>,
+                decode_general,
+                &re_root,
+            )?;
+            (re_root, re_data)
+        };
+        assert_eq!(root.subtree(), re_root.subtree());
+        assert_eq!(data.name(), re_data.name());
+        assert_eq!(data.cardinality(), re_data.cardinality());
+        assert_eq!(data.base_data.metadata(), re_data.base_data.metadata());
+
+        for i in 0..data.cardinality() {
+            assert_eq!(
+                data.base_data.metadata_of(i),
+                re_data.base_data.metadata_of(i)
+            );
+            assert_eq!(data[i], re_data[i])
+        }
+
         // Get the size of the binary file
         let bin_size = {
             data_path.metadata().map_err(|e| e.to_string())?.len()
@@ -201,13 +203,13 @@ fn main() -> Result<(), String> {
         // Get the size of the text file
         let txt_size = expected_path.metadata().map_err(|e| e.to_string())?.len();
 
-        println!("{expected_name}: Dataset: {}, Root: {root}, Clusters: {num_clusters}, Trimmed: {num_clusters_after_trim}", data.name());
+        println!("{expected_name}: Dataset: {}, Root: {re_root}, Clusters: {num_clusters}, Trimmed: {num_clusters_after_trim}", data.name());
 
         println!(
             "Recursive cost: {}, Unitary cost: {}, Estimated Factor: {:.2e}",
-            root.recursive_cost(),
-            root.unitary_cost(),
-            root.recursive_cost().as_f64() / root.unitary_cost().as_f64()
+            re_root.recursive_cost(),
+            re_root.unitary_cost(),
+            re_root.recursive_cost().as_f64() / re_root.unitary_cost().as_f64()
         );
 
         println!(
