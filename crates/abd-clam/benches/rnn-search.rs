@@ -5,10 +5,12 @@ use symagen::random_data;
 
 use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
 
+#[allow(clippy::ptr_arg)]
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::vectors::euclidean(x, y)
 }
 
+#[allow(clippy::type_complexity)]
 const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[("euclidean", euclidean)];
 
 fn cakes(c: &mut Criterion) {

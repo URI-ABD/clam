@@ -5,14 +5,17 @@ use symagen::random_data;
 
 use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
 
+#[allow(clippy::ptr_arg)]
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::vectors::euclidean(x, y)
 }
 
+#[allow(clippy::ptr_arg)]
 fn euclidean_simd(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     distances::simd::euclidean_f32(x, y)
 }
 
+#[allow(clippy::type_complexity)]
 const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] =
     &[("euclidean", euclidean), ("euclidean_simd", euclidean_simd)];
 

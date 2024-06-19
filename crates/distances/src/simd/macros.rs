@@ -167,6 +167,7 @@ macro_rules! impl_op16 {
 macro_rules! impl_distances {
     ($name:ident, $ty:ty) => {
         use super::Naive;
+        #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
         impl $name {
             /// Calculate the squared distance between two SIMD lane-slices
             pub fn euclidean_inner(a: &[$ty], b: &[$ty]) -> $name {
@@ -262,6 +263,7 @@ macro_rules! impl_distances {
 
 macro_rules! impl_naive {
     ($ty1:ty, $ty2:ty) => {
+        #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
         impl Naive for &[$ty1] {
             type Output = $ty2;
             type Ty = $ty1;
@@ -303,6 +305,8 @@ macro_rules! impl_naive {
                 }
             }
         }
+
+        #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
         impl Naive for &Vec<$ty1> {
             type Output = $ty2;
             type Ty = $ty1;

@@ -17,12 +17,12 @@ RUN rustup component add \
 # Add any additional packages here. They are available in all targets.
 RUN cargo install \
     cargo-chef \
-    jaq
-
-RUN cargo install maturin --locked
+    jaq \
+    maturin \
+    --locked
 
 ENV RYE_HOME="/opt/rye"
-RUN curl -sSf https://rye-up.com/get | RYE_INSTALL_OPTION="--yes" bash
+RUN curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
 ENV PATH="${RYE_HOME}/shims:${PATH}"
 
 # This target prepares the recipe.json file for the build stage.

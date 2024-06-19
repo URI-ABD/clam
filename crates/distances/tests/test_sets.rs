@@ -1,6 +1,7 @@
 use distances::sets::dice;
 
 #[test]
+#[allow(clippy::float_equality_without_abs)]
 fn test_dice() {
     let x = vec![1, 2, 3];
     let y = vec![1, 2, 3];
