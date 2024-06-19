@@ -24,7 +24,7 @@ use super::Children;
 /// of the `Cluster` trait.
 ///
 /// A `UniBall` has a center and a radius, and (optionally) has two children.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub struct UniBall<U: Number> {
     /// The depth of the `UniBall` in the tree.

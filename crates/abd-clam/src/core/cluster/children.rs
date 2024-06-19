@@ -15,7 +15,7 @@ use serde::{
 use crate::Cluster;
 
 /// The `Children` of a `Cluster`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Children<U: Number, C: Cluster<U>> {
     /// The left child of the `Cluster`.
     pub left: Box<C>,

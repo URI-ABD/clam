@@ -18,8 +18,8 @@
 
 mod cakes;
 pub mod chaoda;
-pub mod codec;
 mod core;
+pub mod pancakes;
 pub mod utils;
 
 pub use crate::{

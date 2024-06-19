@@ -20,7 +20,7 @@ use crate::{core::cluster::Children, utils, Cluster, Dataset, Instance, Partitio
 pub type Ratios = [f64; 6];
 
 /// A `Vertex` for a `Graph`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Vertex<U: Number> {
     /// The base `UniBall` of the `Vertex`.
     uni_ball: UniBall<U>,

@@ -17,10 +17,8 @@ use serde::{
 
 use crate::{core::cluster::Children, Cluster, Dataset, Instance, PartitionCriterion, UniBall};
 
-use super::criteria::{CompressionCriteria, CompressionCriterion};
-
 /// A `SquishyBall` is a `Cluster` that supports compression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SquishyBall<U: UInt> {
     /// The `UniBall` for the underlying `Cluster`.
     uni_ball: UniBall<U>,
@@ -34,6 +32,8 @@ pub struct SquishyBall<U: UInt> {
     children: Option<Children<U, Self>>,
     /// Whether to save this cluster to disk or proceed to the next level of the tree.
     squish: bool,
+    /// Offset in the compressed data.
+    codec_offset: Option<usize>,
 }
 
 impl<U: UInt> SquishyBall<U> {
@@ -84,6 +84,7 @@ impl<U: UInt> SquishyBall<U> {
                     min_cost,
                     children: Some(children),
                     squish: false,
+                    codec_offset: None,
                 }
             }
             None => Self {
@@ -93,6 +94,7 @@ impl<U: UInt> SquishyBall<U> {
                 min_cost: unitary_cost,
                 children: None,
                 squish: true,
+                codec_offset: None,
             },
         }
     }
@@ -123,6 +125,46 @@ impl<U: UInt> SquishyBall<U> {
         self.squish
     }
 
+    /// Returns the offset in the compressed data.
+    pub const fn codec_offset(&self) -> Option<usize> {
+        self.codec_offset
+    }
+
+    /// Sets the offset in the compressed data.
+    pub fn set_codec_offset(&mut self, offset: usize) {
+        self.codec_offset = Some(offset);
+    }
+
+    /// Returns the clusters in the subtree that have been marked for squishing.
+    pub fn compressible_leaves(&self) -> Vec<&Self> {
+        let mut clusters = Vec::new();
+        if self.squish {
+            // If the cluster is marked for squishing, add it to the list.
+            // `squish` is true for leaves, by construction.
+            clusters.push(self);
+        } else if let Some(children) = self.children.as_ref() {
+            // If the cluster has children, recursively check the children.
+            clusters.extend(children.left.compressible_leaves());
+            clusters.extend(children.right.compressible_leaves());
+        }
+        clusters
+    }
+
+    /// Returns the clusters in the subtree that have been marked for squishing.
+    pub fn compressible_leaves_mut(&mut self) -> Vec<&mut Self> {
+        let mut clusters = Vec::new();
+        if self.squish {
+            // If the cluster is marked for squishing, add it to the list.
+            // `squish` is true for leaves, by construction.
+            clusters.push(self);
+        } else if let Some(children) = self.children.as_mut() {
+            // If the cluster has children, recursively check the children.
+            clusters.extend(children.left.as_mut().compressible_leaves_mut());
+            clusters.extend(children.right.as_mut().compressible_leaves_mut());
+        }
+        clusters
+    }
+
     /// Estimates the memory cost of unitary compression.
     ///
     /// The cost is estimated as the sum of distances from the center to all instances in the cluster.
@@ -135,13 +177,13 @@ impl<U: UInt> SquishyBall<U> {
     }
 
     /// Apply the compression criterion to the cluster tree.
-    pub fn apply_criteria(&mut self, c: &CompressionCriteria<U>) {
-        if c.check(self) {
-            self.squish = true;
-        } else if let Some(children) = self.children.as_mut() {
-            rayon::join(|| children.left.apply_criteria(c), || children.right.apply_criteria(c));
-        } else {
-            self.squish = true;
+    pub fn apply_criteria(&mut self) {
+        self.squish = self.unitary_cost <= self.recursive_cost;
+
+        if !self.squish {
+            if let Some(children) = self.children.as_mut() {
+                rayon::join(|| children.left.apply_criteria(), || children.right.apply_criteria());
+            }
         }
     }
 
@@ -165,6 +207,7 @@ impl<U: UInt> Cluster<U> for SquishyBall<U> {
             min_cost: 0,
             children: None,
             squish: false,
+            codec_offset: None,
         }
     }
 
@@ -253,13 +296,14 @@ impl<U: UInt> Display for SquishyBall<U> {
 
 impl<U: UInt> Serialize for SquishyBall<U> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("SquishyBall", 6)?;
+        let mut state = serializer.serialize_struct("SquishyBall", 7)?;
         state.serialize_field("uni_ball", &self.uni_ball)?;
         state.serialize_field("recursive_cost", &self.recursive_cost)?;
         state.serialize_field("unitary_cost", &self.unitary_cost)?;
         state.serialize_field("min_cost", &self.min_cost)?;
         state.serialize_field("children", &self.children)?;
         state.serialize_field("squish", &self.squish)?;
+        state.serialize_field("codec_offset", &self.codec_offset)?;
         state.end()
     }
 }
@@ -283,6 +327,8 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
             Children,
             /// Whether to save this cluster to disk or proceed to the next level of the tree.
             Squish,
+            /// The offset in the compressed data.
+            CodecOffset,
         }
 
         /// The `Visitor` for the `SquishyBall` struct.
@@ -310,10 +356,14 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
                     .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
                 let children = seq
                     .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    .ok_or_else(|| serde::de::Error::invalid_length(4, &self))?;
                 let squish = seq
                     .next_element()?
-                    .ok_or_else(|| serde::de::Error::invalid_length(3, &self))?;
+                    .ok_or_else(|| serde::de::Error::invalid_length(5, &self))?;
+                let codec_offset = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(6, &self))?;
+
                 Ok(SquishyBall {
                     uni_ball,
                     recursive_cost,
@@ -321,6 +371,7 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
                     min_cost,
                     children,
                     squish,
+                    codec_offset,
                 })
             }
 
@@ -331,6 +382,7 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
                 let mut min_cost = None;
                 let mut children = None;
                 let mut squish = None;
+                let mut codec_offset = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -370,6 +422,12 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
                             }
                             squish = Some(map.next_value()?);
                         }
+                        Field::CodecOffset => {
+                            if codec_offset.is_some() {
+                                return Err(serde::de::Error::duplicate_field("codec_offset"));
+                            }
+                            codec_offset = Some(map.next_value()?);
+                        }
                     }
                 }
 
@@ -379,6 +437,7 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
                 let min_cost = min_cost.ok_or_else(|| serde::de::Error::missing_field("min_cost"))?;
                 let children = children.ok_or_else(|| serde::de::Error::missing_field("children"))?;
                 let squish = squish.ok_or_else(|| serde::de::Error::missing_field("squish"))?;
+                let codec_offset = codec_offset.ok_or_else(|| serde::de::Error::missing_field("codec_offset"))?;
 
                 Ok(SquishyBall {
                     uni_ball,
@@ -387,6 +446,7 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
                     min_cost,
                     children,
                     squish,
+                    codec_offset,
                 })
             }
         }
@@ -399,6 +459,7 @@ impl<'de, U: UInt> Deserialize<'de> for SquishyBall<U> {
             "min_cost",
             "children",
             "squish",
+            "codec_offset",
         ];
         deserializer.deserialize_struct("SquishyBall", FIELDS, SquishyBallVisitor(PhantomData))
     }
@@ -409,7 +470,7 @@ mod tests {
     use distances::strings::levenshtein;
 
     use crate::{
-        codec::dataset::{decode_general, encode_general, GenomicDataset},
+        pancakes::{decode_general, encode_general, CodecData},
         PartitionCriteria, VecDataset,
     };
 
@@ -420,7 +481,7 @@ mod tests {
     }
 
     #[test]
-    fn test_squishy() {
+    fn test_squishy() -> Result<(), String> {
         let strings = vec![
             "NAJIBPEPPERS-EATS".to_string(),
             "NAJIB-PEPPERSEATS".to_string(),
@@ -432,20 +493,15 @@ mod tests {
             "FOODEATSWHAT-TOMEATS".to_string(),
         ];
 
-        let base_data = VecDataset::new("test-genomic".to_string(), strings.clone(), lev_metric, true);
-
-        let mut dataset = GenomicDataset {
-            base_data,
-            bytes_per_unit_distance: 10,
-            encoder: encode_general::<u16>,
-            decoder: decode_general,
-        };
-
+        let mut dataset = VecDataset::new("test-genomic".to_string(), strings.clone(), lev_metric, true);
         let criteria = PartitionCriteria::default();
         let seed = Some(42);
         let root = SquishyBall::new_root(&dataset, None).partition(&mut dataset, &criteria, seed);
 
-        let clusters = root.subtree();
+        let metadata = dataset.metadata().to_vec();
+        let dataset = CodecData::new(root, &dataset, encode_general::<u16>, decode_general, metadata)?;
+
+        let clusters = dataset.root().subtree();
         let unitary_costs = clusters.iter().map(|c| c.unitary_cost).collect::<Vec<_>>();
         let recursive_costs = clusters.iter().map(|c| c.recursive_cost).collect::<Vec<_>>();
         let min_costs = clusters.iter().map(|c| c.min_cost).collect::<Vec<_>>();
@@ -464,5 +520,7 @@ mod tests {
         }
 
         // assert_eq!(unitary_costs, recursive_costs); // This is just for a sanity check. It is not always true.
+
+        Ok(())
     }
 }

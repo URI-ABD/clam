@@ -2,10 +2,10 @@ use std::io::Write;
 use std::path::Path;
 
 use abd_clam::{
-    codec::{decode_general, encode_general, CompressionCriteria, GenomicDataset, SquishyBall},
-    Cluster, Dataset, PartitionCriteria, UniBall, VecDataset,
+    pancakes::{decode_general, encode_general, CodecData, SquishyBall},
+    Cluster, PartitionCriteria, VecDataset,
 };
-use distances::{strings::Penalties, Number};
+use distances::strings::Penalties;
 use symagen::random_edits::{generate_clumped_data, generate_random_string};
 
 #[allow(clippy::ptr_arg)]
@@ -137,103 +137,117 @@ fn main() -> Result<(), String> {
         let (metadata, clumped_data) = clumped_data.into_iter().unzip();
 
         let name = format!("{n}x{m}");
-        let base_data =
+        let mut dataset =
             VecDataset::new(name, clumped_data, lev_metric, true).assign_metadata(metadata)?;
-        let mut data = GenomicDataset::new(base_data, 4, encode_general::<u16>, decode_general);
-
+        let criteria = PartitionCriteria::default();
         let seed = Some(42);
-        let partition_criteria = PartitionCriteria::default();
-        let root = UniBall::new_root(&data, seed).partition(&mut data, &partition_criteria, seed);
-        let mut root = SquishyBall::from_base_tree(root, &data);
-        let compression_criteria = CompressionCriteria::default();
-        root.apply_criteria(&compression_criteria);
-        let num_clusters = root.subtree().len();
-        root.trim();
-        let num_clusters_after_trim = root.subtree().len();
+        let root = SquishyBall::new_root(&dataset, seed).partition(&mut dataset, &criteria, seed);
 
-        let (data, root) = (data, root);
+        let metadata = dataset.metadata().to_vec();
+        let _dataset = CodecData::new(
+            root,
+            &dataset,
+            encode_general::<u16>,
+            decode_general,
+            metadata,
+        )?;
 
-        // Write the dataset to a binary file
-        let bin_dir = dataset_dir.join(format!("tree-{n}-{m}"));
-        if !bin_dir.exists() {
-            std::fs::create_dir(&bin_dir).map_err(|e| e.to_string())?;
-        } else if !bin_dir.is_dir() {
-            return Err(format!("{bin_dir:?} is not a directory"));
-        }
-        let data_path = bin_dir.join("data.bin");
-        let mut writer = std::fs::File::create(&data_path).map_err(|e| e.to_string())?;
-        data.save(&mut writer, &root)?;
-        writer.flush().map_err(|e| e.to_string())?;
-        let tree_path = bin_dir.join("tree.bin");
-        root.save(&tree_path)?;
+        todo!("Finish implementing the rest of the main function, {expected_name}")
 
-        // Reload the dataset and tree, and check that they are the same
-        let (re_root, re_data) = {
-            let re_root = SquishyBall::<u16>::load(&tree_path)?;
-            let mut reader = std::fs::File::open(&data_path).map_err(|e| e.to_string())?;
-            let re_data = GenomicDataset::<u16, String>::load(
-                &mut reader,
-                lev_metric,
-                true,
-                encode_general::<u16>,
-                decode_general,
-                &re_root,
-            )?;
-            (re_root, re_data)
-        };
-        assert_eq!(root.subtree(), re_root.subtree());
-        assert_eq!(data.name(), re_data.name());
-        assert_eq!(data.cardinality(), re_data.cardinality());
-        assert_eq!(data.base_data.metadata(), re_data.base_data.metadata());
-        for i in 0..data.cardinality() {
-            assert_eq!(
-                data.base_data.metadata_of(i),
-                re_data.base_data.metadata_of(i)
-            );
-            assert_eq!(data[i], re_data[i]);
-        }
+        // let mut data = GenomicDataset::new(base_data, 4, encode_general::<u16>, decode_general);
 
-        for i in 0..data.cardinality() {
-            assert_eq!(
-                data.base_data.metadata_of(i),
-                re_data.base_data.metadata_of(i)
-            );
-            assert_eq!(data[i], re_data[i])
-        }
+        // let seed = Some(42);
+        // let partition_criteria = PartitionCriteria::default();
+        // let root = UniBall::new_root(&data, seed).partition(&mut data, &partition_criteria, seed);
+        // let mut root = SquishyBall::from_base_tree(root, &data);
+        // root.apply_criteria();
+        // let num_clusters = root.subtree().len();
+        // root.trim();
+        // let num_clusters_after_trim = root.subtree().len();
 
-        // Get the size of the binary file
-        let bin_size = {
-            data_path.metadata().map_err(|e| e.to_string())?.len()
-                + tree_path.metadata().map_err(|e| e.to_string())?.len()
-        };
+        // let (data, root) = (data, root);
 
-        // Get the size of the text file
-        let txt_size = expected_path.metadata().map_err(|e| e.to_string())?.len();
-
-        println!("{expected_name}: Dataset: {}, Root: {re_root}, Clusters: {num_clusters}, Trimmed: {num_clusters_after_trim}", data.name());
-
-        println!(
-            "Recursive cost: {}, Unitary cost: {}, Estimated Factor: {:.2e}",
-            re_root.recursive_cost(),
-            re_root.unitary_cost(),
-            re_root.recursive_cost().as_f64() / re_root.unitary_cost().as_f64()
-        );
-
-        println!(
-            "File sizes: Text: {txt_size}, Binary: {bin_size}, Actual Factor: {:.2e}",
-            bin_size.as_f64() / txt_size.as_f64()
-        );
-
-        // for c in root.subtree().into_iter().filter(|c| c.is_leaf()) {
-        //     println!(
-        //         "Leaf: {}, Depth: {}, Center: {}, Unitary Cost: {}",
-        //         c.name(),
-        //         c.depth(),
-        //         data.base_data.metadata_of(c.arg_center()),
-        //         c.unitary_cost()
-        //     );
+        // // Write the dataset to a binary file
+        // let bin_dir = dataset_dir.join(format!("tree-{n}-{m}"));
+        // if !bin_dir.exists() {
+        //     std::fs::create_dir(&bin_dir).map_err(|e| e.to_string())?;
+        // } else if !bin_dir.is_dir() {
+        //     return Err(format!("{bin_dir:?} is not a directory"));
         // }
-        println!();
+        // let data_path = bin_dir.join("data.bin");
+        // let mut writer = std::fs::File::create(&data_path).map_err(|e| e.to_string())?;
+        // data.save(&mut writer, &root)?;
+        // writer.flush().map_err(|e| e.to_string())?;
+        // let tree_path = bin_dir.join("tree.bin");
+        // root.save(&tree_path)?;
+
+        // // Reload the dataset and tree, and check that they are the same
+        // let (re_root, re_data) = {
+        //     let re_root = SquishyBall::<u16>::load(&tree_path)?;
+        //     let mut reader = std::fs::File::open(&data_path).map_err(|e| e.to_string())?;
+        //     let re_data = GenomicDataset::<u16, String>::load(
+        //         &mut reader,
+        //         lev_metric,
+        //         true,
+        //         encode_general::<u16>,
+        //         decode_general,
+        //         &re_root,
+        //     )?;
+        //     (re_root, re_data)
+        // };
+        // assert_eq!(root.subtree(), re_root.subtree());
+        // assert_eq!(data.name(), re_data.name());
+        // assert_eq!(data.cardinality(), re_data.cardinality());
+        // assert_eq!(data.base_data.metadata(), re_data.base_data.metadata());
+        // for i in 0..data.cardinality() {
+        //     assert_eq!(
+        //         data.base_data.metadata_of(i),
+        //         re_data.base_data.metadata_of(i)
+        //     );
+        //     assert_eq!(data[i], re_data[i]);
+        // }
+
+        // for i in 0..data.cardinality() {
+        //     assert_eq!(
+        //         data.base_data.metadata_of(i),
+        //         re_data.base_data.metadata_of(i)
+        //     );
+        //     assert_eq!(data[i], re_data[i])
+        // }
+
+        // // Get the size of the binary file
+        // let bin_size = {
+        //     data_path.metadata().map_err(|e| e.to_string())?.len()
+        //         + tree_path.metadata().map_err(|e| e.to_string())?.len()
+        // };
+
+        // // Get the size of the text file
+        // let txt_size = expected_path.metadata().map_err(|e| e.to_string())?.len();
+
+        // println!("{expected_name}: Dataset: {}, Root: {re_root}, Clusters: {num_clusters}, Trimmed: {num_clusters_after_trim}", data.name());
+
+        // println!(
+        //     "Recursive cost: {}, Unitary cost: {}, Estimated Factor: {:.2e}",
+        //     re_root.recursive_cost(),
+        //     re_root.unitary_cost(),
+        //     re_root.recursive_cost().as_f64() / re_root.unitary_cost().as_f64()
+        // );
+
+        // println!(
+        //     "File sizes: Text: {txt_size}, Binary: {bin_size}, Actual Factor: {:.2e}",
+        //     bin_size.as_f64() / txt_size.as_f64()
+        // );
+
+        // // for c in root.subtree().into_iter().filter(|c| c.is_leaf()) {
+        // //     println!(
+        // //         "Leaf: {}, Depth: {}, Center: {}, Unitary Cost: {}",
+        // //         c.name(),
+        // //         c.depth(),
+        // //         data.base_data.metadata_of(c.arg_center()),
+        // //         c.unitary_cost()
+        // //     );
+        // // }
+        // println!();
     }
 
     Ok(())
