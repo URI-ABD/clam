@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 abd-clam = { path = "../abd-clam" }
 distances = { path = "../distances" }
+rand = "0.8.5"
 symagen = { path = "../SyMaGen" }
