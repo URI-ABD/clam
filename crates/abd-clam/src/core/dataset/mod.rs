@@ -401,4 +401,42 @@ pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Ou
     fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String>
     where
         Self: Sized;
+
+    /// Runs linear KNN search on the dataset.
+    fn linear_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
+        let k = k.min(self.cardinality());
+        let mut hits = (0..self.cardinality())
+            .map(|i| (i, self.query_to_one(query, i)))
+            .collect::<Vec<_>>();
+        hits.sort_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Greater));
+        hits.into_iter().take(k).collect()
+    }
+
+    /// Runs parallelized linear KNN search on the dataset.
+    fn par_linear_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
+        let k = k.min(self.cardinality());
+        let mut hits = (0..self.cardinality())
+            .into_par_iter()
+            .map(|i| (i, self.query_to_one(query, i)))
+            .collect::<Vec<_>>();
+        hits.sort_by(|(_, d1), (_, d2)| d1.partial_cmp(d2).unwrap_or(std::cmp::Ordering::Greater));
+        hits.into_iter().take(k).collect()
+    }
+
+    /// Runs linear RNN search on the dataset.
+    fn linear_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
+        (0..self.cardinality())
+            .map(|i| (i, self.query_to_one(query, i)))
+            .filter(|(_, d)| *d <= radius)
+            .collect()
+    }
+
+    /// Runs parallelized linear RNN search on the dataset.
+    fn par_linear_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
+        (0..self.cardinality())
+            .into_par_iter()
+            .map(|i| (i, self.query_to_one(query, i)))
+            .filter(|(_, d)| *d <= radius)
+            .collect()
+    }
 }
