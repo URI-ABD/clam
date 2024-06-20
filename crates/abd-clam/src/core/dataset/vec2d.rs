@@ -24,7 +24,7 @@ use super::Instance;
 /// - `T`: The type of the instances in the `Dataset`.
 /// - `U`: The type of the distance values between instances.
 /// - `M`: The type of the metadata associated with each instance.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VecDataset<I: Instance, U: Number, M: Instance> {
     /// The name of the dataset.
     pub(crate) name: String,

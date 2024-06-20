@@ -4,7 +4,7 @@ use std::path::Path;
 
 use distances::Number;
 
-use crate::{knn, rnn, Dataset, Instance};
+use crate::{cakes::knn, cakes::rnn, Dataset, Instance};
 
 /// A trait for performing RNN- and KNN-Search.
 #[allow(dead_code)]

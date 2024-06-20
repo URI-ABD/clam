@@ -16,7 +16,7 @@ pub use instance::Instance;
 pub use vec2d::VecDataset;
 
 /// A common interface for datasets used in CLAM.
-pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Output = I> {
+pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Output = I> + Clone {
     /// Returns the name of the type of the dataset.
     fn type_name() -> String;
 

@@ -12,7 +12,7 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 ### Cakes: Nearest Neighbor Search
 
 ```rust
-use abd_clam::{knn, rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{cakes::knn, cakes::rnn, Cakes, PartitionCriteria, VecDataset};
 use rand::prelude::*;
 
 /// The distance function with with to perform clustering and search.

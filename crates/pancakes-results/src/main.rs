@@ -3,7 +3,7 @@ use std::path::Path;
 
 use abd_clam::{
     pancakes::{decode_general, encode_general, rnn, CodecData, SquishyBall},
-    Cluster, Dataset, PartitionCriteria, VecDataset,
+    Cakes, Cluster, Dataset, PartitionCriteria, VecDataset,
 };
 use distances::{strings::Penalties, Number};
 use rand::prelude::*;
@@ -160,7 +160,7 @@ fn main() -> Result<(), String> {
         let (clumped_meta, clumped_data) = clumped_data.into_iter().unzip();
 
         let name = format!("{n}x{m}");
-        let mut dataset =
+        let dataset =
             VecDataset::new(name, clumped_data, lev_metric, true).assign_metadata(clumped_meta)?;
 
         // Get a baseline for linear search
@@ -206,19 +206,40 @@ fn main() -> Result<(), String> {
             hits_knn.len()
         );
 
-        let tree_time = std::time::Instant::now();
+        // Build Cakes tree
         let criteria = PartitionCriteria::default();
         let seed = Some(42);
-        let root = SquishyBall::new_root(&dataset, seed).partition(&mut dataset, &criteria, seed);
-        let tree_time = tree_time.elapsed().as_secs_f32();
+        let cakes_time = std::time::Instant::now();
+        let cakes = Cakes::new(dataset, seed, &criteria);
+        let cakes_time = cakes_time.elapsed().as_secs_f32();
+        println!("Cakes built in {cakes_time:.4}s");
+
+        let cakes_rnn = std::time::Instant::now();
+        let cakes_hits_rnn = query_data
+            .iter()
+            .map(|q| cakes.rnn_search(q, 10, abd_clam::cakes::rnn::Algorithm::Clustered))
+            .collect::<Vec<_>>();
+        let cakes_rnn = cakes_rnn.elapsed().as_secs_f32();
+        println!(
+            "Cakes RNN: {cakes_rnn:.4}s, num_queries: {}",
+            cakes_hits_rnn.len()
+        );
+        println!(
+            "RNN ratio: baseline / cakes = {:.4}",
+            baseline_rnn / cakes_rnn
+        );
+
+        let cakes_tree = cakes.trees()[0];
+        let dataset = cakes_tree.data();
+        let root = cakes_tree.root().clone();
         let tree_size = root.subtree().len();
-        println!("Tree built in {tree_time:.4}s");
+        let root = SquishyBall::from_base_tree(root, dataset);
 
         let compression_time = std::time::Instant::now();
         let metadata = dataset.metadata().to_vec();
         let dataset = CodecData::new(
             root,
-            &dataset,
+            dataset,
             encode_general::<u16>,
             decode_general,
             metadata,

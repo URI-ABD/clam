@@ -1,6 +1,6 @@
 //! Tests for the Search algorithms.
 
-use abd_clam::{knn, rnn, PartitionCriteria, Tree, UniBall};
+use abd_clam::{cakes::knn, cakes::rnn, PartitionCriteria, Tree, UniBall};
 use distances::Number;
 use float_cmp::assert_approx_eq;
 use test_case::test_case;

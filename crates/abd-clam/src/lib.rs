@@ -16,14 +16,14 @@
 )]
 #![doc = include_str!("../README.md")]
 
-mod cakes;
+pub mod cakes;
 pub mod chaoda;
 mod core;
 pub mod pancakes;
 pub mod utils;
 
 pub use crate::{
-    cakes::{knn, rnn, Cakes},
+    cakes::Cakes,
     chaoda::graph,
     core::{
         cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
