@@ -67,7 +67,11 @@ impl<U: UInt> SquishyBall<U> {
                     l_cost + left.min_cost + r_cost + right.min_cost
                 };
 
-                let min_cost = recursive_cost.min(unitary_cost);
+                let (squish, min_cost) = if unitary_cost <= recursive_cost {
+                    (true, unitary_cost)
+                } else {
+                    (false, recursive_cost)
+                };
 
                 let children = Children {
                     left,
@@ -83,7 +87,7 @@ impl<U: UInt> SquishyBall<U> {
                     unitary_cost,
                     min_cost,
                     children: Some(children),
-                    squish: false,
+                    squish,
                     codec_offset: None,
                 }
             }
@@ -135,6 +139,19 @@ impl<U: UInt> SquishyBall<U> {
         self.codec_offset = Some(offset);
     }
 
+    /// Returns the compressible subtree.
+    pub fn compressible_subtree(&self) -> Vec<&Self> {
+        let mut clusters = vec![self];
+        if !self.squish {
+            if let Some(children) = self.children.as_ref() {
+                // If the cluster has children, recursively check the children.
+                clusters.extend(children.left.compressible_subtree());
+                clusters.extend(children.right.compressible_subtree());
+            }
+        }
+        clusters
+    }
+
     /// Returns the clusters in the subtree that have been marked for squishing.
     pub fn compressible_leaves(&self) -> Vec<&Self> {
         let mut clusters = Vec::new();
@@ -174,17 +191,6 @@ impl<U: UInt> SquishyBall<U> {
         let instances = c.indices().into_par_iter().map(|i| &data[i]);
         let distances = instances.map(|i| data.metric()(center, i)).map(Number::as_u64);
         distances.sum()
-    }
-
-    /// Apply the compression criterion to the cluster tree.
-    pub fn apply_criteria(&mut self) {
-        self.squish = self.unitary_cost <= self.recursive_cost;
-
-        if !self.squish {
-            if let Some(children) = self.children.as_mut() {
-                rayon::join(|| children.left.apply_criteria(), || children.right.apply_criteria());
-            }
-        }
     }
 
     /// Trim the tree by removing the children of those clusters that are marked for squishing.
