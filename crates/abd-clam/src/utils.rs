@@ -1,9 +1,6 @@
 //! Utility functions for the crate.
 
-use core::{
-    cmp::Ordering,
-    f64::{consts::SQRT_2, EPSILON},
-};
+use core::{cmp::Ordering, f64::consts::SQRT_2};
 
 use distances::{number::Float, Number};
 
@@ -82,7 +79,7 @@ pub(crate) fn normalize_1d(values: &[f64], mean: f64, sd: f64) -> Vec<f64> {
     values
         .iter()
         .map(|&v| v - mean)
-        .map(|v| v / ((EPSILON + sd) * SQRT_2))
+        .map(|v| v / ((f64::EPSILON + sd) * SQRT_2))
         .map(libm::erf)
         .map(|v| (1. + v) / 2.)
         .collect()
@@ -491,6 +488,6 @@ mod tests {
     fn test_standard_deviation() {
         let data = [2., 4., 4., 4., 5., 5., 7., 9.];
         let std = standard_deviation::<f32>(&data);
-        assert_eq!(std, 2.);
+        assert!((std - 2.).abs() < 1e-6);
     }
 }

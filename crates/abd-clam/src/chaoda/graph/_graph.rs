@@ -752,6 +752,7 @@ impl<'a, U: Number> Graph<'a, U> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use std::collections::HashSet;
 
@@ -774,7 +775,9 @@ mod tests {
         let name = "test".to_string();
         VecDataset::new(name, data, metric, false)
     }
+
     /// Euclidean distance between two vectors.
+    #[allow(clippy::ptr_arg)]
     pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
         distances::vectors::euclidean(x, y)
     }
@@ -889,12 +892,12 @@ mod tests {
         let flat_adj_mat = graph.adjacency_matrix().unwrap().iter().flatten();
         let flat_dist_mat = graph.distance_matrix().unwrap().iter().flatten();
 
-        for (has_edge, distance) in flat_adj_mat.zip(flat_dist_mat) {
-            if !has_edge {
-                assert!(float_cmp::approx_eq!(f32, *distance, 0.));
-            } else {
+        for (&has_edge, &distance) in flat_adj_mat.zip(flat_dist_mat) {
+            if has_edge {
                 // possibly false fails if distance is actually 0?
-                assert!(!float_cmp::approx_eq!(f32, *distance, 0.));
+                assert!(!float_cmp::approx_eq!(f32, distance, 0.));
+            } else {
+                assert!(float_cmp::approx_eq!(f32, distance, 0.));
             }
         }
     }
@@ -910,7 +913,7 @@ mod tests {
 
         for i in 0..num_rows {
             for j in 0..num_cols {
-                if matrix[i][j] != matrix[j][i] {
+                if (matrix[i][j] - matrix[j][i]).abs() > 1e-6 {
                     return false; // Elements at (i, j) and (j, i) are not equal, matrix is not symmetric
                 }
             }

@@ -217,6 +217,7 @@ mod tests {
 
     use super::RandomlySharded;
 
+    #[allow(clippy::ptr_arg)]
     fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
         distances::vectors::euclidean(a, b)
     }

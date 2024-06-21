@@ -154,6 +154,7 @@ pub fn detect_edges<'a, I: Instance, U: Number, D: Dataset<I, U>>(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use crate::{Cluster, PartitionCriteria, Tree, VecDataset};
     use distances::number::Float;
@@ -175,6 +176,7 @@ mod tests {
         VecDataset::new(name, data, metric, false)
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn euclidean<T: Number, F: Float>(x: &Vec<T>, y: &Vec<T>) -> F {
         distances::vectors::euclidean(x, y)
     }

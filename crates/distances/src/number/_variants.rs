@@ -45,7 +45,9 @@ pub trait UInt: Number + Hash + Eq + Ord {
 macro_rules! impl_uint {
     ($($ty:ty),*) => {
         $(
+            #[allow(clippy::cast_lossless, clippy::cast_possible_truncation)]
             impl UInt for $ty {
+                #[allow(clippy::cast_possible_wrap)]
                 fn as_i64(self) -> i64 {
                     self as i64
                 }

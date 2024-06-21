@@ -287,6 +287,7 @@ impl Number for f64 {
 macro_rules! impl_number_iint {
     ($($ty:ty),*) => {
         $(
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss, clippy::cast_lossless)]
             impl Number for $ty {
                 fn zero() -> Self {
                     0
@@ -378,6 +379,7 @@ impl_number_iint!(i8, i16, i32, i64, i128, isize);
 macro_rules! impl_number_uint {
     ($($ty:ty),*) => {
         $(
+            #[allow(clippy::cast_possible_truncation, clippy::cast_lossless, clippy::cast_precision_loss)]
             impl Number for $ty {
                 fn zero() -> Self {
                     0
@@ -411,6 +413,7 @@ macro_rules! impl_number_uint {
                     self as u64
                 }
 
+                #[allow(clippy::cast_possible_wrap)]
                 fn as_i64(self) -> i64 {
                     self as i64
                 }
@@ -423,6 +426,7 @@ macro_rules! impl_number_uint {
                     self.abs_diff(other)
                 }
 
+                #[allow(clippy::cast_sign_loss)]
                 fn powi(self, exp: i32) -> Self {
                     <$ty>::pow(self, exp as u32)
                 }

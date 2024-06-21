@@ -106,12 +106,14 @@ pub trait Search<I: Instance, U: Number, D: Dataset<I, U>>: Send + Sync {
     fn linear_knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)>;
 
     /// Performs RNN-Search using the best algorithm.
+    #[allow(dead_code)]
     fn tuned_rnn_search(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         let algo = self.tuned_rnn_algorithm();
         self.rnn_search(query, radius, algo)
     }
 
     /// Performs KNN-Search using the best algorithm.
+    #[allow(dead_code)]
     fn tuned_knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let algo = self.tuned_knn_algorithm();
         self.knn_search(query, k, algo)

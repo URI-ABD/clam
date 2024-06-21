@@ -65,6 +65,7 @@ pub(crate) trait Naive {
 
     fn squared_euclidean(self, other: Self) -> Self::Output;
     fn euclidean(self, other: Self) -> Self::Output;
+    #[allow(dead_code)]
     fn cosine(self, other: Self) -> Self::Output;
     fn cosine_acc(self, other: Self) -> [Self::Output; 3];
 }

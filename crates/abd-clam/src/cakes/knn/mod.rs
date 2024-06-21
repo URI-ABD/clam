@@ -22,6 +22,7 @@ pub(crate) mod sieve;
 pub(crate) mod sieve_sep_center;
 
 /// The algorithm to use for K-Nearest Neighbor search.
+// TODO(Morgan): Update the docs for each algorithm.
 #[derive(Clone, Copy, Debug)]
 pub enum Algorithm {
     /// Use linear search on the entire dataset.
@@ -49,7 +50,7 @@ pub enum Algorithm {
     /// This algorithm is not stable.
     ///
     /// Begins with first priority queue, called `candidates`, wherein the top priority
-    /// candidate is the one with the lowest d_min. We use d_min to express the
+    /// candidate is the one with the lowest `d_min`. We use `d_min` to express the
     /// theoretical closest a point in a given cluster can be to the query. Replaces
     /// the top priority candidate with its children until the top priority candidate
     /// is a leaf. Then, adds all instances in the leaf to a second priority queue, `hits`,
@@ -58,7 +59,7 @@ pub enum Algorithm {
     /// until candidates is empty or the closest candidate is worse than the furthest hit.
     GreedySieve,
 
-    /// Like SieveV1, but without the separate priority queue for hits.
+    /// Like `SieveV1`, but without the separate priority queue for hits.
     ///
     /// This algorithm is not stable.
     ///
@@ -72,7 +73,7 @@ pub enum Algorithm {
     /// of the points in the cluster.
     Sieve,
 
-    /// Like SieveV2, but without the separate priority queue for hits.
+    /// Like `SieveV2`, but without the separate priority queue for hits.
     ///
     /// This algorithm is not stable.
     ///

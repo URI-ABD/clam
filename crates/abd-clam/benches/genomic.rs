@@ -4,14 +4,17 @@ use symagen::random_data;
 
 use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
 
+#[allow(clippy::ptr_arg)]
 fn hamming(x: &String, y: &String) -> u16 {
     distances::strings::hamming(x, y)
 }
 
+#[allow(clippy::ptr_arg)]
 fn levenshtein(x: &String, y: &String) -> u16 {
     distances::strings::levenshtein(x, y)
 }
 
+#[allow(clippy::type_complexity)]
 const METRICS: &[(&str, fn(&String, &String) -> u16)] = &[("hamming", hamming), ("levenshtein", levenshtein)];
 
 fn genomic(c: &mut Criterion) {
