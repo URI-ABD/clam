@@ -75,17 +75,23 @@ impl<I: Instance, U: UInt, M: Instance> CodecData<I, U, M> {
         // Build the leaves' data
         let mut bytes = Vec::new();
         for leaf in root.compressible_leaves_mut().into_iter().filter(|c| c.squish()) {
+            // Set the offset in the compressed data where the leaf data starts.
             leaf.set_codec_offset(bytes.len());
+
+            // Encode the points in the leaf in terms of the center.
             let center = &data[leaf.arg_center()];
             let encodings = leaf
                 .indices()
                 .map(|i| encoder(center, &data[i]))
                 .collect::<Result<Vec<_>, _>>()?;
-            let num_encodings = encodings.len();
-            bytes.extend_from_slice(&num_encodings.to_le_bytes());
+
+            // Write the number of encodings.
+            bytes.extend_from_slice(&leaf.cardinality().to_le_bytes());
             for encoding in encodings {
+                // Write the length of the encoding.
                 let len = encoding.len();
                 bytes.extend_from_slice(&len.to_le_bytes());
+                // Write the encoding.
                 bytes.extend_from_slice(&encoding);
             }
         }
@@ -320,11 +326,11 @@ fn encode_centers<I: Instance, U: UInt>(
     bytes.extend_from_slice(&root_center);
 
     // Serialize the index pairs and their encodings.
-    for (left, right) in index_pairs(root) {
-        bytes.extend_from_slice(&left.to_le_bytes());
-        bytes.extend_from_slice(&right.to_le_bytes());
+    for (reference, target) in index_pairs(root) {
+        bytes.extend_from_slice(&reference.to_le_bytes());
+        bytes.extend_from_slice(&target.to_le_bytes());
 
-        let encoding = encoder(&centers[&left], &centers[&right])?;
+        let encoding = encoder(&centers[&reference], &centers[&target])?;
 
         bytes.extend_from_slice(&encoding.len().to_le_bytes());
         bytes.extend_from_slice(&encoding);
@@ -374,16 +380,16 @@ fn decode_centers<I: Instance, U: UInt>(
     // Deserialize the index pairs and their encodings.
     while offset < bytes.len() {
         // Deserialize the index pair.
-        let left = <usize as Number>::from_le_bytes(&bytes[offset..(offset + usize::num_bytes())]);
+        let reference = <usize as Number>::from_le_bytes(&bytes[offset..(offset + usize::num_bytes())]);
         offset += usize::num_bytes();
-        let right = <usize as Number>::from_le_bytes(&bytes[offset..(offset + usize::num_bytes())]);
+        let target = <usize as Number>::from_le_bytes(&bytes[offset..(offset + usize::num_bytes())]);
         offset += usize::num_bytes();
 
         // Deserialize the encoding.
         let len = <usize as Number>::from_le_bytes(&bytes[offset..(offset + usize::num_bytes())]);
         offset += usize::num_bytes();
-        let encoding = decoder(&centers[&left], &bytes[offset..(offset + len)])?;
-        centers.insert(right, encoding);
+        let encoding = decoder(&centers[&reference], &bytes[offset..(offset + len)])?;
+        centers.insert(target, encoding);
         offset += len;
     }
 
@@ -416,14 +422,14 @@ impl<I: Instance> LeafData<I> {
     /// Returns an error if any leaf data could not be decoded.
     fn load_leaf(&self, center: &I, offset: usize) -> Result<Vec<I>, String> {
         // Read the number of encodings.
-        let num_encodings = {
+        let cardinality = {
             let bytes = &self.bytes[offset..(offset + usize::num_bytes())];
             <usize as Number>::from_le_bytes(bytes)
         };
 
-        let mut data = Vec::with_capacity(num_encodings);
+        let mut data = Vec::with_capacity(cardinality);
         let mut offset = offset + usize::num_bytes();
-        for _ in 0..num_encodings {
+        for _ in 0..cardinality {
             // Read the length of the encoding.
             let len = {
                 let bytes = &self.bytes[offset..(offset + usize::num_bytes())];
@@ -432,13 +438,13 @@ impl<I: Instance> LeafData<I> {
             offset += usize::num_bytes();
 
             // Read the encoding.
-            let encoding = {
+            let target = {
                 let bytes = &self.bytes[offset..(offset + len)];
                 offset += len;
                 (self.decoder)(center, bytes)?
             };
 
-            data.push(encoding);
+            data.push(target);
         }
 
         Ok(data)

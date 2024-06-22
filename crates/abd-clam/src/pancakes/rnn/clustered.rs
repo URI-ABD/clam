@@ -100,7 +100,6 @@ where
                     .unwrap_or_else(|e| unreachable!("Leaf data not found: {e}"));
                 points.into_iter().map(|p| data.metric()(query, &p)).zip(leaf.indices())
             })
-            .filter(|&(d, _)| d <= radius)
             .map(|(d, i)| (i, d))
     });
 
