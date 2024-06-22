@@ -1,4 +1,4 @@
-//! Linear search in a compressed space.
+//! Linear RNN search in a compressed space.
 
 use distances::number::UInt;
 use rayon::prelude::*;
