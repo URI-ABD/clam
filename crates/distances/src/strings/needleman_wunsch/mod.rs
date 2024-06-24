@@ -64,7 +64,10 @@ pub fn edits_recursive_custom<U: UInt>(
         let table = compute_table(x, y, penalties);
         let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
         (
-            compute_edits(&aligned_x, &aligned_y),
+            [
+                unaligned_x_to_y(&aligned_x, &aligned_y),
+                unaligned_x_to_y(&aligned_y, &aligned_x),
+            ],
             table[y.len()][x.len()].0,
         )
     }
@@ -82,12 +85,20 @@ pub fn edits_recursive_custom<U: UInt>(
 ///
 /// * `x`: an unaligned sequence.
 /// * `y`: an unaligned sequence.
+///
+/// # Returns:
+///
+/// * Two sets of edits, one to turn `x` into `y` and one to turn `y` into `x`.
+/// * The edit distance between `x` and `y`.
 #[must_use]
 pub fn edits_recursive<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
     let table = compute_table(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
     (
-        compute_edits(&aligned_x, &aligned_y),
+        [
+            unaligned_x_to_y(&aligned_x, &aligned_y),
+            unaligned_x_to_y(&aligned_y, &aligned_x),
+        ],
         table[y.len()][x.len()].0,
     )
 }
@@ -110,7 +121,10 @@ pub fn edits_iterative_custom<U: UInt>(
         let table = compute_table(x, y, penalties);
         let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
         (
-            compute_edits(&aligned_x, &aligned_y),
+            [
+                unaligned_x_to_y(&aligned_x, &aligned_y),
+                unaligned_x_to_y(&aligned_y, &aligned_x),
+            ],
             table[y.len()][x.len()].0,
         )
     }
@@ -128,12 +142,20 @@ pub fn edits_iterative_custom<U: UInt>(
 ///
 /// * `x`: an unaligned sequence.
 /// * `y`: an unaligned sequence.
+///
+/// # Returns:
+///
+/// * Two sets of edits, one to turn `x` into `y` and one to turn `y` into `x`.
+/// * The edit distance between `x` and `y`.
 #[must_use]
 pub fn edits_iterative<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
     let table = compute_table(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
     (
-        compute_edits(&aligned_x, &aligned_y),
+        [
+            unaligned_x_to_y(&aligned_x, &aligned_y),
+            unaligned_x_to_y(&aligned_y, &aligned_x),
+        ],
         table[y.len()][x.len()].0,
     )
 }

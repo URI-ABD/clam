@@ -1,4 +1,4 @@
-use distances::strings::{Edit, _x_to_y, unaligned_x_to_y};
+use distances::strings::{Edit, _x_to_y, apply_edits, unaligned_x_to_y};
 
 #[test]
 fn tiny_aligned() {
@@ -54,6 +54,23 @@ fn small_unaligned() {
         Edit::Del(4),
         Edit::Sub(5, 'C'),
     ];
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn test_apply_edits() {
+    let x = "ACBAAB";
+    let edits: Vec<Edit> = vec![
+        Edit::Ins(1, 'A'),
+        Edit::Sub(3, 'A'),
+        Edit::Del(4),
+        Edit::Sub(5, 'C'),
+    ];
+
+    let actual = apply_edits(x, &edits);
+
+    let expected = "AACAAC";
 
     assert_eq!(actual, expected);
 }
