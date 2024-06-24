@@ -1,5 +1,6 @@
 //! K-Nearest Neighbors search in a compressed space.
 
+mod greedy_sieve;
 mod linear;
 
 use distances::number::UInt;
@@ -10,8 +11,10 @@ use super::CodecData;
 
 /// The algorithm to use for K-Nearest Neighbors search.
 pub enum Algorithm {
-    /// Use linear search on the entire dataset.
+    /// Use linear search on the dataset.
     Linear,
+    /// Use greedy sieve search on the dataset.
+    GreedySieve,
 }
 
 impl Default for Algorithm {
@@ -41,6 +44,7 @@ impl Algorithm {
     {
         match self {
             Self::Linear => linear::search(query, k, data),
+            Self::GreedySieve => greedy_sieve::search(query, k, data),
         }
     }
 
@@ -49,6 +53,7 @@ impl Algorithm {
     pub const fn name(&self) -> &str {
         match self {
             Self::Linear => "Linear",
+            Self::GreedySieve => "GreedySieve",
         }
     }
 
@@ -70,6 +75,7 @@ impl Algorithm {
     pub fn from_name(s: &str) -> Result<Self, String> {
         match s.to_lowercase().as_str() {
             "linear" => Ok(Self::Linear),
+            "greedysieve" => Ok(Self::GreedySieve),
             _ => Err(format!("Unknown algorithm: {s}")),
         }
     }

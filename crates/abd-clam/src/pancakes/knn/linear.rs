@@ -1,4 +1,4 @@
-//! Linear KNN search in a compressed space.
+//! Linear K-NN search in a compressed space.
 
 use crate::{pancakes::CodecData, Cluster, Instance};
 use distances::number::UInt;
