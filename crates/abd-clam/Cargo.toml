@@ -26,7 +26,7 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { version = "1.6.2", path = "../distances" }
+distances = { version = "1.7.0", path = "../distances" }
 rayon = "1.8.0"
 serde = { version = "1.0.188", features = ["derive"] }
 mt_logger = "3.0.2"

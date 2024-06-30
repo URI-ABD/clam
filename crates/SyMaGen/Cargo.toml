@@ -21,7 +21,7 @@ name = "symagen"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-distances = { version = "1.6.2", path = "../distances" }
+distances = { version = "1.7.0", path = "../distances" }
 rand = "0.8.4"
 rayon = "1.8.0"
 
