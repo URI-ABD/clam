@@ -26,7 +26,7 @@ pub trait Instance: Debug + Send + Sync + Clone {
     /// # Errors
     ///
     /// If the file cannot be written to.
-    fn save<W: std::io::Write>(&self, writer: &mut W) -> Result<(), String> {
+    fn save<W: ?Sized + std::io::Write>(&self, writer: &mut W) -> Result<(), String> {
         let bytes = self.to_bytes();
         let num_bytes = bytes.len().to_be_bytes();
         writer
@@ -40,7 +40,7 @@ pub trait Instance: Debug + Send + Sync + Clone {
     /// # Errors
     ///
     /// If the file cannot be read or the instance cannot be parsed.
-    fn load<R: std::io::Read>(reader: &mut R) -> Result<Self, String>
+    fn load<R: ?Sized + std::io::Read>(reader: &mut R) -> Result<Self, String>
     where
         Self: Sized,
     {

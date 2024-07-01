@@ -1,6 +1,6 @@
 //! Tests for Cakes.
 
-use abd_clam::{knn, rnn, Cakes, Instance, PartitionCriteria, VecDataset};
+use abd_clam::{cakes::knn, cakes::rnn, Cakes, Instance, PartitionCriteria, VecDataset};
 use distances::Number;
 use float_cmp::approx_eq;
 use test_case::test_case;

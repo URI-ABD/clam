@@ -274,7 +274,7 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
 
 /// Field by which we rank elements in priority queue of hits.
 #[derive(Debug)]
-pub struct OrdNumber<U: Number>(U);
+pub struct OrdNumber<U: Number>(pub U);
 
 impl<U: Number> PartialEq for OrdNumber<U> {
     fn eq(&self, other: &Self) -> bool {
@@ -298,7 +298,7 @@ impl<U: Number> Ord for OrdNumber<U> {
 
 /// Field by which we reverse-rank elements in priority queue of hits.
 #[derive(Debug)]
-pub struct RevNumber<U: Number>(U);
+pub struct RevNumber<U: Number>(pub U);
 
 impl<U: Number> PartialEq for RevNumber<U> {
     fn eq(&self, other: &Self) -> bool {
