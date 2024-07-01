@@ -69,32 +69,46 @@ fn serialize_edits(edits: &[Edit]) -> Box<[u8]> {
 }
 
 /// Deserializes a byte array into a vector of edit operations.
+///
+/// A `Del` edit is encoded as `10` followed by the index of the edit in 14 bits.
+/// A `Ins` edit is encoded as `01` followed by the index of the edit in 14 bits and the character in 8 bits.
+/// A `Sub` edit is encoded as `11` followed by the index of the edit in 14 bits and the character in 8 bits.
+///
+/// # Arguments
+///
+/// * `bytes`: The byte array encoding the edit operations.
+///
+/// # Errors
+///
+/// * If the byte array is not a valid encoding of edit operations.
+/// * If the edit type is not recognized.
+///
+/// # Returns
+///
+/// A vector of edit operations.
 fn deserialize_edits(bytes: &[u8]) -> Result<Vec<Edit>, String> {
     let mut edits = Vec::new();
     let mut i = 0;
-    let e_mask = 0b1100_0000;
-    let v_mask = 0b0011_1111;
+    let mask_edit = 0b11;
     while i < bytes.len() {
-        let val = bytes[i] & e_mask;
-        let edit = match val {
-            0b1000_0000 => {
-                let index = u16::from_be_bytes([bytes[i] & v_mask, bytes[i + 1]]);
+        let index = u16::from_be_bytes([bytes[i] & !mask_edit, bytes[i + 1]]);
+        let edit_bits = bytes[i] & mask_edit;
+        let edit = match edit_bits {
+            0b10 => {
                 i += 2;
                 Edit::Del(index as usize)
             }
-            0b0100_0000 => {
-                let index = u16::from_be_bytes([bytes[i] & v_mask, bytes[i + 1]]);
+            0b01 => {
                 let c = bytes[i + 2];
                 i += 3;
                 Edit::Ins(index as usize, c as char)
             }
-            0b1100_0000 => {
-                let index = u16::from_be_bytes([bytes[i] & v_mask, bytes[i + 1]]);
+            0b11 => {
                 let c = bytes[i + 2];
                 i += 3;
                 Edit::Sub(index as usize, c as char)
             }
-            _ => return Err(format!("Invalid edit type: {val:b}.")),
+            _ => return Err(format!("Invalid edit type: {edit_bits:b}.")),
         };
         edits.push(edit);
     }
@@ -116,17 +130,23 @@ fn deserialize_edits(bytes: &[u8]) -> Result<Vec<Edit>, String> {
 /// A byte array encoding the edit operation.
 #[allow(clippy::cast_possible_truncation)]
 fn edit_to_bin(edit: &Edit) -> Vec<u8> {
+    let mask_6 = 0b0011_1111;
+    let mask_del = 0b10;
+    let mask_ins = 0b01;
+    let mask_sub = 0b11;
     match edit {
         // First 2 bits for the type of edit, 14 bits for the index.
         Edit::Del(i) => {
             let mut bytes = (*i as u16).to_be_bytes().to_vec();
-            bytes[0] |= 0b1000_0000;
+            bytes[0] &= mask_6;
+            bytes[0] |= mask_del;
             bytes
         }
         Edit::Ins(i, c) => {
             // First 2 bits for the type of edit, 14 bits for the index.
             let mut bytes = (*i as u16).to_be_bytes().to_vec();
-            bytes[0] |= 0b0100_0000;
+            bytes[0] &= mask_6;
+            bytes[0] |= mask_ins;
             // 8 bits for the character.
             bytes.push(*c as u8);
             bytes
@@ -134,7 +154,8 @@ fn edit_to_bin(edit: &Edit) -> Vec<u8> {
         Edit::Sub(i, c) => {
             // First 2 bits for the type of edit, 14 bits for the index.
             let mut bytes = (*i as u16).to_be_bytes().to_vec();
-            bytes[0] |= 0b1100_0000;
+            bytes[0] &= mask_6;
+            bytes[0] |= mask_sub;
             // 8 bits for the character.
             bytes.push(*c as u8);
             bytes
