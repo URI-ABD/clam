@@ -87,3 +87,52 @@ pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 
     U::one() - (U::from(2) * intersection_size / size)
 }
+
+/// Kulsinski distance.
+///
+/// Similar to the Jaccard distance, the Kulsinski distance is a measure of the dissimilarity
+/// between two sets. It is defined as the sum of the number of not equal dimensions and the
+/// total number of dimensions minus the number of elements in the intersection, all divided by
+/// the sum of the number of not equal dimensions and the total number of dimensions.
+///
+/// # Links
+///
+/// <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.DistanceMetric.html>
+/// <https://docs.scipy.org/doc/scipy-1.7.1/reference/reference/generated/scipy.spatial.distance.kulsinski.html>
+///
+/// # Arguments
+///
+/// * `x`: A set represented as a slice of `Int`s, i.e. a type generic over integers.
+/// * `y`: A set represented as a slice of `Int`s, i.e. a type generic over integers.
+///
+/// # Examples
+///
+/// ```
+/// use distances::sets::kulsinski;
+///
+/// let x: Vec<u32> = vec![1, 2, 3];
+/// let y: Vec<u32> = vec![2, 3, 4];
+///
+/// let distance: f32 = kulsinski(&x, &y);
+/// let real_distance: f32 = 2_f32 / 3_f32;
+///
+/// assert!((distance - real_distance).abs() < f32::EPSILON);
+/// ```
+pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
+    if x.is_empty() || y.is_empty() {
+        return U::one();
+    }
+
+    let x = x.iter().copied().collect::<BTreeSet<_>>();
+    let y = y.iter().copied().collect::<BTreeSet<_>>();
+
+    let intersection = x.intersection(&y).count();
+    let union = x.union(&y).count();
+    let not_equal = union - intersection;
+
+    if intersection == x.len() && intersection == y.len() {
+        U::zero()
+    } else {
+        U::one() - (U::from(intersection) / U::from(union + not_equal))
+    }
+}

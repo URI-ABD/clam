@@ -67,6 +67,8 @@ assert!((distance - (27.0_f32).sqrt()).abs() < 1e-6);
   - [ ] Normalized versions of the above.
 - [ ] Sets:
   - [x] `jaccard`
+  - [x] `dice`
+  - [x] `kulsinski`
   - [ ] `hausdorff`
     - [Hausdorff Distance](https://en.wikipedia.org/wiki/Hausdorff_distance)
 - [ ] Graphs:
