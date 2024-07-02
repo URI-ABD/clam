@@ -91,8 +91,14 @@ pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// Kulsinski distance.
 ///
 /// Similar to the Jaccard distance, the Kulsinski distance is a measure of the dissimilarity
-/// between two sets. It is defined as the cardinality of the intersection divided by the
-/// sum of the number of not equal dimensions and the total number of dimensions.
+/// between two sets. It is defined as the sum of the number of not equal dimensions and the
+/// total number of dimensions minus the number of elements in the intersection, all divided by
+/// the sum of the number of not equal dimensions and the total number of dimensions.
+///
+/// # Links
+///
+/// <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.DistanceMetric.html>
+/// <https://docs.scipy.org/doc/scipy-1.7.1/reference/reference/generated/scipy.spatial.distance.kulsinski.html>
 ///
 /// # Arguments
 ///
