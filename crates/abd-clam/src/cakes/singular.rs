@@ -7,7 +7,7 @@ use std::path::Path;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{knn, rnn, Cluster, Dataset, Instance, PartitionCriterion, Tree, UniBall};
+use crate::{cakes::knn, cakes::rnn, Cluster, Dataset, Instance, PartitionCriterion, Tree, UniBall};
 
 use super::Search;
 

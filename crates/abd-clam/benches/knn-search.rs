@@ -3,7 +3,7 @@ use criterion::*;
 use rand::prelude::*;
 use symagen::random_data;
 
-use abd_clam::{knn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{cakes::knn, Cakes, PartitionCriteria, VecDataset};
 
 #[allow(clippy::ptr_arg)]
 fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {

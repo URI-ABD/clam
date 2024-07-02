@@ -33,7 +33,7 @@ use crate::{Dataset, Instance};
 /// A `Cluster` represents a set of "similar" instances under some distance
 /// function.
 pub trait Cluster<U: Number>:
-    Serialize + for<'a> Deserialize<'a> + PartialEq + Eq + PartialOrd + Ord + Debug + Hash + Display + Send + Sync
+    Serialize + for<'a> Deserialize<'a> + PartialEq + Eq + PartialOrd + Ord + Debug + Hash + Display + Send + Sync + Clone
 {
     /// Creates a new `Cluster` from a given dataset.
     fn new_root<I: Instance, D: Dataset<I, U>>(data: &D, seed: Option<u64>) -> Self;

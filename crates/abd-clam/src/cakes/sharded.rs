@@ -6,7 +6,7 @@ use distances::Number;
 use rayon::prelude::*;
 
 use super::{Search, SingleShard};
-use crate::{knn, rnn, Dataset, Instance};
+use crate::{cakes::knn, cakes::rnn, Dataset, Instance};
 
 /// Cakes search with sharded datasets.
 ///
@@ -211,8 +211,8 @@ mod tests {
     use symagen::random_data;
 
     use crate::{
-        cakes::{Search, SingleShard},
-        knn, rnn, Dataset, PartitionCriteria, VecDataset,
+        cakes::{knn, rnn, Search, SingleShard},
+        Dataset, PartitionCriteria, VecDataset,
     };
 
     use super::RandomlySharded;

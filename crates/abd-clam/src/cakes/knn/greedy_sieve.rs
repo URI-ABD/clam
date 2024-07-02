@@ -35,7 +35,7 @@ where
     let d = root.distance_to_instance(data, query);
     candidates.push(root, RevNumber(d_min(root, d)));
 
-    // stop if we have enough hits and the farthest hit is closer than the closest cluster by delta_min.
+    // Stop if we have enough hits and the farthest hit is closer than the closest cluster (closeness determined by d_min).
     while hits.len() < k
         || (!candidates.is_empty()
             && hits
@@ -54,7 +54,7 @@ where
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
-fn d_min<U: Number, C: Cluster<U>>(c: &C, d: U) -> U {
+pub fn d_min<U: Number, C: Cluster<U>>(c: &C, d: U) -> U {
     if d < c.radius() {
         U::zero()
     } else {
@@ -90,7 +90,7 @@ fn pop_till_leaf<I, U, D, C>(
     }
 }
 
-/// Pops a single leaf from the top of candidates and add those points to hits.
+/// Pops a single leaf from the top of `candidates` and add those points to `hits`.
 fn leaf_into_hits<I, U, D, C>(
     tree: &Tree<I, U, D, C>,
     query: &I,
@@ -115,7 +115,7 @@ fn leaf_into_hits<I, U, D, C>(
     });
 }
 
-/// Trims hits to contain only the k-nearest neighbors.
+/// Trims `hits` to contain only the k nearest neighbors.
 fn trim_hits<U: Number>(k: usize, hits: &mut priority_queue::PriorityQueue<usize, OrdNumber<U>>) {
     while hits.len() > k {
         hits.pop()

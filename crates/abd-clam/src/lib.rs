@@ -16,14 +16,14 @@
 )]
 #![doc = include_str!("../README.md")]
 
-mod cakes;
+pub mod cakes;
 pub mod chaoda;
-pub mod codec;
 mod core;
+pub mod pancakes;
 pub mod utils;
 
 pub use crate::{
-    cakes::{knn, rnn, Cakes},
+    cakes::Cakes,
     chaoda::graph,
     core::{
         cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
@@ -33,4 +33,4 @@ pub use crate::{
 };
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.29.0";
+pub const VERSION: &str = "0.30.0";

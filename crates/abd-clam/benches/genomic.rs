@@ -2,7 +2,7 @@ use criterion::*;
 
 use symagen::random_data;
 
-use abd_clam::{rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{cakes::rnn, Cakes, PartitionCriteria, VecDataset};
 
 #[allow(clippy::ptr_arg)]
 fn hamming(x: &String, y: &String) -> u16 {
