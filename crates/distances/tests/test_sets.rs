@@ -47,43 +47,43 @@ fn sets_test() {
     for _ in 0..10000 {
         let x: Vec<u16> = gen_set();
         let y: Vec<u16> = gen_set();
-        let mut union: f32 = 0.0;
-        let mut intersection: f32 = 0.0;
-        let mut size: f32 = 0.0;
+        let mut union: usize = 0;
+        let mut intersection: usize = 0;
+        let mut size: usize = 0;
         for i in 0_u16..1000 {
             if x.contains(&i) || y.contains(&i) {
-                union += 1.0;
-                size += 1.0;
+                union += 1;
+                size += 1;
             }
             if x.contains(&i) && y.contains(&i) {
-                intersection += 1.0;
-                size += 1.0;
+                intersection += 1;
+                size += 1;
             }
         }
         let mut distance: f32;
         let mut real_distance: f32;
 
         distance = jaccard(&x, &y);
-        if union == 0.0 {
+        if union == 0 {
             real_distance = 0.0;
         } else {
-            real_distance = 1_f32 - intersection / union;
+            real_distance = 1_f32 - (intersection as f32) / (union as f32);
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
 
         distance = dice(&x, &y);
-        if union == 0.0 {
+        if union == 0 {
             real_distance = 0.0;
         } else {
-            real_distance = 1_f32 - (2_f32 * (intersection / size));
+            real_distance = 1_f32 - (2_f32 * ((intersection as f32) / (size as f32)));
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
 
         distance = kulsinski(&x, &y);
-        if union == 0.0 {
+        if union == 0 {
             real_distance = 0.0;
         } else {
-            real_distance = 1_f32 - intersection / (union + union - intersection);
+            real_distance = 1_f32 - (intersection as f32) / ((union + union - intersection) as f32);
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
     }
