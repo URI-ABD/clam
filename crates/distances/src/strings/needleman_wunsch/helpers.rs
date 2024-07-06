@@ -349,6 +349,19 @@ pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
     aligned_x_to_y
 }
 
+/// Given two unaligned strings, returns the edits related to gaps to align the 2 strings.
+///
+/// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
+/// Uses the "traceback_iterative" ftn to align the strings.
+///
+/// # Arguments
+///
+/// * `x`: A unaligned string.
+/// * `y`: A unaligned string.
+///
+/// # Returns
+///
+/// A vector of edits to transform the aligned version of `x` into the aligned version of `y` excluding substitutions.
 pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
     let table = compute_table::<u16>(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x,y]);
@@ -372,6 +385,19 @@ pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
     aligned_x_to_y
 }
 
+/// Given two unaligned strings, returns the location of the gaps needed to align the 2 strings.
+///
+/// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
+/// Uses the "traceback_iterative" ftn to align the strings.
+///
+/// # Arguments
+///
+/// * `x`: A unaligned string.
+/// * `y`: A unaligned string.
+///
+/// # Returns
+///
+/// An array of 2 vectors of edits to align `x` and `y`.
 pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
     let table = compute_table::<u16>(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x,y]);
