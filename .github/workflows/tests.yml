@@ -17,26 +17,18 @@ permissions:
   contents: read
 
 jobs:
-  pre-commit:
+  fmt:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup | Checkout
-        uses: actions/checkout@v4
-      - name: Setup | Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: earthly/actions-setup@v1
         with:
-          toolchain: stable
-          components: |
-            clippy
-            rustfmt
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - uses: pre-commit/action@v3.0.0
+          version: v0.8.4
+      - name: Fmt
+        run: earthly +fmt
 
   test:
-    needs: pre-commit
-    name: Tests
+    needs: fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

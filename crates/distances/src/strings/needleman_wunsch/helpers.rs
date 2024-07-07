@@ -44,11 +44,7 @@ pub enum Edit {
 ///
 /// A nested vector of tuples of total-penalty and Direction, representing the
 /// best alignment at each position.
-pub fn compute_table<U: UInt>(
-    x: &str,
-    y: &str,
-    penalties: Penalties<U>,
-) -> Vec<Vec<(U, Direction)>> {
+pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<Vec<(U, Direction)>> {
     // Initializing table; the inner vectors represent rows in the table.
     let mut table = vec![vec![(U::zero(), Direction::Diagonal); x.len() + 1]; y.len() + 1];
 
@@ -112,10 +108,7 @@ fn min2<U: UInt>(a: (U, Direction), b: (U, Direction)) -> (U, Direction) {
 ///
 /// A tuple of the two aligned sequences.
 #[must_use]
-pub fn trace_back_iterative<U: UInt>(
-    table: &[Vec<(U, Direction)>],
-    [x, y]: [&str; 2],
-) -> (String, String) {
+pub fn trace_back_iterative<U: UInt>(table: &[Vec<(U, Direction)>], [x, y]: [&str; 2]) -> (String, String) {
     let (x, y) = (x.as_bytes(), y.as_bytes());
 
     let (mut row_i, mut col_i) = (y.len(), x.len());
@@ -145,10 +138,8 @@ pub fn trace_back_iterative<U: UInt>(
     aligned_x.reverse();
     aligned_y.reverse();
 
-    let aligned_x = String::from_utf8(aligned_x)
-        .unwrap_or_else(|_| unreachable!("We know we added valid characters."));
-    let aligned_y = String::from_utf8(aligned_y)
-        .unwrap_or_else(|_| unreachable!("We know we added valid characters."));
+    let aligned_x = String::from_utf8(aligned_x).unwrap_or_else(|_| unreachable!("We know we added valid characters."));
+    let aligned_y = String::from_utf8(aligned_y).unwrap_or_else(|_| unreachable!("We know we added valid characters."));
 
     (aligned_x, aligned_y)
 }
@@ -168,10 +159,7 @@ pub fn trace_back_iterative<U: UInt>(
 ///
 /// A tuple of the two aligned sequences.
 #[must_use]
-pub fn trace_back_recursive<U: UInt>(
-    table: &[Vec<(U, Direction)>],
-    [x, y]: [&str; 2],
-) -> (String, String) {
+pub fn trace_back_recursive<U: UInt>(table: &[Vec<(U, Direction)>], [x, y]: [&str; 2]) -> (String, String) {
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
 
     _trace_back_recursive(
@@ -184,10 +172,8 @@ pub fn trace_back_recursive<U: UInt>(
     aligned_x.reverse();
     aligned_y.reverse();
 
-    let aligned_x = String::from_utf8(aligned_x)
-        .unwrap_or_else(|_| unreachable!("We know we added valid characters."));
-    let aligned_y = String::from_utf8(aligned_y)
-        .unwrap_or_else(|_| unreachable!("We know we added valid characters."));
+    let aligned_x = String::from_utf8(aligned_x).unwrap_or_else(|_| unreachable!("We know we added valid characters."));
+    let aligned_y = String::from_utf8(aligned_y).unwrap_or_else(|_| unreachable!("We know we added valid characters."));
 
     (aligned_x, aligned_y)
 }

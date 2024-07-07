@@ -122,11 +122,7 @@ pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= f64::EPSILON);
 /// ```
 pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    abs_diff_iter(x, y)
-        .map(U::from)
-        .map(|v| v * v * v)
-        .sum::<U>()
-        .cbrt()
+    abs_diff_iter(x, y).map(U::from).map(|v| v * v * v).sum::<U>().cbrt()
 }
 
 /// L4-norm between two vectors.

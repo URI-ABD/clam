@@ -36,10 +36,10 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml .
+    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml rustfmt.toml .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
-    COPY --dir pypi .
     COPY --dir crates .
+    COPY --dir pypi .
     RUN rye sync --no-lock
 
 # This target builds the project using the cached dependencies.
@@ -72,7 +72,7 @@ fix:
 
 # This target runs the tests.
 test:
-    FROM +fmt
+    FROM +chef-cook
     RUN cargo test --release --lib --bins --examples --tests --all-features
     # TODO: switch to --all, blocked on https://github.com/astral-sh/rye/issues/853
     RUN rye test --package abd-distances

@@ -1,9 +1,7 @@
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 define_ty!(F32x16, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32);
-impl_minimal!(
-    F32x16, f32, 16, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15
-);
+impl_minimal!(F32x16, f32, 16, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15);
 
 impl F32x16 {
     /// Create a new `F32x16` from a slice.
@@ -14,8 +12,8 @@ impl F32x16 {
     pub fn from_slice(slice: &[f32]) -> Self {
         debug_assert!(slice.len() >= Self::lanes());
         Self(
-            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
-            slice[8], slice[9], slice[10], slice[11], slice[12], slice[13], slice[14], slice[15],
+            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7], slice[8], slice[9],
+            slice[10], slice[11], slice[12], slice[13], slice[14], slice[15],
         )
     }
 

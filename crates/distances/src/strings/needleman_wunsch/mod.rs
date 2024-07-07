@@ -58,9 +58,7 @@ pub fn nw_distance<U: UInt>(x: &str, y: &str) -> U {
 /// # Returns:
 ///
 /// A function with the same signature as `edits_recursive`.
-pub fn edits_recursive_custom<U: UInt>(
-    penalties: Penalties<U>,
-) -> impl Fn(&str, &str) -> ([Vec<Edit>; 2], U) {
+pub fn edits_recursive_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> ([Vec<Edit>; 2], U) {
     move |x: &str, y: &str| {
         let table = compute_table(x, y, penalties);
         let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
@@ -115,9 +113,7 @@ pub fn edits_recursive<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
 /// # Returns:
 ///
 /// A function with the same signature as `edits_iterative`.
-pub fn edits_iterative_custom<U: UInt>(
-    penalties: Penalties<U>,
-) -> impl Fn(&str, &str) -> ([Vec<Edit>; 2], U) {
+pub fn edits_iterative_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &str) -> ([Vec<Edit>; 2], U) {
     move |x: &str, y: &str| {
         let table = compute_table(x, y, penalties);
         let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);

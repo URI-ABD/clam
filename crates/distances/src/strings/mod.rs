@@ -37,11 +37,7 @@ impl<U: UInt> Default for Penalties<U> {
 impl<U: UInt> Penalties<U> {
     /// Create a set of penalties to use for the NW distance metric.
     pub const fn new(match_: U, mismatch: U, gap: U) -> Self {
-        Self {
-            match_,
-            mismatch,
-            gap,
-        }
+        Self { match_, mismatch, gap }
     }
 }
 

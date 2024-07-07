@@ -87,8 +87,8 @@ fn serialization() {
     let original = UniBall::new_root(&data, Some(42));
     // original.history = vec![true, true, false, false, true];
 
-    let original_bytes = postcard::to_allocvec(&original).unwrap();
-    let deserialized: UniBall<f32> = postcard::from_bytes(&original_bytes).unwrap();
+    let original_bytes = bincode::serialize(&original).unwrap();
+    let deserialized: UniBall<f32> = bincode::deserialize(&original_bytes).unwrap();
 
     assert_eq!(original.name(), deserialized.name());
     assert_eq!(original.cardinality(), deserialized.cardinality());

@@ -6,15 +6,11 @@ use symagen::random_data;
 use distances::vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan};
 
 fn l1(x: &[f32], y: &[f32]) -> f32 {
-    x.iter()
-        .zip(y.iter())
-        .fold(0., |acc, (x, y)| acc + (x - y).abs())
+    x.iter().zip(y.iter()).fold(0., |acc, (x, y)| acc + (x - y).abs())
 }
 
 fn l2_sq(x: &[f32], y: &[f32]) -> f32 {
-    x.iter()
-        .zip(y.iter())
-        .fold(0., |acc, (x, y)| acc + (x - y).powi(2))
+    x.iter().zip(y.iter()).fold(0., |acc, (x, y)| acc + (x - y).powi(2))
 }
 
 fn l2(x: &[f32], y: &[f32]) -> f32 {
@@ -37,9 +33,7 @@ fn l4(x: &[f32], y: &[f32]) -> f32 {
 }
 
 fn l_inf(x: &[f32], y: &[f32]) -> f32 {
-    x.iter()
-        .zip(y.iter())
-        .fold(0., |acc, (x, y)| acc.max((x - y).abs()))
+    x.iter().zip(y.iter()).fold(0., |acc, (x, y)| acc.max((x - y).abs()))
 }
 
 #[test]

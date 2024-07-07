@@ -1,0 +1,10 @@
+[package]
+name = "results-pancakes"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+abd-clam = { workspace = true }
+distances = { workspace = true }
+symagen = { workspace = true }
+rand = { workspace = true }
