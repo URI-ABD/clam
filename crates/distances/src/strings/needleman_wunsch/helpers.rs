@@ -416,6 +416,7 @@ pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
             } else if c_y == '-' {
                 gap_indices[1].push(index);
                 modifier += 1;
+                
             }         
     });
     gap_indices
@@ -572,6 +573,7 @@ mod tests {
                                                 inserts.remove(0);},
                 _ => assert_eq!(0, 1),
             }
+            
         }
 
 
