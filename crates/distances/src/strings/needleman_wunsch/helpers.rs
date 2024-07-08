@@ -1,5 +1,5 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
-#[allow(dead_code)]
+#[allow(dead_code!)]
 use crate::{number::UInt, strings::Penalties};
 
 /// The direction of best alignment at a given position in the DP table
@@ -347,7 +347,7 @@ pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// Given two unaligned strings, returns the edits related to gaps to align the 2 strings.
 ///
 /// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
-/// Uses the "traceback_iterative" ftn to align the strings.
+/// Uses the traceback_iterative ftn to align the strings.
 ///
 /// # Arguments
 ///
