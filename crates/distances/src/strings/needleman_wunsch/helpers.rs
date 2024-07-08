@@ -1,5 +1,5 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
-#[allow(dead_code!)]
+#[allow(dead_code)]
 use crate::{number::UInt, strings::Penalties};
 
 /// The direction of best alignment at a given position in the DP table
