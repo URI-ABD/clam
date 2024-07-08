@@ -1,10 +1,6 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
-
-use std::cell;
-
+#[allow(dead_code)]
 use crate::{number::UInt, strings::Penalties};
-
-use serde::{Deserialize, Serialize};
 
 /// The direction of best alignment at a given position in the DP table
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -336,7 +332,7 @@ pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
         .enumerate()
         .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
         .for_each(|(index, (c_x, c_y))| {
-            let i = index - modifier;
+            //let i = index - modifier;
 
             if c_x == '-' {
                 aligned_x_to_y.push(Edit::Ins(index, c_y));
@@ -390,7 +386,7 @@ pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
 /// Given two unaligned strings, returns the location of the gaps needed to align the 2 strings.
 ///
 /// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
-/// Uses the "traceback_iterative" ftn to align the strings.
+/// Uses the 'traceback_iterative' ftn to align the strings.
 ///
 /// # Arguments
 ///
