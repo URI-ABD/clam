@@ -14,7 +14,7 @@ pub enum Direction {
 }
 
 /// The type of edit needed to turn one sequence into another.
-#[derive(Clone, Debug, PartialEq, Eq, Copy, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub enum Edit {
     /// Delete a character at the given index.
     Del(usize),
@@ -292,8 +292,6 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
         .enumerate()
         .filter(|(_, (x, y))| x != y)
         .for_each(|(index, (c_x, c_y))| {
-            let i = index - modifier;
-
             if c_x == '-' {
                 unaligned_x_to_y.push(Edit::Ins(index, c_y));
             } else if c_y == '-' {
