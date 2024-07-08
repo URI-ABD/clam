@@ -326,11 +326,12 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// A vector of edits to transform thenaligned version of `x` into the aligned version of `y`.
 pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
     let table = compute_table::<u16>(x, y, Penalties::default());
-    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x,y]);
-    let mut aligned_x_to_y:Vec<Edit> = Vec::new();
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+    let mut aligned_x_to_y: Vec<Edit> = Vec::new();
     let mut modifier = 0;
 
-    aligned_x.chars()
+    aligned_x
+        .chars()
         .zip(aligned_y.chars())
         .enumerate()
         .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
@@ -364,11 +365,12 @@ pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// A vector of edits to transform the aligned version of `x` into the aligned version of `y` excluding substitutions.
 pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
     let table = compute_table::<u16>(x, y, Penalties::default());
-    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x,y]);
-    let mut aligned_x_to_y:Vec<Edit> = Vec::new();
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+    let mut aligned_x_to_y: Vec<Edit> = Vec::new();
     let mut modifier = 0;
 
-    aligned_x.chars()
+    aligned_x
+        .chars()
         .zip(aligned_y.chars())
         .enumerate()
         .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
@@ -400,11 +402,12 @@ pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
 /// An array of 2 vectors of edits to align `x` and `y`.
 pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
     let table = compute_table::<u16>(x, y, Penalties::default());
-    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x,y]);
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
     let mut gap_indices: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
     let mut modifier = 0;
 
-    aligned_x.chars()
+    aligned_x
+        .chars()
         .zip(aligned_y.chars())
         .enumerate()
         .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
@@ -416,12 +419,10 @@ pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
             } else if c_y == '-' {
                 gap_indices[1].push(index);
                 modifier += 1;
-                
-            }         
-    });
+            }
+        });
     gap_indices
 }
-
 
 /// Applies a set of edits to a reference (unaligned) string to get a target (unaligned) string.
 ///
@@ -527,37 +528,58 @@ mod tests {
         assert_eq!(edits_10_10.len(), 2);
         for edit in edits_10_10 {
             match edit {
-                Edit::Del(x) => {assert_eq!(deletes[0], x);
-                                        deletes.remove(0);},
-                Edit::Ins(x, c) => {assert!(inserts[0].0 == x && inserts[0].1 == c);
-                                                inserts.remove(0);},
+                Edit::Del(x) => {
+                    assert_eq!(deletes[0], x);
+                    deletes.remove(0);
+                }
+                Edit::Ins(x, c) => {
+                    assert!(inserts[0].0 == x && inserts[0].1 == c);
+                    inserts.remove(0);
+                }
                 _ => assert_eq!(0, 1),
             }
         }
         assert_eq!(deletes.len(), 0);
         assert_eq!(inserts.len(), 0);
-        
+
         let edits_10_20 = aligned_x_to_y_no_sub(seq_1_10, seq_2_20);
         let mut deletes: Vec<usize> = vec![];
-        let mut inserts: Vec<(usize, char)> = vec![(2, 'G'), (3, 'G'), (6, 'C'), (7, 'G'), (8, 'C'), (9, 'G'), (12, 'G'), (13, 'G'), (15, 'G'), (19, 'C')];
+        let mut inserts: Vec<(usize, char)> = vec![
+            (2, 'G'),
+            (3, 'G'),
+            (6, 'C'),
+            (7, 'G'),
+            (8, 'C'),
+            (9, 'G'),
+            (12, 'G'),
+            (13, 'G'),
+            (15, 'G'),
+            (19, 'C'),
+        ];
         assert_eq!(edits_10_20.len(), 10);
         for edit in edits_10_20 {
             match edit {
-                Edit::Del(x) => {assert_eq!(deletes[0], x);
-                                        deletes.remove(0);},
-                Edit::Ins(x, c) => {assert!(inserts[0].0 == x && inserts[0].1 == c);
-                                                inserts.remove(0);},
+                Edit::Del(x) => {
+                    assert_eq!(deletes[0], x);
+                    deletes.remove(0);
+                }
+                Edit::Ins(x, c) => {
+                    assert!(inserts[0].0 == x && inserts[0].1 == c);
+                    inserts.remove(0);
+                }
                 _ => assert_eq!(0, 1),
             }
-        } 
+        }
 
         let edits_20_10 = aligned_x_to_y_no_sub(seq_1_20, seq_2_10);
         let mut deletes: Vec<usize> = vec![0, 1, 5, 7, 8, 10, 11, 13, 17, 18];
         assert_eq!(edits_20_10.len(), 10);
         for edit in edits_20_10 {
             match edit {
-                Edit::Del(x) => {assert_eq!(deletes[0], x);
-                                        deletes.remove(0);},
+                Edit::Del(x) => {
+                    assert_eq!(deletes[0], x);
+                    deletes.remove(0);
+                }
                 _ => assert_eq!(0, 1),
             }
         }
@@ -567,16 +589,17 @@ mod tests {
         assert_eq!(edits_20_20.len(), 4);
         for edit in edits_20_20 {
             match edit {
-                Edit::Del(x) => {assert_eq!(deletes[0], x);
-                                        deletes.remove(0);},
-                Edit::Ins(x, c) => {assert!(inserts[0].0 == x && inserts[0].1 == c);
-                                                inserts.remove(0);},
+                Edit::Del(x) => {
+                    assert_eq!(deletes[0], x);
+                    deletes.remove(0);
+                }
+                Edit::Ins(x, c) => {
+                    assert!(inserts[0].0 == x && inserts[0].1 == c);
+                    inserts.remove(0);
+                }
                 _ => assert_eq!(0, 1),
             }
-            
         }
-
-
     }
 
     #[test]
@@ -586,7 +609,7 @@ mod tests {
         let seq_1_20 = "GAAAGCCTATCGTCTGAGCG";
         let seq_2_20 = "AAGGGACGCGTTGGAGTTAC";
         let align_10_10 = x_to_y_alignment(seq_1_10, seq_2_10);
-        let gaps_10_10:[Vec<usize>;2]= [vec![10], vec![3]];
+        let gaps_10_10: [Vec<usize>; 2] = [vec![10], vec![3]];
         for (i, g) in align_10_10[0].iter().enumerate() {
             assert_eq!(&gaps_10_10[0][i], g);
         }
@@ -595,21 +618,21 @@ mod tests {
         }
 
         let align_10_20 = x_to_y_alignment(seq_1_10, seq_2_20);
-        let gaps_10_20:[Vec<usize>;2]= [vec![2, 3, 6, 7, 8, 9, 12, 13, 15, 19], vec![]];
+        let gaps_10_20: [Vec<usize>; 2] = [vec![2, 3, 6, 7, 8, 9, 12, 13, 15, 19], vec![]];
         for (i, g) in align_10_20[0].iter().enumerate() {
             assert_eq!(&gaps_10_20[0][i], g);
         }
         assert_eq!(align_10_20[1].len(), 0);
 
         let align_20_10 = x_to_y_alignment(seq_1_20, seq_2_10);
-        let gaps_20_10:[Vec<usize>;2]= [vec![], vec![0, 1, 5, 7, 8, 10, 11, 13, 17, 18]];
+        let gaps_20_10: [Vec<usize>; 2] = [vec![], vec![0, 1, 5, 7, 8, 10, 11, 13, 17, 18]];
         assert_eq!(align_20_10[0].len(), 0);
         for (i, g) in align_20_10[1].iter().enumerate() {
             assert_eq!(&gaps_20_10[1][i], g);
         }
 
         let align_20_20 = x_to_y_alignment(seq_1_20, seq_2_20);
-        let gaps_20_20:[Vec<usize>;2]= [vec![18, 19], vec![0, 1]];
+        let gaps_20_20: [Vec<usize>; 2] = [vec![18, 19], vec![0, 1]];
         for (i, g) in align_20_20[0].iter().enumerate() {
             assert_eq!(&gaps_20_20[0][i], g);
         }
