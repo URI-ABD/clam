@@ -330,15 +330,15 @@ pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
         .enumerate()
         .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
         .for_each(|(index, (c_x, c_y))| {
-            //let i = index - modifier;
+            let i = index - modifier;
 
             if c_x == '-' {
-                aligned_x_to_y.push(Edit::Ins(index, c_y));
+                aligned_x_to_y.push(Edit::Ins(i, c_y));
             } else if c_y == '-' {
-                aligned_x_to_y.push(Edit::Del(index));
+                aligned_x_to_y.push(Edit::Del(i);
                 modifier += 1;
             } else {
-                aligned_x_to_y.push(Edit::Sub(index, c_y));
+                aligned_x_to_y.push(Edit::Sub(i, c_y));
             }
         });
     aligned_x_to_y
@@ -369,12 +369,12 @@ pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
         .enumerate()
         .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
         .for_each(|(index, (c_x, c_y))| {
-            //let i = index - modifier;
+            let i = i - modifier;
 
             if c_x == '-' {
-                aligned_x_to_y.push(Edit::Ins(index, c_y));
+                aligned_x_to_y.push(Edit::Ins(i, c_y));
             } else if c_y == '-' {
-                aligned_x_to_y.push(Edit::Del(index));
+                aligned_x_to_y.push(Edit::Del(i));
                 modifier += 1;
             }
         });
@@ -579,7 +579,7 @@ mod tests {
         }
         let edits_20_20 = aligned_x_to_y_no_sub(seq_1_20, seq_2_20);
         let mut deletes: Vec<usize> = vec![0, 1];
-        let mut inserts: Vec<(usize, char)> = vec![(18, 'T'), (19, 'T')];
+        let mut inserts: Vec<(usize, char)> = vec![(16, 'T'), (17, 'T')];
         assert_eq!(edits_20_20.len(), 4);
         for edit in edits_20_20 {
             match edit {
@@ -626,7 +626,7 @@ mod tests {
         }
 
         let align_20_20 = x_to_y_alignment(seq_1_20, seq_2_20);
-        let gaps_20_20: [Vec<usize>; 2] = [vec![18, 19], vec![0, 1]];
+        let gaps_20_20: [Vec<usize>; 2] = [vec![16, 17], vec![0, 1]];
         for (i, g) in align_20_20[0].iter().enumerate() {
             assert_eq!(&gaps_20_20[0][i], g);
         }
