@@ -1,4 +1,7 @@
-use distances::strings::{Edit, _x_to_y, apply_edits, aligned_x_to_y, aligned_x_to_y_no_sub, unaligned_x_to_y, x_to_y_alignment};
+use distances::strings::{
+    Edit, _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y,
+    x_to_y_alignment,
+};
 
 #[test]
 fn tiny_aligned() {
@@ -85,7 +88,8 @@ fn test_alignment() {
 
     let mut deletes: Vec<usize> = vec![3];
     let mut inserts: Vec<(usize, char)> = vec![(9, 'T')];
-    let mut substitutions: Vec<(usize, char)> = vec![(0, 'T'), (1, 'T'), (3, 'C'), (5, 'T'), (7, 'G')];
+    let mut substitutions: Vec<(usize, char)> =
+        vec![(0, 'T'), (1, 'T'), (3, 'C'), (5, 'T'), (7, 'G')];
     assert_eq!(edits_10_10.len(), 7);
     for edit in edits_10_10 {
         match edit {
@@ -100,7 +104,7 @@ fn test_alignment() {
             Edit::Sub(x, c) => {
                 assert!(substitutions[0].0 == x && substitutions[0].1 == c);
                 substitutions.remove(0);
-            },
+            }
         }
     }
     assert_eq!(deletes.len(), 0);
@@ -109,7 +113,18 @@ fn test_alignment() {
 
     let edits_10_20 = aligned_x_to_y(seq_1_10, seq_2_20);
     let mut deletes: Vec<usize> = vec![];
-    let mut inserts: Vec<(usize, char)> = vec![(2, 'G'), (3, 'G'), (6, 'C'), (7, 'G'),  (8, 'C'), (9, 'G'), (12, 'G'), (13, 'G'), (15, 'G'), (19, 'C')];
+    let mut inserts: Vec<(usize, char)> = vec![
+        (2, 'G'),
+        (3, 'G'),
+        (6, 'C'),
+        (7, 'G'),
+        (8, 'C'),
+        (9, 'G'),
+        (12, 'G'),
+        (13, 'G'),
+        (15, 'G'),
+        (19, 'C'),
+    ];
     let mut substitutions: Vec<(usize, char)> = vec![(0, 'A'), (10, 'T')];
     assert_eq!(edits_10_20.len(), 12);
     for edit in edits_10_20 {
@@ -142,7 +157,7 @@ fn test_alignment() {
                 assert_eq!(deletes[0], x);
                 deletes.remove(0);
             }
-            Edit::Ins(x,c ) => {
+            Edit::Ins(x, c) => {
                 assert!(inserts[0].0 == x && inserts[0].1 == c);
                 inserts.remove(0);
             }
@@ -155,11 +170,21 @@ fn test_alignment() {
     assert_eq!(deletes.len(), 0);
     assert_eq!(inserts.len(), 0);
     assert_eq!(substitutions.len(), 0);
-    
+
     let edits_20_20 = aligned_x_to_y(seq_1_20, seq_2_20);
     let mut deletes: Vec<usize> = vec![0, 0];
     let mut inserts: Vec<(usize, char)> = vec![(16, 'T'), (17, 'T')];
-    let mut substitutions: Vec<(usize, char)> = vec![(3, 'G'), (4, 'G'), (5, 'A'), (6, 'C'), (7, 'G'), (11, 'T'), (12, 'G'), (18, 'A'), (19, 'C')];
+    let mut substitutions: Vec<(usize, char)> = vec![
+        (3, 'G'),
+        (4, 'G'),
+        (5, 'A'),
+        (6, 'C'),
+        (7, 'G'),
+        (11, 'T'),
+        (12, 'G'),
+        (18, 'A'),
+        (19, 'C'),
+    ];
     assert_eq!(edits_20_20.len(), 13);
     for edit in edits_20_20 {
         match edit {
