@@ -505,5 +505,4 @@ mod tests {
         assert_eq!(aligned_x, "NOTGUILTY");
         assert_eq!(aligned_y, "NOTGUILTY");
     }
-
 }
