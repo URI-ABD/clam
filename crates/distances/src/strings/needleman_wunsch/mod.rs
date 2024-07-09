@@ -8,7 +8,7 @@ use super::Penalties;
 use crate::number::UInt;
 
 pub use helpers::{
-    _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, compute_edits, compute_table, 
+    _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, compute_edits, compute_table,
     trace_back_iterative, trace_back_recursive, unaligned_x_to_y, x_to_y_alignment, Edit,
 };
 
