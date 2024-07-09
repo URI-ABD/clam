@@ -6,7 +6,7 @@ use crate::number::UInt;
 
 pub mod needleman_wunsch;
 
-pub use needleman_wunsch::{_x_to_y, apply_edits, nw_distance, unaligned_x_to_y, Edit};
+pub use needleman_wunsch::{_x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y, x_to_y_alignment, Edit};
 
 /// Penalties to use in the Needleman-Wunsch distance calculation.
 ///
