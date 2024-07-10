@@ -318,6 +318,7 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// # Returns
 ///
 /// A vector of edits to transform thenaligned version of `x` into the aligned version of `y`.
+#[must_use]
 pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
     let table = compute_table::<u16>(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
@@ -357,6 +358,7 @@ pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
 /// # Returns
 ///
 /// A vector of edits to transform the aligned version of `x` into the aligned version of `y` excluding substitutions.
+#[must_use]
 pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
     let table = compute_table::<u16>(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
@@ -393,6 +395,7 @@ pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
 /// # Returns
 ///
 /// An array of 2 vectors of gaps to align `x` and `y`.
+#[must_use]
 pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
     let table = compute_table::<u16>(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
