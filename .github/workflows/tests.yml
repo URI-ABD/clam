@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   fmt:
+    name: Formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +30,7 @@ jobs:
 
   test:
     needs: fmt
+    name: Testing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
