@@ -1,4 +1,7 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
+
+use serde::{Deserialize, Serialize};
+
 use crate::{number::UInt, strings::Penalties};
 
 /// The direction of best alignment at a given position in the DP table
@@ -13,7 +16,7 @@ pub enum Direction {
 }
 
 /// The type of edit needed to turn one sequence into another.
-#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy, Serialize, Deserialize)]
 pub enum Edit {
     /// Delete a character at the given index.
     Del(usize),

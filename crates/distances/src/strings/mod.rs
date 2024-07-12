@@ -1,10 +1,8 @@
 //! String distance metrics.
 
-// use alloc::vec::Vec;  // no-std
+pub mod needleman_wunsch;
 
 use crate::number::UInt;
-
-pub mod needleman_wunsch;
 
 pub use needleman_wunsch::{
     _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y,
