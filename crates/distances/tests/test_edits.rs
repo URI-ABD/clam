@@ -1,6 +1,5 @@
 use distances::strings::{
-    Edit, _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y,
-    x_to_y_alignment,
+    Edit, _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x_to_y_alignment,
 };
 
 #[test]
@@ -78,8 +77,7 @@ fn test_alignment() {
 
     let mut deletes: Vec<usize> = vec![3];
     let mut inserts: Vec<(usize, char)> = vec![(9, 'T')];
-    let mut substitutions: Vec<(usize, char)> =
-        vec![(0, 'T'), (1, 'T'), (3, 'C'), (5, 'T'), (7, 'G')];
+    let mut substitutions: Vec<(usize, char)> = vec![(0, 'T'), (1, 'T'), (3, 'C'), (5, 'T'), (7, 'G')];
     assert_eq!(edits_10_10.len(), 7);
     for edit in edits_10_10 {
         match edit {
