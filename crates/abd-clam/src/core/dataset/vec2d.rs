@@ -142,6 +142,17 @@ impl<I: Instance, U: Number, M: Instance> Index<usize> for VecDataset<I, U, M> {
 }
 
 impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> {
+    fn clone_with_new_metric(&self, metric: fn(&I, &I) -> U, is_expensive: bool, name: String) -> Self {
+        Self {
+            name,
+            data: self.data.clone(),
+            metric,
+            is_expensive,
+            permuted_indices: self.permuted_indices.clone(),
+            metadata: self.metadata.clone(),
+        }
+    }
+
     fn type_name() -> String {
         format!("VecDataset<{}, {}, {}>", I::type_name(), U::type_name(), M::type_name())
     }

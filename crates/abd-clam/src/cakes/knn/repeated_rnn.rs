@@ -40,7 +40,7 @@ where
     }
 
     while num_confirmed < k {
-        let lfd = utils::mean(
+        let lfd: f64 = utils::mean(
             &confirmed
                 .iter()
                 .chain(straddlers.iter())

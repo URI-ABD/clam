@@ -1,6 +1,6 @@
 //! Utility functions for the crate.
 
-use core::{cmp::Ordering, f64::consts::SQRT_2};
+use core::cmp::Ordering;
 
 use distances::{number::Float, Number};
 
@@ -58,30 +58,30 @@ pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
 }
 
 /// Return the mean value of the given slice of values.
-pub fn mean<T: Number>(values: &[T]) -> f64 {
-    values.iter().copied().sum::<T>().as_f64() / values.len().as_f64()
+pub fn mean<T: Number, F: Float>(values: &[T]) -> F {
+    F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
 }
 
 /// Return the variance of the given slice of values.
-pub fn variance<T: Number>(values: &[T], mean: f64) -> f64 {
+pub fn variance<T: Number, F: Float>(values: &[T], mean: F) -> F {
     values
         .iter()
-        .map(|v| v.as_f64())
+        .map(|v| F::from(*v))
         .map(|v| v - mean)
         .map(|v| v.powi(2))
-        .sum::<f64>()
-        / values.len().as_f64()
+        .sum::<F>()
+        / F::from(values.len())
 }
 
 /// Apply Gaussian normalization to the given values.
 #[allow(dead_code)]
-pub(crate) fn normalize_1d(values: &[f64], mean: f64, sd: f64) -> Vec<f64> {
+pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
     values
         .iter()
         .map(|&v| v - mean)
-        .map(|v| v / ((f64::EPSILON + sd) * SQRT_2))
-        .map(libm::erf)
-        .map(|v| (1. + v) / 2.)
+        .map(|v| v / ((F::epsilon() + sd) * F::SQRT_2))
+        .map(F::erf)
+        .map(|v| (F::one() + v) / F::from(2.))
         .collect()
 }
 
@@ -119,10 +119,10 @@ pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
 /// * `ratio` - The ratio to compute the EMA of.
 /// * `parent_ema` - The parent EMA to use.
 #[must_use]
-pub fn next_ema(ratio: f64, parent_ema: f64) -> f64 {
+pub fn next_ema<F: Float>(ratio: F, parent_ema: F) -> F {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
-    let alpha = 2. / 11.;
-    alpha.mul_add(ratio, (1. - alpha) * parent_ema)
+    let alpha = F::from(2.) / F::from(11.);
+    alpha.mul_add(ratio, (F::one() - alpha) * parent_ema)
 }
 
 /// Return the index of the given value in the given slice of values.
@@ -151,9 +151,9 @@ pub(crate) fn position_of<T: Eq + Copy>(values: &[T], v: T) -> Option<usize> {
 /// An array of Vecs where each Vec represents a column of the original matrix.
 /// Note that all arrays in the input Vec must have 6 columns.
 #[must_use]
-pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
-    let all_ratios: Vec<f64> = values.iter().flat_map(|arr| arr.iter().copied()).collect();
-    let mut transposed: [Vec<f64>; 6] = Default::default();
+pub fn rows_to_cols<F: Float>(values: &[[F; 6]]) -> [Vec<F>; 6] {
+    let all_ratios = values.iter().flat_map(|arr| arr.iter().copied()).collect::<Vec<_>>();
+    let mut transposed: [Vec<F>; 6] = Default::default();
 
     for (s, element) in transposed.iter_mut().enumerate() {
         *element = all_ratios.iter().skip(s).step_by(6).copied().collect();
@@ -176,7 +176,7 @@ pub fn rows_to_cols(values: &[[f64; 6]]) -> [Vec<f64>; 6] {
 ///
 /// An array of means, where each element represents the mean of a row.
 #[must_use]
-pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
+pub fn calc_row_means<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
     values
         .iter()
         .map(|values| mean(values))
@@ -199,10 +199,10 @@ pub fn calc_row_means(values: &[Vec<f64>; 6]) -> [f64; 6] {
 ///
 /// An array of standard deviations, where each element represents the standard deviation of a row.
 #[must_use]
-pub fn calc_row_sds(values: &[Vec<f64>; 6]) -> [f64; 6] {
+pub fn calc_row_sds<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
     values
         .iter()
-        .map(|values| (variance(values, mean(values))).sqrt())
+        .map(|values| (variance(values, mean::<_, F>(values))).sqrt())
         .collect::<Vec<_>>()
         .try_into()
         .unwrap_or_else(|_| unreachable!("Array always has a length of 6."))
@@ -305,8 +305,8 @@ pub fn median<T: Number>(data: &[T]) -> Option<T> {
 /// # Arguments
 ///
 /// * `values` - The data to find the STD of.
-pub fn standard_deviation<T: Number>(values: &[T]) -> f64 {
-    variance(values, mean(values)).sqrt()
+pub fn standard_deviation<T: Number, F: Float>(values: &[T]) -> F {
+    variance(values, mean::<_, F>(values)).sqrt()
 }
 
 #[cfg(test)]
@@ -487,7 +487,7 @@ mod tests {
     #[test]
     fn test_standard_deviation() {
         let data = [2., 4., 4., 4., 5., 5., 7., 9.];
-        let std = standard_deviation::<f32>(&data);
+        let std = standard_deviation::<f32, f32>(&data);
         assert!((std - 2.).abs() < 1e-6);
     }
 }

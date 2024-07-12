@@ -4,13 +4,14 @@ members = [
     "crates/distances",
     "crates/symagen",
     "crates/results/pancakes",
+    "crates/results/chaoda",
     "pypi/distances",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-abd-clam = { version = "0.30.0", path = "crates/abd-clam" }
-distances = { version = "1.7.0", path = "crates/distances" }
+abd-clam = { version = "0.31.0", path = "crates/abd-clam" }
+distances = { version = "1.7.1", path = "crates/distances" }
 symagen = { version = "0.4.0", path = "crates/symagen" }
 
 rayon = "1.8"
@@ -20,6 +21,7 @@ mt_logger = "3.0"
 libm = "0.2"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-npy = "0.8.0"
+ordered-float = "4.2"
 
 # Python wrapper dependencies
 numpy = "0.20.0"

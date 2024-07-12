@@ -1,4 +1,4 @@
-//! A `Vertex` for a `Graph`.
+//! An extension fo the `Cluster` trait to allow for anomaly detection.
 
 use core::{
     cmp::Ordering,
@@ -16,8 +16,17 @@ use serde::{
 
 use crate::{core::cluster::Children, utils, Cluster, Dataset, Instance, PartitionCriterion, UniBall};
 
+/// An extension of the `Cluster` trait to allow for anomaly detection.
+pub trait OddBall<U: Number>: Cluster<U> {
+    /// Return the properties of the `Cluster` that are used for anomaly detection.
+    fn ratios(&self) -> Vec<f32>;
+
+    /// Return the accumulated child-parent cardinality ratio.
+    fn accumulated_cp_car_ratio(&self) -> f32;
+}
+
 /// The ratios used for anomaly detection.
-pub type Ratios = [f64; 6];
+pub type Ratios = [f32; 6];
 
 /// A `Vertex` for a `Graph`.
 #[derive(Debug, Clone)]
@@ -28,6 +37,18 @@ pub struct Vertex<U: Number> {
     ratios: Ratios,
     /// Child Vertices
     children: Option<Children<U, Self>>,
+    /// The accumulated child-parent cardinality ratio.
+    accumulated_ratio: f32,
+}
+
+impl<U: Number> OddBall<U> for Vertex<U> {
+    fn ratios(&self) -> Vec<f32> {
+        self.ratios.to_vec()
+    }
+
+    fn accumulated_cp_car_ratio(&self) -> f32 {
+        self.accumulated_ratio
+    }
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> crate::Tree<I, U, D, Vertex<U>> {
@@ -52,12 +73,15 @@ impl<U: Number> Vertex<U> {
             uni_ball,
             ratios,
             children,
+            accumulated_ratio: 1.0,
         }
     }
 
     /// Creates a new `Vertex` tree.
     pub fn from_base_tree(root: UniBall<U>) -> Self {
-        Self::from_uni_ball(root).set_child_parent_ratios([1.0; 6])
+        Self::from_uni_ball(root)
+            .set_child_parent_ratios([1.0; 6], 1.0)
+            .normalize_ratios()
     }
 
     /// Recursively creates a new `Vertex` tree.
@@ -83,12 +107,12 @@ impl<U: Number> Vertex<U> {
     /// Set the child-parent ratios.
     #[must_use]
     #[allow(clippy::similar_names)]
-    pub(crate) fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
+    fn set_child_parent_ratios(mut self, parent_ratios: Ratios, p_cp: f32) -> Self {
         let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
 
-        let c = self.cardinality().as_f64() / pc;
-        let r = self.radius().as_f64() / pr;
-        let l = self.lfd() / pl;
+        let c = self.cardinality().as_f32() / pc;
+        let r = self.radius().as_f32() / pr;
+        let l = self.lfd().as_f32() / pl;
 
         let c_ = utils::next_ema(c, pc_);
         let r_ = utils::next_ema(r, pr_);
@@ -96,6 +120,7 @@ impl<U: Number> Vertex<U> {
 
         let ratios = [c, r, l, c_, r_, l_];
         self.ratios = ratios;
+        self.accumulated_ratio = p_cp + c;
 
         if let Some(Children {
             left,
@@ -105,8 +130,8 @@ impl<U: Number> Vertex<U> {
             polar_distance,
         }) = self.children
         {
-            let left = Box::new(left.set_child_parent_ratios(ratios));
-            let right = Box::new(right.set_child_parent_ratios(ratios));
+            let left = Box::new(left.set_child_parent_ratios(ratios, self.accumulated_ratio));
+            let right = Box::new(right.set_child_parent_ratios(ratios, self.accumulated_ratio));
             let children = Children {
                 left,
                 right,
@@ -123,7 +148,7 @@ impl<U: Number> Vertex<U> {
     /// Normalizes the ratios in the subtree.
     #[must_use]
     pub fn normalize_ratios(mut self) -> Self {
-        let all_ratios = self.subtree().into_iter().map(Self::ratios).collect::<Vec<_>>();
+        let all_ratios = self.subtree().into_iter().map(|v| v.ratios).collect::<Vec<_>>();
 
         let all_ratios = utils::rows_to_cols(&all_ratios);
 
@@ -140,15 +165,15 @@ impl<U: Number> Vertex<U> {
 
     /// Recursively applies Gaussian error normalization to the ratios in the subtree.
     fn set_normalized_ratios(&mut self, means: Ratios, sds: Ratios) {
-        let normalized_ratios: Vec<_> = self
+        let normalized_ratios = self
             .ratios
             .into_iter()
             .zip(means)
             .zip(sds)
-            .map(|((value, mean), std)| (value - mean) / std.mul_add(core::f64::consts::SQRT_2, f64::EPSILON))
-            .map(libm::erf)
+            .map(|((value, mean), std)| (value - mean) / std.mul_add(core::f32::consts::SQRT_2, f32::EPSILON))
+            .map(libm::erff)
             .map(|v| (1. + v) / 2.)
-            .collect();
+            .collect::<Vec<_>>();
 
         if let Ok(normalized_ratios) = normalized_ratios.try_into() {
             self.ratios = normalized_ratios;
@@ -161,16 +186,6 @@ impl<U: Number> Vertex<U> {
             }
             None => (),
         }
-    }
-
-    /// The base `UniBall` of the `Vertex`.
-    pub const fn uni_ball(&self) -> &UniBall<U> {
-        &self.uni_ball
-    }
-
-    /// The ratios of the `Vertex`.
-    pub const fn ratios(&self) -> Ratios {
-        self.ratios
     }
 }
 

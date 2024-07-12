@@ -1,0 +1,11 @@
+[package]
+name = "results-chaoda"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+abd-clam = { workspace = true }
+distances = { workspace = true }
+rand = { workspace = true }
+ndarray = { workspace = true }
+ndarray-npy = { workspace = true }
