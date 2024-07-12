@@ -1,8 +1,8 @@
 //! Helper functions for the Needleman-Wunsch algorithm.
 
-use crate::{number::UInt, strings::Penalties};
-
 use serde::{Deserialize, Serialize};
+
+use crate::{number::UInt, strings::Penalties};
 
 /// The direction of best alignment at a given position in the DP table
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,7 +121,7 @@ pub fn trace_back_iterative<U: UInt>(
     let (mut row_i, mut col_i) = (y.len(), x.len());
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
 
-    while row_i > 0 && col_i > 0 {
+    while row_i > 0 || col_i > 0 {
         match table[row_i][col_i].1 {
             Direction::Diagonal => {
                 aligned_x.push(x[col_i - 1]);
@@ -295,7 +295,6 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
         .filter(|(_, (x, y))| x != y)
         .for_each(|(index, (c_x, c_y))| {
             let i = index - modifier;
-
             if c_x == '-' {
                 unaligned_x_to_y.push(Edit::Ins(i, c_y));
             } else if c_y == '-' {
@@ -305,8 +304,121 @@ pub fn unaligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
                 unaligned_x_to_y.push(Edit::Sub(i, c_y));
             }
         });
-
     unaligned_x_to_y
+}
+
+/// Given two unaligned strings, returns into a sequence of edits to transform the unaligned
+/// version of one into the unaligned version of the other.
+///
+/// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
+/// Expects to receive two strings which were aligned using either `trace_back_iterative` or `trace_back_recursive`.
+///
+/// # Arguments
+///
+/// * `x`: A unaligned string.
+/// * `y`: A unaligned string.
+///
+/// # Returns
+///
+/// A vector of edits to transform thenaligned version of `x` into the aligned version of `y`.
+#[must_use]
+pub fn aligned_x_to_y(x: &str, y: &str) -> Vec<Edit> {
+    let table = compute_table::<u16>(x, y, Penalties::default());
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+    let mut aligned_x_to_y: Vec<Edit> = Vec::new();
+    let mut modifier = 0;
+
+    aligned_x
+        .chars()
+        .zip(aligned_y.chars())
+        .enumerate()
+        .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
+        .for_each(|(index, (c_x, c_y))| {
+            let i = index - modifier;
+
+            if c_x == '-' {
+                aligned_x_to_y.push(Edit::Ins(i, c_y));
+            } else if c_y == '-' {
+                aligned_x_to_y.push(Edit::Del(i));
+                modifier += 1;
+            } else {
+                aligned_x_to_y.push(Edit::Sub(i, c_y));
+            }
+        });
+    aligned_x_to_y
+}
+
+/// Given two unaligned strings, returns the edits related to gaps to align the 2 strings.
+///
+/// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
+/// Uses the `traceback_iterative` ftn to align the strings.
+///
+/// # Arguments
+///
+/// * `x`: A unaligned string.
+/// * `y`: A unaligned string.
+///
+/// # Returns
+///
+/// A vector of edits to transform the aligned version of `x` into the aligned version of `y` excluding substitutions.
+#[must_use]
+pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
+    let table = compute_table::<u16>(x, y, Penalties::default());
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+    let mut aligned_x_to_y: Vec<Edit> = Vec::new();
+    let mut modifier = 0;
+    aligned_x
+        .chars()
+        .zip(aligned_y.chars())
+        .enumerate()
+        .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
+        .for_each(|(index, (c_x, c_y))| {
+            let i = index - modifier;
+
+            if c_x == '-' {
+                aligned_x_to_y.push(Edit::Ins(i, c_y));
+            } else if c_y == '-' {
+                aligned_x_to_y.push(Edit::Del(i));
+                modifier += 1;
+            }
+        });
+    aligned_x_to_y
+}
+
+/// Given two unaligned strings, returns the location of the gaps needed to align the 2 strings.
+///
+/// Requires that gaps are never aligned with gaps (our NW implementation with the default penalties ensures this).
+/// Uses the `traceback_iterative` ftn to align the strings.
+///
+/// # Arguments
+///
+/// * `x`: A unaligned string.
+/// * `y`: A unaligned string.
+///
+/// # Returns
+///
+/// An array of 2 vectors of gaps to align `x` and `y`.
+#[must_use]
+pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
+    let table = compute_table::<u16>(x, y, Penalties::default());
+    let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
+    let mut gap_indices: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
+    let mut modifier: usize = 0;
+    aligned_x
+        .chars()
+        .zip(aligned_y.chars())
+        .enumerate()
+        .filter(|(_, (aligned_x, aligned_y))| aligned_x != aligned_y)
+        .for_each(|(index, (c_x, c_y))| {
+            let i = index - modifier;
+            if c_x == '-' {
+                gap_indices[0].push(index);
+            } else if c_y == '-' {
+                gap_indices[1].push(i);
+                modifier += 1;
+            }
+        });
+    gap_indices
 }
 
 /// Applies a set of edits to a reference (unaligned) string to get a target (unaligned) string.
