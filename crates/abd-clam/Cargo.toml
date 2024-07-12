@@ -26,17 +26,15 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { version = "1.7.0", path = "../distances" }
-rayon = "1.8.0"
-serde = { version = "1.0.188", features = ["derive"] }
-mt_logger = "3.0.2"
+distances = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+mt_logger = { workspace = true }
+libm = { workspace = true }
 
 # TODO: Experiment with other serialization formats for performance.
-bincode = "1.3.3"
-
-# Only used for Dataset::choose_unique
-# TODO: Use a smaller crate so we can have a smaller binary
-rand = "0.8.5"
+bincode = "1.3"
 
 # Only used in CAKES
 # TODO: Break CAKES out into an optional feature
@@ -48,8 +46,6 @@ priority-queue = "1.3.2"
 # automl = { git = "https://github.com/nishaq503/rust-automl", branch = "updates/dependencies" }
 # TODO: Switch from automl to smartcore
 automl = "0.2.7"
-# Only used for normalizing cluster ratios for CHAODA
-libm = "0.2.7"
 
 # Only used for sharded datasets
 # TODO: Break sharded datasets out into an optional feature
@@ -58,12 +54,11 @@ smartcore = "0.2.1"
 
 
 [dev-dependencies]
-symagen = { path = "../SyMaGen" }
+symagen = { workspace = true }
 criterion = { version = "0.5.1", features = ["html_reports"] }
 tempdir = "0.3.7"
 float-cmp = "0.9.0"
 test-case = "3.2.1"
-postcard = { version = "1.0.8", features = ["alloc"] }
 statistical = "1.0.0"
 
 [[bench]]

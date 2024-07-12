@@ -195,10 +195,7 @@ macro_rules! impl_distances {
                 let mut i = 0;
                 let mut sum = $name::splat(0 as $ty);
                 while a.len() - $name::lanes() >= i {
-                    sum += $name::euclidean_inner(
-                        &a[i..i + $name::lanes()],
-                        &b[i..i + $name::lanes()],
-                    );
+                    sum += $name::euclidean_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
                     i += $name::lanes();
                 }
 
@@ -225,8 +222,7 @@ macro_rules! impl_distances {
                     $name::splat(0 as $ty),
                 ];
                 while a.len() - $name::lanes() >= i {
-                    let [xxs, yys, xys] =
-                        $name::cosine_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
+                    let [xxs, yys, xys] = $name::cosine_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
                     xx += xxs;
                     yy += yys;
                     xy += xys;

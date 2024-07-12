@@ -38,12 +38,9 @@ use crate::{
 ///
 /// * [Cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity)
 pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    let [xx, yy, xy] = x
-        .iter()
-        .zip(y.iter())
-        .fold([T::zero(); 3], |[xx, yy, xy], (&a, &b)| {
-            [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
-        });
+    let [xx, yy, xy] = x.iter().zip(y.iter()).fold([T::zero(); 3], |[xx, yy, xy], (&a, &b)| {
+        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+    });
     let [xx, yy, xy] = [U::from(xx), U::from(yy), U::from(xy)];
 
     if xx < U::epsilon() || yy < U::epsilon() || xy < U::epsilon() {
@@ -160,12 +157,9 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// * [Bray-Curtis Distance](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.braycurtis.html#scipy.spatial.distance.braycurtis)
 pub fn bray_curtis<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    let [numerator, denominator] = x
-        .iter()
-        .zip(y.iter())
-        .fold([T::zero(); 2], |[n, d], (&a, &b)| {
-            [n + a.abs_diff(b), d + (a + b).abs()]
-        });
+    let [numerator, denominator] = x.iter().zip(y.iter()).fold([T::zero(); 2], |[n, d], (&a, &b)| {
+        [n + a.abs_diff(b), d + (a + b).abs()]
+    });
 
     if denominator <= numerator {
         U::zero()

@@ -5,8 +5,7 @@ pub mod needleman_wunsch;
 use crate::number::UInt;
 
 pub use needleman_wunsch::{
-    _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y,
-    x_to_y_alignment, Edit,
+    _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y, x_to_y_alignment, Edit,
 };
 
 /// Penalties to use in the Needleman-Wunsch distance calculation.
@@ -37,11 +36,7 @@ impl<U: UInt> Default for Penalties<U> {
 impl<U: UInt> Penalties<U> {
     /// Create a set of penalties to use for the NW distance metric.
     pub const fn new(match_: U, mismatch: U, gap: U) -> Self {
-        Self {
-            match_,
-            mismatch,
-            gap,
-        }
+        Self { match_, mismatch, gap }
     }
 }
 

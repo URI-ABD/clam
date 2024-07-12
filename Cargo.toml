@@ -2,12 +2,29 @@
 members = [
     "crates/abd-clam",
     "crates/distances",
-    "crates/SyMaGen",
-    "crates/pancakes-results",
+    "crates/symagen",
+    "crates/results/pancakes",
     "pypi/distances",
-    # "py-clam",  # TODO: re-enable when we have python bindings
 ]
 resolver = "2"
+
+[workspace.dependencies]
+abd-clam = { version = "0.30.0", path = "crates/abd-clam" }
+distances = { version = "1.7.0", path = "crates/distances" }
+symagen = { version = "0.4.0", path = "crates/symagen" }
+
+rayon = "1.8"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+mt_logger = "3.0"
+libm = "0.2"
+ndarray = { version = "0.15.6", features = ["rayon"] }
+ndarray-npy = "0.8.0"
+
+# Python wrapper dependencies
+numpy = "0.20.0"
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py39"] }
+pyo3-ffi = { version = "0.20", features = ["extension-module", "abi3-py39"] }
 
 [profile.test]
 opt-level = 3

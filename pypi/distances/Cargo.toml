@@ -9,7 +9,7 @@ name = "abd_distances"
 crate-type = ["cdylib"]
 
 [dependencies]
-distances = { version = "1.6.3", path = "../../crates/distances" }
-ndarray = { version = "0.15.6", features = ["rayon"] }
-numpy = "0.20.0"
-pyo3 = { version = "0.20.2", features = ["extension-module", "abi3-py39"] }
+distances = { workspace = true }
+ndarray = { workspace = true }
+numpy = { workspace = true }
+pyo3 = { workspace = true }

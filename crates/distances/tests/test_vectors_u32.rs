@@ -45,11 +45,7 @@ fn l4(x: &[u32], y: &[u32]) -> f32 {
 }
 
 fn l_inf(x: &[u32], y: &[u32]) -> u32 {
-    x.iter()
-        .zip(y.iter())
-        .map(|(x, &y)| x.abs_diff(y))
-        .max()
-        .unwrap()
+    x.iter().zip(y.iter()).map(|(x, &y)| x.abs_diff(y)).max().unwrap()
 }
 
 #[test]
@@ -102,10 +98,7 @@ fn lp_u32() {
 
             let e_l_inf = l_inf(x, y);
             let a_l_inf = chebyshev(x, y);
-            assert_eq!(
-                e_l_inf, a_l_inf,
-                "Chebyshev: expected: {e_l_inf}, actual: {a_l_inf}",
-            );
+            assert_eq!(e_l_inf, a_l_inf, "Chebyshev: expected: {e_l_inf}, actual: {a_l_inf}",);
         }
     }
 }

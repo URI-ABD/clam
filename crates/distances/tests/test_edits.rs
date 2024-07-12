@@ -1,6 +1,5 @@
 use distances::strings::{
-    Edit, _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y,
-    x_to_y_alignment,
+    Edit, _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x_to_y_alignment,
 };
 
 #[test]
@@ -51,12 +50,7 @@ fn small_unaligned() {
     let y = "AACA-AC";
 
     let actual = unaligned_x_to_y(x, y);
-    let expected = vec![
-        Edit::Ins(1, 'A'),
-        Edit::Sub(3, 'A'),
-        Edit::Del(4),
-        Edit::Sub(5, 'C'),
-    ];
+    let expected = vec![Edit::Ins(1, 'A'), Edit::Sub(3, 'A'), Edit::Del(4), Edit::Sub(5, 'C')];
 
     assert_eq!(actual, expected);
 }
@@ -64,12 +58,7 @@ fn small_unaligned() {
 #[test]
 fn test_apply_edits() {
     let x = "ACBAAB";
-    let edits: Vec<Edit> = vec![
-        Edit::Ins(1, 'A'),
-        Edit::Sub(3, 'A'),
-        Edit::Del(4),
-        Edit::Sub(5, 'C'),
-    ];
+    let edits: Vec<Edit> = vec![Edit::Ins(1, 'A'), Edit::Sub(3, 'A'), Edit::Del(4), Edit::Sub(5, 'C')];
 
     let actual = apply_edits(x, &edits);
 
@@ -88,8 +77,7 @@ fn test_alignment() {
 
     let mut deletes: Vec<usize> = vec![3];
     let mut inserts: Vec<(usize, char)> = vec![(9, 'T')];
-    let mut substitutions: Vec<(usize, char)> =
-        vec![(0, 'T'), (1, 'T'), (3, 'C'), (5, 'T'), (7, 'G')];
+    let mut substitutions: Vec<(usize, char)> = vec![(0, 'T'), (1, 'T'), (3, 'C'), (5, 'T'), (7, 'G')];
     assert_eq!(edits_10_10.len(), 7);
     for edit in edits_10_10 {
         match edit {

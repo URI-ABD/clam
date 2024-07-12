@@ -17,15 +17,13 @@ readme = "README.md"
 publish = true
 
 [dependencies]
-rand = "0.8.5"
-serde = { version = "1.0.188", features = ["derive"] }
-# libm = "0.2.7"  # no-std
+rand = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
+symagen = { workspace = true }
 criterion = { version = "0.5.1", features = ["html_reports"] }
-symagen = { path = "../SyMaGen" }
 test-case = "3.2.1"
-
 
 [[bench]]
 name = "inv-sqrt"

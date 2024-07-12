@@ -23,12 +23,8 @@ macro_rules! build_fn {
         fn $name(a: Vector1, b: Vector1) -> PyResult<Scalar> {
             match (&a, &b) {
                 // The types are the same
-                (Vector1::F32(a), Vector1::F32(b)) => {
-                    Ok(Scalar::F32(simd::$name_f32(a.as_slice()?, b.as_slice()?)))
-                }
-                (Vector1::F64(a), Vector1::F64(b)) => {
-                    Ok(Scalar::F64(simd::$name_f64(a.as_slice()?, b.as_slice()?)))
-                }
+                (Vector1::F32(a), Vector1::F32(b)) => Ok(Scalar::F32(simd::$name_f32(a.as_slice()?, b.as_slice()?))),
+                (Vector1::F64(a), Vector1::F64(b)) => Ok(Scalar::F64(simd::$name_f64(a.as_slice()?, b.as_slice()?))),
                 (Vector1::U8(_), Vector1::U8(_)) => {
                     let a = a.cast::<f32>();
                     let a = match a.as_slice() {
@@ -108,10 +104,7 @@ macro_rules! build_fn {
                     }?;
                     Ok(Scalar::F64(simd::$name_f64(a, b)))
                 }
-                (Vector1::U64(_), _)
-                | (Vector1::I64(_), _)
-                | (_, Vector1::U64(_))
-                | (_, Vector1::I64(_)) => {
+                (Vector1::U64(_), _) | (Vector1::I64(_), _) | (_, Vector1::U64(_)) | (_, Vector1::I64(_)) => {
                     let a = a.cast::<f64>();
                     let a = match a.as_slice() {
                         Some(a) => Ok(a),
@@ -226,10 +219,7 @@ fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str) -> PyResult<Py<Py
             let metric = _parse_metric_f64(metric)?;
             Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
         }
-        (Vector2::U64(_), _)
-        | (Vector2::I64(_), _)
-        | (_, Vector2::U64(_))
-        | (_, Vector2::I64(_)) => {
+        (Vector2::U64(_), _) | (Vector2::I64(_), _) | (_, Vector2::U64(_)) | (_, Vector2::I64(_)) => {
             let a = a.cast::<f64>();
             let b = b.cast::<f64>();
             let metric = _parse_metric_f64(metric)?;

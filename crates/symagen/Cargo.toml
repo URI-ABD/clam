@@ -1,0 +1,24 @@
+[package]
+name = "symagen"
+version = "0.4.0"
+authors = [
+    "Morgan Prior <meprior424@gmail.com>",
+    "Najib Ishaq <najib_ishaq@zoho.com>",
+]
+edition = "2021"
+description = "Synthetic manifold generation."
+license = "MIT"
+readme = "README.md"
+documentation = "https://docs.rs/symagen/latest/symagen/"
+repository = "https://github.com/URI-ABD/clam"
+homepage = "https://github.com/URI-ABD/clam"
+
+# Publishing lock.
+# When you're ready to start publishing, set publish to true
+# and update the release github action.
+publish = true
+
+[dependencies]
+distances = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }

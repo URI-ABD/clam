@@ -20,15 +20,11 @@ fn bench_one<T: Number, U: Float>(
     let dimensionality = x.len();
 
     let id = BenchmarkId::new(format!("L{p}_con"), dimensionality);
-    group.bench_with_input(id, &x.len(), |b, _| {
-        b.iter_with_large_drop(|| black_box(metric(x, y)))
-    });
+    group.bench_with_input(id, &x.len(), |b, _| b.iter_with_large_drop(|| black_box(metric(x, y))));
 
     let id = BenchmarkId::new(format!("L{p}_gen"), dimensionality);
     let metric = minkowski::<T, U>(p);
-    group.bench_with_input(id, &x.len(), |b, _| {
-        b.iter_with_large_drop(|| black_box(metric(x, y)))
-    });
+    group.bench_with_input(id, &x.len(), |b, _| b.iter_with_large_drop(|| black_box(metric(x, y))));
 }
 
 fn big_lp_norms(c: &mut Criterion) {

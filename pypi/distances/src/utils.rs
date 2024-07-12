@@ -175,11 +175,7 @@ pub fn _manhattan<T: Number, U: Number>(a: &[T], b: &[T]) -> U {
     U::from(d)
 }
 
-pub fn _cdist<T, U, F>(
-    a: ndarray::ArrayView2<T>,
-    b: ndarray::ArrayView2<T>,
-    metric: F,
-) -> Vec<Vec<U>>
+pub fn _cdist<T, U, F>(a: ndarray::ArrayView2<T>, b: ndarray::ArrayView2<T>, metric: F) -> Vec<Vec<U>>
 where
     T: Number + numpy::Element,
     U: Number + numpy::Element,

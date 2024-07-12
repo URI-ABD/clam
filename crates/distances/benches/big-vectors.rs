@@ -17,9 +17,7 @@ fn bench_one<'a, T: Number, U: Number>(
     y: &[T],
     metric: fn(&[T], &[T]) -> U,
 ) {
-    group.bench_with_input(id, &x.len(), |b, _| {
-        b.iter_with_large_drop(|| black_box(metric(x, y)))
-    });
+    group.bench_with_input(id, &x.len(), |b, _| b.iter_with_large_drop(|| black_box(metric(x, y))));
 }
 
 fn big_f32(c: &mut Criterion) {
@@ -62,12 +60,8 @@ fn big_u32(c: &mut Criterion) {
     group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
     #[allow(clippy::type_complexity)]
-    let metrics: &[(&str, fn(&[u32], &[u32]) -> f32)] = &[
-        ("L2", euclidean),
-        ("L3", l3_norm),
-        ("L4", l4_norm),
-        ("Cosine", cosine),
-    ];
+    let metrics: &[(&str, fn(&[u32], &[u32]) -> f32)] =
+        &[("L2", euclidean), ("L3", l3_norm), ("L4", l4_norm), ("Cosine", cosine)];
 
     for d in 2..=7 {
         let dimensionality = 10_u32.pow(d) as usize;
