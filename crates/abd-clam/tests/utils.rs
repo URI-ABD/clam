@@ -80,7 +80,7 @@ pub fn compute_recall<T: Number>(mut hits: Vec<(usize, T)>, mut linear_hits: Vec
 
     let mut num_common = 0;
     while let (Some(&hit), Some(&linear_hit)) = (hits.peek(), linear_hits.peek()) {
-        if (hit - linear_hit).abs() < T::epsilon() {
+        if (hit - linear_hit).abs() < T::EPSILON {
             num_common += 1;
             hits.next();
             linear_hits.next();

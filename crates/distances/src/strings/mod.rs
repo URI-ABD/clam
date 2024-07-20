@@ -26,9 +26,9 @@ pub struct Penalties<U: UInt> {
 impl<U: UInt> Default for Penalties<U> {
     fn default() -> Self {
         Self {
-            match_: U::zero(),
-            mismatch: U::one(),
-            gap: U::one(),
+            match_: U::ZERO,
+            mismatch: U::ONE,
+            gap: U::ONE,
         }
     }
 }

@@ -124,7 +124,7 @@ pub trait Cluster<U: Number>:
 
     /// Whether the `Cluster` is a singleton, i.e. it contains only one instance or has a radius of zero.
     fn is_singleton(&self) -> bool {
-        self.cardinality() == 1 || self.radius() == U::zero()
+        self.cardinality() == 1 || self.radius() == U::ZERO
     }
 
     /// The indices of the instances in the `Cluster` after the dataset has been reordered.

@@ -30,7 +30,7 @@ use crate::number::{Float, Int};
 /// ```
 pub fn jaccard<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     if x.is_empty() || y.is_empty() {
-        return U::one();
+        return U::ONE;
     }
 
     let x = x.iter().copied().collect::<BTreeSet<_>>();
@@ -39,11 +39,11 @@ pub fn jaccard<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let intersection = x.intersection(&y).count();
 
     if intersection == x.len() && intersection == y.len() {
-        U::zero()
+        U::ZERO
     } else {
         let intersection = U::from(intersection);
         let union = U::from(x.union(&y).count());
-        U::one() - intersection / union
+        U::ONE - intersection / union
     }
 }
 
@@ -72,7 +72,7 @@ pub fn jaccard<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// ```
 pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     if x.is_empty() || y.is_empty() {
-        return U::one();
+        return U::ONE;
     }
 
     let x = x.iter().copied().collect::<BTreeSet<_>>();
@@ -81,11 +81,11 @@ pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let intersection_size = U::from(x.intersection(&y).count());
     let size = U::from(x.len() + y.len());
 
-    if size == U::zero() {
-        return U::one();
+    if size == U::ZERO {
+        return U::ONE;
     }
 
-    U::one() - (U::from(2) * intersection_size / size)
+    U::ONE - ((U::ONE + U::ONE) * intersection_size / size)
 }
 
 /// Kulsinski distance.
@@ -120,7 +120,7 @@ pub fn dice<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// ```
 pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     if x.is_empty() || y.is_empty() {
-        return U::one();
+        return U::ONE;
     }
 
     let x = x.iter().copied().collect::<BTreeSet<_>>();
@@ -131,8 +131,8 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let not_equal = union - intersection;
 
     if intersection == x.len() && intersection == y.len() {
-        U::zero()
+        U::ZERO
     } else {
-        U::one() - (U::from(intersection) / U::from(union + not_equal))
+        U::ONE - (U::from(intersection) / U::from(union + not_equal))
     }
 }

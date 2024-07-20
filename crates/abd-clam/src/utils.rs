@@ -47,7 +47,7 @@ pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
         .iter()
         .map(|&x| F::from(x))
         .map(|x| (x, x.powi(2)))
-        .fold((F::zero(), F::zero()), |(sum, sum_squares), (x, xx)| {
+        .fold((F::ZERO, F::ZERO), |(sum, sum_squares), (x, xx)| {
             (sum + x, sum_squares + xx)
         });
 
@@ -94,16 +94,16 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
 ///
 /// * `radius` - The radius used to compute the distances.
 /// * `distances` - The distances to compute the local fractal dimension of.
-pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
-    if radius == T::zero() {
-        1.
+pub(crate) fn compute_lfd<T: Number, F: Float>(radius: T, distances: &[T]) -> F {
+    if radius == T::ZERO {
+        F::ONE
     } else {
-        let r_2 = radius.as_f64() / 2.;
-        let half_count = distances.iter().filter(|&&d| d.as_f64() <= r_2).count();
+        let r_2 = F::from(radius) / F::from(2);
+        let half_count = distances.iter().filter(|&&d| F::from(d) <= r_2).count();
         if half_count > 0 {
-            (distances.len().as_f64() / half_count.as_f64()).log2()
+            (F::from(distances.len()) / F::from(half_count)).log2()
         } else {
-            1.
+            F::ONE
         }
     }
 }
@@ -121,8 +121,8 @@ pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
 #[must_use]
 pub fn next_ema<F: Float>(ratio: F, parent_ema: F) -> F {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
-    let alpha = F::from(2.) / F::from(11.);
-    alpha.mul_add(ratio, (F::one() - alpha) * parent_ema)
+    let alpha = F::from(2) / F::from(11);
+    alpha.mul_add(ratio, (F::ONE - alpha) * parent_ema)
 }
 
 /// Return the index of the given value in the given slice of values.

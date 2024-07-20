@@ -88,7 +88,7 @@ pub fn are_we_there_yet<U: UInt>(
     alphabet: &[char],
 ) -> String {
     let mut new_string = seed_string.to_string();
-    let mut distance = U::zero();
+    let mut distance = U::ZERO;
     let lev = levenshtein_custom(penalties);
 
     while distance < target_distance {
@@ -125,8 +125,8 @@ pub fn create_batch<U: UInt>(
         .into_par_iter()
         .map(|_| {
             // Randomly sample a distance between 1 and `target_distance`, inclusive
-            let d = UInt::as_u64(min_distance)
-                + rand::random::<u64>() % UInt::as_u64(max_distance - min_distance + U::one());
+            let d =
+                UInt::as_u64(min_distance) + rand::random::<u64>() % UInt::as_u64(max_distance - min_distance + U::ONE);
             are_we_there_yet(seed_string, penalties, U::from(d), alphabet)
         })
         .collect::<Vec<_>>();
@@ -171,7 +171,7 @@ pub fn generate_clumped_data<U: UInt>(
         .iter()
         .enumerate()
         .flat_map(|(i, seed)| {
-            create_batch(seed, penalties, U::one(), clump_radius, alphabet, clump_size)
+            create_batch(seed, penalties, U::ONE, clump_radius, alphabet, clump_size)
                 .into_iter()
                 .enumerate()
                 .map(move |(j, string)| (format!("{i}x{j}"), string))

@@ -78,7 +78,7 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the inverse square root of a `Float`, i.e. `1.0 / self.sqrt()`.
     #[must_use]
     fn inv_sqrt(self) -> Self {
-        Self::one() / self.sqrt()
+        Self::ONE / self.sqrt()
     }
 
     /// Returns `self` raised to the power of `exp`.
@@ -88,6 +88,10 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// The error function.
     #[must_use]
     fn erf(self) -> Self;
+
+    /// Returns the logarithm of `self` with base 2.
+    #[must_use]
+    fn log2(self) -> Self;
 }
 
 impl Float for f32 {
@@ -99,6 +103,15 @@ impl Float for f32 {
 
     fn cbrt(self) -> Self {
         Self::cbrt(self)
+                fn powf(self, exp: Self) -> Self {
+                    Self::powf(self, exp)
+                }
+
+                fn log2(self) -> Self {
+                    Self::log2(self)
+                }
+            }
+        )*
     }
 
     fn powf(self, exp: Self) -> Self {

@@ -177,7 +177,7 @@ pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Ou
     ///
     /// `true` if the instances are equal, `false` otherwise
     fn are_instances_equal(&self, left: usize, right: usize) -> bool {
-        self.one_to_one(left, right) == U::zero()
+        self.one_to_one(left, right) == U::ZERO
     }
 
     /// Returns a vector of distances.
@@ -236,7 +236,7 @@ pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Ou
     /// A vector of vectors of distances between all pairs of instances at `indices`
     fn pairwise(&self, indices: &[usize]) -> Vec<Vec<U>> {
         let n = indices.len();
-        let mut matrix = vec![vec![U::zero(); n]; n];
+        let mut matrix = vec![vec![U::ZERO; n]; n];
 
         for (i, &p) in indices.iter().enumerate() {
             let index_pairs = indices.iter().skip(i + 1).map(|&q| (p, q)).collect::<Vec<_>>();

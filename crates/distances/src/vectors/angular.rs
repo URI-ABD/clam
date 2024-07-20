@@ -38,17 +38,17 @@ use crate::{
 ///
 /// * [Cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity)
 pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    let [xx, yy, xy] = x.iter().zip(y.iter()).fold([T::zero(); 3], |[xx, yy, xy], (&a, &b)| {
+    let [xx, yy, xy] = x.iter().zip(y.iter()).fold([T::ZERO; 3], |[xx, yy, xy], (&a, &b)| {
         [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
     });
     let [xx, yy, xy] = [U::from(xx), U::from(yy), U::from(xy)];
 
-    if xx < U::epsilon() || yy < U::epsilon() || xy < U::epsilon() {
-        U::one()
+    if xx < U::EPSILON || yy < U::EPSILON || xy < U::EPSILON {
+        U::ONE
     } else {
-        let d = U::one() - xy * (xx * yy).inv_sqrt();
-        if d < U::epsilon() {
-            U::zero()
+        let d = U::ONE - xy * (xx * yy).inv_sqrt();
+        if d < U::EPSILON {
+            U::ZERO
         } else {
             d
         }
@@ -130,7 +130,7 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
         .map(|&v| U::from(v))
         .zip(y.iter().map(|&v| U::from(v)))
         .map(|(a, b)| a.abs_diff(b) / (a.abs() + b.abs()))
-        .fold(U::zero(), |acc, v| acc + v)
+        .fold(U::ZERO, |acc, v| acc + v)
 }
 
 /// Computes the Bray-Curtis distance between two vectors.
@@ -157,12 +157,13 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// * [Bray-Curtis Distance](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.braycurtis.html#scipy.spatial.distance.braycurtis)
 pub fn bray_curtis<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    let [numerator, denominator] = x.iter().zip(y.iter()).fold([T::zero(); 2], |[n, d], (&a, &b)| {
-        [n + a.abs_diff(b), d + (a + b).abs()]
-    });
+    let [numerator, denominator] = x
+        .iter()
+        .zip(y.iter())
+        .fold([T::ZERO; 2], |[n, d], (&a, &b)| [n + a.abs_diff(b), d + (a + b).abs()]);
 
     if denominator <= numerator {
-        U::zero()
+        U::ZERO
     } else {
         U::from(numerator) / U::from(denominator)
     }

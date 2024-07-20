@@ -2,6 +2,8 @@
 
 use crate::Number;
 
+use super::{Addition, Multiplication};
+
 /// A `Number` that can be used as a boolean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Bool(u8);
@@ -17,6 +19,30 @@ impl Bool {
     #[must_use]
     pub const fn as_bool(&self) -> bool {
         self.0 == 1
+    }
+}
+
+impl Addition for Bool {
+    const ZERO: Self = Self(0);
+}
+
+impl Multiplication for Bool {
+    const ONE: Self = Self(1);
+
+    fn mul_add(self, a: Self, b: Self) -> Self {
+        Self(self.0.mul_add(a.0, b.0))
+    }
+
+    fn mul_add_assign(&mut self, a: Self, b: Self) {
+        self.0.mul_add_assign(a.0, b.0);
+    }
+
+    fn powi(self, _: i32) -> Self {
+        if self.0 == 0 {
+            Self(0)
+        } else {
+            Self(1)
+        }
     }
 }
 
@@ -107,27 +133,15 @@ impl core::ops::SubAssign for Bool {
 }
 
 impl Number for Bool {
-    fn zero() -> Self {
-        Self(0)
-    }
-
-    fn one() -> Self {
-        Self(1)
-    }
-
-    fn mul_add(self, a: Self, b: Self) -> Self {
-        Self(self.0.mul_add(a.0, b.0))
-    }
-
-    fn mul_add_assign(&mut self, a: Self, b: Self) {
-        self.0.mul_add_assign(a.0, b.0);
-    }
+    const MAX: Self = Self(1);
+    const MIN: Self = Self(0);
+    const EPSILON: Self = Self(1);
 
     fn from<T: Number>(n: T) -> Self {
-        if n == T::zero() {
-            Self(0)
+        if n == T::ZERO {
+            Self::ZERO
         } else {
-            Self(1)
+            Self::ONE
         }
     }
 
@@ -145,26 +159,6 @@ impl Number for Bool {
 
     fn as_i64(self) -> i64 {
         self.0.as_i64()
-    }
-
-    fn abs(self) -> Self {
-        self
-    }
-
-    fn abs_diff(self, other: Self) -> Self {
-        if self.as_bool() == other.as_bool() {
-            Self(0)
-        } else {
-            Self(1)
-        }
-    }
-
-    fn powi(self, exp: i32) -> Self {
-        if exp == 0 {
-            Self(1)
-        } else {
-            self
-        }
     }
 
     fn num_bytes() -> usize {
@@ -185,10 +179,6 @@ impl Number for Bool {
 
     fn to_be_bytes(self) -> Vec<u8> {
         self.to_le_bytes()
-    }
-
-    fn epsilon() -> Self {
-        Self(0)
     }
 
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {

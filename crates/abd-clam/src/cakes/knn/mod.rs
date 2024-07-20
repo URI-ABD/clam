@@ -223,7 +223,7 @@ impl<I: Hash + Eq + Copy, U: Number> Hits<I, U> {
     ///
     /// If the queue is empty, returns the result of calling `default`.
     pub fn peek(&self) -> U {
-        self.queue.peek().map_or_else(U::zero, |(_, &OrdNumber(d))| d)
+        self.queue.peek().map_or(U::ZERO, |(_, &OrdNumber(d))| d)
     }
 
     /// Pushes a hit onto the queue.

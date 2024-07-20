@@ -56,7 +56,7 @@ where
 /// the closest a point in a given cluster could possibly be to the query.
 pub fn d_min<U: Number, C: Cluster<U>>(c: &C, d: U) -> U {
     if d < c.radius() {
-        U::zero()
+        U::ZERO
     } else {
         d - c.radius()
     }

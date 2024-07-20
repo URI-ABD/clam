@@ -46,10 +46,10 @@ pub enum Edit {
 /// best alignment at each position.
 pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<Vec<(U, Direction)>> {
     // Initializing table; the inner vectors represent rows in the table.
-    let mut table = vec![vec![(U::zero(), Direction::Diagonal); x.len() + 1]; y.len() + 1];
+    let mut table = vec![vec![(U::ZERO, Direction::Diagonal); x.len() + 1]; y.len() + 1];
 
     // The top-left cell starts with a total penalty of zero and no direction.
-    table[0][0] = (U::zero(), Direction::Diagonal);
+    table[0][0] = (U::ZERO, Direction::Diagonal);
 
     // Initialize left-most column of distance values.
     for (i, row) in table.iter_mut().enumerate().skip(1) {

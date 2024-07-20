@@ -188,7 +188,7 @@ pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
     abs_diff_iter(x, y)
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less))
-        .unwrap_or_else(T::zero)
+        .unwrap_or(T::ZERO)
 }
 
 /// General (Lp-norm)^p between two vectors.
@@ -249,5 +249,5 @@ pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= 1e-12);
 /// ```
 pub fn minkowski<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
-    move |x: &[T], y: &[T]| minkowski_p::<T, U>(p)(x, y).powf(U::one() / U::from(p))
+    move |x: &[T], y: &[T]| minkowski_p::<T, U>(p)(x, y).powf(U::ONE / U::from(p))
 }

@@ -107,8 +107,8 @@ fn assert_subtree_equal<I: Instance, U: Number, M: Instance>(
     let (raw_radial, rec_radial) = (&raw_data[raw_cluster.arg_radial()], &rec_data[rec_cluster.arg_radial()]);
 
     // Assert centers and radials are equal
-    assert_eq!(metric(raw_center, rec_center), U::zero(), "Centers are not equal.");
-    assert_eq!(metric(raw_radial, rec_radial), U::zero(), "Radials are not equal.");
+    assert_eq!(metric(raw_center, rec_center), U::ZERO, "Centers are not equal.");
+    assert_eq!(metric(raw_radial, rec_radial), U::ZERO, "Radials are not equal.");
 
     // Get children and assert they are of equal optionality
     let (raw_children, rec_children) = (&raw_cluster.children(), &rec_cluster.children());

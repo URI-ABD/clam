@@ -46,7 +46,7 @@ impl<'a, U: Number, C: Cluster<U>> Grain<'a, U, C> {
         Self::Cluster {
             c,
             d_max: d + r,
-            d_min: if d > r { d - r } else { U::zero() },
+            d_min: if d > r { d - r } else { U::ZERO },
             multiplicity: c.cardinality() - 1,
             is_leaf: c.is_leaf(),
         }

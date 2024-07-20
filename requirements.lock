@@ -8,5 +8,5 @@
 #   with-sources: false
 
 -e file:pypi/distances
-numpy==1.26.4
+numpy==2.0.0
     # via abd-distances

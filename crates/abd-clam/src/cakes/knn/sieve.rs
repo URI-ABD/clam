@@ -197,6 +197,7 @@ impl<'a, U: Number, C: Cluster<U>> Grain<'a, U, C> {
         }
     }
 }
+
 /// K-Nearest Neighbor search using a thresholds approach with no separate centers.
 ///
 /// # Arguments
@@ -218,11 +219,9 @@ where
     C: Cluster<U>,
 {
     let data = tree.data();
-    let c = &tree.root;
-    let d = c.distance_to_instance(data, query);
 
-    let mut grains = vec![Grain::new_cluster(c, d)];
-    let [mut insiders, mut non_insiders]: [Vec<_>; 2];
+    let d = tree.root.distance_to_instance(data, query);
+    let mut grains = vec![Grain::new_cluster(&tree.root, d)];
 
     loop {
         // The threshold is the minimum distance, so far, which guarantees that
@@ -231,12 +230,10 @@ where
         let threshold = grains[i].d();
 
         // Remove grains which are outside the threshold.
-        non_insiders = grains.split_off(i + 1);
-        insiders = grains;
-        let non_insiders = non_insiders.into_iter().filter(|g| !g.is_outside(threshold));
+        let non_insiders = grains.split_off(i + 1).into_iter().filter(|g| !g.is_outside(threshold));
 
         // Separate grains into hits and clusters.
-        let (clusters, mut hits) = insiders
+        let (clusters, mut hits) = grains
             .into_iter()
             .chain(non_insiders)
             .partition::<Vec<_>, _>(|g| matches!(g, Grain::Cluster { .. }));

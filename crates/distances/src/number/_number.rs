@@ -3,47 +3,20 @@
 //! We calculate distances over collections of `Number`s.
 //! Distance values are also represented as `Number`s.
 
-use core::{
-    fmt::{Debug, Display},
-    iter::Sum,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
-};
+use core::fmt::{Debug, Display};
+
+use super::{Addition, Multiplication};
 
 /// Collections of `Number`s can be used to calculate distances.
-pub trait Number:
-    Add<Output = Self>
-    + AddAssign<Self>
-    + Sum<Self>
-    + Sub<Output = Self>
-    + SubAssign<Self>
-    + Mul<Output = Self>
-    + MulAssign<Self>
-    + Div<Output = Self>
-    + DivAssign<Self>
-    + Rem<Output = Self>
-    + RemAssign<Self>
-    + Copy
-    + Clone
-    + PartialEq
-    + PartialOrd
-    + Send
-    + Sync
-    + Debug
-    + Display
-    + Default
-{
-    /// Returns the additive identity.
-    fn zero() -> Self;
+pub trait Number: Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default {
+    /// The maximum possible value.
+    const MAX: Self;
 
-    /// Returns the multiplicative identity.
-    fn one() -> Self;
+    /// The minimum possible value.
+    const MIN: Self;
 
-    /// Returns `self + a * b`.
-    #[must_use]
-    fn mul_add(self, a: Self, b: Self) -> Self;
-
-    /// Replaces `self` with `self + a * b`.
-    fn mul_add_assign(&mut self, a: Self, b: Self);
+    /// The difference between `ONE` and the next largest representable number.
+    const EPSILON: Self;
 
     /// Casts a number to `Self`. This may be a lossy conversion.
     fn from<T: Number>(n: T) -> Self;
@@ -59,18 +32,6 @@ pub trait Number:
 
     /// Returns the number as a `i64`. This may be a lossy conversion.
     fn as_i64(self) -> i64;
-
-    /// Returns the absolute value of a `Number`.
-    #[must_use]
-    fn abs(self) -> Self;
-
-    /// Returns the absolute difference between two `Number`s.
-    #[must_use]
-    fn abs_diff(self, other: Self) -> Self;
-
-    /// Returns `self` raised to the power of `exp`.
-    #[must_use]
-    fn powi(self, exp: i32) -> Self;
 
     /// Returns the number of bytes used to represent a `Number`.
     #[must_use]
@@ -94,36 +55,14 @@ pub trait Number:
         core::any::type_name::<Self>()
     }
 
-    /// Returns the epsilon value for the type.
-    ///
-    /// For floating point types, this is the difference between 1.0 and the next
-    /// largest representable number.
-    ///
-    /// For integer types, this is 0.
-    #[must_use]
-    fn epsilon() -> Self;
-
     /// Returns a random `Number`.
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self;
 }
 
 impl Number for f32 {
-    fn zero() -> Self {
-        0.0
-    }
-
-    fn one() -> Self {
-        1.0
-    }
-
-    fn mul_add(self, a: Self, b: Self) -> Self {
-        // libm::fmaf(self, a, b)  // no-std
-        self.mul_add(a, b)
-    }
-
-    fn mul_add_assign(&mut self, a: Self, b: Self) {
-        *self = self.mul_add(a, b);
-    }
+    const MAX: Self = Self::MAX;
+    const MIN: Self = Self::MIN;
+    const EPSILON: Self = Self::EPSILON;
 
     fn as_f32(self) -> f32 {
         self
@@ -148,20 +87,6 @@ impl Number for f32 {
         self as i64
     }
 
-    fn abs(self) -> Self {
-        // libm::fabsf(self)  // no-std
-        self.abs()
-    }
-
-    fn abs_diff(self, other: Self) -> Self {
-        (self - other).abs()
-    }
-
-    fn powi(self, exp: i32) -> Self {
-        // libm::powf(self, exp.as_f32())  // no-std
-        self.powi(exp)
-    }
-
     fn num_bytes() -> usize {
         core::mem::size_of::<Self>()
     }
@@ -186,32 +111,15 @@ impl Number for f32 {
         self.to_be_bytes().to_vec()
     }
 
-    fn epsilon() -> Self {
-        Self::EPSILON
-    }
-
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
         rng.gen()
     }
 }
 
 impl Number for f64 {
-    fn zero() -> Self {
-        0.0
-    }
-
-    fn one() -> Self {
-        1.0
-    }
-
-    fn mul_add(self, a: Self, b: Self) -> Self {
-        // libm::fma(self, a, b)  // no-std
-        self.mul_add(a, b)
-    }
-
-    fn mul_add_assign(&mut self, a: Self, b: Self) {
-        *self = self.mul_add(a, b);
-    }
+    const MAX: Self = Self::MAX;
+    const MIN: Self = Self::MIN;
+    const EPSILON: Self = Self::EPSILON;
 
     fn from<T: Number>(n: T) -> Self {
         n.as_f64()
@@ -236,20 +144,6 @@ impl Number for f64 {
         self as i64
     }
 
-    fn abs(self) -> Self {
-        // libm::fabs(self)  // no-std
-        self.abs()
-    }
-
-    fn abs_diff(self, other: Self) -> Self {
-        (self - other).abs()
-    }
-
-    fn powi(self, exp: i32) -> Self {
-        // libm::pow(self, exp.as_f64())  // no-std
-        self.powi(exp)
-    }
-
     fn num_bytes() -> usize {
         core::mem::size_of::<Self>()
     }
@@ -274,10 +168,6 @@ impl Number for f64 {
         self.to_be_bytes().to_vec()
     }
 
-    fn epsilon() -> Self {
-        Self::EPSILON
-    }
-
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
         rng.gen()
     }
@@ -289,21 +179,9 @@ macro_rules! impl_number_iint {
         $(
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss, clippy::cast_lossless)]
             impl Number for $ty {
-                fn zero() -> Self {
-                    0
-                }
-
-                fn one() -> Self {
-                    1
-                }
-
-                fn mul_add(self, a: Self, b: Self) -> Self {
-                    self + a * b
-                }
-
-                fn mul_add_assign(&mut self, a: Self, b: Self) {
-                    *self += a * b;
-                }
+                const MAX: Self = <$ty>::MAX;
+                const MIN: Self = <$ty>::MIN;
+                const EPSILON: Self = 1;
 
                 fn from<T: Number>(n: T) -> Self {
                     n.as_i64() as $ty
@@ -325,18 +203,6 @@ macro_rules! impl_number_iint {
                     self as i64
                 }
 
-                fn abs(self) -> Self {
-                    <$ty>::abs(self)
-                }
-
-                fn abs_diff(self, other: Self) -> Self {
-                    <$ty>::abs(self - other)
-                }
-
-                fn powi(self, exp: i32) -> Self {
-                    <$ty>::pow(self, exp as u32)
-                }
-
                 fn num_bytes() -> usize {
                     core::mem::size_of::<$ty>()
                 }
@@ -361,10 +227,6 @@ macro_rules! impl_number_iint {
                     self.to_be_bytes().to_vec()
                 }
 
-                fn epsilon() -> Self {
-                    0
-                }
-
                 fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
                     rng.gen()
                 }
@@ -381,21 +243,9 @@ macro_rules! impl_number_uint {
         $(
             #[allow(clippy::cast_possible_truncation, clippy::cast_lossless, clippy::cast_precision_loss)]
             impl Number for $ty {
-                fn zero() -> Self {
-                    0
-                }
-
-                fn one() -> Self {
-                    1
-                }
-
-                fn mul_add(self, a: Self, b: Self) -> Self {
-                    self + a * b
-                }
-
-                fn mul_add_assign(&mut self, a: Self, b: Self) {
-                    *self += a * b;
-                }
+                const MAX: Self = <$ty>::MAX;
+                const MIN: Self = <$ty>::MIN;
+                const EPSILON: Self = 1;
 
                 fn from<T: Number>(n: T) -> Self {
                     n.as_u64() as $ty
@@ -417,20 +267,6 @@ macro_rules! impl_number_uint {
                 fn as_i64(self) -> i64 {
                     self as i64
                 }
-
-                fn abs(self) -> Self {
-                    self
-                }
-
-                fn abs_diff(self, other: Self) -> Self {
-                    self.abs_diff(other)
-                }
-
-                #[allow(clippy::cast_sign_loss)]
-                fn powi(self, exp: i32) -> Self {
-                    <$ty>::pow(self, exp as u32)
-                }
-
                 fn num_bytes() -> usize {
                     core::mem::size_of::<$ty>()
                 }
@@ -453,10 +289,6 @@ macro_rules! impl_number_uint {
 
                 fn to_be_bytes(self) -> Vec<u8> {
                     self.to_be_bytes().to_vec()
-                }
-
-                fn epsilon() -> Self {
-                    0
                 }
 
                 fn next_random<R: rand::Rng>(rng: &mut R) -> Self {

@@ -22,6 +22,9 @@ mod core;
 pub mod pancakes;
 pub mod utils;
 
+pub mod new_cakes;
+pub mod new_core;
+
 pub use crate::{
     cakes::{knn, rnn, Cakes},
     // chaoda::graph,
