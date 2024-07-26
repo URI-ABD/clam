@@ -64,6 +64,9 @@ impl_uint!(u8, u16, u32, u64, u128, usize);
 
 /// Sub-trait of `Number` for all floating point types.
 pub trait Float: Number + core::ops::Neg<Output = Self> {
+    /// The square-root of 2.
+    const SQRT_2: Self;
+
     /// Returns the square root of a `Float`.
     #[must_use]
     fn sqrt(self) -> Self;
@@ -81,27 +84,48 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns `self` raised to the power of `exp`.
     #[must_use]
     fn powf(self, exp: Self) -> Self;
+
+    /// The error function.
+    #[must_use]
+    fn erf(self) -> Self;
 }
 
-/// Macro to implement `UIntNumber` for all unsigned integer types.
-macro_rules! impl_float {
-    ($($ty:ty),*) => {
-        $(
-            impl Float for $ty {
-                fn sqrt(self) -> Self {
-                    Self::sqrt(self)
-                }
+impl Float for f32 {
+    const SQRT_2: Self = core::f32::consts::SQRT_2;
 
-                fn cbrt(self) -> Self {
-                    Self::cbrt(self)
-                }
+    fn sqrt(self) -> Self {
+        Self::sqrt(self)
+    }
 
-                fn powf(self, exp: Self) -> Self {
-                    Self::powf(self, exp)
-                }
-            }
-        )*
+    fn cbrt(self) -> Self {
+        Self::cbrt(self)
+    }
+
+    fn powf(self, exp: Self) -> Self {
+        Self::powf(self, exp)
+    }
+
+    fn erf(self) -> Self {
+        libm::erff(self)
     }
 }
 
-impl_float!(f32, f64);
+impl Float for f64 {
+    const SQRT_2: Self = core::f64::consts::SQRT_2;
+
+    fn sqrt(self) -> Self {
+        Self::sqrt(self)
+    }
+
+    fn cbrt(self) -> Self {
+        Self::cbrt(self)
+    }
+
+    fn powf(self, exp: Self) -> Self {
+        Self::powf(self, exp)
+    }
+
+    fn erf(self) -> Self {
+        libm::erf(self)
+    }
+}

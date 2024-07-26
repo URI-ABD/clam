@@ -51,6 +51,18 @@ impl<I: Instance, U: Number, D: Dataset<I, U>, C: Cluster<U>> Tree<I, U, D, C> {
         }
     }
 
+    /// Constructs a new `Tree` from a given root `Cluster` and dataset.
+    pub fn from_root_and_data(root: C, data: D) -> Self {
+        let depth = root.max_leaf_depth();
+        Self {
+            data,
+            root,
+            depth,
+            _i: PhantomData,
+            _u: PhantomData,
+        }
+    }
+
     /// Recursively partitions the root `Cluster` using the given criteria.
     ///
     /// # Arguments

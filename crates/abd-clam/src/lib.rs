@@ -23,8 +23,8 @@ pub mod pancakes;
 pub mod utils;
 
 pub use crate::{
-    cakes::Cakes,
-    chaoda::graph,
+    cakes::{knn, rnn, Cakes},
+    // chaoda::graph,
     core::{
         cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
         dataset::{Dataset, Instance, VecDataset},
@@ -33,4 +33,4 @@ pub use crate::{
 };
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.30.0";
+pub const VERSION: &str = "0.31.0";
