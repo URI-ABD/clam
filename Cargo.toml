@@ -3,7 +3,7 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/symagen",
-    "crates/results/pancakes",
+    # "crates/results/pancakes",
     "crates/results/chaoda",
     "pypi/distances",
 ]

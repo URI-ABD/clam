@@ -181,7 +181,7 @@ fn par_leaf_into_hits<I, U, D, C>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        new_cakes::search::tests::gen_grid_data,
+        cakes::search::tests::gen_grid_data,
         new_core::{
             cluster::{Ball, Partition},
             LinearSearch,

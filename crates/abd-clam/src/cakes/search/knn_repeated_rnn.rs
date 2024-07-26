@@ -102,7 +102,7 @@ fn mean_lfd<U: Number, C: Cluster<U>>(confirmed: &[(&C, U)], straddlers: &[(&C, 
 #[cfg(test)]
 mod tests {
     use crate::{
-        new_cakes::search::tests::gen_grid_data,
+        cakes::search::tests::gen_grid_data,
         new_core::{
             cluster::{Ball, Partition},
             LinearSearch, ParLinearSearch,

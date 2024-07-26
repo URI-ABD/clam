@@ -6,6 +6,7 @@ mod knn_repeated_rnn;
 pub mod rnn_clustered;
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::new_core::{cluster::Ball, Cluster, Dataset, LinearSearch, ParDataset, ParLinearSearch};
 
@@ -25,10 +26,23 @@ pub trait Searchable<U: Number>: Cluster<U> + Sized {
     fn search<I, D: Dataset<I, U>>(&self, data: &D, query: &I, algorithm: Algorithm<U>) -> Vec<(usize, U)> {
         algorithm.search(data, self, query)
     }
+
+    /// Search for several `queries` in the `data` using the given `algorithm`.
+    fn batch_search<I, D: Dataset<I, U>>(
+        &self,
+        data: &D,
+        queries: &[I],
+        algorithm: Algorithm<U>,
+    ) -> Vec<Vec<(usize, U)>> {
+        queries
+            .iter()
+            .map(|query| self.search(data, query, algorithm))
+            .collect()
+    }
 }
 
 /// A `Cluster` that can be searched in parallel.
-pub trait ParSearchable<U: Number>: Cluster<U> + Sized + Send + Sync {
+pub trait ParSearchable<U: Number>: Searchable<U> + Send + Sync {
     /// Parallel version of `Searchable::search`.
     fn par_search<I: Send + Sync, D: ParDataset<I, U>>(
         &self,
@@ -37,6 +51,37 @@ pub trait ParSearchable<U: Number>: Cluster<U> + Sized + Send + Sync {
         algorithm: Algorithm<U>,
     ) -> Vec<(usize, U)> {
         algorithm.par_search(data, self, query)
+    }
+
+    /// Parallel version of `Searchable::batch_search`. This only provides
+    /// parallelism for the queries, not the search itself.
+    fn par_batch_search<I: Send + Sync, D: ParDataset<I, U>>(
+        &self,
+        data: &D,
+        queries: &[I],
+        algorithm: Algorithm<U>,
+    ) -> Vec<Vec<(usize, U)>> {
+        queries
+            .par_iter()
+            .map(|query| self.search(data, query, algorithm))
+            .collect()
+    }
+
+    /// Parallel version of `ParSearchable::par_search`. This provides
+    /// parallelism for both the queries and the search itself.
+    fn par_batch_par_search<I: Send + Sync, D: ParDataset<I, U>>(
+        &self,
+        data: &D,
+        queries: &[I],
+        algorithm: Algorithm<U>,
+    ) -> Vec<Vec<(usize, U)>>
+    where
+        U: Send + Sync,
+    {
+        queries
+            .par_iter()
+            .map(|query| self.par_search(data, query, algorithm))
+            .collect()
     }
 }
 

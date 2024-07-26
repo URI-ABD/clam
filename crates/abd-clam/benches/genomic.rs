@@ -1,65 +1,108 @@
+use abd_clam::{
+    new_core::{
+        cluster::{Ball, ParPartition},
+        Cluster, FlatVec, Metric,
+    },
+    Algorithm, ParSearchable, Searchable,
+};
 use criterion::*;
+use rand::prelude::*;
 
-use symagen::random_data;
-
-use abd_clam::{cakes::rnn, Cakes, PartitionCriteria, VecDataset};
-
-#[allow(clippy::ptr_arg)]
-fn hamming(x: &String, y: &String) -> u16 {
-    distances::strings::hamming(x, y)
-}
-
-#[allow(clippy::ptr_arg)]
-fn levenshtein(x: &String, y: &String) -> u16 {
-    distances::strings::levenshtein(x, y)
-}
-
-#[allow(clippy::type_complexity)]
-const METRICS: &[(&str, fn(&String, &String) -> u16)] = &[("hamming", hamming), ("levenshtein", levenshtein)];
+const METRICS: &[(&str, fn(&String, &String) -> u16)] = &[
+    ("levenshtein", |x: &String, y: &String| {
+        distances::strings::levenshtein(x, y)
+    }),
+    ("needleman-wunsch", |x: &String, y: &String| {
+        distances::strings::nw_distance(x, y)
+    }),
+];
 
 fn genomic(c: &mut Criterion) {
-    let seed = 42;
-    let cardinality = 10_000;
-    let min_len = 1000;
-    let max_len = 1000;
-    let alphabet = "ACGT";
-    let num_queries = 10;
+    let seed_length = 100;
+    let alphabet = "ACTGN".chars().collect::<Vec<_>>();
+    let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
+    let penalties = distances::strings::Penalties::default();
+    let num_clumps = 16;
+    let clump_size = 16;
+    let clump_radius = 3_u16;
+    let (_, data) = symagen::random_edits::generate_clumped_data(
+        &seed_string,
+        penalties,
+        &alphabet,
+        num_clumps,
+        clump_size,
+        clump_radius,
+    )
+    .into_iter()
+    .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    println!("Building dataset ...");
-    let data = random_data::random_string(cardinality, min_len, max_len, alphabet, seed);
+    let queries = {
+        let mut indices = (0..data.len()).collect::<Vec<_>>();
+        indices.shuffle(&mut rand::thread_rng());
+        indices
+            .into_iter()
+            .take(10)
+            .map(|i| data[i].clone())
+            .collect::<Vec<_>>()
+    };
 
-    let queries = random_data::random_string(num_queries, min_len, max_len, alphabet, seed + 1);
-    let queries = queries.iter().collect::<Vec<_>>();
+    let seed = Some(42);
+    for &(metric_name, distance_fn) in METRICS {
+        let metric = Metric::new(distance_fn, true);
+        let mut dataset = FlatVec::new(data.clone(), metric).unwrap();
 
-    for &(metric_name, metric) in METRICS {
-        let mut group = c.benchmark_group(format!("genomic-{metric_name}"));
-        group
-            .sampling_mode(SamplingMode::Flat)
-            .throughput(Throughput::Elements(num_queries as u64))
-            .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Linear));
+        let criteria = |c: &Ball<u16>| c.cardinality() > 1;
+        let (root, _) = Ball::par_new_tree_and_permute(&mut dataset, &criteria, seed);
 
-        println!("Building cakes for {metric_name} ...");
-        let data_name = format!("{metric_name}-{cardinality}");
-        let dataset = VecDataset::new(data_name, data.clone(), metric, true);
-        let criteria = PartitionCriteria::default();
-        let cakes = Cakes::new(dataset, Some(seed), &criteria);
+        let mut group = c.benchmark_group(format!("genomic-{}", metric_name));
 
-        let radii = [50, 25, 10, 1];
-        println!("Running benchmark for {metric_name} ...");
-        for radius in radii {
-            let id = BenchmarkId::new("Clustered", radius);
+        for radius in [4, 8, 16] {
+            let id = BenchmarkId::new("RnnClustered", radius);
             group.bench_with_input(id, &radius, |b, &radius| {
-                b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radius, rnn::Algorithm::Clustered));
+                b.iter_with_large_drop(|| root.batch_search(&dataset, &queries, Algorithm::RnnClustered(radius)));
+            });
+
+            let id = BenchmarkId::new("ParRnnClustered", radius);
+            group.bench_with_input(id, &radius, |b, &radius| {
+                b.iter_with_large_drop(|| {
+                    root.par_batch_par_search(&dataset, &queries, Algorithm::RnnClustered(radius))
+                });
             });
         }
 
-        group.sample_size(10);
-        let id = BenchmarkId::new("Linear", radii[0]);
-        group.bench_with_input(id, &radii[0], |b, _| {
-            b.iter_with_large_drop(|| cakes.batch_rnn_search(&queries, radii[0], rnn::Algorithm::Linear));
-        });
+        for k in [1, 10, 20] {
+            let id = BenchmarkId::new("KnnRepeatedRnn", k);
+            group.bench_with_input(id, &k, |b, &k| {
+                b.iter_with_large_drop(|| root.batch_search(&dataset, &queries, Algorithm::KnnRepeatedRnn(k, 2)));
+            });
 
-        group.finish();
+            let id = BenchmarkId::new("ParKnnRepeatedRnn", k);
+            group.bench_with_input(id, &k, |b, &k| {
+                b.iter_with_large_drop(|| {
+                    root.par_batch_par_search(&dataset, &queries, Algorithm::KnnRepeatedRnn(k, 2))
+                });
+            });
+
+            let id = BenchmarkId::new("KnnBreadthFirst", k);
+            group.bench_with_input(id, &k, |b, &k| {
+                b.iter_with_large_drop(|| root.batch_search(&dataset, &queries, Algorithm::KnnBreadthFirst(k)));
+            });
+
+            let id = BenchmarkId::new("ParKnnBreadthFirst", k);
+            group.bench_with_input(id, &k, |b, &k| {
+                b.iter_with_large_drop(|| root.par_batch_par_search(&dataset, &queries, Algorithm::KnnBreadthFirst(k)));
+            });
+
+            let id = BenchmarkId::new("KnnDepthFirst", k);
+            group.bench_with_input(id, &k, |b, &k| {
+                b.iter_with_large_drop(|| root.batch_search(&dataset, &queries, Algorithm::KnnDepthFirst(k)));
+            });
+
+            let id = BenchmarkId::new("ParKnnDepthFirst", k);
+            group.bench_with_input(id, &k, |b, &k| {
+                b.iter_with_large_drop(|| root.par_batch_par_search(&dataset, &queries, Algorithm::KnnDepthFirst(k)));
+            });
+        }
     }
 }
 

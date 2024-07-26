@@ -59,15 +59,3 @@ statistical = "1.0.0"
 [[bench]]
 name = "genomic"
 harness = false
-
-[[bench]]
-name = "knn-search"
-harness = false
-
-[[bench]]
-name = "knn-vs-rnn"
-harness = false
-
-[[bench]]
-name = "rnn-search"
-harness = false
