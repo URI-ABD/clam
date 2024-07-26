@@ -4,12 +4,12 @@ mod vertex;
 
 use distances::Number;
 
-use crate::ClusterAdaptor;
+use crate::Cluster;
 
 pub use vertex::Vertex;
 
 /// A cluster that is used for anomaly detection.
-pub trait OddBall<U: Number>: ClusterAdaptor<U> {
+pub trait OddBall<U: Number>: Cluster<U> {
     /// Return the properties of the `Cluster` that are used for anomaly detection.
     fn ratios(&self) -> Vec<f32>;
 

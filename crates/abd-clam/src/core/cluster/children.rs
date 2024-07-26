@@ -28,6 +28,12 @@ impl<U: Number, C> Children<U, C> {
         }
     }
 
+    /// Decomposes the `Children` into its components.
+    pub(crate) fn take(self) -> (Vec<C>, Vec<usize>, Vec<Vec<U>>) {
+        let children = self.children.into_iter().map(|c| *c).collect();
+        (children, self.arg_poles, self.polar_distances)
+    }
+
     /// Returns the children of the `Cluster`.
     #[must_use]
     pub fn clusters(&self) -> Vec<&C> {

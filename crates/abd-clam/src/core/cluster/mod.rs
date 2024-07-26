@@ -1,6 +1,6 @@
 //! A `Cluster` is a collection of "similar" instances in a dataset.
 
-mod adaptors;
+mod adapter;
 mod ball;
 mod children;
 mod index_store;
@@ -13,8 +13,7 @@ use distances::Number;
 
 use super::{Dataset, MetricSpace, ParDataset};
 
-#[allow(clippy::module_name_repetitions)]
-pub use adaptors::ClusterAdaptor;
+pub use adapter::{Adapter, Params};
 pub use ball::Ball;
 pub use children::Children;
 pub use index_store::IndexStore;
@@ -126,6 +125,21 @@ pub trait Cluster<U: Number>: Debug + PartialOrd {
     /// - The remaining instances in the `Cluster`.
     /// - The pairwise distances between the extrema.
     fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>);
+
+    /// Returns all `Cluster`s in the subtree of this `Cluster`, in depth-first order.
+    fn subtree<'a>(&'a self) -> Vec<&'a Self>
+    where
+        Self: Sized,
+        U: 'a,
+    {
+        let mut clusters = vec![self];
+        if let Some(children) = self.children() {
+            for child in children.clusters() {
+                clusters.extend(child.subtree());
+            }
+        }
+        clusters
+    }
 
     /// Whether the `Cluster` is a leaf in the tree.
     fn is_leaf(&self) -> bool

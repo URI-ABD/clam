@@ -32,6 +32,21 @@ pub struct Ball<U: Number> {
     children: Option<Children<U, Self>>,
 }
 
+impl<U: Number> Ball<U> {
+    /// Removes the `Children` from the `Ball` and returns them.
+    ///
+    /// If the `IndexStore` is `LeafOnly`, then it will be converted to
+    /// `EveryCluster`.
+    pub fn take_children(mut self) -> (Self, Option<Children<U, Self>>) {
+        if matches!(self.index_store, IndexStore::LeafOnly(_)) {
+            self.index_store = IndexStore::EveryCluster(self.indices());
+        }
+        let children = self.children;
+        self.children = None;
+        (self, children)
+    }
+}
+
 impl<U: Number> Debug for Ball<U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
