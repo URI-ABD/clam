@@ -12,7 +12,10 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 ### Cakes: Nearest Neighbor Search
 
 ```rust
-use abd_clam::{cakes::knn, cakes::rnn, Cakes, PartitionCriteria, VecDataset};
+use abd_clam::{
+    Ball, Cluster, FlatVec, Metric, Partition,
+    cakes::{Algorithm, Searchable},
+};
 use rand::prelude::*;
 
 /// The distance function with with to perform clustering and search.
@@ -44,70 +47,48 @@ let data: Vec<Vec<f32>> = symagen::random_data::random_tabular(
 // We will generate some random labels for each point.
 let labels: Vec<bool> = data.iter().map(|v| v[0] > 0.0).collect();
 
+// We have to create a `Metric` object to encapsulate the distance function and its properties.
+let metric = Metric::new(euclidean, false);
+
+// We can create a `Dataset` object. We make it mutable here so we can reorder it after building the tree.
+let dataset = FlatVec::new(data, metric).unwrap();
+
+// We can assign the labels as metadata to the dataset.
+let dataset = dataset.with_metadata(labels).unwrap();
+
+// We make the dataset mutable so we can reorder it after building the tree.
+let mut dataset = dataset;
+
+// We define the criteria for building the tree to partition the `Cluster`s until each contains a single point.
+let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+
+// Now we create a tree and reorder the dataset.
+let (root, _) = Ball::new_tree_and_permute(&mut dataset, &criteria, Some(seed));
+
 // We will use the origin as our query.
 let query: Vec<f32> = vec![0.0; dimensionality];
 
-// RNN search will use a radius of 0.05.
-let radius: f32 = 0.05;
+// We can now perform RNN search on the tree.
+let alg = Algorithm::RnnClustered(0.05);
+let rnn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
 
-// KNN search will find the 10 nearest neighbors.
+// KNN search is also supported.
 let k = 10;
 
-// The name of the dataset.
-let name = "demo".to_string();
+// The `KnnRepeatedRnn` algorithm starts RNN search with a small radius and increases it until it finds `k` neighbors.
+let alg = Algorithm::KnnRepeatedRnn(k, 2.0);
+let knn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
 
-// We will assume that our distance function is cheap to compute.
-let is_metric_expensive = false;
+// The `KnnBreadthFirst` algorithm searches the tree in a breadth-first manner.
+let alg = Algorithm::KnnBreadthFirst(k);
+let knn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
 
-// We create the dataset from the data and distance function.
-let dataset = VecDataset::new(
-    name,
-    data,
-    euclidean,
-    is_metric_expensive,
-);
-
-// At this point, `dataset` has taken ownership of the `data`.
-
-// The default metadata is the indices of the points in the dataset. We will,
-// however, use our random labels as metadata.
-let dataset = dataset
-    .assign_metadata(labels)
-    .unwrap_or_else(|_| unreachable!("We made sure that there are as make labels as points."));
-
-// At this point, `dataset` has also taken ownership of `labels`.
-
-// We will use the default partition criteria for this example. This will partition
-// the data until each Cluster contains a single unique point.
-let criteria = PartitionCriteria::<f32>::default();
-
-// The Cakes struct provides the functionality described in the paper.
-// We use a single shard here because the demo data is small.
-let model = Cakes::new(dataset, Some(seed), &criteria);
-// This line performs a non-trivial amount of work. #understatement
-
-// At this point, the dataset has been reordered to improve search performance.
-
-// We can now perform RNN search on the model.
-let rnn_results: Vec<(usize, f32)> = model.rnn_search(
-    &query,
-    radius,
-    rnn::Algorithm::default(),
-);
-
-// We can also perform KNN search on the model.
-let knn_results: Vec<(usize, f32)> = model.knn_search(
-    &query,
-    k,
-    knn::Algorithm::default(),
-);
-
-// Both results are a Vec of 2-tuples where the first element is the index of
-// the point in the dataset and the second element is the distance from the
-// query point.
+// The `KnnDepthFirst` algorithm searches the tree in a depth-first manner.
+let alg = Algorithm::KnnDepthFirst(k);
+let knn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
 
 // We can borrow the reordered labels from the model.
-let labels: &[bool] = model.shards()[0].metadata();
+let labels: &[bool] = dataset.metadata();
 
 // We can use the results to get the labels of the points that are within the
 // radius of the query point.
@@ -116,8 +97,6 @@ let rnn_labels: Vec<bool> = rnn_results.iter().map(|&(i, _)| labels[i]).collect(
 // We can use the results to get the labels of the points that are the k nearest
 // neighbors of the query point.
 let knn_labels: Vec<bool> = knn_results.iter().map(|&(i, _)| labels[i]).collect();
-
-// TODO: Add snippets for saving/loading models.
 ```
 
 ### Chaoda: Anomaly Detection
