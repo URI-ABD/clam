@@ -9,7 +9,7 @@ use crate::{
     utils,
 };
 
-use super::{children::Children, Cluster, IndexStore, ParPartition, Partition, LFD};
+use super::{Children, Cluster, IndexStore, ParCluster, ParPartition, Partition, LFD};
 
 /// A metric-`Ball` is a collection of instances that are within a certain
 /// distance of a center.
@@ -41,7 +41,7 @@ impl<U: Number> Debug for Ball<U> {
             .field("lfd", &self.lfd)
             .field("arg_center", &self.arg_center)
             .field("arg_radial", &self.arg_radial)
-            .field("indices", &self.index_store)
+            .field("index_store", &self.index_store)
             .field("children", &self.children.is_some())
             .finish()
     }
@@ -84,8 +84,8 @@ impl<U: Number> Cluster<U> for Ball<U> {
         let samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let n = (cardinality.as_f64().sqrt()) as usize;
+            #[allow(clippy::cast_possible_truncation)]
+            let n = cardinality.as_f64().sqrt().as_u64() as usize;
             Dataset::choose_unique(data, indices, n, seed)
         };
 
@@ -168,9 +168,15 @@ impl<U: Number> Cluster<U> for Ball<U> {
     {
         self.children.as_mut()
     }
-}
 
-impl<U: Number> Partition<U> for Ball<U> {
+    fn set_children(mut self, children: Children<U, Self>) -> Self
+    where
+        Self: Sized,
+    {
+        self.children = Some(children);
+        self
+    }
+
     fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>) {
         let indices = self.index_store().indices(self);
         let l_distances = Dataset::one_to_many(data, self.arg_radial, &indices);
@@ -189,17 +195,9 @@ impl<U: Number> Partition<U> for Ball<U> {
 
         (extrema, remaining_instances, distances)
     }
-
-    fn set_children(mut self, children: Children<U, Self>) -> Self
-    where
-        Self: Sized,
-    {
-        self.children = Some(children);
-        self
-    }
 }
 
-impl<U: Number> ParPartition<U> for Ball<U> {
+impl<U: Number> ParCluster<U> for Ball<U> {
     fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
         data: &D,
         indices: &[usize],
@@ -218,8 +216,8 @@ impl<U: Number> ParPartition<U> for Ball<U> {
         let samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let n = (cardinality.as_f64().sqrt()) as usize;
+            #[allow(clippy::cast_possible_truncation)]
+            let n = cardinality.as_f64().sqrt().as_u64() as usize;
             ParDataset::par_choose_unique(data, indices, n, seed)
         };
 
@@ -267,6 +265,10 @@ impl<U: Number> ParPartition<U> for Ball<U> {
         (extrema, remaining_instances, distances)
     }
 }
+
+impl<U: Number> Partition<U> for Ball<U> {}
+
+impl<U: Number> ParPartition<U> for Ball<U> {}
 
 #[cfg(test)]
 mod tests {
@@ -396,13 +398,13 @@ mod tests {
         assert_eq!(left.arg_center(), 1);
         assert_eq!(left.radius(), 4);
         assert!([0, 2].contains(&left.arg_radial()));
-        assert_eq!(left.indices_post_permutation(), 0..3);
+        assert_eq!(left.indices(), &[0, 1, 2]);
 
         assert_eq!(right.cardinality(), 2);
         assert_eq!(right.radius(), 8);
         assert!([3, 4].contains(&right.arg_center()));
         assert!([3, 4].contains(&right.arg_radial()));
-        assert_eq!(right.indices_post_permutation(), 3..5);
+        assert_eq!(right.indices(), &[3, 4]);
 
         true
     }

@@ -17,7 +17,7 @@
 #![doc = include_str!("../README.md")]
 
 pub mod cakes;
-// pub mod chaoda;
+pub mod chaoda;
 mod core;
 // pub mod pancakes;
 pub mod utils;
@@ -25,8 +25,8 @@ pub mod utils;
 pub use crate::{
     cakes::Shardable,
     core::{
-        Ball, Children, Cluster, Dataset, FlatVec, LinearSearch, Metric, MetricSpace, ParDataset, ParLinearSearch,
-        ParMetricSpace, ParPartition, Partition, Permutable, SizedHeap, LFD,
+        Ball, Children, Cluster, ClusterAdaptor, Dataset, FlatVec, LinearSearch, Metric, MetricSpace, ParDataset,
+        ParLinearSearch, ParMetricSpace, ParPartition, Partition, Permutable, SizedHeap, LFD,
     },
 };
 

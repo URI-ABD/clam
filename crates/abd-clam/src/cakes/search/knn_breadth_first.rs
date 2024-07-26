@@ -17,7 +17,7 @@ where
     let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
 
-    let d = root.distance_to_instance(data, query);
+    let d = root.distance_to_center(data, query);
     candidates.push((Reverse(d_max(root, d)), root));
 
     while !candidates.is_empty() {
@@ -30,9 +30,9 @@ where
 
         for (d, c) in leaves {
             if c.is_singleton() {
-                c.indices_post_permutation().for_each(|i| hits.push((d, i)));
+                c.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
             } else {
-                data.query_to_many(query, &c.indices_post_permutation().collect::<Vec<_>>())
+                c.distances(data, query)
                     .into_iter()
                     .for_each(|(i, d)| hits.push((d, i)));
             }
@@ -44,7 +44,7 @@ where
                 .unwrap_or_else(|| unreachable!("This is only called on non-leaves."))
                 .clusters()
                 .into_iter()
-                .map(|c| (c, c.distance_to_instance(data, query)))
+                .map(|c| (c, c.distance_to_center(data, query)))
                 .for_each(|(c, d)| candidates.push((Reverse(d_max(c, d)), c)));
         }
     }
@@ -63,7 +63,7 @@ where
     let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
 
-    let d = root.distance_to_instance(data, query);
+    let d = root.distance_to_center(data, query);
     candidates.push((Reverse(d_max(root, d)), root));
 
     while !candidates.is_empty() {
@@ -76,9 +76,9 @@ where
 
         for (d, c) in leaves {
             if c.is_singleton() {
-                c.indices_post_permutation().for_each(|i| hits.push((d, i)));
+                c.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
             } else {
-                data.par_query_to_many(query, &c.indices_post_permutation().collect::<Vec<_>>())
+                c.par_distances(data, query)
                     .into_iter()
                     .for_each(|(i, d)| hits.push((d, i)));
             }
@@ -88,7 +88,7 @@ where
         let distances = parents
             .into_par_iter()
             .flat_map(|(_, p)| p.children().unwrap_or_else(|| unreachable!()).clusters())
-            .map(|c| (c, c.distance_to_instance(data, query)))
+            .map(|c| (c, c.distance_to_center(data, query)))
             .collect::<Vec<_>>();
         distances
             .into_iter()

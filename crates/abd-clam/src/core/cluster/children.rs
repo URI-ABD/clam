@@ -2,11 +2,9 @@
 
 use distances::Number;
 
-use super::Cluster;
-
 /// The `Children` of a `Cluster`.
 #[derive(Debug)]
-pub struct Children<U: Number, C: Cluster<U>> {
+pub struct Children<U: Number, C> {
     /// The children of the `Cluster`.
     children: Vec<Box<C>>,
     /// The indices of the poles used to partition the `Cluster`.
@@ -15,7 +13,7 @@ pub struct Children<U: Number, C: Cluster<U>> {
     polar_distances: Vec<Vec<U>>,
 }
 
-impl<U: Number, C: Cluster<U>> Children<U, C> {
+impl<U: Number, C> Children<U, C> {
     /// Creates a new `Children`.
     ///
     /// # Arguments

@@ -58,7 +58,7 @@ where
     while !candidates.is_empty() {
         (terminal, non_terminal) = candidates
             .into_iter()
-            .map(|c| (c, c.distance_to_instance(data, query)))
+            .map(|c| (c, c.distance_to_center(data, query)))
             .filter(|&(c, d)| d <= (c.radius() + radius))
             .partition(|&(c, d)| (c.radius() + d) < radius);
         confirmed.append(&mut terminal);
@@ -95,7 +95,7 @@ where
     while !candidates.is_empty() {
         (terminal, non_terminal) = candidates
             .into_par_iter()
-            .map(|c| (c, c.distance_to_instance(data, query)))
+            .map(|c| (c, c.distance_to_center(data, query)))
             .filter(|&(c, d)| d <= (c.radius() + radius))
             .partition(|&(c, d)| (c.radius() + d) < radius);
         confirmed.append(&mut terminal);
@@ -146,21 +146,18 @@ where
 {
     let hits = confirmed.into_iter().flat_map(|(c, d)| {
         if c.is_singleton() {
-            c.indices_post_permutation().zip(core::iter::repeat(d)).collect()
+            c.repeat_distance(d)
         } else {
-            data.query_to_many(query, &c.indices_post_permutation().collect::<Vec<_>>())
+            c.distances(data, query)
         }
     });
 
-    let indices = straddlers
+    let distances = straddlers
         .into_iter()
-        .flat_map(|(c, _)| c.indices_post_permutation())
-        .collect::<Vec<_>>();
+        .flat_map(|(c, _)| c.distances(data, query))
+        .filter(|&(_, d)| d <= radius);
 
-    let distances = data.query_to_many(query, &indices);
-
-    hits.chain(distances.into_iter().filter(|&(_, d)| d <= radius))
-        .collect()
+    hits.chain(distances).collect()
 }
 
 /// Parallelized version of the leaf search.
@@ -181,21 +178,20 @@ where
         .into_par_iter()
         .flat_map(|(c, d)| {
             if c.is_singleton() {
-                c.indices_post_permutation().zip(core::iter::repeat(d)).collect()
+                c.repeat_distance(d)
             } else {
-                data.par_query_to_many(query, &c.indices_post_permutation().collect::<Vec<_>>())
+                c.par_distances(data, query)
             }
         })
         .collect::<Vec<_>>();
 
-    let indices = straddlers
+    let distances = straddlers
         .into_par_iter()
-        .flat_map(|(c, _)| c.indices_post_permutation())
+        .flat_map(|(c, _)| c.par_distances(data, query))
+        .filter(|&(_, d)| d <= radius)
         .collect::<Vec<_>>();
 
-    let distances = data.par_query_to_many(query, &indices);
-
-    hits.extend(distances.into_iter().filter(|&(_, d)| d <= radius));
+    hits.extend(distances);
     hits
 }
 

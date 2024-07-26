@@ -16,7 +16,7 @@ where
     let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
 
-    let d = root.distance_to_instance(data, query);
+    let d = root.distance_to_center(data, query);
     candidates.push((Reverse(d_min(root, d)), root));
 
     while !hits.is_full()  // We do not have enough hits.
@@ -45,7 +45,7 @@ where
     let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
 
-    let d = root.distance_to_instance(data, query);
+    let d = root.distance_to_center(data, query);
     candidates.push((Reverse(d_min(root, d)), root));
 
     while !hits.is_full()  // We do not have enough hits.
@@ -92,7 +92,7 @@ where
             .unwrap_or_else(|| unreachable!("elements are non-leaves"))
             .clusters();
         for c in children {
-            let d = c.distance_to_instance(data, query);
+            let d = c.distance_to_center(data, query);
             candidates.push((Reverse(d_min(c, d)), c));
         }
     }
@@ -112,13 +112,11 @@ fn leaf_into_hits<I, U, D, C>(
     let (d, leaf) = candidates
         .pop()
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c));
-    let indices = leaf.indices_post_permutation();
     if leaf.is_singleton() {
-        indices.zip(std::iter::repeat(d)).for_each(|(i, d)| hits.push((d, i)));
+        leaf.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
     } else {
-        indices
+        leaf.distances(data, query)
             .into_iter()
-            .map(|i| (i, data.query_to_one(query, i)))
             .for_each(|(i, d)| hits.push((d, i)));
     };
 }
@@ -167,12 +165,9 @@ fn par_leaf_into_hits<I, U, D, C>(
         .pop()
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c));
     if leaf.is_singleton() {
-        leaf.indices_post_permutation()
-            .zip(std::iter::repeat(d))
-            .for_each(|(i, d)| hits.push((d, i)));
+        leaf.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
     } else {
-        let indices = leaf.indices_post_permutation().collect::<Vec<_>>();
-        data.par_query_to_many(query, &indices)
+        leaf.par_distances(data, query)
             .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
     };
