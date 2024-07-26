@@ -224,7 +224,7 @@ where
     let y_path = path.join(format!("{}_labels.npy", name));
     let reader = std::fs::File::open(y_path).map_err(|e| e.to_string())?;
     let y_data = Array1::<Y>::read_npy(reader).map_err(|e| e.to_string())?;
-    let y_data = y_data.mapv(|y| y == Y::one()).to_vec();
+    let y_data = y_data.mapv(|y| y == Y::ONE).to_vec();
 
     Ok((x_data, y_data))
 }

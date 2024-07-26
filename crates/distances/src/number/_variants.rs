@@ -103,15 +103,6 @@ impl Float for f32 {
 
     fn cbrt(self) -> Self {
         Self::cbrt(self)
-                fn powf(self, exp: Self) -> Self {
-                    Self::powf(self, exp)
-                }
-
-                fn log2(self) -> Self {
-                    Self::log2(self)
-                }
-            }
-        )*
     }
 
     fn powf(self, exp: Self) -> Self {
@@ -120,6 +111,10 @@ impl Float for f32 {
 
     fn erf(self) -> Self {
         libm::erff(self)
+    }
+
+    fn log2(self) -> Self {
+        Self::log2(self)
     }
 }
 
@@ -140,5 +135,9 @@ impl Float for f64 {
 
     fn erf(self) -> Self {
         libm::erf(self)
+    }
+
+    fn log2(self) -> Self {
+        Self::log2(self)
     }
 }

@@ -79,9 +79,9 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
     values
         .iter()
         .map(|&v| v - mean)
-        .map(|v| v / ((F::epsilon() + sd) * F::SQRT_2))
+        .map(|v| v / ((F::EPSILON + sd) * F::SQRT_2))
         .map(F::erf)
-        .map(|v| (F::one() + v) / F::from(2.))
+        .map(|v| (F::ONE + v) / F::from(2.))
         .collect()
 }
 
