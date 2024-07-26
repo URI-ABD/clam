@@ -1,9 +1,5 @@
 use abd_clam::{
-    new_core::{
-        cluster::{Ball, ParPartition},
-        Cluster, FlatVec, Metric,
-    },
-    Algorithm, ParSearchable, Searchable,
+    cakes::Algorithm, cakes::ParSearchable, cakes::Searchable, Ball, Cluster, FlatVec, Metric, ParPartition,
 };
 use criterion::*;
 use rand::prelude::*;

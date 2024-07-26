@@ -3,7 +3,7 @@
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::new_core::{Cluster, Dataset, ParDataset};
+use crate::core::{Cluster, Dataset, ParDataset};
 
 /// Clustered search for the ranged nearest neighbors of a query.
 pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, radius: U) -> Vec<(usize, U)>
@@ -201,7 +201,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::new_core::{
+    use crate::core::{
         cluster::{Ball, Partition},
         LinearSearch,
     };

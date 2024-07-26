@@ -4,7 +4,7 @@ use core::cmp::Reverse;
 
 use distances::Number;
 
-use crate::new_core::{Cluster, Dataset, ParDataset, SizedHeap};
+use crate::core::{Cluster, Dataset, ParDataset, SizedHeap};
 
 /// K-Nearest Neighbors search using a Depth First sieve.
 pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize, U)>
@@ -182,7 +182,7 @@ fn par_leaf_into_hits<I, U, D, C>(
 mod tests {
     use crate::{
         cakes::search::tests::gen_grid_data,
-        new_core::{
+        core::{
             cluster::{Ball, Partition},
             LinearSearch,
         },

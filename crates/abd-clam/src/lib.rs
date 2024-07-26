@@ -16,21 +16,17 @@
 )]
 #![doc = include_str!("../README.md")]
 
-mod cakes;
-pub mod chaoda;
+pub mod cakes;
+// pub mod chaoda;
 mod core;
 // pub mod pancakes;
 pub mod utils;
 
-pub mod new_core;
-
 pub use crate::{
-    cakes::{Algorithm, ParSearchable, Searchable, Shardable},
-    // chaoda::graph,
+    cakes::Shardable,
     core::{
-        cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
-        dataset::{Dataset, Instance, VecDataset},
-        tree::Tree,
+        Ball, Children, Cluster, Dataset, FlatVec, LinearSearch, Metric, MetricSpace, ParDataset, ParLinearSearch,
+        ParMetricSpace, ParPartition, Partition, Permutable, SizedHeap, LFD,
     },
 };
 

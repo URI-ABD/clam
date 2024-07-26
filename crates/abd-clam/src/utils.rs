@@ -125,16 +125,6 @@ pub fn next_ema<F: Float>(ratio: F, parent_ema: F) -> F {
     alpha.mul_add(ratio, (F::ONE - alpha) * parent_ema)
 }
 
-/// Return the index of the given value in the given slice of values.
-pub(crate) fn position_of<T: Eq + Copy>(values: &[T], v: T) -> Option<usize> {
-    values
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|&(_, x)| x == v)
-        .map(|(i, _)| i)
-}
-
 /// Transpose a matrix represented as an array of arrays (slices) to an array of Vecs.
 ///
 /// Given an array of arrays (slices), where each slice represents a row and each element

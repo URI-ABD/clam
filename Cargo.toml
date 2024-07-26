@@ -4,7 +4,7 @@ members = [
     "crates/distances",
     "crates/symagen",
     # "crates/results/pancakes",
-    "crates/results/chaoda",
+    # "crates/results/chaoda",
     "pypi/distances",
 ]
 resolver = "2"

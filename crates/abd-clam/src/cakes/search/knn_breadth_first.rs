@@ -5,7 +5,7 @@ use core::cmp::Reverse;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::new_core::{Cluster, Dataset, ParDataset, SizedHeap};
+use crate::core::{Cluster, Dataset, ParDataset, SizedHeap};
 
 /// K-Nearest Neighbors search using a Breadth First sieve.
 pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize, U)>
@@ -158,7 +158,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::new_core::{
+    use crate::core::{
         cluster::{Ball, Partition},
         LinearSearch,
     };

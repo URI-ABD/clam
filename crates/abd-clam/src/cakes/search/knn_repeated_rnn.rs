@@ -2,7 +2,7 @@
 
 use distances::{number::Multiplication, Number};
 
-use crate::new_core::{cluster::LFD, Cluster, Dataset, ParDataset, SizedHeap};
+use crate::core::{cluster::LFD, Cluster, Dataset, ParDataset, SizedHeap};
 
 use super::rnn_clustered::{leaf_search, par_leaf_search, par_tree_search, tree_search};
 
@@ -103,7 +103,7 @@ fn mean_lfd<U: Number, C: Cluster<U>>(confirmed: &[(&C, U)], straddlers: &[(&C, 
 mod tests {
     use crate::{
         cakes::search::tests::gen_grid_data,
-        new_core::{
+        core::{
             cluster::{Ball, Partition},
             LinearSearch, ParLinearSearch,
         },

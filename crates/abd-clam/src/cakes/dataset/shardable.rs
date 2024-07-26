@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::new_core::{Dataset, FlatVec, Metric};
+use crate::core::{Dataset, FlatVec, Metric};
 
 /// A dataset that can be sharded into multiple smaller datasets.
 pub trait Shardable<I, U: Number>: Dataset<I, U> {

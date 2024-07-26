@@ -8,7 +8,7 @@ pub mod rnn_clustered;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::new_core::{cluster::Ball, Cluster, Dataset, LinearSearch, ParDataset, ParLinearSearch};
+use crate::core::{cluster::Ball, Cluster, Dataset, LinearSearch, ParDataset, ParLinearSearch};
 
 /// A `Cluster` that can be searched.
 pub trait Searchable<U: Number>: Cluster<U> + Sized {
@@ -182,7 +182,7 @@ pub mod tests {
     use rand::prelude::*;
     use test_case::test_case;
 
-    use crate::new_core::{cluster::ParPartition, FlatVec, Metric};
+    use crate::core::{cluster::ParPartition, FlatVec, Metric};
 
     use super::*;
 

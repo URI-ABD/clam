@@ -5,7 +5,7 @@ use core::fmt::Debug;
 use distances::Number;
 
 use crate::{
-    new_core::{Dataset, ParDataset},
+    core::{Dataset, ParDataset},
     utils,
 };
 
@@ -270,7 +270,7 @@ impl<U: Number> ParPartition<U> for Ball<U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::new_core::{FlatVec, Metric, Permutable};
+    use crate::core::{FlatVec, Metric, Permutable};
 
     use super::*;
 
