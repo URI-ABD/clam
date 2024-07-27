@@ -6,7 +6,7 @@ use distances::Number;
 
 use crate::Cluster;
 
-pub use vertex::Vertex;
+pub use vertex::{Ratios, Vertex};
 
 /// A cluster that is used for anomaly detection.
 pub trait OddBall<U: Number>: Cluster<U> {

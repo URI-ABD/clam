@@ -2,6 +2,8 @@
 
 use core::fmt::Debug;
 
+use std::hash::Hash;
+
 use distances::Number;
 
 use crate::{
@@ -13,6 +15,7 @@ use super::{Children, Cluster, IndexStore, ParCluster, ParPartition, Partition, 
 
 /// A metric-`Ball` is a collection of instances that are within a certain
 /// distance of a center.
+#[derive(Clone)]
 pub struct Ball<U: Number> {
     /// Parameters used for creating the `Ball`.
     depth: usize,
@@ -82,6 +85,16 @@ impl<U: Number> Ord for Ball<U> {
             .cmp(&other.depth)
             .then_with(|| self.index_store.cmp(&other.index_store))
             .then_with(|| self.cardinality.cmp(&other.cardinality))
+    }
+}
+
+impl<U: Number> Hash for Ball<U> {
+    #[allow(unused_variables)]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        todo!()
+        // self.depth.hash(state);
+        // self.index_store.hash(state);
+        // self.cardinality.hash(state);
     }
 }
 

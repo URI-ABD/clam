@@ -9,6 +9,8 @@ mod partition;
 
 use core::fmt::Debug;
 
+use std::hash::Hash;
+
 use distances::Number;
 
 use super::{Dataset, MetricSpace, ParDataset};
@@ -26,7 +28,7 @@ pub use partition::{ParPartition, Partition};
 ///
 /// - `U`: The type of the distance values between instances.
 /// - `P`: The type of the parameters used to create the `Cluster`.
-pub trait Cluster<U: Number>: Debug + PartialOrd {
+pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
     /// Creates a new `Cluster`.
     ///
     /// This should store indices as `IndexStore::EveryCluster`.
@@ -139,6 +141,36 @@ pub trait Cluster<U: Number>: Debug + PartialOrd {
             }
         }
         clusters
+    }
+
+    /// Returns whether the `Cluster` is a descendant of another `Cluster`.
+    ///
+    /// This may only return `true` if both `Cluster`s have the same variant of
+    /// `IndexStore`.
+    ///
+    /// If the `IndexStore` is `EveryCluster` or `LeafOnly`, then we will check
+    /// if the indices in `self` are a subset of the indices in `other`.
+    /// Otherwise, we will check if the `offset` of `self` is in the range
+    /// `[offset, offset + cardinality)` of `other`.
+    fn is_descendant_of(&self, other: &Self) -> bool
+    where
+        Self: Sized,
+    {
+        match (self.index_store(), other.index_store()) {
+            (IndexStore::PostPermutation(s_offset), IndexStore::PostPermutation(o_offset)) => {
+                let o_range = (*o_offset)..(*o_offset + other.cardinality());
+                o_range.contains(s_offset)
+            }
+            (IndexStore::EveryCluster(s_indices), IndexStore::EveryCluster(o_indices)) => {
+                let o_indices = o_indices.iter().collect::<std::collections::HashSet<_>>();
+                s_indices.iter().all(|i| o_indices.contains(i))
+            }
+            (IndexStore::LeafOnly(_), IndexStore::LeafOnly(_)) => {
+                let o_indices = other.indices().into_iter().collect::<std::collections::HashSet<_>>();
+                self.indices().iter().all(|i| o_indices.contains(i))
+            }
+            _ => false,
+        }
     }
 
     /// Whether the `Cluster` is a leaf in the tree.

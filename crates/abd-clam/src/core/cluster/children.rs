@@ -3,7 +3,7 @@
 use distances::Number;
 
 /// The `Children` of a `Cluster`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Children<U: Number, C> {
     /// The children of the `Cluster`.
     children: Vec<Box<C>>,

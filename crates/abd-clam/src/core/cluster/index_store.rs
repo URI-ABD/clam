@@ -9,7 +9,7 @@ use super::Cluster;
 
 /// The various ways to store the indices of a `Cluster`.
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum IndexStore {
     /// Every `Cluster` stores the indices of its instances.
     EveryCluster(Vec<usize>),

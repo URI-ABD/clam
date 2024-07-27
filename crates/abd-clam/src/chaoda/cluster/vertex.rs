@@ -10,7 +10,7 @@ use super::OddBall;
 pub type Ratios = [f32; 6];
 
 /// A `Vertex` to use as a node in a `Graph`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Vertex<U: Number> {
     /// The `Ball` that was adapted into this `Vertex`.
     ball: Ball<U>,
@@ -237,8 +237,22 @@ impl<U: Number> PartialEq for Vertex<U> {
     }
 }
 
+impl<U: Number> Eq for Vertex<U> {}
+
 impl<U: Number> PartialOrd for Vertex<U> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.ball.partial_cmp(&other.ball)
+        Some(self.cmp(other))
+    }
+}
+
+impl<U: Number> Ord for Vertex<U> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ball.cmp(&other.ball)
+    }
+}
+
+impl<U: Number> std::hash::Hash for Vertex<U> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ball.hash(state);
     }
 }
