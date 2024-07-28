@@ -3,7 +3,6 @@
 mod adapter;
 mod ball;
 mod children;
-mod index_store;
 mod lfd;
 mod partition;
 
@@ -18,7 +17,6 @@ use super::{Dataset, MetricSpace, ParDataset};
 pub use adapter::{Adapter, Params};
 pub use ball::Ball;
 pub use children::Children;
-pub use index_store::IndexStore;
 pub use lfd::LFD;
 pub use partition::{ParPartition, Partition};
 
@@ -28,7 +26,7 @@ pub use partition::{ParPartition, Partition};
 ///
 /// - `U`: The type of the distance values between instances.
 /// - `P`: The type of the parameters used to create the `Cluster`.
-pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
+pub trait Cluster<U: Number>: Debug + Ord + Hash {
     /// Creates a new `Cluster`.
     ///
     /// This should store indices as `IndexStore::EveryCluster`.
@@ -81,11 +79,11 @@ pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
     /// Returns the Local Fractional Dimension (LFD) of the `Cluster`.
     fn lfd(&self) -> f32;
 
-    /// Returns the `IndexStore` of the `Cluster`.
-    fn index_store(&self) -> &IndexStore;
+    /// Gets the indices of the instances in the `Cluster`.
+    fn indices(&self) -> impl Iterator<Item = usize> + '_;
 
-    /// Sets the `IndexStore` of the `Cluster`.
-    fn set_index_store(&mut self, indices: IndexStore);
+    /// Sets the indices of the instances in the `Cluster`.
+    fn set_indices(&mut self, indices: Vec<usize>);
 
     /// Returns the children of the `Cluster`.
     #[must_use]
@@ -156,21 +154,8 @@ pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
     where
         Self: Sized,
     {
-        match (self.index_store(), other.index_store()) {
-            (IndexStore::PostPermutation(s_offset), IndexStore::PostPermutation(o_offset)) => {
-                let o_range = (*o_offset)..(*o_offset + other.cardinality());
-                o_range.contains(s_offset)
-            }
-            (IndexStore::EveryCluster(s_indices), IndexStore::EveryCluster(o_indices)) => {
-                let o_indices = o_indices.iter().collect::<std::collections::HashSet<_>>();
-                s_indices.iter().all(|i| o_indices.contains(i))
-            }
-            (IndexStore::LeafOnly(_), IndexStore::LeafOnly(_)) => {
-                let o_indices = other.indices().into_iter().collect::<std::collections::HashSet<_>>();
-                self.indices().iter().all(|i| o_indices.contains(i))
-            }
-            _ => false,
-        }
+        let o_indices = other.indices().collect::<std::collections::HashSet<_>>();
+        self.indices().all(|i| o_indices.contains(&i))
     }
 
     /// Whether the `Cluster` is a leaf in the tree.
@@ -186,21 +171,13 @@ pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
         self.cardinality() == 1 || self.radius() < U::EPSILON
     }
 
-    /// Gets the indices of the instances in the `Cluster`.
-    fn indices(&self) -> Vec<usize>
-    where
-        Self: Sized,
-    {
-        self.index_store().indices(self)
-    }
-
     /// Returns the given distance repeated with the indices of the instances in
     /// the `Cluster`.
     fn repeat_distance(&self, d: U) -> Vec<(usize, U)>
     where
         Self: Sized,
     {
-        self.index_store().repeat_distance(self, d)
+        self.indices().zip(core::iter::repeat(d)).collect()
     }
 
     /// Computes the distances from the `query` to all instances in the `Cluster`.
@@ -208,7 +185,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
     where
         Self: Sized,
     {
-        self.index_store().distances(data, query, self)
+        data.query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 
     /// Parallelized version of the `distances` method.
@@ -216,7 +193,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Clone + Hash {
     where
         Self: Sized + Send + Sync,
     {
-        self.index_store().par_distances(data, query, self)
+        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 
     /// Computes the distance from the `Cluster`'s center to a given `query`.

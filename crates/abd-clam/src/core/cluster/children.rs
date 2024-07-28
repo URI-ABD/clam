@@ -2,15 +2,38 @@
 
 use distances::Number;
 
+use super::{Adapter, Ball, Params};
+
 /// The `Children` of a `Cluster`.
 #[derive(Debug, Clone)]
 pub struct Children<U: Number, C> {
     /// The children of the `Cluster`.
-    children: Vec<Box<C>>,
-    /// The indices of the poles used to partition the `Cluster`.
-    arg_poles: Vec<usize>,
-    /// The pairwise distances between the poles.
-    polar_distances: Vec<Vec<U>>,
+    clusters: Vec<Box<C>>,
+    /// The indices of the extremal points used to partition the `Cluster`.
+    arg_extrema: Vec<usize>,
+    /// The pairwise distances between the extrema.
+    extremal_distances: Vec<Vec<U>>,
+}
+
+impl<U: Number> Children<U, Ball<U>> {
+    /// Adapt the `Children` of a `Ball` into another `Cluster` type.
+    pub fn adapt<C: Adapter<U, P>, P: Params<U>>(self, params: &P) -> (Children<U, C>, Vec<usize>) {
+        let child_params = params.child_params(&self.clusters);
+        let (clusters, indices) = self
+            .clusters
+            .into_iter()
+            .zip(child_params)
+            .map(|(child, params)| C::adapt(*child, Some(params)))
+            .map(|(c, i)| (Box::new(c), i))
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+        let children = Children {
+            clusters,
+            arg_extrema: self.arg_extrema,
+            extremal_distances: self.extremal_distances,
+        };
+        let indices = indices.into_iter().flatten().collect();
+        (children, indices)
+    }
 }
 
 impl<U: Number, C> Children<U, C> {
@@ -19,42 +42,36 @@ impl<U: Number, C> Children<U, C> {
     /// # Arguments
     ///
     /// - `children`: The children of the `Cluster`.
-    /// - `arg_poles`: The indices of the poles used to partition the `Cluster`.
-    pub fn new(children: Vec<C>, arg_poles: Vec<usize>, polar_distances: Vec<Vec<U>>) -> Self {
+    /// - `arg_extrema`: The indices of the extremal points used to partition the `Cluster`.
+    pub fn new(clusters: Vec<C>, arg_extrema: Vec<usize>, extremal_distances: Vec<Vec<U>>) -> Self {
         Self {
-            children: children.into_iter().map(Box::new).collect(),
-            arg_poles,
-            polar_distances,
+            clusters: clusters.into_iter().map(Box::new).collect(),
+            arg_extrema,
+            extremal_distances,
         }
-    }
-
-    /// Decomposes the `Children` into its components.
-    pub(crate) fn take(self) -> (Vec<C>, Vec<usize>, Vec<Vec<U>>) {
-        let children = self.children.into_iter().map(|c| *c).collect();
-        (children, self.arg_poles, self.polar_distances)
     }
 
     /// Returns the children of the `Cluster`.
     #[must_use]
     pub fn clusters(&self) -> Vec<&C> {
-        self.children.iter().map(AsRef::as_ref).collect::<Vec<_>>()
+        self.clusters.iter().map(AsRef::as_ref).collect::<Vec<_>>()
     }
 
     /// Returns the children of the `Cluster` as mutable references.
     #[must_use]
     pub fn clusters_mut(&mut self) -> Vec<&mut C> {
-        self.children.iter_mut().map(AsMut::as_mut).collect::<Vec<_>>()
+        self.clusters.iter_mut().map(AsMut::as_mut).collect::<Vec<_>>()
     }
 
-    /// Returns the indices of the poles used to partition the `Cluster`.
+    /// Returns the indices of the extremal points used to partition the `Cluster`.
     #[must_use]
-    pub fn arg_poles(&self) -> &[usize] {
-        &self.arg_poles
+    pub fn arg_extrema(&self) -> &[usize] {
+        &self.arg_extrema
     }
 
-    /// Returns the pairwise distances between the poles.
+    /// Returns the pairwise distances between the extrema.
     #[must_use]
-    pub fn polar_distances(&self) -> &[Vec<U>] {
-        &self.polar_distances
+    pub fn extremal_distances(&self) -> &[Vec<U>] {
+        &self.extremal_distances
     }
 }
