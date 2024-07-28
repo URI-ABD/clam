@@ -6,10 +6,7 @@ use std::hash::Hash;
 
 use distances::Number;
 
-use crate::{
-    core::{Dataset, ParDataset},
-    utils,
-};
+use crate::{dataset::ParDataset, utils, Dataset};
 
 use super::{
     partition::{ParPartition, Partition},

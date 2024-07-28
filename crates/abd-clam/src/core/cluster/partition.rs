@@ -3,7 +3,7 @@
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{Dataset, ParDataset};
+use crate::{dataset::ParDataset, Dataset};
 
 use super::{Children, Cluster, ParCluster};
 

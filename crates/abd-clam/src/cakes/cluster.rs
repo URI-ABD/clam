@@ -4,6 +4,8 @@ use distances::Number;
 
 use crate::{
     adapter::{Adapter, ParAdapter, ParParams, Params},
+    cluster::ParCluster,
+    dataset::ParDataset,
     Ball, Children, Cluster, Dataset, Permutable,
 };
 
@@ -259,6 +261,30 @@ impl<U: Number> Ord for OffsetBall<U> {
 impl<U: Number> std::hash::Hash for OffsetBall<U> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (self.params.offset, self.cardinality()).hash(state);
+    }
+}
+
+impl<U: Number> ParCluster<U> for OffsetBall<U> {
+    fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
+        data: &D,
+        indices: &[usize],
+        depth: usize,
+        seed: Option<u64>,
+    ) -> (Self, usize)
+    where
+        Self: Sized,
+    {
+        let (ball, arg_radial) = Ball::par_new(data, indices, depth, seed);
+        let vertex = Self {
+            ball,
+            children: None,
+            params: OffsetParams::default(),
+        };
+        (vertex, arg_radial)
+    }
+
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>) {
+        self.ball.par_find_extrema(data)
     }
 }
 

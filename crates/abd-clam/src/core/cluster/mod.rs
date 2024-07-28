@@ -12,7 +12,7 @@ use std::hash::Hash;
 
 use distances::Number;
 
-use super::{Dataset, MetricSpace, ParDataset};
+use super::{dataset::ParDataset, Dataset, MetricSpace};
 
 pub use ball::Ball;
 pub use children::Children;
