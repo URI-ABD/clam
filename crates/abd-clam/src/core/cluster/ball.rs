@@ -11,7 +11,10 @@ use crate::{
     utils,
 };
 
-use super::{Children, Cluster, ParCluster, ParPartition, Partition, LFD};
+use super::{
+    partition::{ParPartition, Partition},
+    Children, Cluster, ParCluster, LFD,
+};
 
 /// A metric-`Ball` is a collection of instances that are within a certain
 /// distance of a center.
@@ -90,12 +93,9 @@ impl<U: Number> Ord for Ball<U> {
 }
 
 impl<U: Number> Hash for Ball<U> {
-    #[allow(unused_variables)]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // TODO: Implement hash for Ball
-        // self.depth.hash(state);
-        // self.index_store.hash(state);
-        // self.cardinality.hash(state);
+        // We hash the `indices` field
+        self.indices.hash(state);
     }
 }
 
@@ -403,54 +403,4 @@ mod tests {
 
         Ok(())
     }
-
-    // fn check_permutation(root: &Ball<i32>, indices: &[usize]) -> bool {
-    //     assert!(root.children().is_some());
-    //     assert_eq!(indices, &[0, 1, 2, 4, 3]);
-
-    //     let children = root.children().unwrap().clusters();
-    //     assert_eq!(children.len(), 2);
-    //     for &c in &children {
-    //         assert_eq!(c.depth(), 1);
-    //         assert!(c.children().is_none());
-    //     }
-
-    //     let (left, right) = (children[0], children[1]);
-
-    //     assert_eq!(left.cardinality(), 3);
-    //     assert_eq!(left.arg_center(), 1);
-    //     assert_eq!(left.radius(), 4);
-    //     assert!([0, 2].contains(&left.arg_radial()));
-    //     assert_eq!(left.indices().collect::<Vec<_>>(), &[0, 1, 2]);
-
-    //     assert_eq!(right.cardinality(), 2);
-    //     assert_eq!(right.radius(), 8);
-    //     assert!([3, 4].contains(&right.arg_center()));
-    //     assert!([3, 4].contains(&right.arg_radial()));
-    //     assert_eq!(right.indices().collect::<Vec<_>>(), &[3, 4]);
-
-    //     true
-    // }
-
-    // #[test]
-    // fn permutation() -> Result<(), String> {
-    //     let data = gen_tiny_data()?;
-
-    //     let seed = Some(42);
-    //     let criteria = |c: &Ball<i32>| c.depth() < 1;
-
-    //     let mut perm_data = data.clone();
-    //     let (root, indices) = Ball::new_tree_and_permute(&mut perm_data, &criteria, seed);
-    //     assert_eq!(indices.len(), perm_data.cardinality());
-    //     assert_eq!(indices, perm_data.permutation());
-    //     assert!(check_permutation(&root, &indices));
-
-    //     let mut perm_data = data.clone();
-    //     let (root, indices) = Ball::par_new_tree_and_permute(&mut perm_data, &criteria, seed);
-    //     assert_eq!(indices.len(), perm_data.cardinality());
-    //     assert_eq!(indices, perm_data.permutation());
-    //     assert!(check_permutation(&root, &indices));
-
-    //     Ok(())
-    // }
 }

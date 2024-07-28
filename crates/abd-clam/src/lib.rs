@@ -25,8 +25,8 @@ pub mod utils;
 pub use crate::{
     cakes::Shardable,
     core::{
-        Adapter, Ball, Children, Cluster, Dataset, FlatVec, LinearSearch, Metric, MetricSpace, ParDataset,
-        ParLinearSearch, ParMetricSpace, ParPartition, Params, Partition, Permutable, SizedHeap, LFD,
+        adapter, linear_search, partition, Ball, Children, Cluster, Dataset, FlatVec, Metric, MetricSpace, ParDataset,
+        Partition, Permutable, LFD,
     },
 };
 

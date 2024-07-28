@@ -32,3 +32,19 @@ pub trait Adapter<U: Number, P: Params<U>>: Cluster<U> {
     /// should not have any children.
     fn ball_mut(&mut self) -> &mut Ball<U>;
 }
+
+/// Parallel version of the `Params` trait.
+pub trait ParParams<U: Number>: Params<U> + Send + Sync {
+    /// Parallel version of the `child_params` method.
+    #[must_use]
+    fn par_child_params<B: AsRef<Ball<U>>>(&self, child_balls: &[B]) -> Vec<Self>;
+}
+
+/// Parallel version of the `Adapter` trait.
+#[allow(clippy::module_name_repetitions)]
+pub trait ParAdapter<U: Number, P: ParParams<U>>: Adapter<U, P> + Send + Sync {
+    /// Parallel version of the `adapt` method.
+    fn par_adapt(ball: Ball<U>, params: Option<P>) -> (Self, Vec<usize>)
+    where
+        Self: Sized;
+}

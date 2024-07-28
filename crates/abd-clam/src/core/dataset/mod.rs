@@ -1,18 +1,19 @@
 //! Traits relating to datasets.
 
 mod flat_vec;
-mod linear_search;
+pub mod linear_search;
 mod metric;
-mod metric_space;
+pub mod metric_space;
 mod permutable;
 
 use distances::Number;
 
 pub use flat_vec::FlatVec;
-pub use linear_search::{LinearSearch, ParLinearSearch, SizedHeap};
 pub use metric::Metric;
-pub use metric_space::{MetricSpace, ParMetricSpace};
+pub use metric_space::MetricSpace;
 pub use permutable::Permutable;
+
+use metric_space::ParMetricSpace;
 
 // TODO: Add traits for Compression and Decompression.
 

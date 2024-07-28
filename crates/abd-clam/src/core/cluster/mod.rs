@@ -1,10 +1,10 @@
 //! A `Cluster` is a collection of "similar" instances in a dataset.
 
-mod adapter;
+pub mod adapter;
 mod ball;
 mod children;
 mod lfd;
-mod partition;
+pub mod partition;
 
 use core::fmt::Debug;
 
@@ -14,11 +14,10 @@ use distances::Number;
 
 use super::{Dataset, MetricSpace, ParDataset};
 
-pub use adapter::{Adapter, Params};
 pub use ball::Ball;
 pub use children::Children;
 pub use lfd::LFD;
-pub use partition::{ParPartition, Partition};
+pub use partition::Partition;
 
 /// A `Cluster` is a collection of "similar" instances in a dataset.
 ///

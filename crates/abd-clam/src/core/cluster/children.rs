@@ -1,8 +1,12 @@
 //! The `Children` of a `Cluster`.
 
 use distances::Number;
+use rayon::prelude::*;
 
-use super::{Adapter, Ball, Params};
+use super::{
+    adapter::{Adapter, ParAdapter, ParParams, Params},
+    Ball,
+};
 
 /// The `Children` of a `Cluster`.
 #[derive(Debug, Clone)]
@@ -24,6 +28,25 @@ impl<U: Number> Children<U, Ball<U>> {
             .into_iter()
             .zip(child_params)
             .map(|(child, params)| C::adapt(*child, Some(params)))
+            .map(|(c, i)| (Box::new(c), i))
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+        let children = Children {
+            clusters,
+            arg_extrema: self.arg_extrema,
+            extremal_distances: self.extremal_distances,
+        };
+        let indices = indices.into_iter().flatten().collect();
+        (children, indices)
+    }
+
+    /// Parallel version of the `adapt` method.
+    pub fn par_adapt<C: ParAdapter<U, P>, P: ParParams<U>>(self, params: &P) -> (Children<U, C>, Vec<usize>) {
+        let child_params = params.par_child_params(&self.clusters);
+        let (clusters, indices) = self
+            .clusters
+            .into_par_iter()
+            .zip(child_params.into_par_iter())
+            .map(|(child, params)| C::par_adapt(*child, Some(params)))
             .map(|(c, i)| (Box::new(c), i))
             .unzip::<_, _, Vec<_>, Vec<_>>();
         let children = Children {

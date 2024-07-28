@@ -2,7 +2,10 @@
 
 use distances::Number;
 
-use super::{Dataset, LinearSearch, Metric, MetricSpace, ParDataset, ParLinearSearch, ParMetricSpace, Permutable};
+use super::{
+    linear_search::{LinearSearch, ParLinearSearch},
+    Dataset, Metric, MetricSpace, ParDataset, ParMetricSpace, Permutable,
+};
 
 /// A `FlatVec` is a dataset that is stored as a flat vector.
 ///

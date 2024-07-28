@@ -2,7 +2,10 @@
 
 use distances::Number;
 
-use crate::{Adapter, Ball, Children, Cluster, Dataset, Params, Permutable};
+use crate::{
+    adapter::{Adapter, ParAdapter, ParParams, Params},
+    Ball, Children, Cluster, Dataset, Permutable,
+};
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
 #[derive(Debug)]
@@ -23,6 +26,13 @@ impl<U: Number> OffsetBall<U> {
         root
     }
 
+    /// Parallel version of the `from_ball_tree` method.
+    pub fn par_from_ball_tree<I, D: Dataset<I, U> + Permutable>(ball: Ball<U>, data: &mut D) -> Self {
+        let (root, indices) = Self::par_adapt(ball, None);
+        data.permute(&indices);
+        root
+    }
+
     /// Returns the offset of the `Cluster`.
     #[must_use]
     pub const fn offset(&self) -> usize {
@@ -38,7 +48,7 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
         let (ball, mut indices, children) = ball.deconstruct();
         let params = params.unwrap_or_default();
 
-        let cluster = if let Some(children) = children {
+        let mut cluster = if let Some(children) = children {
             let (children, ret_indices) = children.adapt(&params);
             let cluster = Self {
                 ball,
@@ -55,6 +65,12 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
             }
         };
 
+        let arg_center = position_of(&cluster.ball.arg_center(), &indices);
+        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
+
+        cluster.set_arg_center(params.offset + arg_center);
+        cluster.set_arg_radial(params.offset + arg_radial);
+
         (cluster, indices)
     }
 
@@ -64,6 +80,49 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
 
     fn ball_mut(&mut self) -> &mut Ball<U> {
         &mut self.ball
+    }
+}
+
+/// Returns the position of an item in a slice.
+fn position_of<T: Eq>(item: &T, slice: &[T]) -> usize {
+    slice
+        .iter()
+        .position(|x| x == item)
+        .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
+}
+
+impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
+    fn par_adapt(ball: Ball<U>, params: Option<OffsetParams>) -> (Self, Vec<usize>)
+    where
+        Self: Sized,
+    {
+        let (ball, mut indices, children) = ball.deconstruct();
+        let params = params.unwrap_or_default();
+
+        let mut cluster = if let Some(children) = children {
+            let (children, ret_indices) = children.par_adapt(&params);
+            let cluster = Self {
+                ball,
+                children: Some(children),
+                params,
+            };
+            indices = ret_indices;
+            cluster
+        } else {
+            Self {
+                ball,
+                children: None,
+                params,
+            }
+        };
+
+        let arg_center = position_of(&cluster.ball.arg_center(), &indices);
+        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
+
+        cluster.set_arg_center(params.offset + arg_center);
+        cluster.set_arg_radial(params.offset + arg_radial);
+
+        (cluster, indices)
     }
 }
 
@@ -86,6 +145,13 @@ impl<U: Number> Params<U> for OffsetParams {
                 params
             })
             .collect()
+    }
+}
+
+impl<U: Number> ParParams<U> for OffsetParams {
+    fn par_child_params<B: AsRef<Ball<U>>>(&self, child_balls: &[B]) -> Vec<Self> {
+        // Since we need to keep track of the offset, we cannot parallelize this.
+        self.child_params(child_balls)
     }
 }
 
@@ -193,5 +259,50 @@ impl<U: Number> Ord for OffsetBall<U> {
 impl<U: Number> std::hash::Hash for OffsetBall<U> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (self.params.offset, self.cardinality()).hash(state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{partition::ParPartition, FlatVec, Metric, Partition};
+
+    use super::*;
+
+    fn gen_tiny_data() -> Result<FlatVec<Vec<i32>, i32, usize>, String> {
+        let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
+        let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
+        let metric = Metric::new(distance_function, false);
+        FlatVec::new_array(instances.clone(), metric)
+    }
+
+    fn check_permutation(root: &OffsetBall<i32>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
+        assert!(root.children().is_some());
+
+        for cluster in root.subtree() {
+            let radius = data.one_to_one(cluster.arg_center(), cluster.arg_radial());
+            assert_eq!(cluster.radius(), radius);
+        }
+
+        true
+    }
+
+    #[test]
+    fn permutation() -> Result<(), String> {
+        let data = gen_tiny_data()?;
+
+        let seed = Some(42);
+        let criteria = |c: &Ball<i32>| c.depth() < 1;
+
+        let root = Ball::new_tree(&data, &criteria, seed);
+        let mut perm_data = data.clone();
+        let root = OffsetBall::from_ball_tree(root, &mut perm_data);
+        assert!(check_permutation(&root, &perm_data));
+
+        let root = Ball::par_new_tree(&data, &criteria, seed);
+        let mut perm_data = data.clone();
+        let root = OffsetBall::par_from_ball_tree(root, &mut perm_data);
+        assert!(check_permutation(&root, &perm_data));
+
+        Ok(())
     }
 }
