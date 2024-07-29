@@ -1,5 +1,6 @@
 //! Entropy scaling search algorithms.
 
+mod knn_depth_first;
 mod knn_repeated_rnn;
 mod rnn_clustered;
 
@@ -42,7 +43,8 @@ impl<U: Number> Algorithm<U> {
         match self {
             Self::RnnClustered(radius) => rnn_clustered::search(data, root, query, *radius),
             Self::KnnRepeatedRnn(k, max_multiplier) => knn_repeated_rnn::search(data, root, query, *k, *max_multiplier),
-            _ => unimplemented!(),
+            Self::KnnBreadthFirst(_) => todo!(),
+            Self::KnnDepthFirst(k) => knn_depth_first::search(data, root, query, *k),
         }
     }
 
@@ -58,7 +60,8 @@ impl<U: Number> Algorithm<U> {
             Self::KnnRepeatedRnn(k, max_multiplier) => {
                 knn_repeated_rnn::par_search(data, root, query, *k, *max_multiplier)
             }
-            _ => unimplemented!(),
+            Self::KnnBreadthFirst(_) => todo!(),
+            Self::KnnDepthFirst(k) => knn_depth_first::par_search(data, root, query, *k),
         }
     }
 }
