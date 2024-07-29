@@ -3,7 +3,7 @@
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{dataset::ParDataset, Cluster, Dataset};
+use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
 
 /// Clustered search for the ranged nearest neighbors of a query.
 pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, radius: U) -> Vec<(usize, U)>
@@ -22,7 +22,7 @@ where
     I: Send + Sync,
     U: Number,
     D: ParDataset<I, U>,
-    C: Cluster<U> + Send + Sync,
+    C: ParCluster<U>,
 {
     let [confirmed, straddlers] = par_tree_search(data, root, query, radius);
     par_leaf_search(data, confirmed, straddlers, query, radius)
@@ -71,7 +71,7 @@ where
             .flat_map(|(c, _)| {
                 c.children()
                     .unwrap_or_else(|| unreachable!("Non-leaf cluster without children"))
-                    .clusters()
+                    .overlapping_clusters(data, query, radius)
             })
             .collect();
     }
@@ -85,7 +85,7 @@ where
     I: Send + Sync,
     U: Number + 'a,
     D: ParDataset<I, U>,
-    C: Cluster<U> + Send + Sync,
+    C: ParCluster<U>,
 {
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
@@ -108,7 +108,7 @@ where
             .flat_map(|(c, _)| {
                 c.children()
                     .unwrap_or_else(|| unreachable!("Non-leaf cluster without children"))
-                    .clusters()
+                    .par_overlapping_clusters(data, query, radius)
             })
             .collect();
     }
@@ -172,7 +172,7 @@ where
     I: Send + Sync,
     U: Number,
     D: ParDataset<I, U>,
-    C: Cluster<U> + Send + Sync,
+    C: ParCluster<U>,
 {
     let mut hits = confirmed
         .into_par_iter()

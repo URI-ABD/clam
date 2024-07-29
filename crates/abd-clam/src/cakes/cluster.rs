@@ -51,7 +51,11 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
         let params = params.unwrap_or_default();
 
         let mut cluster = if let Some(children) = children {
-            let (children, ret_indices) = children.adapt(&params);
+            let (mut children, ret_indices) = children.adapt(&params);
+            children
+                .arg_extrema_mut()
+                .iter_mut()
+                .for_each(|p| *p = params.offset + position_of(p, &ret_indices));
             let cluster = Self {
                 ball,
                 children: Some(children),
@@ -68,9 +72,9 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
         };
 
         let arg_center = position_of(&cluster.ball.arg_center(), &indices);
-        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
-
         cluster.set_arg_center(params.offset + arg_center);
+
+        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
         cluster.set_arg_radial(params.offset + arg_radial);
 
         (cluster, indices)
@@ -102,7 +106,11 @@ impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
         let params = params.unwrap_or_default();
 
         let mut cluster = if let Some(children) = children {
-            let (children, ret_indices) = children.par_adapt(&params);
+            let (mut children, ret_indices) = children.par_adapt(&params);
+            children
+                .arg_extrema_mut()
+                .iter_mut()
+                .for_each(|p| *p = params.offset + position_of(p, &ret_indices));
             let cluster = Self {
                 ball,
                 children: Some(children),
@@ -119,9 +127,9 @@ impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
         };
 
         let arg_center = position_of(&cluster.ball.arg_center(), &indices);
-        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
-
         cluster.set_arg_center(params.offset + arg_center);
+
+        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
         cluster.set_arg_radial(params.offset + arg_radial);
 
         (cluster, indices)
@@ -163,6 +171,7 @@ impl<U: Number> Cluster<U> for OffsetBall<U> {
         Self: Sized,
     {
         let (ball, arg_radial) = Ball::new(data, indices, depth, seed);
+        // TODO: Consider whether to reset indices of the ball.
         let vertex = Self {
             ball,
             children: None,
@@ -240,6 +249,7 @@ impl<U: Number> Cluster<U> for OffsetBall<U> {
 
 impl<U: Number> PartialEq for OffsetBall<U> {
     fn eq(&self, other: &Self) -> bool {
+        // TODO: Should this be offset and cardinality?
         self.ball == other.ball
     }
 }
@@ -254,6 +264,7 @@ impl<U: Number> PartialOrd for OffsetBall<U> {
 
 impl<U: Number> Ord for OffsetBall<U> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // TODO: This should definitely be offset and cardinality.
         self.ball.cmp(&other.ball)
     }
 }

@@ -3,9 +3,11 @@
 use distances::Number;
 use rayon::prelude::*;
 
+use crate::{dataset::ParDataset, Dataset};
+
 use super::{
     adapter::{Adapter, ParAdapter, ParParams, Params},
-    Ball,
+    Ball, Cluster, ParCluster,
 };
 
 /// The `Children` of a `Cluster`.
@@ -92,9 +94,83 @@ impl<U: Number, C> Children<U, C> {
         &self.arg_extrema
     }
 
+    /// Returns `arg_extrema` mutably.
+    pub fn arg_extrema_mut(&mut self) -> &mut [usize] {
+        &mut self.arg_extrema
+    }
+
     /// Returns the pairwise distances between the extrema.
     #[must_use]
     pub fn extremal_distances(&self) -> &[Vec<U>] {
         &self.extremal_distances
+    }
+
+    /// Gets the child clusters that overlap with a query ball.
+    #[must_use]
+    pub fn overlapping_clusters<I, D: Dataset<I, U>>(&self, data: &D, query: &I, radius: U) -> Vec<&C>
+    where
+        C: Cluster<U>,
+    {
+        // We start by finding the first child that has overlapping volume with
+        // the query ball
+        let anchor = self
+            .clusters
+            .iter()
+            .map(Box::as_ref)
+            .enumerate()
+            .find(|&(_, c)| c.distance_to_center(data, query) <= (c.radius() + radius));
+        if let Some((i, anchor)) = anchor {
+            self.clusters
+                .iter()
+                .skip(i + 1)
+                .map(Box::as_ref)
+                .filter(|&c| {
+                    // TODO: use triangle math here
+                    c.distance_to_center(data, query) <= (c.radius() + radius)
+                })
+                .chain(core::iter::once(anchor))
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Parallel version of the `overlapping_clusters` method.
+    #[must_use]
+    pub fn par_overlapping_clusters<I: Send + Sync, D: ParDataset<I, U>>(
+        &self,
+        data: &D,
+        query: &I,
+        radius: U,
+    ) -> Vec<&C>
+    where
+        C: ParCluster<U>,
+    {
+        // We start by finding the first child that has overlapping volume with
+        // the query ball
+        let anchor = self
+            .clusters
+            .iter()
+            .map(Box::as_ref)
+            .enumerate()
+            .find(|&(_, c)| c.distance_to_center(data, query) <= (c.radius() + radius));
+        if let Some((i, anchor)) = anchor {
+            // TODO: Can we improve the parallelism here?
+            let mut clusters = vec![anchor];
+            self.clusters
+                .par_iter()
+                .skip(i + 1)
+                .map(Box::as_ref)
+                .filter(|&c| {
+                    // TODO: use triangle math here
+                    c.distance_to_center(data, query) <= (c.radius() + radius)
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .for_each(|c| clusters.push(c));
+            clusters
+        } else {
+            Vec::new()
+        }
     }
 }

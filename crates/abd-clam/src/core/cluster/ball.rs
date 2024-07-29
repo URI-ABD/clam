@@ -28,7 +28,7 @@ pub struct Ball<U: Number> {
     arg_center: usize,
     /// The index of the instance that is the furthest from the center.
     arg_radial: usize,
-    /// Temp member for storing the indices.
+    /// The indices of the instances in the `Ball`.
     indices: Vec<usize>,
     /// The children of the `Ball`.
     children: Option<Children<U, Self>>,
@@ -68,7 +68,7 @@ impl<U: Number> Debug for Ball<U> {
 
 impl<U: Number> PartialEq for Ball<U> {
     fn eq(&self, other: &Self) -> bool {
-        self.depth == other.depth && self.indices == other.indices && self.cardinality == other.cardinality
+        self.depth == other.depth && self.cardinality == other.cardinality && self.indices == other.indices
     }
 }
 

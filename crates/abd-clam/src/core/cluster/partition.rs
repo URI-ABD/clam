@@ -8,7 +8,7 @@ use crate::{dataset::ParDataset, Dataset};
 use super::{Children, Cluster, ParCluster};
 
 /// `Cluster`s that can be partitioned into child `Cluster`s, and recursively partitioned into a tree.
-pub trait Partition<U: Number>: Cluster<U> + Sized {
+pub trait Partition<U: Number>: Cluster<U> {
     /// Creates a new `Cluster` tree.
     ///
     /// # Arguments
@@ -143,7 +143,7 @@ pub trait Partition<U: Number>: Cluster<U> + Sized {
 
 /// `Cluster`s that use and provide parallelized methods.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParPartition<U: Number>: ParCluster<U> + Sized {
+pub trait ParPartition<U: Number>: ParCluster<U> {
     /// Parallelized version of the `new_tree` method.
     fn par_new_tree<I: Send + Sync, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync>(
         data: &D,

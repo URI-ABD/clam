@@ -25,7 +25,7 @@ pub use partition::Partition;
 ///
 /// - `U`: The type of the distance values between instances.
 /// - `P`: The type of the parameters used to create the `Cluster`.
-pub trait Cluster<U: Number>: Debug + Ord + Hash {
+pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
     /// Creates a new `Cluster`.
     ///
     /// This should store indices as `IndexStore::EveryCluster`.
@@ -46,9 +46,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash {
     ///
     /// - The new `Cluster`.
     /// - The index of the radial instance in `instances`.
-    fn new<I, D: Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
-    where
-        Self: Sized;
+    fn new<I, D: Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
 
     /// Returns the depth os the `Cluster` in the tree.
     fn depth(&self) -> usize;
@@ -86,21 +84,15 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash {
 
     /// Returns the children of the `Cluster`.
     #[must_use]
-    fn children(&self) -> Option<&Children<U, Self>>
-    where
-        Self: Sized;
+    fn children(&self) -> Option<&Children<U, Self>>;
 
     /// Returns the children of the `Cluster` as mutable references.
     #[must_use]
-    fn children_mut(&mut self) -> Option<&mut Children<U, Self>>
-    where
-        Self: Sized;
+    fn children_mut(&mut self) -> Option<&mut Children<U, Self>>;
 
     /// Sets the children of the `Cluster`.
     #[must_use]
-    fn set_children(self, children: Children<U, Self>) -> Self
-    where
-        Self: Sized;
+    fn set_children(self, children: Children<U, Self>) -> Self;
 
     /// Finds the extrema of the `Cluster`.
     ///
@@ -128,7 +120,6 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash {
     /// Returns all `Cluster`s in the subtree of this `Cluster`, in depth-first order.
     fn subtree<'a>(&'a self) -> Vec<&'a Self>
     where
-        Self: Sized,
         U: 'a,
     {
         let mut clusters = vec![self];
@@ -149,19 +140,13 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash {
     /// if the indices in `self` are a subset of the indices in `other`.
     /// Otherwise, we will check if the `offset` of `self` is in the range
     /// `[offset, offset + cardinality)` of `other`.
-    fn is_descendant_of(&self, other: &Self) -> bool
-    where
-        Self: Sized,
-    {
+    fn is_descendant_of(&self, other: &Self) -> bool {
         let o_indices = other.indices().collect::<std::collections::HashSet<_>>();
         self.indices().all(|i| o_indices.contains(&i))
     }
 
     /// Whether the `Cluster` is a leaf in the tree.
-    fn is_leaf(&self) -> bool
-    where
-        Self: Sized,
-    {
+    fn is_leaf(&self) -> bool {
         self.children().is_none()
     }
 
@@ -172,27 +157,13 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash {
 
     /// Returns the given distance repeated with the indices of the instances in
     /// the `Cluster`.
-    fn repeat_distance(&self, d: U) -> Vec<(usize, U)>
-    where
-        Self: Sized,
-    {
+    fn repeat_distance(&self, d: U) -> Vec<(usize, U)> {
         self.indices().zip(core::iter::repeat(d)).collect()
     }
 
     /// Computes the distances from the `query` to all instances in the `Cluster`.
-    fn distances<I, D: Dataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)>
-    where
-        Self: Sized,
-    {
+    fn distances<I, D: Dataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.query_to_many(query, &self.indices().collect::<Vec<_>>())
-    }
-
-    /// Parallelized version of the `distances` method.
-    fn par_distances<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)>
-    where
-        Self: Sized + Send + Sync,
-    {
-        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 
     /// Computes the distance from the `Cluster`'s center to a given `query`.
@@ -216,10 +187,13 @@ pub trait ParCluster<U: Number>: Cluster<U> + Send + Sync {
         indices: &[usize],
         depth: usize,
         seed: Option<u64>,
-    ) -> (Self, usize)
-    where
-        Self: Sized;
+    ) -> (Self, usize);
 
     /// Parallelized version of the `find_extrema` method.
     fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>);
+
+    /// Parallelized version of the `distances` method.
+    fn par_distances<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
+    }
 }
