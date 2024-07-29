@@ -7,7 +7,12 @@ mod rnn_clustered;
 
 use distances::Number;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
+use crate::{
+    cluster::ParCluster,
+    dataset::ParDataset,
+    linear_search::{LinearSearch, ParLinearSearch},
+    Cluster, Dataset,
+};
 
 /// The different algorithms that can be used for search.
 ///
@@ -65,14 +70,41 @@ impl<U: Number> Algorithm<U> {
             Self::KnnDepthFirst(k) => knn_depth_first::par_search(data, root, query, *k),
         }
     }
+
+    /// Search via a linear scan.
+    pub fn linear_search<I, D: LinearSearch<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        match self {
+            Self::RnnClustered(radius) => data.rnn(query, *radius),
+            Self::KnnRepeatedRnn(k, _) | Self::KnnDepthFirst(k) | Self::KnnBreadthFirst(k) => data.knn(query, *k),
+        }
+    }
+
+    /// Parallel version of the `linear_search` method
+    pub fn par_linear_search<I: Send + Sync, D: ParLinearSearch<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        match self {
+            Self::RnnClustered(radius) => data.par_rnn(query, *radius),
+            Self::KnnRepeatedRnn(k, _) | Self::KnnDepthFirst(k) | Self::KnnBreadthFirst(k) => data.par_knn(query, *k),
+        }
+    }
+
+    /// Get the name of the algorithm.
+    pub fn name(&self) -> String {
+        match self {
+            Self::RnnClustered(r) => format!("RnnClustered({r})"),
+            Self::KnnRepeatedRnn(k, m) => format!("KnnRepeatedRnn({k}, {m})"),
+            Self::KnnBreadthFirst(k) => format!("KnnBreadthFirst({k})"),
+            Self::KnnDepthFirst(k) => format!("KnnDepthFirst({k})"),
+        }
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use distances::Number;
     use rand::prelude::*;
+    use test_case::test_case;
 
-    use crate::{FlatVec, Metric};
+    use crate::{cakes::OffsetBall, Ball, Cluster, FlatVec, Metric, Partition};
 
     pub fn gen_line_data(max: i32) -> Result<FlatVec<i32, u32, usize>, String> {
         let data = (-max..=max).collect::<Vec<_>>();
@@ -86,20 +118,6 @@ pub mod tests {
             .flat_map(|x| (-max..=max).map(move |y| (x.as_f32(), y.as_f32())))
             .collect::<Vec<_>>();
         let distance_fn = |(x1, y1): &(f32, f32), (x2, y2): &(f32, f32)| (x1 - x2).hypot(y1 - y2);
-        let metric = Metric::new(distance_fn, false);
-        FlatVec::new(data, metric)
-    }
-
-    #[allow(dead_code)]
-    pub fn gen_random_data(
-        car: usize,
-        dim: usize,
-        max: f32,
-        seed: u64,
-    ) -> Result<FlatVec<Vec<f32>, f32, usize>, String> {
-        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-        let data = symagen::random_data::random_tabular(car, dim, -max, max, &mut rng);
-        let distance_fn = |a: &Vec<f32>, b: &Vec<f32>| distances::vectors::euclidean(a, b);
         let metric = Metric::new(distance_fn, false);
         FlatVec::new(data, metric)
     }
@@ -137,5 +155,144 @@ pub mod tests {
         }
 
         true
+    }
+
+    pub fn gen_random_data(
+        car: usize,
+        dim: usize,
+        max: f32,
+        seed: u64,
+    ) -> Result<FlatVec<Vec<f32>, f32, usize>, String> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let data = symagen::random_data::random_tabular(car, dim, -max, max, &mut rng);
+        let distance_fn = |a: &Vec<f32>, b: &Vec<f32>| distances::vectors::euclidean(a, b);
+        let metric = Metric::new(distance_fn, false);
+        FlatVec::new(data, metric)
+    }
+
+    #[test_case(1_000, 10; "1k-10")]
+    #[test_case(10_000, 10; "10k-10")]
+    #[test_case(100_000, 10; "100k-10")]
+    #[test_case(1_000, 100; "1k-100")]
+    #[test_case(10_000, 100; "10k-100")]
+    fn vectors(car: usize, dim: usize) -> Result<(), String> {
+        let mut algs: Vec<(
+            super::Algorithm<f32>,
+            fn(Vec<(usize, f32)>, Vec<(usize, f32)>, &str) -> bool,
+        )> = vec![];
+        for radius in [0.1, 1.0] {
+            algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
+        }
+        for k in [1, 10, 100] {
+            algs.push((super::Algorithm::KnnRepeatedRnn(k, 2.0), check_search_by_distance));
+            algs.push((super::Algorithm::KnnBreadthFirst(k), check_search_by_distance));
+            algs.push((super::Algorithm::KnnDepthFirst(k), check_search_by_distance));
+        }
+
+        let seed = 42;
+        let data = gen_random_data(car, dim, 10.0, seed)?;
+        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+        let seed = Some(seed);
+        let query = &vec![0.0; dim];
+
+        let root = Ball::new_tree(&data, &criteria, seed);
+
+        for &(alg, checker) in &algs {
+            let true_hits = alg.par_linear_search(&data, query);
+
+            if car < 100_000 {
+                let pred_hits = alg.search(&data, &root, query);
+                checker(true_hits.clone(), pred_hits, &alg.name());
+            }
+
+            let pred_hits = alg.par_search(&data, &root, query);
+            checker(true_hits, pred_hits, &alg.name());
+        }
+
+        let mut data = data;
+        let root = OffsetBall::from_ball_tree(root, &mut data);
+
+        for (alg, checker) in algs {
+            let true_hits = alg.par_linear_search(&data, query);
+
+            if car < 100_000 {
+                let pred_hits = alg.search(&data, &root, query);
+                checker(true_hits.clone(), pred_hits, &alg.name());
+            }
+
+            let pred_hits = alg.par_search(&data, &root, query);
+            checker(true_hits, pred_hits, &alg.name());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn strings() -> Result<(), String> {
+        let mut algs: Vec<(
+            super::Algorithm<u16>,
+            fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str) -> bool,
+        )> = vec![];
+        for radius in [4, 8, 16] {
+            algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
+        }
+        for k in [1, 10, 20] {
+            algs.push((super::Algorithm::KnnRepeatedRnn(k, 2), check_search_by_distance));
+            algs.push((super::Algorithm::KnnBreadthFirst(k), check_search_by_distance));
+            algs.push((super::Algorithm::KnnDepthFirst(k), check_search_by_distance));
+        }
+
+        let seed_length = 100;
+        let alphabet = "ACTGN".chars().collect::<Vec<_>>();
+        let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
+        let penalties = distances::strings::Penalties::default();
+        let num_clumps = 16;
+        let clump_size = 16;
+        let clump_radius = 3_u16;
+        let (metadata, data) = symagen::random_edits::generate_clumped_data(
+            &seed_string,
+            penalties,
+            &alphabet,
+            num_clumps,
+            clump_size,
+            clump_radius,
+        )
+        .into_iter()
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+        let query = &seed_string;
+
+        let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
+        let metric = Metric::new(distance_fn, true);
+        let data = FlatVec::new(data, metric)?.with_metadata(metadata)?;
+
+        let criteria = |c: &Ball<u16>| c.cardinality() > 1;
+        let seed = Some(42);
+
+        let root = Ball::new_tree(&data, &criteria, seed);
+
+        for &(alg, checker) in &algs {
+            let true_hits = alg.par_linear_search(&data, query);
+
+            let pred_hits = alg.search(&data, &root, query);
+            checker(true_hits.clone(), pred_hits, &alg.name());
+
+            let pred_hits = alg.par_search(&data, &root, query);
+            checker(true_hits, pred_hits, &alg.name());
+        }
+
+        let mut data = data;
+        let root = OffsetBall::from_ball_tree(root, &mut data);
+
+        for (alg, checker) in algs {
+            let true_hits = alg.par_linear_search(&data, query);
+
+            let pred_hits = alg.search(&data, &root, query);
+            checker(true_hits.clone(), pred_hits, &alg.name());
+
+            let pred_hits = alg.par_search(&data, &root, query);
+            checker(true_hits, pred_hits, &alg.name());
+        }
+
+        Ok(())
     }
 }
