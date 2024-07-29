@@ -1,4 +1,4 @@
-//! A adaptation of `Ball` that stores indices after reordering the dataset.
+//! An adaptation of `Ball` that stores indices after reordering the dataset.
 
 use distances::Number;
 

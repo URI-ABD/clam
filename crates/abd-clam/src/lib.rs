@@ -22,12 +22,9 @@ mod core;
 // pub mod pancakes;
 pub mod utils;
 
-pub use crate::{
-    cakes::Shardable,
-    core::{
-        adapter, cluster, dataset, linear_search, partition, Ball, Children, Cluster, Dataset, FlatVec, Metric,
-        MetricSpace, Partition, Permutable, LFD,
-    },
+pub use crate::core::{
+    adapter, cluster, dataset, linear_search, partition, Ball, Children, Cluster, Dataset, FlatVec, Metric, MetricSpace,
+    Partition, Permutable, LFD,
 };
 
 /// The current version of the crate.
