@@ -174,7 +174,7 @@ fn par_leaf_into_hits<I, U, D, C>(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use distances::Number;
 
     use crate::{

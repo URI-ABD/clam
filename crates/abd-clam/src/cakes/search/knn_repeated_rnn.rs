@@ -112,7 +112,7 @@ mod tests {
 
     use super::super::tests::{check_search_by_distance, gen_grid_data, gen_line_data};
 
-    pub fn check_knn<I: Send + Sync, U: Number, C: ParCluster<U>>(
+    fn check_knn<I: Send + Sync, U: Number, C: ParCluster<U>>(
         root: &C,
         data: &FlatVec<I, U, usize>,
         query: &I,
