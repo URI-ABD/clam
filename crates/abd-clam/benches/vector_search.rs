@@ -4,59 +4,55 @@ use abd_clam::{
     Ball, Cluster, FlatVec, Metric,
 };
 use criterion::*;
+use distances::Number;
 use rand::prelude::*;
 
-const METRICS: &[(&str, fn(&String, &String) -> u16)] = &[
-    ("levenshtein", |x: &String, y: &String| {
-        distances::strings::levenshtein(x, y)
+const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
+    ("euclidean", |x: &Vec<f32>, y: &Vec<f32>| {
+        distances::vectors::euclidean(x, y)
     }),
-    ("needleman-wunsch", |x: &String, y: &String| {
-        distances::strings::nw_distance(x, y)
+    ("euclidean_sq", |x: &Vec<f32>, y: &Vec<f32>| {
+        distances::vectors::euclidean_sq(x, y)
     }),
+    ("manhattan", |x: &Vec<f32>, y: &Vec<f32>| {
+        distances::vectors::manhattan(x, y)
+    }),
+    ("cosine", |x: &Vec<f32>, y: &Vec<f32>| distances::vectors::cosine(x, y)),
 ];
 
-fn genomic(c: &mut Criterion) {
-    let seed_length = 100;
-    let alphabet = "ACTGN".chars().collect::<Vec<_>>();
-    let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
-    let penalties = distances::strings::Penalties::default();
-    let num_clumps = 256;
-    let clump_size = 32;
-    let clump_radius = 3_u16;
-    let (_, genomes) = symagen::random_edits::generate_clumped_data(
-        &seed_string,
-        penalties,
-        &alphabet,
-        num_clumps,
-        clump_size,
-        clump_radius,
-    )
-    .into_iter()
-    .unzip::<_, _, Vec<_>, Vec<_>>();
+fn vector_search(c: &mut Criterion) {
+    let cardinality = 100_000;
+    let dimensionality = 100;
+    let max_val = 10.0;
+    let min_val = -max_val;
+    let seed = 42;
+    let rows = symagen::random_data::random_tabular_seedable(cardinality, dimensionality, min_val, max_val, seed);
 
+    let num_queries = 20;
     let queries = {
-        let mut indices = (0..genomes.len()).collect::<Vec<_>>();
-        indices.shuffle(&mut rand::thread_rng());
+        let mut indices = (0..rows.len()).collect::<Vec<_>>();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        indices.shuffle(&mut rng);
         indices
             .into_iter()
-            .take(10)
-            .map(|i| genomes[i].clone())
+            .take(num_queries)
+            .map(|i| rows[i].clone())
             .collect::<Vec<_>>()
     };
 
-    let seed = Some(42);
-    let radii = vec![2, 3, 4, 6, 16];
-    let ks = vec![1, 10, 20];
+    let seed = Some(seed);
+    let radii = vec![0.05, 0.1, 0.5, 1.0];
+    let ks = vec![1, 10, 100];
     for &(metric_name, distance_fn) in METRICS {
         let metric = Metric::new(distance_fn, true);
-        let data = FlatVec::new(genomes.clone(), metric).unwrap();
+        let data = FlatVec::new(rows.clone(), metric).unwrap();
 
-        let criteria = |c: &Ball<u16>| c.cardinality() > 1;
+        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
         let root = Ball::par_new_tree(&data, &criteria, seed);
         bench_on_root(c, false, metric_name, &root, &data, &queries, &radii, &ks);
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(root, &mut data);
+        let root = OffsetBall::par_from_ball_tree(root, &mut data);
         bench_on_root(c, true, metric_name, &root, &data, &queries, &radii, &ks);
     }
 }
@@ -66,16 +62,21 @@ fn bench_on_root<C>(
     permuted: bool,
     metric_name: &str,
     root: &C,
-    data: &FlatVec<String, u16, usize>,
-    queries: &[String],
-    radii: &[u16],
+    data: &FlatVec<Vec<f32>, f32, usize>,
+    queries: &[Vec<f32>],
+    radii: &[f32],
     ks: &[usize],
 ) where
-    C: Cluster<u16> + cakes::cluster::ParSearchable<String, u16, FlatVec<String, u16, usize>>,
+    C: Cluster<f32> + cakes::cluster::ParSearchable<Vec<f32>, f32, FlatVec<Vec<f32>, f32, usize>>,
 {
     let permuted = if permuted { "-permuted" } else { "" };
 
-    let mut group = c.benchmark_group(format!("genomic-{}{}", metric_name, permuted));
+    let mut group = c.benchmark_group(format!("vector-search-{}{}", metric_name, permuted));
+    group
+        .sample_size(10)
+        .sampling_mode(SamplingMode::Flat)
+        .throughput(Throughput::Elements(queries.len().as_u64()))
+        .plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
     for &radius in radii {
         let id = BenchmarkId::new("RnnClustered", radius);
@@ -87,7 +88,7 @@ fn bench_on_root<C>(
     for &k in ks {
         let id = BenchmarkId::new("KnnRepeatedRnn", k);
         group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.batch_search(&data, &queries, Algorithm::KnnRepeatedRnn(k, 2)));
+            b.iter_with_large_drop(|| root.batch_search(&data, &queries, Algorithm::KnnRepeatedRnn(k, 2.0)));
         });
 
         let id = BenchmarkId::new("KnnBreadthFirst", k);
@@ -111,7 +112,7 @@ fn bench_on_root<C>(
     for &k in ks {
         let id = BenchmarkId::new("ParKnnRepeatedRnn", k);
         group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.par_batch_par_search(&data, &queries, Algorithm::KnnRepeatedRnn(k, 2)));
+            b.iter_with_large_drop(|| root.par_batch_par_search(&data, &queries, Algorithm::KnnRepeatedRnn(k, 2.0)));
         });
 
         let id = BenchmarkId::new("ParKnnBreadthFirst", k);
@@ -126,5 +127,5 @@ fn bench_on_root<C>(
     }
 }
 
-criterion_group!(benches, genomic);
+criterion_group!(benches, vector_search);
 criterion_main!(benches);
