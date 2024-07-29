@@ -197,13 +197,37 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::cakes::OffsetBall;
-    use crate::partition::ParPartition;
-    use crate::{Ball, Partition};
+    use distances::Number;
 
-    use super::super::tests::{check_rnn, gen_grid_data, gen_line_data};
+    use crate::{
+        cakes::OffsetBall, cluster::ParCluster, linear_search::LinearSearch, partition::ParPartition, Ball, Cluster,
+        FlatVec, Partition,
+    };
 
-    use super::*;
+    use super::super::tests::{check_search_by_index, gen_grid_data, gen_line_data};
+
+    pub fn check_rnn<I: Send + Sync, U: Number, C: ParCluster<U>>(
+        root: &C,
+        data: &FlatVec<I, U, usize>,
+        query: &I,
+        radius: U,
+    ) -> bool {
+        let true_hits = data.rnn(query, radius);
+
+        let pred_hits = super::search(data, root, query, radius);
+        assert_eq!(pred_hits.len(), true_hits.len(), "Rnn search failed: {pred_hits:?}");
+        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered");
+
+        let pred_hits = super::par_search(data, root, query, radius);
+        assert_eq!(
+            pred_hits.len(),
+            true_hits.len(),
+            "Parallel Rnn search failed: {pred_hits:?}"
+        );
+        check_search_by_index(true_hits, pred_hits, "Par RnnClustered");
+
+        true
+    }
 
     #[test]
     fn line() -> Result<(), String> {

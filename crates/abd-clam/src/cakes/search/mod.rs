@@ -1,5 +1,6 @@
 //! Entropy scaling search algorithms.
 
+mod knn_repeated_rnn;
 mod rnn_clustered;
 
 use distances::Number;
@@ -40,6 +41,7 @@ impl<U: Number> Algorithm<U> {
     pub fn search<I, C: Cluster<U>, D: Dataset<I, U>>(&self, data: &D, root: &C, query: &I) -> Vec<(usize, U)> {
         match self {
             Self::RnnClustered(radius) => rnn_clustered::search(data, root, query, *radius),
+            Self::KnnRepeatedRnn(k, max_multiplier) => knn_repeated_rnn::search(data, root, query, *k, *max_multiplier),
             _ => unimplemented!(),
         }
     }
@@ -53,6 +55,9 @@ impl<U: Number> Algorithm<U> {
     ) -> Vec<(usize, U)> {
         match self {
             Self::RnnClustered(radius) => rnn_clustered::par_search(data, root, query, *radius),
+            Self::KnnRepeatedRnn(k, max_multiplier) => {
+                knn_repeated_rnn::par_search(data, root, query, *k, *max_multiplier)
+            }
             _ => unimplemented!(),
         }
     }
@@ -60,11 +65,10 @@ impl<U: Number> Algorithm<U> {
 
 #[cfg(test)]
 pub mod tests {
+    use distances::Number;
     use rand::prelude::*;
 
-    use crate::{linear_search::LinearSearch, FlatVec, Metric};
-
-    use super::*;
+    use crate::{FlatVec, Metric};
 
     pub fn gen_line_data(max: i32) -> Result<FlatVec<i32, u32, usize>, String> {
         let data = (-max..=max).collect::<Vec<_>>();
@@ -127,54 +131,6 @@ pub mod tests {
                 "Failed {name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}"
             );
         }
-
-        true
-    }
-
-    pub fn check_rnn<I: Send + Sync, U: Number, C: ParCluster<U>>(
-        root: &C,
-        data: &FlatVec<I, U, usize>,
-        query: &I,
-        radius: U,
-    ) -> bool {
-        let true_hits = data.rnn(query, radius);
-
-        let pred_hits = rnn_clustered::search(data, root, query, radius);
-        assert_eq!(pred_hits.len(), true_hits.len(), "Rnn search failed: {pred_hits:?}");
-        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered");
-
-        let pred_hits = rnn_clustered::par_search(data, root, query, radius);
-        assert_eq!(
-            pred_hits.len(),
-            true_hits.len(),
-            "Parallel Rnn search failed: {pred_hits:?}"
-        );
-        check_search_by_index(true_hits, pred_hits, "Par RnnClustered");
-
-        true
-    }
-
-    #[allow(dead_code)]
-    pub fn check_knn<I: Send + Sync, U: Number, C: ParCluster<U>>(
-        root: &C,
-        data: &FlatVec<I, U, usize>,
-        query: &I,
-        k: usize,
-        radius: U,
-    ) -> bool {
-        let true_hits = data.knn(query, k);
-
-        let pred_hits = rnn_clustered::search(data, root, query, radius);
-        assert_eq!(pred_hits.len(), true_hits.len(), "Knn search failed: {pred_hits:?}");
-        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered");
-
-        let pred_hits = rnn_clustered::par_search(data, root, query, radius);
-        assert_eq!(
-            pred_hits.len(),
-            true_hits.len(),
-            "Parallel Knn search failed: {pred_hits:?}"
-        );
-        check_search_by_distance(true_hits, pred_hits, "Par KnnClustered");
 
         true
     }
