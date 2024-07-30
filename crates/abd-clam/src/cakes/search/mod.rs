@@ -130,6 +130,12 @@ pub mod tests {
         true_hits.sort_by_key(|(i, _)| *i);
         pred_hits.sort_by_key(|(i, _)| *i);
 
+        assert_eq!(
+            true_hits.len(),
+            pred_hits.len(),
+            "{name}: {true_hits:?} vs {pred_hits:?}"
+        );
+
         for ((i, p), (j, q)) in true_hits.into_iter().zip(pred_hits) {
             let msg = format!("Failed {name} i: {i}, j: {j}, p: {p}, q: {q}");
             assert_eq!(i, j, "{msg}");
@@ -146,6 +152,12 @@ pub mod tests {
     ) -> bool {
         true_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
         pred_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
+
+        assert_eq!(
+            true_hits.len(),
+            pred_hits.len(),
+            "{name}: {true_hits:?} vs {pred_hits:?}"
+        );
 
         for (i, (&(_, p), &(_, q))) in true_hits.iter().zip(pred_hits.iter()).enumerate() {
             assert!(

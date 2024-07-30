@@ -60,10 +60,12 @@ where
             .into_iter()
             .map(|c| (c, c.distance_to_center(data, query)))
             .filter(|&(c, d)| d <= (c.radius() + radius))
-            .partition(|&(c, d)| (c.radius() + d) < radius);
+            .partition(|&(c, d)| (c.radius() + d) <= radius);
         confirmed.append(&mut terminal);
 
-        (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
+        (terminal, non_terminal) = non_terminal
+            .into_iter()
+            .partition(|&(c, _)| c.is_leaf() || c.is_singleton());
         straddlers.append(&mut terminal);
 
         candidates = non_terminal

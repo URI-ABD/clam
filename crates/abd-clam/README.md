@@ -13,8 +13,8 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 
 ```rust
 use abd_clam::{
+    cakes::{cluster::Searchable, Algorithm},
     Ball, Cluster, FlatVec, Metric, Partition,
-    cakes::{Algorithm, Searchable},
 };
 use rand::prelude::*;
 
@@ -36,7 +36,7 @@ let seed = 42;
 let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1.0, 1.0);
-let data: Vec<Vec<f32>> = symagen::random_data::random_tabular(
+let rows: Vec<Vec<f32>> = symagen::random_data::random_tabular(
     cardinality,
     dimensionality,
     min_val,
@@ -45,50 +45,48 @@ let data: Vec<Vec<f32>> = symagen::random_data::random_tabular(
 );
 
 // We will generate some random labels for each point.
-let labels: Vec<bool> = data.iter().map(|v| v[0] > 0.0).collect();
+let labels: Vec<bool> = rows.iter().map(|v| v[0] > 0.0).collect();
 
 // We have to create a `Metric` object to encapsulate the distance function and its properties.
 let metric = Metric::new(euclidean, false);
 
 // We can create a `Dataset` object. We make it mutable here so we can reorder it after building the tree.
-let dataset = FlatVec::new(data, metric).unwrap();
+let data = FlatVec::new(rows, metric).unwrap();
 
 // We can assign the labels as metadata to the dataset.
-let dataset = dataset.with_metadata(labels).unwrap();
-
-// We make the dataset mutable so we can reorder it after building the tree.
-let mut dataset = dataset;
+let data = data.with_metadata(labels).unwrap();
 
 // We define the criteria for building the tree to partition the `Cluster`s until each contains a single point.
 let criteria = |c: &Ball<f32>| c.cardinality() > 1;
 
-// Now we create a tree and reorder the dataset.
-let (root, _) = Ball::new_tree_and_permute(&mut dataset, &criteria, Some(seed));
+// Now we create a tree.
+let root = Ball::new_tree(&data, &criteria, Some(seed));
 
 // We will use the origin as our query.
 let query: Vec<f32> = vec![0.0; dimensionality];
 
-// We can now perform RNN search on the tree.
-let alg = Algorithm::RnnClustered(0.05);
-let rnn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
+// We can now perform Ranged Nearest Neighbors search on the tree.
+let radius = 0.05;
+let alg = Algorithm::RnnClustered(radius);
+let rnn_results: Vec<(usize, f32)> = root.search(&data, &query, alg);
 
 // KNN search is also supported.
 let k = 10;
 
 // The `KnnRepeatedRnn` algorithm starts RNN search with a small radius and increases it until it finds `k` neighbors.
 let alg = Algorithm::KnnRepeatedRnn(k, 2.0);
-let knn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
+let knn_results: Vec<(usize, f32)> = root.search(&data, &query, alg);
 
 // The `KnnBreadthFirst` algorithm searches the tree in a breadth-first manner.
 let alg = Algorithm::KnnBreadthFirst(k);
-let knn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
+let knn_results: Vec<(usize, f32)> = root.search(&data, &query, alg);
 
 // The `KnnDepthFirst` algorithm searches the tree in a depth-first manner.
 let alg = Algorithm::KnnDepthFirst(k);
-let knn_results: Vec<(usize, f32)> = root.search(&dataset, &query, alg);
+let knn_results: Vec<(usize, f32)> = root.search(&data, &query, alg);
 
 // We can borrow the reordered labels from the model.
-let labels: &[bool] = dataset.metadata();
+let labels: &[bool] = data.metadata();
 
 // We can use the results to get the labels of the points that are within the
 // radius of the query point.

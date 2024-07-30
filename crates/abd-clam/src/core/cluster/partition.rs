@@ -51,13 +51,15 @@ pub trait Partition<U: Number>: Cluster<U> {
     ///
     /// # Returns
     ///
-    /// The instances with which to initialize the child `Cluster`s.
+    /// - The instances with which to initialize the child `Cluster`s.
+    /// - The distance from each pole to the farthest instance assigned to that
+    /// child.
     fn split_by_extrema<I, D: Dataset<I, U>>(
         &self,
         data: &D,
         extrema: Vec<usize>,
         instances: Vec<usize>,
-    ) -> Vec<Vec<usize>> {
+    ) -> (Vec<Vec<usize>>, Vec<U>) {
         // Find the distances from each pole to each instance.
         let polar_distances = Dataset::many_to_many(data, &extrema, &instances);
 
@@ -70,20 +72,30 @@ pub trait Partition<U: Number>: Cluster<U> {
         }
 
         // Initialize a child stack for each pole.
-        let mut child_stacks = extrema.iter().map(|&p| vec![p]).collect::<Vec<_>>();
+        let mut child_stacks = extrema.iter().map(|&p| vec![(p, U::ZERO)]).collect::<Vec<_>>();
 
         // For each pole, find the instances that are closer to it than to any
         // other pole.
         for (col, instance) in distances.iter().zip(instances) {
-            let (pole_index, _) = col
+            let (pole_index, &d) = col
                 .iter()
                 .enumerate()
                 .min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Greater))
                 .unwrap_or_else(|| unreachable!("Cannot find the minimum distance"));
-            child_stacks[pole_index].push(instance);
+            child_stacks[pole_index].push((instance, d));
         }
 
         child_stacks
+            .into_iter()
+            .map(|stack| {
+                let (instances, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+                let max_distance = distances
+                    .into_iter()
+                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+                    .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
+                (instances, max_distance)
+            })
+            .unzip()
     }
 
     /// Recursively partitions the `Cluster` into a tree.
@@ -116,7 +128,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     ) -> Self {
         indices = if !self.is_singleton() && criteria(&self) {
             let (extrema, mut indices, extremal_distances) = self.find_extrema(data);
-            let child_stacks = self.split_by_extrema(data, extrema, indices);
+            let (child_stacks, child_extents) = self.split_by_extrema(data, extrema, indices);
             let depth = self.depth() + 1;
             let (children, other) = child_stacks
                 .into_iter()
@@ -129,7 +141,7 @@ pub trait Partition<U: Number>: Cluster<U> {
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
             indices = child_stacks.into_iter().flatten().collect::<Vec<_>>();
-            let children = Children::new(children, arg_extrema, extremal_distances);
+            let children = Children::new(children, arg_extrema, extremal_distances, child_extents);
             self = self.set_children(children);
             indices
         } else {
@@ -161,7 +173,7 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
         data: &D,
         extrema: Vec<usize>,
         instances: Vec<usize>,
-    ) -> Vec<Vec<usize>> {
+    ) -> (Vec<Vec<usize>>, Vec<U>) {
         // Find the distances from each pole to each instance.
         let polar_distances = ParDataset::par_many_to_many(data, &extrema, &instances);
 
@@ -174,20 +186,32 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
         }
 
         // Initialize a child stack for each pole.
-        let mut child_stacks = extrema.iter().map(|&p| vec![p]).collect::<Vec<_>>();
+        let mut child_stacks = extrema.iter().map(|&p| vec![(p, U::ZERO)]).collect::<Vec<_>>();
 
         // For each pole, find the instances that are closer to it than to any
         // other pole.
         for (col, instance) in distances.iter().zip(instances) {
-            let (pole_index, _) = col
+            let (pole_index, &d) = col
                 .iter()
                 .enumerate()
                 .min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Greater))
                 .unwrap_or_else(|| unreachable!("Cannot find the minimum distance"));
-            child_stacks[pole_index].push(instance);
+            child_stacks[pole_index].push((instance, d));
         }
 
-        child_stacks
+        let child_stacks: Vec<(Vec<usize>, U)> = child_stacks
+            .into_par_iter()
+            .map(|stack| {
+                let (instances, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+                let max_distance = distances
+                    .into_iter()
+                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+                    .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
+                (instances, max_distance)
+            })
+            .collect();
+
+        child_stacks.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
     }
 
     /// Parallelized version of the `partition` method.
@@ -201,7 +225,7 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
     ) -> Self {
         indices = if !self.is_singleton() && criteria(&self) {
             let (extrema, mut indices, extremal_distances) = self.par_find_extrema(data);
-            let child_stacks = self.par_split_by_extrema(data, extrema, indices);
+            let (child_stacks, child_extents) = self.par_split_by_extrema(data, extrema, indices);
             let depth = self.depth() + 1;
             let (children, other) = child_stacks
                 .into_par_iter()
@@ -214,7 +238,7 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
             indices = child_stacks.into_iter().flatten().collect::<Vec<_>>();
-            let children = Children::new(children, arg_extrema, extremal_distances);
+            let children = Children::new(children, arg_extrema, extremal_distances, child_extents);
             self = self.set_children(children);
             indices
         } else {

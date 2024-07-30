@@ -19,6 +19,8 @@ pub struct Children<U: Number, C> {
     arg_extrema: Vec<usize>,
     /// The pairwise distances between the extrema.
     extremal_distances: Vec<Vec<U>>,
+    /// The distances from each extremum to the farthest point assigned in that child.
+    child_extents: Vec<U>,
 }
 
 impl<U: Number> Children<U, Ball<U>> {
@@ -36,6 +38,7 @@ impl<U: Number> Children<U, Ball<U>> {
             clusters,
             arg_extrema: self.arg_extrema,
             extremal_distances: self.extremal_distances,
+            child_extents: self.child_extents,
         };
         let indices = indices.into_iter().flatten().collect();
         (children, indices)
@@ -55,6 +58,7 @@ impl<U: Number> Children<U, Ball<U>> {
             clusters,
             arg_extrema: self.arg_extrema,
             extremal_distances: self.extremal_distances,
+            child_extents: self.child_extents,
         };
         let indices = indices.into_iter().flatten().collect();
         (children, indices)
@@ -68,11 +72,17 @@ impl<U: Number, C> Children<U, C> {
     ///
     /// - `children`: The children of the `Cluster`.
     /// - `arg_extrema`: The indices of the extremal points used to partition the `Cluster`.
-    pub fn new(clusters: Vec<C>, arg_extrema: Vec<usize>, extremal_distances: Vec<Vec<U>>) -> Self {
+    pub fn new(
+        clusters: Vec<C>,
+        arg_extrema: Vec<usize>,
+        extremal_distances: Vec<Vec<U>>,
+        child_extents: Vec<U>,
+    ) -> Self {
         Self {
             clusters: clusters.into_iter().map(Box::new).collect(),
             arg_extrema,
             extremal_distances,
+            child_extents,
         }
     }
 
@@ -105,34 +115,33 @@ impl<U: Number, C> Children<U, C> {
         &self.extremal_distances
     }
 
+    /// Returns the distances from each extremum to the farthest point assigned in that child.
+    #[must_use]
+    pub fn child_extents(&self) -> &[U] {
+        &self.child_extents
+    }
+
     /// Gets the child clusters that overlap with a query ball.
     #[must_use]
     pub fn overlapping_clusters<I, D: Dataset<I, U>>(&self, data: &D, query: &I, radius: U) -> Vec<&C>
     where
         C: Cluster<U>,
     {
-        // We start by finding the first child that has overlapping volume with
-        // the query ball
-        let anchor = self
-            .clusters
-            .iter()
-            .map(Box::as_ref)
-            .enumerate()
-            .find(|&(_, c)| c.distance_to_center(data, query) <= (c.radius() + radius));
-        if let Some((i, anchor)) = anchor {
-            self.clusters
-                .iter()
-                .skip(i + 1)
-                .map(Box::as_ref)
-                .filter(|&c| {
-                    // TODO: use triangle math here
-                    c.distance_to_center(data, query) <= (c.radius() + radius)
-                })
-                .chain(core::iter::once(anchor))
-                .collect()
-        } else {
-            Vec::new()
-        }
+        data.query_to_many(query, &self.arg_extrema)
+            .into_iter()
+            .map(|(_, d)| d)
+            .zip(self.child_extents.iter().copied())
+            .zip(self.clusters.iter().map(Box::as_ref))
+            .filter_map(
+                |((distance, extent), child)| {
+                    if distance <= radius + extent {
+                        Some(child)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect()
     }
 
     /// Parallel version of the `overlapping_clusters` method.
@@ -146,31 +155,20 @@ impl<U: Number, C> Children<U, C> {
     where
         C: ParCluster<U>,
     {
-        // We start by finding the first child that has overlapping volume with
-        // the query ball
-        let anchor = self
-            .clusters
-            .iter()
-            .map(Box::as_ref)
-            .enumerate()
-            .find(|&(_, c)| c.distance_to_center(data, query) <= (c.radius() + radius));
-        if let Some((i, anchor)) = anchor {
-            // TODO: Can we improve the parallelism here?
-            let mut clusters = vec![anchor];
-            self.clusters
-                .par_iter()
-                .skip(i + 1)
-                .map(Box::as_ref)
-                .filter(|&c| {
-                    // TODO: use triangle math here
-                    c.distance_to_center(data, query) <= (c.radius() + radius)
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .for_each(|c| clusters.push(c));
-            clusters
-        } else {
-            Vec::new()
-        }
+        data.par_query_to_many(query, &self.arg_extrema)
+            .into_iter()
+            .map(|(_, d)| d)
+            .zip(self.child_extents.iter().copied())
+            .zip(self.clusters.iter().map(Box::as_ref))
+            .filter_map(
+                |((distance, extent), child)| {
+                    if distance <= radius + extent {
+                        Some(child)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect()
     }
 }
