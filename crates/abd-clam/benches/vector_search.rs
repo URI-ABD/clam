@@ -51,6 +51,7 @@ fn vector_search(c: &mut Criterion) {
 
         utils::compare_permuted(
             c,
+            "vector-search",
             metric_name,
             &data,
             &root,
@@ -59,6 +60,7 @@ fn vector_search(c: &mut Criterion) {
             &queries,
             &radii,
             &ks,
+            false,
         );
     }
 }

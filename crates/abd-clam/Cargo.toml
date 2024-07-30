@@ -59,3 +59,7 @@ harness = false
 [[bench]]
 name = "vector_search"
 harness = false
+
+[[bench]]
+name = "ann_benchmarks"
+harness = false

@@ -34,6 +34,7 @@ use distances::Number;
 /// - `Dp`: The type of the permuted dataset.
 pub fn compare_permuted<I, U, D, Dp>(
     c: &mut Criterion,
+    data_name: &str,
     metric_name: &str,
     data: &D,
     root: &Ball<U>,
@@ -42,6 +43,7 @@ pub fn compare_permuted<I, U, D, Dp>(
     queries: &[I],
     radii: &[U],
     ks: &[usize],
+    par_only: bool,
 ) where
     I: Send + Sync,
     U: Number,
@@ -54,7 +56,7 @@ pub fn compare_permuted<I, U, D, Dp>(
         Algorithm::KnnDepthFirst(ks[0]),
     ];
 
-    let mut group = c.benchmark_group(format!("vectors-RnnClustered-{}", metric_name));
+    let mut group = c.benchmark_group(format!("{}-{}-RnnClustered", data_name, metric_name));
     group
         .sample_size(10)
         .sampling_mode(SamplingMode::Flat)
@@ -63,12 +65,14 @@ pub fn compare_permuted<I, U, D, Dp>(
     for &radius in radii {
         let alg = Algorithm::RnnClustered(radius);
 
-        group.bench_with_input(BenchmarkId::new("Ball", radius), &radius, |b, _| {
-            b.iter_with_large_drop(|| root.batch_search(data, queries, alg));
-        });
-        group.bench_with_input(BenchmarkId::new("OffsetBall", radius), &radius, |b, _| {
-            b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
-        });
+        if !par_only {
+            group.bench_with_input(BenchmarkId::new("Ball", radius), &radius, |b, _| {
+                b.iter_with_large_drop(|| root.batch_search(data, queries, alg));
+            });
+            group.bench_with_input(BenchmarkId::new("OffsetBall", radius), &radius, |b, _| {
+                b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
+            });
+        }
 
         group.bench_with_input(BenchmarkId::new("ParBall", radius), &radius, |b, _| {
             b.iter_with_large_drop(|| root.par_batch_search(data, queries, alg));
@@ -80,7 +84,7 @@ pub fn compare_permuted<I, U, D, Dp>(
     group.finish();
 
     for alg in &algs {
-        let mut group = c.benchmark_group(format!("vectors-{}-{}", alg.variant_name(), metric_name));
+        let mut group = c.benchmark_group(format!("{}-{}-{}", data_name, metric_name, alg.variant_name()));
         group
             .sample_size(10)
             .sampling_mode(SamplingMode::Flat)
@@ -89,12 +93,15 @@ pub fn compare_permuted<I, U, D, Dp>(
         for &k in ks {
             let alg = alg.with_params(U::ZERO, k);
 
-            group.bench_with_input(BenchmarkId::new("Ball", k), &k, |b, _| {
-                b.iter_with_large_drop(|| root.batch_search(data, queries, alg));
-            });
-            group.bench_with_input(BenchmarkId::new("OffsetBall", k), &k, |b, _| {
-                b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
-            });
+            if !par_only {
+                group.bench_with_input(BenchmarkId::new("Ball", k), &k, |b, _| {
+                    b.iter_with_large_drop(|| root.batch_search(data, queries, alg));
+                });
+                group.bench_with_input(BenchmarkId::new("OffsetBall", k), &k, |b, _| {
+                    b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
+                });
+            }
+
             group.bench_with_input(BenchmarkId::new("ParBall", k), &k, |b, _| {
                 b.iter_with_large_drop(|| root.par_batch_search(data, queries, alg));
             });

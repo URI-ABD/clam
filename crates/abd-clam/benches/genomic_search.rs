@@ -62,6 +62,7 @@ fn genomic_search(c: &mut Criterion) {
 
         utils::compare_permuted(
             c,
+            "genomic-search",
             metric_name,
             &data,
             &root,
@@ -70,6 +71,7 @@ fn genomic_search(c: &mut Criterion) {
             &queries,
             &radii,
             &ks,
+            true,
         );
     }
 }

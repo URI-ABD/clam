@@ -98,6 +98,27 @@ impl<T, U> FlatVec<Vec<T>, U, usize> {
 }
 
 impl<I, U, M> FlatVec<I, U, M> {
+    /// Deconstructs the `FlatVec` into its components.
+    ///
+    /// # Returns
+    ///
+    /// - The `Metric` of the dataset.
+    /// - The instances in the dataset.
+    /// - A hint for the dimensionality of the dataset.
+    /// - The permutation of the instances.
+    /// - The metadata associated with the instances.
+    #[allow(clippy::type_complexity)]
+    #[must_use]
+    pub fn deconstruct(self) -> (Metric<I, U>, Vec<I>, (usize, Option<usize>), Vec<usize>, Vec<M>) {
+        (
+            self.metric,
+            self.instances,
+            self.dimensionality_hint,
+            self.permutation,
+            self.metadata,
+        )
+    }
+
     /// Sets a lower bound for the dimensionality of the dataset.
     #[must_use]
     pub const fn with_dim_lower_bound(mut self, lower_bound: usize) -> Self {
