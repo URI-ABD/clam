@@ -1,8 +1,8 @@
-use abd_clam::{
-    cakes::{self, Algorithm, OffsetBall},
-    partition::ParPartition,
-    Ball, Cluster, FlatVec, Metric,
-};
+//! Benchmark for genomic search.
+
+mod utils;
+
+use abd_clam::{cakes::OffsetBall, partition::ParPartition, Ball, Cluster, FlatVec, Metric};
 use criterion::*;
 use rand::prelude::*;
 
@@ -20,7 +20,7 @@ fn genomic_search(c: &mut Criterion) {
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
     let penalties = distances::strings::Penalties::default();
-    let num_clumps = 256;
+    let num_clumps = 128;
     let clump_size = 32;
     let clump_radius = 3_u16;
     let (_, genomes) = symagen::random_edits::generate_clumped_data(
@@ -48,7 +48,7 @@ fn genomic_search(c: &mut Criterion) {
     };
 
     let seed = Some(seed);
-    let radii = vec![2, 3, 4, 6, 16];
+    let radii = vec![1, 2, 3, 4, 6, 10];
     let ks = vec![1, 10, 20];
     for &(metric_name, distance_fn) in METRICS {
         let metric = Metric::new(distance_fn, true);
@@ -56,76 +56,21 @@ fn genomic_search(c: &mut Criterion) {
 
         let criteria = |c: &Ball<_>| c.cardinality() > 1;
         let root = Ball::par_new_tree(&data, &criteria, seed);
-        bench_on_root(c, false, metric_name, &root, &data, &queries, &radii, &ks);
 
-        let mut data = data;
-        let root = OffsetBall::from_ball_tree(root, &mut data);
-        bench_on_root(c, true, metric_name, &root, &data, &queries, &radii, &ks);
-    }
-}
+        let mut perm_data = data.clone();
+        let perm_root = OffsetBall::par_from_ball_tree(root.clone(), &mut perm_data);
 
-fn bench_on_root<C>(
-    c: &mut Criterion,
-    permuted: bool,
-    metric_name: &str,
-    root: &C,
-    data: &FlatVec<String, u16, usize>,
-    queries: &[String],
-    radii: &[u16],
-    ks: &[usize],
-) where
-    C: Cluster<u16> + cakes::cluster::ParSearchable<String, u16, FlatVec<String, u16, usize>>,
-{
-    let permuted = if permuted { "-permuted" } else { "" };
-
-    let mut group = c.benchmark_group(format!("genomic-search-{}{}", metric_name, permuted));
-
-    for &radius in radii {
-        let id = BenchmarkId::new("RnnClustered", radius);
-        group.bench_with_input(id, &radius, |b, &radius| {
-            b.iter_with_large_drop(|| root.batch_search(&data, &queries, Algorithm::RnnClustered(radius)));
-        });
-    }
-
-    for &k in ks {
-        let id = BenchmarkId::new("KnnRepeatedRnn", k);
-        group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.batch_search(&data, &queries, Algorithm::KnnRepeatedRnn(k, 2)));
-        });
-
-        let id = BenchmarkId::new("KnnBreadthFirst", k);
-        group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.batch_search(&data, &queries, Algorithm::KnnBreadthFirst(k)));
-        });
-
-        let id = BenchmarkId::new("KnnDepthFirst", k);
-        group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.batch_search(&data, &queries, Algorithm::KnnDepthFirst(k)));
-        });
-    }
-
-    for &radius in radii {
-        let id = BenchmarkId::new("ParRnnClustered", radius);
-        group.bench_with_input(id, &radius, |b, &radius| {
-            b.iter_with_large_drop(|| root.par_batch_par_search(&data, queries, Algorithm::RnnClustered(radius)));
-        });
-    }
-
-    for &k in ks {
-        let id = BenchmarkId::new("ParKnnRepeatedRnn", k);
-        group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.par_batch_par_search(&data, &queries, Algorithm::KnnRepeatedRnn(k, 2)));
-        });
-
-        let id = BenchmarkId::new("ParKnnBreadthFirst", k);
-        group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.par_batch_par_search(&data, &queries, Algorithm::KnnBreadthFirst(k)));
-        });
-
-        let id = BenchmarkId::new("ParKnnDepthFirst", k);
-        group.bench_with_input(id, &k, |b, &k| {
-            b.iter_with_large_drop(|| root.par_batch_par_search(&data, &queries, Algorithm::KnnDepthFirst(k)));
-        });
+        utils::compare_permuted(
+            c,
+            metric_name,
+            &data,
+            &root,
+            &perm_data,
+            &perm_root,
+            &queries,
+            &radii,
+            &ks,
+        );
     }
 }
 
