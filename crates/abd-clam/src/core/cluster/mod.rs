@@ -2,7 +2,6 @@
 
 pub mod adapter;
 mod ball;
-mod children;
 mod lfd;
 pub mod partition;
 
@@ -11,11 +10,12 @@ use core::fmt::Debug;
 use std::hash::Hash;
 
 use distances::Number;
+use rayon::prelude::*;
 
 use super::{dataset::ParDataset, Dataset, MetricSpace};
 
 pub use ball::Ball;
-pub use children::Children;
+// pub use children::Children;
 pub use lfd::LFD;
 pub use partition::Partition;
 
@@ -84,15 +84,15 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
 
     /// Returns the children of the `Cluster`.
     #[must_use]
-    fn children(&self) -> Option<&Children<U, Self>>;
+    fn children(&self) -> &[(usize, U, Box<Self>)];
 
     /// Returns the children of the `Cluster` as mutable references.
     #[must_use]
-    fn children_mut(&mut self) -> Option<&mut Children<U, Self>>;
+    fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)];
 
     /// Sets the children of the `Cluster`.
     #[must_use]
-    fn set_children(self, children: Children<U, Self>) -> Self;
+    fn set_children(self, children: Vec<(usize, U, Self)>) -> Self;
 
     /// Finds the extrema of the `Cluster`.
     ///
@@ -112,10 +112,29 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
     ///
     /// # Returns
     ///
-    /// - The extrema to use for partitioning the `Cluster`.
-    /// - The remaining instances in the `Cluster`.
-    /// - The pairwise distances between the extrema.
-    fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>);
+    /// The extrema to use for partitioning the `Cluster`.
+    fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> Vec<usize>;
+
+    /// Gets the child `Cluster`s.
+    fn child_clusters<'a>(&'a self) -> impl Iterator<Item = &Self>
+    where
+        U: 'a,
+    {
+        self.children().iter().map(|(_, _, child)| child.as_ref())
+    }
+
+    /// Gets only those children which might overlap with a query ball.
+    fn overlapping_children<'a, I, D: Dataset<I, U>>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
+    where
+        U: 'a,
+    {
+        self.children()
+            .iter()
+            .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
+            .filter(|&(d, e, _)| d <= (e + radius))
+            .map(|(_, _, c)| c.as_ref())
+            .collect()
+    }
 
     /// Returns all `Cluster`s in the subtree of this `Cluster`, in depth-first order.
     fn subtree<'a>(&'a self) -> Vec<&'a Self>
@@ -123,11 +142,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
         U: 'a,
     {
         let mut clusters = vec![self];
-        if let Some(children) = self.children() {
-            for child in children.clusters() {
-                clusters.extend(child.subtree());
-            }
-        }
+        self.child_clusters().for_each(|child| clusters.extend(child.subtree()));
         clusters
     }
 
@@ -147,7 +162,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
 
     /// Whether the `Cluster` is a leaf in the tree.
     fn is_leaf(&self) -> bool {
-        self.children().is_none()
+        self.children().is_empty()
     }
 
     /// Whether the `Cluster` is a singleton.
@@ -190,10 +205,28 @@ pub trait ParCluster<U: Number>: Cluster<U> + Send + Sync {
     ) -> (Self, usize);
 
     /// Parallelized version of the `find_extrema` method.
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>);
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize>;
 
     /// Parallelized version of the `distances` method.
     fn par_distances<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
+    }
+
+    /// Gets only those children which might overlap with a query ball.
+    fn par_overlapping_children<'a, I: Send + Sync, D: ParDataset<I, U>>(
+        &'a self,
+        data: &D,
+        query: &I,
+        radius: U,
+    ) -> Vec<&Self>
+    where
+        U: 'a,
+    {
+        self.children()
+            .par_iter()
+            .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
+            .filter(|&(d, e, _)| d <= (e + radius))
+            .map(|(_, _, c)| c.as_ref())
+            .collect()
     }
 }

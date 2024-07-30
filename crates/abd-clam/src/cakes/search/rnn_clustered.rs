@@ -70,11 +70,7 @@ where
 
         candidates = non_terminal
             .into_iter()
-            .flat_map(|(c, _)| {
-                c.children()
-                    .unwrap_or_else(|| unreachable!("Non-leaf cluster without children"))
-                    .overlapping_clusters(data, query, radius)
-            })
+            .flat_map(|(c, _)| c.overlapping_children(data, query, radius))
             .collect();
     }
 
@@ -107,11 +103,7 @@ where
 
         candidates = non_terminal
             .into_par_iter()
-            .flat_map(|(c, _)| {
-                c.children()
-                    .unwrap_or_else(|| unreachable!("Non-leaf cluster without children"))
-                    .par_overlapping_clusters(data, query, radius)
-            })
+            .flat_map(|(c, _)| c.par_overlapping_children(data, query, radius))
             .collect();
     }
 

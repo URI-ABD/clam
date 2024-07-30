@@ -40,10 +40,7 @@ where
 
         candidates = SizedHeap::new(None);
         for (_, p) in parents {
-            p.children()
-                .unwrap_or_else(|| unreachable!("This is only called on non-leaves."))
-                .clusters()
-                .into_iter()
+            p.child_clusters()
                 .map(|c| (c, c.distance_to_center(data, query)))
                 .for_each(|(c, d)| candidates.push((Reverse(d_max(c, d)), c)));
         }
@@ -87,7 +84,7 @@ where
         candidates = SizedHeap::new(None);
         let distances = parents
             .into_par_iter()
-            .flat_map(|(_, p)| p.children().unwrap_or_else(|| unreachable!()).clusters())
+            .flat_map(|(_, p)| p.child_clusters().collect::<Vec<_>>())
             .map(|c| (c, c.distance_to_center(data, query)))
             .collect::<Vec<_>>();
         distances

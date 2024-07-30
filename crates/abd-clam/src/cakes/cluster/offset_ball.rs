@@ -1,12 +1,13 @@
 //! An adaptation of `Ball` that stores indices after reordering the dataset.
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::{
     adapter::{Adapter, ParAdapter, ParParams, Params},
     cluster::ParCluster,
     dataset::ParDataset,
-    Ball, Children, Cluster, Dataset, Permutable,
+    Ball, Cluster, Dataset, Permutable,
 };
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
@@ -15,7 +16,7 @@ pub struct OffsetBall<U: Number> {
     /// The `Ball` of the `Cluster`.
     ball: Ball<U>,
     /// The children of the `Cluster`.
-    children: Option<Children<U, Self>>,
+    children: Vec<(usize, U, Box<Self>)>,
     /// The parameters of the `Cluster`.
     params: OffsetParams,
 }
@@ -50,32 +51,40 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
         let (ball, mut indices, children) = ball.deconstruct();
         let params = params.unwrap_or_default();
 
-        let mut cluster = if let Some(children) = children {
-            let (mut children, ret_indices) = children.adapt(&params);
-            children
-                .arg_extrema_mut()
-                .iter_mut()
-                .for_each(|p| *p = params.offset + position_of(p, &ret_indices));
-            let cluster = Self {
-                ball,
-                children: Some(children),
-                params,
-            };
-            indices = ret_indices;
-            cluster
-        } else {
+        let mut cluster = if children.is_empty() {
             Self {
                 ball,
-                children: None,
+                children: Vec::new(),
                 params,
             }
+        } else {
+            let (arg_extrema, others) = children
+                .into_iter()
+                .map(|(a, b, c)| (a, (b, c)))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+            let (children, ret_indices) = params
+                .child_params(&children)
+                .into_iter()
+                .zip(children)
+                .map(|(p, c)| Self::adapt(*c, Some(p)))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            let children = arg_extrema
+                .into_iter()
+                .zip(extents)
+                .zip(children)
+                .map(|((a, b), c)| (a, b, Box::new(c)))
+                .collect();
+            indices = ret_indices.into_iter().flatten().collect();
+            Self { ball, children, params }
         };
 
-        let arg_center = position_of(&cluster.ball.arg_center(), &indices);
-        cluster.set_arg_center(params.offset + arg_center);
-
-        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
-        cluster.set_arg_radial(params.offset + arg_radial);
+        // Update the indices of the important instances in the `Cluster`.
+        cluster.set_arg_center(new_index(cluster.ball.arg_center(), &indices, params.offset));
+        cluster.set_arg_radial(new_index(cluster.ball.arg_radial(), &indices, params.offset));
+        for (p, _, _) in cluster.children_mut() {
+            *p = new_index(*p, &indices, params.offset);
+        }
 
         (cluster, indices)
     }
@@ -89,12 +98,13 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
     }
 }
 
-/// Returns the position of an item in a slice.
-fn position_of<T: Eq>(item: &T, slice: &[T]) -> usize {
-    slice
-        .iter()
-        .position(|x| x == item)
-        .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
+/// Helper for computing a new index after permutation of data.
+fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
+    offset
+        + indices
+            .iter()
+            .position(|x| *x == i)
+            .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
 }
 
 impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
@@ -105,32 +115,40 @@ impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
         let (ball, mut indices, children) = ball.deconstruct();
         let params = params.unwrap_or_default();
 
-        let mut cluster = if let Some(children) = children {
-            let (mut children, ret_indices) = children.par_adapt(&params);
-            children
-                .arg_extrema_mut()
-                .iter_mut()
-                .for_each(|p| *p = params.offset + position_of(p, &ret_indices));
-            let cluster = Self {
-                ball,
-                children: Some(children),
-                params,
-            };
-            indices = ret_indices;
-            cluster
-        } else {
+        let mut cluster = if children.is_empty() {
             Self {
                 ball,
-                children: None,
+                children: Vec::new(),
                 params,
             }
+        } else {
+            let (arg_extrema, others) = children
+                .into_iter()
+                .map(|(a, b, c)| (a, (b, c)))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+            let (children, ret_indices) = params
+                .child_params(&children)
+                .into_par_iter()
+                .zip(children.into_par_iter())
+                .map(|(p, c)| Self::par_adapt(*c, Some(p)))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            let children = arg_extrema
+                .into_iter()
+                .zip(extents)
+                .zip(children)
+                .map(|((a, b), c)| (a, b, Box::new(c)))
+                .collect();
+            indices = ret_indices.into_iter().flatten().collect();
+            Self { ball, children, params }
         };
 
-        let arg_center = position_of(&cluster.ball.arg_center(), &indices);
-        cluster.set_arg_center(params.offset + arg_center);
-
-        let arg_radial = position_of(&cluster.ball.arg_radial(), &indices);
-        cluster.set_arg_radial(params.offset + arg_radial);
+        // Update the indices of the important instances in the `Cluster`.
+        cluster.set_arg_center(new_index(cluster.ball.arg_center(), &indices, params.offset));
+        cluster.set_arg_radial(new_index(cluster.ball.arg_radial(), &indices, params.offset));
+        for (p, _, _) in cluster.children_mut() {
+            *p = new_index(*p, &indices, params.offset);
+        }
 
         (cluster, indices)
     }
@@ -174,7 +192,7 @@ impl<U: Number> Cluster<U> for OffsetBall<U> {
         // TODO: Consider whether to reset indices of the ball.
         let vertex = Self {
             ball,
-            children: None,
+            children: Vec::new(),
             params: OffsetParams::default(),
         };
         (vertex, arg_radial)
@@ -220,29 +238,20 @@ impl<U: Number> Cluster<U> for OffsetBall<U> {
         todo!()
     }
 
-    fn children(&self) -> Option<&Children<U, Self>>
-    where
-        Self: Sized,
-    {
-        self.children.as_ref()
+    fn children(&self) -> &[(usize, U, Box<Self>)] {
+        self.children.as_slice()
     }
 
-    fn children_mut(&mut self) -> Option<&mut Children<U, Self>>
-    where
-        Self: Sized,
-    {
-        self.children.as_mut()
+    fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)] {
+        self.children.as_mut_slice()
     }
 
-    fn set_children(mut self, children: Children<U, Self>) -> Self
-    where
-        Self: Sized,
-    {
-        self.children = Some(children);
+    fn set_children(mut self, children: Vec<(usize, U, Self)>) -> Self {
+        self.children = children.into_iter().map(|(a, b, c)| (a, b, Box::new(c))).collect();
         self
     }
 
-    fn find_extrema<I, D: crate::Dataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>) {
+    fn find_extrema<I, D: crate::Dataset<I, U>>(&self, data: &D) -> Vec<usize> {
         self.ball.find_extrema(data)
     }
 }
@@ -288,13 +297,13 @@ impl<U: Number> ParCluster<U> for OffsetBall<U> {
         let (ball, arg_radial) = Ball::par_new(data, indices, depth, seed);
         let vertex = Self {
             ball,
-            children: None,
+            children: Vec::new(),
             params: OffsetParams::default(),
         };
         (vertex, arg_radial)
     }
 
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>) {
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize> {
         self.ball.par_find_extrema(data)
     }
 }
@@ -313,7 +322,7 @@ mod tests {
     }
 
     fn check_permutation(root: &OffsetBall<i32>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
-        assert!(root.children().is_some());
+        assert!(!root.children().is_empty());
 
         for cluster in root.subtree() {
             let radius = data.one_to_one(cluster.arg_center(), cluster.arg_radial());

@@ -23,7 +23,7 @@ mod core;
 pub mod utils;
 
 pub use crate::core::{
-    adapter, cluster, dataset, linear_search, partition, Ball, Children, Cluster, Dataset, FlatVec, Metric, MetricSpace,
+    adapter, cluster, dataset, linear_search, partition, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace,
     Partition, Permutable, LFD,
 };
 

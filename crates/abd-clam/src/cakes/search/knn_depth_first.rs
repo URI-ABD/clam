@@ -84,16 +84,11 @@ where
         .peek() // The top candidate is a leaf
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| !c.is_leaf())
     {
-        let c = candidates
+        let parent = candidates
             .pop()
             .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| c);
-        let children = c
-            .children()
-            .unwrap_or_else(|| unreachable!("elements are non-leaves"))
-            .clusters();
-        for c in children {
-            let d = c.distance_to_center(data, query);
-            candidates.push((Reverse(d_min(c, d)), c));
+        for child in parent.child_clusters() {
+            candidates.push((Reverse(d_min(child, child.distance_to_center(data, query))), child));
         }
     }
 }
@@ -134,13 +129,10 @@ where
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| !c.is_leaf())
     // is not a leaf
     {
-        let c = candidates
+        let parent = candidates
             .pop()
             .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| c);
-        let children = c
-            .children()
-            .unwrap_or_else(|| unreachable!("elements are non-leaves"))
-            .clusters();
+        let children = parent.child_clusters().collect::<Vec<_>>();
         let indices = children.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
         data.par_query_to_many(query, &indices)
             .into_iter()

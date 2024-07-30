@@ -10,7 +10,7 @@ use crate::{dataset::ParDataset, utils, Dataset};
 
 use super::{
     partition::{ParPartition, Partition},
-    Children, Cluster, ParCluster, LFD,
+    Cluster, ParCluster, LFD,
 };
 
 /// A metric-`Ball` is a collection of instances that are within a certain
@@ -31,7 +31,7 @@ pub struct Ball<U: Number> {
     /// The indices of the instances in the `Ball`.
     indices: Vec<usize>,
     /// The children of the `Ball`.
-    children: Option<Children<U, Self>>,
+    children: Vec<(usize, U, Box<Self>)>,
 }
 
 impl<U: Number> Ball<U> {
@@ -42,11 +42,12 @@ impl<U: Number> Ball<U> {
     /// - The `Ball`, without the indices and children.
     /// - The indices of the instances in the `Ball`.
     /// - The children of the `Ball`.
-    pub fn deconstruct(mut self) -> (Self, Vec<usize>, Option<Children<U, Self>>) {
+    #[allow(clippy::type_complexity)]
+    pub fn deconstruct(mut self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
         let indices = self.indices;
         self.indices = Vec::new();
         let children = self.children;
-        self.children = None;
+        self.children = Vec::new();
         (self, indices, children)
     }
 }
@@ -61,7 +62,7 @@ impl<U: Number> Debug for Ball<U> {
             .field("arg_center", &self.arg_center)
             .field("arg_radial", &self.arg_radial)
             .field("indices", &self.indices)
-            .field("children", &self.children.is_some())
+            .field("children", &self.children.is_empty())
             .finish()
     }
 }
@@ -135,7 +136,7 @@ impl<U: Number> Cluster<U> for Ball<U> {
             arg_center,
             arg_radial,
             indices: indices.to_vec(),
-            children: None,
+            children: Vec::new(),
         };
 
         (c, arg_radial)
@@ -181,41 +182,28 @@ impl<U: Number> Cluster<U> for Ball<U> {
         self.indices = indices;
     }
 
-    fn children(&self) -> Option<&Children<U, Self>>
-    where
-        Self: Sized,
-    {
-        self.children.as_ref()
+    fn children(&self) -> &[(usize, U, Box<Self>)] {
+        self.children.as_slice()
     }
 
-    fn children_mut(&mut self) -> Option<&mut Children<U, Self>>
-    where
-        Self: Sized,
-    {
-        self.children.as_mut()
+    fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)] {
+        self.children.as_mut_slice()
     }
 
-    fn set_children(mut self, children: Children<U, Self>) -> Self
-    where
-        Self: Sized,
-    {
-        self.children = Some(children);
+    fn set_children(mut self, children: Vec<(usize, U, Self)>) -> Self {
+        self.children = children.into_iter().map(|(i, d, c)| (i, d, Box::new(c))).collect();
         self
     }
 
-    fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>) {
+    fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> Vec<usize> {
         let l_distances = Dataset::one_to_many(data, self.arg_radial, &self.indices().collect::<Vec<_>>());
 
-        let &(arg_l, d) = l_distances
+        let &(arg_l, _) = l_distances
             .iter()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
-        let extrema = vec![arg_l, self.arg_radial];
-        let remaining_instances = self.indices().filter(|&i| i != self.arg_radial && i != arg_l).collect();
-        let distances = vec![vec![U::ZERO, d], vec![d, U::ZERO]];
-
-        (extrema, remaining_instances, distances)
+        vec![arg_l, self.arg_radial]
     }
 }
 
@@ -262,25 +250,21 @@ impl<U: Number> ParCluster<U> for Ball<U> {
             arg_center,
             arg_radial,
             indices: indices.to_vec(),
-            children: None,
+            children: Vec::new(),
         };
 
         (c, arg_radial)
     }
 
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> (Vec<usize>, Vec<usize>, Vec<Vec<U>>) {
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize> {
         let l_distances = ParDataset::par_one_to_many(data, self.arg_radial, &self.indices().collect::<Vec<_>>());
 
-        let &(arg_l, d) = l_distances
+        let &(arg_l, _) = l_distances
             .iter()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
-        let extrema = vec![arg_l, self.arg_radial];
-        let remaining_instances = self.indices().filter(|&i| i != self.arg_radial && i != arg_l).collect();
-        let distances = vec![vec![U::ZERO, d], vec![d, U::ZERO]];
-
-        (extrema, remaining_instances, distances)
+        vec![arg_l, self.arg_radial]
     }
 }
 
@@ -315,7 +299,7 @@ mod tests {
         assert_eq!(root.arg_center(), 2);
         assert_eq!(root.radius(), 12);
         assert_eq!(root.arg_radial(), arg_r);
-        assert!(root.children().is_none());
+        assert!(root.children().is_empty());
         assert_eq!(root.indices().collect::<Vec<_>>(), indices);
 
         let (root, arg_r) = Ball::par_new(&data, &indices, 0, seed);
@@ -326,7 +310,7 @@ mod tests {
         assert_eq!(root.arg_center(), 2);
         assert_eq!(root.radius(), 12);
         assert_eq!(root.arg_radial(), arg_r);
-        assert!(root.children().is_none());
+        assert!(root.children().is_empty());
         assert_eq!(root.indices().collect::<Vec<_>>(), indices);
 
         Ok(())
@@ -335,14 +319,14 @@ mod tests {
     fn check_partition(root: &Ball<i32>) -> bool {
         let indices = root.indices().collect::<Vec<_>>();
 
-        assert!(root.children().is_some());
+        assert!(!root.children().is_empty());
         assert_eq!(indices, &[0, 1, 2, 4, 3]);
 
-        let children = root.children().unwrap().clusters();
+        let children = root.child_clusters().collect::<Vec<_>>();
         assert_eq!(children.len(), 2);
         for &c in &children {
             assert_eq!(c.depth(), 1);
-            assert!(c.children().is_none());
+            assert!(c.children().is_empty());
         }
 
         let (left, right) = (children[0], children[1]);

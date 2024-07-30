@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::{dataset::ParDataset, Dataset};
 
-use super::{Children, Cluster, ParCluster};
+use super::{Cluster, ParCluster};
 
 /// `Cluster`s that can be partitioned into child `Cluster`s, and recursively partitioned into a tree.
 pub trait Partition<U: Number>: Cluster<U> {
@@ -126,8 +126,9 @@ pub trait Partition<U: Number>: Cluster<U> {
         criteria: &C,
         seed: Option<u64>,
     ) -> Self {
-        indices = if !self.is_singleton() && criteria(&self) {
-            let (extrema, mut indices, extremal_distances) = self.find_extrema(data);
+        if !self.is_singleton() && criteria(&self) {
+            let extrema = self.find_extrema(data);
+            indices.retain(|i| !extrema.contains(i));
             let (child_stacks, child_extents) = self.split_by_extrema(data, extrema, indices);
             let depth = self.depth() + 1;
             let (children, other) = child_stacks
@@ -141,11 +142,13 @@ pub trait Partition<U: Number>: Cluster<U> {
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
             indices = child_stacks.into_iter().flatten().collect::<Vec<_>>();
-            let children = Children::new(children, arg_extrema, extremal_distances, child_extents);
+            let children = arg_extrema
+                .into_iter()
+                .zip(child_extents)
+                .zip(children)
+                .map(|((a, b), c)| (a, b, c))
+                .collect();
             self = self.set_children(children);
-            indices
-        } else {
-            indices
         };
         self.set_indices(indices);
 
@@ -223,8 +226,9 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
         criteria: &C,
         seed: Option<u64>,
     ) -> Self {
-        indices = if !self.is_singleton() && criteria(&self) {
-            let (extrema, mut indices, extremal_distances) = self.par_find_extrema(data);
+        if !self.is_singleton() && criteria(&self) {
+            let extrema = self.par_find_extrema(data);
+            indices.retain(|i| !extrema.contains(i));
             let (child_stacks, child_extents) = self.par_split_by_extrema(data, extrema, indices);
             let depth = self.depth() + 1;
             let (children, other) = child_stacks
@@ -238,11 +242,13 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
             indices = child_stacks.into_iter().flatten().collect::<Vec<_>>();
-            let children = Children::new(children, arg_extrema, extremal_distances, child_extents);
+            let children = arg_extrema
+                .into_iter()
+                .zip(child_extents)
+                .zip(children)
+                .map(|((a, b), c)| (a, b, c))
+                .collect();
             self = self.set_children(children);
-            indices
-        } else {
-            indices
         };
         self.set_indices(indices);
 
