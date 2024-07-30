@@ -96,6 +96,27 @@ impl<U: Number> Algorithm<U> {
             Self::KnnDepthFirst(k) => format!("KnnDepthFirst({k})"),
         }
     }
+
+    /// Get the name of the variant of algorithm.
+    pub const fn variant_name(&self) -> &str {
+        match self {
+            Self::RnnClustered(_) => "RnnClustered",
+            Self::KnnRepeatedRnn(_, _) => "KnnRepeatedRnn",
+            Self::KnnBreadthFirst(_) => "KnnBreadthFirst",
+            Self::KnnDepthFirst(_) => "KnnDepthFirst",
+        }
+    }
+
+    /// Same variant of the algorithm with different parameters.
+    #[must_use]
+    pub const fn with_params(&self, radius: U, k: usize) -> Self {
+        match self {
+            Self::RnnClustered(_) => Self::RnnClustered(radius),
+            Self::KnnRepeatedRnn(_, m) => Self::KnnRepeatedRnn(k, *m),
+            Self::KnnBreadthFirst(_) => Self::KnnBreadthFirst(k),
+            Self::KnnDepthFirst(_) => Self::KnnDepthFirst(k),
+        }
+    }
 }
 
 #[cfg(test)]

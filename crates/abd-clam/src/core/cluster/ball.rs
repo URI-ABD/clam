@@ -15,6 +15,7 @@ use super::{
 
 /// A metric-`Ball` is a collection of instances that are within a certain
 /// distance of a center.
+#[derive(Clone)]
 pub struct Ball<U: Number> {
     /// Parameters used for creating the `Ball`.
     depth: usize,
