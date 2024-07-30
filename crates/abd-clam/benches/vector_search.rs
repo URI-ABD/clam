@@ -8,16 +8,13 @@ use distances::Number;
 use rand::prelude::*;
 
 const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
-    ("euclidean", |x: &Vec<f32>, y: &Vec<f32>| {
+    ("euclidean", |x: &Vec<_>, y: &Vec<_>| {
         distances::vectors::euclidean(x, y)
     }),
-    ("euclidean_sq", |x: &Vec<f32>, y: &Vec<f32>| {
-        distances::vectors::euclidean_sq(x, y)
-    }),
-    ("manhattan", |x: &Vec<f32>, y: &Vec<f32>| {
+    ("manhattan", |x: &Vec<_>, y: &Vec<_>| {
         distances::vectors::manhattan(x, y)
     }),
-    ("cosine", |x: &Vec<f32>, y: &Vec<f32>| distances::vectors::cosine(x, y)),
+    ("cosine", |x: &Vec<_>, y: &Vec<_>| distances::vectors::cosine(x, y)),
 ];
 
 fn vector_search(c: &mut Criterion) {
@@ -47,7 +44,7 @@ fn vector_search(c: &mut Criterion) {
         let metric = Metric::new(distance_fn, true);
         let data = FlatVec::new(rows.clone(), metric).unwrap();
 
-        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_>| c.cardinality() > 1;
         let root = Ball::par_new_tree(&data, &criteria, seed);
         bench_on_root(c, false, metric_name, &root, &data, &queries, &radii, &ks);
 

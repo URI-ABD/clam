@@ -54,7 +54,7 @@ fn genomic_search(c: &mut Criterion) {
         let metric = Metric::new(distance_fn, true);
         let data = FlatVec::new(genomes.clone(), metric).unwrap();
 
-        let criteria = |c: &Ball<u16>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_>| c.cardinality() > 1;
         let root = Ball::par_new_tree(&data, &criteria, seed);
         bench_on_root(c, false, metric_name, &root, &data, &queries, &radii, &ks);
 
