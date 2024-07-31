@@ -7,7 +7,6 @@ use abd_clam::{
         Algorithm, OffsetBall,
     },
     dataset::ParDataset,
-    Ball,
 };
 use criterion::*;
 use distances::Number;
@@ -30,16 +29,17 @@ use distances::Number;
 ///
 /// - `I`: The type of the items in the dataset.
 /// - `U`: The type of the scalars used to measure distances.
+/// - `C`: The type of the cluster for the original dataset.
 /// - `D`: The type of the original dataset.
 /// - `Dp`: The type of the permuted dataset.
-pub fn compare_permuted<I, U, D, Dp>(
+pub fn compare_permuted<I, U, C, D, Dp>(
     c: &mut Criterion,
     data_name: &str,
     metric_name: &str,
     data: &D,
-    root: &Ball<U>,
+    root: &C,
     perm_data: &Dp,
-    perm_root: &OffsetBall<U>,
+    perm_root: &OffsetBall<U, C>,
     queries: &[I],
     radii: &[U],
     ks: &[usize],
@@ -47,6 +47,7 @@ pub fn compare_permuted<I, U, D, Dp>(
 ) where
     I: Send + Sync,
     U: Number,
+    C: ParSearchable<I, U, D>,
     D: ParDataset<I, U>,
     Dp: ParDataset<I, U>,
 {

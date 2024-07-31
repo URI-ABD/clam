@@ -35,24 +35,6 @@ pub struct Ball<U: Number> {
     children: Vec<(usize, U, Box<Self>)>,
 }
 
-impl<U: Number> Ball<U> {
-    /// Deconstructs the `Ball` into its components.
-    ///
-    /// # Returns
-    ///
-    /// - The `Ball`, without the indices and children.
-    /// - The indices of the instances in the `Ball`.
-    /// - The children of the `Ball`.
-    #[allow(clippy::type_complexity)]
-    pub fn deconstruct(mut self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
-        let indices = self.indices;
-        self.indices = Vec::new();
-        let children = self.children;
-        self.children = Vec::new();
-        (self, indices, children)
-    }
-}
-
 impl<U: Number> Debug for Ball<U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
@@ -141,6 +123,14 @@ impl<U: Number> Cluster<U> for Ball<U> {
         };
 
         (c, arg_radial)
+    }
+
+    fn disassemble(mut self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
+        let indices = self.indices;
+        self.indices = Vec::new();
+        let children = self.children;
+        self.children = Vec::new();
+        (self, indices, children)
     }
 
     fn depth(&self) -> usize {

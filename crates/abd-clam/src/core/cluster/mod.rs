@@ -48,6 +48,16 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
     /// - The index of the radial instance in `instances`.
     fn new<I, D: Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
 
+    /// Deconstructs the `Cluster` into its parts.
+    ///
+    /// # Returns
+    ///
+    /// - The `Cluster` itself, without the indices or children.
+    /// - The indices of the instances in the `Cluster`.
+    /// - The children of the `Cluster`.
+    #[allow(clippy::type_complexity)]
+    fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>);
+
     /// Returns the depth os the `Cluster` in the tree.
     fn depth(&self) -> usize;
 

@@ -12,16 +12,16 @@ use crate::{
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
 #[derive(Debug)]
-pub struct OffsetBall<U: Number> {
-    /// The `Ball` of the `Cluster`.
-    ball: Ball<U>,
+pub struct OffsetBall<U: Number, S: Cluster<U>> {
+    /// The `Cluster` type that the `OffsetBall` is based on.
+    source: S,
     /// The children of the `Cluster`.
     children: Vec<(usize, U, Box<Self>)>,
     /// The parameters of the `Cluster`.
     params: OffsetParams,
 }
 
-impl<U: Number> OffsetBall<U> {
+impl<U: Number> OffsetBall<U, Ball<U>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     pub fn from_ball_tree<I, D: Dataset<I, U> + Permutable>(ball: Ball<U>, data: &mut D) -> Self {
         let (root, indices) = Self::adapt(ball, None);
@@ -43,17 +43,17 @@ impl<U: Number> OffsetBall<U> {
     }
 }
 
-impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
-    fn adapt(ball: Ball<U>, params: Option<OffsetParams>) -> (Self, Vec<usize>)
+impl<U: Number, S: Cluster<U>> Adapter<U, S, OffsetParams> for OffsetBall<U, S> {
+    fn adapt(source: S, params: Option<OffsetParams>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
-        let (ball, mut indices, children) = ball.deconstruct();
+        let (source, mut indices, children) = source.disassemble();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
             Self {
-                ball,
+                source,
                 children: Vec::new(),
                 params,
             }
@@ -69,32 +69,36 @@ impl<U: Number> Adapter<U, OffsetParams> for OffsetBall<U> {
                 .zip(children)
                 .map(|(p, c)| Self::adapt(*c, Some(p)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
+
+            indices = ret_indices.into_iter().flatten().collect();
+            let arg_extrema = arg_extrema.into_iter().map(|i| new_index(i, &indices, params.offset));
+
             let children = arg_extrema
-                .into_iter()
                 .zip(extents)
                 .zip(children)
                 .map(|((a, b), c)| (a, b, Box::new(c)))
                 .collect();
-            indices = ret_indices.into_iter().flatten().collect();
-            Self { ball, children, params }
+
+            Self {
+                source,
+                children,
+                params,
+            }
         };
 
         // Update the indices of the important instances in the `Cluster`.
-        cluster.set_arg_center(new_index(cluster.ball.arg_center(), &indices, params.offset));
-        cluster.set_arg_radial(new_index(cluster.ball.arg_radial(), &indices, params.offset));
-        for (p, _, _) in cluster.children_mut() {
-            *p = new_index(*p, &indices, params.offset);
-        }
+        cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
+        cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
 
         (cluster, indices)
     }
 
-    fn ball(&self) -> &Ball<U> {
-        &self.ball
+    fn inner(&self) -> &S {
+        &self.source
     }
 
-    fn ball_mut(&mut self) -> &mut Ball<U> {
-        &mut self.ball
+    fn inner_mut(&mut self) -> &mut S {
+        &mut self.source
     }
 }
 
@@ -107,17 +111,17 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
             .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
 }
 
-impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
-    fn par_adapt(ball: Ball<U>, params: Option<OffsetParams>) -> (Self, Vec<usize>)
+impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, OffsetParams> for OffsetBall<U, S> {
+    fn par_adapt(source: S, params: Option<OffsetParams>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
-        let (ball, mut indices, children) = ball.deconstruct();
+        let (source, mut indices, children) = source.disassemble();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
             Self {
-                ball,
+                source,
                 children: Vec::new(),
                 params,
             }
@@ -133,22 +137,26 @@ impl<U: Number> ParAdapter<U, OffsetParams> for OffsetBall<U> {
                 .zip(children.into_par_iter())
                 .map(|(p, c)| Self::par_adapt(*c, Some(p)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
+
+            indices = ret_indices.into_iter().flatten().collect();
+            let arg_extrema = arg_extrema.into_iter().map(|i| new_index(i, &indices, params.offset));
+
             let children = arg_extrema
-                .into_iter()
                 .zip(extents)
                 .zip(children)
                 .map(|((a, b), c)| (a, b, Box::new(c)))
                 .collect();
-            indices = ret_indices.into_iter().flatten().collect();
-            Self { ball, children, params }
+
+            Self {
+                source,
+                children,
+                params,
+            }
         };
 
         // Update the indices of the important instances in the `Cluster`.
-        cluster.set_arg_center(new_index(cluster.ball.arg_center(), &indices, params.offset));
-        cluster.set_arg_radial(new_index(cluster.ball.arg_radial(), &indices, params.offset));
-        for (p, _, _) in cluster.children_mut() {
-            *p = new_index(*p, &indices, params.offset);
-        }
+        cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
+        cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
 
         (cluster, indices)
     }
@@ -162,8 +170,8 @@ pub struct OffsetParams {
     offset: usize,
 }
 
-impl<U: Number> Params<U> for OffsetParams {
-    fn child_params<B: AsRef<Ball<U>>>(&self, child_balls: &[B]) -> Vec<Self> {
+impl<U: Number, S: Cluster<U>> Params<U, S> for OffsetParams {
+    fn child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         let mut offset = self.offset;
         child_balls
             .iter()
@@ -176,58 +184,77 @@ impl<U: Number> Params<U> for OffsetParams {
     }
 }
 
-impl<U: Number> ParParams<U> for OffsetParams {
-    fn par_child_params<B: AsRef<Ball<U>>>(&self, child_balls: &[B]) -> Vec<Self> {
+impl<U: Number, S: Cluster<U>> ParParams<U, S> for OffsetParams {
+    fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
         self.child_params(child_balls)
     }
 }
 
-impl<U: Number> Cluster<U> for OffsetBall<U> {
+impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
     fn new<I, D: crate::Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
     {
-        let (ball, arg_radial) = Ball::new(data, indices, depth, seed);
+        let (source, arg_radial) = S::new(data, indices, depth, seed);
         // TODO: Consider whether to reset indices of the ball.
         let vertex = Self {
-            ball,
+            source,
             children: Vec::new(),
             params: OffsetParams::default(),
         };
         (vertex, arg_radial)
     }
 
+    fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
+        let indices = self.indices().collect();
+        let Self {
+            source: ball,
+            children,
+            params,
+        } = self;
+        let (ball, _, _) = ball.disassemble();
+        (
+            Self {
+                source: ball,
+                children: Vec::new(),
+                params,
+            },
+            indices,
+            children,
+        )
+    }
+
     fn depth(&self) -> usize {
-        self.ball.depth()
+        self.source.depth()
     }
 
     fn cardinality(&self) -> usize {
-        self.ball.cardinality()
+        self.source.cardinality()
     }
 
     fn arg_center(&self) -> usize {
-        self.ball.arg_center()
+        self.source.arg_center()
     }
 
     fn set_arg_center(&mut self, arg_center: usize) {
-        self.ball.set_arg_center(arg_center);
+        self.source.set_arg_center(arg_center);
     }
 
     fn radius(&self) -> U {
-        self.ball.radius()
+        self.source.radius()
     }
 
     fn arg_radial(&self) -> usize {
-        self.ball.arg_radial()
+        self.source.arg_radial()
     }
 
     fn set_arg_radial(&mut self, arg_radial: usize) {
-        self.ball.set_arg_radial(arg_radial);
+        self.source.set_arg_radial(arg_radial);
     }
 
     fn lfd(&self) -> f32 {
-        self.ball.lfd()
+        self.source.lfd()
     }
 
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
@@ -252,39 +279,39 @@ impl<U: Number> Cluster<U> for OffsetBall<U> {
     }
 
     fn find_extrema<I, D: crate::Dataset<I, U>>(&self, data: &D) -> Vec<usize> {
-        self.ball.find_extrema(data)
+        self.source.find_extrema(data)
     }
 }
 
-impl<U: Number> PartialEq for OffsetBall<U> {
+impl<U: Number, S: Cluster<U>> PartialEq for OffsetBall<U, S> {
     fn eq(&self, other: &Self) -> bool {
         // TODO: Should this be offset and cardinality?
-        self.ball == other.ball
+        self.source == other.source
     }
 }
 
-impl<U: Number> Eq for OffsetBall<U> {}
+impl<U: Number, S: Cluster<U>> Eq for OffsetBall<U, S> {}
 
-impl<U: Number> PartialOrd for OffsetBall<U> {
+impl<U: Number, S: Cluster<U>> PartialOrd for OffsetBall<U, S> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<U: Number> Ord for OffsetBall<U> {
+impl<U: Number, S: Cluster<U>> Ord for OffsetBall<U, S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // TODO: This should definitely be offset and cardinality.
-        self.ball.cmp(&other.ball)
+        self.source.cmp(&other.source)
     }
 }
 
-impl<U: Number> std::hash::Hash for OffsetBall<U> {
+impl<U: Number, S: Cluster<U>> std::hash::Hash for OffsetBall<U, S> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (self.params.offset, self.cardinality()).hash(state);
     }
 }
 
-impl<U: Number> ParCluster<U> for OffsetBall<U> {
+impl<U: Number, S: ParCluster<U>> ParCluster<U> for OffsetBall<U, S> {
     fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
         data: &D,
         indices: &[usize],
@@ -294,9 +321,9 @@ impl<U: Number> ParCluster<U> for OffsetBall<U> {
     where
         Self: Sized,
     {
-        let (ball, arg_radial) = Ball::par_new(data, indices, depth, seed);
+        let (source, arg_radial) = S::par_new(data, indices, depth, seed);
         let vertex = Self {
-            ball,
+            source,
             children: Vec::new(),
             params: OffsetParams::default(),
         };
@@ -304,7 +331,7 @@ impl<U: Number> ParCluster<U> for OffsetBall<U> {
     }
 
     fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize> {
-        self.ball.par_find_extrema(data)
+        self.source.par_find_extrema(data)
     }
 }
 
@@ -321,7 +348,7 @@ mod tests {
         FlatVec::new_array(instances.clone(), metric)
     }
 
-    fn check_permutation(root: &OffsetBall<i32>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
+    fn check_permutation(root: &OffsetBall<i32, Ball<i32>>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
         assert!(!root.children().is_empty());
 
         for cluster in root.subtree() {
