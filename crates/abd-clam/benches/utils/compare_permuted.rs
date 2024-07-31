@@ -3,7 +3,7 @@
 
 use abd_clam::{
     cakes::{
-        cluster::{ParSearchable, Searchable},
+        cluster::{ParSearchable, Searchable, SquishyBall},
         Algorithm, OffsetBall,
     },
     dataset::ParDataset,
@@ -38,8 +38,10 @@ pub fn compare_permuted<I, U, C, D, Dp>(
     metric_name: &str,
     data: &D,
     root: &C,
+    squishy_root: &SquishyBall<U, C>,
     perm_data: &Dp,
     perm_root: &OffsetBall<U, C>,
+    squishy_perm_root: &SquishyBall<U, OffsetBall<U, C>>,
     queries: &[I],
     radii: &[U],
     ks: &[usize],
@@ -73,6 +75,9 @@ pub fn compare_permuted<I, U, C, D, Dp>(
             group.bench_with_input(BenchmarkId::new("OffsetBall", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
             });
+            group.bench_with_input(BenchmarkId::new("SquishyBall", radius), &radius, |b, _| {
+                b.iter_with_large_drop(|| squishy_root.batch_search(data, queries, alg));
+            });
         }
 
         group.bench_with_input(BenchmarkId::new("ParBall", radius), &radius, |b, _| {
@@ -80,6 +85,9 @@ pub fn compare_permuted<I, U, C, D, Dp>(
         });
         group.bench_with_input(BenchmarkId::new("ParOffsetBall", radius), &radius, |b, _| {
             b.iter_with_large_drop(|| perm_root.par_batch_search(perm_data, queries, alg));
+        });
+        group.bench_with_input(BenchmarkId::new("ParSquishyBall", radius), &radius, |b, _| {
+            b.iter_with_large_drop(|| squishy_root.par_batch_search(data, queries, alg));
         });
     }
     group.finish();
@@ -101,6 +109,9 @@ pub fn compare_permuted<I, U, C, D, Dp>(
                 group.bench_with_input(BenchmarkId::new("OffsetBall", k), &k, |b, _| {
                     b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
                 });
+                group.bench_with_input(BenchmarkId::new("SquishyOffsetBall", k), &k, |b, _| {
+                    b.iter_with_large_drop(|| squishy_perm_root.batch_search(data, queries, alg));
+                });
             }
 
             group.bench_with_input(BenchmarkId::new("ParBall", k), &k, |b, _| {
@@ -108,6 +119,9 @@ pub fn compare_permuted<I, U, C, D, Dp>(
             });
             group.bench_with_input(BenchmarkId::new("ParOffsetBall", k), &k, |b, _| {
                 b.iter_with_large_drop(|| perm_root.par_batch_search(perm_data, queries, alg));
+            });
+            group.bench_with_input(BenchmarkId::new("ParSquishyOffsetBall", k), &k, |b, _| {
+                b.iter_with_large_drop(|| squishy_perm_root.par_batch_search(data, queries, alg));
             });
         }
         group.finish();

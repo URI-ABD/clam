@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OffsetBall<U: Number, S: Cluster<U>> {
     /// The `Cluster` type that the `OffsetBall` is based on.
     source: S,
@@ -52,11 +52,7 @@ impl<U: Number, S: Cluster<U>> Adapter<U, S, OffsetParams> for OffsetBall<U, S> 
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
-            Self {
-                source,
-                children: Vec::new(),
-                params,
-            }
+            Self::newly_adapted(source, Vec::new(), params)
         } else {
             let (arg_extrema, others) = children
                 .into_iter()
@@ -70,34 +66,40 @@ impl<U: Number, S: Cluster<U>> Adapter<U, S, OffsetParams> for OffsetBall<U, S> 
                 .map(|(p, c)| Self::adapt(*c, Some(p)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
 
-            indices = ret_indices.into_iter().flatten().collect();
-            let arg_extrema = arg_extrema.into_iter().map(|i| new_index(i, &indices, params.offset));
-
             let children = arg_extrema
+                .into_iter()
                 .zip(extents)
                 .zip(children)
                 .map(|((a, b), c)| (a, b, Box::new(c)))
                 .collect();
 
-            Self {
-                source,
-                children,
-                params,
-            }
+            indices = ret_indices.into_iter().flatten().collect();
+            Self::newly_adapted(source, children, params)
         };
 
         // Update the indices of the important instances in the `Cluster`.
         cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
         cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
+        for (p, _, _) in cluster.children_mut() {
+            *p = new_index(*p, &indices, params.offset);
+        }
 
         (cluster, indices)
     }
 
-    fn inner(&self) -> &S {
+    fn newly_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: OffsetParams) -> Self {
+        Self {
+            source,
+            children,
+            params,
+        }
+    }
+
+    fn source(&self) -> &S {
         &self.source
     }
 
-    fn inner_mut(&mut self) -> &mut S {
+    fn source_mut(&mut self) -> &mut S {
         &mut self.source
     }
 }
@@ -138,25 +140,23 @@ impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, OffsetParams> for OffsetBall<
                 .map(|(p, c)| Self::par_adapt(*c, Some(p)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
 
-            indices = ret_indices.into_iter().flatten().collect();
-            let arg_extrema = arg_extrema.into_iter().map(|i| new_index(i, &indices, params.offset));
-
             let children = arg_extrema
+                .into_iter()
                 .zip(extents)
                 .zip(children)
                 .map(|((a, b), c)| (a, b, Box::new(c)))
                 .collect();
 
-            Self {
-                source,
-                children,
-                params,
-            }
+            indices = ret_indices.into_iter().flatten().collect();
+            Self::newly_adapted(source, children, params)
         };
 
         // Update the indices of the important instances in the `Cluster`.
         cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
         cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
+        for (p, _, _) in cluster.children_mut() {
+            *p = new_index(*p, &indices, params.offset);
+        }
 
         (cluster, indices)
     }
@@ -164,7 +164,7 @@ impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, OffsetParams> for OffsetBall<
 
 /// Parameters for the `OffsetBall`.
 #[derive(Debug, Default, Copy, Clone)]
-pub struct OffsetParams {
+struct OffsetParams {
     /// The offset of the slice of indices of the `Cluster` in the reordered
     /// dataset.
     offset: usize,
@@ -184,7 +184,7 @@ impl<U: Number, S: Cluster<U>> Params<U, S> for OffsetParams {
     }
 }
 
-impl<U: Number, S: Cluster<U>> ParParams<U, S> for OffsetParams {
+impl<U: Number, S: ParCluster<U>> ParParams<U, S> for OffsetParams {
     fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
         self.child_params(child_balls)
@@ -209,14 +209,13 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
     fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
         let indices = self.indices().collect();
         let Self {
-            source: ball,
+            source,
             children,
             params,
         } = self;
-        let (ball, _, _) = ball.disassemble();
         (
             Self {
-                source: ball,
+                source,
                 children: Vec::new(),
                 params,
             },
@@ -261,8 +260,9 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
         self.params.offset..(self.params.offset + self.cardinality())
     }
 
-    fn set_indices(&mut self, _: Vec<usize>) {
-        todo!()
+    fn set_indices(&mut self, indices: Vec<usize>) {
+        let offset = indices[0];
+        self.params.offset = offset;
     }
 
     fn children(&self) -> &[(usize, U, Box<Self>)] {
@@ -285,8 +285,7 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
 
 impl<U: Number, S: Cluster<U>> PartialEq for OffsetBall<U, S> {
     fn eq(&self, other: &Self) -> bool {
-        // TODO: Should this be offset and cardinality?
-        self.source == other.source
+        self.params.offset == other.params.offset && self.cardinality() == other.cardinality()
     }
 }
 
@@ -300,8 +299,10 @@ impl<U: Number, S: Cluster<U>> PartialOrd for OffsetBall<U, S> {
 
 impl<U: Number, S: Cluster<U>> Ord for OffsetBall<U, S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // TODO: This should definitely be offset and cardinality.
-        self.source.cmp(&other.source)
+        self.params
+            .offset
+            .cmp(&other.params.offset)
+            .then_with(|| other.cardinality().cmp(&self.cardinality()))
     }
 }
 

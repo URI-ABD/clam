@@ -2,11 +2,17 @@
 
 mod utils;
 
-use abd_clam::{cakes::OffsetBall, partition::ParPartition, Ball, Cluster, FlatVec, Metric};
+use abd_clam::{
+    cakes::{cluster::SquishyBall, OffsetBall},
+    partition::ParPartition,
+    Ball, Cluster, FlatVec, Metric,
+};
 use criterion::*;
 use rand::prelude::*;
 
-const METRICS: &[(&str, fn(&String, &String) -> u16)] = &[
+pub use utils::read_ann_data_npy;
+
+const METRICS: &[(&str, fn(&String, &String) -> u64)] = &[
     ("levenshtein", |x: &String, y: &String| {
         distances::strings::levenshtein(x, y)
     }),
@@ -20,8 +26,8 @@ fn genomic_search(c: &mut Criterion) {
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
     let penalties = distances::strings::Penalties::default();
-    let num_clumps = 128;
-    let clump_size = 32;
+    let num_clumps = 256;
+    let clump_size = 16;
     let clump_radius = 3_u16;
     let (_, genomes) = symagen::random_edits::generate_clumped_data(
         &seed_string,
@@ -56,9 +62,11 @@ fn genomic_search(c: &mut Criterion) {
 
         let criteria = |c: &Ball<_>| c.cardinality() > 1;
         let root = Ball::par_new_tree(&data, &criteria, seed);
+        let squishy_root = SquishyBall::par_from_root(root.clone(), &data, true);
 
         let mut perm_data = data.clone();
         let perm_root = OffsetBall::par_from_ball_tree(root.clone(), &mut perm_data);
+        let squishy_perm_root = SquishyBall::par_from_root(perm_root.clone(), &perm_data, true);
 
         utils::compare_permuted(
             c,
@@ -66,8 +74,10 @@ fn genomic_search(c: &mut Criterion) {
             metric_name,
             &data,
             &root,
+            &squishy_root,
             &perm_data,
             &perm_root,
+            &squishy_perm_root,
             &queries,
             &radii,
             &ks,

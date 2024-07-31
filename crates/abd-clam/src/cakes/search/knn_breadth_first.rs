@@ -156,7 +156,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        cakes::OffsetBall,
+        cakes::{cluster::SquishyBall, OffsetBall},
         cluster::{Ball, Partition},
         Cluster,
     };
@@ -175,16 +175,18 @@ mod tests {
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
+        let squishy_ball = SquishyBall::from_root(ball.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &data, query, k));
+            assert!(check_knn(&ball, &squishy_ball, &data, query, k));
         }
 
         let mut data = data;
         let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k));
+            assert!(check_knn(&root, &squishy_root, &data, query, k));
         }
 
         Ok(())
@@ -199,16 +201,18 @@ mod tests {
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
+        let squishy_ball = SquishyBall::from_root(ball.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &data, query, k));
+            assert!(check_knn(&ball, &squishy_ball, &data, query, k));
         }
 
         let mut data = data;
         let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k));
+            assert!(check_knn(&root, &squishy_root, &data, query, k));
         }
 
         Ok(())

@@ -125,7 +125,10 @@ pub mod tests {
     use rand::prelude::*;
     use test_case::test_case;
 
-    use crate::{cakes::OffsetBall, Ball, Cluster, FlatVec, Metric, Partition};
+    use crate::{
+        cakes::{cluster::SquishyBall, OffsetBall},
+        Ball, Cluster, FlatVec, Metric, Partition,
+    };
 
     pub fn gen_line_data(max: i32) -> Result<FlatVec<i32, u32, usize>, String> {
         let data = (-max..=max).collect::<Vec<_>>();
@@ -147,18 +150,20 @@ pub mod tests {
         mut true_hits: Vec<(usize, U)>,
         mut pred_hits: Vec<(usize, U)>,
         name: &str,
+        squishy: bool,
     ) -> bool {
         true_hits.sort_by_key(|(i, _)| *i);
         pred_hits.sort_by_key(|(i, _)| *i);
+        let squishy = if squishy { "squishy " } else { "" };
 
         assert_eq!(
             true_hits.len(),
             pred_hits.len(),
-            "{name}: {true_hits:?} vs {pred_hits:?}"
+            "{squishy}{name}: {true_hits:?} vs {pred_hits:?}"
         );
 
         for ((i, p), (j, q)) in true_hits.into_iter().zip(pred_hits) {
-            let msg = format!("Failed {name} i: {i}, j: {j}, p: {p}, q: {q}");
+            let msg = format!("Failed {squishy}{name} i: {i}, j: {j}, p: {p}, q: {q}");
             assert_eq!(i, j, "{msg}");
             assert!(p.abs_diff(q) <= U::EPSILON, "{msg}");
         }
@@ -170,20 +175,22 @@ pub mod tests {
         mut true_hits: Vec<(usize, U)>,
         mut pred_hits: Vec<(usize, U)>,
         name: &str,
+        squishy: bool,
     ) -> bool {
         true_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
         pred_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
+        let squishy = if squishy { "squishy " } else { "" };
 
         assert_eq!(
             true_hits.len(),
             pred_hits.len(),
-            "{name}: {true_hits:?} vs {pred_hits:?}"
+            "{squishy}{name}: {true_hits:?} vs {pred_hits:?}"
         );
 
         for (i, (&(_, p), &(_, q))) in true_hits.iter().zip(pred_hits.iter()).enumerate() {
             assert!(
                 p.abs_diff(q) <= U::EPSILON,
-                "Failed {name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}"
+                "Failed {squishy}{name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}"
             );
         }
 
@@ -211,7 +218,7 @@ pub mod tests {
     fn vectors(car: usize, dim: usize) -> Result<(), String> {
         let mut algs: Vec<(
             super::Algorithm<f32>,
-            fn(Vec<(usize, f32)>, Vec<(usize, f32)>, &str) -> bool,
+            fn(Vec<(usize, f32)>, Vec<(usize, f32)>, &str, bool) -> bool,
         )> = vec![];
         for radius in [0.1, 1.0] {
             algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
@@ -229,32 +236,42 @@ pub mod tests {
         let query = &vec![0.0; dim];
 
         let root = Ball::new_tree(&data, &criteria, seed);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&data, query);
 
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name());
+                checker(true_hits.clone(), pred_hits, &alg.name(), false);
+                let pred_hits = alg.search(&data, &squishy_root, query);
+                checker(true_hits.clone(), pred_hits, &alg.name(), true);
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits, pred_hits, &alg.name());
+            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            let pred_hits = alg.par_search(&data, &squishy_root, query);
+            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         let mut data = data;
         let root = OffsetBall::from_ball_tree(root, &mut data);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for (alg, checker) in algs {
             let true_hits = alg.par_linear_search(&data, query);
 
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name());
+                checker(true_hits.clone(), pred_hits, &alg.name(), false);
+                let pred_hits = alg.search(&data, &squishy_root, query);
+                checker(true_hits.clone(), pred_hits, &alg.name(), true);
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits, pred_hits, &alg.name());
+            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            let pred_hits = alg.par_search(&data, &squishy_root, query);
+            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         Ok(())
@@ -264,7 +281,7 @@ pub mod tests {
     fn strings() -> Result<(), String> {
         let mut algs: Vec<(
             super::Algorithm<u16>,
-            fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str) -> bool,
+            fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str, bool) -> bool,
         )> = vec![];
         for radius in [4, 8, 16] {
             algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
@@ -302,28 +319,42 @@ pub mod tests {
         let seed = Some(42);
 
         let root = Ball::new_tree(&data, &criteria, seed);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&data, query);
 
             let pred_hits = alg.search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name());
+            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+
+            let pred_hits = alg.search(&data, &squishy_root, query);
+            checker(true_hits.clone(), pred_hits, &alg.name(), true);
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits, pred_hits, &alg.name());
+            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+
+            let pred_hits = alg.par_search(&data, &squishy_root, query);
+            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         let mut data = data;
         let root = OffsetBall::from_ball_tree(root, &mut data);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for (alg, checker) in algs {
             let true_hits = alg.par_linear_search(&data, query);
 
             let pred_hits = alg.search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name());
+            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+
+            let pred_hits = alg.search(&data, &squishy_root, query);
+            checker(true_hits.clone(), pred_hits, &alg.name(), true);
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits, pred_hits, &alg.name());
+            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+
+            let pred_hits = alg.par_search(&data, &squishy_root, query);
+            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         Ok(())

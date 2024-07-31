@@ -210,7 +210,7 @@ mod tests {
 
         let pred_hits = super::search(data, root, query, radius);
         assert_eq!(pred_hits.len(), true_hits.len(), "Rnn search failed: {pred_hits:?}");
-        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered");
+        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered", false);
 
         let pred_hits = super::par_search(data, root, query, radius);
         assert_eq!(
@@ -218,7 +218,7 @@ mod tests {
             true_hits.len(),
             "Parallel Rnn search failed: {pred_hits:?}"
         );
-        check_search_by_index(true_hits, pred_hits, "Par RnnClustered");
+        check_search_by_index(true_hits, pred_hits, "Par RnnClustered", false);
 
         true
     }

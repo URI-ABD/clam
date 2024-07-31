@@ -28,8 +28,8 @@ where
                     .peek() // the closest candidate
                     .map_or_else(|| unreachable!("`candidates` is non-empty."), |(d, _)| d.0))
     {
-        pop_till_leaf(data, query, &mut candidates);
-        leaf_into_hits(data, query, &mut hits, &mut candidates);
+        let (d, leaf) = pop_till_leaf(data, query, &mut candidates);
+        leaf_into_hits(data, query, &mut hits, d, leaf);
     }
     hits.items().map(|(d, i)| (i, d)).collect()
 }
@@ -74,7 +74,8 @@ pub fn d_min<U: Number, C: Cluster<U>>(c: &C, d: U) -> U {
 }
 
 /// Pops from the top of `candidates` until the top candidate is a leaf cluster.
-fn pop_till_leaf<'a, I, U, D, C>(data: &D, query: &I, candidates: &mut SizedHeap<(Reverse<U>, &'a C)>)
+/// Then, pops and returns the leaf cluster.
+fn pop_till_leaf<'a, I, U, D, C>(data: &D, query: &I, candidates: &mut SizedHeap<(Reverse<U>, &'a C)>) -> (U, &'a C)
 where
     U: Number + 'a,
     D: Dataset<I, U>,
@@ -91,22 +92,18 @@ where
             candidates.push((Reverse(d_min(child, child.distance_to_center(data, query))), child));
         }
     }
+    candidates
+        .pop()
+        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c))
 }
 
 /// Pops from the top of `candidates` and adds its points to `hits`.
-fn leaf_into_hits<I, U, D, C>(
-    data: &D,
-    query: &I,
-    hits: &mut SizedHeap<(U, usize)>,
-    candidates: &mut SizedHeap<(Reverse<U>, &C)>,
-) where
+fn leaf_into_hits<I, U, D, C>(data: &D, query: &I, hits: &mut SizedHeap<(U, usize)>, d: U, leaf: &C)
+where
     U: Number,
     D: Dataset<I, U>,
     C: Cluster<U>,
 {
-    let (d, leaf) = candidates
-        .pop()
-        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c));
     if leaf.is_singleton() {
         leaf.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
     } else {
@@ -170,7 +167,7 @@ pub(crate) mod tests {
     use distances::Number;
 
     use crate::{
-        cakes::OffsetBall,
+        cakes::{cluster::SquishyBall, OffsetBall},
         cluster::{Ball, ParCluster, Partition},
         linear_search::LinearSearch,
         Cluster, FlatVec,
@@ -180,6 +177,7 @@ pub(crate) mod tests {
 
     pub fn check_knn<I: Send + Sync, U: Number, C: ParCluster<U>>(
         root: &C,
+        squishy_root: &SquishyBall<U, C>,
         data: &FlatVec<I, U, usize>,
         query: &I,
         k: usize,
@@ -188,7 +186,15 @@ pub(crate) mod tests {
 
         let pred_hits = super::search(data, root, query, k);
         assert_eq!(pred_hits.len(), true_hits.len(), "Knn search failed: {pred_hits:?}");
-        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered");
+        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered", false);
+
+        let pred_hits = super::search(data, squishy_root, query, k);
+        assert_eq!(
+            pred_hits.len(),
+            true_hits.len(),
+            "Squishy Knn search failed: {pred_hits:?}"
+        );
+        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered", true);
 
         let pred_hits = super::par_search(data, root, query, k);
         assert_eq!(
@@ -196,7 +202,15 @@ pub(crate) mod tests {
             true_hits.len(),
             "Parallel Knn search failed: {pred_hits:?}"
         );
-        check_search_by_distance(true_hits, pred_hits, "Par KnnClustered");
+        check_search_by_distance(true_hits.clone(), pred_hits, "Par KnnClustered", false);
+
+        let pred_hits = super::par_search(data, squishy_root, query, k);
+        assert_eq!(
+            pred_hits.len(),
+            true_hits.len(),
+            "Parallel Squishy Knn search failed: {pred_hits:?}"
+        );
+        check_search_by_distance(true_hits, pred_hits, "Par KnnClustered", true);
 
         true
     }
@@ -210,16 +224,23 @@ pub(crate) mod tests {
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
+        let squishy_ball = SquishyBall::from_root(ball.clone(), &data, true);
+
+        for c in squishy_ball.subtree() {
+            assert_eq!(c.indices().count(), c.cardinality(), "Indices count mismatch for {c:?}");
+            assert!(c.cardinality() > 0, "Cardinality is zero for {c:?}");
+        }
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &data, query, k));
+            assert!(check_knn(&ball, &squishy_ball, &data, query, k));
         }
 
         let mut data = data;
         let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k));
+            assert!(check_knn(&root, &squishy_root, &data, query, k));
         }
 
         Ok(())
@@ -234,16 +255,18 @@ pub(crate) mod tests {
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
+        let squishy_ball = SquishyBall::from_root(ball.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &data, query, k));
+            assert!(check_knn(&ball, &squishy_ball, &data, query, k));
         }
 
         let mut data = data;
         let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k));
+            assert!(check_knn(&root, &squishy_root, &data, query, k));
         }
 
         Ok(())
