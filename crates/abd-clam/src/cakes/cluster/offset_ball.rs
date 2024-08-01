@@ -1,5 +1,7 @@
 //! An adaptation of `Ball` that stores indices after reordering the dataset.
 
+use core::fmt::Debug;
+
 use distances::Number;
 use rayon::prelude::*;
 
@@ -11,17 +13,27 @@ use crate::{
 };
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
-#[derive(Debug, Clone)]
-pub struct OffsetBall<U: Number, S: Cluster<U>> {
+#[derive(Clone)]
+pub struct OffBall<U: Number, S: Cluster<U>> {
     /// The `Cluster` type that the `OffsetBall` is based on.
     source: S,
     /// The children of the `Cluster`.
     children: Vec<(usize, U, Box<Self>)>,
     /// The parameters of the `Cluster`.
-    params: OffsetParams,
+    params: Offset,
 }
 
-impl<U: Number> OffsetBall<U, Ball<U>> {
+impl<U: Number, S: Cluster<U> + Debug> Debug for OffBall<U, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OffsetBall")
+            .field("source", &self.source)
+            .field("children", &self.children.is_empty())
+            .field("offset", &self.params.offset)
+            .finish()
+    }
+}
+
+impl<U: Number> OffBall<U, Ball<U>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     pub fn from_ball_tree<I, D: Dataset<I, U> + Permutable>(ball: Ball<U>, data: &mut D) -> Self {
         let (root, indices) = Self::adapt(ball, None);
@@ -43,8 +55,8 @@ impl<U: Number> OffsetBall<U, Ball<U>> {
     }
 }
 
-impl<U: Number, S: Cluster<U>> Adapter<U, S, OffsetParams> for OffsetBall<U, S> {
-    fn adapt(source: S, params: Option<OffsetParams>) -> (Self, Vec<usize>)
+impl<U: Number, S: Cluster<U>> Adapter<U, S, Offset> for OffBall<U, S> {
+    fn adapt(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
@@ -87,7 +99,7 @@ impl<U: Number, S: Cluster<U>> Adapter<U, S, OffsetParams> for OffsetBall<U, S> 
         (cluster, indices)
     }
 
-    fn newly_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: OffsetParams) -> Self {
+    fn newly_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset) -> Self {
         Self {
             source,
             children,
@@ -113,8 +125,8 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
             .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
 }
 
-impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, OffsetParams> for OffsetBall<U, S> {
-    fn par_adapt(source: S, params: Option<OffsetParams>) -> (Self, Vec<usize>)
+impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, Offset> for OffBall<U, S> {
+    fn par_adapt(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
@@ -164,13 +176,13 @@ impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, OffsetParams> for OffsetBall<
 
 /// Parameters for the `OffsetBall`.
 #[derive(Debug, Default, Copy, Clone)]
-struct OffsetParams {
+struct Offset {
     /// The offset of the slice of indices of the `Cluster` in the reordered
     /// dataset.
     offset: usize,
 }
 
-impl<U: Number, S: Cluster<U>> Params<U, S> for OffsetParams {
+impl<U: Number, S: Cluster<U>> Params<U, S> for Offset {
     fn child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         let mut offset = self.offset;
         child_balls
@@ -184,14 +196,14 @@ impl<U: Number, S: Cluster<U>> Params<U, S> for OffsetParams {
     }
 }
 
-impl<U: Number, S: ParCluster<U>> ParParams<U, S> for OffsetParams {
+impl<U: Number, S: ParCluster<U>> ParParams<U, S> for Offset {
     fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
         self.child_params(child_balls)
     }
 }
 
-impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
+impl<U: Number, S: Cluster<U>> Cluster<U> for OffBall<U, S> {
     fn new<I, D: crate::Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
@@ -201,7 +213,7 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
         let vertex = Self {
             source,
             children: Vec::new(),
-            params: OffsetParams::default(),
+            params: Offset::default(),
         };
         (vertex, arg_radial)
     }
@@ -283,21 +295,21 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffsetBall<U, S> {
     }
 }
 
-impl<U: Number, S: Cluster<U>> PartialEq for OffsetBall<U, S> {
+impl<U: Number, S: Cluster<U>> PartialEq for OffBall<U, S> {
     fn eq(&self, other: &Self) -> bool {
         self.params.offset == other.params.offset && self.cardinality() == other.cardinality()
     }
 }
 
-impl<U: Number, S: Cluster<U>> Eq for OffsetBall<U, S> {}
+impl<U: Number, S: Cluster<U>> Eq for OffBall<U, S> {}
 
-impl<U: Number, S: Cluster<U>> PartialOrd for OffsetBall<U, S> {
+impl<U: Number, S: Cluster<U>> PartialOrd for OffBall<U, S> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<U: Number, S: Cluster<U>> Ord for OffsetBall<U, S> {
+impl<U: Number, S: Cluster<U>> Ord for OffBall<U, S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.params
             .offset
@@ -306,13 +318,13 @@ impl<U: Number, S: Cluster<U>> Ord for OffsetBall<U, S> {
     }
 }
 
-impl<U: Number, S: Cluster<U>> std::hash::Hash for OffsetBall<U, S> {
+impl<U: Number, S: Cluster<U>> std::hash::Hash for OffBall<U, S> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (self.params.offset, self.cardinality()).hash(state);
     }
 }
 
-impl<U: Number, S: ParCluster<U>> ParCluster<U> for OffsetBall<U, S> {
+impl<U: Number, S: ParCluster<U>> ParCluster<U> for OffBall<U, S> {
     fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
         data: &D,
         indices: &[usize],
@@ -326,7 +338,7 @@ impl<U: Number, S: ParCluster<U>> ParCluster<U> for OffsetBall<U, S> {
         let vertex = Self {
             source,
             children: Vec::new(),
-            params: OffsetParams::default(),
+            params: Offset::default(),
         };
         (vertex, arg_radial)
     }
@@ -349,7 +361,7 @@ mod tests {
         FlatVec::new_array(instances.clone(), metric)
     }
 
-    fn check_permutation(root: &OffsetBall<i32, Ball<i32>>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
+    fn check_permutation(root: &OffBall<i32, Ball<i32>>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
         assert!(!root.children().is_empty());
 
         for cluster in root.subtree() {
@@ -369,12 +381,12 @@ mod tests {
 
         let root = Ball::new_tree(&data, &criteria, seed);
         let mut perm_data = data.clone();
-        let root = OffsetBall::from_ball_tree(root, &mut perm_data);
+        let root = OffBall::from_ball_tree(root, &mut perm_data);
         assert!(check_permutation(&root, &perm_data));
 
         let root = Ball::par_new_tree(&data, &criteria, seed);
         let mut perm_data = data.clone();
-        let root = OffsetBall::par_from_ball_tree(root, &mut perm_data);
+        let root = OffBall::par_from_ball_tree(root, &mut perm_data);
         assert!(check_permutation(&root, &perm_data));
 
         Ok(())

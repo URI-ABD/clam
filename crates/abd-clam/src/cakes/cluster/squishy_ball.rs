@@ -20,7 +20,7 @@ pub struct SquishyBall<U: Number, S: Cluster<U>> {
     /// The children of the `Cluster`.
     children: Vec<(usize, U, Box<Self>)>,
     /// Parameters for the `OffsetBall`.
-    params: SquishCosts<U>,
+    costs: SquishCosts<U>,
 }
 
 impl<U: Number, S: Cluster<U> + Debug> Debug for SquishyBall<U, S> {
@@ -28,7 +28,9 @@ impl<U: Number, S: Cluster<U> + Debug> Debug for SquishyBall<U, S> {
         f.debug_struct("SquishyBall")
             .field("source", &self.source)
             .field("children", &self.children.is_empty())
-            .field("params", &self.params)
+            .field("recursive_cost", &self.costs.recursive)
+            .field("unitary_cost", &self.costs.unitary)
+            .field("minimum_cost", &self.costs.minimum)
             .finish()
     }
 }
@@ -56,7 +58,7 @@ impl<U: Number, S: Cluster<U>> SquishyBall<U, S> {
     /// is greater than the recursive cost.
     fn trim(&mut self) {
         if !self.children.is_empty() {
-            if self.params.unitary <= self.params.recursive {
+            if self.costs.unitary <= self.costs.recursive {
                 self.children.clear();
             } else {
                 self.children.iter_mut().for_each(|(_, _, c)| c.trim());
@@ -68,7 +70,7 @@ impl<U: Number, S: Cluster<U>> SquishyBall<U, S> {
     fn set_costs<I, D: Dataset<I, U>>(&mut self, data: &D) {
         self.set_unitary_cost(data);
         if self.children.is_empty() {
-            self.params.recursive = U::ZERO;
+            self.costs.recursive = U::ZERO;
         } else {
             self.children.iter_mut().for_each(|(_, _, c)| c.set_costs(data));
             self.set_recursive_cost(data);
@@ -78,7 +80,7 @@ impl<U: Number, S: Cluster<U>> SquishyBall<U, S> {
 
     /// Calculates the unitary cost of the `Cluster`.
     fn set_unitary_cost<I, D: Dataset<I, U>>(&mut self, data: &D) {
-        self.params.unitary = Dataset::one_to_many(data, self.arg_center(), &self.indices().collect::<Vec<_>>())
+        self.costs.unitary = Dataset::one_to_many(data, self.arg_center(), &self.indices().collect::<Vec<_>>())
             .into_iter()
             .map(|(_, d)| d)
             .sum();
@@ -87,23 +89,23 @@ impl<U: Number, S: Cluster<U>> SquishyBall<U, S> {
     /// Calculates the recursive cost of the `Cluster`.
     fn set_recursive_cost<I, D: Dataset<I, U>>(&mut self, data: &D) {
         if self.children.is_empty() {
-            self.params.recursive = U::ZERO;
+            self.costs.recursive = U::ZERO;
         } else {
             let children = self.children.iter().map(|(_, _, c)| c.as_ref()).collect::<Vec<_>>();
-            let child_costs = children.iter().map(|c| c.params.minimum).sum::<U>();
+            let child_costs = children.iter().map(|c| c.costs.minimum).sum::<U>();
             let child_centers = children.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
             let distances = Dataset::one_to_many(data, self.arg_center(), &child_centers);
 
-            self.params.recursive = child_costs + distances.into_iter().map(|(_, d)| d).sum::<U>();
+            self.costs.recursive = child_costs + distances.into_iter().map(|(_, d)| d).sum::<U>();
         }
     }
 
     /// Sets the minimum cost of the `Cluster`.
     fn set_min_cost(&mut self) {
-        self.params.minimum = if self.params.recursive < self.params.unitary {
-            self.params.recursive
+        self.costs.minimum = if self.costs.recursive < self.costs.unitary {
+            self.costs.recursive
         } else {
-            self.params.unitary
+            self.costs.unitary
         };
     }
 }
@@ -131,7 +133,7 @@ impl<U: Number, S: ParCluster<U>> SquishyBall<U, S> {
     fn par_set_costs<I: Send + Sync, D: ParDataset<I, U>>(&mut self, data: &D) {
         self.par_set_unitary_cost(data);
         if self.children.is_empty() {
-            self.params.recursive = U::ZERO;
+            self.costs.recursive = U::ZERO;
         } else {
             self.children.par_iter_mut().for_each(|(_, _, c)| c.par_set_costs(data));
             self.par_set_recursive_cost(data);
@@ -141,7 +143,7 @@ impl<U: Number, S: ParCluster<U>> SquishyBall<U, S> {
 
     /// Calculates the unitary cost of the `Cluster`.
     fn par_set_unitary_cost<I: Send + Sync, D: ParDataset<I, U>>(&mut self, data: &D) {
-        self.params.unitary = ParDataset::par_one_to_many(data, self.arg_center(), &self.indices().collect::<Vec<_>>())
+        self.costs.unitary = ParDataset::par_one_to_many(data, self.arg_center(), &self.indices().collect::<Vec<_>>())
             .into_iter()
             .map(|(_, d)| d)
             .sum();
@@ -150,14 +152,14 @@ impl<U: Number, S: ParCluster<U>> SquishyBall<U, S> {
     /// Calculates the recursive cost of the `Cluster`.
     fn par_set_recursive_cost<I: Send + Sync, D: ParDataset<I, U>>(&mut self, data: &D) {
         if self.children.is_empty() {
-            self.params.recursive = U::ZERO;
+            self.costs.recursive = U::ZERO;
         } else {
             let children = self.children.iter().map(|(_, _, c)| c.as_ref()).collect::<Vec<_>>();
-            let child_costs = children.iter().map(|c| c.params.minimum).sum::<U>();
+            let child_costs = children.iter().map(|c| c.costs.minimum).sum::<U>();
             let child_centers = children.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
             let distances = ParDataset::par_one_to_many(data, self.arg_center(), &child_centers);
 
-            self.params.recursive = child_costs + distances.into_iter().map(|(_, d)| d).sum::<U>();
+            self.costs.recursive = child_costs + distances.into_iter().map(|(_, d)| d).sum::<U>();
         }
     }
 }
@@ -203,7 +205,7 @@ impl<U: Number, S: Cluster<U>> Adapter<U, S, SquishCosts<U>> for SquishyBall<U, 
         Self {
             source,
             children,
-            params,
+            costs: params,
         }
     }
 
@@ -283,7 +285,7 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for SquishyBall<U, S> {
         let ball = Self {
             source,
             children: Vec::new(),
-            params: SquishCosts::default(),
+            costs: SquishCosts::default(),
         };
         (ball, arg_radial)
     }
@@ -293,13 +295,13 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for SquishyBall<U, S> {
         let Self {
             source,
             children,
-            params,
+            costs: params,
         } = self;
         (
             Self {
                 source,
                 children: Vec::new(),
-                params,
+                costs: params,
             },
             indices,
             children,
@@ -375,7 +377,7 @@ impl<U: Number, S: ParCluster<U>> ParCluster<U> for SquishyBall<U, S> {
         let ball = Self {
             source,
             children: Vec::new(),
-            params: SquishCosts::default(),
+            costs: SquishCosts::default(),
         };
         (ball, arg_radial)
     }

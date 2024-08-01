@@ -104,7 +104,7 @@ mod tests {
     use distances::Number;
 
     use crate::{
-        cakes::OffsetBall,
+        cakes::OffBall,
         cluster::{Ball, ParCluster, Partition},
         linear_search::LinearSearch,
         Cluster, FlatVec,
@@ -153,7 +153,7 @@ mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let root = OffBall::from_ball_tree(ball, &mut data);
 
         for k in [1, 4, 8] {
             assert!(check_knn(&root, &data, query, k, max_multiplier));
@@ -179,7 +179,7 @@ mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let root = OffBall::from_ball_tree(ball, &mut data);
 
         for k in [1, 4, 8, 16, 32] {
             assert!(check_knn(&root, &data, query, k, max_multiplier));

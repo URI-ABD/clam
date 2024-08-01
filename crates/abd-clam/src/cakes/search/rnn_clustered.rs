@@ -194,7 +194,7 @@ mod tests {
     use distances::Number;
 
     use crate::{
-        cakes::OffsetBall, cluster::ParCluster, linear_search::LinearSearch, partition::ParPartition, Ball, Cluster,
+        cakes::OffBall, cluster::ParCluster, linear_search::LinearSearch, partition::ParPartition, Ball, Cluster,
         FlatVec, Partition,
     };
 
@@ -237,7 +237,7 @@ mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(root, &mut data);
+        let root = OffBall::from_ball_tree(root, &mut data);
         for radius in 0..=4 {
             assert!(check_rnn(&root, &data, &query, radius));
         }
@@ -259,7 +259,7 @@ mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(root, &mut data);
+        let root = OffBall::from_ball_tree(root, &mut data);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
             assert!(check_rnn(&root, &data, &query, radius));
         }

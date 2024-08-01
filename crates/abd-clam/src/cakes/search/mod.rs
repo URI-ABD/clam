@@ -126,7 +126,7 @@ pub mod tests {
     use test_case::test_case;
 
     use crate::{
-        cakes::{cluster::SquishyBall, OffsetBall},
+        cakes::{cluster::SquishyBall, OffBall},
         Ball, Cluster, FlatVec, Metric, Partition,
     };
 
@@ -255,7 +255,7 @@ pub mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(root, &mut data);
+        let root = OffBall::from_ball_tree(root, &mut data);
         let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for (alg, checker) in algs {
@@ -338,7 +338,7 @@ pub mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(root, &mut data);
+        let root = OffBall::from_ball_tree(root, &mut data);
         let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for (alg, checker) in algs {

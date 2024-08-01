@@ -4,7 +4,7 @@
 use abd_clam::{
     cakes::{
         cluster::{ParSearchable, Searchable, SquishyBall},
-        Algorithm, OffsetBall,
+        Algorithm, OffBall,
     },
     dataset::ParDataset,
 };
@@ -40,8 +40,8 @@ pub fn compare_permuted<I, U, C, D, Dp>(
     root: &C,
     squishy_root: &SquishyBall<U, C>,
     perm_data: &Dp,
-    perm_root: &OffsetBall<U, C>,
-    squishy_perm_root: &SquishyBall<U, OffsetBall<U, C>>,
+    perm_root: &OffBall<U, C>,
+    squishy_perm_root: &SquishyBall<U, OffBall<U, C>>,
     queries: &[I],
     radii: &[U],
     ks: &[usize],

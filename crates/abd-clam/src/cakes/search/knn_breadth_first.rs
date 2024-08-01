@@ -156,7 +156,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        cakes::{cluster::SquishyBall, OffsetBall},
+        cakes::{cluster::SquishyBall, OffBall},
         cluster::{Ball, Partition},
         Cluster,
     };
@@ -182,7 +182,7 @@ mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let root = OffBall::from_ball_tree(ball, &mut data);
         let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
@@ -208,7 +208,7 @@ mod tests {
         }
 
         let mut data = data;
-        let root = OffsetBall::from_ball_tree(ball, &mut data);
+        let root = OffBall::from_ball_tree(ball, &mut data);
         let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {

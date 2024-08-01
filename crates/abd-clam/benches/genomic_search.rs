@@ -3,7 +3,7 @@
 mod utils;
 
 use abd_clam::{
-    cakes::{cluster::SquishyBall, OffsetBall},
+    cakes::{cluster::SquishyBall, OffBall},
     partition::ParPartition,
     Ball, Cluster, FlatVec, Metric,
 };
@@ -65,7 +65,7 @@ fn genomic_search(c: &mut Criterion) {
         let squishy_root = SquishyBall::par_from_root(root.clone(), &data, true);
 
         let mut perm_data = data.clone();
-        let perm_root = OffsetBall::par_from_ball_tree(root.clone(), &mut perm_data);
+        let perm_root = OffBall::par_from_ball_tree(root.clone(), &mut perm_data);
         let squishy_perm_root = SquishyBall::par_from_root(perm_root.clone(), &perm_data, true);
 
         utils::compare_permuted(
