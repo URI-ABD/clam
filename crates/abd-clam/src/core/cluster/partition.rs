@@ -15,7 +15,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     ///
     /// - `data`: The dataset containing the instances.
     /// - `criteria`: The function to use for determining when a `Cluster`
-    /// should be partitioned.
+    ///   should be partitioned.
     /// - `seed`: An optional seed for random number generation.
     ///
     /// # Type Parameters
@@ -53,7 +53,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     ///
     /// - The instances with which to initialize the child `Cluster`s.
     /// - The distance from each pole to the farthest instance assigned to that
-    /// child.
+    ///   child.
     fn split_by_extrema<I, D: Dataset<I, U>>(
         &self,
         data: &D,
@@ -104,7 +104,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     ///
     /// - `data`: The dataset containing the instances.
     /// - `criteria`: The function to use for determining when a `Cluster`
-    ///  should be partitioned.
+    ///   should be partitioned.
     /// - `seed`: An optional seed for random number generation.
     ///
     /// # Type Parameters
@@ -117,7 +117,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     ///
     /// - The root `Cluster` of the tree.
     /// - The instances in the `Cluster` in depth-first order of traversal of
-    ///  the tree.
+    ///   the tree.
     #[must_use]
     fn partition<I, D: Dataset<I, U>, C: Fn(&Self) -> bool>(
         mut self,

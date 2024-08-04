@@ -116,10 +116,10 @@ where
 ///
 /// - `data` - The dataset to search.
 /// - `confirmed` - The confirmed clusters from the tree search. All points
-///  in these clusters are guaranteed to be within the query ball.
+///   in these clusters are guaranteed to be within the query ball.
 /// - `straddlers` - The straddlers from the tree search. These clusters
-///  overlap the query ball, but not all points in the cluster are guaranteed
-///  to be within the query ball.
+///   overlap the query ball, but not all points in the cluster are guaranteed
+///   to be within the query ball.
 /// - `query` - The query to search around.
 /// - `radius` - The radius to search within.
 ///

@@ -1,9 +1,12 @@
 //! Extension traits of `Dataset` for specific search applications.
 
+mod compression;
 mod searchable;
 mod shardable;
 
 use distances::Number;
+
+pub use compression::{Compressible, Encodable};
 pub use searchable::{ParSearchable, Searchable};
 pub use shardable::Shardable;
 

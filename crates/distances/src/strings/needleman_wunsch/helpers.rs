@@ -186,7 +186,7 @@ pub fn trace_back_recursive<U: UInt>(table: &[Vec<(U, Direction)>], [x, y]: [&st
 /// * `[row_i, col_i]`: mutable indices into the table.
 /// * `[x, y]`: The two sequences to align, passed as slices of bytes.
 /// * `[aligned_x, aligned_y]`: mutable aligned sequences that will be built
-/// up from initially empty vectors.
+///   up from initially empty vectors.
 fn _trace_back_recursive<U: UInt>(
     table: &[Vec<(U, Direction)>],
     [mut row_i, mut col_i]: [usize; 2],

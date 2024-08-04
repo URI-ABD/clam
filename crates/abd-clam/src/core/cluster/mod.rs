@@ -156,6 +156,18 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
         clusters
     }
 
+    /// Returns all leaf `Cluster`s in the subtree of this `Cluster`, in depth-first order.
+    fn leaves<'a>(&'a self) -> Vec<&'a Self>
+    where
+        U: 'a,
+    {
+        if self.is_leaf() {
+            vec![self]
+        } else {
+            self.child_clusters().flat_map(Self::leaves).collect()
+        }
+    }
+
     /// Returns whether the `Cluster` is a descendant of another `Cluster`.
     ///
     /// This may only return `true` if both `Cluster`s have the same variant of

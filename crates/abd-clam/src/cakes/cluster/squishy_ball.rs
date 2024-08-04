@@ -43,8 +43,8 @@ impl<U: Number, S: Cluster<U>> SquishyBall<U, S> {
     /// - `source`: The `Cluster` to adapt into a `SquishyBall`.
     /// - `data`: The dataset containing the instances.
     /// - `trim`: Whether to trim the tree after creating it, i.e. remove
-    /// children of clusters whose unitary cost of compression is greater than
-    /// the recursive cost.
+    ///   children of clusters whose unitary cost of compression is greater than
+    ///   the recursive cost.
     pub fn from_root<I, D: Dataset<I, U>>(source: S, data: &D, trim: bool) -> Self {
         let (mut root, _) = Self::adapt(source, None);
         root.set_costs(data);
@@ -118,8 +118,8 @@ impl<U: Number, S: ParCluster<U>> SquishyBall<U, S> {
     /// - `source`: The `Cluster` to adapt into a `SquishyBall`.
     /// - `data`: The dataset containing the instances.
     /// - `trim`: Whether to trim the tree after creating it, i.e. remove
-    /// children of clusters whose unitary cost of compression is greater than
-    /// the recursive cost.
+    ///   children of clusters whose unitary cost of compression is greater than
+    ///   the recursive cost.
     pub fn par_from_root<I: Send + Sync, D: ParDataset<I, U>>(source: S, data: &D, trim: bool) -> Self {
         let (mut root, _) = Self::par_adapt(source, None);
         root.par_set_costs(data);
