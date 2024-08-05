@@ -51,6 +51,7 @@ pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> {
         for leaf in root.leaves() {
             offsets.push(bytes.len());
 
+            bytes.extend_from_slice(&leaf.arg_center().to_le_bytes());
             bytes.extend_from_slice(&leaf.cardinality().to_le_bytes());
             let center = self.get(leaf.arg_center());
             for i in leaf.indices() {
