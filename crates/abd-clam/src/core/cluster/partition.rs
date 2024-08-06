@@ -8,7 +8,7 @@ use crate::{dataset::ParDataset, Dataset};
 use super::{Cluster, ParCluster};
 
 /// `Cluster`s that can be partitioned into child `Cluster`s, and recursively partitioned into a tree.
-pub trait Partition<U: Number>: Cluster<U> {
+pub trait Partition<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool>: Cluster<I, U, D> {
     /// Creates a new `Cluster` tree.
     ///
     /// # Arguments
@@ -27,7 +27,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     /// # Returns
     ///
     /// - The root `Cluster` of the tree.
-    fn new_tree<I, D: Dataset<I, U>, C: Fn(&Self) -> bool>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
+    fn new_tree(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
         let (root, _) = Self::new(data, &indices, 0, seed);
         root.partition(data, indices, criteria, seed)
@@ -54,12 +54,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     /// - The instances with which to initialize the child `Cluster`s.
     /// - The distance from each pole to the farthest instance assigned to that
     ///   child.
-    fn split_by_extrema<I, D: Dataset<I, U>>(
-        &self,
-        data: &D,
-        extrema: Vec<usize>,
-        instances: Vec<usize>,
-    ) -> (Vec<Vec<usize>>, Vec<U>) {
+    fn split_by_extrema(&self, data: &D, extrema: Vec<usize>, instances: Vec<usize>) -> (Vec<Vec<usize>>, Vec<U>) {
         // Find the distances from each pole to each instance.
         let polar_distances = Dataset::many_to_many(data, &extrema, &instances);
 
@@ -119,13 +114,7 @@ pub trait Partition<U: Number>: Cluster<U> {
     /// - The instances in the `Cluster` in depth-first order of traversal of
     ///   the tree.
     #[must_use]
-    fn partition<I, D: Dataset<I, U>, C: Fn(&Self) -> bool>(
-        mut self,
-        data: &D,
-        mut indices: Vec<usize>,
-        criteria: &C,
-        seed: Option<u64>,
-    ) -> Self {
+    fn partition(mut self, data: &D, mut indices: Vec<usize>, criteria: &C, seed: Option<u64>) -> Self {
         if !self.is_singleton() && criteria(&self) {
             let extrema = self.find_extrema(data);
             indices.retain(|i| !extrema.contains(i));
@@ -158,25 +147,18 @@ pub trait Partition<U: Number>: Cluster<U> {
 
 /// `Cluster`s that use and provide parallelized methods.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParPartition<U: Number>: ParCluster<U> {
+pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync>:
+    ParCluster<I, U, D>
+{
     /// Parallelized version of the `new_tree` method.
-    fn par_new_tree<I: Send + Sync, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync>(
-        data: &D,
-        criteria: &C,
-        seed: Option<u64>,
-    ) -> Self {
+    fn par_new_tree(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
         let (root, _) = Self::par_new(data, &indices, 0, seed);
         root.par_partition(data, indices, criteria, seed)
     }
 
     /// Parallelized version of the `partition_once` method.
-    fn par_split_by_extrema<I: Send + Sync, D: ParDataset<I, U>>(
-        &self,
-        data: &D,
-        extrema: Vec<usize>,
-        instances: Vec<usize>,
-    ) -> (Vec<Vec<usize>>, Vec<U>) {
+    fn par_split_by_extrema(&self, data: &D, extrema: Vec<usize>, instances: Vec<usize>) -> (Vec<Vec<usize>>, Vec<U>) {
         // Find the distances from each pole to each instance.
         let polar_distances = ParDataset::par_many_to_many(data, &extrema, &instances);
 
@@ -219,13 +201,7 @@ pub trait ParPartition<U: Number>: ParCluster<U> {
 
     /// Parallelized version of the `partition` method.
     #[must_use]
-    fn par_partition<I: Send + Sync, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync>(
-        mut self,
-        data: &D,
-        mut indices: Vec<usize>,
-        criteria: &C,
-        seed: Option<u64>,
-    ) -> Self {
+    fn par_partition(mut self, data: &D, mut indices: Vec<usize>, criteria: &C, seed: Option<u64>) -> Self {
         if !self.is_singleton() && criteria(&self) {
             let extrema = self.par_find_extrema(data);
             indices.retain(|i| !extrema.contains(i));

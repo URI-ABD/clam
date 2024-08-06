@@ -2,10 +2,12 @@
 
 use distances::Number;
 
+use crate::{dataset::ParDataset, Dataset};
+
 use super::{Cluster, ParCluster};
 
 /// A trait for the parameters to use for adapting a `Ball` into another `Cluster`.
-pub trait Params<U: Number, S: Cluster<U>>: Default {
+pub trait Params<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>>: Default {
     /// Given the `S` that was adapted into a `Cluster`, returns parameters
     /// to use for adapting the children of `S`.
     #[must_use]
@@ -19,7 +21,7 @@ pub trait Params<U: Number, S: Cluster<U>>: Default {
 /// - `U`: The type of the distance values.
 /// - `S`: The type of the `Cluster` to adapt from.
 /// - `P`: The type of the parameters to use for the adaptation.
-pub trait Adapter<U: Number, S: Cluster<U>, P: Params<U, S>>: Cluster<U> {
+pub trait Adapter<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, P: Params<I, U, D, S>>: Cluster<I, U, D> {
     /// Adapts a tree of `S`s into a `Cluster`.
     fn adapt(source: S, params: Option<P>) -> (Self, Vec<usize>)
     where
@@ -38,7 +40,9 @@ pub trait Adapter<U: Number, S: Cluster<U>, P: Params<U, S>>: Cluster<U> {
 }
 
 /// Parallel version of the `Params` trait.
-pub trait ParParams<U: Number, S: Cluster<U>>: Params<U, S> + Send + Sync {
+pub trait ParParams<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>>:
+    Params<I, U, D, S> + Send + Sync
+{
     /// Parallel version of the `child_params` method.
     #[must_use]
     fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self>;
@@ -46,7 +50,9 @@ pub trait ParParams<U: Number, S: Cluster<U>>: Params<U, S> + Send + Sync {
 
 /// Parallel version of the `Adapter` trait.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParAdapter<U: Number, S: ParCluster<U>, P: ParParams<U, S>>: Adapter<U, S, P> + Send + Sync {
+pub trait ParAdapter<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>, P: ParParams<I, U, D, S>>:
+    Adapter<I, U, D, S, P> + Send + Sync
+{
     /// Parallel version of the `adapt` method.
     fn par_adapt(source: S, params: Option<P>) -> (Self, Vec<usize>)
     where

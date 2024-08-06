@@ -11,7 +11,7 @@ pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize, max_multiplie
 where
     U: Number,
     D: Dataset<I, U>,
-    C: Cluster<U>,
+    C: Cluster<I, U, D>,
 {
     let max_multiplier = max_multiplier.as_f32();
     let mut radius = root.radius().as_f32();
@@ -51,7 +51,7 @@ where
     I: Send + Sync,
     U: Number,
     D: ParDataset<I, U>,
-    C: ParCluster<U>,
+    C: ParCluster<I, U, D>,
 {
     let max_multiplier = max_multiplier.as_f32();
     let mut radius = root.radius().as_f32();
@@ -84,12 +84,15 @@ where
 }
 
 /// Count the total cardinality of the clusters.
-fn count_hits<U: Number, C: Cluster<U>>(hits: &[(&C, U)]) -> usize {
+fn count_hits<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(hits: &[(&C, U)]) -> usize {
     hits.iter().map(|(c, _)| c.cardinality()).sum()
 }
 
 /// Calculate the weighted mean of the LFDs of the clusters.
-fn mean_lfd<U: Number, C: Cluster<U>>(confirmed: &[(&C, U)], straddlers: &[(&C, U)]) -> (f32, usize) {
+fn mean_lfd<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(
+    confirmed: &[(&C, U)],
+    straddlers: &[(&C, U)],
+) -> (f32, usize) {
     let (lfd, car) = confirmed
         .iter()
         .map(|&(c, _)| c)
@@ -112,7 +115,7 @@ mod tests {
 
     use super::super::tests::{check_search_by_distance, gen_grid_data, gen_line_data};
 
-    fn check_knn<I: Send + Sync, U: Number, C: ParCluster<U>>(
+    fn check_knn<I: Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
         root: &C,
         data: &FlatVec<I, U, usize>,
         query: &I,
@@ -141,7 +144,7 @@ mod tests {
         let data = gen_line_data(10)?;
         let query = &0;
 
-        let criteria = |c: &Ball<u32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
@@ -167,7 +170,7 @@ mod tests {
         let data = gen_grid_data(10)?;
         let query = &(0.0, 0.0);
 
-        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);

@@ -2,7 +2,7 @@
 
 use core::fmt::Debug;
 
-use std::hash::Hash;
+use std::{hash::Hash, marker::PhantomData};
 
 use distances::Number;
 
@@ -16,7 +16,7 @@ use super::{
 /// A metric-`Ball` is a collection of instances that are within a certain
 /// distance of a center.
 #[derive(Clone)]
-pub struct Ball<U: Number> {
+pub struct Ball<I, U: Number, D: Dataset<I, U>> {
     /// Parameters used for creating the `Ball`.
     depth: usize,
     /// The number of instances in the `Ball`.
@@ -33,9 +33,11 @@ pub struct Ball<U: Number> {
     indices: Vec<usize>,
     /// The children of the `Ball`.
     children: Vec<(usize, U, Box<Self>)>,
+    /// Phantom data to satisfy the compiler.
+    _id: PhantomData<(I, D)>,
 }
 
-impl<U: Number> Debug for Ball<U> {
+impl<I, U: Number, D: Dataset<I, U>> Debug for Ball<I, U, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
             .field("depth", &self.depth)
@@ -50,21 +52,21 @@ impl<U: Number> Debug for Ball<U> {
     }
 }
 
-impl<U: Number> PartialEq for Ball<U> {
+impl<I, U: Number, D: Dataset<I, U>> PartialEq for Ball<I, U, D> {
     fn eq(&self, other: &Self) -> bool {
         self.depth == other.depth && self.cardinality == other.cardinality && self.indices == other.indices
     }
 }
 
-impl<U: Number> Eq for Ball<U> {}
+impl<I, U: Number, D: Dataset<I, U>> Eq for Ball<I, U, D> {}
 
-impl<U: Number> PartialOrd for Ball<U> {
+impl<I, U: Number, D: Dataset<I, U>> PartialOrd for Ball<I, U, D> {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<U: Number> Ord for Ball<U> {
+impl<I, U: Number, D: Dataset<I, U>> Ord for Ball<I, U, D> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.depth
             .cmp(&other.depth)
@@ -73,15 +75,15 @@ impl<U: Number> Ord for Ball<U> {
     }
 }
 
-impl<U: Number> Hash for Ball<U> {
+impl<I, U: Number, D: Dataset<I, U>> Hash for Ball<I, U, D> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // We hash the `indices` field
         self.indices.hash(state);
     }
 }
 
-impl<U: Number> Cluster<U> for Ball<U> {
-    fn new<I, D: Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
+impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
     {
@@ -120,6 +122,7 @@ impl<U: Number> Cluster<U> for Ball<U> {
             arg_radial,
             indices: indices.to_vec(),
             children: Vec::new(),
+            _id: PhantomData,
         };
 
         (c, arg_radial)
@@ -186,8 +189,8 @@ impl<U: Number> Cluster<U> for Ball<U> {
         self
     }
 
-    fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> Vec<usize> {
-        let l_distances = Dataset::one_to_many(data, self.arg_radial, &self.indices().collect::<Vec<_>>());
+    fn find_extrema(&self, data: &D) -> Vec<usize> {
+        let l_distances = Dataset::one_to_many(data, self.arg_radial, &self.indices);
 
         let &(arg_l, _) = l_distances
             .iter()
@@ -196,15 +199,14 @@ impl<U: Number> Cluster<U> for Ball<U> {
 
         vec![arg_l, self.arg_radial]
     }
+
+    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        data.query_to_many(query, &self.indices)
+    }
 }
 
-impl<U: Number> ParCluster<U> for Ball<U> {
-    fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
-        data: &D,
-        indices: &[usize],
-        depth: usize,
-        seed: Option<u64>,
-    ) -> (Self, usize)
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {
+    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
     {
@@ -242,13 +244,14 @@ impl<U: Number> ParCluster<U> for Ball<U> {
             arg_radial,
             indices: indices.to_vec(),
             children: Vec::new(),
+            _id: PhantomData,
         };
 
         (c, arg_radial)
     }
 
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize> {
-        let l_distances = ParDataset::par_one_to_many(data, self.arg_radial, &self.indices().collect::<Vec<_>>());
+    fn par_find_extrema(&self, data: &D) -> Vec<usize> {
+        let l_distances = ParDataset::par_one_to_many(data, self.arg_radial, &self.indices);
 
         let &(arg_l, _) = l_distances
             .iter()
@@ -259,15 +262,21 @@ impl<U: Number> ParCluster<U> for Ball<U> {
     }
 }
 
-impl<U: Number> Partition<U> for Ball<U> {}
+impl<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool> Partition<I, U, D, C> for Ball<I, U, D> {}
 
-impl<U: Number> ParPartition<U> for Ball<U> {}
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync> ParPartition<I, U, D, C>
+    for Ball<I, U, D>
+{
+}
 
 #[cfg(test)]
 mod tests {
     use crate::core::{FlatVec, Metric};
 
     use super::*;
+
+    type F = FlatVec<Vec<i32>, i32, usize>;
+    type B = Ball<Vec<i32>, i32, F>;
 
     fn gen_tiny_data() -> Result<FlatVec<Vec<i32>, i32, usize>, String> {
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
@@ -307,7 +316,7 @@ mod tests {
         Ok(())
     }
 
-    fn check_partition(root: &Ball<i32>) -> bool {
+    fn check_partition(root: &B) -> bool {
         let indices = root.indices().collect::<Vec<_>>();
 
         assert!(!root.children().is_empty());
@@ -341,7 +350,7 @@ mod tests {
 
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
         let seed = Some(42);
-        let criteria = |c: &Ball<i32>| c.depth() < 1;
+        let criteria = |c: &B| c.depth() < 1;
 
         let root = Ball::new(&data, &indices, 0, seed)
             .0
@@ -363,7 +372,7 @@ mod tests {
         let data = gen_tiny_data()?;
 
         let seed = Some(42);
-        let criteria = |c: &Ball<i32>| c.depth() < 1;
+        let criteria = |c: &B| c.depth() < 1;
 
         let root = Ball::new_tree(&data, &criteria, seed);
         assert_eq!(root.indices().count(), data.cardinality());

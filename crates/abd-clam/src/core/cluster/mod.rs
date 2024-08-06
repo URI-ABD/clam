@@ -15,7 +15,6 @@ use rayon::prelude::*;
 use super::{dataset::ParDataset, Dataset, MetricSpace};
 
 pub use ball::Ball;
-// pub use children::Children;
 pub use lfd::LFD;
 pub use partition::Partition;
 
@@ -25,7 +24,7 @@ pub use partition::Partition;
 ///
 /// - `U`: The type of the distance values between instances.
 /// - `P`: The type of the parameters used to create the `Cluster`.
-pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
+pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
     /// Creates a new `Cluster`.
     ///
     /// This should store indices as `IndexStore::EveryCluster`.
@@ -46,7 +45,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
     ///
     /// - The new `Cluster`.
     /// - The index of the radial instance in `instances`.
-    fn new<I, D: Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
 
     /// Deconstructs the `Cluster` into its parts.
     ///
@@ -123,7 +122,10 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
     /// # Returns
     ///
     /// The extrema to use for partitioning the `Cluster`.
-    fn find_extrema<I, D: Dataset<I, U>>(&self, data: &D) -> Vec<usize>;
+    fn find_extrema(&self, data: &D) -> Vec<usize>;
+
+    /// Computes the distances from the `query` to all instances in the `Cluster`.
+    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)>;
 
     /// Gets the child `Cluster`s.
     fn child_clusters<'a>(&'a self) -> impl Iterator<Item = &Self>
@@ -134,7 +136,7 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
     }
 
     /// Gets only those children which might overlap with a query ball.
-    fn overlapping_children<'a, I, D: Dataset<I, U>>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
+    fn overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
     where
         U: 'a,
     {
@@ -198,49 +200,34 @@ pub trait Cluster<U: Number>: Debug + Ord + Hash + Sized {
         self.indices().zip(core::iter::repeat(d)).collect()
     }
 
-    /// Computes the distances from the `query` to all instances in the `Cluster`.
-    fn distances<I, D: Dataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        data.query_to_many(query, &self.indices().collect::<Vec<_>>())
-    }
-
     /// Computes the distance from the `Cluster`'s center to a given `query`.
-    fn distance_to_center<I, D: Dataset<I, U>>(&self, data: &D, query: &I) -> U {
+    fn distance_to_center(&self, data: &D, query: &I) -> U {
         let center = data.get(self.arg_center());
         MetricSpace::one_to_one(data, center, query)
     }
 
     /// Computes the distance from the `Cluster`'s center to another `Cluster`'s center.
-    fn distance_to_other<I, D: Dataset<I, U>>(&self, data: &D, other: &Self) -> U {
+    fn distance_to_other(&self, data: &D, other: &Self) -> U {
         Dataset::one_to_one(data, self.arg_center(), other.arg_center())
     }
 }
 
 /// A parallelized version of the `Cluster` trait.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParCluster<U: Number>: Cluster<U> + Send + Sync {
+pub trait ParCluster<I: Send + Sync, U: Number, D: ParDataset<I, U>>: Cluster<I, U, D> + Send + Sync {
     /// Parallelized version of the `new` method.
-    fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
-        data: &D,
-        indices: &[usize],
-        depth: usize,
-        seed: Option<u64>,
-    ) -> (Self, usize);
+    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
 
     /// Parallelized version of the `find_extrema` method.
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize>;
+    fn par_find_extrema(&self, data: &D) -> Vec<usize>;
 
     /// Parallelized version of the `distances` method.
-    fn par_distances<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 
     /// Gets only those children which might overlap with a query ball.
-    fn par_overlapping_children<'a, I: Send + Sync, D: ParDataset<I, U>>(
-        &'a self,
-        data: &D,
-        query: &I,
-        radius: U,
-    ) -> Vec<&Self>
+    fn par_overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
     where
         U: 'a,
     {

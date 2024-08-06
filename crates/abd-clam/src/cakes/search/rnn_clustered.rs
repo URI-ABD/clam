@@ -10,7 +10,7 @@ pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, radius: U) -> Vec<(usiz
 where
     U: Number,
     D: Dataset<I, U>,
-    C: Cluster<U>,
+    C: Cluster<I, U, D>,
 {
     let [confirmed, straddlers] = tree_search(data, root, query, radius);
     leaf_search(data, confirmed, straddlers, query, radius)
@@ -22,7 +22,7 @@ where
     I: Send + Sync,
     U: Number,
     D: ParDataset<I, U>,
-    C: ParCluster<U>,
+    C: ParCluster<I, U, D>,
 {
     let [confirmed, straddlers] = par_tree_search(data, root, query, radius);
     par_leaf_search(data, confirmed, straddlers, query, radius)
@@ -48,7 +48,7 @@ pub fn tree_search<'a, I, U, D, C>(data: &D, root: &'a C, query: &I, radius: U) 
 where
     U: Number + 'a,
     D: Dataset<I, U>,
-    C: Cluster<U>,
+    C: Cluster<I, U, D>,
 {
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
@@ -83,7 +83,7 @@ where
     I: Send + Sync,
     U: Number + 'a,
     D: ParDataset<I, U>,
-    C: ParCluster<U>,
+    C: ParCluster<I, U, D>,
 {
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
@@ -136,7 +136,7 @@ pub fn leaf_search<I, U, D, C>(
 where
     U: Number,
     D: Dataset<I, U>,
-    C: Cluster<U>,
+    C: Cluster<I, U, D>,
 {
     let hits = confirmed.into_iter().flat_map(|(c, d)| {
         if c.is_singleton() {
@@ -166,7 +166,7 @@ where
     I: Send + Sync,
     U: Number,
     D: ParDataset<I, U>,
-    C: ParCluster<U>,
+    C: ParCluster<I, U, D>,
 {
     let mut hits = confirmed
         .into_par_iter()
@@ -200,7 +200,7 @@ mod tests {
 
     use super::super::tests::{check_search_by_index, gen_grid_data, gen_line_data};
 
-    pub fn check_rnn<I: Send + Sync, U: Number, C: ParCluster<U>>(
+    pub fn check_rnn<I: Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
         root: &C,
         data: &FlatVec<I, U, usize>,
         query: &I,
@@ -228,7 +228,7 @@ mod tests {
         let data = gen_line_data(10)?;
         let query = &0;
 
-        let criteria = |c: &Ball<u32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let root = Ball::new_tree(&data, &criteria, seed);
@@ -250,7 +250,7 @@ mod tests {
         let data = gen_grid_data(10)?;
         let query = &(0.0, 0.0);
 
-        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let root = Ball::par_new_tree(&data, &criteria, seed);

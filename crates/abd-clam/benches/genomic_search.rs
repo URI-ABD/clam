@@ -2,11 +2,7 @@
 
 mod utils;
 
-use abd_clam::{
-    cakes::{cluster::SquishyBall, OffBall},
-    partition::ParPartition,
-    Ball, Cluster, FlatVec, Metric,
-};
+use abd_clam::{cakes::OffBall, partition::ParPartition, Ball, Cluster, FlatVec, Metric};
 use criterion::*;
 use rand::prelude::*;
 
@@ -60,13 +56,11 @@ fn genomic_search(c: &mut Criterion) {
         let metric = Metric::new(distance_fn, true);
         let data = FlatVec::new(genomes.clone(), metric).unwrap();
 
-        let criteria = |c: &Ball<_>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let root = Ball::par_new_tree(&data, &criteria, seed);
-        let squishy_root = SquishyBall::par_from_root(root.clone(), &data, true);
 
         let mut perm_data = data.clone();
         let perm_root = OffBall::par_from_ball_tree(root.clone(), &mut perm_data);
-        let squishy_perm_root = SquishyBall::par_from_root(perm_root.clone(), &perm_data, true);
 
         utils::compare_permuted(
             c,
@@ -74,10 +68,8 @@ fn genomic_search(c: &mut Criterion) {
             metric_name,
             &data,
             &root,
-            &squishy_root,
             &perm_data,
             &perm_root,
-            &squishy_perm_root,
             &queries,
             &radii,
             &ks,

@@ -57,7 +57,7 @@ let data = FlatVec::new(rows, metric).unwrap();
 let data = data.with_metadata(labels).unwrap();
 
 // We define the criteria for building the tree to partition the `Cluster`s until each contains a single point.
-let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
 
 // Now we create a tree.
 let root = Ball::new_tree(&data, &criteria, Some(seed));

@@ -1,6 +1,7 @@
 //! An adaptation of `Ball` that stores indices after reordering the dataset.
 
 use core::fmt::Debug;
+use std::marker::PhantomData;
 
 use distances::Number;
 use rayon::prelude::*;
@@ -14,16 +15,18 @@ use crate::{
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
 #[derive(Clone)]
-pub struct OffBall<U: Number, S: Cluster<U>> {
+pub struct OffBall<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The `Cluster` type that the `OffsetBall` is based on.
     source: S,
     /// The children of the `Cluster`.
     children: Vec<(usize, U, Box<Self>)>,
     /// The parameters of the `Cluster`.
     params: Offset,
+    /// Phantom data to satisfy the compiler.
+    _id: PhantomData<(I, D)>,
 }
 
-impl<U: Number, S: Cluster<U> + Debug> Debug for OffBall<U, S> {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug> Debug for OffBall<I, U, D, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OffsetBall")
             .field("source", &self.source)
@@ -33,21 +36,16 @@ impl<U: Number, S: Cluster<U> + Debug> Debug for OffBall<U, S> {
     }
 }
 
-impl<U: Number> OffBall<U, Ball<U>> {
+impl<I, U: Number, D: Dataset<I, U> + Permutable> OffBall<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
-    pub fn from_ball_tree<I, D: Dataset<I, U> + Permutable>(ball: Ball<U>, data: &mut D) -> Self {
+    pub fn from_ball_tree(ball: Ball<I, U, D>, data: &mut D) -> Self {
         let (root, indices) = Self::adapt(ball, None);
         data.permute(&indices);
         root
     }
+}
 
-    /// Parallel version of the `from_ball_tree` method.
-    pub fn par_from_ball_tree<I, D: Dataset<I, U> + Permutable>(ball: Ball<U>, data: &mut D) -> Self {
-        let (root, indices) = Self::par_adapt(ball, None);
-        data.permute(&indices);
-        root
-    }
-
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> OffBall<I, U, D, S> {
     /// Returns the offset of the `Cluster`.
     #[must_use]
     pub const fn offset(&self) -> usize {
@@ -55,7 +53,16 @@ impl<U: Number> OffBall<U, Ball<U>> {
     }
 }
 
-impl<U: Number, S: Cluster<U>> Adapter<U, S, Offset> for OffBall<U, S> {
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> OffBall<I, U, D, Ball<I, U, D>> {
+    /// Parallel version of the `from_ball_tree` method.
+    pub fn par_from_ball_tree(ball: Ball<I, U, D>, data: &mut D) -> Self {
+        let (root, indices) = Self::par_adapt(ball, None);
+        data.permute(&indices);
+        root
+    }
+}
+
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, S, Offset> for OffBall<I, U, D, S> {
     fn adapt(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
     where
         Self: Sized,
@@ -104,6 +111,7 @@ impl<U: Number, S: Cluster<U>> Adapter<U, S, Offset> for OffBall<U, S> {
             source,
             children,
             params,
+            _id: PhantomData,
         }
     }
 
@@ -125,7 +133,9 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
             .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
 }
 
-impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, Offset> for OffBall<U, S> {
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParAdapter<I, U, D, S, Offset>
+    for OffBall<I, U, D, S>
+{
     fn par_adapt(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
     where
         Self: Sized,
@@ -138,6 +148,7 @@ impl<U: Number, S: ParCluster<U>> ParAdapter<U, S, Offset> for OffBall<U, S> {
                 source,
                 children: Vec::new(),
                 params,
+                _id: PhantomData,
             }
         } else {
             let (arg_extrema, others) = children
@@ -182,7 +193,7 @@ struct Offset {
     offset: usize,
 }
 
-impl<U: Number, S: Cluster<U>> Params<U, S> for Offset {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, S> for Offset {
     fn child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         let mut offset = self.offset;
         child_balls
@@ -196,15 +207,15 @@ impl<U: Number, S: Cluster<U>> Params<U, S> for Offset {
     }
 }
 
-impl<U: Number, S: ParCluster<U>> ParParams<U, S> for Offset {
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, S> for Offset {
     fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
         self.child_params(child_balls)
     }
 }
 
-impl<U: Number, S: Cluster<U>> Cluster<U> for OffBall<U, S> {
-    fn new<I, D: crate::Dataset<I, U>>(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for OffBall<I, U, D, S> {
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
     {
@@ -214,6 +225,7 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffBall<U, S> {
             source,
             children: Vec::new(),
             params: Offset::default(),
+            _id: PhantomData,
         };
         (vertex, arg_radial)
     }
@@ -224,12 +236,14 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffBall<U, S> {
             source,
             children,
             params,
+            _id,
         } = self;
         (
             Self {
                 source,
                 children: Vec::new(),
                 params,
+                _id: PhantomData,
             },
             indices,
             children,
@@ -290,26 +304,30 @@ impl<U: Number, S: Cluster<U>> Cluster<U> for OffBall<U, S> {
         self
     }
 
-    fn find_extrema<I, D: crate::Dataset<I, U>>(&self, data: &D) -> Vec<usize> {
+    fn find_extrema(&self, data: &D) -> Vec<usize> {
         self.source.find_extrema(data)
+    }
+
+    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        data.query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 }
 
-impl<U: Number, S: Cluster<U>> PartialEq for OffBall<U, S> {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> PartialEq for OffBall<I, U, D, S> {
     fn eq(&self, other: &Self) -> bool {
         self.params.offset == other.params.offset && self.cardinality() == other.cardinality()
     }
 }
 
-impl<U: Number, S: Cluster<U>> Eq for OffBall<U, S> {}
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Eq for OffBall<I, U, D, S> {}
 
-impl<U: Number, S: Cluster<U>> PartialOrd for OffBall<U, S> {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> PartialOrd for OffBall<I, U, D, S> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<U: Number, S: Cluster<U>> Ord for OffBall<U, S> {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Ord for OffBall<I, U, D, S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.params
             .offset
@@ -318,19 +336,16 @@ impl<U: Number, S: Cluster<U>> Ord for OffBall<U, S> {
     }
 }
 
-impl<U: Number, S: Cluster<U>> std::hash::Hash for OffBall<U, S> {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> std::hash::Hash for OffBall<I, U, D, S> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (self.params.offset, self.cardinality()).hash(state);
     }
 }
 
-impl<U: Number, S: ParCluster<U>> ParCluster<U> for OffBall<U, S> {
-    fn par_new<I: Send + Sync, D: ParDataset<I, U>>(
-        data: &D,
-        indices: &[usize],
-        depth: usize,
-        seed: Option<u64>,
-    ) -> (Self, usize)
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParCluster<I, U, D>
+    for OffBall<I, U, D, S>
+{
+    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
     {
@@ -339,11 +354,12 @@ impl<U: Number, S: ParCluster<U>> ParCluster<U> for OffBall<U, S> {
             source,
             children: Vec::new(),
             params: Offset::default(),
+            _id: PhantomData,
         };
         (vertex, arg_radial)
     }
 
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I, U>>(&self, data: &D) -> Vec<usize> {
+    fn par_find_extrema(&self, data: &D) -> Vec<usize> {
         self.source.par_find_extrema(data)
     }
 }
@@ -354,6 +370,10 @@ mod tests {
 
     use super::*;
 
+    type Fv = FlatVec<Vec<i32>, i32, usize>;
+    type B = Ball<Vec<i32>, i32, Fv>;
+    type Ob = OffBall<Vec<i32>, i32, Fv, B>;
+
     fn gen_tiny_data() -> Result<FlatVec<Vec<i32>, i32, usize>, String> {
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
@@ -361,7 +381,7 @@ mod tests {
         FlatVec::new_array(instances.clone(), metric)
     }
 
-    fn check_permutation(root: &OffBall<i32, Ball<i32>>, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
+    fn check_permutation(root: &Ob, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {
         assert!(!root.children().is_empty());
 
         for cluster in root.subtree() {
@@ -377,7 +397,7 @@ mod tests {
         let data = gen_tiny_data()?;
 
         let seed = Some(42);
-        let criteria = |c: &Ball<i32>| c.depth() < 1;
+        let criteria = |c: &B| c.depth() < 1;
 
         let root = Ball::new_tree(&data, &criteria, seed);
         let mut perm_data = data.clone();

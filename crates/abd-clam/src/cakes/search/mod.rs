@@ -45,7 +45,7 @@ pub enum Algorithm<U: Number> {
 
 impl<U: Number> Algorithm<U> {
     /// Perform the search using the algorithm.
-    pub fn search<I, C: Cluster<U>, D: Dataset<I, U>>(&self, data: &D, root: &C, query: &I) -> Vec<(usize, U)> {
+    pub fn search<I, D: Dataset<I, U>, C: Cluster<I, U, D>>(&self, data: &D, root: &C, query: &I) -> Vec<(usize, U)> {
         match self {
             Self::RnnClustered(radius) => rnn_clustered::search(data, root, query, *radius),
             Self::KnnRepeatedRnn(k, max_multiplier) => knn_repeated_rnn::search(data, root, query, *k, *max_multiplier),
@@ -55,7 +55,7 @@ impl<U: Number> Algorithm<U> {
     }
 
     /// Parallel version of the `search` method.
-    pub fn par_search<I: Send + Sync, C: ParCluster<U>, D: ParDataset<I, U>>(
+    pub fn par_search<I: Send + Sync, D: ParDataset<I, U>, C: ParCluster<I, U, D>>(
         &self,
         data: &D,
         root: &C,
@@ -125,10 +125,7 @@ pub mod tests {
     use rand::prelude::*;
     use test_case::test_case;
 
-    use crate::{
-        cakes::{cluster::SquishyBall, OffBall},
-        Ball, Cluster, FlatVec, Metric, Partition,
-    };
+    use crate::{cakes::OffBall, Ball, Cluster, FlatVec, Metric, Partition};
 
     pub fn gen_line_data(max: i32) -> Result<FlatVec<i32, u32, usize>, String> {
         let data = (-max..=max).collect::<Vec<_>>();
@@ -231,12 +228,11 @@ pub mod tests {
 
         let seed = 42;
         let data = gen_random_data(car, dim, 10.0, seed)?;
-        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(seed);
         let query = &vec![0.0; dim];
 
         let root = Ball::new_tree(&data, &criteria, seed);
-        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&data, query);
@@ -244,19 +240,14 @@ pub mod tests {
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
                 checker(true_hits.clone(), pred_hits, &alg.name(), false);
-                let pred_hits = alg.search(&data, &squishy_root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name(), true);
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name(), false);
-            let pred_hits = alg.par_search(&data, &squishy_root, query);
-            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         let mut data = data;
         let root = OffBall::from_ball_tree(root, &mut data);
-        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for (alg, checker) in algs {
             let true_hits = alg.par_linear_search(&data, query);
@@ -264,14 +255,10 @@ pub mod tests {
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
                 checker(true_hits.clone(), pred_hits, &alg.name(), false);
-                let pred_hits = alg.search(&data, &squishy_root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name(), true);
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name(), false);
-            let pred_hits = alg.par_search(&data, &squishy_root, query);
-            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         Ok(())
@@ -279,7 +266,6 @@ pub mod tests {
 
     #[test]
     fn strings() -> Result<(), String> {
-        // TODO: Sometimes this runs for ever.
         let mut algs: Vec<(
             super::Algorithm<u16>,
             fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str, bool) -> bool,
@@ -316,11 +302,10 @@ pub mod tests {
         let metric = Metric::new(distance_fn, true);
         let data = FlatVec::new(data, metric)?.with_metadata(metadata)?;
 
-        let criteria = |c: &Ball<u16>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let root = Ball::new_tree(&data, &criteria, seed);
-        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&data, query);
@@ -328,19 +313,12 @@ pub mod tests {
             let pred_hits = alg.search(&data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name(), false);
 
-            let pred_hits = alg.search(&data, &squishy_root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), true);
-
             let pred_hits = alg.par_search(&data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name(), false);
-
-            let pred_hits = alg.par_search(&data, &squishy_root, query);
-            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         let mut data = data;
         let root = OffBall::from_ball_tree(root, &mut data);
-        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for (alg, checker) in algs {
             let true_hits = alg.par_linear_search(&data, query);
@@ -348,14 +326,8 @@ pub mod tests {
             let pred_hits = alg.search(&data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name(), false);
 
-            let pred_hits = alg.search(&data, &squishy_root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), true);
-
             let pred_hits = alg.par_search(&data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name(), false);
-
-            let pred_hits = alg.par_search(&data, &squishy_root, query);
-            checker(true_hits, pred_hits, &alg.name(), true);
         }
 
         Ok(())

@@ -48,7 +48,19 @@ impl<I, U, M> CodecData<I, U, M> {
     }
 }
 
-impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {}
+impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
+    fn centers(&self) -> &HashMap<usize, I> {
+        &self.centers
+    }
+
+    fn leaf_bytes(&self) -> &[u8] {
+        self.leaf_bytes.as_ref()
+    }
+
+    fn leaf_offsets(&self) -> &[usize] {
+        &self.leaf_offsets
+    }
+}
 
 impl<I: Decodable, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
     fn cardinality(&self) -> usize {
@@ -59,23 +71,10 @@ impl<I: Decodable, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
         self.dimensionality_hint
     }
 
+    #[allow(clippy::panic)]
     fn get(&self, index: usize) -> &I {
         self.centers.get(&index).map_or_else(
-            || {
-                // Find the first offset that is larger than the given index.
-                let offset_index = self
-                    .leaf_offsets
-                    .iter()
-                    .position(|&offset| offset > index)
-                    .unwrap_or(self.leaf_bytes.len());
-                // The offset for the leaf is one less than that.
-                let mut leaf_offset = self.leaf_offsets[offset_index - 1];
-                // Decode the leaf.
-                let _leaf = self.decode_leaf(&self.leaf_bytes, &mut leaf_offset, &self.centers);
-                // Return the instance at the given index.
-                // &leaf[index - leaf_offset]
-                todo!()
-            },
+            || panic!("For CodecData, the `get` method may only be used for cluster centers."),
             |center| center,
         )
     }

@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use crate::{cakes::Algorithm, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
 
 /// A dataset that can be searched with entropy-scaling algorithms.
-pub trait Searchable<I, U: Number, D: Dataset<I, U>>: Cluster<U> {
+pub trait Searchable<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// Searches the dataset for the `query` instance and returns the
     /// indices of and distances to the nearest neighbors.
     fn search(&self, data: &D, query: &I, alg: Algorithm<U>) -> Vec<(usize, U)> {
@@ -21,7 +21,9 @@ pub trait Searchable<I, U: Number, D: Dataset<I, U>>: Cluster<U> {
 
 /// Parallel version of the `Searchable` trait.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParSearchable<I: Send + Sync, U: Number, D: ParDataset<I, U>>: Searchable<I, U, D> + ParCluster<U> {
+pub trait ParSearchable<I: Send + Sync, U: Number, D: ParDataset<I, U>>:
+    Searchable<I, U, D> + ParCluster<I, U, D>
+{
     /// Parallel version of the `search` method.
     fn par_search(&self, data: &D, query: &I, alg: Algorithm<U>) -> Vec<(usize, U)> {
         alg.par_search(data, self, query)

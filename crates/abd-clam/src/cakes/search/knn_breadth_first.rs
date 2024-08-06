@@ -12,7 +12,7 @@ pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize
 where
     U: Number,
     D: Dataset<I, U>,
-    C: Cluster<U>,
+    C: Cluster<I, U, D>,
 {
     let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
@@ -55,7 +55,7 @@ where
     I: Send + Sync,
     U: Number,
     D: ParDataset<I, U>,
-    C: ParCluster<U>,
+    C: ParCluster<I, U, D>,
 {
     let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
@@ -96,20 +96,21 @@ where
 }
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
-fn d_max<U: Number, C: Cluster<U>>(c: &C, d: U) -> U {
+fn d_max<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C, d: U) -> U {
     c.radius() + d
 }
 
 /// Splits the candidates three ways: those needed to get to k hits, those that
 /// might be needed to get to k hits, and those that are not needed to get to k
 /// hits.
-fn split_candidates<'a, U, C>(
+fn split_candidates<'a, I, U, D, C>(
     hits: &SizedHeap<(U, usize)>,
     candidates: SizedHeap<(Reverse<U>, &'a C)>,
 ) -> [Vec<(U, &'a C)>; 3]
 where
     U: Number,
-    C: Cluster<U>,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
 {
     let k = hits
         .k()
@@ -156,7 +157,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        cakes::{cluster::SquishyBall, OffBall},
+        cakes::OffBall,
         cluster::{Ball, Partition},
         Cluster,
     };
@@ -171,22 +172,20 @@ mod tests {
         let data = gen_line_data(10)?;
         let query = &0;
 
-        let criteria = |c: &Ball<u32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
-        let squishy_ball = SquishyBall::from_root(ball.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &squishy_ball, &data, query, k));
+            assert!(check_knn(&ball, &data, query, k));
         }
 
         let mut data = data;
         let root = OffBall::from_ball_tree(ball, &mut data);
-        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &squishy_root, &data, query, k));
+            assert!(check_knn(&root, &data, query, k));
         }
 
         Ok(())
@@ -197,22 +196,20 @@ mod tests {
         let data = gen_grid_data(10)?;
         let query = &(0.0, 0.0);
 
-        let criteria = |c: &Ball<f32>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
-        let squishy_ball = SquishyBall::from_root(ball.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &squishy_ball, &data, query, k));
+            assert!(check_knn(&ball, &data, query, k));
         }
 
         let mut data = data;
         let root = OffBall::from_ball_tree(ball, &mut data);
-        let squishy_root = SquishyBall::from_root(root.clone(), &data, true);
 
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &squishy_root, &data, query, k));
+            assert!(check_knn(&root, &data, query, k));
         }
 
         Ok(())
