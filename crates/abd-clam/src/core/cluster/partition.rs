@@ -8,7 +8,50 @@ use crate::{dataset::ParDataset, Dataset};
 use super::{Cluster, ParCluster};
 
 /// `Cluster`s that can be partitioned into child `Cluster`s, and recursively partitioned into a tree.
-pub trait Partition<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool>: Cluster<I, U, D> {
+pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
+    /// Creates a new `Cluster`.
+    ///
+    /// This should store indices as `IndexStore::EveryCluster`.
+    ///
+    /// # Arguments
+    ///
+    /// - `data`: The dataset containing the instances.
+    /// - `indices`: The indices of instances in the `Cluster`.
+    /// - `depth`: The depth of the `Cluster` in the tree.
+    /// - `seed`: An optional seed for random number generation.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `I`: The type of the instances in the dataset.
+    /// - `D`: The type of the dataset.
+    ///
+    /// # Returns
+    ///
+    /// - The new `Cluster`.
+    /// - The index of the radial instance in `instances`.
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
+
+    /// Finds the extrema of the `Cluster`.
+    ///
+    /// The extrema are meant to be well-separated instances that can be used to
+    /// partition the `Cluster` into some number of child `Cluster`s. The number
+    /// of children will be equal to the number of extrema determined by this
+    /// method.
+    ///
+    /// # Arguments
+    ///
+    /// - `data`: The dataset containing the instances.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `I`: The type of the instances in the dataset.
+    /// - `D`: The type of the dataset.
+    ///
+    /// # Returns
+    ///
+    /// The extrema to use for partitioning the `Cluster`.
+    fn find_extrema(&self, data: &D) -> Vec<usize>;
+
     /// Creates a new `Cluster` tree.
     ///
     /// # Arguments
@@ -27,7 +70,7 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool>: Clust
     /// # Returns
     ///
     /// - The root `Cluster` of the tree.
-    fn new_tree(data: &D, criteria: &C, seed: Option<u64>) -> Self {
+    fn new_tree<C: Fn(&Self) -> bool>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
         let (root, _) = Self::new(data, &indices, 0, seed);
         root.partition(data, indices, criteria, seed)
@@ -114,7 +157,13 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool>: Clust
     /// - The instances in the `Cluster` in depth-first order of traversal of
     ///   the tree.
     #[must_use]
-    fn partition(mut self, data: &D, mut indices: Vec<usize>, criteria: &C, seed: Option<u64>) -> Self {
+    fn partition<C: Fn(&Self) -> bool>(
+        mut self,
+        data: &D,
+        mut indices: Vec<usize>,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> Self {
         if !self.is_singleton() && criteria(&self) {
             let extrema = self.find_extrema(data);
             indices.retain(|i| !extrema.contains(i));
@@ -147,11 +196,15 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool>: Clust
 
 /// `Cluster`s that use and provide parallelized methods.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync>:
-    ParCluster<I, U, D>
-{
+pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParCluster<I, U, D> {
+    /// Parallelized version of the `new` method.
+    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
+
+    /// Parallelized version of the `find_extrema` method.
+    fn par_find_extrema(&self, data: &D) -> Vec<usize>;
+
     /// Parallelized version of the `new_tree` method.
-    fn par_new_tree(data: &D, criteria: &C, seed: Option<u64>) -> Self {
+    fn par_new_tree<C: (Fn(&Self) -> bool) + Send + Sync>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
         let (root, _) = Self::par_new(data, &indices, 0, seed);
         root.par_partition(data, indices, criteria, seed)
@@ -201,7 +254,13 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>, C: (Fn(&S
 
     /// Parallelized version of the `partition` method.
     #[must_use]
-    fn par_partition(mut self, data: &D, mut indices: Vec<usize>, criteria: &C, seed: Option<u64>) -> Self {
+    fn par_partition<C: (Fn(&Self) -> bool) + Send + Sync>(
+        mut self,
+        data: &D,
+        mut indices: Vec<usize>,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> Self {
         if !self.is_singleton() && criteria(&self) {
             let extrema = self.par_find_extrema(data);
             indices.retain(|i| !extrema.contains(i));

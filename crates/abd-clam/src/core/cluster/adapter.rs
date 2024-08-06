@@ -7,7 +7,7 @@ use crate::{dataset::ParDataset, Dataset};
 use super::{Cluster, ParCluster};
 
 /// A trait for the parameters to use for adapting a `Ball` into another `Cluster`.
-pub trait Params<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>>: Default {
+pub trait Params<I, U: Number, Din: Dataset<I, U>, Dout: Dataset<I, U>, S: Cluster<I, U, Din>>: Default {
     /// Given the `S` that was adapted into a `Cluster`, returns parameters
     /// to use for adapting the children of `S`.
     #[must_use]
@@ -21,7 +21,15 @@ pub trait Params<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>>: Default {
 /// - `U`: The type of the distance values.
 /// - `S`: The type of the `Cluster` to adapt from.
 /// - `P`: The type of the parameters to use for the adaptation.
-pub trait Adapter<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, P: Params<I, U, D, S>>: Cluster<I, U, D> {
+pub trait Adapter<
+    I,
+    U: Number,
+    Din: Dataset<I, U>,
+    Dout: Dataset<I, U>,
+    S: Cluster<I, U, Din>,
+    P: Params<I, U, Din, Dout, S>,
+>: Cluster<I, U, Dout>
+{
     /// Adapts a tree of `S`s into a `Cluster`.
     fn adapt(source: S, params: Option<P>) -> (Self, Vec<usize>)
     where
@@ -40,8 +48,8 @@ pub trait Adapter<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, P: Params
 }
 
 /// Parallel version of the `Params` trait.
-pub trait ParParams<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>>:
-    Params<I, U, D, S> + Send + Sync
+pub trait ParParams<I: Send + Sync, U: Number, Din: ParDataset<I, U>, Dout: ParDataset<I, U>, S: ParCluster<I, U, Din>>:
+    Params<I, U, Din, Dout, S> + Send + Sync
 {
     /// Parallel version of the `child_params` method.
     #[must_use]
@@ -50,8 +58,14 @@ pub trait ParParams<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluste
 
 /// Parallel version of the `Adapter` trait.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParAdapter<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>, P: ParParams<I, U, D, S>>:
-    Adapter<I, U, D, S, P> + Send + Sync
+pub trait ParAdapter<
+    I: Send + Sync,
+    U: Number,
+    Din: ParDataset<I, U>,
+    Dout: ParDataset<I, U>,
+    S: ParCluster<I, U, Din>,
+    P: ParParams<I, U, Din, Dout, S>,
+>: Adapter<I, U, Din, Dout, S, P> + Send + Sync
 {
     /// Parallel version of the `adapt` method.
     fn par_adapt(source: S, params: Option<P>) -> (Self, Vec<usize>)

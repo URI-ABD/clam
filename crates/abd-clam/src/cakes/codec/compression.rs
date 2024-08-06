@@ -17,7 +17,7 @@ pub trait Encodable: Clone {
 pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
     /// Recursively encodes the centers of the clusters in terms of their
     /// parents' center.
-    fn encode_centers<C: Cluster<I, U, Self>>(&self, root: &C) -> Box<[u8]> {
+    fn encode_centers<D: Dataset<I, U>, C: Cluster<I, U, D>>(&self, root: &C) -> Box<[u8]> {
         let mut bytes = Vec::new();
 
         let root_center = self.get(root.arg_center()).as_bytes();
@@ -44,7 +44,7 @@ pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
     /// - A flattened vector of encoded instances.
     /// - A vector of offsets that indicate the start of the instances for each
     ///   leaf cluster in the flattened vector.
-    fn encode_leaves<C: Cluster<I, U, Self>>(&self, root: &C) -> (Box<[u8]>, Vec<usize>) {
+    fn encode_leaves<D: Dataset<I, U>, C: Cluster<I, U, D>>(&self, root: &C) -> (Box<[u8]>, Vec<usize>) {
         let mut offsets = Vec::new();
         let mut bytes = Vec::new();
 
@@ -67,7 +67,7 @@ pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
 
 /// Recursively finds the pairs of indices that represent the parent and child
 /// centers of a cluster.
-fn index_pairs<I: Encodable, U: Number, D: Compressible<I, U>, C: Cluster<I, U, D>>(c: &C) -> Vec<(usize, usize)> {
+fn index_pairs<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C) -> Vec<(usize, usize)> {
     let mut pairs = Vec::new();
     let center = c.arg_center();
     for child in c.child_clusters() {

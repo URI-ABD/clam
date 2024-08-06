@@ -25,28 +25,6 @@ pub use partition::Partition;
 /// - `U`: The type of the distance values between instances.
 /// - `P`: The type of the parameters used to create the `Cluster`.
 pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
-    /// Creates a new `Cluster`.
-    ///
-    /// This should store indices as `IndexStore::EveryCluster`.
-    ///
-    /// # Arguments
-    ///
-    /// - `data`: The dataset containing the instances.
-    /// - `indices`: The indices of instances in the `Cluster`.
-    /// - `depth`: The depth of the `Cluster` in the tree.
-    /// - `seed`: An optional seed for random number generation.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
-    ///
-    /// # Returns
-    ///
-    /// - The new `Cluster`.
-    /// - The index of the radial instance in `instances`.
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
-
     /// Deconstructs the `Cluster` into its parts.
     ///
     /// # Returns
@@ -102,27 +80,6 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
     /// Sets the children of the `Cluster`.
     #[must_use]
     fn set_children(self, children: Vec<(usize, U, Self)>) -> Self;
-
-    /// Finds the extrema of the `Cluster`.
-    ///
-    /// The extrema are meant to be well-separated instances that can be used to
-    /// partition the `Cluster` into some number of child `Cluster`s. The number
-    /// of children will be equal to the number of extrema determined by this
-    /// method.
-    ///
-    /// # Arguments
-    ///
-    /// - `data`: The dataset containing the instances.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
-    ///
-    /// # Returns
-    ///
-    /// The extrema to use for partitioning the `Cluster`.
-    fn find_extrema(&self, data: &D) -> Vec<usize>;
 
     /// Computes the distances from the `query` to all instances in the `Cluster`.
     fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)>;
@@ -215,12 +172,6 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
 /// A parallelized version of the `Cluster` trait.
 #[allow(clippy::module_name_repetitions)]
 pub trait ParCluster<I: Send + Sync, U: Number, D: ParDataset<I, U>>: Cluster<I, U, D> + Send + Sync {
-    /// Parallelized version of the `new` method.
-    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
-
-    /// Parallelized version of the `find_extrema` method.
-    fn par_find_extrema(&self, data: &D) -> Vec<usize>;
-
     /// Parallelized version of the `distances` method.
     fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())

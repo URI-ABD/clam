@@ -62,7 +62,9 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> OffBall<I, U, 
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, S, Offset> for OffBall<I, U, D, S> {
+impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Offset>
+    for OffBall<I, U, D, S>
+{
     fn adapt(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
     where
         Self: Sized,
@@ -133,8 +135,8 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
             .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParAdapter<I, U, D, S, Offset>
-    for OffBall<I, U, D, S>
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<I, U, D>>
+    ParAdapter<I, U, D, D, S, Offset> for OffBall<I, U, D, S>
 {
     fn par_adapt(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
     where
@@ -193,7 +195,7 @@ struct Offset {
     offset: usize,
 }
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, S> for Offset {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for Offset {
     fn child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         let mut offset = self.offset;
         child_balls
@@ -207,7 +209,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, S> for
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, S> for Offset {
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for Offset {
     fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
         self.child_params(child_balls)
@@ -215,21 +217,6 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Par
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for OffBall<I, U, D, S> {
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
-    where
-        Self: Sized,
-    {
-        let (source, arg_radial) = S::new(data, indices, depth, seed);
-        // TODO: Consider whether to reset indices of the ball.
-        let vertex = Self {
-            source,
-            children: Vec::new(),
-            params: Offset::default(),
-            _id: PhantomData,
-        };
-        (vertex, arg_radial)
-    }
-
     fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
         let indices = self.indices().collect();
         let Self {
@@ -304,10 +291,6 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for O
         self
     }
 
-    fn find_extrema(&self, data: &D) -> Vec<usize> {
-        self.source.find_extrema(data)
-    }
-
     fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
@@ -345,23 +328,6 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> std::hash::Hash for Of
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParCluster<I, U, D>
     for OffBall<I, U, D, S>
 {
-    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
-    where
-        Self: Sized,
-    {
-        let (source, arg_radial) = S::par_new(data, indices, depth, seed);
-        let vertex = Self {
-            source,
-            children: Vec::new(),
-            params: Offset::default(),
-            _id: PhantomData,
-        };
-        (vertex, arg_radial)
-    }
-
-    fn par_find_extrema(&self, data: &D) -> Vec<usize> {
-        self.source.par_find_extrema(data)
-    }
 }
 
 #[cfg(test)]

@@ -83,51 +83,6 @@ impl<I, U: Number, D: Dataset<I, U>> Hash for Ball<I, U, D> {
 }
 
 impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
-    where
-        Self: Sized,
-    {
-        if indices.is_empty() {
-            unreachable!("Cannot create a Ball with no instances")
-        }
-
-        let cardinality = indices.len();
-
-        let samples = if cardinality < 100 {
-            indices.to_vec()
-        } else {
-            #[allow(clippy::cast_possible_truncation)]
-            let n = cardinality.as_f64().sqrt().as_u64() as usize;
-            Dataset::choose_unique(data, indices, n, seed)
-        };
-
-        let arg_center = Dataset::median(data, &samples);
-
-        let distances = Dataset::one_to_many(data, arg_center, indices);
-        let &(arg_radial, radius) = distances
-            .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
-            .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-
-        let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd_scale = radius.half();
-        let lfd = LFD::from_radial_distances(&distances, lfd_scale);
-
-        let c = Self {
-            depth,
-            cardinality,
-            radius,
-            lfd,
-            arg_center,
-            arg_radial,
-            indices: indices.to_vec(),
-            children: Vec::new(),
-            _id: PhantomData,
-        };
-
-        (c, arg_radial)
-    }
-
     fn disassemble(mut self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
         let indices = self.indices;
         self.indices = Vec::new();
@@ -189,6 +144,59 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self
     }
 
+    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        data.query_to_many(query, &self.indices)
+    }
+}
+
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {}
+
+impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
+    where
+        Self: Sized,
+    {
+        if indices.is_empty() {
+            unreachable!("Cannot create a Ball with no instances")
+        }
+
+        let cardinality = indices.len();
+
+        let samples = if cardinality < 100 {
+            indices.to_vec()
+        } else {
+            #[allow(clippy::cast_possible_truncation)]
+            let n = cardinality.as_f64().sqrt().as_u64() as usize;
+            Dataset::choose_unique(data, indices, n, seed)
+        };
+
+        let arg_center = Dataset::median(data, &samples);
+
+        let distances = Dataset::one_to_many(data, arg_center, indices);
+        let &(arg_radial, radius) = distances
+            .iter()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+            .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
+
+        let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
+        let lfd_scale = radius.half();
+        let lfd = LFD::from_radial_distances(&distances, lfd_scale);
+
+        let c = Self {
+            depth,
+            cardinality,
+            radius,
+            lfd,
+            arg_center,
+            arg_radial,
+            indices: indices.to_vec(),
+            children: Vec::new(),
+            _id: PhantomData,
+        };
+
+        (c, arg_radial)
+    }
+
     fn find_extrema(&self, data: &D) -> Vec<usize> {
         let l_distances = Dataset::one_to_many(data, self.arg_radial, &self.indices);
 
@@ -199,13 +207,9 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
 
         vec![arg_l, self.arg_radial]
     }
-
-    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        data.query_to_many(query, &self.indices)
-    }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for Ball<I, U, D> {
     fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
     where
         Self: Sized,
@@ -262,18 +266,11 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Bal
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>, C: Fn(&Self) -> bool> Partition<I, U, D, C> for Ball<I, U, D> {}
-
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, C: (Fn(&Self) -> bool) + Send + Sync> ParPartition<I, U, D, C>
-    for Ball<I, U, D>
-{
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::core::{FlatVec, Metric};
+    use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
 
-    use super::*;
+    use super::Ball;
 
     type F = FlatVec<Vec<i32>, i32, usize>;
     type B = Ball<Vec<i32>, i32, F>;

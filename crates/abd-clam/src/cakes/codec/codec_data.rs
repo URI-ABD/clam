@@ -4,7 +4,11 @@ use std::collections::HashMap;
 
 use distances::Number;
 
-use crate::{Dataset, Metric, MetricSpace};
+use crate::{
+    dataset::{metric_space::ParMetricSpace, ParDataset},
+    linear_search::{LinearSearch, ParLinearSearch},
+    Dataset, Metric, MetricSpace,
+};
 
 use super::{Decodable, Decompressible};
 
@@ -24,20 +28,20 @@ use super::{Decodable, Decompressible};
 /// - `M`: The type of the metadata associated with the instances.
 pub struct CodecData<I, U, M> {
     /// The metric space of the dataset.
-    metric: Metric<I, U>,
+    pub(crate) metric: Metric<I, U>,
     /// The cardinality of the dataset.
-    cardinality: usize,
+    pub(crate) cardinality: usize,
     /// A hint for the dimensionality of the dataset.
-    dimensionality_hint: (usize, Option<usize>),
+    pub(crate) dimensionality_hint: (usize, Option<usize>),
     /// The metadata associated with the instances.
-    metadata: Vec<M>,
+    pub(crate) metadata: Vec<M>,
     /// The centers of the clusters in the dataset.
-    centers: HashMap<usize, I>,
+    pub(crate) centers: HashMap<usize, I>,
     /// The bytes representing the leaf clusters as a flattened vector.
-    leaf_bytes: Box<[u8]>,
+    pub(crate) leaf_bytes: Box<[u8]>,
     /// The offsets that indicate the start of the instances for each leaf
     /// cluster in the flattened vector.
-    leaf_offsets: Vec<usize>,
+    pub(crate) leaf_offsets: Vec<usize>,
 }
 
 impl<I, U, M> CodecData<I, U, M> {
@@ -62,7 +66,7 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
     }
 }
 
-impl<I: Decodable, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
+impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
     fn cardinality(&self) -> usize {
         self.cardinality
     }
@@ -105,3 +109,11 @@ impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
         self.metric.distance_function()
     }
 }
+
+impl<I, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {}
+
+impl<I: Send + Sync, U: Number, M: Send + Sync> ParMetricSpace<I, U> for CodecData<I, U, M> {}
+
+impl<I: Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for CodecData<I, U, M> {}
+
+impl<I: Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for CodecData<I, U, M> {}
