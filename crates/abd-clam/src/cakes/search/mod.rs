@@ -279,6 +279,7 @@ pub mod tests {
 
     #[test]
     fn strings() -> Result<(), String> {
+        // TODO: Sometimes this runs for ever.
         let mut algs: Vec<(
             super::Algorithm<u16>,
             fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str, bool) -> bool,
