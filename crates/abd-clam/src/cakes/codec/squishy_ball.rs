@@ -21,27 +21,27 @@ use super::{CodecData, Compressible, Decodable, Decompressible, Encodable};
 pub struct SquishyBall<
     I: Encodable + Decodable,
     U: Number,
-    D: Compressible<I, U>,
-    Dc: Decompressible<I, U>,
-    S: Cluster<I, U, D>,
+    Co: Compressible<I, U>,
+    Dec: Decompressible<I, U>,
+    S: Cluster<I, U, Co>,
 > {
     /// The `Cluster` type that the `OffsetBall` is based on.
-    source: OffBall<I, U, D, S>,
+    source: OffBall<I, U, Co, S>,
     /// The children of the `Cluster`.
     children: Vec<(usize, U, Box<Self>)>,
     /// Parameters for the `OffsetBall`.
     costs: SquishCosts<U>,
     /// Phantom data to satisfy the compiler.
-    _dc: PhantomData<Dc>,
+    _dc: PhantomData<Dec>,
 }
 
 impl<
         I: Encodable + Decodable,
         U: Number,
-        D: Compressible<I, U>,
-        Dc: Decompressible<I, U>,
-        S: Cluster<I, U, D> + Debug,
-    > Debug for SquishyBall<I, U, D, Dc, S>
+        Co: Compressible<I, U>,
+        Dec: Decompressible<I, U>,
+        S: Cluster<I, U, Co> + Debug,
+    > Debug for SquishyBall<I, U, Co, Dec, S>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SquishyBall")
@@ -54,8 +54,8 @@ impl<
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    SquishyBall<I, U, Co, Dec, S>
 {
     /// Trims the tree by removing empty children of clusters whose unitary cost
     /// is greater than the recursive cost.
@@ -70,7 +70,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
     }
 
     /// Sets the costs for the tree.
-    fn set_costs(&mut self, data: &D) {
+    fn set_costs(&mut self, data: &Co) {
         self.set_unitary_cost(data);
         if self.children.is_empty() {
             self.costs.recursive = U::ZERO;
@@ -82,7 +82,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
     }
 
     /// Calculates the unitary cost of the `Cluster`.
-    fn set_unitary_cost(&mut self, data: &D) {
+    fn set_unitary_cost(&mut self, data: &Co) {
         self.costs.unitary = Dataset::one_to_many(data, self.arg_center(), &self.indices().collect::<Vec<_>>())
             .into_iter()
             .map(|(_, d)| d)
@@ -90,7 +90,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
     }
 
     /// Calculates the recursive cost of the `Cluster`.
-    fn set_recursive_cost(&mut self, data: &D) {
+    fn set_recursive_cost(&mut self, data: &Co) {
         if self.children.is_empty() {
             self.costs.recursive = U::ZERO;
         } else {
@@ -127,9 +127,6 @@ impl<I: Encodable + Decodable + Clone, U: Number, S: Cluster<I, U, FlatVec<I, U,
     ///
     /// - `source`: The `Cluster` to adapt into a `SquishyBall`.
     /// - `data`: The dataset containing the instances.
-    /// - `trim`: Whether to trim the tree after creating it, i.e. remove
-    ///   children of clusters whose unitary cost of compression is greater than
-    ///   the recursive cost.
     pub fn from_root(source: OffBall<I, U, FlatVec<I, U, M>, S>, data: FlatVec<I, U, M>) -> (Self, CodecData<I, U, M>) {
         let (mut root, _) = Self::adapt(source, None);
         root.set_costs(&data);
@@ -162,10 +159,10 @@ impl<I: Encodable + Decodable + Clone, U: Number, S: Cluster<I, U, FlatVec<I, U,
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        D: Compressible<I, U> + ParDataset<I, U>,
-        Dc: Decompressible<I, U> + ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
-    > SquishyBall<I, U, D, Dc, S>
+        Co: Compressible<I, U> + ParDataset<I, U>,
+        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        S: ParCluster<I, U, Co>,
+    > SquishyBall<I, U, Co, Dec, S>
 {
     /// Creates a new `SquishyBall` tree from a `Cluster`.
     ///
@@ -176,7 +173,7 @@ impl<
     /// - `trim`: Whether to trim the tree after creating it, i.e. remove
     ///   children of clusters whose unitary cost of compression is greater than
     ///   the recursive cost.
-    pub fn par_from_root(source: OffBall<I, U, D, S>, data: &D, trim: bool) -> Self {
+    pub fn par_from_root(source: OffBall<I, U, Co, S>, data: &Co, trim: bool) -> Self {
         let (mut root, _) = Self::par_adapt(source, None);
         root.par_set_costs(data);
         if trim {
@@ -186,7 +183,7 @@ impl<
     }
 
     /// Sets the costs for the tree.
-    fn par_set_costs(&mut self, data: &D) {
+    fn par_set_costs(&mut self, data: &Co) {
         self.par_set_unitary_cost(data);
         if self.children.is_empty() {
             self.costs.recursive = U::ZERO;
@@ -198,7 +195,7 @@ impl<
     }
 
     /// Calculates the unitary cost of the `Cluster`.
-    fn par_set_unitary_cost(&mut self, data: &D) {
+    fn par_set_unitary_cost(&mut self, data: &Co) {
         self.costs.unitary = ParDataset::par_one_to_many(data, self.arg_center(), &self.indices().collect::<Vec<_>>())
             .into_iter()
             .map(|(_, d)| d)
@@ -206,7 +203,7 @@ impl<
     }
 
     /// Calculates the recursive cost of the `Cluster`.
-    fn par_set_recursive_cost(&mut self, data: &D) {
+    fn par_set_recursive_cost(&mut self, data: &Co) {
         if self.children.is_empty() {
             self.costs.recursive = U::ZERO;
         } else {
@@ -220,10 +217,10 @@ impl<
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    Adapter<I, U, D, Dc, OffBall<I, U, D, S>, SquishCosts<U>> for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    Adapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn adapt(source: OffBall<I, U, D, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
+    fn adapt(source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
@@ -239,8 +236,8 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
                 .map(|(a, b, c)| (a, (b, c)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let (children, _) = <SquishCosts<U> as Params<I, U, D, Dc, OffBall<I, U, D, S>>>::child_params::<
-                Box<OffBall<I, U, D, S>>,
+            let (children, _) = <SquishCosts<U> as Params<I, U, Co, Dec, OffBall<I, U, Co, S>>>::child_params::<
+                Box<OffBall<I, U, Co, S>>,
             >(&params, &children)
             .into_iter()
             .zip(children)
@@ -260,7 +257,11 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
         (cluster, indices)
     }
 
-    fn newly_adapted(source: OffBall<I, U, D, S>, children: Vec<(usize, U, Box<Self>)>, params: SquishCosts<U>) -> Self {
+    fn newly_adapted(
+        source: OffBall<I, U, Co, S>,
+        children: Vec<(usize, U, Box<Self>)>,
+        params: SquishCosts<U>,
+    ) -> Self {
         Self {
             source,
             children,
@@ -269,11 +270,11 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
         }
     }
 
-    fn source(&self) -> &OffBall<I, U, D, S> {
+    fn source(&self) -> &OffBall<I, U, Co, S> {
         &self.source
     }
 
-    fn source_mut(&mut self) -> &mut OffBall<I, U, D, S> {
+    fn source_mut(&mut self) -> &mut OffBall<I, U, Co, S> {
         &mut self.source
     }
 }
@@ -289,8 +290,8 @@ struct SquishCosts<U> {
     minimum: U,
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    Params<I, U, D, Dc, S> for SquishCosts<U>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    Params<I, U, Co, Dec, S> for SquishCosts<U>
 {
     fn child_params<B: AsRef<S>>(&self, children: &[B]) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
@@ -300,12 +301,12 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        D: Compressible<I, U> + ParDataset<I, U>,
-        Dc: Decompressible<I, U> + ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
-    > ParAdapter<I, U, D, Dc, OffBall<I, U, D, S>, SquishCosts<U>> for SquishyBall<I, U, D, Dc, S>
+        Co: Compressible<I, U> + ParDataset<I, U>,
+        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        S: ParCluster<I, U, Co>,
+    > ParAdapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn par_adapt(source: OffBall<I, U, D, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
+    fn par_adapt(source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
@@ -321,8 +322,8 @@ impl<
                 .map(|(a, b, c)| (a, (b, c)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (extents, children) = others.into_par_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let (children, _) = <SquishCosts<U> as ParParams<I, U, D, Dc, OffBall<I, U, D, S>>>::par_child_params::<
-                Box<OffBall<I, U, D, S>>,
+            let (children, _) = <SquishCosts<U> as ParParams<I, U, Co, Dec, OffBall<I, U, Co, S>>>::par_child_params::<
+                Box<OffBall<I, U, Co, S>>,
             >(&params, &children)
             .into_par_iter()
             .zip(children.into_par_iter())
@@ -346,13 +347,13 @@ impl<
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        D: Compressible<I, U> + ParDataset<I, U>,
-        Dc: Decompressible<I, U> + ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
-    > ParParams<I, U, D, Dc, S> for SquishCosts<U>
+        Co: Compressible<I, U> + ParDataset<I, U>,
+        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        S: ParCluster<I, U, Co>,
+    > ParParams<I, U, Co, Dec, S> for SquishCosts<U>
 {
     fn par_child_params<B: AsRef<S>>(&self, children: &[B]) -> Vec<Self> {
-        Params::<I, U, D, Dc, S>::child_params(self, children)
+        Params::<I, U, Co, Dec, S>::child_params(self, children)
     }
 }
 
@@ -447,12 +448,12 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        D: Compressible<I, U> + ParDataset<I, U>,
-        Dc: Decompressible<I, U> + ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
-    > ParCluster<I, U, Dc> for SquishyBall<I, U, D, Dc, S>
+        Co: Compressible<I, U> + ParDataset<I, U>,
+        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        S: ParCluster<I, U, Co>,
+    > ParCluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn par_distances(&self, data: &Dc, query: &I) -> Vec<(usize, U)> {
+    fn par_distances(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         self.leaves()
             .into_iter()
             .map(Self::offset)
@@ -466,37 +467,37 @@ impl<
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>> PartialEq
-    for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    PartialEq for SquishyBall<I, U, Co, Dec, S>
 {
     fn eq(&self, other: &Self) -> bool {
         self.source == other.source
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>> Eq
-    for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>> Eq
+    for SquishyBall<I, U, Co, Dec, S>
 {
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    PartialOrd for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    PartialOrd for SquishyBall<I, U, Co, Dec, S>
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>> Ord
-    for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>> Ord
+    for SquishyBall<I, U, Co, Dec, S>
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.source.cmp(&other.source)
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    std::hash::Hash for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    std::hash::Hash for SquishyBall<I, U, Co, Dec, S>
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.source.hash(state);

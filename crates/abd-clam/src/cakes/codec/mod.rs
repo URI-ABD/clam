@@ -17,17 +17,18 @@ use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, FlatVec};
 
 impl<I: Encodable, U: Number, M> Compressible<I, U> for FlatVec<I, U, M> {}
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    super::cluster::Searchable<I, U, Dc> for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    super::cluster::Searchable<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
 }
+
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        D: Compressible<I, U> + ParDataset<I, U>,
-        Dc: Decompressible<I, U> + ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
-    > super::cluster::ParSearchable<I, U, Dc> for SquishyBall<I, U, D, Dc, S>
+        Co: Compressible<I, U> + ParDataset<I, U>,
+        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        S: ParCluster<I, U, Co>,
+    > super::cluster::ParSearchable<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
 }
 
