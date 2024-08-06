@@ -149,7 +149,11 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {}
+impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {
+    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
+    }
+}
 
 impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
     fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)

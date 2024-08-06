@@ -42,6 +42,8 @@ pub struct CodecData<I, U, M> {
     /// The offsets that indicate the start of the instances for each leaf
     /// cluster in the flattened vector.
     pub(crate) leaf_offsets: Vec<usize>,
+    /// The cumulative cardinalities of the leaves.
+    pub(crate) cumulative_cardinalities: Vec<usize>,
 }
 
 impl<I, U, M> CodecData<I, U, M> {
@@ -63,6 +65,17 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
 
     fn leaf_offsets(&self) -> &[usize] {
         &self.leaf_offsets
+    }
+
+    /// Finds the offset of the leaf's instances in the compressed form, given
+    /// the offset of the leaf in decompressed form.
+    fn find_compressed_offset(&self, decompressed_offset: usize) -> usize {
+        let pos = self
+            .cumulative_cardinalities
+            .iter()
+            .position(|&i| i == decompressed_offset)
+            .unwrap_or_else(|| unreachable!("Should be impossible to not hav the offset present here."));
+        self.leaf_offsets[pos]
     }
 }
 
@@ -110,10 +123,76 @@ impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
     }
 }
 
-impl<I, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {}
+impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
+    fn knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
+        let mut knn = crate::linear_search::SizedHeap::new(Some(k));
+        self.leaf_offsets
+            .iter()
+            .map(|&o| (o, self.decode_leaf(o)))
+            .flat_map(|(o, instances)| {
+                let instances = instances
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (o + i, p))
+                    .collect::<Vec<_>>();
+                MetricSpace::one_to_many(self, query, &instances)
+            })
+            .for_each(|(i, d)| knn.push((d, i)));
+        knn.items().map(|(d, i)| (i, d)).collect()
+    }
+
+    fn rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
+        self.leaf_offsets
+            .iter()
+            .map(|&o| (o, self.decode_leaf(o)))
+            .flat_map(|(o, instances)| {
+                let instances = instances
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (o + i, p))
+                    .collect::<Vec<_>>();
+                MetricSpace::one_to_many(self, query, &instances)
+            })
+            .filter(|&(_, d)| d <= radius)
+            .collect()
+    }
+}
 
 impl<I: Send + Sync, U: Number, M: Send + Sync> ParMetricSpace<I, U> for CodecData<I, U, M> {}
 
 impl<I: Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for CodecData<I, U, M> {}
 
-impl<I: Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for CodecData<I, U, M> {}
+impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for CodecData<I, U, M> {
+    fn par_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
+        let mut knn = crate::linear_search::SizedHeap::new(Some(k));
+        self.leaf_offsets
+            .iter()
+            .map(|&o| (o, self.decode_leaf(o)))
+            .flat_map(|(o, instances)| {
+                let instances = instances
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (o + i, p))
+                    .collect::<Vec<_>>();
+                ParMetricSpace::par_one_to_many(self, query, &instances)
+            })
+            .for_each(|(i, d)| knn.push((d, i)));
+        knn.items().map(|(d, i)| (i, d)).collect()
+    }
+
+    fn par_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
+        self.leaf_offsets
+            .iter()
+            .map(|&o| (o, self.decode_leaf(o)))
+            .flat_map(|(o, instances)| {
+                let instances = instances
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| (o + i, p))
+                    .collect::<Vec<_>>();
+                ParMetricSpace::par_one_to_many(self, query, &instances)
+            })
+            .filter(|&(_, d)| d <= radius)
+            .collect()
+    }
+}

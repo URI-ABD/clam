@@ -44,11 +44,13 @@ pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
     /// - A flattened vector of encoded instances.
     /// - A vector of offsets that indicate the start of the instances for each
     ///   leaf cluster in the flattened vector.
-    fn encode_leaves<D: Dataset<I, U>, C: Cluster<I, U, D>>(&self, root: &C) -> (Box<[u8]>, Vec<usize>) {
+    fn encode_leaves<D: Dataset<I, U>, C: Cluster<I, U, D>>(&self, root: &C) -> (Box<[u8]>, Vec<usize>, Vec<usize>) {
+        let mut cumulative_cardinalities = vec![0];
         let mut offsets = Vec::new();
         let mut bytes = Vec::new();
 
-        for leaf in root.leaves() {
+        for (i, leaf) in root.leaves().into_iter().enumerate() {
+            cumulative_cardinalities.push(cumulative_cardinalities[i] + leaf.cardinality());
             offsets.push(bytes.len());
 
             bytes.extend_from_slice(&leaf.arg_center().to_le_bytes());
@@ -61,7 +63,7 @@ pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
             }
         }
 
-        (bytes.into_boxed_slice(), offsets)
+        (bytes.into_boxed_slice(), offsets, cumulative_cardinalities)
     }
 }
 

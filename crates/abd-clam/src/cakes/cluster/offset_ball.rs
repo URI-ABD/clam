@@ -328,6 +328,9 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> std::hash::Hash for Of
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParCluster<I, U, D>
     for OffBall<I, U, D, S>
 {
+    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
+    }
 }
 
 #[cfg(test)]

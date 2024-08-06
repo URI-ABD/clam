@@ -27,6 +27,10 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
     /// Returns the offsets of the leaves' encodings in the bytes.
     fn leaf_offsets(&self) -> &[usize];
 
+    /// Finds the offset of the leaf's instances in the compressed form, given
+    /// the offset of the leaf in decompressed form.
+    fn find_compressed_offset(&self, decompressed_offset: usize) -> usize;
+
     /// Decodes the centers of the clusters in terms of their parents' center.
     fn decode_centers<C: Cluster<I, U, Self>>(&self, root: &C, bytes: &[u8]) -> HashMap<usize, I> {
         let mut offset = 0;

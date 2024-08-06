@@ -68,10 +68,7 @@ where
             .partition(|&(c, _)| c.is_leaf() || c.is_singleton());
         straddlers.append(&mut terminal);
 
-        candidates = non_terminal
-            .into_iter()
-            .flat_map(|(c, _)| c.overlapping_children(data, query, radius))
-            .collect();
+        candidates = non_terminal.into_iter().flat_map(|(c, _)| c.child_clusters()).collect();
     }
 
     [confirmed, straddlers]
@@ -101,10 +98,7 @@ where
         (terminal, non_terminal) = non_terminal.into_par_iter().partition(|&(c, _)| c.is_leaf());
         straddlers.append(&mut terminal);
 
-        candidates = non_terminal
-            .into_par_iter()
-            .flat_map(|(c, _)| c.par_overlapping_children(data, query, radius))
-            .collect();
+        candidates = non_terminal.into_iter().flat_map(|(c, _)| c.child_clusters()).collect();
     }
 
     [confirmed, straddlers]

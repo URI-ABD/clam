@@ -142,7 +142,7 @@ impl<I: Encodable + Decodable + Clone, U: Number, S: Cluster<I, U, FlatVec<I, U,
             .map(|i| (i, data.get(i).clone()))
             .collect::<HashMap<_, _>>();
 
-        let (leaf_bytes, leaf_offsets) = data.encode_leaves(&root);
+        let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.encode_leaves(&root);
         let cardinality = data.cardinality();
         let (metric, _, dimensionality_hint, _, metadata) = data.deconstruct();
         let data = CodecData {
@@ -153,6 +153,7 @@ impl<I: Encodable + Decodable + Clone, U: Number, S: Cluster<I, U, FlatVec<I, U,
             centers,
             leaf_bytes,
             leaf_offsets,
+            cumulative_cardinalities,
         };
         (root, data)
     }
@@ -435,6 +436,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
         self.leaves()
             .into_iter()
             .map(Self::offset)
+            .map(|o| data.find_compressed_offset(o))
             .flat_map(|o| data.decode_leaf(o))
             .zip(self.indices())
             .map(|(p, i)| (i, MetricSpace::one_to_one(data, query, &p)))
@@ -450,6 +452,18 @@ impl<
         S: ParCluster<I, U, D>,
     > ParCluster<I, U, Dc> for SquishyBall<I, U, D, Dc, S>
 {
+    fn par_distances(&self, data: &Dc, query: &I) -> Vec<(usize, U)> {
+        self.leaves()
+            .into_iter()
+            .map(Self::offset)
+            .map(|o| data.find_compressed_offset(o))
+            .flat_map(|o| data.decode_leaf(o))
+            .zip(self.indices())
+            .collect::<Vec<_>>()
+            .into_par_iter()
+            .map(|(p, i)| (i, MetricSpace::one_to_one(data, query, &p)))
+            .collect()
+    }
 }
 
 impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>> PartialEq

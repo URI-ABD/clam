@@ -10,7 +10,6 @@ use core::fmt::Debug;
 use std::hash::Hash;
 
 use distances::Number;
-use rayon::prelude::*;
 
 use super::{dataset::ParDataset, Dataset, MetricSpace};
 
@@ -92,18 +91,18 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
         self.children().iter().map(|(_, _, child)| child.as_ref())
     }
 
-    /// Gets only those children which might overlap with a query ball.
-    fn overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
-    where
-        U: 'a,
-    {
-        self.children()
-            .iter()
-            .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
-            .filter(|&(d, e, _)| d <= (e + radius))
-            .map(|(_, _, c)| c.as_ref())
-            .collect()
-    }
+    // /// Gets only those children which might overlap with a query ball.
+    // fn overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
+    // where
+    //     U: 'a,
+    // {
+    //     self.children()
+    //         .iter()
+    //         .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
+    //         .filter(|&(d, e, _)| d <= (e + radius))
+    //         .map(|(_, _, c)| c.as_ref())
+    //         .collect()
+    // }
 
     /// Returns all `Cluster`s in the subtree of this `Cluster`, in depth-first order.
     fn subtree<'a>(&'a self) -> Vec<&'a Self>
@@ -173,20 +172,18 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
 #[allow(clippy::module_name_repetitions)]
 pub trait ParCluster<I: Send + Sync, U: Number, D: ParDataset<I, U>>: Cluster<I, U, D> + Send + Sync {
     /// Parallelized version of the `distances` method.
-    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
-    }
+    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)>;
 
-    /// Gets only those children which might overlap with a query ball.
-    fn par_overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
-    where
-        U: 'a,
-    {
-        self.children()
-            .par_iter()
-            .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
-            .filter(|&(d, e, _)| d <= (e + radius))
-            .map(|(_, _, c)| c.as_ref())
-            .collect()
-    }
+    // /// Gets only those children which might overlap with a query ball.
+    // fn par_overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
+    // where
+    //     U: 'a,
+    // {
+    //     self.children()
+    //         .par_iter()
+    //         .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
+    //         .filter(|&(d, e, _)| d <= (e + radius))
+    //         .map(|(_, _, c)| c.as_ref())
+    //         .collect()
+    // }
 }
