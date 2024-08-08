@@ -57,7 +57,7 @@ pub mod tests {
     use distances::strings::needleman_wunsch;
     use test_case::test_case;
 
-    use crate::{cakes::Algorithm, Ball, Cluster, FlatVec, Metric};
+    use crate::{cakes::Algorithm, Ball, Cluster, Dataset, FlatVec, Metric, Permutable};
 
     use super::{
         super::search::tests::{check_search_by_distance, check_search_by_index, gen_random_data},
@@ -92,7 +92,7 @@ pub mod tests {
 
         fn decode(reference: &Self, bytes: &[u8]) -> Self {
             let diffs = Self::from_bytes(bytes);
-            reference.iter().zip(diffs.into_iter()).map(|(&a, b)| a + b).collect()
+            reference.iter().zip(diffs.into_iter()).map(|(&a, b)| a - b).collect()
         }
     }
 
@@ -102,10 +102,31 @@ pub mod tests {
         }
 
         fn encode(&self, reference: &Self) -> Box<[u8]> {
-            let table =
-                needleman_wunsch::compute_table::<u32>(reference, self, distances::strings::Penalties::default());
-            let (aligned_x, aligned_y) = needleman_wunsch::trace_back_recursive(&table, [reference, self]);
-            serialize_edits(&needleman_wunsch::unaligned_x_to_y(&aligned_x, &aligned_y))
+            let penalties = distances::strings::Penalties::default();
+            let table = needleman_wunsch::compute_table::<u16>(reference, self, penalties);
+            let (aligned_ref, aligned_tar) = needleman_wunsch::trace_back_recursive(&table, [reference, self]);
+            let edits = needleman_wunsch::unaligned_x_to_y(&aligned_ref, &aligned_tar);
+
+            let tar = needleman_wunsch::apply_edits(reference, &edits);
+            assert_eq!(tar, *self);
+
+            let bytes = serialize_edits(&edits);
+
+            let rec_edits = deserialize_edits(&bytes);
+            assert_eq!(edits, rec_edits);
+
+            bytes
+        }
+    }
+
+    impl Decodable for String {
+        fn from_bytes(bytes: &[u8]) -> Self {
+            Self::from_utf8(bytes.to_vec()).unwrap_or_else(|e| unreachable!("Could not cast back to string: {e:?}"))
+        }
+
+        fn decode(reference: &Self, bytes: &[u8]) -> Self {
+            let edits = deserialize_edits(bytes);
+            needleman_wunsch::apply_edits(reference, &edits)
         }
     }
 
@@ -130,46 +151,37 @@ pub mod tests {
     /// A byte array encoding the edit operation.
     #[allow(clippy::cast_possible_truncation)]
     fn edit_to_bin(edit: &needleman_wunsch::Edit) -> Vec<u8> {
-        let mask_6 = 0b0011_1111;
-        let mask_del = 0b10;
-        let mask_ins = 0b01;
-        let mask_sub = 0b11;
+        let mask_idx = 0b00_111111;
+        let mask_del = 0b10_000000;
+        let mask_ins = 0b01_000000;
+        let mask_sub = 0b11_000000;
+
         match edit {
-            // First 2 bits for the type of edit, 14 bits for the index.
             needleman_wunsch::Edit::Del(i) => {
                 let mut bytes = (*i as u16).to_be_bytes().to_vec();
-                bytes[0] &= mask_6;
+                // First 2 bits for the type of edit, 14 bits for the index.
+                bytes[0] &= mask_idx;
                 bytes[0] |= mask_del;
                 bytes
             }
             needleman_wunsch::Edit::Ins(i, c) => {
-                // First 2 bits for the type of edit, 14 bits for the index.
                 let mut bytes = (*i as u16).to_be_bytes().to_vec();
-                bytes[0] &= mask_6;
+                // First 2 bits for the type of edit, 14 bits for the index.
+                bytes[0] &= mask_idx;
                 bytes[0] |= mask_ins;
                 // 8 bits for the character.
                 bytes.push(*c as u8);
                 bytes
             }
             needleman_wunsch::Edit::Sub(i, c) => {
-                // First 2 bits for the type of edit, 14 bits for the index.
                 let mut bytes = (*i as u16).to_be_bytes().to_vec();
-                bytes[0] &= mask_6;
+                // First 2 bits for the type of edit, 14 bits for the index.
+                bytes[0] &= mask_idx;
                 bytes[0] |= mask_sub;
                 // 8 bits for the character.
                 bytes.push(*c as u8);
                 bytes
             }
-        }
-    }
-
-    impl Decodable for String {
-        fn from_bytes(bytes: &[u8]) -> Self {
-            Self::from_utf8(bytes.to_vec()).unwrap_or_else(|e| unreachable!("Could not cast back to string: {e:?}"))
-        }
-
-        fn decode(reference: &Self, bytes: &[u8]) -> Self {
-            needleman_wunsch::apply_edits(reference, &deserialize_edits(bytes))
         }
     }
 
@@ -193,25 +205,26 @@ pub mod tests {
     /// A vector of edit operations.
     fn deserialize_edits(bytes: &[u8]) -> Vec<needleman_wunsch::Edit> {
         let mut edits = Vec::new();
-        let mut i = 0;
-        let mask_edit = 0b11;
-        while i < bytes.len() {
-            let index = u16::from_be_bytes([bytes[i] & !mask_edit, bytes[i + 1]]);
-            let edit_bits = bytes[i] & mask_edit;
+        let mut offset = 0;
+        let mask_idx = 0b00_111111;
+
+        while offset < bytes.len() {
+            let edit_bits = bytes[offset] & !mask_idx;
+            let i = u16::from_be_bytes([bytes[offset] & mask_idx, bytes[offset + 1]]) as usize;
             let edit = match edit_bits {
-                0b10 => {
-                    i += 2;
-                    needleman_wunsch::Edit::Del(index as usize)
+                0b10_000000 => {
+                    offset += 2;
+                    needleman_wunsch::Edit::Del(i)
                 }
-                0b01 => {
-                    let c = bytes[i + 2];
-                    i += 3;
-                    needleman_wunsch::Edit::Ins(index as usize, c as char)
+                0b01_000000 => {
+                    let c = bytes[offset + 2] as char;
+                    offset += 3;
+                    needleman_wunsch::Edit::Ins(i, c)
                 }
-                0b11 => {
-                    let c = bytes[i + 2];
-                    i += 3;
-                    needleman_wunsch::Edit::Sub(index as usize, c as char)
+                0b11_000000 => {
+                    let c = bytes[offset + 2] as char;
+                    offset += 3;
+                    needleman_wunsch::Edit::Sub(i, c)
                 }
                 _ => unreachable!("Invalid edit type: {edit_bits:b}."),
             };
@@ -237,22 +250,33 @@ pub mod tests {
         }
 
         let seed = 42;
-        let data = gen_random_data(car, dim, 10.0, seed)?;
+        let mut data = gen_random_data(car, dim, 10.0, seed)?;
+        let metadata = data.metadata().to_vec();
         let query = &vec![0.0; dim];
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(seed);
-        let (root, data) = SquishyBall::new_tree(data, &criteria, seed);
+        let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
+
+        let dec_data = co_data.decompress().with_metadata(metadata)?;
+
+        assert_eq!(data.cardinality(), dec_data.cardinality());
+        assert_eq!(data.permutation(), dec_data.permutation());
+        assert_eq!(data.metadata(), dec_data.metadata());
+        for i in 0..data.cardinality() {
+            let (x, y) = (data.get(i), dec_data.get(i));
+            assert_eq!(x, y, "Failed at index {i}: {x:?} vs {y:?}");
+        }
 
         for &(alg, checker) in &algs {
-            let true_hits = alg.par_linear_search(&data, query);
+            let true_hits = alg.par_linear_search(&co_data, query);
 
             if car < 100_000 {
-                let pred_hits = alg.search(&data, &root, query);
+                let pred_hits = alg.search(&co_data, &root, query);
                 checker(true_hits.clone(), pred_hits, &alg.name());
             }
 
-            let pred_hits = alg.par_search(&data, &root, query);
+            let pred_hits = alg.par_search(&co_data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
@@ -271,13 +295,13 @@ pub mod tests {
             algs.push((Algorithm::KnnDepthFirst(k), check_search_by_distance));
         }
 
-        let seed_length = 100;
+        let seed_length = 30;
         let alphabet = "ACTGN".chars().collect::<Vec<_>>();
         let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
         let penalties = distances::strings::Penalties::default();
         let num_clumps = 16;
         let clump_size = 16;
-        let clump_radius = 3_u16;
+        let clump_radius = 2_u16;
         let (metadata, data) = symagen::random_edits::generate_clumped_data(
             &seed_string,
             penalties,
@@ -292,19 +316,29 @@ pub mod tests {
 
         let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
         let metric = Metric::new(distance_fn, true);
-        let data = FlatVec::new(data, metric)?.with_metadata(metadata)?;
+        let mut data = FlatVec::new(data, metric)?.with_metadata(metadata.clone())?;
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
-        let (root, data) = SquishyBall::new_tree(data, &criteria, seed);
+        let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
 
-        for &(alg, checker) in &algs {
-            let true_hits = alg.par_linear_search(&data, query);
+        let dec_data = co_data.decompress().with_metadata(metadata)?;
 
-            let pred_hits = alg.search(&data, &root, query);
+        assert_eq!(data.cardinality(), dec_data.cardinality());
+        assert_eq!(data.permutation(), dec_data.permutation());
+        assert_eq!(data.metadata(), dec_data.metadata());
+        for i in 0..data.cardinality() {
+            let (x, y) = (data.get(i), dec_data.get(i));
+            assert_eq!(x, y, "Failed at index {i}: {x} vs {y}");
+        }
+
+        for (alg, checker) in algs {
+            let true_hits = alg.par_linear_search(&co_data, query);
+
+            let pred_hits = alg.search(&co_data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name());
 
-            let pred_hits = alg.par_search(&data, &root, query);
+            let pred_hits = alg.par_search(&co_data, &root, query);
             checker(true_hits.clone(), pred_hits, &alg.name());
         }
 

@@ -9,7 +9,7 @@ use crate::{
     cluster::ParCluster,
     dataset::{metric_space::ParMetricSpace, ParDataset},
     linear_search::{LinearSearch, ParLinearSearch},
-    Cluster, Dataset, Metric, MetricSpace,
+    Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
 };
 
 use super::{
@@ -40,6 +40,8 @@ pub struct CodecData<I, U, M> {
     pub(crate) dimensionality_hint: (usize, Option<usize>),
     /// The metadata associated with the instances.
     pub(crate) metadata: Vec<M>,
+    /// The permutation of the original dataset.
+    pub(crate) permutation: Vec<usize>,
     /// The centers of the clusters in the dataset.
     pub(crate) centers: HashMap<usize, I>,
     /// The bytes representing the leaf clusters as a flattened vector.
@@ -53,7 +55,7 @@ pub struct CodecData<I, U, M> {
 
 impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn from_compressible<D: Compressible<I, U>, S: Cluster<I, U, D>>(
+    pub fn compress<D: Compressible<I, U> + Permutable, S: Cluster<I, U, D>>(
         data: &D,
         root: &SquishyBall<I, U, D, Self, S>,
     ) -> Self {
@@ -73,6 +75,7 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             cardinality,
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
+            permutation: data.permutation(),
             centers,
             leaf_bytes,
             leaf_offsets,
@@ -83,7 +86,7 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
 
 impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn par_from_compressible<D: ParCompressible<I, U>, S: ParCluster<I, U, D>>(
+    pub fn par_from_compressible<D: ParCompressible<I, U> + Permutable, S: ParCluster<I, U, D>>(
         data: &D,
         root: &SquishyBall<I, U, D, Self, S>,
     ) -> Self {
@@ -103,6 +106,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             cardinality,
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
+            permutation: data.permutation(),
             centers,
             leaf_bytes,
             leaf_offsets,
@@ -114,12 +118,14 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
 impl<I, U, M> CodecData<I, U, M> {
     /// Sets the metadata of the dataset.
     #[must_use]
-    pub fn with_metadata<Mn>(self, metadata: Vec<Mn>) -> CodecData<I, U, Mn> {
+    pub fn with_metadata<Mn>(self, mut metadata: Vec<Mn>) -> CodecData<I, U, Mn> {
+        metadata.permute(&self.permutation);
         CodecData {
             metric: self.metric,
             cardinality: self.cardinality,
             dimensionality_hint: self.dimensionality_hint,
             metadata,
+            permutation: self.permutation,
             centers: self.centers,
             leaf_bytes: self.leaf_bytes,
             leaf_offsets: self.leaf_offsets,
@@ -131,6 +137,40 @@ impl<I, U, M> CodecData<I, U, M> {
     #[must_use]
     pub fn metadata(&self) -> &[M] {
         &self.metadata
+    }
+
+    /// Returns the permutation of the original dataset.
+    #[must_use]
+    pub fn permutation(&self) -> &[usize] {
+        &self.permutation
+    }
+}
+
+impl<I: Decodable + Clone, U: Number, M: Clone> CodecData<I, U, M> {
+    /// Decompresses the dataset into a `FlatVec`. This will set the permutation
+    /// in the `FlatVec` to the identity permutation.
+    #[must_use]
+    pub fn decompress(&self) -> FlatVec<I, U, M> {
+        let mut instances = self.centers.clone();
+        self.leaf_offsets
+            .iter()
+            .map(|&o| self.decode_leaf(o))
+            .zip(self.cumulative_cardinalities.iter())
+            .for_each(|(l_instances, o)| {
+                l_instances.into_iter().enumerate().for_each(|(i, p)| {
+                    instances.insert(o + i, p);
+                });
+            });
+        let mut instances = instances.into_iter().collect::<Vec<_>>();
+        instances.sort_unstable_by_key(|(i, _)| *i);
+        let (_, instances): (Vec<_>, Vec<_>) = instances.into_iter().unzip();
+        FlatVec {
+            metric: self.metric.clone(),
+            instances,
+            dimensionality_hint: self.dimensionality_hint,
+            permutation: self.permutation.clone(),
+            metadata: self.metadata.clone(),
+        }
     }
 }
 
@@ -214,8 +254,9 @@ impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
         let mut knn = crate::linear_search::SizedHeap::new(Some(k));
         self.leaf_offsets
             .iter()
-            .map(|&o| (o, self.decode_leaf(o)))
-            .flat_map(|(o, instances)| {
+            .map(|&o| self.decode_leaf(o))
+            .zip(self.cumulative_cardinalities.iter())
+            .flat_map(|(instances, o)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -230,8 +271,9 @@ impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
     fn rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         self.leaf_offsets
             .iter()
-            .map(|&o| (o, self.decode_leaf(o)))
-            .flat_map(|(o, instances)| {
+            .map(|&o| self.decode_leaf(o))
+            .zip(self.cumulative_cardinalities.iter())
+            .flat_map(|(instances, o)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -252,9 +294,10 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U
     fn par_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let mut knn = crate::linear_search::SizedHeap::new(Some(k));
         self.leaf_offsets
-            .iter()
-            .map(|&o| (o, self.decode_leaf(o)))
-            .flat_map(|(o, instances)| {
+            .par_iter()
+            .map(|&o| self.decode_leaf(o))
+            .zip(self.cumulative_cardinalities.par_iter())
+            .flat_map(|(instances, o)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -262,15 +305,18 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U
                     .collect::<Vec<_>>();
                 ParMetricSpace::par_one_to_many(self, query, &instances)
             })
+            .collect::<Vec<_>>()
+            .into_iter()
             .for_each(|(i, d)| knn.push((d, i)));
         knn.items().map(|(d, i)| (i, d)).collect()
     }
 
     fn par_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         self.leaf_offsets
-            .iter()
-            .map(|&o| (o, self.decode_leaf(o)))
-            .flat_map(|(o, instances)| {
+            .par_iter()
+            .map(|&o| self.decode_leaf(o))
+            .zip(self.cumulative_cardinalities.par_iter())
+            .flat_map(|(instances, o)| {
                 let instances = instances
                     .iter()
                     .enumerate()

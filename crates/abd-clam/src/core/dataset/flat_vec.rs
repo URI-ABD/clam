@@ -163,7 +163,11 @@ impl<I, U, M> FlatVec<I, U, M> {
                 metadata,
             })
         } else {
-            Err("The metadata length does not match the number of instances.".to_string())
+            Err(format!(
+                "The metadata length does not match the number of instances. {} vs {}",
+                metadata.len(),
+                self.instances.len()
+            ))
         }
     }
 }
@@ -215,6 +219,10 @@ impl<I, U: Number, M> Dataset<I, U> for FlatVec<I, U, M> {
 impl<I, U: Number, M> Permutable for FlatVec<I, U, M> {
     fn permutation(&self) -> Vec<usize> {
         self.permutation.clone()
+    }
+
+    fn set_permutation(&mut self, permutation: &[usize]) {
+        self.permutation = permutation.to_vec();
     }
 
     fn swap_two(&mut self, i: usize, j: usize) {
@@ -418,6 +426,10 @@ mod tests {
         impl Permutable for SwapTracker {
             fn permutation(&self) -> Vec<usize> {
                 self.data.permutation()
+            }
+
+            fn set_permutation(&mut self, permutation: &[usize]) {
+                self.data.set_permutation(permutation);
             }
 
             fn swap_two(&mut self, i: usize, j: usize) {

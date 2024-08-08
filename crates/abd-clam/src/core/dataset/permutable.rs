@@ -16,6 +16,9 @@ pub trait Permutable {
     /// return the identity permutation.
     fn permutation(&self) -> Vec<usize>;
 
+    /// Sets the permutation of the collection without modifying the collection.
+    fn set_permutation(&mut self, permutation: &[usize]);
+
     /// Swaps the location of two instances in the collection.
     ///
     /// # Arguments
@@ -67,6 +70,8 @@ impl<T> Permutable for Vec<T> {
         (0..self.len()).collect()
     }
 
+    fn set_permutation(&mut self, _: &[usize]) {}
+
     fn swap_two(&mut self, i: usize, j: usize) {
         self.swap(i, j);
     }
@@ -76,6 +81,8 @@ impl<T> Permutable for &mut [T] {
     fn permutation(&self) -> Vec<usize> {
         (0..self.len()).collect()
     }
+
+    fn set_permutation(&mut self, _: &[usize]) {}
 
     fn swap_two(&mut self, i: usize, j: usize) {
         self.swap(i, j);

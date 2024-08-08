@@ -63,14 +63,16 @@ where
 
     let mut num_confirmed = count_hits(&confirmed);
     while num_confirmed == 0 {
-        radius = radius.mul_add(max_multiplier, U::EPSILON.as_f32());
+        radius = radius.double();
         [confirmed, straddlers] = par_tree_search(data, root, query, U::from(radius));
         num_confirmed = count_hits(&confirmed);
     }
 
     while num_confirmed < k {
         let (lfd, car) = mean_lfd(&confirmed, &straddlers);
-        multiplier = LFD::multiplier_for_k(lfd, car, k).min(max_multiplier);
+        multiplier = LFD::multiplier_for_k(lfd, car, k)
+            .min(max_multiplier)
+            .max(f32::ONE + f32::EPSILON);
         radius = radius.mul_add(multiplier, U::EPSILON.as_f32());
         [confirmed, straddlers] = par_tree_search(data, root, query, U::from(radius));
         num_confirmed = count_hits(&confirmed);

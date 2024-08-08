@@ -64,15 +64,19 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U> + Permutable, S
 {
     /// Creates a new `SquishyBall` tree and `CodecData` from a `Compressible`
     /// and `Permutable` `Dataset`.
-    pub fn new_tree<C: Fn(&S) -> bool>(mut data: Co, criteria: &C, seed: Option<u64>) -> (Self, CodecData<I, U, usize>) {
-        let root = S::new_tree(&data, criteria, seed);
+    pub fn new_tree<C: Fn(&S) -> bool>(
+        data: &mut Co,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> (Self, CodecData<I, U, usize>) {
+        let root = S::new_tree(data, criteria, seed);
         let (root, indices) = OffBall::adapt(root, None);
         data.permute(&indices);
         let (mut root, _) = Self::adapt(root, None);
-        root.set_costs(&data);
+        root.set_costs(data);
         root.trim();
 
-        let data = CodecData::from_compressible(&data, &root);
+        let data = CodecData::compress(data, &root);
         (root, data)
     }
 }
@@ -86,18 +90,18 @@ impl<
 {
     /// Parallel version of the `new_tree` method.
     pub fn par_new_tree<C: (Fn(&S) -> bool) + Send + Sync>(
-        mut data: Co,
+        data: &mut Co,
         criteria: &C,
         seed: Option<u64>,
     ) -> (Self, CodecData<I, U, usize>) {
-        let root = S::par_new_tree(&data, criteria, seed);
+        let root = S::par_new_tree(data, criteria, seed);
         let (root, indices) = OffBall::par_adapt(root, None);
         data.permute(&indices);
         let (mut root, _) = Self::par_adapt(root, None);
-        root.par_set_costs(&data);
+        root.par_set_costs(data);
         root.trim();
 
-        let data = CodecData::par_from_compressible(&data, &root);
+        let data = CodecData::par_from_compressible(data, &root);
         (root, data)
     }
 }
