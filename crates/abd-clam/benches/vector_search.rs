@@ -2,7 +2,11 @@
 
 mod utils;
 
-use abd_clam::{cakes::OffBall, partition::ParPartition, Ball, Cluster, FlatVec, Metric};
+use abd_clam::{
+    cakes::{OffBall, SquishyBall},
+    partition::ParPartition,
+    Ball, Cluster, FlatVec, Metric,
+};
 use criterion::*;
 use rand::prelude::*;
 
@@ -16,9 +20,9 @@ const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
 ];
 
 fn vector_search(c: &mut Criterion) {
-    let cardinality = 100_000;
-    let dimensionality = 100;
-    let max_val = 10.0;
+    let cardinality = 1_000_000;
+    let dimensionality = 10;
+    let max_val = 2.0;
     let min_val = -max_val;
     let seed = 42;
     let rows = symagen::random_data::random_tabular_seedable(cardinality, dimensionality, min_val, max_val, seed);
@@ -36,7 +40,7 @@ fn vector_search(c: &mut Criterion) {
     };
 
     let seed = Some(seed);
-    let radii = vec![0.01, 0.05, 0.1, 0.5];
+    let radii = vec![0.001, 0.005, 0.01, 0.1];
     let ks = vec![1, 10, 100];
     for &(metric_name, distance_fn) in METRICS {
         let metric = Metric::new(distance_fn, true);
@@ -48,6 +52,8 @@ fn vector_search(c: &mut Criterion) {
         let mut perm_data = data.clone();
         let perm_root = OffBall::par_from_ball_tree(root.clone(), &mut perm_data);
 
+        let (dec_root, dec_data) = SquishyBall::par_new_tree(&mut data.clone(), &criteria, seed);
+
         utils::compare_permuted(
             c,
             "vector-search",
@@ -56,9 +62,12 @@ fn vector_search(c: &mut Criterion) {
             &root,
             &perm_data,
             &perm_root,
+            &dec_data,
+            &dec_root,
             &queries,
             &radii,
             &ks,
+            false,
             false,
         );
     }

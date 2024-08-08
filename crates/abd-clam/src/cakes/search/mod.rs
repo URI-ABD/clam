@@ -6,6 +6,7 @@ mod knn_repeated_rnn;
 mod rnn_clustered;
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::{
     cluster::ParCluster,
@@ -79,12 +80,53 @@ impl<U: Number> Algorithm<U> {
         }
     }
 
+    /// Batched version of the `linear_search` method
+    pub fn batch_linear_search<I, D: LinearSearch<I, U>>(&self, data: &D, queries: &[I]) -> Vec<Vec<(usize, U)>> {
+        queries.iter().map(|query| self.linear_search(data, query)).collect()
+    }
+
     /// Parallel version of the `linear_search` method
     pub fn par_linear_search<I: Send + Sync, D: ParLinearSearch<I, U>>(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         match self {
             Self::RnnClustered(radius) => data.par_rnn(query, *radius),
             Self::KnnRepeatedRnn(k, _) | Self::KnnDepthFirst(k) | Self::KnnBreadthFirst(k) => data.par_knn(query, *k),
         }
+    }
+
+    /// Parallel version of the `batch_linear_search` method
+    pub fn par_batch_linear_search<I: Send + Sync, D: ParLinearSearch<I, U>>(
+        &self,
+        data: &D,
+        queries: &[I],
+    ) -> Vec<Vec<(usize, U)>> {
+        queries
+            .par_iter()
+            .map(|query| self.linear_search(data, query))
+            .collect()
+    }
+
+    /// Batched version of the `par_linear_search` method
+    pub fn batch_par_linear_search<I: Send + Sync, D: ParLinearSearch<I, U>>(
+        &self,
+        data: &D,
+        queries: &[I],
+    ) -> Vec<Vec<(usize, U)>> {
+        queries
+            .iter()
+            .map(|query| self.par_linear_search(data, query))
+            .collect()
+    }
+
+    /// Parallel version of the `batch_par_linear_search` method
+    pub fn par_batch_par_linear_search<I: Send + Sync, D: ParLinearSearch<I, U>>(
+        &self,
+        data: &D,
+        queries: &[I],
+    ) -> Vec<Vec<(usize, U)>> {
+        queries
+            .par_iter()
+            .map(|query| self.par_linear_search(data, query))
+            .collect()
     }
 
     /// Get the name of the algorithm.

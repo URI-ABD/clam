@@ -6,6 +6,8 @@ pub mod dataset;
 mod search;
 
 pub use cluster::OffBall;
-pub use codec::{CodecData, Compressible, Decodable, Decompressible, Encodable};
+pub use codec::{
+    CodecData, Compressible, Decodable, Decompressible, Encodable, ParCompressible, ParDecompressible, SquishyBall,
+};
 pub use dataset::Shardable;
 pub use search::Algorithm;

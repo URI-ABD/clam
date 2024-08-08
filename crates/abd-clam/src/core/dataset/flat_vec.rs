@@ -435,7 +435,6 @@ mod tests {
             fn swap_two(&mut self, i: usize, j: usize) {
                 self.data.swap_two(i, j);
                 self.count += 1;
-                println!("Swap #{}: {i} and {j}", self.count);
             }
         }
 

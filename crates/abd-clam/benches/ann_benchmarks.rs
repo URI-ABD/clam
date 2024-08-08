@@ -2,7 +2,11 @@
 
 mod utils;
 
-use abd_clam::{cakes::OffBall, partition::ParPartition, Ball, Cluster, Metric};
+use abd_clam::{
+    cakes::{OffBall, SquishyBall},
+    partition::ParPartition,
+    Ball, Cluster, Metric,
+};
 use criterion::*;
 
 fn ann_benchmarks(c: &mut Criterion) {
@@ -39,6 +43,8 @@ fn ann_benchmarks(c: &mut Criterion) {
         let mut perm_data = data.clone();
         let perm_root = OffBall::par_from_ball_tree(root.clone(), &mut perm_data);
 
+        let (dec_root, dec_data) = SquishyBall::par_new_tree(&mut data.clone(), &criteria, seed);
+
         utils::compare_permuted(
             c,
             data_name,
@@ -47,10 +53,13 @@ fn ann_benchmarks(c: &mut Criterion) {
             &root,
             &perm_data,
             &perm_root,
+            &dec_data,
+            &dec_root,
             queries,
             &radii,
             &ks,
             true,
+            false,
         );
     }
 }
