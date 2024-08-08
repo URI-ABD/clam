@@ -4,6 +4,8 @@ use distances::Number;
 use rand::prelude::*;
 use rayon::prelude::*;
 
+use super::Metric;
+
 /// `MetricSpace` is a trait for datasets that have a distance function.
 ///
 /// # Type Parameters
@@ -11,6 +13,9 @@ use rayon::prelude::*;
 /// * `I`: The type of the instances, i.e. each data point in the dataset.
 /// * `U`: The type of the distance values.
 pub trait MetricSpace<I, U: Number> {
+    /// Returns the underlying metric.
+    fn metric(&self) -> &Metric<I, U>;
+
     /// Whether the distance function provides an identity.
     ///
     /// Identity is defined as: `d(x, y) = 0 <=> x = y`.

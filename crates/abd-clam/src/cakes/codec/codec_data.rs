@@ -3,14 +3,19 @@
 use std::collections::HashMap;
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::{
+    cluster::ParCluster,
     dataset::{metric_space::ParMetricSpace, ParDataset},
     linear_search::{LinearSearch, ParLinearSearch},
-    Dataset, Metric, MetricSpace,
+    Cluster, Dataset, Metric, MetricSpace,
 };
 
-use super::{Decodable, Decompressible};
+use super::{
+    compression::ParCompressible, decompression::ParDecompressible, Compressible, Decodable, Decompressible, Encodable,
+    SquishyBall,
+};
 
 /// A compressed dataset, that can be partially decompressed for search and
 /// other applications.
@@ -46,7 +51,82 @@ pub struct CodecData<I, U, M> {
     pub(crate) cumulative_cardinalities: Vec<usize>,
 }
 
+impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
+    /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
+    pub fn from_compressible<D: Compressible<I, U>, S: Cluster<I, U, D>>(
+        data: &D,
+        root: &SquishyBall<I, U, D, Self, S>,
+    ) -> Self {
+        let centers = root
+            .subtree()
+            .into_iter()
+            .map(SquishyBall::arg_center)
+            .map(|i| (i, data.get(i).clone()))
+            .collect::<HashMap<_, _>>();
+
+        let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.encode_leaves(root);
+        let cardinality = data.cardinality();
+        let metric = data.metric().clone();
+        let dimensionality_hint = data.dimensionality_hint();
+        Self {
+            metric,
+            cardinality,
+            dimensionality_hint,
+            metadata: (0..cardinality).collect(),
+            centers,
+            leaf_bytes,
+            leaf_offsets,
+            cumulative_cardinalities,
+        }
+    }
+}
+
+impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
+    /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
+    pub fn par_from_compressible<D: ParCompressible<I, U>, S: ParCluster<I, U, D>>(
+        data: &D,
+        root: &SquishyBall<I, U, D, Self, S>,
+    ) -> Self {
+        let centers = root
+            .subtree()
+            .into_par_iter()
+            .map(SquishyBall::arg_center)
+            .map(|i| (i, data.get(i).clone()))
+            .collect::<HashMap<_, _>>();
+
+        let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.par_encode_leaves(root);
+        let cardinality = data.cardinality();
+        let metric = data.metric().clone();
+        let dimensionality_hint = data.dimensionality_hint();
+        Self {
+            metric,
+            cardinality,
+            dimensionality_hint,
+            metadata: (0..cardinality).collect(),
+            centers,
+            leaf_bytes,
+            leaf_offsets,
+            cumulative_cardinalities,
+        }
+    }
+}
+
 impl<I, U, M> CodecData<I, U, M> {
+    /// Sets the metadata of the dataset.
+    #[must_use]
+    pub fn with_metadata<Mn>(self, metadata: Vec<Mn>) -> CodecData<I, U, Mn> {
+        CodecData {
+            metric: self.metric,
+            cardinality: self.cardinality,
+            dimensionality_hint: self.dimensionality_hint,
+            metadata,
+            centers: self.centers,
+            leaf_bytes: self.leaf_bytes,
+            leaf_offsets: self.leaf_offsets,
+            cumulative_cardinalities: self.cumulative_cardinalities,
+        }
+    }
+
     /// Returns the metadata associated with the instances in the dataset.
     #[must_use]
     pub fn metadata(&self) -> &[M] {
@@ -79,6 +159,8 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
     }
 }
 
+impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDecompressible<I, U> for CodecData<I, U, M> {}
+
 impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
     fn cardinality(&self) -> usize {
         self.cardinality
@@ -98,6 +180,10 @@ impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
 }
 
 impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
+    fn metric(&self) -> &Metric<I, U> {
+        &self.metric
+    }
+
     fn identity(&self) -> bool {
         self.metric.identity()
     }

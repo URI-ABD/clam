@@ -5,6 +5,8 @@ mod compression;
 mod decompression;
 mod squishy_ball;
 
+use compression::ParCompressible;
+use decompression::ParDecompressible;
 use distances::Number;
 
 #[allow(clippy::module_name_repetitions)]
@@ -13,9 +15,10 @@ pub use compression::{Compressible, Encodable};
 pub use decompression::{Decodable, Decompressible};
 pub use squishy_ball::SquishyBall;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, FlatVec};
+use crate::{cluster::ParCluster, Cluster, FlatVec};
 
 impl<I: Encodable, U: Number, M> Compressible<I, U> for FlatVec<I, U, M> {}
+impl<I: Encodable + Send + Sync, U: Number, M: Send + Sync> ParCompressible<I, U> for FlatVec<I, U, M> {}
 
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     super::cluster::Searchable<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
@@ -25,8 +28,8 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        Co: Compressible<I, U> + ParDataset<I, U>,
-        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        Co: ParCompressible<I, U>,
+        Dec: ParDecompressible<I, U>,
         S: ParCluster<I, U, Co>,
     > super::cluster::ParSearchable<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
@@ -42,10 +45,10 @@ pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
 
 /// Reads a `usize` from a byte array and increments the offset.
 pub fn read_usize(bytes: &[u8], offset: &mut usize) -> usize {
-    let index_bytes: [u8; std::mem::size_of::<usize>()] = bytes[*offset..*offset + std::mem::size_of::<usize>()]
+    let index_bytes: [u8; core::mem::size_of::<usize>()] = bytes[*offset..*offset + core::mem::size_of::<usize>()]
         .try_into()
         .unwrap_or_else(|e| unreachable!("Could not convert slice into array: {e:?}"));
-    *offset += std::mem::size_of::<usize>();
+    *offset += core::mem::size_of::<usize>();
     usize::from_le_bytes(index_bytes)
 }
 
@@ -54,17 +57,14 @@ pub mod tests {
     use distances::strings::needleman_wunsch;
     use test_case::test_case;
 
-    use crate::{
-        cakes::{Algorithm, OffBall},
-        Ball, Cluster, FlatVec, Metric, Partition,
-    };
+    use crate::{cakes::Algorithm, Ball, Cluster, FlatVec, Metric};
 
     use super::{
         super::search::tests::{check_search_by_distance, check_search_by_index, gen_random_data},
         Decodable, Encodable, SquishyBall,
     };
 
-    impl Encodable for Vec<f32> {
+    impl Encodable for Vec<f64> {
         fn as_bytes(&self) -> Box<[u8]> {
             self.iter()
                 .flat_map(|v| v.to_le_bytes())
@@ -78,15 +78,15 @@ pub mod tests {
         }
     }
 
-    impl Decodable for Vec<f32> {
+    impl Decodable for Vec<f64> {
         fn from_bytes(bytes: &[u8]) -> Self {
             bytes
-                .chunks_exact(std::mem::size_of::<f32>())
+                .chunks_exact(std::mem::size_of::<f64>())
                 .map(|v| {
                     v.try_into()
                         .unwrap_or_else(|e| unreachable!("Could not cast to four bytes: {e:?}"))
                 })
-                .map(f32::from_le_bytes)
+                .map(f64::from_le_bytes)
                 .collect()
         }
 
@@ -226,10 +226,7 @@ pub mod tests {
     #[test_case(1_000, 100; "1k-100")]
     #[test_case(10_000, 100; "10k-100")]
     fn vectors(car: usize, dim: usize) -> Result<(), String> {
-        let mut algs: Vec<(
-            Algorithm<f32>,
-            fn(Vec<(usize, f32)>, Vec<(usize, f32)>, &str, bool) -> bool,
-        )> = vec![];
+        let mut algs: Vec<(Algorithm<f64>, fn(Vec<(usize, f64)>, Vec<(usize, f64)>, &str) -> bool)> = vec![];
         for radius in [0.1, 1.0] {
             algs.push((Algorithm::RnnClustered(radius), check_search_by_index));
         }
@@ -241,27 +238,22 @@ pub mod tests {
 
         let seed = 42;
         let data = gen_random_data(car, dim, 10.0, seed)?;
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(seed);
         let query = &vec![0.0; dim];
 
-        let root = Ball::new_tree(&data, &criteria, seed);
-
-        let mut data = data;
-        let root = OffBall::from_ball_tree(root, &mut data);
-
-        let (root, data) = SquishyBall::from_root(root, data);
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let seed = Some(seed);
+        let (root, data) = SquishyBall::new_tree(data, &criteria, seed);
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&data, query);
 
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name(), false);
+                checker(true_hits.clone(), pred_hits, &alg.name());
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
         Ok(())
@@ -269,10 +261,7 @@ pub mod tests {
 
     #[test]
     fn strings() -> Result<(), String> {
-        let mut algs: Vec<(
-            Algorithm<u16>,
-            fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str, bool) -> bool,
-        )> = vec![];
+        let mut algs: Vec<(Algorithm<u16>, fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str) -> bool)> = vec![];
         for radius in [4, 8, 16] {
             algs.push((Algorithm::RnnClustered(radius), check_search_by_index));
         }
@@ -307,21 +296,16 @@ pub mod tests {
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
-        let root = Ball::new_tree(&data, &criteria, seed);
-
-        let mut data = data;
-        let root = OffBall::from_ball_tree(root, &mut data);
-
-        let (root, data) = SquishyBall::from_root(root, data);
+        let (root, data) = SquishyBall::new_tree(data, &criteria, seed);
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&data, query);
 
             let pred_hits = alg.search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
         Ok(())

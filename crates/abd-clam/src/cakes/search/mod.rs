@@ -121,7 +121,7 @@ impl<U: Number> Algorithm<U> {
 
 #[cfg(test)]
 pub mod tests {
-    use distances::Number;
+    use distances::{number::Float, Number};
     use rand::prelude::*;
     use test_case::test_case;
 
@@ -147,20 +147,18 @@ pub mod tests {
         mut true_hits: Vec<(usize, U)>,
         mut pred_hits: Vec<(usize, U)>,
         name: &str,
-        squishy: bool,
     ) -> bool {
         true_hits.sort_by_key(|(i, _)| *i);
         pred_hits.sort_by_key(|(i, _)| *i);
-        let squishy = if squishy { "squishy " } else { "" };
 
         assert_eq!(
             true_hits.len(),
             pred_hits.len(),
-            "{squishy}{name}: {true_hits:?} vs {pred_hits:?}"
+            "{name}: {true_hits:?} vs {pred_hits:?}"
         );
 
         for ((i, p), (j, q)) in true_hits.into_iter().zip(pred_hits) {
-            let msg = format!("Failed {squishy}{name} i: {i}, j: {j}, p: {p}, q: {q}");
+            let msg = format!("Failed {name} i: {i}, j: {j}, p: {p}, q: {q}");
             assert_eq!(i, j, "{msg}");
             assert!(p.abs_diff(q) <= U::EPSILON, "{msg}");
         }
@@ -172,37 +170,35 @@ pub mod tests {
         mut true_hits: Vec<(usize, U)>,
         mut pred_hits: Vec<(usize, U)>,
         name: &str,
-        squishy: bool,
     ) -> bool {
         true_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
         pred_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
-        let squishy = if squishy { "squishy " } else { "" };
 
         assert_eq!(
             true_hits.len(),
             pred_hits.len(),
-            "{squishy}{name}: {true_hits:?} vs {pred_hits:?}"
+            "{name}: {true_hits:?} vs {pred_hits:?}"
         );
 
         for (i, (&(_, p), &(_, q))) in true_hits.iter().zip(pred_hits.iter()).enumerate() {
             assert!(
                 p.abs_diff(q) <= U::EPSILON,
-                "Failed {squishy}{name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}"
+                "Failed {name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}"
             );
         }
 
         true
     }
 
-    pub fn gen_random_data(
+    pub fn gen_random_data<F: Float>(
         car: usize,
         dim: usize,
-        max: f32,
+        max: F,
         seed: u64,
-    ) -> Result<FlatVec<Vec<f32>, f32, usize>, String> {
+    ) -> Result<FlatVec<Vec<F>, F, usize>, String> {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         let data = symagen::random_data::random_tabular(car, dim, -max, max, &mut rng);
-        let distance_fn = |a: &Vec<f32>, b: &Vec<f32>| distances::vectors::euclidean(a, b);
+        let distance_fn = |a: &Vec<F>, b: &Vec<F>| distances::vectors::euclidean(a, b);
         let metric = Metric::new(distance_fn, false);
         FlatVec::new(data, metric)
     }
@@ -215,7 +211,7 @@ pub mod tests {
     fn vectors(car: usize, dim: usize) -> Result<(), String> {
         let mut algs: Vec<(
             super::Algorithm<f32>,
-            fn(Vec<(usize, f32)>, Vec<(usize, f32)>, &str, bool) -> bool,
+            fn(Vec<(usize, f32)>, Vec<(usize, f32)>, &str) -> bool,
         )> = vec![];
         for radius in [0.1, 1.0] {
             algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
@@ -239,11 +235,11 @@ pub mod tests {
 
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name(), false);
+                checker(true_hits.clone(), pred_hits, &alg.name());
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
         let mut data = data;
@@ -254,11 +250,11 @@ pub mod tests {
 
             if car < 100_000 {
                 let pred_hits = alg.search(&data, &root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name(), false);
+                checker(true_hits.clone(), pred_hits, &alg.name());
             }
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
         Ok(())
@@ -268,7 +264,7 @@ pub mod tests {
     fn strings() -> Result<(), String> {
         let mut algs: Vec<(
             super::Algorithm<u16>,
-            fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str, bool) -> bool,
+            fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str) -> bool,
         )> = vec![];
         for radius in [4, 8, 16] {
             algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
@@ -311,10 +307,10 @@ pub mod tests {
             let true_hits = alg.par_linear_search(&data, query);
 
             let pred_hits = alg.search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
         let mut data = data;
@@ -324,10 +320,10 @@ pub mod tests {
             let true_hits = alg.par_linear_search(&data, query);
 
             let pred_hits = alg.search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
 
             let pred_hits = alg.par_search(&data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name(), false);
+            checker(true_hits.clone(), pred_hits, &alg.name());
         }
 
         Ok(())

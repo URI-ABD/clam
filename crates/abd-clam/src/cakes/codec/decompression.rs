@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use distances::Number;
 
-use crate::{Cluster, Dataset};
+use crate::{dataset::ParDataset, Cluster, Dataset};
 
 /// A trait that defines how a value can be decoded in terms of a reference.
 pub trait Decodable {
@@ -57,18 +57,32 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
     /// Decodes all the instances of a leaf cluster in terms of its center.
     fn decode_leaf(&self, mut offset: usize) -> Vec<I> {
         let mut instances = Vec::new();
+        let bytes = self.leaf_bytes();
 
-        let arg_center = super::read_usize(self.leaf_bytes(), &mut offset);
+        let arg_center = super::read_usize(bytes, &mut offset);
         let center = &self.centers()[&arg_center];
 
-        let cardinality = super::read_usize(self.leaf_bytes(), &mut offset);
+        let cardinality = super::read_usize(bytes, &mut offset);
 
         for _ in 0..cardinality {
-            let encoding = super::read_encoding(self.leaf_bytes(), &mut offset);
+            let encoding = super::read_encoding(bytes, &mut offset);
             let instance = I::decode(center, &encoding);
             instances.push(instance);
         }
 
         instances
+    }
+}
+
+/// Parallel version of the `Decompressible` trait.
+pub trait ParDecompressible<I: Decodable + Send + Sync, U: Number>: Decompressible<I, U> + ParDataset<I, U> {
+    /// Parallel version of the `decode_centers` method.
+    fn par_decode_centers<C: Cluster<I, U, Self>>(&self, root: &C, bytes: &[u8]) -> HashMap<usize, I> {
+        self.decode_centers(root, bytes)
+    }
+
+    /// Parallel version of the `decode_leaf` method.
+    fn par_decode_leaf(&self, offset: usize) -> Vec<I> {
+        self.decode_leaf(offset)
     }
 }

@@ -2,7 +2,8 @@
 //! search in the compressed space.
 
 use core::fmt::Debug;
-use std::{collections::HashMap, marker::PhantomData};
+
+use std::marker::PhantomData;
 
 use distances::Number;
 use rayon::prelude::*;
@@ -12,10 +13,14 @@ use crate::{
     cakes::OffBall,
     cluster::ParCluster,
     dataset::ParDataset,
-    Cluster, Dataset, FlatVec, MetricSpace,
+    partition::ParPartition,
+    Cluster, Dataset, MetricSpace, Partition, Permutable,
 };
 
-use super::{CodecData, Compressible, Decodable, Decompressible, Encodable};
+use super::{
+    compression::ParCompressible, decompression::ParDecompressible, CodecData, Compressible, Decodable, Decompressible,
+    Encodable,
+};
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
 pub struct SquishyBall<
@@ -54,9 +59,57 @@ impl<
     }
 }
 
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U> + Permutable, S: Partition<I, U, Co>>
+    SquishyBall<I, U, Co, CodecData<I, U, usize>, S>
+{
+    /// Creates a new `SquishyBall` tree and `CodecData` from a `Compressible`
+    /// and `Permutable` `Dataset`.
+    pub fn new_tree<C: Fn(&S) -> bool>(mut data: Co, criteria: &C, seed: Option<u64>) -> (Self, CodecData<I, U, usize>) {
+        let root = S::new_tree(&data, criteria, seed);
+        let (root, indices) = OffBall::adapt(root, None);
+        data.permute(&indices);
+        let (mut root, _) = Self::adapt(root, None);
+        root.set_costs(&data);
+        root.trim();
+
+        let data = CodecData::from_compressible(&data, &root);
+        (root, data)
+    }
+}
+
+impl<
+        I: Encodable + Decodable + Send + Sync,
+        U: Number,
+        Co: ParCompressible<I, U> + Permutable,
+        S: ParPartition<I, U, Co>,
+    > SquishyBall<I, U, Co, CodecData<I, U, usize>, S>
+{
+    /// Parallel version of the `new_tree` method.
+    pub fn par_new_tree<C: (Fn(&S) -> bool) + Send + Sync>(
+        mut data: Co,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> (Self, CodecData<I, U, usize>) {
+        let root = S::par_new_tree(&data, criteria, seed);
+        let (root, indices) = OffBall::par_adapt(root, None);
+        data.permute(&indices);
+        let (mut root, _) = Self::par_adapt(root, None);
+        root.par_set_costs(&data);
+        root.trim();
+
+        let data = CodecData::par_from_compressible(&data, &root);
+        (root, data)
+    }
+}
+
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     SquishyBall<I, U, Co, Dec, S>
 {
+    /// Gets the offset of the cluster's indices in its dataset.
+    pub const fn offset(&self) -> usize {
+        self.source.offset()
+    }
+
     /// Trims the tree by removing empty children of clusters whose unitary cost
     /// is greater than the recursive cost.
     fn trim(&mut self) {
@@ -111,77 +164,16 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
             self.costs.unitary
         };
     }
-
-    /// Gets the offset of the cluster's indices in its dataset.
-    pub const fn offset(&self) -> usize {
-        self.source.offset()
-    }
-}
-
-impl<I: Encodable + Decodable + Clone, U: Number, S: Cluster<I, U, FlatVec<I, U, M>>, M>
-    SquishyBall<I, U, FlatVec<I, U, M>, CodecData<I, U, M>, S>
-{
-    /// Creates a new `SquishyBall` tree from a `Cluster`.
-    ///
-    /// # Arguments
-    ///
-    /// - `source`: The `Cluster` to adapt into a `SquishyBall`.
-    /// - `data`: The dataset containing the instances.
-    pub fn from_root(source: OffBall<I, U, FlatVec<I, U, M>, S>, data: FlatVec<I, U, M>) -> (Self, CodecData<I, U, M>) {
-        let (mut root, _) = Self::adapt(source, None);
-        root.set_costs(&data);
-        root.trim();
-
-        let centers = root
-            .subtree()
-            .into_iter()
-            .map(Self::arg_center)
-            .map(|i| (i, data.get(i).clone()))
-            .collect::<HashMap<_, _>>();
-
-        let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.encode_leaves(&root);
-        let cardinality = data.cardinality();
-        let (metric, _, dimensionality_hint, _, metadata) = data.deconstruct();
-        let data = CodecData {
-            metric,
-            cardinality,
-            dimensionality_hint,
-            metadata,
-            centers,
-            leaf_bytes,
-            leaf_offsets,
-            cumulative_cardinalities,
-        };
-        (root, data)
-    }
 }
 
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        Co: Compressible<I, U> + ParDataset<I, U>,
-        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        Co: ParCompressible<I, U>,
+        Dec: ParDecompressible<I, U>,
         S: ParCluster<I, U, Co>,
     > SquishyBall<I, U, Co, Dec, S>
 {
-    /// Creates a new `SquishyBall` tree from a `Cluster`.
-    ///
-    /// # Arguments
-    ///
-    /// - `source`: The `Cluster` to adapt into a `SquishyBall`.
-    /// - `data`: The dataset containing the instances.
-    /// - `trim`: Whether to trim the tree after creating it, i.e. remove
-    ///   children of clusters whose unitary cost of compression is greater than
-    ///   the recursive cost.
-    pub fn par_from_root(source: OffBall<I, U, Co, S>, data: &Co, trim: bool) -> Self {
-        let (mut root, _) = Self::par_adapt(source, None);
-        root.par_set_costs(data);
-        if trim {
-            root.trim();
-        }
-        root
-    }
-
     /// Sets the costs for the tree.
     fn par_set_costs(&mut self, data: &Co) {
         self.par_set_unitary_cost(data);
@@ -301,8 +293,8 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        Co: Compressible<I, U> + ParDataset<I, U>,
-        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        Co: ParCompressible<I, U>,
+        Dec: ParDecompressible<I, U>,
         S: ParCluster<I, U, Co>,
     > ParAdapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
@@ -347,8 +339,8 @@ impl<
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        Co: Compressible<I, U> + ParDataset<I, U>,
-        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        Co: ParCompressible<I, U>,
+        Dec: ParDecompressible<I, U>,
         S: ParCluster<I, U, Co>,
     > ParParams<I, U, Co, Dec, S> for SquishCosts<U>
 {
@@ -448,8 +440,8 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
 impl<
         I: Encodable + Decodable + Send + Sync,
         U: Number,
-        Co: Compressible<I, U> + ParDataset<I, U>,
-        Dec: Decompressible<I, U> + ParDataset<I, U>,
+        Co: ParCompressible<I, U>,
+        Dec: ParDecompressible<I, U>,
         S: ParCluster<I, U, Co>,
     > ParCluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {

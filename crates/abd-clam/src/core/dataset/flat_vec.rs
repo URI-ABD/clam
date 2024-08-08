@@ -169,6 +169,10 @@ impl<I, U, M> FlatVec<I, U, M> {
 }
 
 impl<I, U: Number, M> MetricSpace<I, U> for FlatVec<I, U, M> {
+    fn metric(&self) -> &Metric<I, U> {
+        &self.metric
+    }
+
     fn identity(&self) -> bool {
         self.metric.identity()
     }
@@ -368,6 +372,10 @@ mod tests {
         }
 
         impl MetricSpace<Vec<i32>, i32> for SwapTracker {
+            fn metric(&self) -> &Metric<Vec<i32>, i32> {
+                &self.data.metric
+            }
+
             fn identity(&self) -> bool {
                 self.data.identity()
             }

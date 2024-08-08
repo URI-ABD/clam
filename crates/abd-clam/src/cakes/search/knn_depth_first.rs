@@ -185,7 +185,7 @@ pub(crate) mod tests {
 
         let pred_hits = super::search(data, root, query, k);
         assert_eq!(pred_hits.len(), true_hits.len(), "Knn search failed: {pred_hits:?}");
-        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered", false);
+        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered");
 
         let pred_hits = super::par_search(data, root, query, k);
         assert_eq!(
@@ -193,7 +193,7 @@ pub(crate) mod tests {
             true_hits.len(),
             "Parallel Knn search failed: {pred_hits:?}"
         );
-        check_search_by_distance(true_hits.clone(), pred_hits, "Par KnnClustered", false);
+        check_search_by_distance(true_hits.clone(), pred_hits, "Par KnnClustered");
 
         true
     }

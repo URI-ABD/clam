@@ -123,6 +123,10 @@ impl<I, U> Metric<I, U> {
 }
 
 impl<I, U: Number> MetricSpace<I, U> for Metric<I, U> {
+    fn metric(&self) -> &Self {
+        self
+    }
+
     fn identity(&self) -> bool {
         self.identity
     }

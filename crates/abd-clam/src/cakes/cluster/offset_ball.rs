@@ -189,7 +189,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<
 
 /// Parameters for the `OffsetBall`.
 #[derive(Debug, Default, Copy, Clone)]
-struct Offset {
+pub struct Offset {
     /// The offset of the slice of indices of the `Cluster` in the reordered
     /// dataset.
     offset: usize,
