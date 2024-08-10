@@ -19,31 +19,43 @@ pub trait MetricSpace<I, U: Number> {
     /// Whether the distance function provides an identity.
     ///
     /// Identity is defined as: `d(x, y) = 0 <=> x = y`.
-    fn identity(&self) -> bool;
+    fn identity(&self) -> bool {
+        self.metric().identity
+    }
 
     /// Whether the distance function is non-negative.
     ///
     /// Non-negativity is defined as: `d(x, y) >= 0`.
-    fn non_negativity(&self) -> bool;
+    fn non_negativity(&self) -> bool {
+        self.metric().non_negativity
+    }
 
     /// Whether the distance function is symmetric.
     ///
     /// Symmetry is defined as: `d(x, y) = d(y, x) for all x, y`.
-    fn symmetry(&self) -> bool;
+    fn symmetry(&self) -> bool {
+        self.metric().symmetry
+    }
 
     /// Whether the distance function satisfies the triangle inequality.
     ///
     /// The triangle inequality is defined as: `d(x, y) + d(y, z) >= d(x, z) for all x, y, z`.
-    fn triangle_inequality(&self) -> bool;
+    fn triangle_inequality(&self) -> bool {
+        self.metric().triangle_inequality
+    }
 
     /// Whether the distance function is expensive to compute.
     ///
     /// A distance function is expensive if its asymptotic complexity is greater
     /// than O(n) where n is the dimensionality of the dataset.
-    fn expensive(&self) -> bool;
+    fn expensive(&self) -> bool {
+        self.metric().expensive
+    }
 
     /// Returns the distance function
-    fn distance_function(&self) -> fn(&I, &I) -> U;
+    fn distance_function(&self) -> fn(&I, &I) -> U {
+        self.metric().distance_function
+    }
 
     /// Calculates the distance between two instances.
     fn one_to_one(&self, a: &I, b: &I) -> U {

@@ -4,7 +4,8 @@ use distances::Number;
 
 use super::{
     linear_search::{LinearSearch, ParLinearSearch},
-    Dataset, Metric, MetricSpace, ParDataset, ParMetricSpace, Permutable,
+    metric_space::ParMetricSpace,
+    Dataset, Metric, MetricSpace, ParDataset, Permutable,
 };
 
 /// A `FlatVec` is a dataset that is stored as a flat vector.
@@ -176,31 +177,9 @@ impl<I, U: Number, M> MetricSpace<I, U> for FlatVec<I, U, M> {
     fn metric(&self) -> &Metric<I, U> {
         &self.metric
     }
-
-    fn identity(&self) -> bool {
-        self.metric.identity()
-    }
-
-    fn non_negativity(&self) -> bool {
-        self.metric.non_negativity()
-    }
-
-    fn symmetry(&self) -> bool {
-        self.metric.symmetry()
-    }
-
-    fn triangle_inequality(&self) -> bool {
-        self.metric.triangle_inequality()
-    }
-
-    fn expensive(&self) -> bool {
-        self.metric.expensive()
-    }
-
-    fn distance_function(&self) -> fn(&I, &I) -> U {
-        self.metric.distance_function()
-    }
 }
+
+impl<I: Send + Sync, U: Number, M: Send + Sync> ParMetricSpace<I, U> for FlatVec<I, U, M> {}
 
 impl<I, U: Number, M> Dataset<I, U> for FlatVec<I, U, M> {
     fn cardinality(&self) -> usize {
@@ -215,6 +194,8 @@ impl<I, U: Number, M> Dataset<I, U> for FlatVec<I, U, M> {
         &self.instances[index]
     }
 }
+
+impl<I: Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for FlatVec<I, U, M> {}
 
 impl<I, U: Number, M> Permutable for FlatVec<I, U, M> {
     fn permutation(&self) -> Vec<usize> {
@@ -233,10 +214,6 @@ impl<I, U: Number, M> Permutable for FlatVec<I, U, M> {
 }
 
 impl<I, U: Number, M> LinearSearch<I, U> for FlatVec<I, U, M> {}
-
-impl<I: Send + Sync, U: Number, M: Send + Sync> ParMetricSpace<I, U> for FlatVec<I, U, M> {}
-
-impl<I: Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for FlatVec<I, U, M> {}
 
 impl<I: Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for FlatVec<I, U, M> {}
 
@@ -292,7 +269,12 @@ impl<T: ndarray_npy::WritableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
 /// Tests for the `FlatVec` struct.
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::{
+        linear_search::{LinearSearch, ParLinearSearch},
+        Dataset, Metric, MetricSpace, Permutable,
+    };
+
+    use super::FlatVec;
 
     #[test]
     fn creation() -> Result<(), String> {

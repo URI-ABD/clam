@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 
 use distances::Number;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     adapter::{Adapter, ParAdapter, ParParams, Params},
@@ -14,7 +15,7 @@ use crate::{
 };
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OffBall<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The `Cluster` type that the `OffsetBall` is based on.
     source: S,
@@ -188,7 +189,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<
 }
 
 /// Parameters for the `OffsetBall`.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Serialize, Deserialize)]
 pub struct Offset {
     /// The offset of the slice of indices of the `Cluster` in the reordered
     /// dataset.

@@ -5,6 +5,7 @@ use core::fmt::Debug;
 use std::{hash::Hash, marker::PhantomData};
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::{dataset::ParDataset, utils, Dataset};
 
@@ -15,7 +16,7 @@ use super::{
 
 /// A metric-`Ball` is a collection of instances that are within a certain
 /// distance of a center.
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Ball<I, U: Number, D: Dataset<I, U>> {
     /// Parameters used for creating the `Ball`.
     depth: usize,

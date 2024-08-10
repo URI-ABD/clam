@@ -223,30 +223,6 @@ impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
     fn metric(&self) -> &Metric<I, U> {
         &self.metric
     }
-
-    fn identity(&self) -> bool {
-        self.metric.identity()
-    }
-
-    fn non_negativity(&self) -> bool {
-        self.metric.non_negativity()
-    }
-
-    fn symmetry(&self) -> bool {
-        self.metric.symmetry()
-    }
-
-    fn triangle_inequality(&self) -> bool {
-        self.metric.triangle_inequality()
-    }
-
-    fn expensive(&self) -> bool {
-        self.metric.expensive()
-    }
-
-    fn distance_function(&self) -> fn(&I, &I) -> U {
-        self.metric.distance_function()
-    }
 }
 
 impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {

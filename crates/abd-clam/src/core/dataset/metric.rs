@@ -1,10 +1,6 @@
 //! A `Metric` is a wrapper for a distance function that provides information
 //! about the properties of the distance function.
 
-use distances::Number;
-
-use super::{MetricSpace, ParMetricSpace};
-
 /// A `Metric` is a wrapper for a distance function that provides information
 /// about the properties of the distance function.
 ///
@@ -121,35 +117,3 @@ impl<I, U> Metric<I, U> {
         self
     }
 }
-
-impl<I, U: Number> MetricSpace<I, U> for Metric<I, U> {
-    fn metric(&self) -> &Self {
-        self
-    }
-
-    fn identity(&self) -> bool {
-        self.identity
-    }
-
-    fn non_negativity(&self) -> bool {
-        self.non_negativity
-    }
-
-    fn symmetry(&self) -> bool {
-        self.symmetry
-    }
-
-    fn triangle_inequality(&self) -> bool {
-        self.triangle_inequality
-    }
-
-    fn expensive(&self) -> bool {
-        self.expensive
-    }
-
-    fn distance_function(&self) -> fn(&I, &I) -> U {
-        self.distance_function
-    }
-}
-
-impl<I: Send + Sync, U: Number> ParMetricSpace<I, U> for Metric<I, U> {}

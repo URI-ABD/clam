@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 
 use distances::Number;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     adapter::{Adapter, ParAdapter, ParParams, Params},
@@ -23,6 +24,7 @@ use super::{
 };
 
 /// A variant of `Ball` that stores indices after reordering the dataset.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SquishyBall<
     I: Encodable + Decodable,
     U: Number,
@@ -276,7 +278,7 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 }
 
 /// Parameters for the `OffsetBall`.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Serialize, Deserialize)]
 struct SquishCosts<U> {
     /// Expected memory cost of recursive compression.
     recursive: U,
