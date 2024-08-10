@@ -16,28 +16,6 @@ pub trait Encodable: Clone {
 
 /// A trait that defines how a dataset can be compressed.
 pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
-    /// Recursively encodes the centers of the clusters in terms of their
-    /// parents' center.
-    fn encode_centers<D: Dataset<I, U>, C: Cluster<I, U, D>>(&self, root: &C) -> Box<[u8]> {
-        let mut bytes = Vec::new();
-
-        let root_center = self.get(root.arg_center()).as_bytes();
-        bytes.extend_from_slice(&root_center.len().to_le_bytes());
-        bytes.extend_from_slice(&root_center);
-
-        for (reference_index, target_index) in index_pairs(root) {
-            bytes.extend_from_slice(&target_index.to_le_bytes());
-            bytes.extend_from_slice(&reference_index.to_le_bytes());
-
-            let encoding = self.get(target_index).encode(self.get(reference_index));
-
-            bytes.extend_from_slice(&encoding.len().to_le_bytes());
-            bytes.extend_from_slice(&encoding);
-        }
-
-        bytes.into_boxed_slice()
-    }
-
     /// Encodes all the instances of leaf clusters in terms of their centers.
     ///
     /// # Returns
@@ -71,31 +49,6 @@ pub trait Compressible<I: Encodable, U: Number>: Dataset<I, U> + Sized {
 
 /// A trait that defines how a dataset can be compressed.
 pub trait ParCompressible<I: Encodable + Send + Sync, U: Number>: Compressible<I, U> + ParDataset<I, U> + Sized {
-    /// Recursively encodes the centers of the clusters in terms of their
-    /// parents' center.
-    fn par_encode_centers<D: ParDataset<I, U>, C: ParCluster<I, U, D>>(&self, root: &C) -> Box<[u8]> {
-        let encodings = index_pairs(root)
-            .into_par_iter()
-            .map(|(r, t)| (r, t, self.get(t).encode(self.get(r))))
-            .collect::<Vec<_>>();
-
-        let mut bytes = Vec::new();
-
-        let root_center = self.get(root.arg_center()).as_bytes();
-        bytes.extend_from_slice(&root_center.len().to_le_bytes());
-        bytes.extend_from_slice(&root_center);
-
-        for (reference, target, enc) in encodings {
-            bytes.extend_from_slice(&target.to_le_bytes());
-            bytes.extend_from_slice(&reference.to_le_bytes());
-
-            bytes.extend_from_slice(&enc.len().to_le_bytes());
-            bytes.extend_from_slice(&enc);
-        }
-
-        bytes.into_boxed_slice()
-    }
-
     /// Encodes all the instances of leaf clusters in terms of their centers.
     ///
     /// # Returns
@@ -141,19 +94,4 @@ pub trait ParCompressible<I: Encodable + Send + Sync, U: Number>: Compressible<I
 
         (bytes.into_boxed_slice(), offsets, cumulative_cardinalities)
     }
-}
-
-/// Recursively finds the pairs of indices that represent the parent and child
-/// centers of a cluster.
-fn index_pairs<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C) -> Vec<(usize, usize)> {
-    let mut pairs = Vec::new();
-    let center = c.arg_center();
-    for child in c.child_clusters() {
-        let child_center = child.arg_center();
-        pairs.push((center, child_center));
-    }
-    for child in c.child_clusters() {
-        pairs.extend(index_pairs(child));
-    }
-    pairs
 }

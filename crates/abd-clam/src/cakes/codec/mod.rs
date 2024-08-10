@@ -210,20 +210,59 @@ fn deserialize_edits(bytes: &[u8]) -> Vec<needleman_wunsch::Edit> {
 
 #[cfg(test)]
 pub mod tests {
-    use test_case::test_case;
-
-    use crate::{cakes::Algorithm, Ball, Cluster, Dataset, FlatVec, Metric, Permutable};
-
-    use super::{
-        super::search::tests::{check_search_by_distance, check_search_by_index, gen_random_data},
-        SquishyBall,
+    use crate::{
+        cakes::{Algorithm, CodecData},
+        Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
     };
 
-    #[test_case(1_000, 10; "1k-10")]
-    #[test_case(10_000, 10; "10k-10")]
-    #[test_case(100_000, 10; "100k-10")]
-    #[test_case(1_000, 100; "1k-100")]
-    #[test_case(10_000, 100; "10k-100")]
+    use super::SquishyBall;
+
+    use super::super::search::tests::{check_search_by_distance, check_search_by_index, gen_random_data};
+
+    #[test]
+    fn ser_de() -> Result<(), String> {
+        // The compressible dataset
+        type Co = FlatVec<Vec<f64>, f64, usize>;
+        // The decompressible dataset
+        type Dec = CodecData<Vec<f64>, f64, usize>;
+        // The squishy ball
+        type Sb = SquishyBall<Vec<f64>, f64, Co, Dec, Ball<Vec<f64>, f64, Co>>;
+
+        let seed = 42;
+        let car = 10_000;
+        let dim = 10;
+
+        let mut data: Co = gen_random_data(car, dim, 10.0, seed)?;
+        let metric = data.metric().clone();
+        let metadata = data.metadata().to_vec();
+
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let seed = Some(seed);
+        let (_, co_data): (Sb, Dec) = SquishyBall::new_tree(&mut data, &criteria, seed);
+        let co_data: Dec = co_data.with_metadata(metadata.clone())?;
+
+        let serialized: Vec<u8> = bincode::serialize(&co_data).unwrap();
+        let deserialized: Dec = bincode::deserialize(&serialized).unwrap();
+        let deserialized: Dec = deserialized.with_metric(metric.clone());
+
+        assert_eq!(co_data.cardinality, deserialized.cardinality);
+        assert_eq!(co_data.dimensionality_hint, deserialized.dimensionality_hint);
+        assert_eq!(co_data.metadata, deserialized.metadata);
+        assert_eq!(co_data.permutation, deserialized.permutation);
+        assert_eq!(co_data.root_arg_center, deserialized.root_arg_center);
+        assert_eq!(co_data.center_map, deserialized.center_map);
+        assert_eq!(co_data.leaf_bytes, deserialized.leaf_bytes);
+        assert_eq!(co_data.leaf_offsets, deserialized.leaf_offsets);
+        assert_eq!(co_data.cumulative_cardinalities, deserialized.cumulative_cardinalities);
+
+        Ok(())
+    }
+
+    #[test_case::test_case(1_000, 10; "1k-10")]
+    #[test_case::test_case(10_000, 10; "10k-10")]
+    #[test_case::test_case(100_000, 10; "100k-10")]
+    #[test_case::test_case(1_000, 100; "1k-100")]
+    #[test_case::test_case(10_000, 100; "10k-100")]
     fn vectors(car: usize, dim: usize) -> Result<(), String> {
         let mut algs: Vec<(Algorithm<f64>, fn(Vec<(usize, f64)>, Vec<(usize, f64)>, &str) -> bool)> = vec![];
         for radius in [0.1, 1.0] {
@@ -244,7 +283,7 @@ pub mod tests {
         let seed = Some(seed);
         let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
 
-        let dec_data = co_data.decompress().with_metadata(metadata)?;
+        let dec_data = co_data.to_flat_vec().with_metadata(metadata)?;
 
         assert_eq!(data.cardinality(), dec_data.cardinality());
         assert_eq!(data.permutation(), dec_data.permutation());
@@ -308,7 +347,7 @@ pub mod tests {
         let seed = Some(42);
         let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
 
-        let dec_data = co_data.decompress().with_metadata(metadata)?;
+        let dec_data = co_data.to_flat_vec().with_metadata(metadata)?;
 
         assert_eq!(data.cardinality(), dec_data.cardinality());
         assert_eq!(data.permutation(), dec_data.permutation());

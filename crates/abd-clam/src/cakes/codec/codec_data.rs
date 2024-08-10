@@ -1,9 +1,14 @@
 //! An implementation of the Compression and Decompression traits.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use distances::Number;
 use rayon::prelude::*;
+use serde::{
+    de::Deserializer,
+    ser::{SerializeStruct, Serializer},
+    Deserialize, Serialize,
+};
 
 use crate::{
     cluster::ParCluster,
@@ -42,8 +47,13 @@ pub struct CodecData<I, U, M> {
     pub(crate) metadata: Vec<M>,
     /// The permutation of the original dataset.
     pub(crate) permutation: Vec<usize>,
-    /// The centers of the clusters in the dataset.
-    pub(crate) centers: HashMap<usize, I>,
+    /// The index of the center of the root cluster in the dataset.
+    pub(crate) root_arg_center: usize,
+    /// The centers of the clusters in the dataset. The key is the index of the
+    /// center in the dataset, and the value is the index of the parent center
+    /// and the center itself. For the root center, the parent index is the same
+    /// as the center index.
+    pub(crate) center_map: BTreeMap<usize, (usize, I)>,
     /// The bytes representing the leaf clusters as a flattened vector.
     pub(crate) leaf_bytes: Box<[u8]>,
     /// The offsets that indicate the start of the instances for each leaf
@@ -55,16 +65,15 @@ pub struct CodecData<I, U, M> {
 
 impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn compress<D: Compressible<I, U> + Permutable, S: Cluster<I, U, D>>(
+    pub fn from_compressible<D: Compressible<I, U> + Permutable, S: Cluster<I, U, D>>(
         data: &D,
         root: &SquishyBall<I, U, D, Self, S>,
     ) -> Self {
-        let centers = root
-            .subtree()
+        let center_map = root
+            .center_map()
             .into_iter()
-            .map(SquishyBall::arg_center)
-            .map(|i| (i, data.get(i).clone()))
-            .collect::<HashMap<_, _>>();
+            .map(|(arg_center, parent_arg_center)| (arg_center, (parent_arg_center, data.get(arg_center).clone())))
+            .collect();
 
         let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.encode_leaves(root);
         let cardinality = data.cardinality();
@@ -76,7 +85,8 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
             permutation: data.permutation(),
-            centers,
+            root_arg_center: root.arg_center(),
+            center_map,
             leaf_bytes,
             leaf_offsets,
             cumulative_cardinalities,
@@ -90,12 +100,11 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
         data: &D,
         root: &SquishyBall<I, U, D, Self, S>,
     ) -> Self {
-        let centers = root
-            .subtree()
-            .into_par_iter()
-            .map(SquishyBall::arg_center)
-            .map(|i| (i, data.get(i).clone()))
-            .collect::<HashMap<_, _>>();
+        let center_map = root
+            .center_map()
+            .into_iter()
+            .map(|(arg_center, parent_arg_center)| (arg_center, (parent_arg_center, data.get(arg_center).clone())))
+            .collect();
 
         let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.par_encode_leaves(root);
         let cardinality = data.cardinality();
@@ -107,7 +116,8 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
             permutation: data.permutation(),
-            centers,
+            root_arg_center: root.arg_center(),
+            center_map,
             leaf_bytes,
             leaf_offsets,
             cumulative_cardinalities,
@@ -116,20 +126,41 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
 }
 
 impl<I, U, M> CodecData<I, U, M> {
-    /// Sets the metadata of the dataset.
+    /// Changes the metric of the dataset. This is primarily useful after
+    /// deserialization.
     #[must_use]
-    pub fn with_metadata<Mn>(self, mut metadata: Vec<Mn>) -> CodecData<I, U, Mn> {
-        metadata.permute(&self.permutation);
-        CodecData {
-            metric: self.metric,
-            cardinality: self.cardinality,
-            dimensionality_hint: self.dimensionality_hint,
-            metadata,
-            permutation: self.permutation,
-            centers: self.centers,
-            leaf_bytes: self.leaf_bytes,
-            leaf_offsets: self.leaf_offsets,
-            cumulative_cardinalities: self.cumulative_cardinalities,
+    pub const fn with_metric(mut self, metric: Metric<I, U>) -> Self {
+        self.metric = metric;
+        self
+    }
+
+    /// Sets the metadata of the dataset.
+    ///
+    /// # Errors
+    ///
+    /// - If the length of the metadata vector does not match the cardinality of
+    ///   the dataset.
+    pub fn with_metadata<Me>(self, mut metadata: Vec<Me>) -> Result<CodecData<I, U, Me>, String> {
+        if metadata.len() == self.cardinality {
+            metadata.permute(&self.permutation);
+            Ok(CodecData {
+                metric: self.metric,
+                cardinality: self.cardinality,
+                dimensionality_hint: self.dimensionality_hint,
+                metadata,
+                permutation: self.permutation,
+                root_arg_center: self.root_arg_center,
+                center_map: self.center_map,
+                leaf_bytes: self.leaf_bytes,
+                leaf_offsets: self.leaf_offsets,
+                cumulative_cardinalities: self.cumulative_cardinalities,
+            })
+        } else {
+            Err(format!(
+                "The length of the metadata vector ({}) does not match the cardinality of the dataset ({}).",
+                metadata.len(),
+                self.cardinality
+            ))
         }
     }
 
@@ -147,23 +178,14 @@ impl<I, U, M> CodecData<I, U, M> {
 }
 
 impl<I: Decodable + Clone, U: Number, M: Clone> CodecData<I, U, M> {
-    /// Decompresses the dataset into a `FlatVec`. This will set the permutation
-    /// in the `FlatVec` to the identity permutation.
+    /// Decompresses the dataset into a `FlatVec`.
     #[must_use]
-    pub fn decompress(&self) -> FlatVec<I, U, M> {
-        let mut instances = self.centers.clone();
-        self.leaf_offsets
+    pub fn to_flat_vec(&self) -> FlatVec<I, U, M> {
+        let instances = self
+            .leaf_offsets
             .iter()
-            .map(|&o| self.decode_leaf(o))
-            .zip(self.cumulative_cardinalities.iter())
-            .for_each(|(l_instances, o)| {
-                l_instances.into_iter().enumerate().for_each(|(i, p)| {
-                    instances.insert(o + i, p);
-                });
-            });
-        let mut instances = instances.into_iter().collect::<Vec<_>>();
-        instances.sort_unstable_by_key(|(i, _)| *i);
-        let (_, instances): (Vec<_>, Vec<_>) = instances.into_iter().unzip();
+            .flat_map(|&o| self.decode_leaf(o))
+            .collect::<Vec<_>>();
         FlatVec {
             metric: self.metric.clone(),
             instances,
@@ -175,8 +197,8 @@ impl<I: Decodable + Clone, U: Number, M: Clone> CodecData<I, U, M> {
 }
 
 impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
-    fn centers(&self) -> &HashMap<usize, I> {
-        &self.centers
+    fn centers(&self) -> &BTreeMap<usize, (usize, I)> {
+        &self.center_map
     }
 
     fn leaf_bytes(&self) -> &[u8] {
@@ -212,10 +234,11 @@ impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
 
     #[allow(clippy::panic)]
     fn get(&self, index: usize) -> &I {
-        self.centers.get(&index).map_or_else(
+        let (_, center) = &self.center_map.get(&index).map_or_else(
             || panic!("For CodecData, the `get` method may only be used for cluster centers."),
             |center| center,
-        )
+        );
+        center
     }
 }
 
@@ -302,5 +325,129 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U
             })
             .filter(|&(_, d)| d <= radius)
             .collect()
+    }
+}
+
+/// Recursively encodes the centers of the clusters in the dataset.
+fn encode_centers<I: Encodable>(root_arg_center: usize, center_map: &BTreeMap<usize, (usize, I)>) -> Box<[u8]> {
+    let mut bytes = Vec::new();
+
+    // Encode the root center.
+    bytes.extend_from_slice(&root_arg_center.to_le_bytes());
+
+    let root_encoding = center_map[&root_arg_center].1.as_bytes();
+    bytes.extend_from_slice(&root_encoding.len().to_le_bytes());
+    bytes.extend_from_slice(&root_encoding);
+
+    let center_vec = {
+        let mut center_map = center_map.iter().collect::<Vec<_>>();
+        center_map.sort_unstable_by_key(|(_, (i, _))| *i);
+        center_map
+    };
+
+    // Encode the other centers.
+    for (arg_center, (parent_arg_center, center)) in center_vec {
+        bytes.extend_from_slice(&arg_center.to_le_bytes());
+        bytes.extend_from_slice(&parent_arg_center.to_le_bytes());
+
+        let (_, parent_center) = &center_map[parent_arg_center];
+        let encoding = center.encode(parent_center);
+        bytes.extend_from_slice(&encoding.len().to_le_bytes());
+        bytes.extend_from_slice(&encoding);
+    }
+
+    bytes.into_boxed_slice()
+}
+
+/// Inverse of the `encode_centers` function.
+fn decode_centers<I: Decodable>(bytes: &[u8]) -> BTreeMap<usize, (usize, I)> {
+    let mut offset = 0;
+
+    let root_arg_center = super::read_usize(bytes, &mut offset);
+    let root_center = I::from_bytes(&super::read_encoding(bytes, &mut offset));
+
+    let mut center_map = BTreeMap::new();
+    center_map.insert(root_arg_center, (root_arg_center, root_center));
+
+    while offset < bytes.len() {
+        let arg_center = super::read_usize(bytes, &mut offset);
+        let parent_arg_center = super::read_usize(bytes, &mut offset);
+
+        let encoding = super::read_encoding(bytes, &mut offset);
+        let (_, parent_center) = &center_map[&parent_arg_center];
+        let center = I::decode(parent_center, &encoding);
+
+        center_map.insert(arg_center, (parent_arg_center, center));
+    }
+
+    center_map
+}
+
+/// This struct is used for serializing and deserializing a `CodecData`.
+#[derive(Serialize, Deserialize)]
+struct CodecDataSerde<M> {
+    /// The cardinality of the dataset.
+    cardinality: usize,
+    /// A hint for the dimensionality of the dataset.
+    dimensionality_hint: (usize, Option<usize>),
+    /// The metadata associated with the instances.
+    metadata: Vec<M>,
+    /// The permutation of the original dataset.
+    permutation: Vec<usize>,
+    /// The index of the center of the root cluster in the dataset.
+    root_arg_center: usize,
+    /// The bytes representing the centers of the clusters in the dataset.
+    center_bytes: Box<[u8]>,
+    /// The bytes representing the leaf clusters as a flattened vector.
+    leaf_bytes: Box<[u8]>,
+    /// The offsets that indicate the start of the instances for each leaf
+    leaf_offsets: Vec<usize>,
+    /// The cumulative cardinalities of the leaves.
+    cumulative_cardinalities: Vec<usize>,
+}
+
+impl<I: Encodable, U, M: Serialize> Serialize for CodecData<I, U, M> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let center_bytes = encode_centers(self.root_arg_center, &self.center_map);
+        let mut state = serializer.serialize_struct("CodecDataSerde", 9)?;
+        state.serialize_field("cardinality", &self.cardinality)?;
+        state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
+        state.serialize_field("metadata", &self.metadata)?;
+        state.serialize_field("permutation", &self.permutation)?;
+        state.serialize_field("root_arg_center", &self.root_arg_center)?;
+        state.serialize_field("center_bytes", &center_bytes)?;
+        state.serialize_field("leaf_bytes", &self.leaf_bytes)?;
+        state.serialize_field("leaf_offsets", &self.leaf_offsets)?;
+        state.serialize_field("cumulative_cardinalities", &self.cumulative_cardinalities)?;
+        state.end()
+    }
+}
+
+impl<'de, I: Decodable, U, M: Deserialize<'de>> Deserialize<'de> for CodecData<I, U, M> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let CodecDataSerde {
+            cardinality,
+            dimensionality_hint,
+            metadata,
+            permutation,
+            root_arg_center,
+            center_bytes,
+            leaf_bytes,
+            leaf_offsets,
+            cumulative_cardinalities,
+        } = CodecDataSerde::deserialize(deserializer)?;
+        let center_map = decode_centers(&center_bytes);
+        Ok(Self {
+            metric: Metric::default(),
+            cardinality,
+            dimensionality_hint,
+            metadata,
+            permutation,
+            root_arg_center,
+            center_map,
+            leaf_bytes,
+            leaf_offsets,
+            cumulative_cardinalities,
+        })
     }
 }

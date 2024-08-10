@@ -126,6 +126,22 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
         }
     }
 
+    /// Returns the `arg_center`s of the `Cluster`s in the tree in a `Vec` of
+    /// tuples of `(arg_center, parent_arg_center)`.
+    ///
+    /// For the root `Cluster` (or the `Cluster` this method is called on), the
+    /// `parent_arg_center` is the same as the `arg_center`.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of tuples of `(arg_center, parent_arg_center)`.
+    fn center_map<'a>(&'a self) -> Vec<(usize, usize)>
+    where
+        U: 'a,
+    {
+        center_map(self, self.arg_center())
+    }
+
     /// Returns whether the `Cluster` is a descendant of another `Cluster`.
     ///
     /// This may only return `true` if both `Cluster`s have the same variant of
@@ -186,4 +202,19 @@ pub trait ParCluster<I: Send + Sync, U: Number, D: ParDataset<I, U>>: Cluster<I,
     //         .map(|(_, _, c)| c.as_ref())
     //         .collect()
     // }
+}
+
+/// Returns the `arg_center`s of the `Cluster`s in the tree in a `Vec` of
+/// tuples of `(arg_center, parent_arg_center)`.
+fn center_map<I, U, D, C>(c: &C, parent_arg_center: usize) -> Vec<(usize, usize)>
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    let mut centers = vec![(c.arg_center(), parent_arg_center)];
+    c.child_clusters()
+        .map(|child| center_map(child, c.arg_center()))
+        .for_each(|child_map| centers.extend(child_map));
+    centers
 }

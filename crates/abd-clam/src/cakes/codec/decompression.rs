@@ -1,6 +1,6 @@
 //! Traits and an implementation for decompressing datasets.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use distances::Number;
 
@@ -19,7 +19,7 @@ pub trait Decodable {
 pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
     /// Returns the centers of the clusters in the tree associated with this
     /// dataset.
-    fn centers(&self) -> &HashMap<usize, I>;
+    fn centers(&self) -> &BTreeMap<usize, (usize, I)>;
 
     /// Returns the bytes slice representing all compressed leaves.
     fn leaf_bytes(&self) -> &[u8];
@@ -32,12 +32,12 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
     fn find_compressed_offset(&self, decompressed_offset: usize) -> usize;
 
     /// Decodes the centers of the clusters in terms of their parents' center.
-    fn decode_centers<C: Cluster<I, U, Self>>(&self, root: &C, bytes: &[u8]) -> HashMap<usize, I> {
+    fn decode_centers<C: Cluster<I, U, Self>>(&self, root: &C, bytes: &[u8]) -> BTreeMap<usize, I> {
         let mut offset = 0;
 
         let root_center = I::from_bytes(&super::read_encoding(bytes, &mut offset));
 
-        let mut centers = HashMap::new();
+        let mut centers = BTreeMap::new();
         centers.insert(root.arg_center(), root_center);
 
         while offset < bytes.len() {
@@ -60,7 +60,7 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
         let bytes = self.leaf_bytes();
 
         let arg_center = super::read_usize(bytes, &mut offset);
-        let center = &self.centers()[&arg_center];
+        let (_, center) = &self.centers()[&arg_center];
 
         let cardinality = super::read_usize(bytes, &mut offset);
 
@@ -77,7 +77,7 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
 /// Parallel version of the `Decompressible` trait.
 pub trait ParDecompressible<I: Decodable + Send + Sync, U: Number>: Decompressible<I, U> + ParDataset<I, U> {
     /// Parallel version of the `decode_centers` method.
-    fn par_decode_centers<C: Cluster<I, U, Self>>(&self, root: &C, bytes: &[u8]) -> HashMap<usize, I> {
+    fn par_decode_centers<C: Cluster<I, U, Self>>(&self, root: &C, bytes: &[u8]) -> BTreeMap<usize, I> {
         self.decode_centers(root, bytes)
     }
 

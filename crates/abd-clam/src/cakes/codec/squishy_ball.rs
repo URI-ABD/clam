@@ -78,7 +78,7 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U> + Permutable, S
         root.set_costs(data);
         root.trim();
 
-        let data = CodecData::compress(data, &root);
+        let data = CodecData::from_compressible(data, &root);
         (root, data)
     }
 }
