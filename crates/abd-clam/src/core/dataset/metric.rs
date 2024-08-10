@@ -25,6 +25,19 @@ pub struct Metric<I, U> {
     pub(crate) distance_function: fn(&I, &I) -> U,
 }
 
+impl<I, U> Default for Metric<I, U> {
+    fn default() -> Self {
+        Self {
+            identity: true,
+            non_negativity: true,
+            symmetry: true,
+            triangle_inequality: true,
+            expensive: false,
+            distance_function: |_, _| unreachable!("This should never be called."),
+        }
+    }
+}
+
 impl<I, U> Metric<I, U> {
     /// Creates a new `Metric`.
     ///

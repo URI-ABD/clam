@@ -1,6 +1,11 @@
 //! A `FlatVec` is a dataset that is stored as a flat vector.
 
 use distances::Number;
+use serde::{
+    de::Deserializer,
+    ser::{SerializeStruct, Serializer},
+    Deserialize, Serialize,
+};
 
 use super::{
     linear_search::{LinearSearch, ParLinearSearch},
@@ -16,6 +21,7 @@ use super::{
 ///
 /// - `I`: The type of the instances in the dataset.
 /// - `U`: The type of the distance values.
+/// - `M`: The type of the metadata associated with the instances.
 #[derive(Clone)]
 pub struct FlatVec<I, U, M> {
     /// The metric space of the dataset.
@@ -99,7 +105,15 @@ impl<T, U> FlatVec<Vec<T>, U, usize> {
 }
 
 impl<I, U, M> FlatVec<I, U, M> {
-    /// Deconstructs the `FlatVec` into its components.
+    /// Changes the `Metric` of the dataset. This is primarily for use after
+    /// deserialization.
+    #[must_use]
+    pub const fn with_metric(mut self, metric: Metric<I, U>) -> Self {
+        self.metric = metric;
+        self
+    }
+
+    /// Deconstructs the `FlatVec` into its members.
     ///
     /// # Returns
     ///
@@ -263,6 +277,48 @@ impl<T: ndarray_npy::WritableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
         let arr: ndarray::Array2<T> = ndarray::Array2::from_shape_vec(shape, v).map_err(|e| e.to_string())?;
         ndarray_npy::write_npy(&path, &arr).map_err(|e| e.to_string())?;
         Ok(path)
+    }
+}
+
+/// This struct is used for serializing and deserializing a `FlatVec`.
+#[derive(Serialize, Deserialize)]
+struct FlatVecSerde<I, M> {
+    /// The instances in the dataset.
+    instances: Vec<I>,
+    /// A hint for the dimensionality of the dataset.
+    dimensionality_hint: (usize, Option<usize>),
+    /// The permutation of the instances.
+    permutation: Vec<usize>,
+    /// The metadata associated with the instances.
+    metadata: Vec<M>,
+}
+
+impl<I: Serialize, U, M: Serialize> Serialize for FlatVec<I, U, M> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("FlatVecSerde", 4)?;
+        state.serialize_field("instances", &self.instances)?;
+        state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
+        state.serialize_field("permutation", &self.permutation)?;
+        state.serialize_field("metadata", &self.metadata)?;
+        state.end()
+    }
+}
+
+impl<'de, I: Deserialize<'de>, U, M: Deserialize<'de>> Deserialize<'de> for FlatVec<I, U, M> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let FlatVecSerde {
+            instances,
+            dimensionality_hint,
+            permutation,
+            metadata,
+        } = FlatVecSerde::deserialize(deserializer)?;
+        Ok(Self {
+            metric: Metric::default(),
+            instances,
+            dimensionality_hint,
+            permutation,
+            metadata,
+        })
     }
 }
 
@@ -491,6 +547,30 @@ mod tests {
         let mut result = dataset.par_rnn(&query, 5);
         result.sort_unstable_by_key(|x| x.0);
         assert_eq!(result, vec![(0, 3), (1, 1), (2, 5)]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn ser_de() -> Result<(), String> {
+        type Fv = FlatVec<Vec<i32>, i32, usize>;
+
+        let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
+        let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
+        let metric = Metric::new(distance_function, false);
+        let dataset: Fv = FlatVec::new_array(instances.clone(), metric.clone())?;
+
+        let serialized: Vec<u8> = bincode::serialize(&dataset).map_err(|e| e.to_string())?;
+        let deserialized: Fv = bincode::deserialize(&serialized).map_err(|e| e.to_string())?;
+        let deserialized: Fv = deserialized.with_metric(metric.clone());
+
+        assert_eq!(dataset.cardinality(), deserialized.cardinality());
+        assert_eq!(dataset.dimensionality_hint(), deserialized.dimensionality_hint());
+        assert_eq!(dataset.permutation(), deserialized.permutation());
+        assert_eq!(dataset.metadata(), deserialized.metadata());
+        for i in 0..dataset.cardinality() {
+            assert_eq!(dataset.get(i), deserialized.get(i));
+        }
 
         Ok(())
     }
