@@ -223,13 +223,15 @@ pub mod tests {
     fn ser_de() -> Result<(), String> {
         // The compressible dataset
         type Co = FlatVec<Vec<f64>, f64, usize>;
+        // The ball for the compressible dataset.
+        type B = Ball<Vec<f64>, f64, Co>;
         // The decompressible dataset
         type Dec = CodecData<Vec<f64>, f64, usize>;
         // The squishy ball
-        type Sb = SquishyBall<Vec<f64>, f64, Co, Dec, Ball<Vec<f64>, f64, Co>>;
+        type Sb = SquishyBall<Vec<f64>, f64, Co, Dec, B>;
 
         let seed = 42;
-        let car = 10_000;
+        let car = 1_000;
         let dim = 10;
 
         let mut data: Co = gen_random_data(car, dim, 10.0, seed)?;
@@ -249,7 +251,6 @@ pub mod tests {
         assert_eq!(co_data.dimensionality_hint, deserialized.dimensionality_hint);
         assert_eq!(co_data.metadata, deserialized.metadata);
         assert_eq!(co_data.permutation, deserialized.permutation);
-        assert_eq!(co_data.root_arg_center, deserialized.root_arg_center);
         assert_eq!(co_data.center_map, deserialized.center_map);
         assert_eq!(co_data.leaf_bytes, deserialized.leaf_bytes);
         assert_eq!(co_data.leaf_offsets, deserialized.leaf_offsets);

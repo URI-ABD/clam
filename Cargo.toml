@@ -35,8 +35,6 @@ debug = true
 overflow-checks = true
 
 [profile.release]
-debug = true
-overflow-checks = true
 strip = true
 lto = true
 codegen-units = 1
