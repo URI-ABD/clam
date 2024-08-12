@@ -36,9 +36,6 @@ impl_iint!(i8, i16, i32, i64, i128, isize);
 pub trait UInt: Number + Hash + Eq + Ord {
     /// Returns the number as a `i64`.
     fn as_i64(self) -> i64;
-
-    /// Returns the number as a `u64`.
-    fn as_u64(self) -> u64;
 }
 
 /// Macro to implement `UIntNumber` for all unsigned integer types.
@@ -50,10 +47,6 @@ macro_rules! impl_uint {
                 #[allow(clippy::cast_possible_wrap)]
                 fn as_i64(self) -> i64 {
                     self as i64
-                }
-
-                fn as_u64(self) -> u64 {
-                    self as u64
                 }
             }
         )*

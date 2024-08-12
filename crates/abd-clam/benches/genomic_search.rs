@@ -23,13 +23,15 @@ const METRICS: &[(&str, fn(&String, &String) -> u64)] = &[
 ];
 
 fn genomic_search(c: &mut Criterion) {
-    let seed_length = 100;
+    let seed_length = 250;
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
     let penalties = distances::strings::Penalties::default();
-    let num_clumps = 256;
-    let clump_size = 16;
-    let clump_radius = 3_u16;
+    let num_clumps = 1024;
+    let clump_size = 32;
+    let clump_radius = 10_u16;
+    let inter_clump_distance_range = (50_u16, 70_u16);
+    let len_delta = 10;
     let (_, genomes) = symagen::random_edits::generate_clumped_data(
         &seed_string,
         penalties,
@@ -37,6 +39,8 @@ fn genomic_search(c: &mut Criterion) {
         num_clumps,
         clump_size,
         clump_radius,
+        inter_clump_distance_range,
+        len_delta,
     )
     .into_iter()
     .unzip::<_, _, Vec<_>, Vec<_>>();
@@ -55,9 +59,9 @@ fn genomic_search(c: &mut Criterion) {
     };
 
     let seed = Some(seed);
-    let radii = vec![1, 2, 3, 4, 6, 10];
+    let radii = vec![5, 10, 20];
     let ks = vec![1, 10, 20];
-    for &(metric_name, distance_fn) in METRICS {
+    for &(metric_name, distance_fn) in &METRICS[..1] {
         let metric = Metric::new(distance_fn, true);
         let data = FlatVec::new(genomes.clone(), metric).unwrap();
 

@@ -171,6 +171,8 @@ pub mod tests {
         let alphabet = "ACTGN".chars().collect::<Vec<_>>();
         let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
         let penalties = distances::strings::Penalties::default();
+        let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
+        let len_delta = seed_length / 10;
         let (metadata, data) = symagen::random_edits::generate_clumped_data(
             &seed_string,
             penalties,
@@ -178,6 +180,8 @@ pub mod tests {
             num_clumps,
             clump_size,
             clump_radius,
+            inter_clump_distance_range,
+            len_delta,
         )
         .into_iter()
         .unzip::<_, _, Vec<_>, Vec<_>>();
