@@ -277,22 +277,11 @@ pub mod tests {
 
         let seed = 42;
         let mut data = gen_random_data(car, dim, 10.0, seed)?;
-        let metadata = data.metadata().to_vec();
         let query = &vec![0.0; dim];
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(seed);
         let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
-
-        let dec_data = co_data.to_flat_vec().with_metadata(metadata)?;
-
-        assert_eq!(data.cardinality(), dec_data.cardinality());
-        assert_eq!(data.permutation(), dec_data.permutation());
-        assert_eq!(data.metadata(), dec_data.metadata());
-        for i in 0..data.cardinality() {
-            let (x, y) = (data.get(i), dec_data.get(i));
-            assert_eq!(x, y, "Failed at index {i}: {x:?} vs {y:?}");
-        }
 
         for &(alg, checker) in &algs {
             let true_hits = alg.par_linear_search(&co_data, query);

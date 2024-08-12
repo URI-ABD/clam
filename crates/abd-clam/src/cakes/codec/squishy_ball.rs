@@ -355,8 +355,8 @@ impl<
     }
 }
 
-impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressible<I, U>, S: Cluster<I, U, D>>
-    Cluster<I, U, Dc> for SquishyBall<I, U, D, Dc, S>
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
+    Cluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
     fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
         let indices = self.indices().collect();
@@ -431,7 +431,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
         Self { children, ..self }
     }
 
-    fn distances(&self, data: &Dc, query: &I) -> Vec<(usize, U)> {
+    fn distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         self.leaves()
             .into_iter()
             .map(Self::offset)
@@ -440,6 +440,10 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U>, Dc: Decompressi
             .zip(self.indices())
             .map(|(p, i)| (i, MetricSpace::one_to_one(data, query, &p)))
             .collect()
+    }
+
+    fn is_descendant_of(&self, other: &Self) -> bool {
+        self.source.is_descendant_of(&other.source)
     }
 }
 
@@ -451,7 +455,7 @@ impl<
         S: ParCluster<I, U, Co>,
     > ParCluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn par_distances(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
+    fn par_distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         self.leaves()
             .into_iter()
             .map(Self::offset)

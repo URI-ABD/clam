@@ -60,9 +60,9 @@ pub struct CodecData<I, U, M> {
 
 impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn from_compressible<D: Compressible<I, U> + Permutable, S: Cluster<I, U, D>>(
-        data: &D,
-        root: &SquishyBall<I, U, D, Self, S>,
+    pub fn from_compressible<Co: Compressible<I, U> + Permutable, S: Cluster<I, U, Co>>(
+        data: &Co,
+        root: &SquishyBall<I, U, Co, Self, S>,
     ) -> Self {
         let center_map = root
             .subtree()

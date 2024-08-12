@@ -30,9 +30,9 @@ where
 
         for (d, c) in leaves {
             if c.is_singleton() {
-                c.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
+                c.indices().for_each(|i| hits.push((d, i)));
             } else {
-                c.distances(data, query)
+                c.distances_to_query(data, query)
                     .into_iter()
                     .for_each(|(i, d)| hits.push((d, i)));
             }
@@ -73,9 +73,9 @@ where
 
         for (d, c) in leaves {
             if c.is_singleton() {
-                c.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
+                c.indices().for_each(|i| hits.push((d, i)));
             } else {
-                c.par_distances(data, query)
+                c.par_distances_to_query(data, query)
                     .into_iter()
                     .for_each(|(i, d)| hits.push((d, i)));
             }

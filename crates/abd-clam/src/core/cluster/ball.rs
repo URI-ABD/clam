@@ -145,19 +145,24 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self
     }
 
-    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+    fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.query_to_many(query, &self.indices)
+    }
+
+    fn is_descendant_of(&self, other: &Self) -> bool {
+        let indices = other.indices().collect::<std::collections::HashSet<_>>();
+        self.indices().all(|i| indices.contains(&i))
     }
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {
-    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+    fn par_distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 }
 
 impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self
     where
         Self: Sized,
     {
@@ -187,7 +192,7 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
         let lfd_scale = radius.half();
         let lfd = LFD::from_radial_distances(&distances, lfd_scale);
 
-        let c = Self {
+        Self {
             depth,
             cardinality,
             radius,
@@ -197,9 +202,7 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
             indices: indices.to_vec(),
             children: Vec::new(),
             _id: PhantomData,
-        };
-
-        (c, arg_radial)
+        }
     }
 
     fn find_extrema(&self, data: &D) -> Vec<usize> {
@@ -215,7 +218,7 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for Ball<I, U, D> {
-    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize)
+    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self
     where
         Self: Sized,
     {
@@ -244,7 +247,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
         let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
         let lfd = utils::compute_lfd(radius, &distances);
 
-        let c = Self {
+        Self {
             depth,
             cardinality,
             radius,
@@ -254,9 +257,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
             indices: indices.to_vec(),
             children: Vec::new(),
             _id: PhantomData,
-        };
-
-        (c, arg_radial)
+        }
     }
 
     fn par_find_extrema(&self, data: &D) -> Vec<usize> {
@@ -293,7 +294,8 @@ mod tests {
 
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
         let seed = Some(42);
-        let (root, arg_r) = Ball::new(&data, &indices, 0, seed);
+        let root = Ball::new(&data, &indices, 0, seed);
+        let arg_r = root.arg_radial();
 
         assert_eq!(arg_r, data.cardinality() - 1);
         assert_eq!(root.depth(), 0);
@@ -304,7 +306,8 @@ mod tests {
         assert!(root.children().is_empty());
         assert_eq!(root.indices().collect::<Vec<_>>(), indices);
 
-        let (root, arg_r) = Ball::par_new(&data, &indices, 0, seed);
+        let root = Ball::par_new(&data, &indices, 0, seed);
+        let arg_r = root.arg_radial();
 
         assert_eq!(arg_r, data.cardinality() - 1);
         assert_eq!(root.depth(), 0);
@@ -344,29 +347,6 @@ mod tests {
         assert!([3, 4].contains(&right.arg_radial()));
 
         true
-    }
-
-    #[test]
-    fn partition() -> Result<(), String> {
-        let data = gen_tiny_data()?;
-
-        let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let seed = Some(42);
-        let criteria = |c: &B| c.depth() < 1;
-
-        let root = Ball::new(&data, &indices, 0, seed)
-            .0
-            .partition(&data, indices.clone(), &criteria, seed);
-        assert_eq!(root.indices().count(), data.cardinality());
-        assert!(check_partition(&root));
-
-        let root = Ball::par_new(&data, &indices, 0, seed)
-            .0
-            .par_partition(&data, indices, &criteria, seed);
-        assert_eq!(root.indices().count(), data.cardinality());
-        assert!(check_partition(&root));
-
-        Ok(())
     }
 
     #[test]

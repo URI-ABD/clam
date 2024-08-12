@@ -107,6 +107,8 @@ impl<T, U> FlatVec<Vec<T>, U, usize> {
 impl<I, U, M> FlatVec<I, U, M> {
     /// Changes the `Metric` of the dataset. This is primarily for use after
     /// deserialization.
+    ///
+    /// Using an incompatible metric will lead to undefined behavior.
     #[must_use]
     pub const fn with_metric(mut self, metric: Metric<I, U>) -> Self {
         self.metric = metric;
@@ -562,7 +564,7 @@ mod tests {
 
         let serialized: Vec<u8> = bincode::serialize(&dataset).map_err(|e| e.to_string())?;
         let deserialized: Fv = bincode::deserialize(&serialized).map_err(|e| e.to_string())?;
-        let deserialized: Fv = deserialized.with_metric(metric.clone());
+        let deserialized: Fv = deserialized.with_metric(metric);
 
         assert_eq!(dataset.cardinality(), deserialized.cardinality());
         assert_eq!(dataset.dimensionality_hint(), deserialized.dimensionality_hint());

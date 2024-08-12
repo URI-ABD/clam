@@ -16,7 +16,7 @@ impl LFD {
     /// # Arguments
     ///
     /// * `distances` - The radial distances of the points.
-    /// * `half_max` - The scale at which to calculate the LFD.
+    /// * `half_max` - Half of the maximum distance in `distances`.
     ///
     /// # Returns
     ///

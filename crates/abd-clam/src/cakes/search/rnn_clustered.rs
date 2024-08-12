@@ -134,15 +134,15 @@ where
 {
     let hits = confirmed.into_iter().flat_map(|(c, d)| {
         if c.is_singleton() {
-            c.repeat_distance(d)
+            c.indices().map(|i| (i, d)).collect()
         } else {
-            c.distances(data, query)
+            c.distances_to_query(data, query)
         }
     });
 
     let distances = straddlers
         .into_iter()
-        .flat_map(|(c, _)| c.distances(data, query))
+        .flat_map(|(c, _)| c.distances_to_query(data, query))
         .filter(|&(_, d)| d <= radius);
 
     hits.chain(distances).collect()
@@ -166,16 +166,16 @@ where
         .into_par_iter()
         .flat_map(|(c, d)| {
             if c.is_singleton() {
-                c.repeat_distance(d)
+                c.indices().map(|i| (i, d)).collect()
             } else {
-                c.par_distances(data, query)
+                c.par_distances_to_query(data, query)
             }
         })
         .collect::<Vec<_>>();
 
     let distances = straddlers
         .into_par_iter()
-        .flat_map(|(c, _)| c.par_distances(data, query))
+        .flat_map(|(c, _)| c.par_distances_to_query(data, query))
         .filter(|&(_, d)| d <= radius)
         .collect::<Vec<_>>();
 

@@ -14,6 +14,7 @@ use super::{Cluster, ParCluster};
 /// - U: The type of distance values.
 /// - Din: The type of `Dataset` that the tree was originally built on.
 /// - Dout: The type of the `Dataset` that the adapted tree will use.
+/// - S: The type of `Cluster` that the tree was originally built on.
 pub trait Params<I, U: Number, Din: Dataset<I, U>, Dout: Dataset<I, U>, S: Cluster<I, U, Din>>: Default {
     /// Given the `S` that was adapted into a `Cluster`, returns parameters
     /// to use for adapting the children of `S`.

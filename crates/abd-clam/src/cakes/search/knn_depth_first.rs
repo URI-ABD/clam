@@ -105,9 +105,9 @@ where
     C: Cluster<I, U, D>,
 {
     if leaf.is_singleton() {
-        leaf.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
+        leaf.indices().for_each(|i| hits.push((d, i)));
     } else {
-        leaf.distances(data, query)
+        leaf.distances_to_query(data, query)
             .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
     };
@@ -154,9 +154,9 @@ fn par_leaf_into_hits<I, U, D, C>(
         .pop()
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c));
     if leaf.is_singleton() {
-        leaf.repeat_distance(d).into_iter().for_each(|(i, d)| hits.push((d, i)));
+        leaf.indices().for_each(|i| hits.push((d, i)));
     } else {
-        leaf.par_distances(data, query)
+        leaf.par_distances_to_query(data, query)
             .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
     };

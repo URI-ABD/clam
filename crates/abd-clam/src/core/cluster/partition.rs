@@ -7,11 +7,16 @@ use crate::{dataset::ParDataset, Dataset};
 
 use super::{Cluster, ParCluster};
 
-/// `Cluster`s that can be partitioned into child `Cluster`s, and recursively partitioned into a tree.
+/// `Cluster`s that can be partitioned into child `Cluster`s, and recursively
+/// partitioned into a tree.
+///
+/// # Type Parameters
+///
+/// - `I`: The type of the instances in the `Dataset`.
+/// - `U`: The type of the distance values.
+/// - `D`: The type of the `Dataset`.
 pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// Creates a new `Cluster`.
-    ///
-    /// This should store indices as `IndexStore::EveryCluster`.
     ///
     /// # Arguments
     ///
@@ -20,16 +25,10 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// - `depth`: The depth of the `Cluster` in the tree.
     /// - `seed`: An optional seed for random number generation.
     ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
-    ///
     /// # Returns
     ///
     /// - The new `Cluster`.
-    /// - The index of the radial instance in `instances`.
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
+    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self;
 
     /// Finds the extrema of the `Cluster`.
     ///
@@ -42,11 +41,6 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     ///
     /// - `data`: The dataset containing the instances.
     ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
-    ///
     /// # Returns
     ///
     /// The extrema to use for partitioning the `Cluster`.
@@ -58,80 +52,74 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     ///
     /// - `data`: The dataset containing the instances.
     /// - `criteria`: The function to use for determining when a `Cluster`
-    ///   should be partitioned.
+    ///    should be partitioned. A `Cluster` will only be partitioned if it is
+    ///    not a singleton and this function returns `true`.
     /// - `seed`: An optional seed for random number generation.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
-    /// - `C`: The type of the criteria function.
     ///
     /// # Returns
     ///
     /// - The root `Cluster` of the tree.
     fn new_tree<C: Fn(&Self) -> bool>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let (root, _) = Self::new(data, &indices, 0, seed);
-        root.partition(data, indices, criteria, seed)
+        Self::new(data, &indices, 0, seed).partition(data, indices, criteria, seed)
     }
 
     /// Partitions the `Cluster` into a number of child `Cluster`s.
     ///
-    /// The number of children will be equal to the number of poles determined
-    /// by the `find_poles` method.
+    /// The number of children will be equal to the number of extrema determined
+    /// by the `find_extrema` method.
     ///
     /// # Arguments
     ///
     /// - `data`: The dataset containing the instances.
-    /// - `extrema`: The extrema to use for partitioning the `Cluster`.
-    /// - `instances`: The instances in the `Cluster`.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
+    /// - `extrema`: The indices of extrema for partitioning the `Cluster`.
+    /// - `instances`: The indices of instances in the `Cluster`.
     ///
     /// # Returns
     ///
-    /// - The instances with which to initialize the child `Cluster`s.
-    /// - The distance from each pole to the farthest instance assigned to that
-    ///   child.
+    /// - The indices of instances with which to initialize the children. The
+    ///   0th element of each inner `Vec` is the index of the corresponding
+    ///   extremum.
+    /// - The distance from each extremum to the farthest instance assigned to
+    ///   that child, i.e. the "extent" of the child.
     fn split_by_extrema(&self, data: &D, extrema: Vec<usize>, instances: Vec<usize>) -> (Vec<Vec<usize>>, Vec<U>) {
-        // Find the distances from each pole to each instance.
-        let polar_distances = Dataset::many_to_many(data, &extrema, &instances);
+        // Find the distances from each extremum to each instance.
+        let extremal_distances = Dataset::many_to_many(data, &extrema, &instances);
 
         // Convert the distances from row-major to column-major.
-        let mut distances = vec![vec![U::ZERO; extrema.len()]; instances.len()];
-        for (r, row) in polar_distances.iter().enumerate() {
-            for (c, &(_, _, d)) in row.iter().enumerate() {
-                distances[c][r] = d;
+        let distances = {
+            let mut distances = vec![vec![U::ZERO; extrema.len()]; instances.len()];
+            for (r, row) in extremal_distances.into_iter().enumerate() {
+                for (c, (_, _, d)) in row.into_iter().enumerate() {
+                    distances[c][r] = d;
+                }
             }
-        }
+            distances
+        };
 
-        // Initialize a child stack for each pole.
-        let mut child_stacks = extrema.iter().map(|&p| vec![(p, U::ZERO)]).collect::<Vec<_>>();
+        // Initialize a child stack for each extremum.
+        let mut child_stacks = extrema.into_iter().map(|p| vec![(p, U::ZERO)]).collect::<Vec<_>>();
 
-        // For each pole, find the instances that are closer to it than to any
-        // other pole.
-        for (col, instance) in distances.iter().zip(instances) {
-            let (pole_index, &d) = col
-                .iter()
+        // For each extremum, find the instances that are closer to it than to
+        // any other extremum.
+        for (col, instance) in distances.into_iter().zip(instances) {
+            let (e_index, d) = col
+                .into_iter()
                 .enumerate()
-                .min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Greater))
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Greater))
                 .unwrap_or_else(|| unreachable!("Cannot find the minimum distance"));
-            child_stacks[pole_index].push((instance, d));
+            child_stacks[e_index].push((instance, d));
         }
 
         child_stacks
             .into_iter()
             .map(|stack| {
-                let (instances, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                let max_distance = distances
+                let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+                let extent = distances
                     .into_iter()
                     .max_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
                     .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-                (instances, max_distance)
+                (indices, extent)
             })
             .unzip()
     }
@@ -144,12 +132,6 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// - `criteria`: The function to use for determining when a `Cluster`
     ///   should be partitioned.
     /// - `seed`: An optional seed for random number generation.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The type of the instances in the dataset.
-    /// - `D`: The type of the dataset.
-    /// - `C`: The type of the criteria function.
     ///
     /// # Returns
     ///
@@ -165,30 +147,40 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
         seed: Option<u64>,
     ) -> Self {
         if !self.is_singleton() && criteria(&self) {
+            // Find the extrema.
             let extrema = self.find_extrema(data);
+            // Remove the extrema from the indices.
             indices.retain(|i| !extrema.contains(i));
+            // Split the instances by the extrema.
             let (child_stacks, child_extents) = self.split_by_extrema(data, extrema, indices);
+            // Increment the depth for the children.
             let depth = self.depth() + 1;
+            // Create the children.
             let (children, other) = child_stacks
                 .into_iter()
                 .map(|child_indices| {
-                    let (mut child, arg_r) = Self::new(data, &child_indices, depth, seed);
+                    let mut child = Self::new(data, &child_indices, depth, seed);
+                    let arg_r = child.arg_radial();
                     child = child.partition(data, child_indices, criteria, seed);
                     let child_indices = child.indices().collect::<Vec<_>>();
                     (child, (arg_r, child_indices))
                 })
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+            // Recombine the indices.
             indices = child_stacks.into_iter().flatten().collect::<Vec<_>>();
+            // Combine the children with the extrema and extents.
             let children = arg_extrema
                 .into_iter()
                 .zip(child_extents)
                 .zip(children)
                 .map(|((a, b), c)| (a, b, c))
                 .collect();
+            // Update the `Cluster`'s children.
             self = self.set_children(children);
+            // Update the `Cluster`'s indices.
+            self.set_indices(indices);
         };
-        self.set_indices(indices);
 
         self
     }
@@ -198,7 +190,7 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
 #[allow(clippy::module_name_repetitions)]
 pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParCluster<I, U, D> {
     /// Parallelized version of the `new` method.
-    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> (Self, usize);
+    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self;
 
     /// Parallelized version of the `find_extrema` method.
     fn par_find_extrema(&self, data: &D) -> Vec<usize>;
@@ -206,50 +198,51 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
     /// Parallelized version of the `new_tree` method.
     fn par_new_tree<C: (Fn(&Self) -> bool) + Send + Sync>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let (root, _) = Self::par_new(data, &indices, 0, seed);
-        root.par_partition(data, indices, criteria, seed)
+        Self::par_new(data, &indices, 0, seed).par_partition(data, indices, criteria, seed)
     }
 
     /// Parallelized version of the `partition_once` method.
     fn par_split_by_extrema(&self, data: &D, extrema: Vec<usize>, instances: Vec<usize>) -> (Vec<Vec<usize>>, Vec<U>) {
-        // Find the distances from each pole to each instance.
-        let polar_distances = ParDataset::par_many_to_many(data, &extrema, &instances);
+        // Find the distances from each extremum to each instance.
+        let extremal_distances = ParDataset::par_many_to_many(data, &extrema, &instances);
 
         // Convert the distances from row-major to column-major.
-        let mut distances = vec![vec![U::ZERO; extrema.len()]; instances.len()];
-        for (r, row) in polar_distances.iter().enumerate() {
-            for (c, &(_, _, d)) in row.iter().enumerate() {
-                distances[c][r] = d;
+        let distances = {
+            let mut distances = vec![vec![U::ZERO; extrema.len()]; instances.len()];
+            for (r, row) in extremal_distances.into_iter().enumerate() {
+                for (c, (_, _, d)) in row.into_iter().enumerate() {
+                    distances[c][r] = d;
+                }
             }
-        }
+            distances
+        };
 
-        // Initialize a child stack for each pole.
-        let mut child_stacks = extrema.iter().map(|&p| vec![(p, U::ZERO)]).collect::<Vec<_>>();
+        // Initialize a child stack for each extremum.
+        let mut child_stacks = extrema.into_iter().map(|p| vec![(p, U::ZERO)]).collect::<Vec<_>>();
 
-        // For each pole, find the instances that are closer to it than to any
-        // other pole.
-        for (col, instance) in distances.iter().zip(instances) {
-            let (pole_index, &d) = col
-                .iter()
+        // For each extremum, find the instances that are closer to it than to
+        // any other extremum.
+        for (col, instance) in distances.into_iter().zip(instances) {
+            let (e_index, d) = col
+                .into_iter()
                 .enumerate()
-                .min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Greater))
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Greater))
                 .unwrap_or_else(|| unreachable!("Cannot find the minimum distance"));
-            child_stacks[pole_index].push((instance, d));
+            child_stacks[e_index].push((instance, d));
         }
 
-        let child_stacks: Vec<(Vec<usize>, U)> = child_stacks
+        // Find the maximum distance for each child and return the instances.
+        child_stacks
             .into_par_iter()
             .map(|stack| {
-                let (instances, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                let max_distance = distances
+                let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+                let extent = distances
                     .into_iter()
                     .max_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
                     .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-                (instances, max_distance)
+                (indices, extent)
             })
-            .collect();
-
-        child_stacks.into_iter().unzip::<_, _, Vec<_>, Vec<_>>()
+            .unzip()
     }
 
     /// Parallelized version of the `partition` method.
@@ -262,30 +255,46 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
         seed: Option<u64>,
     ) -> Self {
         if !self.is_singleton() && criteria(&self) {
+            // Find the extrema.
             let extrema = self.par_find_extrema(data);
+            // Remove the extrema from the indices.
             indices.retain(|i| !extrema.contains(i));
+
+            // Split the instances by the extrema.
             let (child_stacks, child_extents) = self.par_split_by_extrema(data, extrema, indices);
+            // Increment the depth for the children.
             let depth = self.depth() + 1;
+
+            // Create the children.
             let (children, other) = child_stacks
                 .into_par_iter()
                 .map(|child_indices| {
-                    let (mut child, arg_r) = Self::par_new(data, &child_indices, depth, seed);
-                    child = child.par_partition(data, child_indices, criteria, seed);
+                    let e_index = child_indices[0];
+                    let child = Self::par_new(data, &child_indices, depth, seed).par_partition(
+                        data,
+                        child_indices,
+                        criteria,
+                        seed,
+                    );
                     let child_indices = child.indices().collect::<Vec<_>>();
-                    (child, (arg_r, child_indices))
+                    (child, (e_index, child_indices))
                 })
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+            // Recombine the indices from the children.
             indices = child_stacks.into_iter().flatten().collect::<Vec<_>>();
+            // Combine the children with the extrema and extents.
             let children = arg_extrema
                 .into_iter()
                 .zip(child_extents)
                 .zip(children)
                 .map(|((a, b), c)| (a, b, c))
                 .collect();
+            // Update the `Cluster`'s children.
             self = self.set_children(children);
+            // Update the `Cluster`'s indices.
+            self.set_indices(indices);
         };
-        self.set_indices(indices);
 
         self
     }

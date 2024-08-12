@@ -5,8 +5,6 @@ mod ball;
 mod lfd;
 pub mod partition;
 
-use core::fmt::Debug;
-
 use std::hash::Hash;
 
 use distances::Number;
@@ -21,10 +19,36 @@ pub use partition::Partition;
 ///
 /// # Type Parameters
 ///
+/// - `I`: The type of the instances in the dataset.
 /// - `U`: The type of the distance values between instances.
-/// - `P`: The type of the parameters used to create the `Cluster`.
-pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
-    /// Deconstructs the `Cluster` into its parts.
+/// - `D`: The type of the dataset.
+///
+/// # Remarks
+///
+/// A `Cluster` must have certain properties to be useful in CLAM. These are:
+///
+/// - `depth`: The depth of the `Cluster` in the tree.
+/// - `cardinality`: The number of instances in the `Cluster`.
+/// - `indices`: The indices of the instances in the `Cluster`.
+/// - `arg_center`: The index of the geometric median of the instances in the
+///   `Cluster`. This may be computed exactly, using all instances in the
+///   `Cluster`, or approximately, using a subset of the instances.
+/// - `radius`: The distance from the center to the farthest instance in the
+///   `Cluster`.
+/// - `arg_radial`: The index of the instance that is farthest from the center.
+/// - `lfd`: The Local Fractional Dimension of the `Cluster`.
+///
+/// A `Cluster` may have two or more children, which are `Cluster`s of the same
+/// type. The children should be stored as a tuple with:
+///
+/// - The index of the extremal instance in the `Cluster` that was used to
+///   create the child.
+/// - The distance from that extremal instance to the farthest instance that was
+///   assigned to the child. We refer to this as the "extent" of the child.
+/// - The child `Cluster`.
+pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
+    /// Deconstructs the `Cluster` into its most basic members. This is useful
+    /// for adapting the `Cluster` to a different type of `Cluster`.
     ///
     /// # Returns
     ///
@@ -81,7 +105,10 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
     fn set_children(self, children: Vec<(usize, U, Self)>) -> Self;
 
     /// Computes the distances from the `query` to all instances in the `Cluster`.
-    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)>;
+    fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)>;
+
+    /// Returns whether the `Cluster` is a descendant of another `Cluster`.
+    fn is_descendant_of(&self, other: &Self) -> bool;
 
     /// Gets the child `Cluster`s.
     fn child_clusters<'a>(&'a self) -> impl Iterator<Item = &Self>
@@ -90,19 +117,6 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
     {
         self.children().iter().map(|(_, _, child)| child.as_ref())
     }
-
-    // /// Gets only those children which might overlap with a query ball.
-    // fn overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
-    // where
-    //     U: 'a,
-    // {
-    //     self.children()
-    //         .iter()
-    //         .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
-    //         .filter(|&(d, e, _)| d <= (e + radius))
-    //         .map(|(_, _, c)| c.as_ref())
-    //         .collect()
-    // }
 
     /// Returns all `Cluster`s in the subtree of this `Cluster`, in depth-first order.
     fn subtree<'a>(&'a self) -> Vec<&'a Self>
@@ -119,41 +133,7 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
     where
         U: 'a,
     {
-        if self.is_leaf() {
-            vec![self]
-        } else {
-            self.child_clusters().flat_map(Self::leaves).collect()
-        }
-    }
-
-    /// Returns the `arg_center`s of the `Cluster`s in the tree in a `Vec` of
-    /// tuples of `(arg_center, parent_arg_center)`.
-    ///
-    /// For the root `Cluster` (or the `Cluster` this method is called on), the
-    /// `parent_arg_center` is the same as the `arg_center`.
-    ///
-    /// # Returns
-    ///
-    /// A `Vec` of tuples of `(arg_center, parent_arg_center)`.
-    fn center_map<'a>(&'a self) -> Vec<(usize, usize)>
-    where
-        U: 'a,
-    {
-        center_map(self, self.arg_center())
-    }
-
-    /// Returns whether the `Cluster` is a descendant of another `Cluster`.
-    ///
-    /// This may only return `true` if both `Cluster`s have the same variant of
-    /// `IndexStore`.
-    ///
-    /// If the `IndexStore` is `EveryCluster` or `LeafOnly`, then we will check
-    /// if the indices in `self` are a subset of the indices in `other`.
-    /// Otherwise, we will check if the `offset` of `self` is in the range
-    /// `[offset, offset + cardinality)` of `other`.
-    fn is_descendant_of(&self, other: &Self) -> bool {
-        let o_indices = other.indices().collect::<std::collections::HashSet<_>>();
-        self.indices().all(|i| o_indices.contains(&i))
+        self.subtree().into_iter().filter(|c| c.is_leaf()).collect()
     }
 
     /// Whether the `Cluster` is a leaf in the tree.
@@ -164,12 +144,6 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
     /// Whether the `Cluster` is a singleton.
     fn is_singleton(&self) -> bool {
         self.cardinality() == 1 || self.radius() < U::EPSILON
-    }
-
-    /// Returns the given distance repeated with the indices of the instances in
-    /// the `Cluster`.
-    fn repeat_distance(&self, d: U) -> Vec<(usize, U)> {
-        self.indices().zip(core::iter::repeat(d)).collect()
     }
 
     /// Computes the distance from the `Cluster`'s center to a given `query`.
@@ -187,34 +161,6 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Debug + Ord + Hash + Sized {
 /// A parallelized version of the `Cluster` trait.
 #[allow(clippy::module_name_repetitions)]
 pub trait ParCluster<I: Send + Sync, U: Number, D: ParDataset<I, U>>: Cluster<I, U, D> + Send + Sync {
-    /// Parallelized version of the `distances` method.
-    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)>;
-
-    // /// Gets only those children which might overlap with a query ball.
-    // fn par_overlapping_children<'a>(&'a self, data: &D, query: &I, radius: U) -> Vec<&Self>
-    // where
-    //     U: 'a,
-    // {
-    //     self.children()
-    //         .par_iter()
-    //         .map(|(a, e, c)| (data.query_to_one(query, *a), *e, c))
-    //         .filter(|&(d, e, _)| d <= (e + radius))
-    //         .map(|(_, _, c)| c.as_ref())
-    //         .collect()
-    // }
-}
-
-/// Returns the `arg_center`s of the `Cluster`s in the tree in a `Vec` of
-/// tuples of `(arg_center, parent_arg_center)`.
-fn center_map<I, U, D, C>(c: &C, parent_arg_center: usize) -> Vec<(usize, usize)>
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
-{
-    let mut centers = vec![(c.arg_center(), parent_arg_center)];
-    c.child_clusters()
-        .map(|child| center_map(child, c.arg_center()))
-        .for_each(|child_map| centers.extend(child_map));
-    centers
+    /// Parallelized version of the `distances_to_query` method.
+    fn par_distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)>;
 }

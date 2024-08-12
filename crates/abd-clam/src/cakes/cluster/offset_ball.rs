@@ -292,8 +292,13 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for O
         self
     }
 
-    fn distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+    fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.query_to_many(query, &self.indices().collect::<Vec<_>>())
+    }
+
+    fn is_descendant_of(&self, other: &Self) -> bool {
+        let range = other.params.offset..(other.params.offset + other.cardinality());
+        range.contains(&self.offset()) && self.cardinality() <= other.cardinality()
     }
 }
 
@@ -329,7 +334,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> std::hash::Hash for Of
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParCluster<I, U, D>
     for OffBall<I, U, D, S>
 {
-    fn par_distances(&self, data: &D, query: &I) -> Vec<(usize, U)> {
+    fn par_distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
         data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
     }
 }
