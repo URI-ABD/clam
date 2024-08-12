@@ -157,15 +157,14 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
+        adapter::BallAdapter,
         cakes::OffBall,
         cluster::{Ball, Partition},
         Cluster,
     };
 
-    use super::super::{
-        knn_depth_first::tests::check_knn,
-        tests::{gen_grid_data, gen_line_data},
-    };
+    use super::super::knn_depth_first::tests::check_knn;
+    use crate::cakes::tests::{gen_grid_data, gen_line_data};
 
     #[test]
     fn line() -> Result<(), String> {
@@ -176,16 +175,13 @@ mod tests {
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
-
         for k in [1, 4, 8] {
             assert!(check_knn(&ball, &data, query, k));
         }
 
-        let mut data = data;
-        let root = OffBall::from_ball_tree(ball, &mut data);
-
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k));
+            assert!(check_knn(&off_ball, &perm_data, query, k));
         }
 
         Ok(())
@@ -200,16 +196,13 @@ mod tests {
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
-
         for k in [1, 4, 8] {
             assert!(check_knn(&ball, &data, query, k));
         }
 
-        let mut data = data;
-        let root = OffBall::from_ball_tree(ball, &mut data);
-
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k));
+            assert!(check_knn(&off_ball, &perm_data, query, k));
         }
 
         Ok(())

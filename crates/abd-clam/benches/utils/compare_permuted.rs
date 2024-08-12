@@ -4,7 +4,7 @@
 use abd_clam::{
     cakes::{
         cluster::{ParSearchable, Searchable},
-        Algorithm, Decodable, Encodable, OffBall, ParCompressible, ParDecompressible, SquishyBall,
+        Algorithm, CodecData, Decodable, Encodable, OffBall, ParCompressible, SquishyBall,
     },
     linear_search::ParLinearSearch,
     Ball,
@@ -31,26 +31,24 @@ use distances::Number;
 /// - `I`: The type of the items in the dataset.
 /// - `U`: The type of the scalars used to measure distances.
 /// - `Co`: The type of the original dataset.
-pub fn compare_permuted<I, U, Co, Dec>(
+pub fn compare_permuted<I, U, Co>(
     c: &mut Criterion,
     data_name: &str,
     metric_name: &str,
-    data: &Co,
-    root: &Ball<I, U, Co>,
-    perm_data: &Co,
-    perm_root: &OffBall<I, U, Co, Ball<I, U, Co>>,
-    dec_data: &Dec,
-    dec_root: &SquishyBall<I, U, Co, Dec, Ball<I, U, Co>>,
+    ball_data: (&Ball<I, U, Co>, &Co),
+    off_ball_data: (&OffBall<I, U, Co, Ball<I, U, Co>>, &Co),
+    dec_ball_data: Option<(
+        &SquishyBall<I, U, Co, CodecData<I, U, usize>, Ball<I, U, Co>>,
+        &CodecData<I, U, usize>,
+    )>,
     queries: &[I],
     radii: &[U],
     ks: &[usize],
     par_only: bool,
-    squishy: bool,
 ) where
     I: Encodable + Decodable + Send + Sync,
     U: Number,
     Co: ParCompressible<I, U> + ParLinearSearch<I, U>,
-    Dec: ParDecompressible<I, U>,
 {
     let algs = vec![
         Algorithm::KnnRepeatedRnn(ks[0], U::ONE.double()),
@@ -64,6 +62,9 @@ pub fn compare_permuted<I, U, Co, Dec>(
         .sampling_mode(SamplingMode::Flat)
         .throughput(Throughput::Elements(queries.len().as_u64()));
 
+    let (ball, data) = ball_data;
+    let (off_ball, perm_data) = off_ball_data;
+
     for &radius in radii {
         let alg = Algorithm::RnnClustered(radius);
 
@@ -72,12 +73,12 @@ pub fn compare_permuted<I, U, Co, Dec>(
                 b.iter_with_large_drop(|| alg.batch_linear_search(data, queries));
             });
             group.bench_with_input(BenchmarkId::new("Ball", radius), &radius, |b, _| {
-                b.iter_with_large_drop(|| root.batch_search(data, queries, alg));
+                b.iter_with_large_drop(|| ball.batch_search(data, queries, alg));
             });
             group.bench_with_input(BenchmarkId::new("OffBall", radius), &radius, |b, _| {
-                b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
+                b.iter_with_large_drop(|| off_ball.batch_search(perm_data, queries, alg));
             });
-            if squishy {
+            if let Some((dec_root, dec_data)) = dec_ball_data {
                 group.bench_with_input(BenchmarkId::new("SquishyBall", radius), &radius, |b, _| {
                     b.iter_with_large_drop(|| dec_root.batch_search(dec_data, queries, alg));
                 });
@@ -88,12 +89,12 @@ pub fn compare_permuted<I, U, Co, Dec>(
             b.iter_with_large_drop(|| alg.par_batch_linear_search(data, queries));
         });
         group.bench_with_input(BenchmarkId::new("ParBall", radius), &radius, |b, _| {
-            b.iter_with_large_drop(|| root.par_batch_search(data, queries, alg));
+            b.iter_with_large_drop(|| ball.par_batch_search(data, queries, alg));
         });
         group.bench_with_input(BenchmarkId::new("ParOffBall", radius), &radius, |b, _| {
-            b.iter_with_large_drop(|| perm_root.par_batch_search(perm_data, queries, alg));
+            b.iter_with_large_drop(|| off_ball.par_batch_search(perm_data, queries, alg));
         });
-        if squishy {
+        if let Some((dec_root, dec_data)) = dec_ball_data {
             group.bench_with_input(BenchmarkId::new("ParSquishyBall", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| dec_root.par_batch_search(dec_data, queries, alg));
             });
@@ -116,12 +117,12 @@ pub fn compare_permuted<I, U, Co, Dec>(
                     b.iter_with_large_drop(|| alg.batch_linear_search(data, queries));
                 });
                 group.bench_with_input(BenchmarkId::new("Ball", k), &k, |b, _| {
-                    b.iter_with_large_drop(|| root.batch_search(data, queries, alg));
+                    b.iter_with_large_drop(|| ball.batch_search(data, queries, alg));
                 });
                 group.bench_with_input(BenchmarkId::new("OffBall", k), &k, |b, _| {
-                    b.iter_with_large_drop(|| perm_root.batch_search(perm_data, queries, alg));
+                    b.iter_with_large_drop(|| off_ball.batch_search(perm_data, queries, alg));
                 });
-                if squishy {
+                if let Some((dec_root, dec_data)) = dec_ball_data {
                     group.bench_with_input(BenchmarkId::new("SquishyBall", k), &k, |b, _| {
                         b.iter_with_large_drop(|| dec_root.batch_search(dec_data, queries, alg));
                     });
@@ -132,12 +133,12 @@ pub fn compare_permuted<I, U, Co, Dec>(
                 b.iter_with_large_drop(|| alg.par_batch_linear_search(data, queries));
             });
             group.bench_with_input(BenchmarkId::new("ParBall", k), &k, |b, _| {
-                b.iter_with_large_drop(|| root.par_batch_search(data, queries, alg));
+                b.iter_with_large_drop(|| ball.par_batch_search(data, queries, alg));
             });
             group.bench_with_input(BenchmarkId::new("ParOffBall", k), &k, |b, _| {
-                b.iter_with_large_drop(|| perm_root.par_batch_search(perm_data, queries, alg));
+                b.iter_with_large_drop(|| off_ball.par_batch_search(perm_data, queries, alg));
             });
-            if squishy {
+            if let Some((dec_root, dec_data)) = dec_ball_data {
                 group.bench_with_input(BenchmarkId::new("ParSquishyBall", k), &k, |b, _| {
                     b.iter_with_large_drop(|| dec_root.par_batch_search(dec_data, queries, alg));
                 });

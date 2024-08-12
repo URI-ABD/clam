@@ -109,13 +109,14 @@ mod tests {
     use distances::Number;
 
     use crate::{
+        adapter::BallAdapter,
         cakes::OffBall,
         cluster::{Ball, ParCluster, Partition},
         linear_search::LinearSearch,
         Cluster, FlatVec,
     };
 
-    use super::super::tests::{check_search_by_distance, gen_grid_data, gen_line_data};
+    use crate::cakes::tests::{check_search_by_distance, gen_grid_data, gen_line_data};
 
     fn check_knn<I: Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
         root: &C,
@@ -145,23 +146,19 @@ mod tests {
     fn line() -> Result<(), String> {
         let data = gen_line_data(10)?;
         let query = &0;
+        let max_multiplier = 2;
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
-
-        let max_multiplier = 2;
-
         for k in [1, 4, 8] {
             assert!(check_knn(&ball, &data, query, k, max_multiplier));
         }
 
-        let mut data = data;
-        let root = OffBall::from_ball_tree(ball, &mut data);
-
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for k in [1, 4, 8] {
-            assert!(check_knn(&root, &data, query, k, max_multiplier));
+            assert!(check_knn(&off_ball, &perm_data, query, k, max_multiplier));
         }
 
         Ok(())
@@ -171,23 +168,19 @@ mod tests {
     fn grid() -> Result<(), String> {
         let data = gen_grid_data(10)?;
         let query = &(0.0, 0.0);
+        let max_multiplier = 2.0;
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
         let ball = Ball::new_tree(&data, &criteria, seed);
-
-        let max_multiplier = 2.0;
-
         for k in [1, 4, 8, 16, 32] {
             assert!(check_knn(&ball, &data, query, k, max_multiplier));
         }
 
-        let mut data = data;
-        let root = OffBall::from_ball_tree(ball, &mut data);
-
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for k in [1, 4, 8, 16, 32] {
-            assert!(check_knn(&root, &data, query, k, max_multiplier));
+            assert!(check_knn(&off_ball, &perm_data, query, k, max_multiplier));
         }
 
         Ok(())

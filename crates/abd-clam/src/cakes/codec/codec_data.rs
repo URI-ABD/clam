@@ -129,12 +129,62 @@ impl<I, U, M> CodecData<I, U, M> {
         self
     }
 
-    /// Sets the metadata of the dataset.
+    /// Sets the permutation and metadata of the dataset after deserialization.
+    ///
+    /// # Parameters
+    ///
+    /// - `permutation`: The permutation of the original dataset.
+    /// - `metadata`: The new metadata to associate with the instances.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Me`: The type of the new metadata.
+    ///
+    /// # Returns
+    ///
+    /// A `CodecData` with the permutation and metadata set.
     ///
     /// # Errors
     ///
+    /// - If the length of the permutation vector does not match the cardinality
+    ///   of the dataset.
     /// - If the length of the metadata vector does not match the cardinality of
     ///   the dataset.
+    pub fn post_deserialization<Me>(
+        mut self,
+        permutation: Vec<usize>,
+        metadata: Vec<Me>,
+    ) -> Result<CodecData<I, U, Me>, String> {
+        if permutation.len() == self.cardinality {
+            self.permutation = permutation;
+            self.with_metadata(metadata)
+        } else {
+            Err(format!(
+                "The length of the permutation vector ({}) does not match the cardinality of the dataset ({}).",
+                permutation.len(),
+                self.cardinality
+            ))
+        }
+    }
+
+    /// Changes the metadata of the dataset.
+    ///
+    /// # Parameters
+    ///
+    /// - `metadata`: The new metadata to associate with the instances.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Me`: The type of the new metadata.
+    ///
+    /// # Returns
+    ///
+    /// A `CodecData` with the new metadata.
+    ///
+    /// # Errors
+    ///
+    /// If the length of the metadata vector does not match the cardinality of
+    /// the dataset.
     pub fn with_metadata<Me>(self, mut metadata: Vec<Me>) -> Result<CodecData<I, U, Me>, String> {
         if metadata.len() == self.cardinality {
             metadata.permute(&self.permutation);
@@ -354,15 +404,11 @@ fn decode_centers<I: Decodable>(bytes: &[u8]) -> HashMap<usize, I> {
 
 /// This struct is used for serializing and deserializing a `CodecData`.
 #[derive(Serialize, Deserialize)]
-struct CodecDataSerde<M> {
+struct CodecDataSerde {
     /// The cardinality of the dataset.
     cardinality: usize,
     /// A hint for the dimensionality of the dataset.
     dimensionality_hint: (usize, Option<usize>),
-    /// The metadata associated with the instances.
-    metadata: Vec<M>,
-    /// The permutation of the original dataset.
-    permutation: Vec<usize>,
     /// The bytes representing the centers of the clusters in the dataset.
     center_bytes: Box<[u8]>,
     /// The bytes representing the leaf clusters as a flattened vector.
@@ -373,14 +419,12 @@ struct CodecDataSerde<M> {
     cumulative_cardinalities: Vec<usize>,
 }
 
-impl<I: Encodable, U, M: Serialize> Serialize for CodecData<I, U, M> {
+impl<I: Encodable, U, M> Serialize for CodecData<I, U, M> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let center_bytes = encode_centers(&self.center_map);
-        let mut state = serializer.serialize_struct("CodecDataSerde", 8)?;
+        let mut state = serializer.serialize_struct("CodecDataSerde", 6)?;
         state.serialize_field("cardinality", &self.cardinality)?;
         state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
-        state.serialize_field("metadata", &self.metadata)?;
-        state.serialize_field("permutation", &self.permutation)?;
         state.serialize_field("center_bytes", &center_bytes)?;
         state.serialize_field("leaf_bytes", &self.leaf_bytes)?;
         state.serialize_field("leaf_offsets", &self.leaf_offsets)?;
@@ -389,24 +433,23 @@ impl<I: Encodable, U, M: Serialize> Serialize for CodecData<I, U, M> {
     }
 }
 
-impl<'de, I: Decodable, U, M: Deserialize<'de>> Deserialize<'de> for CodecData<I, U, M> {
+impl<'de, I: Decodable, U> Deserialize<'de> for CodecData<I, U, usize> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let CodecDataSerde {
             cardinality,
             dimensionality_hint,
-            metadata,
-            permutation,
             center_bytes,
             leaf_bytes,
             leaf_offsets,
             cumulative_cardinalities,
         } = CodecDataSerde::deserialize(deserializer)?;
         let center_map = decode_centers(&center_bytes);
+        let permutation = (0..cardinality).collect::<Vec<_>>();
         Ok(Self {
             metric: Metric::default(),
             cardinality,
             dimensionality_hint,
-            metadata,
+            metadata: permutation.clone(),
             permutation,
             center_map,
             leaf_bytes,

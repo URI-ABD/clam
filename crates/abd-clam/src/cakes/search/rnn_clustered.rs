@@ -188,11 +188,11 @@ mod tests {
     use distances::Number;
 
     use crate::{
-        cakes::OffBall, cluster::ParCluster, linear_search::LinearSearch, partition::ParPartition, Ball, Cluster,
-        FlatVec, Partition,
+        adapter::BallAdapter, cakes::OffBall, cluster::ParCluster, linear_search::LinearSearch, partition::ParPartition,
+        Ball, Cluster, FlatVec, Partition,
     };
 
-    use super::super::tests::{check_search_by_index, gen_grid_data, gen_line_data};
+    use crate::cakes::tests::{check_search_by_index, gen_grid_data, gen_line_data};
 
     pub fn check_rnn<I: Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
         root: &C,
@@ -225,15 +225,14 @@ mod tests {
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
-        let root = Ball::new_tree(&data, &criteria, seed);
+        let ball = Ball::new_tree(&data, &criteria, seed);
         for radius in 0..=4 {
-            assert!(check_rnn(&root, &data, &query, radius));
+            assert!(check_rnn(&ball, &data, &query, radius));
         }
 
-        let mut data = data;
-        let root = OffBall::from_ball_tree(root, &mut data);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for radius in 0..=4 {
-            assert!(check_rnn(&root, &data, &query, radius));
+            assert!(check_rnn(&off_ball, &perm_data, &query, radius));
         }
 
         Ok(())
@@ -247,15 +246,14 @@ mod tests {
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
 
-        let root = Ball::par_new_tree(&data, &criteria, seed);
+        let ball = Ball::par_new_tree(&data, &criteria, seed);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
-            assert!(check_rnn(&root, &data, &query, radius));
+            assert!(check_rnn(&ball, &data, &query, radius));
         }
 
-        let mut data = data;
-        let root = OffBall::from_ball_tree(root, &mut data);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
-            assert!(check_rnn(&root, &data, &query, radius));
+            assert!(check_rnn(&off_ball, &perm_data, &query, radius));
         }
 
         Ok(())

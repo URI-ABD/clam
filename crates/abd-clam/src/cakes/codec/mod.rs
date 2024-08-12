@@ -210,42 +210,45 @@ fn deserialize_edits(bytes: &[u8]) -> Vec<needleman_wunsch::Edit> {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{
-        cakes::{Algorithm, CodecData},
-        Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
-    };
+    use crate::{adapter::BallAdapter, cakes::CodecData, Ball, Cluster, FlatVec, MetricSpace, Partition};
 
     use super::SquishyBall;
 
-    use super::super::search::tests::{check_search_by_distance, check_search_by_index, gen_random_data};
+    use crate::cakes::tests::gen_random_data;
 
     #[test]
     fn ser_de() -> Result<(), String> {
+        // The instances.
+        type I = Vec<f64>;
+        // The distance values.
+        type U = f64;
         // The compressible dataset
-        type Co = FlatVec<Vec<f64>, f64, usize>;
+        type Co = FlatVec<I, U, usize>;
         // The ball for the compressible dataset.
-        type B = Ball<Vec<f64>, f64, Co>;
+        type B = Ball<I, U, Co>;
         // The decompressible dataset
-        type Dec = CodecData<Vec<f64>, f64, usize>;
+        type Dec = CodecData<I, U, usize>;
         // The squishy ball
-        type Sb = SquishyBall<Vec<f64>, f64, Co, Dec, B>;
+        type Sb = SquishyBall<I, U, Co, Dec, B>;
 
         let seed = 42;
         let car = 1_000;
         let dim = 10;
 
-        let mut data: Co = gen_random_data(car, dim, 10.0, seed)?;
+        let data: Co = gen_random_data(car, dim, 10.0, seed)?;
         let metric = data.metric().clone();
         let metadata = data.metadata().to_vec();
 
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(seed);
-        let (_, co_data): (Sb, Dec) = SquishyBall::new_tree(&mut data, &criteria, seed);
-        let co_data: Dec = co_data.with_metadata(metadata.clone())?;
+        let criteria = |c: &B| c.cardinality() > 1;
+        let ball = B::new_tree(&data, &criteria, Some(seed));
+        let (_, co_data) = Sb::from_ball_tree(ball, data);
+        let co_data = co_data.with_metadata(metadata.clone())?;
 
-        let serialized: Vec<u8> = bincode::serialize(&co_data).unwrap();
-        let deserialized: Dec = bincode::deserialize(&serialized).unwrap();
-        let deserialized: Dec = deserialized.with_metric(metric.clone());
+        let serialized = bincode::serialize(&co_data).unwrap();
+        let deserialized = bincode::deserialize::<Dec>(&serialized)
+            .unwrap()
+            .post_deserialization(co_data.permutation.clone(), metadata)?
+            .with_metric(metric.clone());
 
         assert_eq!(co_data.cardinality, deserialized.cardinality);
         assert_eq!(co_data.dimensionality_hint, deserialized.dimensionality_hint);
@@ -255,107 +258,6 @@ pub mod tests {
         assert_eq!(co_data.leaf_bytes, deserialized.leaf_bytes);
         assert_eq!(co_data.leaf_offsets, deserialized.leaf_offsets);
         assert_eq!(co_data.cumulative_cardinalities, deserialized.cumulative_cardinalities);
-
-        Ok(())
-    }
-
-    #[test_case::test_case(1_000, 10; "1k-10")]
-    #[test_case::test_case(10_000, 10; "10k-10")]
-    #[test_case::test_case(100_000, 10; "100k-10")]
-    #[test_case::test_case(1_000, 100; "1k-100")]
-    #[test_case::test_case(10_000, 100; "10k-100")]
-    fn vectors(car: usize, dim: usize) -> Result<(), String> {
-        let mut algs: Vec<(Algorithm<f64>, fn(Vec<(usize, f64)>, Vec<(usize, f64)>, &str) -> bool)> = vec![];
-        for radius in [0.1, 1.0] {
-            algs.push((Algorithm::RnnClustered(radius), check_search_by_index));
-        }
-        for k in [1, 10, 100] {
-            algs.push((Algorithm::KnnRepeatedRnn(k, 2.0), check_search_by_distance));
-            algs.push((Algorithm::KnnBreadthFirst(k), check_search_by_distance));
-            algs.push((Algorithm::KnnDepthFirst(k), check_search_by_distance));
-        }
-
-        let seed = 42;
-        let mut data = gen_random_data(car, dim, 10.0, seed)?;
-        let query = &vec![0.0; dim];
-
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(seed);
-        let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
-
-        for &(alg, checker) in &algs {
-            let true_hits = alg.par_linear_search(&co_data, query);
-
-            if car < 100_000 {
-                let pred_hits = alg.search(&co_data, &root, query);
-                checker(true_hits.clone(), pred_hits, &alg.name());
-            }
-
-            let pred_hits = alg.par_search(&co_data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name());
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn strings() -> Result<(), String> {
-        let mut algs: Vec<(Algorithm<u16>, fn(Vec<(usize, u16)>, Vec<(usize, u16)>, &str) -> bool)> = vec![];
-        for radius in [4, 8, 16] {
-            algs.push((Algorithm::RnnClustered(radius), check_search_by_index));
-        }
-        for k in [1, 10, 20] {
-            algs.push((Algorithm::KnnRepeatedRnn(k, 2), check_search_by_distance));
-            algs.push((Algorithm::KnnBreadthFirst(k), check_search_by_distance));
-            algs.push((Algorithm::KnnDepthFirst(k), check_search_by_distance));
-        }
-
-        let seed_length = 30;
-        let alphabet = "ACTGN".chars().collect::<Vec<_>>();
-        let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
-        let penalties = distances::strings::Penalties::default();
-        let num_clumps = 16;
-        let clump_size = 16;
-        let clump_radius = 2_u16;
-        let (metadata, data) = symagen::random_edits::generate_clumped_data(
-            &seed_string,
-            penalties,
-            &alphabet,
-            num_clumps,
-            clump_size,
-            clump_radius,
-        )
-        .into_iter()
-        .unzip::<_, _, Vec<_>, Vec<_>>();
-        let query = &seed_string;
-
-        let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
-        let metric = Metric::new(distance_fn, true);
-        let mut data = FlatVec::new(data, metric)?.with_metadata(metadata.clone())?;
-
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(42);
-        let (root, co_data) = SquishyBall::new_tree(&mut data, &criteria, seed);
-
-        let dec_data = co_data.to_flat_vec().with_metadata(metadata)?;
-
-        assert_eq!(data.cardinality(), dec_data.cardinality());
-        assert_eq!(data.permutation(), dec_data.permutation());
-        assert_eq!(data.metadata(), dec_data.metadata());
-        for i in 0..data.cardinality() {
-            let (x, y) = (data.get(i), dec_data.get(i));
-            assert_eq!(x, y, "Failed at index {i}: {x} vs {y}");
-        }
-
-        for (alg, checker) in algs {
-            let true_hits = alg.par_linear_search(&co_data, query);
-
-            let pred_hits = alg.search(&co_data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name());
-
-            let pred_hits = alg.par_search(&co_data, &root, query);
-            checker(true_hits.clone(), pred_hits, &alg.name());
-        }
 
         Ok(())
     }
