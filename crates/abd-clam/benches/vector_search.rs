@@ -18,7 +18,7 @@ const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
 fn vector_search(c: &mut Criterion) {
     let cardinality = 1_000_000;
     let dimensionality = 10;
-    let max_val = 2.0;
+    let max_val = 1.0;
     let min_val = -max_val;
     let seed = 42;
     let rows = symagen::random_data::random_tabular_seedable(cardinality, dimensionality, min_val, max_val, seed);

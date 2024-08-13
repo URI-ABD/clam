@@ -27,7 +27,7 @@ fn genomic_search(c: &mut Criterion) {
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
     let penalties = distances::strings::Penalties::default();
-    let num_clumps = 1_000;
+    let num_clumps = 500;
     let clump_size = 20;
     let clump_radius = 10_u16;
     let inter_clump_distance_range = (50_u16, 80_u16);

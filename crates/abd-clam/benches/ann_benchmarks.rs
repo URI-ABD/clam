@@ -44,7 +44,7 @@ fn ann_benchmarks(c: &mut Criterion) {
             (&ball, &data),
             (&off_ball, &perm_data),
             None,
-            queries,
+            &queries,
             &radii,
             &ks,
             true,
