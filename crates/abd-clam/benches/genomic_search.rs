@@ -17,9 +17,9 @@ const METRICS: &[(&str, fn(&String, &String) -> u64)] = &[
     ("levenshtein", |x: &String, y: &String| {
         distances::strings::levenshtein(x, y)
     }),
-    ("needleman-wunsch", |x: &String, y: &String| {
-        distances::strings::nw_distance(x, y)
-    }),
+    // ("needleman-wunsch", |x: &String, y: &String| {
+    //     distances::strings::nw_distance(x, y)
+    // }),
 ];
 
 fn genomic_search(c: &mut Criterion) {
@@ -27,10 +27,10 @@ fn genomic_search(c: &mut Criterion) {
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
     let penalties = distances::strings::Penalties::default();
-    let num_clumps = 1024;
-    let clump_size = 32;
+    let num_clumps = 1_000;
+    let clump_size = 20;
     let clump_radius = 10_u16;
-    let inter_clump_distance_range = (50_u16, 70_u16);
+    let inter_clump_distance_range = (50_u16, 80_u16);
     let len_delta = 10;
     let (_, genomes) = symagen::random_edits::generate_clumped_data(
         &seed_string,
@@ -59,9 +59,9 @@ fn genomic_search(c: &mut Criterion) {
     };
 
     let seed = Some(seed);
-    let radii = vec![5, 10, 20];
+    let radii = vec![];
     let ks = vec![1, 10, 20];
-    for &(metric_name, distance_fn) in &METRICS[..1] {
+    for &(metric_name, distance_fn) in METRICS {
         let metric = Metric::new(distance_fn, true);
         let data = FlatVec::new(genomes.clone(), metric).unwrap();
 

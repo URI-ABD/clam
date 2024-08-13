@@ -176,7 +176,17 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
             indices.to_vec()
         } else {
             #[allow(clippy::cast_possible_truncation)]
-            let n = cardinality.as_f64().sqrt().as_u64() as usize;
+            let n = if cardinality < 10_100 {
+                // We use the square root of the cardinality as the number of samples
+                (cardinality - 100).as_f64().sqrt().as_u64() as usize
+            } else {
+                // We use the logarithm of the cardinality as the number of samples
+                #[allow(clippy::cast_possible_truncation)]
+                let n = (cardinality - 10_100).as_f64().log2().as_u64() as usize;
+                n + 100
+            };
+
+            let n = n + 100;
             Dataset::choose_unique(data, indices, n, seed)
         };
 
@@ -232,7 +242,17 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
             indices.to_vec()
         } else {
             #[allow(clippy::cast_possible_truncation)]
-            let n = cardinality.as_f64().sqrt().as_u64() as usize;
+            let n = if cardinality < 10_100 {
+                // We use the square root of the cardinality as the number of samples
+                (cardinality - 100).as_f64().sqrt().as_u64() as usize
+            } else {
+                // We use the logarithm of the cardinality as the number of samples
+                #[allow(clippy::cast_possible_truncation)]
+                let n = (cardinality - 10_100).as_f64().log2().as_u64() as usize;
+                n + 100
+            };
+
+            let n = n + 100;
             ParDataset::par_choose_unique(data, indices, n, seed)
         };
 
