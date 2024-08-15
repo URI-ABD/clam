@@ -121,14 +121,6 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
 }
 
 impl<I, U, M> CodecData<I, U, M> {
-    /// Changes the metric of the dataset. This is primarily useful after
-    /// deserialization.
-    #[must_use]
-    pub const fn with_metric(mut self, metric: Metric<I, U>) -> Self {
-        self.metric = metric;
-        self
-    }
-
     /// Sets the permutation and metadata of the dataset after deserialization.
     ///
     /// # Parameters
@@ -288,6 +280,10 @@ impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
 impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
     fn metric(&self) -> &Metric<I, U> {
         &self.metric
+    }
+
+    fn set_metric(&mut self, metric: Metric<I, U>) {
+        self.metric = metric;
     }
 }
 

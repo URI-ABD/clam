@@ -5,6 +5,7 @@ use core::marker::PhantomData;
 
 use distances::Number;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
@@ -22,6 +23,7 @@ use crate::{
 /// - `U`: The type of the distance values.
 /// - `D`: The type of the dataset.
 /// - `S`: The type of the `Cluster` that was adapted into the `Vertex`.
+#[derive(Serialize, Deserialize)]
 pub struct Vertex<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The `Cluster` that was adapted into the `Vertex`.
     source: S,
@@ -291,7 +293,8 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> std::hash::Hash for Ve
 /// The anomaly detection properties of the `Vertex`, their exponential moving
 /// averages, and the accumulated child-parent cardinality ratio.
 #[allow(clippy::struct_field_names)]
-struct Ratios {
+#[derive(Serialize, Deserialize)]
+pub struct Ratios {
     /// The anomaly detection properties of the `Vertex`.
     ratios: [f32; 3],
     /// The exponential moving average of the `ratios`.

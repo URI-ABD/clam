@@ -105,16 +105,6 @@ impl<T, U> FlatVec<Vec<T>, U, usize> {
 }
 
 impl<I, U, M> FlatVec<I, U, M> {
-    /// Changes the `Metric` of the dataset. This is primarily for use after
-    /// deserialization.
-    ///
-    /// Using an incompatible metric will lead to undefined behavior.
-    #[must_use]
-    pub const fn with_metric(mut self, metric: Metric<I, U>) -> Self {
-        self.metric = metric;
-        self
-    }
-
     /// Deconstructs the `FlatVec` into its members.
     ///
     /// # Returns
@@ -192,6 +182,10 @@ impl<I, U, M> FlatVec<I, U, M> {
 impl<I, U: Number, M> MetricSpace<I, U> for FlatVec<I, U, M> {
     fn metric(&self) -> &Metric<I, U> {
         &self.metric
+    }
+
+    fn set_metric(&mut self, metric: Metric<I, U>) {
+        self.metric = metric;
     }
 }
 
@@ -424,28 +418,8 @@ mod tests {
                 &self.data.metric
             }
 
-            fn identity(&self) -> bool {
-                self.data.identity()
-            }
-
-            fn non_negativity(&self) -> bool {
-                self.data.non_negativity()
-            }
-
-            fn symmetry(&self) -> bool {
-                self.data.symmetry()
-            }
-
-            fn triangle_inequality(&self) -> bool {
-                self.data.triangle_inequality()
-            }
-
-            fn expensive(&self) -> bool {
-                self.data.expensive()
-            }
-
-            fn distance_function(&self) -> fn(&Vec<i32>, &Vec<i32>) -> i32 {
-                self.data.distance_function()
+            fn set_metric(&mut self, metric: Metric<Vec<i32>, i32>) {
+                self.data.metric = metric;
             }
         }
 
@@ -563,8 +537,8 @@ mod tests {
         let dataset: Fv = FlatVec::new_array(instances.clone(), metric.clone())?;
 
         let serialized: Vec<u8> = bincode::serialize(&dataset).map_err(|e| e.to_string())?;
-        let deserialized: Fv = bincode::deserialize(&serialized).map_err(|e| e.to_string())?;
-        let deserialized: Fv = deserialized.with_metric(metric);
+        let mut deserialized: Fv = bincode::deserialize(&serialized).map_err(|e| e.to_string())?;
+        deserialized.set_metric(metric);
 
         assert_eq!(dataset.cardinality(), deserialized.cardinality());
         assert_eq!(dataset.dimensionality_hint(), deserialized.dimensionality_hint());

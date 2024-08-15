@@ -17,14 +17,17 @@
 #![doc = include_str!("../README.md")]
 
 pub mod cakes;
-pub mod chaoda;
+mod chaoda;
 mod core;
 // pub mod pancakes;
 pub mod utils;
 
-pub use crate::core::{
-    adapter, cluster, dataset, linear_search, partition, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace,
-    Partition, Permutable, LFD,
+pub use crate::{
+    chaoda::{Algorithm, Chaoda, Member, MlModel, Vertex},
+    core::{
+        adapter, cluster, dataset, linear_search, partition, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace,
+        Partition, Permutable, LFD,
+    },
 };
 
 /// The current version of the crate.

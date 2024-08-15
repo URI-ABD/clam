@@ -245,10 +245,10 @@ pub mod tests {
         let co_data = co_data.with_metadata(metadata.clone())?;
 
         let serialized = bincode::serialize(&co_data).unwrap();
-        let deserialized = bincode::deserialize::<Dec>(&serialized)
+        let mut deserialized = bincode::deserialize::<Dec>(&serialized)
             .unwrap()
-            .post_deserialization(co_data.permutation.clone(), metadata)?
-            .with_metric(metric.clone());
+            .post_deserialization(co_data.permutation.clone(), metadata)?;
+        deserialized.set_metric(metric.clone());
 
         assert_eq!(co_data.cardinality, deserialized.cardinality);
         assert_eq!(co_data.dimensionality_hint, deserialized.dimensionality_hint);
