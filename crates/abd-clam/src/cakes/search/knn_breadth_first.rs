@@ -1,6 +1,6 @@
 //! K-Nearest Neighbors search using a Breadth First sieve.
 
-use core::cmp::Reverse;
+use core::cmp::{min, Ordering, Reverse};
 
 use distances::Number;
 use rayon::prelude::*;
@@ -100,6 +100,71 @@ fn d_max<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C, d: U) -> U 
     c.radius() + d
 }
 
+/// Wrapper for `_partition_items`.
+fn partition_items<I, U, C, D>(items: &mut Vec<(U, &C)>, k: usize) -> usize
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    _partition_items(items, k, 0, items.len() - 1)
+}
+
+/// Finds the smallest index i such that the combined cardinality of items which
+/// are at least as close to the query as items[i] is at least k.
+fn _partition_items<I, U, D, C>(items: &mut Vec<(U, &C)>, k: usize, l: usize, r: usize) -> usize
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    if l >= r {
+        min(l, r)
+    } else {
+        let pivot = l + (r - l) / 2;
+        let p = partition_once(items, l, r, pivot);
+
+        let guaranteed_p = items.iter().take(p).map(|(_, c)| c.cardinality()).sum::<usize>();
+        let guaranteed_p_minus_one = items.iter().take(p - 1).map(|(_, c)| c.cardinality()).sum::<usize>();
+        match guaranteed_p.cmp(&k) {
+            Ordering::Equal => p,
+            Ordering::Less => _partition_items(items, k, p + 1, r),
+            Ordering::Greater => {
+                if p == 0 || guaranteed_p_minus_one < k {
+                    p
+                } else {
+                    _partition_items(items, k, l, p - 1)
+                }
+            }
+        }
+    }
+}
+
+/// Changes pivot point and swaps elements around so that all elements to left
+/// of pivot are less than or equal to pivot and all elements to right of pivot
+/// are greater than pivot.
+fn partition_once<I, U, C, D>(items: &mut [(U, &C)], l: usize, r: usize, pivot: usize) -> usize
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    items.swap(pivot, r);
+
+    let (mut a, mut b) = (l, l);
+    while b < r {
+        if items[b].0 < items[r].0 {
+            items.swap(a, b);
+            a += 1;
+        }
+        b += 1;
+    }
+
+    items.swap(a, r);
+
+    a
+}
+
 /// Splits the candidates three ways: those needed to get to k hits, those that
 /// might be needed to get to k hits, and those that are not needed to get to k
 /// hits.
@@ -115,24 +180,10 @@ where
     let k = hits
         .k()
         .unwrap_or_else(|| unreachable!("The `hits` heap should have a maximum size."));
-    let items = candidates.items().map(|(Reverse(d), c)| (d, c)).collect::<Vec<_>>();
-    let threshold_index = items
-        .iter()
-        .scan(hits.len(), |num_hits_so_far, (_, c)| {
-            *num_hits_so_far += c.cardinality();
-            Some(*num_hits_so_far)
-        })
-        .position(|num_hits| num_hits > k)
-        .unwrap_or_else(|| items.len() - 1);
-    let threshold = {
-        let (d, _) = items[threshold_index];
-        let kth_distance = hits.peek().map_or(U::ZERO, |(d, _)| *d);
-        if d < kth_distance {
-            kth_distance
-        } else {
-            d
-        }
-    };
+    let mut items = candidates.items().map(|(Reverse(d), c)| (d, c)).collect::<Vec<_>>();
+
+    let threshold_index = partition_items(&mut items, k);
+    let threshold = items[threshold_index].0;
 
     let (needed, items) = items.into_iter().partition::<Vec<_>, _>(|(d, _)| *d < threshold);
 
