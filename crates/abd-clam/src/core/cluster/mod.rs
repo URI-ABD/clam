@@ -101,8 +101,7 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
     fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)];
 
     /// Sets the children of the `Cluster`.
-    #[must_use]
-    fn set_children(self, children: Vec<(usize, U, Self)>) -> Self;
+    fn set_children(&mut self, children: Vec<(usize, U, Self)>);
 
     /// Computes the distances from the `query` to all instances in the `Cluster`.
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)>;

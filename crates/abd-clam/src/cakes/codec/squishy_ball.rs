@@ -251,6 +251,10 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
     fn source_mut(&mut self) -> &mut OffBall<I, U, Co, S> {
         &mut self.source
     }
+
+    fn source_owned(self) -> OffBall<I, U, Co, S> {
+        self.source
+    }
 }
 
 /// Parameters for the `OffsetBall`.
@@ -267,7 +271,7 @@ pub struct SquishCosts<U> {
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Params<I, U, Co, Dec, S> for SquishCosts<U>
 {
-    fn child_params<B: AsRef<S>>(&self, children: &[B]) -> Vec<Self> {
+    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
     }
 }
@@ -326,7 +330,7 @@ impl<
         S: ParCluster<I, U, Co>,
     > ParParams<I, U, Co, Dec, S> for SquishCosts<U>
 {
-    fn par_child_params<B: AsRef<S>>(&self, children: &[B]) -> Vec<Self> {
+    fn par_child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
         Params::<I, U, Co, Dec, S>::child_params(self, children)
     }
 }
@@ -402,9 +406,8 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
         &mut self.children
     }
 
-    fn set_children(self, children: Vec<(usize, U, Self)>) -> Self {
-        let children = children.into_iter().map(|(i, r, c)| (i, r, Box::new(c))).collect();
-        Self { children, ..self }
+    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
+        self.children = children.into_iter().map(|(i, r, c)| (i, r, Box::new(c))).collect();
     }
 
     fn distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {

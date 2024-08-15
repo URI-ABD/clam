@@ -15,8 +15,6 @@ pub use permutable::Permutable;
 
 use metric_space::ParMetricSpace;
 
-// TODO: Add traits for Compression and Decompression.
-
 /// A dataset is a collection of instances.
 ///
 /// # Type Parameters

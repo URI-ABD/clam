@@ -28,7 +28,7 @@ pub struct OffBall<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug> Debug for OffBall<I, U, D, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OffsetBall")
+        f.debug_struct("OffBall")
             .field("source", &self.source)
             .field("children", &self.children.is_empty())
             .field("offset", &self.params.offset)
@@ -123,6 +123,10 @@ impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I
     fn source_mut(&mut self) -> &mut S {
         &mut self.source
     }
+
+    fn source_owned(self) -> S {
+        self.source
+    }
 }
 
 /// Helper for computing a new index after permutation of data.
@@ -190,9 +194,9 @@ pub struct Offset {
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for Offset {
-    fn child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
+    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
         let mut offset = self.offset;
-        child_balls
+        children
             .iter()
             .map(|child| {
                 let params = Self { offset };
@@ -204,9 +208,9 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> 
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for Offset {
-    fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self> {
+    fn par_child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
-        self.child_params(child_balls)
+        self.child_params(children)
     }
 }
 
@@ -280,9 +284,8 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for O
         self.children.as_mut_slice()
     }
 
-    fn set_children(mut self, children: Vec<(usize, U, Self)>) -> Self {
+    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
         self.children = children.into_iter().map(|(a, b, c)| (a, b, Box::new(c))).collect();
-        self
     }
 
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {

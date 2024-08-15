@@ -177,7 +177,7 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
                 .map(|((a, b), c)| (a, b, c))
                 .collect();
             // Update the `Cluster`'s children.
-            self = self.set_children(children);
+            self.set_children(children);
             // Update the `Cluster`'s indices.
             self.set_indices(indices);
         };
@@ -291,7 +291,7 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
                 .map(|((a, b), c)| (a, b, c))
                 .collect();
             // Update the `Cluster`'s children.
-            self = self.set_children(children);
+            self.set_children(children);
             // Update the `Cluster`'s indices.
             self.set_indices(indices);
         };

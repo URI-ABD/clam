@@ -17,7 +17,7 @@
 #![doc = include_str!("../README.md")]
 
 pub mod cakes;
-// pub mod chaoda;
+pub mod chaoda;
 mod core;
 // pub mod pancakes;
 pub mod utils;

@@ -140,9 +140,8 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self.children.as_mut_slice()
     }
 
-    fn set_children(mut self, children: Vec<(usize, U, Self)>) -> Self {
+    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
         self.children = children.into_iter().map(|(i, d, c)| (i, d, Box::new(c))).collect();
-        self
     }
 
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {

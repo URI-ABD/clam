@@ -1,6 +1,7 @@
 //! Traits to adapt a `Ball` into other `Cluster` types.
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::{dataset::ParDataset, Dataset};
 
@@ -14,6 +15,7 @@ pub trait BallAdapter<I, U: Number, Din: Dataset<I, U>, Dout: Dataset<I, U>, P: 
     /// Adapts this `Cluster` from a `Ball` tree.
     fn from_ball_tree(ball: Ball<I, U, Din>, data: Din) -> (Self, Dout);
 }
+
 /// Parallel version of the `BallAdapter` trait.
 #[allow(clippy::module_name_repetitions)]
 pub trait ParBallAdapter<
@@ -41,7 +43,7 @@ pub trait Params<I, U: Number, Din: Dataset<I, U>, Dout: Dataset<I, U>, S: Clust
     /// Given the `S` that was adapted into a `Cluster`, returns parameters
     /// to use for adapting the children of `S`.
     #[must_use]
-    fn child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self>;
+    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self>;
 }
 
 /// A trait for adapting one `Cluster` type into another `Cluster` type.
@@ -93,6 +95,24 @@ pub trait Adapter<
     /// Returns the `Ball` mutably that was adapted into this `Cluster`. This
     /// should not have any children.
     fn source_mut(&mut self) -> &mut S;
+
+    /// Provides ownership of the underlying source `Cluster`.
+    fn source_owned(self) -> S;
+
+    /// Recover the source `Cluster` tree that was adapted into this `Cluster`.
+    fn recover_source_tree(self) -> S {
+        let (source, indices, children) = self.disassemble();
+        let mut source = source.source_owned();
+        source.set_indices(indices);
+
+        let children = children
+            .into_iter()
+            .map(|(i, d, c)| (i, d, c.recover_source_tree()))
+            .collect();
+
+        source.set_children(children);
+        source
+    }
 }
 
 /// Parallel version of the `Params` trait.
@@ -101,7 +121,7 @@ pub trait ParParams<I: Send + Sync, U: Number, Din: ParDataset<I, U>, Dout: ParD
 {
     /// Parallel version of the `child_params` method.
     #[must_use]
-    fn par_child_params<B: AsRef<S>>(&self, child_balls: &[B]) -> Vec<Self>;
+    fn par_child_params<C: AsRef<S> + Send + Sync>(&self, children: &[C]) -> Vec<Self>;
 }
 
 /// Parallel version of the `Adapter` trait.
@@ -117,4 +137,19 @@ pub trait ParAdapter<
 {
     /// Parallel version of the `adapt` method.
     fn par_adapt_tree(source: S, params: Option<P>) -> (Self, Vec<usize>);
+
+    /// Recover the source `Cluster` tree that was adapted into this `Cluster`.
+    fn par_recover_source_tree(self) -> S {
+        let (source, indices, children) = self.disassemble();
+        let mut source = source.source_owned();
+        source.set_indices(indices);
+
+        let children = children
+            .into_par_iter()
+            .map(|(i, d, c)| (i, d, c.par_recover_source_tree()))
+            .collect();
+
+        source.set_children(children);
+        source
+    }
 }
