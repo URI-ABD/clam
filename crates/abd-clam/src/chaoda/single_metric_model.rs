@@ -1,6 +1,7 @@
 //! A CHAODA model that works with a single metric and tree.
 
 use distances::Number;
+use mt_logger::{mt_log, Level};
 use smartcore::metrics::roc_auc_score;
 
 use crate::{chaoda::members::Algorithm, Cluster, Dataset, Metric};
@@ -16,42 +17,62 @@ pub type TrainingData = Vec<Vec<(Vec<f32>, f32)>>;
 
 /// The combination of `Member` and `MlModel`, and their corresponding `Graph`s,
 /// that are used in the ensemble.
-type Models<'a, I, U, D, S> = Vec<(Member, MlModel, Option<Graph<'a, I, U, D, S>>)>;
+type Models = Vec<(Member, MlModel)>;
 
 /// A CHAODA model that works with a single metric and tree.
-pub struct SingleMetricModel<'a, I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
+pub struct SingleMetricModel<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The metric used to calculate the distance between two instances.
     metric: Metric<I, U>,
     /// The combinations of `Member` and `MlModel` that are used in the ensemble.
-    models: Models<'a, I, U, D, S>,
+    models: Models,
     /// The minimum depth in the tree to consider when selecting nodes for the `Graph`s.
     min_depth: usize,
+    /// Phantom data to satisfy the compiler.
+    _p: std::marker::PhantomData<(D, S)>,
 }
 
-impl<'a, I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricModel<'a, I, U, D, S> {
+impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricModel<I, U, D, S> {
     /// Create a new `SingleMetricModel`.
     #[must_use]
     pub fn new(metric: Metric<I, U>, model_combinations: Vec<(Member, Vec<MlModel>)>, min_depth: usize) -> Self {
         let models = model_combinations
             .into_iter()
-            .flat_map(|(member, models)| models.into_iter().map(move |model| (member.clone(), model, None)))
+            .flat_map(|(member, models)| models.into_iter().map(move |model| (member.clone(), model)))
             .collect();
         Self {
             metric,
             models,
             min_depth,
+            _p: std::marker::PhantomData,
         }
     }
 
-    /// Train the model.
-    pub fn train(
+    /// Train the model for one epoch.
+    ///
+    /// # Parameters
+    ///
+    /// - `data`: The dataset to use for training.
+    /// - `root`: The root of the tree.
+    /// - `labels`: The labels for the instances in the dataset.
+    /// - `training_data`: The training data from previous epochs.
+    ///
+    /// # Returns
+    ///
+    /// The training data after generated during this epoch along with the
+    /// training data from previous epochs.
+    ///
+    /// # Errors
+    ///
+    /// - If the number of labels does not match the number of instances in the
+    ///   dataset.
+    /// - If the training of the meta-ml models fails.
+    pub fn train_step(
         &mut self,
         data: &mut D,
-        root: &'a Vertex<I, U, D, S>,
+        root: &Vertex<I, U, D, S>,
         labels: &[bool],
-        num_epochs: usize,
-        previous_data: Option<TrainingData>,
-    ) -> Result<(), String> {
+        mut training_data: TrainingData,
+    ) -> Result<TrainingData, String> {
         if labels.len() != data.cardinality() {
             return Err(format!(
                 "The number of labels ({}) does not match the number of instances ({})",
@@ -62,36 +83,34 @@ impl<'a, I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetri
 
         let y_true = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
 
-        let mut training_data = previous_data.map_or_else(
-            || {
-                self.create_default_graphs(data, root);
-                Vec::new()
-            },
-            |data| data,
-        );
+        let mut graphs = if training_data.is_empty() {
+            mt_log!(Level::Info, "Creating default graphs...");
+            self.create_default_graphs(data, root)
+        } else {
+            mt_log!(Level::Info, "Creating meta-ml graphs...");
+            self.create_graphs(data, root)
+        };
 
-        for _ in 0..num_epochs {
-            training_data.extend(self.generate_training_data(&y_true));
+        training_data.extend(self.generate_training_data(&y_true, &mut graphs));
+        self.train_models(&training_data)?;
 
-            self.train_models(&training_data)?;
-            self.create_graphs(data, root);
-        }
-
-        Ok(())
+        Ok(training_data)
     }
 
     /// Predict the anomaly scores for the instances in the dataset for each
     /// combination of `Member` and `MlModel`.
-    pub fn predict(&mut self) -> Vec<Vec<f32>> {
-        self.models
-            .iter_mut()
-            .map(|(model, _, graph)| {
-                let graph = graph
-                    .as_mut()
-                    .unwrap_or_else(|| unreachable!("The graph was not created."));
-                model.evaluate_points(graph)
-            })
-            .collect()
+    pub fn predict(&self, data: &mut D, root: &Vertex<I, U, D, S>) -> Vec<Vec<f32>> {
+        data.set_metric(self.metric.clone());
+        let mut graphs = self.create_graphs(data, root);
+        let mut scores = Vec::new();
+
+        for ((member, _), g) in self.models.iter().zip(graphs.iter_mut()) {
+            let anomaly_ratings = member.evaluate_points(g);
+            assert_eq!(anomaly_ratings.len(), data.cardinality());
+            scores.push(anomaly_ratings);
+        }
+
+        scores
     }
 
     /// Creates `Graph`s for each combination of `Member` and `MlModel`.
@@ -100,25 +119,29 @@ impl<'a, I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetri
     ///
     /// This will also change the metric in the `data` so it is upon the user to
     /// change it back if needed.
-    fn create_graphs(&mut self, data: &mut D, root: &'a Vertex<I, U, D, S>) {
+    fn create_graphs<'a>(&self, data: &mut D, root: &'a Vertex<I, U, D, S>) -> Vec<Graph<'a, I, U, D, S>> {
         data.set_metric(self.metric.clone());
+        let mut graphs = Vec::new();
 
-        self.models.iter_mut().for_each(|(_, model, g)| {
+        for (_, model) in &self.models {
             let cluster_scorer = |vertices: &[&Vertex<I, U, D, S>]| {
                 let properties = vertices.iter().map(|v| v.ratios().to_vec()).collect::<Vec<_>>();
                 model
                     .predict(&properties)
                     .unwrap_or_else(|e| unreachable!("Failed to predict: {e}"))
             };
-            *g = Some(Graph::from_tree(root, data, cluster_scorer, self.min_depth));
-        });
+            graphs.push(Graph::from_tree(root, data, cluster_scorer, self.min_depth));
+        }
+
+        graphs
     }
 
     /// Creates `Graph`s with vertices at the min-depth.
-    fn create_default_graphs(&mut self, data: &mut D, root: &'a Vertex<I, U, D, S>) {
+    fn create_default_graphs<'a>(&self, data: &mut D, root: &'a Vertex<I, U, D, S>) -> Vec<Graph<'a, I, U, D, S>> {
         data.set_metric(self.metric.clone());
+        let mut graphs = Vec::new();
 
-        self.models.iter_mut().for_each(|(_, _, g)| {
+        for _ in &self.models {
             let cluster_scorer = |vertices: &[&Vertex<I, U, D, S>]| {
                 vertices
                     .iter()
@@ -131,19 +154,18 @@ impl<'a, I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetri
                     })
                     .collect::<Vec<_>>()
             };
-            *g = Some(Graph::from_tree(root, data, cluster_scorer, self.min_depth));
-        });
+            graphs.push(Graph::from_tree(root, data, cluster_scorer, self.min_depth));
+        }
+
+        graphs
     }
 
     /// Generate the training data to use for the meta-ml models.
-    fn generate_training_data(&mut self, y_true: &[f32]) -> TrainingData {
+    fn generate_training_data(&mut self, y_true: &[f32], graphs: &mut [Graph<I, U, D, S>]) -> TrainingData {
         let mut training_data = Vec::new();
 
-        for (member, _, graph) in &mut self.models {
-            let graph = graph
-                .as_mut()
-                .unwrap_or_else(|| unreachable!("The graph was not created."));
-            let anomaly_ratings = <Member as Algorithm<I, U, D, S>>::evaluate_points(member, graph);
+        for ((member, _), graph) in self.models.iter_mut().zip(graphs.iter_mut()) {
+            let anomaly_ratings = member.evaluate_points(graph);
             let train_data = graph
                 .iter_clusters()
                 .map(|v| {
@@ -170,9 +192,10 @@ impl<'a, I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetri
 
     /// Train the meta-ml models.
     fn train_models(&mut self, training_data: &TrainingData) -> Result<(), String> {
-        for ((_, ml_model, _), train_data) in self.models.iter_mut().zip(training_data) {
+        mt_log!(Level::Info, "Training models with {} samples...", training_data.len());
+        for ((_, ml_model), ml_data) in self.models.iter_mut().zip(training_data) {
             // TODO: Try to remove the `.cloned()` here.
-            let (train_x, train_y) = train_data.iter().cloned().unzip::<_, _, Vec<_>, Vec<_>>();
+            let (train_x, train_y) = ml_data.iter().cloned().unzip::<_, _, Vec<_>, Vec<_>>();
             ml_model.train(&train_x, &train_y)?;
         }
         Ok(())

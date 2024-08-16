@@ -23,6 +23,8 @@ pub struct Metric<I, U> {
     pub(crate) expensive: bool,
     /// The distance function.
     pub(crate) distance_function: fn(&I, &I) -> U,
+    /// The name of the distance function.
+    pub(crate) name: &'static str,
 }
 
 impl<I, U> Default for Metric<I, U> {
@@ -34,7 +36,28 @@ impl<I, U> Default for Metric<I, U> {
             triangle_inequality: true,
             expensive: false,
             distance_function: |_, _| unreachable!("This should never be called."),
+            name: "Unknown",
         }
+    }
+}
+
+#[allow(clippy::missing_fields_in_debug)]
+impl<I, U> core::fmt::Debug for Metric<I, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Metric")
+            .field("name", &self.name)
+            .field("identity", &self.identity)
+            .field("non_negativity", &self.non_negativity)
+            .field("symmetry", &self.symmetry)
+            .field("triangle_inequality", &self.triangle_inequality)
+            .field("expensive", &self.expensive)
+            .finish()
+    }
+}
+
+impl<I, U> core::fmt::Display for Metric<I, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} Metric", self.name)
     }
 }
 
@@ -56,7 +79,15 @@ impl<I, U> Metric<I, U> {
             triangle_inequality: true,
             expensive,
             distance_function,
+            name: "Unknown",
         }
+    }
+
+    /// Sets the name of the distance function.
+    #[must_use]
+    pub const fn with_name(mut self, name: &'static str) -> Self {
+        self.name = name;
+        self
     }
 
     /// Specifies that this distance function provides an identity.

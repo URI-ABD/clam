@@ -22,6 +22,13 @@ use metric_space::ParMetricSpace;
 /// - `I`: The type of the instances.
 /// - `U`: The type of the distance values.
 pub trait Dataset<I, U: Number>: MetricSpace<I, U> {
+    /// Returns the name of the dataset.
+    fn name(&self) -> &str;
+
+    /// Changes the name of the dataset.
+    #[must_use]
+    fn with_name(self, name: &str) -> Self;
+
     /// Returns the number of instances in the dataset.
     fn cardinality(&self) -> usize;
 

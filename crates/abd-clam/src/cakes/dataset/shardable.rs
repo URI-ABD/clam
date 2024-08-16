@@ -96,6 +96,7 @@ impl<I, U: Number, M> Shardable<I, U> for FlatVec<I, U, M> {
             dimensionality_hint: self.dimensionality_hint,
             permutation,
             metadata,
+            name: self.name.clone(),
         };
         [self, right_data]
     }

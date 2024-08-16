@@ -34,6 +34,8 @@ pub struct FlatVec<I, U, M> {
     pub(crate) permutation: Vec<usize>,
     /// The metadata associated with the instances.
     pub(crate) metadata: Vec<M>,
+    /// The name of the dataset.
+    pub(crate) name: String,
 }
 
 impl<I, U> FlatVec<I, U, usize> {
@@ -63,6 +65,7 @@ impl<I, U> FlatVec<I, U, usize> {
                 dimensionality_hint: (0, None),
                 permutation,
                 metadata,
+                name: "Unknown FlatVec".to_string(),
             })
         }
     }
@@ -99,6 +102,7 @@ impl<T, U> FlatVec<Vec<T>, U, usize> {
                 dimensionality_hint: (dimensionality, Some(dimensionality)),
                 permutation,
                 metadata,
+                name: "Unknown FlatVec".to_string(),
             })
         }
     }
@@ -116,13 +120,14 @@ impl<I, U, M> FlatVec<I, U, M> {
     /// - The metadata associated with the instances.
     #[allow(clippy::type_complexity)]
     #[must_use]
-    pub fn deconstruct(self) -> (Metric<I, U>, Vec<I>, (usize, Option<usize>), Vec<usize>, Vec<M>) {
+    pub fn deconstruct(self) -> (Metric<I, U>, Vec<I>, (usize, Option<usize>), Vec<usize>, Vec<M>, String) {
         (
             self.metric,
             self.instances,
             self.dimensionality_hint,
             self.permutation,
             self.metadata,
+            self.name,
         )
     }
 
@@ -168,6 +173,7 @@ impl<I, U, M> FlatVec<I, U, M> {
                 dimensionality_hint: self.dimensionality_hint,
                 permutation: self.permutation,
                 metadata,
+                name: self.name,
             })
         } else {
             Err(format!(
@@ -192,6 +198,16 @@ impl<I, U: Number, M> MetricSpace<I, U> for FlatVec<I, U, M> {
 impl<I: Send + Sync, U: Number, M: Send + Sync> ParMetricSpace<I, U> for FlatVec<I, U, M> {}
 
 impl<I, U: Number, M> Dataset<I, U> for FlatVec<I, U, M> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Changes the name of the dataset.
+    fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_string();
+        self
+    }
+
     fn cardinality(&self) -> usize {
         self.instances.len()
     }
@@ -287,15 +303,18 @@ struct FlatVecSerde<I, M> {
     permutation: Vec<usize>,
     /// The metadata associated with the instances.
     metadata: Vec<M>,
+    /// The name of the dataset.
+    name: String,
 }
 
 impl<I: Serialize, U, M: Serialize> Serialize for FlatVec<I, U, M> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("FlatVecSerde", 4)?;
+        let mut state = serializer.serialize_struct("FlatVecSerde", 5)?;
         state.serialize_field("instances", &self.instances)?;
         state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
         state.serialize_field("permutation", &self.permutation)?;
         state.serialize_field("metadata", &self.metadata)?;
+        state.serialize_field("name", &self.name)?;
         state.end()
     }
 }
@@ -307,6 +326,7 @@ impl<'de, I: Deserialize<'de>, U, M: Deserialize<'de>> Deserialize<'de> for Flat
             dimensionality_hint,
             permutation,
             metadata,
+            name,
         } = FlatVecSerde::deserialize(deserializer)?;
         Ok(Self {
             metric: Metric::default(),
@@ -314,6 +334,7 @@ impl<'de, I: Deserialize<'de>, U, M: Deserialize<'de>> Deserialize<'de> for Flat
             dimensionality_hint,
             permutation,
             metadata,
+            name,
         })
     }
 }
@@ -424,6 +445,15 @@ mod tests {
         }
 
         impl Dataset<Vec<i32>, i32> for SwapTracker {
+            fn name(&self) -> &str {
+                self.data.name()
+            }
+
+            fn with_name(mut self, name: &str) -> Self {
+                self.data = self.data.with_name(name);
+                self
+            }
+
             fn cardinality(&self) -> usize {
                 self.data.cardinality()
             }

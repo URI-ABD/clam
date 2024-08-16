@@ -47,6 +47,8 @@ pub struct CodecData<I, U, M> {
     pub(crate) metadata: Vec<M>,
     /// The permutation of the original dataset.
     pub(crate) permutation: Vec<usize>,
+    /// The name of the dataset.
+    pub(crate) name: String,
     /// The centers of the clusters in the dataset.
     pub(crate) center_map: HashMap<usize, I>,
     /// The bytes representing the leaf clusters as a flattened vector.
@@ -81,6 +83,7 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
             permutation: data.permutation(),
+            name: format!("CodecData({})", data.name()),
             center_map,
             leaf_bytes,
             leaf_offsets,
@@ -112,6 +115,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
             permutation: data.permutation(),
+            name: format!("CodecData({})", data.name()),
             center_map,
             leaf_bytes,
             leaf_offsets,
@@ -186,6 +190,7 @@ impl<I, U, M> CodecData<I, U, M> {
                 dimensionality_hint: self.dimensionality_hint,
                 metadata,
                 permutation: self.permutation,
+                name: self.name,
                 center_map: self.center_map,
                 leaf_bytes: self.leaf_bytes,
                 leaf_offsets: self.leaf_offsets,
@@ -228,6 +233,7 @@ impl<I: Decodable + Clone, U: Number, M: Clone> CodecData<I, U, M> {
             dimensionality_hint: self.dimensionality_hint,
             permutation: self.permutation.clone(),
             metadata: self.metadata.clone(),
+            name: format!("FlatVec({})", self.name),
         }
     }
 }
@@ -260,6 +266,15 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
 impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDecompressible<I, U> for CodecData<I, U, M> {}
 
 impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn with_name(mut self, name: &str) -> Self {
+        self.name = format!("CodecData({name})");
+        self
+    }
+
     fn cardinality(&self) -> usize {
         self.cardinality
     }
@@ -413,18 +428,21 @@ struct CodecDataSerde {
     leaf_offsets: Vec<usize>,
     /// The cumulative cardinalities of the leaves.
     cumulative_cardinalities: Vec<usize>,
+    /// The name of the dataset.
+    name: String,
 }
 
 impl<I: Encodable, U, M> Serialize for CodecData<I, U, M> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let center_bytes = encode_centers(&self.center_map);
-        let mut state = serializer.serialize_struct("CodecDataSerde", 6)?;
+        let mut state = serializer.serialize_struct("CodecDataSerde", 7)?;
         state.serialize_field("cardinality", &self.cardinality)?;
         state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
         state.serialize_field("center_bytes", &center_bytes)?;
         state.serialize_field("leaf_bytes", &self.leaf_bytes)?;
         state.serialize_field("leaf_offsets", &self.leaf_offsets)?;
         state.serialize_field("cumulative_cardinalities", &self.cumulative_cardinalities)?;
+        state.serialize_field("name", &self.name)?;
         state.end()
     }
 }
@@ -438,6 +456,7 @@ impl<'de, I: Decodable, U> Deserialize<'de> for CodecData<I, U, usize> {
             leaf_bytes,
             leaf_offsets,
             cumulative_cardinalities,
+            name,
         } = CodecDataSerde::deserialize(deserializer)?;
         let center_map = decode_centers(&center_bytes);
         let permutation = (0..cardinality).collect::<Vec<_>>();
@@ -447,6 +466,7 @@ impl<'de, I: Decodable, U> Deserialize<'de> for CodecData<I, U, usize> {
             dimensionality_hint,
             metadata: permutation.clone(),
             permutation,
+            name,
             center_map,
             leaf_bytes,
             leaf_offsets,

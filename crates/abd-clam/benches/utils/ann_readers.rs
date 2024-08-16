@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use abd_clam::{FlatVec, Metric};
+use abd_clam::{Dataset, FlatVec, Metric};
 
 /// Reads the training and query data of the given dataset from the directory.
 pub fn read_ann_data_npy(
@@ -102,8 +102,8 @@ impl AnnDataset {
         let [train, test] = self.paths(root, ext);
         println!("Reading train data from {:?}, {:?}", train, test);
         let test = FlatVec::read_npy(test, metric).unwrap();
-        let (metric, test, _, _, _) = test.deconstruct();
-        let train = FlatVec::read_npy(train, metric).unwrap();
+        let (metric, test, _, _, _, _) = test.deconstruct();
+        let train = FlatVec::read_npy(train, metric).unwrap().with_name(self.to_name());
         (train, test)
     }
 }
