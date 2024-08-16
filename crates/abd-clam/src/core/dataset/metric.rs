@@ -24,7 +24,7 @@ pub struct Metric<I, U> {
     /// The distance function.
     pub(crate) distance_function: fn(&I, &I) -> U,
     /// The name of the distance function.
-    pub(crate) name: &'static str,
+    pub(crate) name: String,
 }
 
 impl<I, U> Default for Metric<I, U> {
@@ -36,7 +36,7 @@ impl<I, U> Default for Metric<I, U> {
             triangle_inequality: true,
             expensive: false,
             distance_function: |_, _| unreachable!("This should never be called."),
-            name: "Unknown",
+            name: "Unknown Metric".to_string(),
         }
     }
 }
@@ -79,14 +79,20 @@ impl<I, U> Metric<I, U> {
             triangle_inequality: true,
             expensive,
             distance_function,
-            name: "Unknown",
+            name: "Unknown Metric".to_string(),
         }
+    }
+
+    /// Returns the name of the distance function.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Sets the name of the distance function.
     #[must_use]
-    pub const fn with_name(mut self, name: &'static str) -> Self {
-        self.name = name;
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_string();
         self
     }
 

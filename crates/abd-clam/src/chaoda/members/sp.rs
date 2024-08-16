@@ -26,8 +26,8 @@ impl StationaryProbability {
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for StationaryProbability {
-    fn name(&self) -> String {
-        format!("sp-{}", self.num_steps)
+    fn name(&self) -> &str {
+        "sp"
     }
 
     fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {

@@ -12,8 +12,8 @@ use super::Algorithm;
 pub struct VertexDegree;
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for VertexDegree {
-    fn name(&self) -> String {
-        "vd".to_string()
+    fn name(&self) -> &str {
+        "vd"
     }
 
     fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {

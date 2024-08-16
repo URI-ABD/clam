@@ -2,14 +2,14 @@
 
 use std::path::Path;
 
-use abd_clam::{
-    chaoda::{Chaoda, Vertex},
-    Cluster, Dataset, PartitionCriteria, VecDataset,
-};
+use abd_clam::{Ball, Chaoda, Cluster, Dataset, Metric};
+use mt_logger::{mt_flush, mt_log, mt_new, Level, OutputStream};
 
 mod data;
 
 fn main() -> Result<(), String> {
+    mt_new!(None, Level::Info, OutputStream::StdOut);
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() != 3 {
@@ -22,7 +22,7 @@ fn main() -> Result<(), String> {
     // Parse args[1] into path object
     let data_dir = Path::new(&args[1]);
     let data_dir = std::fs::canonicalize(data_dir).map_err(|e| e.to_string())?;
-    println!("Reading datasets from: {data_dir:?}");
+    mt_log!(Level::Info, "Reading datasets from: {data_dir:?}");
 
     // Parse args[2] into boolean
     let use_pre_trained = args[2].parse::<String>().map_err(|e| e.to_string())?;
@@ -43,110 +43,69 @@ fn main() -> Result<(), String> {
 
     // Set some parameters for tree building
     let seed = Some(42);
-    let criteria = PartitionCriteria::default();
 
-    #[allow(clippy::type_complexity)]
-    let named_metrics: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
-        ("euclidean", |x, y| distances::vectors::euclidean(x, y)),
-        ("manhattan", |x, y| distances::vectors::manhattan(x, y)),
-        // ("cosine", |x, y| distances::vectors::cosine(x, y)),
-        // ("canberra", |x, y| distances::vectors::canberra(x, y)),
-        // ("bray_curtis", |x, y| distances::vectors::bray_curtis(x, y)),
+    let metrics = [
+        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::euclidean(x, y), false).with_name("euclidean"),
+        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::manhattan(x, y), false).with_name("manhattan"),
+        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::cosine(x, y), false).with_name("cosine"),
+        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::canberra(x, y), false).with_name("canberra"),
+        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::bray_curtis(x, y), false).with_name("bray_curtis"),
     ];
 
-    // Read the datasets and assign the metrics
-    let train_names: &[&str] = &[
-        "arrhythmia",
-        "mnist",
-        "pendigits",
-        "satellite",
-        // "shuttle",
-        "thyroid",
-    ];
-    let train_datasets = {
-        let datasets = train_names
-            .iter()
-            .map(|&name| {
-                let (train, labels) = data::Data::new(name)?.read(&data_dir)?;
-                Ok((name, (train, labels)))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let datasets = datasets
-            .into_iter()
-            .map(|(name, (train, labels))| {
-                let (metric_name, metric) = named_metrics[0];
-                let train = VecDataset::new(format!("{name}-{metric_name}"), train, metric, false);
-                let train = train.assign_metadata(labels)?;
-                let mut datasets = vec![train];
-                for &(metric_name, metric) in named_metrics.iter().skip(1) {
-                    let train = datasets[0].clone_with_new_metric(metric, false, format!("{name}-{metric_name}"));
-                    datasets.push(train);
-                }
-                Ok(datasets)
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let datasets = datasets.into_iter().flatten().collect::<Vec<_>>();
-        datasets
-            .into_iter()
-            .map(|d| {
-                let labels = d.metadata().to_vec();
-                (d, labels)
-            })
-            .collect::<Vec<_>>()
+    let mut train_datasets = data::Data::read_paper_train(&data_dir)?;
+    let criteria = {
+        let mut criteria = Vec::new();
+        for _ in 0..train_datasets.len() {
+            criteria.push(|c: &Ball<_, _, _>| c.cardinality() > 1);
+        }
+        criteria
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("We have a criterion for each dataset."))
     };
-    println!("Training datasets:");
-    for (d, _) in train_datasets.iter() {
-        println!("{}", d.name());
+    let labels = {
+        let mut labels = Vec::new();
+        for data in &train_datasets {
+            labels.push(data.metadata().to_vec());
+        }
+        labels
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("We have labels for each dataset."))
+    };
+
+    mt_log!(Level::Info, "Training datasets:");
+    for d in &train_datasets {
+        mt_log!(Level::Info, "{}", d.name());
     }
 
     let model = if use_pre_trained {
         // Load the pre-trained CHAODA model
-        println!("Loading pre-trained model from: {model_path:?}");
-        Chaoda::load(&model_path)?
+        mt_log!(Level::Info, "Loading pre-trained model from: {model_path:?}");
+        Chaoda::load(&model_path, &metrics)?
     } else {
         // Train the CHAODA model
         let num_epochs = 16;
-        let mut model = Chaoda::default();
-        model.train::<_, _, _, Vertex<_>, _>(&train_datasets, num_epochs, &criteria, None, seed);
-        println!("Training complete");
+        let trees = Chaoda::par_new_trees(&mut train_datasets, &criteria, &metrics, seed);
+        let mut model = Chaoda::new(&metrics, None, 4);
+        model.par_train(&mut train_datasets, &trees, &labels, num_epochs, None)?;
+        mt_log!(Level::Info, "Training complete");
         model.save(&model_path)?;
-        println!("Model saved to: {model_path:?}");
+        mt_log!(Level::Info, "Model saved to: {model_path:?}");
         model
     };
 
     // Print the ROC scores for all datasets
-    for (name, (data, labels)) in data::Data::read_all(&data_dir)? {
-        println!("Starting evaluation for: {name}");
+    for data in data::Data::read_all(&data_dir)? {
+        mt_log!(Level::Info, "Starting evaluation for: {}", data.name());
+        let mut data = [data];
+        let criteria = [|c: &Ball<_, _, _>| c.cardinality() > 1];
+        let trees = Chaoda::par_new_trees(&mut data, &criteria, &metrics, seed);
+        let labels = data[0].metadata().to_vec();
 
-        let (metric_name, metric) = named_metrics[0];
-        let dataset = VecDataset::new(format!("{name}-{metric_name}"), data, metric, false);
-        let dataset = dataset.assign_metadata(labels.clone())?;
-        let mut datasets = vec![dataset];
-
-        for &(metric_name, metric) in named_metrics.iter().skip(1) {
-            let dataset = datasets[0].clone_with_new_metric(metric, false, format!("{name}-{metric_name}"));
-            datasets.push(dataset);
-        }
-
-        let roots = datasets
-            .iter_mut()
-            .map(|dataset| Vertex::new_root(dataset, seed).partition(dataset, &criteria, seed))
-            .collect::<Vec<_>>();
-
-        let scores = datasets
-            .iter()
-            .zip(roots.iter())
-            .map(|(d, r)| model.predict(d, r))
-            .collect::<Vec<_>>();
-        let y_pred = Chaoda::aggregate_predictions(&scores);
-
-        let y_true = labels
-            .into_iter()
-            .map(|l| if l { 1.0 } else { 0.0 })
-            .collect::<Vec<_>>();
-        let roc_auc = Chaoda::roc_auc_score(&y_true, &y_pred);
-        println!("{name}: Aggregate {roc_auc:.6}");
+        let mut data = data.into_iter().next().unwrap();
+        let trees = trees.into_iter().next().unwrap();
+        let roc_score = model.par_evaluate(&mut data, &trees, &labels);
+        mt_log!(Level::Info, "Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
     }
 
-    Ok(())
+    mt_flush!().map_err(|e| e.to_string())
 }

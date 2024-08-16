@@ -12,8 +12,8 @@ use super::Algorithm;
 pub struct ClusterCardinality;
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for ClusterCardinality {
-    fn name(&self) -> String {
-        "cc".to_string()
+    fn name(&self) -> &str {
+        "cc"
     }
 
     fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {

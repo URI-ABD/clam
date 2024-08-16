@@ -12,8 +12,8 @@ use super::Algorithm;
 pub struct SubgraphCardinality;
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for SubgraphCardinality {
-    fn name(&self) -> String {
-        "sc".to_string()
+    fn name(&self) -> &str {
+        "sc"
     }
 
     fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {

@@ -2,14 +2,11 @@
 
 use std::path::Path;
 
-use distances::Number;
+use abd_clam::{Dataset, FlatVec, Metric};
 use ndarray::prelude::*;
-use ndarray_npy::{ReadNpyExt, ReadableElement};
+use ndarray_npy::ReadNpyExt;
 
-/// The result of reading a dataset.
-///
-/// The first element is the data and the second element is the labels.
-pub type DataResult = (Vec<Vec<f32>>, Vec<bool>);
+type ChaodaDataset = FlatVec<Vec<f64>, f64, bool>;
 
 /// The datasets used for anomaly detection.
 ///
@@ -134,7 +131,7 @@ impl Data {
     /// # Arguments
     ///
     /// * `data_dir` - The directory containing the dataset.
-    pub fn read(&self, data_dir: &Path) -> Result<DataResult, String> {
+    pub fn read(&self, data_dir: &Path) -> Result<ChaodaDataset, String> {
         match self {
             Self::Annthyroid
             | Self::Arrhythmia
@@ -159,72 +156,64 @@ impl Data {
             | Self::Vertebral
             | Self::Vowels
             | Self::Wbc
-            | Self::Wine => read_xy::<f64, u8>(data_dir, self.name()),
+            | Self::Wine => read_xy(data_dir, self.name()),
         }
     }
 
     /// Read the training datasets from the paper
-    pub fn read_paper_train(data_dir: &Path) -> Result<Vec<(String, DataResult)>, String> {
-        Ok(vec![
-            ("annthyroid".to_string(), Self::Annthyroid.read(data_dir)?),
-            ("mnist".to_string(), Self::Mnist.read(data_dir)?),
-            ("pendigits".to_string(), Self::PenDigits.read(data_dir)?),
-            ("satellite".to_string(), Self::Satellite.read(data_dir)?),
-            // ("shuttle".to_string(), Self::Shuttle.read(data_dir)?),  // I moved this to inference because it takes too long to train
-            ("thyroid".to_string(), Self::Thyroid.read(data_dir)?),
+    pub fn read_paper_train(data_dir: &Path) -> Result<[ChaodaDataset; 5], String> {
+        Ok([
+            Self::Annthyroid.read(data_dir)?,
+            Self::Mnist.read(data_dir)?,
+            Self::PenDigits.read(data_dir)?,
+            Self::Satellite.read(data_dir)?,
+            // Self::Shuttle.read(data_dir)?,  // I moved this to inference because it takes too long to train
+            Self::Thyroid.read(data_dir)?,
         ])
     }
 
     /// Read the inference datasets from the paper
-    pub fn read_paper_inference(data_dir: &Path) -> Result<Vec<(String, DataResult)>, String> {
+    pub fn read_paper_inference(data_dir: &Path) -> Result<Vec<ChaodaDataset>, String> {
         Ok(vec![
-            ("shuttle".to_string(), Self::Shuttle.read(data_dir)?),
-            ("arrhythmia".to_string(), Self::Arrhythmia.read(data_dir)?),
-            ("breastw".to_string(), Self::BreastW.read(data_dir)?),
-            ("cardio".to_string(), Self::Cardio.read(data_dir)?),
-            ("cover".to_string(), Self::ForestCover.read(data_dir)?),
-            ("glass".to_string(), Self::Glass.read(data_dir)?),
-            ("http".to_string(), Self::Http.read(data_dir)?),
-            ("ionosphere".to_string(), Self::Ionosphere.read(data_dir)?),
-            ("lympho".to_string(), Self::Lympho.read(data_dir)?),
-            ("mammography".to_string(), Self::Mammography.read(data_dir)?),
-            ("musk".to_string(), Self::Musk.read(data_dir)?),
-            ("optdigits".to_string(), Self::OptDigits.read(data_dir)?),
-            ("pima".to_string(), Self::Pima.read(data_dir)?),
-            ("satimage-2".to_string(), Self::SatImage2.read(data_dir)?),
-            ("smtp".to_string(), Self::Smtp.read(data_dir)?),
-            ("vertebral".to_string(), Self::Vertebral.read(data_dir)?),
-            ("vowels".to_string(), Self::Vowels.read(data_dir)?),
-            ("wbc".to_string(), Self::Wbc.read(data_dir)?),
-            ("wine".to_string(), Self::Wine.read(data_dir)?),
+            Self::Shuttle.read(data_dir)?,
+            Self::Arrhythmia.read(data_dir)?,
+            Self::BreastW.read(data_dir)?,
+            Self::Cardio.read(data_dir)?,
+            Self::ForestCover.read(data_dir)?,
+            Self::Glass.read(data_dir)?,
+            Self::Http.read(data_dir)?,
+            Self::Ionosphere.read(data_dir)?,
+            Self::Lympho.read(data_dir)?,
+            Self::Mammography.read(data_dir)?,
+            Self::Musk.read(data_dir)?,
+            Self::OptDigits.read(data_dir)?,
+            Self::Pima.read(data_dir)?,
+            Self::SatImage2.read(data_dir)?,
+            Self::Smtp.read(data_dir)?,
+            Self::Vertebral.read(data_dir)?,
+            Self::Vowels.read(data_dir)?,
+            Self::Wbc.read(data_dir)?,
+            Self::Wine.read(data_dir)?,
         ])
     }
 
     /// Read all the datasets
     #[allow(dead_code)]
-    pub fn read_all(data_dir: &Path) -> Result<Vec<(String, DataResult)>, String> {
-        let mut datasets = Self::read_paper_train(data_dir)?;
+    pub fn read_all(data_dir: &Path) -> Result<Vec<ChaodaDataset>, String> {
+        let mut datasets = Self::read_paper_train(data_dir)?.to_vec();
         datasets.extend(Self::read_paper_inference(data_dir)?);
         Ok(datasets)
     }
 }
 
-fn read_xy<X, Y>(path: &Path, name: &str) -> Result<DataResult, String>
-where
-    X: Number + ReadableElement,
-    Y: Number + ReadableElement,
-{
+fn read_xy(path: &Path, name: &str) -> Result<ChaodaDataset, String> {
+    let labels_path = path.join(format!("{}_labels.npy", name));
+    let reader = std::fs::File::open(labels_path).map_err(|e| e.to_string())?;
+    let labels = Array1::<u8>::read_npy(reader).map_err(|e| e.to_string())?;
+    let labels = labels.mapv(|y| y == 1).to_vec();
+
     let x_path = path.join(format!("{}.npy", name));
+    let fv: FlatVec<Vec<f64>, f64, usize> = FlatVec::read_npy(x_path, Metric::default())?;
 
-    let reader = std::fs::File::open(x_path).map_err(|e| e.to_string())?;
-    let x_data = Array2::<X>::read_npy(reader).map_err(|e| e.to_string())?;
-    let x_data = x_data.mapv(|x| x.as_f32());
-    let x_data = x_data.axis_iter(Axis(0)).map(|row| row.to_vec()).collect::<Vec<_>>();
-
-    let y_path = path.join(format!("{}_labels.npy", name));
-    let reader = std::fs::File::open(y_path).map_err(|e| e.to_string())?;
-    let y_data = Array1::<Y>::read_npy(reader).map_err(|e| e.to_string())?;
-    let y_data = y_data.mapv(|y| y == Y::ONE).to_vec();
-
-    Ok((x_data, y_data))
+    fv.with_name(name).with_metadata(labels)
 }

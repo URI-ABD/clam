@@ -1,7 +1,7 @@
 //! Entropy Scaling Search
 
 pub mod cluster;
-mod codec;
+pub(crate) mod codec;
 pub mod dataset;
 mod search;
 

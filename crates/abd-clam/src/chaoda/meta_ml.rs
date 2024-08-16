@@ -42,27 +42,37 @@ impl MlModel {
     /// * If the model name is unknown.
     pub fn new(model: &str) -> Result<Self, String> {
         // Dummy data for model initialization. This comes from the `smartcore` examples.
-        let dummy_x = DenseMatrix::from_2d_array(&[
-            &[234.289, 235.6, 159.0, 107.608, 1947., 60.323],
-            &[259.426, 232.5, 145.6, 108.632, 1948., 61.122],
-            &[258.054, 368.2, 161.6, 109.773, 1949., 60.171],
-            &[284.599, 335.1, 165.0, 110.929, 1950., 61.187],
-            &[328.975, 209.9, 309.9, 112.075, 1951., 63.221],
-            &[346.999, 193.2, 359.4, 113.270, 1952., 63.639],
-            &[365.385, 187.0, 354.7, 115.094, 1953., 64.989],
-            &[363.112, 357.8, 335.0, 116.219, 1954., 63.761],
-            &[397.469, 290.4, 304.8, 117.388, 1955., 66.019],
-            &[419.180, 282.2, 285.7, 118.734, 1956., 67.857],
-            &[442.769, 293.6, 279.8, 120.445, 1957., 68.169],
-            &[444.546, 468.1, 263.7, 121.950, 1958., 66.513],
-            &[482.704, 381.3, 255.2, 123.366, 1959., 68.655],
-            &[502.601, 393.1, 251.4, 125.368, 1960., 69.564],
-            &[518.173, 480.6, 257.2, 127.852, 1961., 69.331],
-            &[554.894, 400.7, 282.7, 130.081, 1962., 70.551],
-        ]);
-        let dummy_y = vec![
+        let dummy_x = [
+            [234.289, 235.6, 159.0, 107.608, 1947., 60.323].as_slice(),
+            [259.426, 232.5, 145.6, 108.632, 1948., 61.122].as_slice(),
+            [258.054, 368.2, 161.6, 109.773, 1949., 60.171].as_slice(),
+            [284.599, 335.1, 165.0, 110.929, 1950., 61.187].as_slice(),
+            [328.975, 209.9, 309.9, 112.075, 1951., 63.221].as_slice(),
+            [346.999, 193.2, 359.4, 113.270, 1952., 63.639].as_slice(),
+            [365.385, 187.0, 354.7, 115.094, 1953., 64.989].as_slice(),
+            [363.112, 357.8, 335.0, 116.219, 1954., 63.761].as_slice(),
+            [397.469, 290.4, 304.8, 117.388, 1955., 66.019].as_slice(),
+            [419.180, 282.2, 285.7, 118.734, 1956., 67.857].as_slice(),
+            [442.769, 293.6, 279.8, 120.445, 1957., 68.169].as_slice(),
+            [444.546, 468.1, 263.7, 121.950, 1958., 66.513].as_slice(),
+            [482.704, 381.3, 255.2, 123.366, 1959., 68.655].as_slice(),
+            [502.601, 393.1, 251.4, 125.368, 1960., 69.564].as_slice(),
+            [518.173, 480.6, 257.2, 127.852, 1961., 69.331].as_slice(),
+            [554.894, 400.7, 282.7, 130.081, 1962., 70.551].as_slice(),
+        ];
+        let dummy_y = [
             83.0, 88.5, 88.2, 89.5, 96.2, 98.1, 99.0, 100.0, 101.2, 104.6, 108.4, 110.8, 112.6, 114.2, 115.7, 116.9,
         ];
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Generating dummy MetaML model {} on {} data samples with {} dims",
+            model,
+            dummy_x.len(),
+            dummy_x[0].len()
+        );
+
+        let dummy_x = DenseMatrix::from_2d_array(&dummy_x);
+        let dummy_y = dummy_y.to_vec();
 
         Ok(match model {
             "lr" | "LR" | "LinearRegression" => Self::LinearRegression(
@@ -95,6 +105,32 @@ impl MlModel {
         })
     }
 
+    /// Get the name of the model.
+    #[must_use]
+    pub const fn name(&self) -> &str {
+        match self {
+            Self::LinearRegression(_) => "LinearRegression",
+            Self::ElasticNet(_) => "ElasticNet",
+            Self::Lasso(_) => "Lasso",
+            Self::RidgeRegression(_) => "RidgeRegression",
+            Self::DecisionTreeRegressor(_) => "DecisionTreeRegressor",
+            Self::RandomForestRegressor(_) => "RandomForestRegressor",
+        }
+    }
+
+    /// Get the short name of the model.
+    #[must_use]
+    pub const fn short_name(&self) -> &str {
+        match self {
+            Self::LinearRegression(_) => "LR",
+            Self::ElasticNet(_) => "EN",
+            Self::Lasso(_) => "LA",
+            Self::RidgeRegression(_) => "RR",
+            Self::DecisionTreeRegressor(_) => "DT",
+            Self::RandomForestRegressor(_) => "RF",
+        }
+    }
+
     /// Get the default models.
     #[must_use]
     pub fn default_models() -> Vec<Self> {
@@ -119,6 +155,14 @@ impl MlModel {
     ///
     /// * If the number of `labels` is not equal to the cardinality of the data.
     pub fn train(&mut self, data: &[Vec<f32>], roc_scores: &Vec<f32>) -> Result<(), String> {
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Training MetaML model {} on {} data samples with {} dims",
+            self.name(),
+            data.len(),
+            data[0].len()
+        );
+
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let data = DenseMatrix::from_2d_array(&data);
         match self {
@@ -172,6 +216,14 @@ impl MlModel {
     /// * If the number of features in the data does not match the number of features in the model.
     /// * If the model cannot predict the data.
     pub fn predict(&self, data: &[Vec<f32>]) -> Result<Vec<f32>, String> {
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Predicting with MetaML model {} on {} data samples with {} dims",
+            self.name(),
+            data.len(),
+            data[0].len()
+        );
+
         let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let data = DenseMatrix::from_2d_array(&data);
         match self {

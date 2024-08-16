@@ -65,10 +65,23 @@ impl Member {
             Self::VD(vd::VertexDegree),
         ]
     }
+
+    /// Get the name of the algorithm.
+    #[must_use]
+    pub const fn name(&self) -> &str {
+        match self {
+            Self::CC(_) => "cc",
+            Self::GN(_) => "gn",
+            Self::PC(_) => "pc",
+            Self::SC(_) => "sc",
+            Self::SP(_) => "sp",
+            Self::VD(_) => "vd",
+        }
+    }
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for Member {
-    fn name(&self) -> String {
+    fn name(&self) -> &str {
         match self {
             Self::CC(a) => <cc::ClusterCardinality as Algorithm<I, U, D, S>>::name(a),
             Self::GN(a) => <gn::GraphNeighborhood as Algorithm<I, U, D, S>>::name(a),
@@ -105,7 +118,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> 
 /// A trait for an algorithm in the CHAODA ensemble.
 pub trait Algorithm<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// Get the name of the algorithm.
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
 
     /// Evaluate the algorithm on a `Graph` and return a vector of scores for each
     /// `OddBall` in the `Graph`.

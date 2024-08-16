@@ -12,8 +12,8 @@ use super::Algorithm;
 pub struct ParentCardinality;
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for ParentCardinality {
-    fn name(&self) -> String {
-        "pc".to_string()
+    fn name(&self) -> &str {
+        "pc"
     }
 
     fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {

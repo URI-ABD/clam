@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::core::{Dataset, FlatVec, Metric};
+use crate::core::{Dataset, FlatVec};
 
 /// A dataset that can be sharded into multiple smaller datasets.
 pub trait Shardable<I, U: Number>: Dataset<I, U> {
@@ -77,7 +77,7 @@ pub trait Shardable<I, U: Number>: Dataset<I, U> {
     }
 }
 
-impl<I, U: Number, M> Shardable<I, U> for FlatVec<I, U, M> {
+impl<I: Clone, U: Number, M> Shardable<I, U> for FlatVec<I, U, M> {
     #[must_use]
     fn reset_permutation(mut self) -> Self {
         self.permutation = (0..self.instances.len()).collect();
@@ -86,7 +86,7 @@ impl<I, U: Number, M> Shardable<I, U> for FlatVec<I, U, M> {
 
     fn split_off(mut self, at: usize) -> [Self; 2] {
         #[allow(clippy::unnecessary_struct_initialization)]
-        let metric = Metric { ..self.metric };
+        let metric = self.metric.clone();
         let instances = self.instances.split_off(at);
         let permutation = Vec::new();
         let metadata = self.metadata.split_off(at);

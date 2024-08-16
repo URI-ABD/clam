@@ -30,8 +30,8 @@ impl GraphNeighborhood {
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for GraphNeighborhood {
-    fn name(&self) -> String {
-        format!("gn-{}", self.diameter_fraction)
+    fn name(&self) -> &str {
+        "gn"
     }
 
     fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {

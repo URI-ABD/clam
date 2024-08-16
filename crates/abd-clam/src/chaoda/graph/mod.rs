@@ -22,6 +22,8 @@ pub struct Graph<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     components: Vec<Component<'a, I, U, D, S>>,
     /// Cumulative populations of the `Component`s in the `Graph`.
     populations: Vec<usize>,
+    /// The number of vertices in the `Graph`.
+    cardinality: usize,
 }
 
 // , C: OddBall<U>, const N: usize
@@ -77,10 +79,17 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Graph<'a, I, U, D,
                 Some(*acc)
             })
             .collect::<Vec<_>>();
+        let cardinality = components.iter().map(Component::cardinality).sum();
         Self {
             components,
             populations,
+            cardinality,
         }
+    }
+
+    /// Cet teh number of `Vertex`es in the `Graph`.
+    pub const fn cardinality(&self) -> usize {
+        self.cardinality
     }
 
     /// Iterate over the `OddBall`s in the `Graph`.
