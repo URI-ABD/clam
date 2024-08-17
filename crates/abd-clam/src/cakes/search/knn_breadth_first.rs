@@ -1,6 +1,6 @@
 //! K-Nearest Neighbors search using a Breadth First sieve.
 
-use core::cmp::{min, Ordering, Reverse};
+use core::cmp::{min, Ordering};
 
 use distances::Number;
 use rayon::prelude::*;
@@ -14,14 +14,14 @@ where
     D: Dataset<I, U>,
     C: Cluster<I, U, D>,
 {
-    let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
+    let mut candidates = Vec::new();
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
 
     let d = root.distance_to_center(data, query);
-    candidates.push((Reverse(d_max(root, d)), root));
+    candidates.push((d_max(root, d), root));
 
     while !candidates.is_empty() {
-        let [needed, maybe_needed, _] = split_candidates(&hits, candidates);
+        let [needed, maybe_needed, _] = split_candidates(&mut candidates, k);
 
         let (leaves, parents) = needed
             .into_iter()
@@ -38,11 +38,11 @@ where
             }
         }
 
-        candidates = SizedHeap::new(None);
+        candidates = Vec::new();
         for (_, p) in parents {
             p.child_clusters()
                 .map(|c| (c, c.distance_to_center(data, query)))
-                .for_each(|(c, d)| candidates.push((Reverse(d_max(c, d)), c)));
+                .for_each(|(c, d)| candidates.push((d_max(c, d), c)));
         }
     }
 
@@ -57,14 +57,14 @@ where
     D: ParDataset<I, U>,
     C: ParCluster<I, U, D>,
 {
-    let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
+    let mut candidates = Vec::new();
     let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
 
     let d = root.distance_to_center(data, query);
-    candidates.push((Reverse(d_max(root, d)), root));
+    candidates.push((d_max(root, d), root));
 
     while !candidates.is_empty() {
-        let [needed, maybe_needed, _] = split_candidates(&hits, candidates);
+        let [needed, maybe_needed, _] = split_candidates(&mut candidates, k);
 
         let (leaves, parents) = needed
             .into_iter()
@@ -81,7 +81,7 @@ where
             }
         }
 
-        candidates = SizedHeap::new(None);
+        candidates = Vec::new();
         let distances = parents
             .into_par_iter()
             .flat_map(|(_, p)| p.child_clusters().collect::<Vec<_>>())
@@ -89,7 +89,7 @@ where
             .collect::<Vec<_>>();
         distances
             .into_iter()
-            .for_each(|(c, d)| candidates.push((Reverse(d_max(c, d)), c)));
+            .for_each(|(c, d)| candidates.push((d_max(c, d), c)));
     }
 
     hits.items().map(|(d, i)| (i, d)).collect()
@@ -100,94 +100,21 @@ fn d_max<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C, d: U) -> U 
     c.radius() + d
 }
 
-/// Wrapper for `_partition_items`.
-fn partition_items<I, U, C, D>(items: &mut Vec<(U, &C)>, k: usize) -> usize
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
-{
-    _partition_items(items, k, 0, items.len() - 1)
-}
-
-/// Finds the smallest index i such that the combined cardinality of items which
-/// are at least as close to the query as items[i] is at least k.
-fn _partition_items<I, U, D, C>(items: &mut Vec<(U, &C)>, k: usize, l: usize, r: usize) -> usize
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
-{
-    if l >= r {
-        min(l, r)
-    } else {
-        let pivot = l + (r - l) / 2;
-        let p = partition_once(items, l, r, pivot);
-
-        let guaranteed_p = items.iter().take(p).map(|(_, c)| c.cardinality()).sum::<usize>();
-        let guaranteed_p_minus_one = items.iter().take(p - 1).map(|(_, c)| c.cardinality()).sum::<usize>();
-        match guaranteed_p.cmp(&k) {
-            Ordering::Equal => p,
-            Ordering::Less => _partition_items(items, k, p + 1, r),
-            Ordering::Greater => {
-                if p == 0 || guaranteed_p_minus_one < k {
-                    p
-                } else {
-                    _partition_items(items, k, l, p - 1)
-                }
-            }
-        }
-    }
-}
-
-/// Changes pivot point and swaps elements around so that all elements to left
-/// of pivot are less than or equal to pivot and all elements to right of pivot
-/// are greater than pivot.
-fn partition_once<I, U, C, D>(items: &mut [(U, &C)], l: usize, r: usize, pivot: usize) -> usize
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
-{
-    items.swap(pivot, r);
-
-    let (mut a, mut b) = (l, l);
-    while b < r {
-        if items[b].0 < items[r].0 {
-            items.swap(a, b);
-            a += 1;
-        }
-        b += 1;
-    }
-
-    items.swap(a, r);
-
-    a
-}
-
 /// Splits the candidates three ways: those needed to get to k hits, those that
 /// might be needed to get to k hits, and those that are not needed to get to k
 /// hits.
-fn split_candidates<'a, I, U, D, C>(
-    hits: &SizedHeap<(U, usize)>,
-    candidates: SizedHeap<(Reverse<U>, &'a C)>,
-) -> [Vec<(U, &'a C)>; 3]
+fn split_candidates<'a, I, U, D, C>(candidates: &mut [(U, &'a C)], k: usize) -> [Vec<(U, &'a C)>; 3]
 where
     U: Number,
     D: Dataset<I, U>,
     C: Cluster<I, U, D>,
 {
-    let k = hits
-        .k()
-        .unwrap_or_else(|| unreachable!("The `hits` heap should have a maximum size."));
-    let mut items = candidates.items().map(|(Reverse(d), c)| (d, c)).collect::<Vec<_>>();
+    let threshold_index = quick_partition(candidates, k);
+    let threshold = candidates[threshold_index].0;
 
-    let threshold_index = partition_items(&mut items, k);
-    let threshold = items[threshold_index].0;
+    let (needed, others) = candidates.iter().partition::<Vec<_>, _>(|(d, _)| *d < threshold);
 
-    let (needed, items) = items.into_iter().partition::<Vec<_>, _>(|(d, _)| *d < threshold);
-
-    let (not_needed, maybe_needed) = items
+    let (not_needed, maybe_needed) = others
         .into_iter()
         .map(|(d, c)| {
             let diam = c.radius().double();
@@ -203,6 +130,97 @@ where
     let maybe_needed = maybe_needed.into_iter().map(|(d, _, c)| (d, c)).collect();
 
     [needed, maybe_needed, not_needed]
+}
+
+/// The Quick Partition algorithm, which is a variant of the Quick Select
+/// algorithm. It finds the k-th smallest element in a list of elements, while
+/// also reordering the list so that all elements to the left of the k-th
+/// smallest element are less than or equal to it, and all elements to the right
+/// of the k-th smallest element are greater than or equal to it.
+fn quick_partition<I, U, C, D>(items: &mut [(U, &C)], k: usize) -> usize
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    qps(items, k, 0, items.len() - 1)
+}
+
+/// The recursive helper function for the Quick Partition algorithm.
+fn qps<I, U, D, C>(items: &mut [(U, &C)], k: usize, l: usize, r: usize) -> usize
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    if l >= r {
+        min(l, r)
+    } else {
+        // Choose the pivot point
+        let pivot = l + (r - l) / 2;
+        let p = find_pivot(items, l, r, pivot);
+
+        // Calculate the cumulative guaranteed cardinalities for the first p
+        // `Cluster`s
+        let cumulative_guarantees = items
+            .iter()
+            .take(p)
+            .scan(0, |acc, (_, c)| {
+                *acc += c.cardinality();
+                Some(*acc)
+            })
+            .collect::<Vec<_>>();
+
+        // Calculate the guaranteed cardinality of the p-th `Cluster`
+        let guaranteed_p = if p > 0 { cumulative_guarantees[p - 1] } else { 0 };
+
+        match guaranteed_p.cmp(&k) {
+            Ordering::Equal => p,                      // Found the k-th smallest element
+            Ordering::Less => qps(items, k, p + 1, r), // Need to look to the right
+            Ordering::Greater => {
+                // The `Cluster` just before the p-th might be the one we need
+                let guaranteed_p_minus_one = if p > 1 { cumulative_guarantees[p - 2] } else { 0 };
+                if p == 0 || guaranteed_p_minus_one < k {
+                    p // Found the k-th smallest element
+                } else {
+                    // Need to look to the left
+                    qps(items, k, l, p - 1)
+                }
+            }
+        }
+    }
+}
+
+/// Moves pivot point and swaps elements around so that all elements to left
+/// of pivot are less than or equal to pivot and all elements to right of pivot
+/// are greater than pivot.
+fn find_pivot<I, U, C, D>(items: &mut [(U, &C)], l: usize, r: usize, pivot: usize) -> usize
+where
+    U: Number,
+    D: Dataset<I, U>,
+    C: Cluster<I, U, D>,
+{
+    // Move pivot to the end
+    items.swap(pivot, r);
+
+    // Partition around pivot
+    let (mut a, mut b) = (l, l);
+    // Invariant: a <= b <= r
+    while b < r {
+        // If the current element is less than the pivot, swap it with the
+        // element at a and increment a.
+        if items[b].0 < items[r].0 {
+            items.swap(a, b);
+            a += 1;
+        }
+        // Increment b
+        b += 1;
+    }
+
+    // Move pivot to its final position
+    items.swap(a, r);
+
+    a
 }
 
 #[cfg(test)]

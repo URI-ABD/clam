@@ -60,7 +60,7 @@ pub struct SizedHeap<T: PartialOrd> {
     /// The heap of items.
     heap: BinaryHeap<MaxItem<T>>,
     /// The maximum size of the heap.
-    k: Option<usize>,
+    k: usize,
 }
 
 impl<T: PartialOrd> SizedHeap<T> {
@@ -70,34 +70,30 @@ impl<T: PartialOrd> SizedHeap<T> {
         k.map_or_else(
             || Self {
                 heap: BinaryHeap::new(),
-                k: None,
+                k: usize::MAX,
             },
             |k| Self {
                 heap: BinaryHeap::with_capacity(k),
-                k: Some(k),
+                k,
             },
         )
     }
 
     /// Returns the maximum size of the heap.
     #[must_use]
-    pub const fn k(&self) -> Option<usize> {
+    pub const fn k(&self) -> usize {
         self.k
     }
 
     /// Pushes an item onto the heap, maintaining the max size.
     pub fn push(&mut self, item: T) {
-        if let Some(k) = self.k {
-            if self.heap.len() < k {
-                self.heap.push(MaxItem(item));
-            } else if let Some(top) = self.heap.peek() {
-                if item < top.0 {
-                    self.heap.pop();
-                    self.heap.push(MaxItem(item));
-                }
-            }
-        } else {
+        if self.heap.len() < self.k {
             self.heap.push(MaxItem(item));
+        } else if let Some(top) = self.heap.peek() {
+            if item < top.0 {
+                self.heap.pop();
+                self.heap.push(MaxItem(item));
+            }
         }
     }
 
@@ -132,7 +128,7 @@ impl<T: PartialOrd> SizedHeap<T> {
     /// Returns whether the heap is full.
     #[must_use]
     pub fn is_full(&self) -> bool {
-        self.k.map_or(false, |k| self.heap.len() == k)
+        self.heap.len() == self.k
     }
 }
 
