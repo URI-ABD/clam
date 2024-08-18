@@ -1,11 +1,7 @@
 //! A `FlatVec` is a dataset that is stored as a flat vector.
 
 use distances::Number;
-use serde::{
-    de::Deserializer,
-    ser::{SerializeStruct, Serializer},
-    Deserialize, Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 use super::{
     linear_search::{LinearSearch, ParLinearSearch},
@@ -22,9 +18,10 @@ use super::{
 /// - `I`: The type of the instances in the dataset.
 /// - `U`: The type of the distance values.
 /// - `M`: The type of the metadata associated with the instances.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FlatVec<I, U, M> {
     /// The metric space of the dataset.
+    #[serde(skip)]
     pub(crate) metric: Metric<I, U>,
     /// The instances in the dataset.
     pub(crate) instances: Vec<I>,
@@ -289,53 +286,6 @@ impl<T: ndarray_npy::WritableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
         let arr: ndarray::Array2<T> = ndarray::Array2::from_shape_vec(shape, v).map_err(|e| e.to_string())?;
         ndarray_npy::write_npy(&path, &arr).map_err(|e| e.to_string())?;
         Ok(path)
-    }
-}
-
-/// This struct is used for serializing and deserializing a `FlatVec`.
-#[derive(Serialize, Deserialize)]
-struct FlatVecSerde<I, M> {
-    /// The instances in the dataset.
-    instances: Vec<I>,
-    /// A hint for the dimensionality of the dataset.
-    dimensionality_hint: (usize, Option<usize>),
-    /// The permutation of the instances.
-    permutation: Vec<usize>,
-    /// The metadata associated with the instances.
-    metadata: Vec<M>,
-    /// The name of the dataset.
-    name: String,
-}
-
-impl<I: Serialize, U, M: Serialize> Serialize for FlatVec<I, U, M> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("FlatVecSerde", 5)?;
-        state.serialize_field("instances", &self.instances)?;
-        state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
-        state.serialize_field("permutation", &self.permutation)?;
-        state.serialize_field("metadata", &self.metadata)?;
-        state.serialize_field("name", &self.name)?;
-        state.end()
-    }
-}
-
-impl<'de, I: Deserialize<'de>, U, M: Deserialize<'de>> Deserialize<'de> for FlatVec<I, U, M> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let FlatVecSerde {
-            instances,
-            dimensionality_hint,
-            permutation,
-            metadata,
-            name,
-        } = FlatVecSerde::deserialize(deserializer)?;
-        Ok(Self {
-            metric: Metric::default(),
-            instances,
-            dimensionality_hint,
-            permutation,
-            metadata,
-            name,
-        })
     }
 }
 

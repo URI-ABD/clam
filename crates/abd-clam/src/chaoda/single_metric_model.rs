@@ -25,7 +25,7 @@ type Models = Vec<(Member, MlModel)>;
 #[derive(Serialize, Deserialize)]
 pub struct SingleMetricModel<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The metric used to calculate the distance between two instances.
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip)]
     metric: Metric<I, U>,
     /// The combinations of `Member` and `MlModel` that are used in the ensemble.
     models: Models,

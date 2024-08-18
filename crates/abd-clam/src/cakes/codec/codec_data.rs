@@ -4,11 +4,7 @@ use std::collections::HashMap;
 
 use distances::Number;
 use rayon::prelude::*;
-use serde::{
-    de::Deserializer,
-    ser::{SerializeStruct, Serializer},
-    Deserialize, Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     cluster::ParCluster,
@@ -36,16 +32,20 @@ use super::{
 /// - `I`: The type of the instances in the dataset.
 /// - `U`: The type of the numbers in the dataset.
 /// - `M`: The type of the metadata associated with the instances.
+#[derive(Serialize, Deserialize)]
 pub struct CodecData<I, U, M> {
     /// The metric space of the dataset.
+    #[serde(skip)]
     pub(crate) metric: Metric<I, U>,
     /// The cardinality of the dataset.
     pub(crate) cardinality: usize,
     /// A hint for the dimensionality of the dataset.
     pub(crate) dimensionality_hint: (usize, Option<usize>),
     /// The metadata associated with the instances.
+    #[serde(skip)]
     pub(crate) metadata: Vec<M>,
     /// The permutation of the original dataset.
+    #[serde(skip)]
     pub(crate) permutation: Vec<usize>,
     /// The name of the dataset.
     pub(crate) name: String,
@@ -379,98 +379,5 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U
             })
             .filter(|&(_, d)| d <= radius)
             .collect()
-    }
-}
-
-/// Returns binary encodings for the centers of the clusters in the dataset.
-fn encode_centers<I: Encodable>(center_map: &HashMap<usize, I>) -> Box<[u8]> {
-    // TODO: Bring back recursive encodings after fixing graph traversal for
-    // when multiple clusters have the same arg_center.
-    let mut bytes = Vec::new();
-
-    for (i, center) in center_map {
-        bytes.extend(i.to_le_bytes());
-        let encoding = center.as_bytes();
-        bytes.extend(encoding.len().to_le_bytes());
-        bytes.extend(encoding);
-    }
-
-    bytes.into_boxed_slice()
-}
-
-/// Decodes the binary encodings for the centers of the clusters in the dataset.
-fn decode_centers<I: Decodable>(bytes: &[u8]) -> HashMap<usize, I> {
-    let mut offset = 0;
-
-    let mut center_map = HashMap::new();
-    while offset < bytes.len() {
-        let i = super::read_usize(bytes, &mut offset);
-        let encoding = super::read_encoding(bytes, &mut offset);
-        let center = I::from_bytes(&encoding);
-        center_map.insert(i, center);
-    }
-
-    center_map
-}
-
-/// This struct is used for serializing and deserializing a `CodecData`.
-#[derive(Serialize, Deserialize)]
-struct CodecDataSerde {
-    /// The cardinality of the dataset.
-    cardinality: usize,
-    /// A hint for the dimensionality of the dataset.
-    dimensionality_hint: (usize, Option<usize>),
-    /// The bytes representing the centers of the clusters in the dataset.
-    center_bytes: Box<[u8]>,
-    /// The bytes representing the leaf clusters as a flattened vector.
-    leaf_bytes: Box<[u8]>,
-    /// The offsets that indicate the start of the instances for each leaf
-    leaf_offsets: Vec<usize>,
-    /// The cumulative cardinalities of the leaves.
-    cumulative_cardinalities: Vec<usize>,
-    /// The name of the dataset.
-    name: String,
-}
-
-impl<I: Encodable, U, M> Serialize for CodecData<I, U, M> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let center_bytes = encode_centers(&self.center_map);
-        let mut state = serializer.serialize_struct("CodecDataSerde", 7)?;
-        state.serialize_field("cardinality", &self.cardinality)?;
-        state.serialize_field("dimensionality_hint", &self.dimensionality_hint)?;
-        state.serialize_field("center_bytes", &center_bytes)?;
-        state.serialize_field("leaf_bytes", &self.leaf_bytes)?;
-        state.serialize_field("leaf_offsets", &self.leaf_offsets)?;
-        state.serialize_field("cumulative_cardinalities", &self.cumulative_cardinalities)?;
-        state.serialize_field("name", &self.name)?;
-        state.end()
-    }
-}
-
-impl<'de, I: Decodable, U> Deserialize<'de> for CodecData<I, U, usize> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let CodecDataSerde {
-            cardinality,
-            dimensionality_hint,
-            center_bytes,
-            leaf_bytes,
-            leaf_offsets,
-            cumulative_cardinalities,
-            name,
-        } = CodecDataSerde::deserialize(deserializer)?;
-        let center_map = decode_centers(&center_bytes);
-        let permutation = (0..cardinality).collect::<Vec<_>>();
-        Ok(Self {
-            metric: Metric::default(),
-            cardinality,
-            dimensionality_hint,
-            metadata: permutation.clone(),
-            permutation,
-            name,
-            center_map,
-            leaf_bytes,
-            leaf_offsets,
-            cumulative_cardinalities,
-        })
     }
 }
