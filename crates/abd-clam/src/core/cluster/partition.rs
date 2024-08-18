@@ -147,6 +147,13 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
         seed: Option<u64>,
     ) -> Self {
         if !self.is_singleton() && criteria(&self) {
+            mt_logger::mt_log!(
+                mt_logger::Level::Debug,
+                "Starting `partition` of a cluster at depth {}, with {} instances.",
+                self.depth(),
+                self.cardinality()
+            );
+
             // Find the extrema.
             let extrema = self.find_extrema(data);
             // Remove the extrema from the indices.
@@ -180,6 +187,13 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
             self.set_children(children);
             // Update the `Cluster`'s indices.
             self.set_indices(indices);
+
+            mt_logger::mt_log!(
+                mt_logger::Level::Debug,
+                "Finished `partition` of a cluster at depth {}, with {} instances.",
+                self.depth(),
+                self.cardinality()
+            );
         };
 
         self
@@ -255,6 +269,13 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
         seed: Option<u64>,
     ) -> Self {
         if !self.is_singleton() && criteria(&self) {
+            mt_logger::mt_log!(
+                mt_logger::Level::Debug,
+                "Starting `par_partition` of a cluster at depth {}, with {} instances.",
+                self.depth(),
+                self.cardinality()
+            );
+
             // Find the extrema.
             let extrema = self.par_find_extrema(data);
             // Remove the extrema from the indices.
@@ -294,6 +315,13 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
             self.set_children(children);
             // Update the `Cluster`'s indices.
             self.set_indices(indices);
+
+            mt_logger::mt_log!(
+                mt_logger::Level::Debug,
+                "Finished `par_partition` of a cluster at depth {}, with {} instances.",
+                self.depth(),
+                self.cardinality()
+            );
         };
 
         self

@@ -19,10 +19,10 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::BallAdapter,
+    adapter::ParBallAdapter,
     cakes::{CodecData, Decompressible, SquishyBall},
     partition::ParPartition,
-    Ball, Cluster, Dataset, Metric, MetricSpace,
+    Ball, Cluster, Dataset, Metric, MetricSpace, Permutable,
 };
 use clap::Parser;
 use readers::FlatGenomic;
@@ -107,7 +107,7 @@ fn main() -> Result<(), String> {
 
     mt_logger::mt_log!(
         mt_logger::Level::Info,
-        "Elapsed time: {:.6} seconds.",
+        "Read the raw data in {:.6} seconds.",
         end.as_secs_f64()
     );
 
@@ -166,6 +166,7 @@ fn main() -> Result<(), String> {
     let subtree_cardinality = ball.subtree().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
 
+    let metadata = data.metadata().to_vec();
     let squishy_ball_path = out_dir.join("greengenes.squishy_ball");
     let codec_data_path = out_dir.join("greengenes.codec_data");
     let start = std::time::Instant::now();
@@ -181,7 +182,7 @@ fn main() -> Result<(), String> {
         );
 
         let start = std::time::Instant::now();
-        let codec_data: CodecData<_, _, _> =
+        let mut codec_data: CodecData<String, u32, usize> =
             bincode::deserialize_from(std::fs::File::open(&codec_data_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         let end = start.elapsed();
@@ -191,15 +192,19 @@ fn main() -> Result<(), String> {
             end.as_secs_f64()
         );
 
+        codec_data.set_metric(data.metric().clone());
+        let codec_data = codec_data.post_deserialization(data.permutation(), metadata)?;
+
         (squishy_ball, codec_data)
     } else {
-        let (squishy_ball, codec_data) = SquishyBall::from_ball_tree(ball, data);
+        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball, data);
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
             "Built SquishyBall in {:.6} seconds.",
             end.as_secs_f64()
         );
+        let codec_data = codec_data.with_metadata(metadata)?;
 
         let start = std::time::Instant::now();
         bincode::serialize_into(
