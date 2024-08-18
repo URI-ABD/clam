@@ -7,5 +7,6 @@ edition = "2021"
 clap = { version = "4.5.16", features = ["derive"] }
 bio = "2.0.1"
 abd-clam = { workspace = true }
+distances = { workspace = true }
 mt_logger = { workspace = true }
 bincode = { workspace = true }

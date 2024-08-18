@@ -11,7 +11,7 @@ pub fn read(path: &std::path::Path) -> Result<FlatGenomic, String> {
         return Err(format!("Path {path:?} does not exist!"));
     }
 
-    println!("Reading GreenGenes dataset from {path:?}.");
+    mt_logger::mt_log!(mt_logger::Level::Info, "Reading GreenGenes dataset from {path:?}.");
 
     let mut records = fasta::Reader::from_file(path).map_err(|e| e.to_string())?.records();
     let mut num_reads = 0;
@@ -41,9 +41,10 @@ pub fn read(path: &std::path::Path) -> Result<FlatGenomic, String> {
         (min.min(len), max.max(len))
     });
 
-    println!(
+    mt_logger::mt_log!(
+        mt_logger::Level::Info,
         "Read {} sequences from {path:?}. Minimum len: {min_seq_len}, Maximum len: {max_seq_len}.",
-        seqs.len(),
+        seqs.len()
     );
 
     let metric = Metric::default();

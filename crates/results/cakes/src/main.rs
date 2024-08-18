@@ -18,7 +18,12 @@
 
 use std::path::PathBuf;
 
-use abd_clam::Dataset;
+use abd_clam::{
+    adapter::BallAdapter,
+    cakes::{CodecData, Decompressible, SquishyBall},
+    partition::ParPartition,
+    Ball, Cluster, Dataset, Metric, MetricSpace,
+};
 use clap::Parser;
 use readers::FlatGenomic;
 
@@ -35,10 +40,31 @@ struct Args {
     /// Path to the dataset.
     #[arg(short, long)]
     path: PathBuf,
+
+    /// Path to the output directory.
+    #[arg(short, long)]
+    out_dir: PathBuf,
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), String> {
     let args = Args::parse();
+
+    mt_logger::mt_new!(
+        Some("cakes-greengenes.log"),
+        mt_logger::Level::Debug,
+        mt_logger::OutputStream::Both
+    );
+
+    // Check that the output directory exists
+    if !args.out_dir.exists() {
+        return Err(format!("Output directory {:?} does not exist!", args.out_dir));
+    }
+    if !args.out_dir.is_dir() {
+        return Err(format!("{:?} is not a directory!", args.out_dir));
+    }
+    let out_dir = args.out_dir.canonicalize().map_err(|e| e.to_string())?;
+    mt_logger::mt_log!(mt_logger::Level::Info, "Output directory: {out_dir:?}");
 
     // Construct the path for the serialized dataset
     let original_path = args.path.canonicalize().map_err(|e| e.to_string())?;
@@ -52,7 +78,8 @@ fn main() -> Result<(), String> {
             bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         let end = start.elapsed();
-        println!(
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
             "Deserialized {:?} dataset from {flat_vec_path:?} with {} sequences.",
             args.dataset,
             data.cardinality()
@@ -61,7 +88,8 @@ fn main() -> Result<(), String> {
     } else {
         let data = args.dataset.read(&original_path)?;
         let end = start.elapsed();
-        println!(
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
             "Read dataset from {original_path:?} with {} sequences.",
             data.cardinality()
         );
@@ -69,21 +97,147 @@ fn main() -> Result<(), String> {
         bincode::serialize_into(std::fs::File::create(&flat_vec_path).map_err(|e| e.to_string())?, &data)
             .map_err(|e| e.to_string())?;
         let serde_end = serde_start.elapsed();
-        println!(
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
             "Serialized dataset to {flat_vec_path:?} in {:.6} seconds.",
             serde_end.as_secs_f64()
         );
         (data, end)
     };
 
-    println!("Elapsed time: {:.6} seconds.", end.as_secs_f64());
+    mt_logger::mt_log!(
+        mt_logger::Level::Info,
+        "Elapsed time: {:.6} seconds.",
+        end.as_secs_f64()
+    );
 
-    println!(
+    mt_logger::mt_log!(
+        mt_logger::Level::Info,
         "Working with {:?} Dataset with {} sequences in {:?} dims.",
         args.dataset,
         data.cardinality(),
         data.dimensionality_hint()
     );
 
-    Ok(())
+    let data = {
+        let lev = |x: &String, y: &String| distances::strings::levenshtein(x, y);
+        let metric = Metric::new(lev, true);
+        let mut data = data;
+        data.set_metric(metric);
+        data
+    };
+
+    let ball_path = out_dir.join("ball_tree.cakes");
+    let start = std::time::Instant::now();
+    let ball = if ball_path.exists() {
+        let ball: Ball<_, _, _> = bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Deserialized BallTree from {ball_path:?} in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+        ball
+    } else {
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let seed = Some(42);
+        let ball = Ball::par_new_tree(&data, &criteria, seed);
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Built BallTree in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        let start = std::time::Instant::now();
+        bincode::serialize_into(std::fs::File::create(&ball_path).map_err(|e| e.to_string())?, &ball)
+            .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Serialized BallTree to {ball_path:?} in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        ball
+    };
+
+    let subtree_cardinality = ball.subtree().len();
+    mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
+
+    let squishy_ball_path = out_dir.join("squishy_ball.cakes");
+    let codec_data_path = out_dir.join("codec_data.cakes");
+    let start = std::time::Instant::now();
+    let (squishy_ball, codec_data) = if squishy_ball_path.exists() && codec_data_path.exists() {
+        let squishy_ball: SquishyBall<_, _, _, _, _> =
+            bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Deserialized SquishyBall from {squishy_ball_path:?} in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        let start = std::time::Instant::now();
+        let codec_data: CodecData<_, _, _> =
+            bincode::deserialize_from(std::fs::File::open(&codec_data_path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Deserialized CodecData from {codec_data_path:?} in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        (squishy_ball, codec_data)
+    } else {
+        let (squishy_ball, codec_data) = SquishyBall::from_ball_tree(ball, data);
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Built SquishyBall in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        let start = std::time::Instant::now();
+        bincode::serialize_into(
+            std::fs::File::create(&squishy_ball_path).map_err(|e| e.to_string())?,
+            &squishy_ball,
+        )
+        .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Serialized SquishyBall to {squishy_ball_path:?} in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        let start = std::time::Instant::now();
+        bincode::serialize_into(
+            std::fs::File::create(&codec_data_path).map_err(|e| e.to_string())?,
+            &codec_data,
+        )
+        .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Serialized CodecData to {codec_data_path:?} in {:.6} seconds.",
+            end.as_secs_f64()
+        );
+
+        (squishy_ball, codec_data)
+    };
+
+    let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
+    mt_logger::mt_log!(
+        mt_logger::Level::Info,
+        "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
+    );
+
+    let num_leaf_bytes = codec_data.leaf_bytes().len();
+    mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
+
+    mt_logger::mt_flush!().map_err(|e| e.to_string())
 }
