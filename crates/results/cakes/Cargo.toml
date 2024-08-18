@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bio = "2.0.1"
 clap = { version = "4.5.16", features = ["derive"] }
+bio = "2.0.1"
+abd-clam = { workspace = true }
+mt_logger = { workspace = true }
+bincode = { workspace = true }

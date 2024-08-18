@@ -18,7 +18,9 @@
 
 use std::path::PathBuf;
 
+use abd_clam::Dataset;
 use clap::Parser;
+use readers::FlatGenomic;
 
 mod readers;
 
@@ -30,25 +32,58 @@ struct Args {
     #[arg(short, long)]
     dataset: readers::Datasets,
 
-    /// Name of the person to greet
+    /// Path to the dataset.
     #[arg(short, long)]
     path: PathBuf,
-
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 10)]
-    num_samples: usize,
 }
 
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
-    // Check that the path exists
-    if !args.path.exists() {
-        return Err(format!("Path {:?} does not exist!", args.path));
-    }
+    // Construct the path for the serialized dataset
+    let original_path = args.path.canonicalize().map_err(|e| e.to_string())?;
+    let flat_vec_path = original_path.with_extension("flatvec");
+
+    let start = std::time::Instant::now();
 
     // Read the dataset
-    args.dataset.read(&args.path, args.num_samples)?;
+    let (data, end) = if flat_vec_path.exists() {
+        let data: FlatGenomic =
+            bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        let end = start.elapsed();
+        println!(
+            "Deserialized {:?} dataset from {flat_vec_path:?} with {} sequences.",
+            args.dataset,
+            data.cardinality()
+        );
+        (data, end)
+    } else {
+        let data = args.dataset.read(&original_path)?;
+        let end = start.elapsed();
+        println!(
+            "Read dataset from {original_path:?} with {} sequences.",
+            data.cardinality()
+        );
+        let serde_start = std::time::Instant::now();
+        bincode::serialize_into(std::fs::File::create(&flat_vec_path).map_err(|e| e.to_string())?, &data)
+            .map_err(|e| e.to_string())?;
+        let serde_end = serde_start.elapsed();
+        println!(
+            "Serialized dataset to {flat_vec_path:?} in {:.6} seconds.",
+            serde_end.as_secs_f64()
+        );
+        (data, end)
+    };
+
+    println!("Elapsed time: {:.6} seconds.", end.as_secs_f64());
+
+    println!(
+        "Working with {:?} Dataset with {} sequences in {:?} dims.",
+        args.dataset,
+        data.cardinality(),
+        data.dimensionality_hint()
+    );
 
     Ok(())
 }
