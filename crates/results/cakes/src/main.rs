@@ -68,7 +68,7 @@ fn main() -> Result<(), String> {
 
     // Construct the path for the serialized dataset
     let original_path = args.path.canonicalize().map_err(|e| e.to_string())?;
-    let flat_vec_path = original_path.with_extension("flatvec");
+    let flat_vec_path = args.out_dir.join("greengenes.flat_data");
 
     let start = std::time::Instant::now();
 
@@ -127,7 +127,7 @@ fn main() -> Result<(), String> {
         data
     };
 
-    let ball_path = out_dir.join("ball_tree.cakes");
+    let ball_path = out_dir.join("greengenes.ball");
     let start = std::time::Instant::now();
     let ball = if ball_path.exists() {
         let ball: Ball<_, _, _> = bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
@@ -166,8 +166,8 @@ fn main() -> Result<(), String> {
     let subtree_cardinality = ball.subtree().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
 
-    let squishy_ball_path = out_dir.join("squishy_ball.cakes");
-    let codec_data_path = out_dir.join("codec_data.cakes");
+    let squishy_ball_path = out_dir.join("greengenes.squishy_ball");
+    let codec_data_path = out_dir.join("greengenes.codec_data");
     let start = std::time::Instant::now();
     let (squishy_ball, codec_data) = if squishy_ball_path.exists() && codec_data_path.exists() {
         let squishy_ball: SquishyBall<_, _, _, _, _> =
