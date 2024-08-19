@@ -13,9 +13,6 @@ def count_clusters(file_path: pathlib.Path) -> dict[str, int]:
         r"^(?P<status>Starting|Finished) `par_partition` of a cluster at depth (?P<depth>\d+), with (?P<instances>\d+) instances\.$",  # noqa: E501
     )
 
-    # The format for the key is "Starting" or "Finished" followed by the depth
-    # and the number of instances.
-    # The value is the number of times that key was found in the file.
     cluster_counts: dict[str, int] = {}
 
     with file_path.open("r") as file:
