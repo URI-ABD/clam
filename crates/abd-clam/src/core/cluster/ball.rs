@@ -31,7 +31,7 @@ pub struct Ball<I, U: Number, D: Dataset<I, U>> {
     /// The index of the instance that is the furthest from the center.
     arg_radial: usize,
     /// The indices of the instances in the `Ball`.
-    indices: Vec<usize>,
+    pub(crate) indices: Vec<usize>,
     /// The children of the `Ball`.
     children: Vec<(usize, U, Box<Self>)>,
     /// Phantom data to satisfy the compiler.

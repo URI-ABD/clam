@@ -1,6 +1,7 @@
 //! A `Cluster` is a collection of "similar" instances in a dataset.
 
 pub mod adapter;
+mod balanced_ball;
 mod ball;
 mod lfd;
 pub mod partition;
@@ -11,6 +12,7 @@ use distances::Number;
 
 use super::{dataset::ParDataset, Dataset, MetricSpace};
 
+pub use balanced_ball::BalancedBall;
 pub use ball::Ball;
 pub use lfd::LFD;
 pub use partition::Partition;
