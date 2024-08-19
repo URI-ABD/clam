@@ -28,4 +28,5 @@ dev-dependencies = [
 [tool.rye.workspace]
 members = [
     "pypi/distances",
+    "pypi/results/cakes",
 ]

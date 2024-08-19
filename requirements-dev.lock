@@ -8,9 +8,12 @@
 #   with-sources: false
 
 -e file:pypi/distances
+-e file:pypi/results/cakes
 bump2version==1.0.1
 cfgv==3.4.0
     # via pre-commit
+click==8.1.7
+    # via typer
 contourpy==1.2.0
     # via matplotlib
 coverage==7.4.3
@@ -50,6 +53,7 @@ numpy==1.26.4
     # via contourpy
     # via matplotlib
     # via pandas
+    # via py-cakes
     # via scipy
     # via seaborn
 packaging==23.2
@@ -87,9 +91,12 @@ pyyaml==6.0.1
     # via pre-commit
 rich==13.7.1
     # via richbench
+    # via typer
 richbench==1.0.3
 scipy==1.13.1
 seaborn==0.13.2
+shellingham==1.5.4
+    # via typer
 six==1.16.0
     # via python-dateutil
 termcolor==2.4.0
@@ -98,6 +105,10 @@ tomli==2.0.1
     # via coverage
     # via pytest
 tqdm==4.66.4
+typer==0.12.4
+    # via py-cakes
+typing-extensions==4.12.2
+    # via typer
 tzdata==2024.1
     # via pandas
 virtualenv==20.26.3
