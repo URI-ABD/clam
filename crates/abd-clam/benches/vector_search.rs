@@ -2,7 +2,12 @@
 
 mod utils;
 
-use abd_clam::{adapter::ParBallAdapter, cakes::OffBall, partition::ParPartition, Ball, Cluster, FlatVec, Metric};
+use abd_clam::{
+    adapter::{ParAdapter, ParBallAdapter},
+    cakes::OffBall,
+    partition::ParPartition,
+    BalancedBall, Ball, Cluster, FlatVec, Metric, Permutable,
+};
 use criterion::*;
 use rand::prelude::*;
 
@@ -46,12 +51,24 @@ fn vector_search(c: &mut Criterion) {
         let ball = Ball::par_new_tree(&data, &criteria, seed);
         let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
 
+        let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
+        let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);
+        let (balanced_off_ball, balanced_perm_data) = {
+            let (balanced_off_ball, permutation) = OffBall::par_adapt_tree(balanced_ball.clone(), None);
+            let mut balanced_perm_data = data.clone();
+            balanced_perm_data.permute(&permutation);
+            (balanced_off_ball, balanced_perm_data)
+        };
+
         utils::compare_permuted(
             c,
             "vector-search",
             metric_name,
             (&ball, &data),
             (&off_ball, &perm_data),
+            None,
+            (&balanced_ball, &data),
+            (&balanced_off_ball, &balanced_perm_data),
             None,
             &queries,
             &radii,

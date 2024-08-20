@@ -2,12 +2,14 @@
 
 use distances::Number;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{dataset::ParDataset, Dataset};
 
 use super::{partition::ParPartition, Ball, Cluster, ParCluster, Partition};
 
 /// A `Cluster` that provides a balanced clustering.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BalancedBall<I, U: Number, D: Dataset<I, U>> {
     /// The inner `Ball` of the `BalancedBall`.
     ball: Ball<I, U, D>,

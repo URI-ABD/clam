@@ -7,7 +7,7 @@ use abd_clam::{
         Algorithm, CodecData, Decodable, Encodable, OffBall, ParCompressible, SquishyBall,
     },
     linear_search::ParLinearSearch,
-    Ball,
+    BalancedBall, Ball,
 };
 use criterion::*;
 use distances::Number;
@@ -41,6 +41,12 @@ pub fn compare_permuted<I, U, Co>(
         &SquishyBall<I, U, Co, CodecData<I, U, usize>, Ball<I, U, Co>>,
         &CodecData<I, U, usize>,
     )>,
+    bal_ball_data: (&BalancedBall<I, U, Co>, &Co),
+    bal_off_ball_data: (&OffBall<I, U, Co, BalancedBall<I, U, Co>>, &Co),
+    bal_dec_ball_data: Option<(
+        &SquishyBall<I, U, Co, CodecData<I, U, usize>, BalancedBall<I, U, Co>>,
+        &CodecData<I, U, usize>,
+    )>,
     queries: &[I],
     radii: &[U],
     ks: &[usize],
@@ -65,6 +71,9 @@ pub fn compare_permuted<I, U, Co>(
     let (ball, data) = ball_data;
     let (off_ball, perm_data) = off_ball_data;
 
+    let (bal_ball, bal_data) = bal_ball_data;
+    let (bal_off_ball, bal_perm_data) = bal_off_ball_data;
+
     for &radius in radii {
         let alg = Algorithm::RnnClustered(radius);
 
@@ -72,14 +81,28 @@ pub fn compare_permuted<I, U, Co>(
             group.bench_with_input(BenchmarkId::new("Linear", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| alg.batch_linear_search(data, queries));
             });
+
             group.bench_with_input(BenchmarkId::new("Ball", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| ball.batch_search(data, queries, alg));
             });
+            group.bench_with_input(BenchmarkId::new("BalancedBall", radius), &radius, |b, _| {
+                b.iter_with_large_drop(|| bal_ball.batch_search(bal_data, queries, alg));
+            });
+
             group.bench_with_input(BenchmarkId::new("OffBall", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| off_ball.batch_search(perm_data, queries, alg));
             });
+            group.bench_with_input(BenchmarkId::new("BalancedOffBall", radius), &radius, |b, _| {
+                b.iter_with_large_drop(|| bal_off_ball.batch_search(bal_perm_data, queries, alg));
+            });
+
             if let Some((dec_root, dec_data)) = dec_ball_data {
                 group.bench_with_input(BenchmarkId::new("SquishyBall", radius), &radius, |b, _| {
+                    b.iter_with_large_drop(|| dec_root.batch_search(dec_data, queries, alg));
+                });
+            }
+            if let Some((dec_root, dec_data)) = bal_dec_ball_data {
+                group.bench_with_input(BenchmarkId::new("BalancedSquishyBall", radius), &radius, |b, _| {
                     b.iter_with_large_drop(|| dec_root.batch_search(dec_data, queries, alg));
                 });
             }
@@ -88,14 +111,28 @@ pub fn compare_permuted<I, U, Co>(
         group.bench_with_input(BenchmarkId::new("ParLinear", radius), &radius, |b, _| {
             b.iter_with_large_drop(|| alg.par_batch_linear_search(data, queries));
         });
+
         group.bench_with_input(BenchmarkId::new("ParBall", radius), &radius, |b, _| {
             b.iter_with_large_drop(|| ball.par_batch_search(data, queries, alg));
         });
+        group.bench_with_input(BenchmarkId::new("ParBalancedBall", radius), &radius, |b, _| {
+            b.iter_with_large_drop(|| bal_ball.par_batch_search(bal_data, queries, alg));
+        });
+
         group.bench_with_input(BenchmarkId::new("ParOffBall", radius), &radius, |b, _| {
             b.iter_with_large_drop(|| off_ball.par_batch_search(perm_data, queries, alg));
         });
+        group.bench_with_input(BenchmarkId::new("ParBalancedOffBall", radius), &radius, |b, _| {
+            b.iter_with_large_drop(|| bal_off_ball.par_batch_search(bal_perm_data, queries, alg));
+        });
+
         if let Some((dec_root, dec_data)) = dec_ball_data {
             group.bench_with_input(BenchmarkId::new("ParSquishyBall", radius), &radius, |b, _| {
+                b.iter_with_large_drop(|| dec_root.par_batch_search(dec_data, queries, alg));
+            });
+        }
+        if let Some((dec_root, dec_data)) = bal_dec_ball_data {
+            group.bench_with_input(BenchmarkId::new("ParBalancedSquishyBall", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| dec_root.par_batch_search(dec_data, queries, alg));
             });
         }
@@ -116,14 +153,28 @@ pub fn compare_permuted<I, U, Co>(
                 group.bench_with_input(BenchmarkId::new("Linear", k), &k, |b, _| {
                     b.iter_with_large_drop(|| alg.batch_linear_search(data, queries));
                 });
+
                 group.bench_with_input(BenchmarkId::new("Ball", k), &k, |b, _| {
                     b.iter_with_large_drop(|| ball.batch_search(data, queries, alg));
                 });
+                group.bench_with_input(BenchmarkId::new("BalancedBall", k), &k, |b, _| {
+                    b.iter_with_large_drop(|| bal_ball.batch_search(bal_data, queries, alg));
+                });
+
                 group.bench_with_input(BenchmarkId::new("OffBall", k), &k, |b, _| {
                     b.iter_with_large_drop(|| off_ball.batch_search(perm_data, queries, alg));
                 });
+                group.bench_with_input(BenchmarkId::new("BalancedOffBall", k), &k, |b, _| {
+                    b.iter_with_large_drop(|| bal_off_ball.batch_search(bal_perm_data, queries, alg));
+                });
+
                 if let Some((dec_root, dec_data)) = dec_ball_data {
                     group.bench_with_input(BenchmarkId::new("SquishyBall", k), &k, |b, _| {
+                        b.iter_with_large_drop(|| dec_root.batch_search(dec_data, queries, alg));
+                    });
+                }
+                if let Some((dec_root, dec_data)) = bal_dec_ball_data {
+                    group.bench_with_input(BenchmarkId::new("BalancedSquishyBall", k), &k, |b, _| {
                         b.iter_with_large_drop(|| dec_root.batch_search(dec_data, queries, alg));
                     });
                 }
@@ -132,14 +183,28 @@ pub fn compare_permuted<I, U, Co>(
             group.bench_with_input(BenchmarkId::new("ParLinear", k), &k, |b, _| {
                 b.iter_with_large_drop(|| alg.par_batch_linear_search(data, queries));
             });
+
             group.bench_with_input(BenchmarkId::new("ParBall", k), &k, |b, _| {
                 b.iter_with_large_drop(|| ball.par_batch_search(data, queries, alg));
             });
+            group.bench_with_input(BenchmarkId::new("ParBalancedBall", k), &k, |b, _| {
+                b.iter_with_large_drop(|| bal_ball.par_batch_search(bal_data, queries, alg));
+            });
+
             group.bench_with_input(BenchmarkId::new("ParOffBall", k), &k, |b, _| {
                 b.iter_with_large_drop(|| off_ball.par_batch_search(perm_data, queries, alg));
             });
+            group.bench_with_input(BenchmarkId::new("ParBalancedOffBall", k), &k, |b, _| {
+                b.iter_with_large_drop(|| bal_off_ball.par_batch_search(bal_perm_data, queries, alg));
+            });
+
             if let Some((dec_root, dec_data)) = dec_ball_data {
                 group.bench_with_input(BenchmarkId::new("ParSquishyBall", k), &k, |b, _| {
+                    b.iter_with_large_drop(|| dec_root.par_batch_search(dec_data, queries, alg));
+                });
+            }
+            if let Some((dec_root, dec_data)) = bal_dec_ball_data {
+                group.bench_with_input(BenchmarkId::new("ParBalancedSquishyBall", k), &k, |b, _| {
                     b.iter_with_large_drop(|| dec_root.par_batch_search(dec_data, queries, alg));
                 });
             }
