@@ -38,13 +38,12 @@ def main(
     clusters = count_clusters(log_path)
     progress = clusters_by_depth(clusters)
 
-    gg_car = 1_262_986
+    gg_car = 1_075_170
     for depth, ((s_freq, s_car), (f_freq, f_car)) in progress:
         msg = (
-            f"Depth {depth:4d}: Started {s_freq:7d} of {(2 ** depth) if depth < 21 else 0:7d} "
-            f"clusters with {s_car:7d} instances ({100 * s_car / gg_car:3.2f}%), "
-            f"finished {f_freq:7d} clusters with {f_car:7d} "
-            f"({100 * f_car / gg_car:3.2f}%) instances."
+            f"Depth {depth:4d}: Started {s_freq:7d} clusters with {s_car:7d} instances, "
+            f"finished {f_freq:7d} ({100 * f_freq / s_freq:3.2f}%) clusters with "
+            f"{f_car:7d} ({100 * f_car / gg_car:3.2f}%) instances."
         )
         logger.info(msg)
 

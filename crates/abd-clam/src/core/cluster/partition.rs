@@ -198,6 +198,28 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
 
         self
     }
+
+    /// Partitions the leaf `Cluster`s the tree even further using a different
+    /// criteria.
+    #[must_use]
+    fn partition_further<C: Fn(&Self) -> bool>(self, data: &D, criteria: &C, seed: Option<u64>) -> Self {
+        if self.is_leaf() {
+            let indices = self.indices().collect();
+            self.partition(data, indices, criteria, seed)
+        } else {
+            let (mut c, indices, children) = self.disassemble();
+            let children = children
+                .into_iter()
+                .map(|(i, d, child)| {
+                    let child = child.partition_further(data, criteria, seed);
+                    (i, d, child)
+                })
+                .collect::<Vec<_>>();
+            c.set_indices(indices);
+            c.set_children(children);
+            c
+        }
+    }
 }
 
 /// `Cluster`s that use and provide parallelized methods.
@@ -325,5 +347,31 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
         };
 
         self
+    }
+
+    /// Parallelized version of the `partition_further` method.
+    #[must_use]
+    fn par_partition_further<C: (Fn(&Self) -> bool) + Send + Sync>(
+        self,
+        data: &D,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> Self {
+        if self.is_leaf() {
+            let indices = self.indices().collect();
+            self.par_partition(data, indices, criteria, seed)
+        } else {
+            let (mut c, indices, children) = self.disassemble();
+            let children = children
+                .into_par_iter()
+                .map(|(i, d, child)| {
+                    let child = child.par_partition_further(data, criteria, seed);
+                    (i, d, child)
+                })
+                .collect::<Vec<_>>();
+            c.set_indices(indices);
+            c.set_children(children);
+            c
+        }
     }
 }

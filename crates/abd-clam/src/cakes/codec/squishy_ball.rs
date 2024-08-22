@@ -60,6 +60,24 @@ impl<
     }
 }
 
+impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, S: Cluster<I, U, Co>, M>
+    SquishyBall<I, U, Co, CodecData<I, U, M>, S>
+{
+    /// Allows for the `SquishyBall` to be use with the same compressed dataset under different metadata types.
+    pub fn with_metadata_type<Me>(self) -> SquishyBall<I, U, Co, CodecData<I, U, Me>, S> {
+        SquishyBall {
+            source: self.source,
+            children: self
+                .children
+                .into_iter()
+                .map(|(i, r, c)| (i, r, Box::new(c.with_metadata_type())))
+                .collect(),
+            costs: self.costs,
+            _dc: PhantomData,
+        }
+    }
+}
+
 impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
     BallAdapter<I, U, D, CodecData<I, U, usize>, SquishCosts<U>>
     for SquishyBall<I, U, D, CodecData<I, U, usize>, Ball<I, U, D>>

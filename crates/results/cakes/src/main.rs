@@ -22,11 +22,12 @@ use abd_clam::{
     adapter::ParAdapter,
     cakes::{CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
-    BalancedBall, Cluster, Dataset, Metric, MetricSpace, Permutable,
+    Ball, Cluster, Dataset, MetricSpace, Permutable,
 };
 use clap::Parser;
 use readers::FlatGenomic;
 
+mod metrics;
 mod readers;
 
 /// Simple program to greet a person
@@ -37,9 +38,13 @@ struct Args {
     #[arg(short, long)]
     dataset: readers::Datasets,
 
-    /// Path to the dataset.
+    /// The distance function to use.
     #[arg(short, long)]
-    path: PathBuf,
+    metric: metrics::StringDistance,
+
+    /// Path to the input directory.
+    #[arg(short, long)]
+    inp_dir: PathBuf,
 
     /// Path to the output directory.
     #[arg(short, long)]
@@ -51,24 +56,32 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
 
     mt_logger::mt_new!(
-        Some("cakes-greengenes.log"),
+        Some("cakes-results.log"),
         mt_logger::Level::Debug,
         mt_logger::OutputStream::Both
     );
 
-    // Check that the output directory exists
-    if !args.out_dir.exists() {
-        return Err(format!("Output directory {:?} does not exist!", args.out_dir));
+    // Check that the directories exist
+    for dir in [&args.inp_dir, &args.out_dir] {
+        if !dir.exists() {
+            return Err(format!("{dir:?} does not exist!"));
+        }
+        if !dir.is_dir() {
+            return Err(format!("{dir:?} is not a directory!"));
+        }
     }
-    if !args.out_dir.is_dir() {
-        return Err(format!("{:?} is not a directory!", args.out_dir));
-    }
+
+    let inp_dir = args.inp_dir.canonicalize().map_err(|e| e.to_string())?;
+    mt_logger::mt_log!(mt_logger::Level::Info, "Input directory: {inp_dir:?}");
+
     let out_dir = args.out_dir.canonicalize().map_err(|e| e.to_string())?;
     mt_logger::mt_log!(mt_logger::Level::Info, "Output directory: {out_dir:?}");
 
-    // Construct the path for the serialized dataset
-    let original_path = args.path.canonicalize().map_err(|e| e.to_string())?;
-    let flat_vec_path = args.out_dir.join("greengenes.flat_data");
+    let ball_path = out_dir.join(args.dataset.ball_file());
+    let flat_vec_path = out_dir.join(args.dataset.flat_file());
+
+    let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
+    let codec_data_path = out_dir.join(args.dataset.compressed_file());
 
     let start = std::time::Instant::now();
 
@@ -86,11 +99,12 @@ fn main() -> Result<(), String> {
         );
         (data, end)
     } else {
-        let data = args.dataset.read(&original_path)?;
+        let data = args.dataset.read_fasta(&inp_dir)?;
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
-            "Read dataset from {original_path:?} with {} sequences.",
+            "Read {} dataset from {inp_dir:?} with {} sequences.",
+            args.dataset.name(),
             data.cardinality()
         );
         let serde_start = std::time::Instant::now();
@@ -120,19 +134,16 @@ fn main() -> Result<(), String> {
     );
 
     let data = {
-        let lev = |x: &String, y: &String| distances::strings::levenshtein(x, y);
-        let metric = Metric::new(lev, true);
+        let metric = args.metric.metric();
         let mut data = data;
         data.set_metric(metric);
         data
     };
 
-    let ball_path = out_dir.join("greengenes.ball");
     let start = std::time::Instant::now();
     let ball = if ball_path.exists() {
-        let ball: BalancedBall<_, _, _> =
-            bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
+        let ball: Ball<_, _, _> = bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -141,9 +152,9 @@ fn main() -> Result<(), String> {
         );
         ball
     } else {
-        let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 10 && c.depth() < 256;
         let seed = Some(42);
-        let ball = BalancedBall::par_new_tree(&data, &criteria, seed);
+        let ball = Ball::par_new_tree(&data, &criteria, seed);
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -168,11 +179,9 @@ fn main() -> Result<(), String> {
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
 
     let metadata = data.metadata().to_vec();
-    let squishy_ball_path = out_dir.join("greengenes.squishy_ball");
-    let codec_data_path = out_dir.join("greengenes.codec_data");
     let start = std::time::Instant::now();
     let (squishy_ball, codec_data) = if squishy_ball_path.exists() && codec_data_path.exists() {
-        let squishy_ball: SquishyBall<_, _, _, _, _> =
+        let squishy_ball: SquishyBall<_, _, _, CodecData<String, u32, String>, _> =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         let end = start.elapsed();
@@ -208,6 +217,7 @@ fn main() -> Result<(), String> {
             let data = CodecData::par_from_compressible(&data, &ball);
             (ball, data)
         };
+        let squishy_ball = squishy_ball.with_metadata_type::<String>();
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,

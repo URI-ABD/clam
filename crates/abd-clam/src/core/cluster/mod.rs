@@ -119,6 +119,14 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
         self.children().iter().map(|(_, _, child)| child.as_ref())
     }
 
+    /// Gets the child `Cluster`s as mutable references.
+    fn child_clusters_mut<'a>(&'a mut self) -> impl Iterator<Item = &mut Self>
+    where
+        U: 'a,
+    {
+        self.children_mut().iter_mut().map(|(_, _, child)| child.as_mut())
+    }
+
     /// Returns all `Cluster`s in the subtree of this `Cluster`, in depth-first order.
     fn subtree<'a>(&'a self) -> Vec<&'a Self>
     where
