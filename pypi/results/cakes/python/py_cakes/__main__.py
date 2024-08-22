@@ -7,7 +7,6 @@ import typer
 
 from py_cakes.wrangling_logs import clusters_by_depth
 from py_cakes.wrangling_logs import count_clusters
-from py_cakes.wrangling_logs import track_progress
 
 logger = logging.getLogger("py_cakes")
 logger.setLevel(logging.INFO)
@@ -37,21 +36,17 @@ def main(
     logger.info(msg)
 
     clusters = count_clusters(log_path)
-    depth_counts = clusters_by_depth(clusters)
-    progress = track_progress(depth_counts)
+    progress = clusters_by_depth(clusters)
 
-    for depth, ((finished, f_count), (started, s_count)) in sorted(progress.items()):
-        if finished == started:
-            msg = f"Depth {depth}: Finished {finished}"
-            logger.debug(msg)
-        else:
-            left = started - finished
-            count = s_count - f_count
-            msg = (
-                f"Depth {depth:4d}: Working on {left:2d} cluster(s), "
-                f"containing {count:8d} instances."
-            )
-            logger.info(msg)
+    gg_car = 1_262_986
+    for depth, ((s_freq, s_car), (f_freq, f_car)) in progress:
+        msg = (
+            f"Depth {depth:4d}: Started {s_freq:7d} of {(2 ** depth) if depth < 21 else 0:7d} "
+            f"clusters with {s_car:7d} instances ({100 * s_car / gg_car:3.2f}%), "
+            f"finished {f_freq:7d} clusters with {f_car:7d} "
+            f"({100 * f_car / gg_car:3.2f}%) instances."
+        )
+        logger.info(msg)
 
 
 if __name__ == "__main__":

@@ -19,10 +19,10 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::ParBallAdapter,
-    cakes::{CodecData, Decompressible, SquishyBall},
+    adapter::ParAdapter,
+    cakes::{CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
-    Ball, Cluster, Dataset, Metric, MetricSpace, Permutable,
+    BalancedBall, Cluster, Dataset, Metric, MetricSpace, Permutable,
 };
 use clap::Parser;
 use readers::FlatGenomic;
@@ -130,8 +130,9 @@ fn main() -> Result<(), String> {
     let ball_path = out_dir.join("greengenes.ball");
     let start = std::time::Instant::now();
     let ball = if ball_path.exists() {
-        let ball: Ball<_, _, _> = bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+        let ball: BalancedBall<_, _, _> =
+            bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -140,9 +141,9 @@ fn main() -> Result<(), String> {
         );
         ball
     } else {
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
         let seed = Some(42);
-        let ball = Ball::par_new_tree(&data, &criteria, seed);
+        let ball = BalancedBall::par_new_tree(&data, &criteria, seed);
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -197,7 +198,16 @@ fn main() -> Result<(), String> {
 
         (squishy_ball, codec_data)
     } else {
-        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball, data);
+        let (squishy_ball, codec_data) = {
+            let mut data = data;
+            let (ball, indices) = OffBall::par_adapt_tree(ball, None);
+            data.permute(&indices);
+            let (mut ball, _) = SquishyBall::par_adapt_tree(ball, None);
+            ball.par_set_costs(&data);
+            ball.trim();
+            let data = CodecData::par_from_compressible(&data, &ball);
+            (ball, data)
+        };
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,

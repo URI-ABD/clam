@@ -98,7 +98,7 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 
     /// Trims the tree by removing empty children of clusters whose unitary cost
     /// is greater than the recursive cost.
-    fn trim(&mut self) {
+    pub fn trim(&mut self) {
         if !self.children.is_empty() {
             if self.costs.unitary <= self.costs.recursive {
                 self.children.clear();
@@ -109,7 +109,7 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
     }
 
     /// Sets the costs for the tree.
-    fn set_costs(&mut self, data: &Co) {
+    pub fn set_costs(&mut self, data: &Co) {
         self.set_unitary_cost(data);
         if self.children.is_empty() {
             self.costs.recursive = U::ZERO;
@@ -161,7 +161,7 @@ impl<
     > SquishyBall<I, U, Co, Dec, S>
 {
     /// Sets the costs for the tree.
-    fn par_set_costs(&mut self, data: &Co) {
+    pub fn par_set_costs(&mut self, data: &Co) {
         self.par_set_unitary_cost(data);
         if self.children.is_empty() {
             self.costs.recursive = U::ZERO;
