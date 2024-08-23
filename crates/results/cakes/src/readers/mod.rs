@@ -1,11 +1,8 @@
 //! Readers for the various file formats of datasets used in benchmarks.
 
-use abd_clam::FlatVec;
-
 mod greengenes;
 
-/// A flat genomic dataset.
-pub type FlatGenomic = FlatVec<String, u32, String>;
+use crate::Co;
 
 /// The available datasets.
 #[derive(clap::ValueEnum, Debug, Clone)]
@@ -23,7 +20,7 @@ pub enum Datasets {
 
 impl Datasets {
     /// Reads the dataset from the given path.
-    pub fn read_fasta(&self, dir_path: &std::path::Path) -> Result<FlatGenomic, String> {
+    pub fn read_fasta(&self, dir_path: &std::path::Path) -> Result<Co, String> {
         match self {
             Self::GreenGenes13x5 => greengenes::read(&dir_path.join("gg_13_5.fasta")),
             Self::GreenGenes12x10 => greengenes::read(&dir_path.join("gg_12_10.fasta")),

@@ -22,13 +22,26 @@ use abd_clam::{
     adapter::ParAdapter,
     cakes::{CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
-    Ball, Cluster, Dataset, MetricSpace, Permutable,
+    Ball, Cluster, Dataset, FlatVec, MetricSpace, Permutable,
 };
 use clap::Parser;
-use readers::FlatGenomic;
 
 mod metrics;
 mod readers;
+mod sequence;
+
+use sequence::AlignedSequence;
+
+/// The type of the compressible dataset.
+pub type Co = FlatVec<AlignedSequence, u32, String>;
+/// The type of the ball tree over the compressible dataset.
+type B = Ball<AlignedSequence, u32, Co>;
+/// The type of the offset ball tree used as an intermediate between the ball and the squishy ball.
+type OB = OffBall<AlignedSequence, u32, Co, B>;
+/// The type of the compressed, decompressible dataset.
+type Dec = CodecData<AlignedSequence, u32, String>;
+/// The type of the squishy ball tree.
+type SB = SquishyBall<AlignedSequence, u32, Co, Dec, B>;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -87,9 +100,8 @@ fn main() -> Result<(), String> {
 
     // Read the dataset
     let (data, end) = if flat_vec_path.exists() {
-        let data: FlatGenomic =
-            bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
+        let data: Co = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -99,7 +111,7 @@ fn main() -> Result<(), String> {
         );
         (data, end)
     } else {
-        let data = args.dataset.read_fasta(&inp_dir)?;
+        let data: Co = args.dataset.read_fasta(&inp_dir)?;
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -133,7 +145,7 @@ fn main() -> Result<(), String> {
         data.dimensionality_hint()
     );
 
-    let data = {
+    let data: Co = {
         let metric = args.metric.metric();
         let mut data = data;
         data.set_metric(metric);
@@ -141,7 +153,7 @@ fn main() -> Result<(), String> {
     };
 
     let start = std::time::Instant::now();
-    let ball = if ball_path.exists() {
+    let ball: B = if ball_path.exists() {
         let ball: Ball<_, _, _> = bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
         let end = start.elapsed();
@@ -154,7 +166,7 @@ fn main() -> Result<(), String> {
     } else {
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 10 && c.depth() < 256;
         let seed = Some(42);
-        let ball = Ball::par_new_tree(&data, &criteria, seed);
+        let ball: B = Ball::par_new_tree(&data, &criteria, seed);
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -180,8 +192,8 @@ fn main() -> Result<(), String> {
 
     let metadata = data.metadata().to_vec();
     let start = std::time::Instant::now();
-    let (squishy_ball, codec_data) = if squishy_ball_path.exists() && codec_data_path.exists() {
-        let squishy_ball: SquishyBall<_, _, _, CodecData<String, u32, String>, _> =
+    let (squishy_ball, codec_data): (SB, Dec) = if squishy_ball_path.exists() && codec_data_path.exists() {
+        let squishy_ball: SB =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         let end = start.elapsed();
@@ -192,7 +204,7 @@ fn main() -> Result<(), String> {
         );
 
         let start = std::time::Instant::now();
-        let mut codec_data: CodecData<String, u32, usize> =
+        let mut codec_data: Dec =
             bincode::deserialize_from(std::fs::File::open(&codec_data_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         let end = start.elapsed();
@@ -203,13 +215,13 @@ fn main() -> Result<(), String> {
         );
 
         codec_data.set_metric(data.metric().clone());
-        let codec_data = codec_data.post_deserialization(data.permutation(), metadata)?;
+        let codec_data: Dec = codec_data.post_deserialization(data.permutation(), metadata)?;
 
         (squishy_ball, codec_data)
     } else {
         let (squishy_ball, codec_data) = {
-            let mut data = data;
-            let (ball, indices) = OffBall::par_adapt_tree(ball, None);
+            let mut data: Co = data;
+            let (ball, indices): (OB, Vec<usize>) = OffBall::par_adapt_tree(ball, None);
             data.permute(&indices);
             let (mut ball, _) = SquishyBall::par_adapt_tree(ball, None);
             ball.par_set_costs(&data);
@@ -217,14 +229,14 @@ fn main() -> Result<(), String> {
             let data = CodecData::par_from_compressible(&data, &ball);
             (ball, data)
         };
-        let squishy_ball = squishy_ball.with_metadata_type::<String>();
+        let squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
             "Built SquishyBall in {:.6} seconds.",
             end.as_secs_f64()
         );
-        let codec_data = codec_data.with_metadata(metadata)?;
+        let codec_data: Dec = codec_data.with_metadata(metadata)?;
 
         let start = std::time::Instant::now();
         bincode::serialize_into(

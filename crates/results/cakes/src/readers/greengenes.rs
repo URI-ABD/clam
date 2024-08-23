@@ -3,10 +3,12 @@
 use abd_clam::{FlatVec, Metric};
 use bio::io::fasta;
 
-use super::FlatGenomic;
+use crate::AlignedSequence;
+
+use crate::Co;
 
 /// Reads a `GreenGenes` dataset from the given path.
-pub fn read(path: &std::path::Path) -> Result<FlatGenomic, String> {
+pub fn read(path: &std::path::Path) -> Result<Co, String> {
     if !path.exists() {
         return Err(format!("Path {path:?} does not exist!"));
     }
@@ -33,7 +35,7 @@ pub fn read(path: &std::path::Path) -> Result<FlatGenomic, String> {
         }
 
         ids.push(id);
-        seqs.push(seq);
+        seqs.push(AlignedSequence::new(seq));
     }
 
     let (min_seq_len, max_seq_len) = seqs.iter().fold((usize::MAX, 0), |(min, max), seq| {
