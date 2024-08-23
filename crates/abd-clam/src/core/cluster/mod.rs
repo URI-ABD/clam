@@ -137,6 +137,25 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
         self.subtree().into_iter().filter(|c| c.is_leaf()).collect()
     }
 
+    /// Returns mutable references to all leaf `Cluster`s in the subtree of this `Cluster`, in depth-first order.
+    fn leaves_mut<'a>(&'a mut self) -> Vec<&'a mut Self>
+    where
+        U: 'a,
+    {
+        let mut queue = vec![self];
+        let mut stack = vec![];
+
+        while let Some(cluster) = queue.pop() {
+            if cluster.is_leaf() {
+                stack.push(cluster);
+            } else {
+                queue.extend(cluster.child_clusters_mut());
+            }
+        }
+
+        stack
+    }
+
     /// Whether the `Cluster` is a leaf in the tree.
     fn is_leaf(&self) -> bool {
         self.children().is_empty()

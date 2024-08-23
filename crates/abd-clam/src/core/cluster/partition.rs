@@ -195,26 +195,17 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// Partitions the leaf `Cluster`s the tree even further using a different
     /// criteria.
     fn partition_further<C: Fn(&Self) -> bool>(&mut self, data: &D, criteria: &C, seed: Option<u64>) {
-        if self.is_leaf() {
-            let indices = self.indices().collect();
-            self.partition(data, indices, criteria, seed);
-        } else {
-            let children = self
-                .take_children()
-                .into_iter()
-                .map(|(i, d, mut child)| {
-                    child.partition_further(data, criteria, seed);
-                    (i, d, child)
-                })
-                .collect::<Vec<_>>();
-            self.set_children(children);
-        }
+        self.leaves_mut()
+            .into_iter()
+            .for_each(|child| child.partition(data, child.indices().collect(), criteria, seed));
     }
 }
 
 /// `Cluster`s that use and provide parallelized methods.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParCluster<I, U, D> {
+pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>:
+    ParCluster<I, U, D> + Partition<I, U, D>
+{
     /// Parallelized version of the `new` method.
     fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self;
 
@@ -341,19 +332,8 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
         criteria: &C,
         seed: Option<u64>,
     ) {
-        if self.is_leaf() {
-            let indices = self.indices().collect();
-            self.par_partition(data, indices, criteria, seed);
-        } else {
-            let children = self
-                .take_children()
-                .into_par_iter()
-                .map(|(i, d, mut child)| {
-                    child.par_partition_further(data, criteria, seed);
-                    (i, d, child)
-                })
-                .collect::<Vec<_>>();
-            self.set_children(children);
-        }
+        self.leaves_mut()
+            .into_par_iter()
+            .for_each(|child| child.par_partition(data, child.indices().collect(), criteria, seed));
     }
 }

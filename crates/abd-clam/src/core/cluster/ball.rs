@@ -381,4 +381,33 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn partition_further() -> Result<(), String> {
+        let data = gen_tiny_data()?;
+
+        let seed = Some(42);
+        let criteria_one = |c: &B| c.depth() < 1;
+        let criteria_two = |c: &B| c.depth() < 2;
+
+        let mut root = Ball::new_tree(&data, &criteria_one, seed);
+        for leaf in root.leaves() {
+            assert_eq!(leaf.depth(), 1);
+        }
+        root.partition_further(&data, &criteria_two, seed);
+        for leaf in root.leaves() {
+            assert_eq!(leaf.depth(), 2);
+        }
+
+        let mut root = Ball::par_new_tree(&data, &criteria_one, seed);
+        for leaf in root.leaves() {
+            assert_eq!(leaf.depth(), 1);
+        }
+        root.par_partition_further(&data, &criteria_two, seed);
+        for leaf in root.leaves() {
+            assert_eq!(leaf.depth(), 2);
+        }
+
+        Ok(())
+    }
 }
