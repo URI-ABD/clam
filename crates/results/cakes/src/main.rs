@@ -164,13 +164,23 @@ fn main() -> Result<(), String> {
         );
         ball
     } else {
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 10 && c.depth() < 256;
+        let mut depth = 0;
+        let depth_delta = 256;
         let seed = Some(42);
-        let ball: B = Ball::par_new_tree(&data, &criteria, seed);
+
+        let criteria = |c: &B| c.depth() < 1;
+        let mut ball = Ball::par_new_tree(&data, &criteria, seed);
+
+        while ball.leaves().into_iter().any(|c| !c.is_singleton()) {
+            depth += depth_delta;
+            let criteria = |c: &B| c.depth() < depth;
+            ball.par_partition_further(&data, &criteria, seed);
+        }
+
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
-            "Built BallTree in {:.6} seconds.",
+            "Built BallTree in {:.6} seconds to depth approximately {depth}.",
             end.as_secs_f64()
         );
 
