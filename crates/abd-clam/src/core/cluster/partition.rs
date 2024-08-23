@@ -61,7 +61,9 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// - The root `Cluster` of the tree.
     fn new_tree<C: Fn(&Self) -> bool>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        Self::new(data, &indices, 0, seed).partition(data, indices, criteria, seed)
+        let mut tree = Self::new(data, &indices, 0, seed);
+        tree.partition(data, indices, criteria, seed);
+        tree
     }
 
     /// Partitions the `Cluster` into a number of child `Cluster`s.
@@ -138,15 +140,8 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// - The root `Cluster` of the tree.
     /// - The instances in the `Cluster` in depth-first order of traversal of
     ///   the tree.
-    #[must_use]
-    fn partition<C: Fn(&Self) -> bool>(
-        mut self,
-        data: &D,
-        mut indices: Vec<usize>,
-        criteria: &C,
-        seed: Option<u64>,
-    ) -> Self {
-        if !self.is_singleton() && criteria(&self) {
+    fn partition<C: Fn(&Self) -> bool>(&mut self, data: &D, mut indices: Vec<usize>, criteria: &C, seed: Option<u64>) {
+        if !self.is_singleton() && criteria(self) {
             mt_logger::mt_log!(
                 mt_logger::Level::Debug,
                 "Starting `partition` of a cluster at depth {}, with {} instances.",
@@ -168,9 +163,9 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
                 .map(|child_indices| {
                     let mut child = Self::new(data, &child_indices, depth, seed);
                     let arg_r = child.arg_radial();
-                    child = child.partition(data, child_indices, criteria, seed);
+                    child.partition(data, child_indices, criteria, seed);
                     let child_indices = child.indices().collect::<Vec<_>>();
-                    (child, (arg_r, child_indices))
+                    (Box::new(child), (arg_r, child_indices))
                 })
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
@@ -195,29 +190,24 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
                 self.cardinality()
             );
         };
-
-        self
     }
 
     /// Partitions the leaf `Cluster`s the tree even further using a different
     /// criteria.
-    #[must_use]
-    fn partition_further<C: Fn(&Self) -> bool>(self, data: &D, criteria: &C, seed: Option<u64>) -> Self {
+    fn partition_further<C: Fn(&Self) -> bool>(&mut self, data: &D, criteria: &C, seed: Option<u64>) {
         if self.is_leaf() {
             let indices = self.indices().collect();
-            self.partition(data, indices, criteria, seed)
+            self.partition(data, indices, criteria, seed);
         } else {
-            let (mut c, indices, children) = self.disassemble();
-            let children = children
+            let children = self
+                .take_children()
                 .into_iter()
-                .map(|(i, d, child)| {
-                    let child = child.partition_further(data, criteria, seed);
+                .map(|(i, d, mut child)| {
+                    child.partition_further(data, criteria, seed);
                     (i, d, child)
                 })
                 .collect::<Vec<_>>();
-            c.set_indices(indices);
-            c.set_children(children);
-            c
+            self.set_children(children);
         }
     }
 }
@@ -234,7 +224,9 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
     /// Parallelized version of the `new_tree` method.
     fn par_new_tree<C: (Fn(&Self) -> bool) + Send + Sync>(data: &D, criteria: &C, seed: Option<u64>) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        Self::par_new(data, &indices, 0, seed).par_partition(data, indices, criteria, seed)
+        let mut tree = Self::par_new(data, &indices, 0, seed);
+        tree.par_partition(data, indices, criteria, seed);
+        tree
     }
 
     /// Parallelized version of the `partition_once` method.
@@ -282,15 +274,14 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
     }
 
     /// Parallelized version of the `partition` method.
-    #[must_use]
     fn par_partition<C: (Fn(&Self) -> bool) + Send + Sync>(
-        mut self,
+        &mut self,
         data: &D,
         mut indices: Vec<usize>,
         criteria: &C,
         seed: Option<u64>,
-    ) -> Self {
-        if !self.is_singleton() && criteria(&self) {
+    ) {
+        if !self.is_singleton() && criteria(self) {
             mt_logger::mt_log!(
                 mt_logger::Level::Debug,
                 "Starting `par_partition` of a cluster at depth {}, with {} instances.",
@@ -313,14 +304,10 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
                 .into_par_iter()
                 .map(|child_indices| {
                     let e_index = child_indices[0];
-                    let child = Self::par_new(data, &child_indices, depth, seed).par_partition(
-                        data,
-                        child_indices,
-                        criteria,
-                        seed,
-                    );
+                    let mut child = Self::par_new(data, &child_indices, depth, seed);
+                    child.par_partition(data, child_indices, criteria, seed);
                     let child_indices = child.indices().collect::<Vec<_>>();
-                    (child, (e_index, child_indices))
+                    (Box::new(child), (e_index, child_indices))
                 })
                 .unzip::<_, _, Vec<_>, Vec<_>>();
             let (arg_extrema, child_stacks) = other.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
@@ -345,33 +332,28 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>: ParClust
                 self.cardinality()
             );
         };
-
-        self
     }
 
     /// Parallelized version of the `partition_further` method.
-    #[must_use]
     fn par_partition_further<C: (Fn(&Self) -> bool) + Send + Sync>(
-        self,
+        &mut self,
         data: &D,
         criteria: &C,
         seed: Option<u64>,
-    ) -> Self {
+    ) {
         if self.is_leaf() {
             let indices = self.indices().collect();
-            self.par_partition(data, indices, criteria, seed)
+            self.par_partition(data, indices, criteria, seed);
         } else {
-            let (mut c, indices, children) = self.disassemble();
-            let children = children
+            let children = self
+                .take_children()
                 .into_par_iter()
-                .map(|(i, d, child)| {
-                    let child = child.par_partition_further(data, criteria, seed);
+                .map(|(i, d, mut child)| {
+                    child.par_partition_further(data, criteria, seed);
                     (i, d, child)
                 })
                 .collect::<Vec<_>>();
-            c.set_indices(indices);
-            c.set_children(children);
-            c
+            self.set_children(children);
         }
     }
 }

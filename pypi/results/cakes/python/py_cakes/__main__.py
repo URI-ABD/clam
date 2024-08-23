@@ -40,6 +40,8 @@ def main(
 
     gg_car = 1_075_170
     for depth, ((s_freq, s_car), (f_freq, f_car)) in progress:
+        if depth > 30:
+            break
         msg = (
             f"Depth {depth:4d}: Started {s_freq:7d} clusters with {s_car:7d} instances, "
             f"finished {f_freq:7d} ({100 * f_freq / s_freq:3.2f}%) clusters with "

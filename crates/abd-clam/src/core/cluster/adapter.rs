@@ -100,16 +100,16 @@ pub trait Adapter<
     fn source_owned(self) -> S;
 
     /// Recover the source `Cluster` tree that was adapted into this `Cluster`.
-    fn recover_source_tree(self) -> S {
-        let (source, indices, children) = self.disassemble();
-        let mut source = source.source_owned();
-        source.set_indices(indices);
-
-        let children = children
+    fn recover_source_tree(mut self) -> S {
+        let indices = self.source().indices().collect();
+        let children = self
+            .take_children()
             .into_iter()
-            .map(|(i, d, c)| (i, d, c.recover_source_tree()))
+            .map(|(i, d, c)| (i, d, Box::new(c.recover_source_tree())))
             .collect();
 
+        let mut source = self.source_owned();
+        source.set_indices(indices);
         source.set_children(children);
         source
     }
@@ -139,16 +139,16 @@ pub trait ParAdapter<
     fn par_adapt_tree(source: S, params: Option<P>) -> (Self, Vec<usize>);
 
     /// Recover the source `Cluster` tree that was adapted into this `Cluster`.
-    fn par_recover_source_tree(self) -> S {
-        let (source, indices, children) = self.disassemble();
-        let mut source = source.source_owned();
-        source.set_indices(indices);
-
-        let children = children
+    fn par_recover_source_tree(mut self) -> S {
+        let indices = self.source().indices().collect();
+        let children = self
+            .take_children()
             .into_par_iter()
-            .map(|(i, d, c)| (i, d, c.par_recover_source_tree()))
+            .map(|(i, d, c)| (i, d, Box::new(c.par_recover_source_tree())))
             .collect();
 
+        let mut source = self.source_owned();
+        source.set_indices(indices);
         source.set_children(children);
         source
     }

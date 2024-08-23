@@ -49,17 +49,6 @@ pub use partition::Partition;
 ///   assigned to the child. We refer to this as the "extent" of the child.
 /// - The child `Cluster`.
 pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
-    /// Deconstructs the `Cluster` into its most basic members. This is useful
-    /// for adapting the `Cluster` to a different type of `Cluster`.
-    ///
-    /// # Returns
-    ///
-    /// - The `Cluster` itself, without the indices or children.
-    /// - The indices of the instances in the `Cluster`.
-    /// - The children of the `Cluster`.
-    #[allow(clippy::type_complexity)]
-    fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>);
-
     /// Returns the depth os the `Cluster` in the tree.
     fn depth(&self) -> usize;
 
@@ -103,7 +92,10 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
     fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)];
 
     /// Sets the children of the `Cluster`.
-    fn set_children(&mut self, children: Vec<(usize, U, Self)>);
+    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>);
+
+    /// Returns the owned children and sets the cluster's children to an empty vector.
+    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)>;
 
     /// Computes the distances from the `query` to all instances in the `Cluster`.
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)>;

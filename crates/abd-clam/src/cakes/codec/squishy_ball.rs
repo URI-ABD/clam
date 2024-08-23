@@ -216,12 +216,8 @@ impl<
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Adapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn adapt_tree(source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
-    where
-        Self: Sized,
-    {
-        let (mut source, indices, children) = source.disassemble();
-        source.set_indices(indices.clone());
+    fn adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>) {
+        let children = source.take_children();
         let params = params.unwrap_or_default();
 
         let cluster = if children.is_empty() {
@@ -250,6 +246,7 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
             Self::new_adapted(source, children, params)
         };
 
+        let indices = cluster.indices().collect();
         (cluster, indices)
     }
 
@@ -302,12 +299,11 @@ impl<
         S: ParCluster<I, U, Co>,
     > ParAdapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn par_adapt_tree(source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
+    fn par_adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
     where
         Self: Sized,
     {
-        let (mut source, indices, children) = source.disassemble();
-        source.set_indices(indices.clone());
+        let children = source.take_children();
         let params = params.unwrap_or_default();
 
         let cluster = if children.is_empty() {
@@ -336,6 +332,7 @@ impl<
             Self::new_adapted(source, children, params)
         };
 
+        let indices = cluster.indices().collect();
         (cluster, indices)
     }
 }
@@ -356,26 +353,6 @@ impl<
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Cluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
-        let indices = self.indices().collect();
-        let Self {
-            source,
-            children,
-            costs,
-            _dc,
-        } = self;
-        (
-            Self {
-                source,
-                children: Vec::new(),
-                costs,
-                _dc: PhantomData,
-            },
-            indices,
-            children,
-        )
-    }
-
     fn depth(&self) -> usize {
         self.source.depth()
     }
@@ -424,8 +401,12 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
         &mut self.children
     }
 
-    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
-        self.children = children.into_iter().map(|(i, r, c)| (i, r, Box::new(c))).collect();
+    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>) {
+        self.children = children;
+    }
+
+    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)> {
+        std::mem::take(&mut self.children)
     }
 
     fn distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {

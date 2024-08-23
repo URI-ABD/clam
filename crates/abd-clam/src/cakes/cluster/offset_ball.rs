@@ -67,8 +67,9 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Offset>
     for OffBall<I, U, D, S>
 {
-    fn adapt_tree(source: S, params: Option<Offset>) -> (Self, Vec<usize>) {
-        let (source, mut indices, children) = source.disassemble();
+    fn adapt_tree(mut source: S, params: Option<Offset>) -> (Self, Vec<usize>) {
+        let children = source.take_children();
+        let mut indices = source.indices().collect::<Vec<_>>();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
@@ -141,11 +142,9 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<I, U, D>>
     ParAdapter<I, U, D, D, S, Offset> for OffBall<I, U, D, S>
 {
-    fn par_adapt_tree(source: S, params: Option<Offset>) -> (Self, Vec<usize>)
-    where
-        Self: Sized,
-    {
-        let (source, mut indices, children) = source.disassemble();
+    fn par_adapt_tree(mut source: S, params: Option<Offset>) -> (Self, Vec<usize>) {
+        let children = source.take_children();
+        let mut indices = source.indices().collect::<Vec<_>>();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
@@ -215,26 +214,6 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Par
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for OffBall<I, U, D, S> {
-    fn disassemble(self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
-        let indices = self.indices().collect();
-        let Self {
-            source,
-            children,
-            params,
-            _id,
-        } = self;
-        (
-            Self {
-                source,
-                children: Vec::new(),
-                params,
-                _id: PhantomData,
-            },
-            indices,
-            children,
-        )
-    }
-
     fn depth(&self) -> usize {
         self.source.depth()
     }
@@ -284,8 +263,12 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for O
         self.children.as_mut_slice()
     }
 
-    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
-        self.children = children.into_iter().map(|(a, b, c)| (a, b, Box::new(c))).collect();
+    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>) {
+        self.children = children;
+    }
+
+    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)> {
+        std::mem::take(&mut self.children)
     }
 
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {

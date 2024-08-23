@@ -84,14 +84,6 @@ impl<I, U: Number, D: Dataset<I, U>> Hash for Ball<I, U, D> {
 }
 
 impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
-    fn disassemble(mut self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
-        let indices = self.indices;
-        self.indices = Vec::new();
-        let children = self.children;
-        self.children = Vec::new();
-        (self, indices, children)
-    }
-
     fn depth(&self) -> usize {
         self.depth
     }
@@ -140,8 +132,12 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self.children.as_mut_slice()
     }
 
-    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
-        self.children = children.into_iter().map(|(i, d, c)| (i, d, Box::new(c))).collect();
+    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>) {
+        self.children = children;
+    }
+
+    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)> {
+        core::mem::take(&mut self.children)
     }
 
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {

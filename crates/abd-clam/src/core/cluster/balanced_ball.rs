@@ -59,14 +59,6 @@ impl<I, U: Number, D: Dataset<I, U>> std::hash::Hash for BalancedBall<I, U, D> {
 }
 
 impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for BalancedBall<I, U, D> {
-    fn disassemble(mut self) -> (Self, Vec<usize>, Vec<(usize, U, Box<Self>)>) {
-        let (ball, indices, _) = self.ball.disassemble();
-        let children = self.children;
-        self.ball = ball;
-        self.children = Vec::new();
-        (self, indices, children)
-    }
-
     fn depth(&self) -> usize {
         self.ball.depth()
     }
@@ -115,8 +107,12 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for BalancedBall<I, U, D> 
         &mut self.children
     }
 
-    fn set_children(&mut self, children: Vec<(usize, U, Self)>) {
-        self.children = children.into_iter().map(|(i, r, c)| (i, r, Box::new(c))).collect();
+    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>) {
+        self.children = children;
+    }
+
+    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)> {
+        core::mem::take(&mut self.children)
     }
 
     fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
