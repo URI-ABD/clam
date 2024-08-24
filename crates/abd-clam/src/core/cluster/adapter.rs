@@ -43,7 +43,7 @@ pub trait Params<I, U: Number, Din: Dataset<I, U>, Dout: Dataset<I, U>, S: Clust
     /// Given the `S` that was adapted into a `Cluster`, returns parameters
     /// to use for adapting the children of `S`.
     #[must_use]
-    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self>;
+    fn child_params(&self, children: &[S]) -> Vec<Self>;
 }
 
 /// A trait for adapting one `Cluster` type into another `Cluster` type.
@@ -78,12 +78,7 @@ pub trait Adapter<
     /// - `source`: The `S` to adapt.
     /// - `params`: The parameters to use for adapting `S`. If `None`, assume
     ///   that `S` is a root `Cluster` and use the default parameters.
-    ///
-    /// # Returns
-    ///
-    /// - The adapted `Cluster`.
-    /// - A list of indices of `S`.
-    fn adapt_tree(source: S, params: Option<P>) -> (Self, Vec<usize>);
+    fn adapt_tree(source: S, params: Option<P>) -> Self;
 
     /// Creates a new `Cluster` that was adapted from a `S` and a list of children.
     fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: P) -> Self;
@@ -99,6 +94,9 @@ pub trait Adapter<
     /// Provides ownership of the underlying source `Cluster`.
     fn source_owned(self) -> S;
 
+    /// Returns the params used to adapt the `Cluster`
+    fn params(&self) -> &P;
+
     /// Recover the source `Cluster` tree that was adapted into this `Cluster`.
     fn recover_source_tree(mut self) -> S {
         let indices = self.source().indices().collect();
@@ -113,6 +111,43 @@ pub trait Adapter<
         source.set_children(children);
         source
     }
+
+    /// Adapts the tree of `S`s into this `Cluster` in a such a way that we bypass
+    /// the recursion limit in Rust.
+    fn adapt_tree_iterative(mut source: S, params: Option<P>) -> Self {
+        let target_depth = source.depth() + crate::MAX_RECURSION_DEPTH;
+        let children = source.trim_at_depth(target_depth);
+        let mut root = Self::adapt_tree(source, params);
+        let leaf_params = root
+            .leaves()
+            .into_iter()
+            .filter(|l| l.depth() == target_depth)
+            .map(Self::params);
+
+        let children = children
+            .into_iter()
+            .zip(leaf_params)
+            .map(|(children, params)| {
+                let (others, children) = children
+                    .into_iter()
+                    .map(|(i, d, c)| ((i, d), *c))
+                    .unzip::<_, _, Vec<_>, Vec<_>>();
+                params
+                    .child_params(&children)
+                    .into_iter()
+                    .zip(children)
+                    .zip(others)
+                    .map(|((p, c), (i, d))| {
+                        let c = Self::adapt_tree_iterative(c, Some(p));
+                        (i, d, Box::new(c))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        root.graft_at_depth(target_depth, children);
+        root
+    }
 }
 
 /// Parallel version of the `Params` trait.
@@ -121,7 +156,7 @@ pub trait ParParams<I: Send + Sync, U: Number, Din: ParDataset<I, U>, Dout: ParD
 {
     /// Parallel version of the `child_params` method.
     #[must_use]
-    fn par_child_params<C: AsRef<S> + Send + Sync>(&self, children: &[C]) -> Vec<Self>;
+    fn par_child_params(&self, children: &[S]) -> Vec<Self>;
 }
 
 /// Parallel version of the `Adapter` trait.
@@ -136,7 +171,7 @@ pub trait ParAdapter<
 >: ParCluster<I, U, Dout> + Adapter<I, U, Din, Dout, S, P>
 {
     /// Parallel version of the `adapt` method.
-    fn par_adapt_tree(source: S, params: Option<P>) -> (Self, Vec<usize>);
+    fn par_adapt_tree(source: S, params: Option<P>) -> Self;
 
     /// Recover the source `Cluster` tree that was adapted into this `Cluster`.
     fn par_recover_source_tree(mut self) -> S {

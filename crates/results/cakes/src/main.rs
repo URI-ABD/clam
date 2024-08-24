@@ -19,7 +19,7 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::ParAdapter,
+    adapter::{Adapter, ParAdapter},
     cakes::{CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
     Ball, Cluster, Dataset, FlatVec, MetricSpace, Permutable,
@@ -231,9 +231,10 @@ fn main() -> Result<(), String> {
     } else {
         let (squishy_ball, codec_data) = {
             let mut data: Co = data;
-            let (ball, indices): (OB, Vec<usize>) = OffBall::par_adapt_tree(ball, None);
-            data.permute(&indices);
-            let (mut ball, _) = SquishyBall::par_adapt_tree(ball, None);
+            let ball: OB = OffBall::par_adapt_tree(ball, None);
+            let permutation = ball.source().indices().collect::<Vec<_>>();
+            data.permute(&permutation);
+            let mut ball = SquishyBall::par_adapt_tree(ball, None);
             ball.par_set_costs(&data);
             ball.trim();
             let data = CodecData::par_from_compressible(&data, &ball);

@@ -103,6 +103,50 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
     /// Returns whether the `Cluster` is a descendant of another `Cluster`.
     fn is_descendant_of(&self, other: &Self) -> bool;
 
+    /// Clears the indices stored with every cluster in the tree.
+    fn clear_indices(&mut self) {
+        if !self.is_leaf() {
+            self.child_clusters_mut().for_each(Self::clear_indices);
+        }
+        self.set_indices(Vec::new());
+    }
+
+    /// Trims the tree at the given depth. Returns the trimmed roots in the same
+    /// order as the leaves of the trimmed tree at that depth.
+    fn trim_at_depth(&mut self, depth: usize) -> Vec<Vec<(usize, U, Box<Self>)>> {
+        let mut queue = vec![self];
+        let mut stack = Vec::new();
+
+        while let Some(c) = queue.pop() {
+            if c.depth() == depth {
+                stack.push(c);
+            } else {
+                queue.extend(c.child_clusters_mut());
+            }
+        }
+
+        stack.into_iter().map(Self::take_children).collect()
+    }
+
+    /// Inverts the `trim_at_depth` method.
+    fn graft_at_depth(&mut self, depth: usize, children: Vec<Vec<(usize, U, Box<Self>)>>) {
+        let mut queue = vec![self];
+        let mut stack = Vec::new();
+
+        while let Some(c) = queue.pop() {
+            if c.depth() == depth {
+                stack.push(c);
+            } else {
+                queue.extend(c.child_clusters_mut());
+            }
+        }
+
+        stack
+            .into_iter()
+            .zip(children)
+            .for_each(|(c, children)| c.set_children(children));
+    }
+
     /// Gets the child `Cluster`s.
     fn child_clusters<'a>(&'a self) -> impl Iterator<Item = &Self>
     where

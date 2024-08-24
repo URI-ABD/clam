@@ -4,6 +4,7 @@ use core::fmt::Debug;
 use std::marker::PhantomData;
 
 use distances::Number;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -47,8 +48,9 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> OffBall<I, U, D, S> {
 impl<I, U: Number, D: Dataset<I, U> + Permutable> BallAdapter<I, U, D, D, Offset> for OffBall<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
-        let (root, indices) = Self::adapt_tree(ball, None);
-        data.permute(&indices);
+        let mut root = Self::adapt_tree(ball, None);
+        data.permute(&root.source.indices);
+        root.source.clear_indices();
         (root, data)
     }
 }
@@ -58,8 +60,9 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn par_from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
-        let (root, indices) = Self::par_adapt_tree(ball, None);
-        data.permute(&indices);
+        let mut root = Self::par_adapt_tree(ball, None);
+        data.permute(&root.source.indices);
+        root.source.clear_indices();
         (root, data)
     }
 }
@@ -67,9 +70,8 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Offset>
     for OffBall<I, U, D, S>
 {
-    fn adapt_tree(mut source: S, params: Option<Offset>) -> (Self, Vec<usize>) {
+    fn adapt_tree(mut source: S, params: Option<Offset>) -> Self {
         let children = source.take_children();
-        let mut indices = source.indices().collect::<Vec<_>>();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
@@ -79,33 +81,30 @@ impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I
                 .into_iter()
                 .map(|(a, b, c)| (a, (b, c)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let (children, ret_indices) = params
+            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
+            let children = params
                 .child_params(&children)
                 .into_iter()
                 .zip(children)
-                .map(|(p, c)| Self::adapt_tree(*c, Some(p)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-
-            let children = arg_extrema
-                .into_iter()
+                .map(|(p, c)| Self::adapt_tree(c, Some(p)))
+                .zip(arg_extrema)
                 .zip(extents)
-                .zip(children)
-                .map(|((a, b), c)| (a, b, Box::new(c)))
-                .collect();
+                .map(|((c, i), d)| (i, d, Box::new(c)))
+                .collect::<Vec<_>>();
 
-            indices = ret_indices.into_iter().flatten().collect();
+            source.set_indices(children.iter().flat_map(|(_, _, c)| c.indices()).collect());
             Self::new_adapted(source, children, params)
         };
 
         // Update the indices of the important instances in the `Cluster`.
+        let indices = cluster.source.indices().collect::<Vec<_>>();
         cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
         cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
         for (p, _, _) in cluster.children_mut() {
             *p = new_index(*p, &indices, params.offset);
         }
 
-        (cluster, indices)
+        cluster
     }
 
     fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset) -> Self {
@@ -128,6 +127,10 @@ impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I
     fn source_owned(self) -> S {
         self.source
     }
+
+    fn params(&self) -> &Offset {
+        &self.params
+    }
 }
 
 /// Helper for computing a new index after permutation of data.
@@ -142,9 +145,8 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<I, U, D>>
     ParAdapter<I, U, D, D, S, Offset> for OffBall<I, U, D, S>
 {
-    fn par_adapt_tree(mut source: S, params: Option<Offset>) -> (Self, Vec<usize>) {
+    fn par_adapt_tree(mut source: S, params: Option<Offset>) -> Self {
         let children = source.take_children();
-        let mut indices = source.indices().collect::<Vec<_>>();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
@@ -154,33 +156,30 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<
                 .into_iter()
                 .map(|(a, b, c)| (a, (b, c)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let (children, ret_indices) = params
+            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
+            let children = params
                 .child_params(&children)
-                .into_iter()
+                .into_par_iter()
                 .zip(children)
-                .map(|(p, c)| Self::par_adapt_tree(*c, Some(p)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-
-            let children = arg_extrema
-                .into_iter()
+                .map(|(p, c)| Self::par_adapt_tree(c, Some(p)))
+                .zip(arg_extrema)
                 .zip(extents)
-                .zip(children)
-                .map(|((a, b), c)| (a, b, Box::new(c)))
-                .collect();
+                .map(|((c, i), d)| (i, d, Box::new(c)))
+                .collect::<Vec<_>>();
 
-            indices = ret_indices.into_iter().flatten().collect();
+            source.set_indices(children.iter().flat_map(|(_, _, c)| c.indices()).collect());
             Self::new_adapted(source, children, params)
         };
 
         // Update the indices of the important instances in the `Cluster`.
+        let indices = cluster.source.indices().collect::<Vec<_>>();
         cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
         cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
         for (p, _, _) in cluster.children_mut() {
             *p = new_index(*p, &indices, params.offset);
         }
 
-        (cluster, indices)
+        cluster
     }
 }
 
@@ -193,13 +192,13 @@ pub struct Offset {
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for Offset {
-    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
+    fn child_params(&self, children: &[S]) -> Vec<Self> {
         let mut offset = self.offset;
         children
             .iter()
             .map(|child| {
                 let params = Self { offset };
-                offset += child.as_ref().cardinality();
+                offset += child.cardinality();
                 params
             })
             .collect()
@@ -207,7 +206,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> 
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for Offset {
-    fn par_child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
+    fn par_child_params(&self, children: &[S]) -> Vec<Self> {
         // Since we need to keep track of the offset, we cannot parallelize this.
         self.child_params(children)
     }

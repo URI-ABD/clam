@@ -17,18 +17,21 @@
 #![doc = include_str!("../README.md")]
 
 pub mod cakes;
-mod chaoda;
+// mod chaoda;
 mod core;
 // pub mod pancakes;
 pub mod utils;
 
 pub use crate::{
-    chaoda::{Algorithm, Chaoda, Member, MlModel, Vertex},
+    // chaoda::{Algorithm, Chaoda, Member, MlModel, Vertex},
     core::{
         adapter, cluster, dataset, linear_search, partition, BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric,
         MetricSpace, Partition, Permutable, LFD,
     },
 };
+
+/// Used to bypass the recursion limit in Rust.
+const MAX_RECURSION_DEPTH: usize = 256;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.31.0";

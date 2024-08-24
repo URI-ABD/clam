@@ -84,7 +84,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
 {
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
         let (off_ball, data) = OffBall::from_ball_tree(ball, data);
-        let (mut root, _) = Self::adapt_tree(off_ball, None);
+        let mut root = Self::adapt_tree(off_ball, None);
         root.set_costs(&data);
         root.trim();
         let data = CodecData::from_compressible(&data, &root);
@@ -98,7 +98,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
 {
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
         let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
-        let (mut root, _) = Self::par_adapt_tree(off_ball, None);
+        let mut root = Self::par_adapt_tree(off_ball, None);
         root.par_set_costs(&data);
         root.trim();
         let data = CodecData::par_from_compressible(&data, &root);
@@ -216,38 +216,30 @@ impl<
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Adapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>) {
+    fn adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> Self {
         let children = source.take_children();
         let params = params.unwrap_or_default();
 
-        let cluster = if children.is_empty() {
+        if children.is_empty() {
             Self::new_adapted(source, Vec::new(), params)
         } else {
             let (arg_extrema, others) = children
                 .into_iter()
                 .map(|(a, b, c)| (a, (b, c)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let (children, _) = <SquishCosts<U> as Params<I, U, Co, Dec, OffBall<I, U, Co, S>>>::child_params::<
-                Box<OffBall<I, U, Co, S>>,
-            >(&params, &children)
-            .into_iter()
-            .zip(children)
-            .map(|(p, c)| Self::adapt_tree(*c, Some(p)))
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-
-            let children = arg_extrema
-                .into_iter()
-                .zip(extents)
-                .zip(children)
-                .map(|((a, b), c)| (a, b, Box::new(c)))
-                .collect();
+            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
+            let children =
+                <SquishCosts<U> as Params<I, U, Co, Dec, OffBall<I, U, Co, S>>>::child_params(&params, &children)
+                    .into_iter()
+                    .zip(children)
+                    .map(|(p, c)| Self::adapt_tree(c, Some(p)))
+                    .zip(arg_extrema)
+                    .zip(extents)
+                    .map(|((c, i), d)| (i, d, Box::new(c)))
+                    .collect();
 
             Self::new_adapted(source, children, params)
-        };
-
-        let indices = cluster.indices().collect();
-        (cluster, indices)
+        }
     }
 
     fn new_adapted(source: OffBall<I, U, Co, S>, children: Vec<(usize, U, Box<Self>)>, params: SquishCosts<U>) -> Self {
@@ -270,6 +262,10 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
     fn source_owned(self) -> OffBall<I, U, Co, S> {
         self.source
     }
+
+    fn params(&self) -> &SquishCosts<U> {
+        &self.costs
+    }
 }
 
 /// Parameters for the `OffsetBall`.
@@ -286,7 +282,7 @@ pub struct SquishCosts<U> {
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Params<I, U, Co, Dec, S> for SquishCosts<U>
 {
-    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
+    fn child_params(&self, children: &[S]) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
     }
 }
@@ -299,41 +295,30 @@ impl<
         S: ParCluster<I, U, Co>,
     > ParAdapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn par_adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> (Self, Vec<usize>)
-    where
-        Self: Sized,
-    {
+    fn par_adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> Self {
         let children = source.take_children();
         let params = params.unwrap_or_default();
 
-        let cluster = if children.is_empty() {
+        if children.is_empty() {
             Self::new_adapted(source, Vec::new(), params)
         } else {
             let (arg_extrema, others) = children
-                .into_par_iter()
+                .into_iter()
                 .map(|(a, b, c)| (a, (b, c)))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_par_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let (children, _) = <SquishCosts<U> as ParParams<I, U, Co, Dec, OffBall<I, U, Co, S>>>::par_child_params::<
-                Box<OffBall<I, U, Co, S>>,
-            >(&params, &children)
-            .into_par_iter()
-            .zip(children.into_par_iter())
-            .map(|(p, c)| Self::par_adapt_tree(*c, Some(p)))
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-
-            let children = arg_extrema
-                .into_iter()
-                .zip(extents)
-                .zip(children)
-                .map(|((a, b), c)| (a, b, Box::new(c)))
-                .collect();
+            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
+            let children =
+                <SquishCosts<U> as Params<I, U, Co, Dec, OffBall<I, U, Co, S>>>::child_params(&params, &children)
+                    .into_par_iter()
+                    .zip(children)
+                    .map(|(p, c)| Self::par_adapt_tree(c, Some(p)))
+                    .zip(arg_extrema)
+                    .zip(extents)
+                    .map(|((c, i), d)| (i, d, Box::new(c)))
+                    .collect();
 
             Self::new_adapted(source, children, params)
-        };
-
-        let indices = cluster.indices().collect();
-        (cluster, indices)
+        }
     }
 }
 
@@ -345,7 +330,7 @@ impl<
         S: ParCluster<I, U, Co>,
     > ParParams<I, U, Co, Dec, S> for SquishCosts<U>
 {
-    fn par_child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
+    fn par_child_params(&self, children: &[S]) -> Vec<Self> {
         Params::<I, U, Co, Dec, S>::child_params(self, children)
     }
 }
