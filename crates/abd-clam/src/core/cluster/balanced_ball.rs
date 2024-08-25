@@ -141,7 +141,9 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for BalancedBall<I, U, D
         self.ball.find_extrema(data)
     }
 
-    fn split_by_extrema(&self, data: &D, extrema: Vec<usize>, mut instances: Vec<usize>) -> (Vec<Vec<usize>>, Vec<U>) {
+    fn split_by_extrema(&self, data: &D, extrema: &[usize]) -> (Vec<Vec<usize>>, Vec<U>) {
+        let mut instances = self.indices().filter(|&i| !extrema.contains(&i)).collect::<Vec<_>>();
+
         // Calculate the number of instances per child for a balanced split
         let num_per_child = instances.len() / extrema.len();
         let last_child_size = if instances.len() % extrema.len() == 0 {
@@ -153,7 +155,7 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for BalancedBall<I, U, D
             core::iter::once(last_child_size).chain(core::iter::repeat(num_per_child).take(extrema.len() - 1));
 
         // Initialize the child stacks with the extrema
-        let mut child_stacks = extrema.into_iter().map(|e| vec![(e, U::ZERO)]).collect::<Vec<_>>();
+        let mut child_stacks = extrema.iter().map(|&e| vec![(e, U::ZERO)]).collect::<Vec<_>>();
         for (child_stack, s) in child_stacks.iter_mut().zip(child_sizes) {
             // Calculate the distances to the instances from the extremum
             let mut distances = Dataset::one_to_many(data, child_stack[0].0, &instances);
@@ -192,12 +194,9 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
         self.ball.par_find_extrema(data)
     }
 
-    fn par_split_by_extrema(
-        &self,
-        data: &D,
-        extrema: Vec<usize>,
-        mut instances: Vec<usize>,
-    ) -> (Vec<Vec<usize>>, Vec<U>) {
+    fn par_split_by_extrema(&self, data: &D, extrema: &[usize]) -> (Vec<Vec<usize>>, Vec<U>) {
+        let mut instances = self.indices().filter(|&i| !extrema.contains(&i)).collect::<Vec<_>>();
+
         // Calculate the number of instances per child for a balanced split
         let num_per_child = instances.len() / extrema.len();
         let last_child_size = if instances.len() % extrema.len() == 0 {
@@ -209,7 +208,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
             core::iter::once(last_child_size).chain(core::iter::repeat(num_per_child).take(extrema.len() - 1));
 
         // Initialize the child stacks with the extrema
-        let mut child_stacks = extrema.into_iter().map(|e| vec![(e, U::ZERO)]).collect::<Vec<_>>();
+        let mut child_stacks = extrema.iter().map(|&e| vec![(e, U::ZERO)]).collect::<Vec<_>>();
         for (child_stack, s) in child_stacks.iter_mut().zip(child_sizes) {
             // Calculate the distances to the instances from the extremum
             let mut distances = ParDataset::par_one_to_many(data, child_stack[0].0, &instances);

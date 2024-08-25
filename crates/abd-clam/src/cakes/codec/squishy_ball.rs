@@ -84,7 +84,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
 {
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
         let (off_ball, data) = OffBall::from_ball_tree(ball, data);
-        let mut root = Self::adapt_tree(off_ball, None);
+        let mut root = Self::adapt_tree_iterative(off_ball, None);
         root.set_costs(&data);
         root.trim();
         let data = CodecData::from_compressible(&data, &root);
@@ -98,7 +98,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
 {
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
         let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
-        let mut root = Self::par_adapt_tree(off_ball, None);
+        let mut root = Self::par_adapt_tree_iterative(off_ball, None);
         root.par_set_costs(&data);
         root.trim();
         let data = CodecData::par_from_compressible(&data, &root);
@@ -292,7 +292,7 @@ impl<
         U: Number,
         Co: ParCompressible<I, U>,
         Dec: ParDecompressible<I, U>,
-        S: ParCluster<I, U, Co>,
+        S: ParCluster<I, U, Co> + Debug,
     > ParAdapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
     fn par_adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> Self {
@@ -415,13 +415,15 @@ impl<
         U: Number,
         Co: ParCompressible<I, U>,
         Dec: ParDecompressible<I, U>,
-        S: ParCluster<I, U, Co>,
+        S: ParCluster<I, U, Co> + Debug,
     > ParCluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
     fn par_distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         self.leaves()
             .into_iter()
+            .inspect(|l| println!("Leaf: {l:?}"))
             .map(Self::offset)
+            .inspect(|o| println!("Offset: {o:?}"))
             .map(|o| data.find_compressed_offset(o))
             .flat_map(|o| data.decode_leaf(o))
             .zip(self.indices())

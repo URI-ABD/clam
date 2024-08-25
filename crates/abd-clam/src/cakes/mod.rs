@@ -157,57 +157,63 @@ pub mod tests {
 
     #[test_case::test_case(16, 16, 3)]
     fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
-        let mut algs: Algs<u16> = vec![];
-        for radius in [4, 8, 16] {
-            algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
-        }
-        for k in [1, 10, 20] {
-            algs.push((super::Algorithm::KnnRepeatedRnn(k, 2), check_search_by_distance));
-            algs.push((super::Algorithm::KnnBreadthFirst(k), check_search_by_distance));
-            algs.push((super::Algorithm::KnnDepthFirst(k), check_search_by_distance));
-        }
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap();
 
-        let seed_length = 100;
-        let alphabet = "ACTGN".chars().collect::<Vec<_>>();
-        let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
-        let penalties = distances::strings::Penalties::default();
-        let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
-        let len_delta = seed_length / 10;
-        let (metadata, data) = symagen::random_edits::generate_clumped_data(
-            &seed_string,
-            penalties,
-            &alphabet,
-            num_clumps,
-            clump_size,
-            clump_radius,
-            inter_clump_distance_range,
-            len_delta,
-        )
-        .into_iter()
-        .unzip::<_, _, Vec<_>, Vec<_>>();
-        let query = &seed_string;
+        pool.install(|| {
+            let mut algs: Algs<u16> = vec![];
+            for radius in [4, 8, 16] {
+                algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
+            }
+            for k in [1, 10, 20] {
+                algs.push((super::Algorithm::KnnRepeatedRnn(k, 2), check_search_by_distance));
+                algs.push((super::Algorithm::KnnBreadthFirst(k), check_search_by_distance));
+                algs.push((super::Algorithm::KnnDepthFirst(k), check_search_by_distance));
+            }
 
-        let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
-        let metric = Metric::new(distance_fn, true);
-        let data = FlatVec::new(data, metric)?.with_metadata(metadata)?;
+            let seed_length = 100;
+            let alphabet = "ACTGN".chars().collect::<Vec<_>>();
+            let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
+            let penalties = distances::strings::Penalties::default();
+            let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
+            let len_delta = seed_length / 10;
+            let (metadata, data) = symagen::random_edits::generate_clumped_data(
+                &seed_string,
+                penalties,
+                &alphabet,
+                num_clumps,
+                clump_size,
+                clump_radius,
+                inter_clump_distance_range,
+                len_delta,
+            )
+            .into_iter()
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+            let query = &seed_string;
 
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(42);
+            let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
+            let metric = Metric::new(distance_fn, true);
+            let data = FlatVec::new(data, metric)?.with_metadata(metadata)?;
 
-        let ball = Ball::new_tree(&data, &criteria, seed);
-        check_search(&algs, &data, &ball, query, "ball");
+            let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+            let seed = Some(42);
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
-        check_search(&algs, &perm_data, &off_ball, query, "off_ball");
+            let ball = Ball::new_tree(&data, &criteria, seed);
+            check_search(&algs, &data, &ball, query, "ball");
 
-        let (par_off_ball, par_perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
-        check_search(&algs, &par_perm_data, &par_off_ball, query, "par_off_ball");
+            let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
+            check_search(&algs, &perm_data, &off_ball, query, "off_ball");
 
-        let (squishy_ball, co_data) = SquishyBall::from_ball_tree(ball.clone(), data.clone());
-        check_search(&algs, &co_data, &squishy_ball, query, "squishy_ball");
+            let (par_off_ball, par_perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
+            check_search(&algs, &par_perm_data, &par_off_ball, query, "par_off_ball");
 
-        let (par_squishy_ball, par_co_data) = SquishyBall::par_from_ball_tree(ball, data);
-        check_search(&algs, &par_co_data, &par_squishy_ball, query, "par_squishy_ball");
+            let (squishy_ball, co_data) = SquishyBall::from_ball_tree(ball.clone(), data.clone());
+            check_search(&algs, &co_data, &squishy_ball, query, "squishy_ball");
+
+            let (par_squishy_ball, par_co_data) = SquishyBall::par_from_ball_tree(ball, data);
+            check_search(&algs, &par_co_data, &par_squishy_ball, query, "par_squishy_ball");
+
+            Ok::<_, String>(())
+        })?;
 
         Ok(())
     }

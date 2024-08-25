@@ -48,7 +48,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> OffBall<I, U, D, S> {
 impl<I, U: Number, D: Dataset<I, U> + Permutable> BallAdapter<I, U, D, D, Offset> for OffBall<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
-        let mut root = Self::adapt_tree(ball, None);
+        let mut root = Self::adapt_tree_iterative(ball, None);
         data.permute(&root.source.indices);
         root.source.clear_indices();
         (root, data)
@@ -60,7 +60,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn par_from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
-        let mut root = Self::par_adapt_tree(ball, None);
+        let mut root = Self::par_adapt_tree_iterative(ball, None);
         data.permute(&root.source.indices);
         root.source.clear_indices();
         (root, data)
@@ -91,8 +91,6 @@ impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I
                 .zip(extents)
                 .map(|((c, i), d)| (i, d, Box::new(c)))
                 .collect::<Vec<_>>();
-
-            source.set_indices(children.iter().flat_map(|(_, _, c)| c.indices()).collect());
             Self::new_adapted(source, children, params)
         };
 
@@ -166,8 +164,6 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<
                 .zip(extents)
                 .map(|((c, i), d)| (i, d, Box::new(c)))
                 .collect::<Vec<_>>();
-
-            source.set_indices(children.iter().flat_map(|(_, _, c)| c.indices()).collect());
             Self::new_adapted(source, children, params)
         };
 

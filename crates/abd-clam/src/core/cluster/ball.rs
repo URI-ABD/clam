@@ -289,6 +289,8 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
 
 #[cfg(test)]
 mod tests {
+    use distances::number::{Addition, Multiplication};
+
     use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
 
     use super::Ball;
@@ -301,6 +303,23 @@ mod tests {
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
         let metric = Metric::new(distance_function, false);
         FlatVec::new_array(instances.clone(), metric)
+    }
+
+    fn gen_pathological_line() -> FlatVec<f64, f64, usize> {
+        let min_delta = 1e-12;
+        let mut delta = min_delta;
+        let mut line = vec![0_f64];
+
+        while line.len() < 900 {
+            let last = *line.last().unwrap();
+            line.push(last + delta);
+            delta *= 2.0;
+            delta += min_delta;
+        }
+
+        let distance_fn = |x: &f64, y: &f64| x.abs_diff(*y);
+        let metric = Metric::new(distance_fn, false);
+        FlatVec::new(line, metric).unwrap()
     }
 
     #[test]
@@ -406,6 +425,54 @@ mod tests {
         root.par_partition_further(&data, &criteria_two, seed);
         for leaf in root.leaves() {
             assert_eq!(leaf.depth(), 2);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn tree_iterative() {
+        let data = gen_pathological_line();
+
+        let seed = Some(42);
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+
+        let mut intermediate_depth = crate::MAX_RECURSION_DEPTH;
+        let intermediate_criteria = |c: &Ball<_, _, _>| c.depth() < intermediate_depth && criteria(c);
+        let mut root = Ball::new_tree(&data, &intermediate_criteria, seed);
+
+        while root.leaves().into_iter().any(|l| !l.is_singleton()) {
+            intermediate_depth += crate::MAX_RECURSION_DEPTH;
+            let intermediate_criteria = |c: &Ball<_, _, _>| c.depth() < intermediate_depth && criteria(c);
+            root.partition_further(&data, &intermediate_criteria, seed);
+        }
+
+        assert!(!root.is_leaf());
+    }
+
+    #[test]
+    fn trim_and_graft() -> Result<(), String> {
+        let line = (0..1024).collect();
+        let distance_fn = |x: &u32, y: &u32| x.abs_diff(*y);
+        let metric = Metric::new(distance_fn, false);
+        let data = FlatVec::new(line, metric)?;
+
+        let seed = Some(42);
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let root = Ball::new_tree(&data, &criteria, seed);
+
+        let target_depth = 4;
+        let mut grafted_root = root.clone();
+        let children = grafted_root.trim_at_depth(target_depth);
+
+        let leaves = grafted_root.leaves();
+        assert_eq!(leaves.len(), 2.powi(target_depth as i32));
+        assert_eq!(leaves.len(), children.len());
+
+        grafted_root.graft_at_depth(target_depth, children);
+        assert_eq!(grafted_root, root);
+        for (l, c) in root.subtree().into_iter().zip(grafted_root.subtree()) {
+            assert_eq!(l, c);
         }
 
         Ok(())

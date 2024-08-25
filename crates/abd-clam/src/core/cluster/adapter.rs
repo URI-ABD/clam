@@ -187,4 +187,42 @@ pub trait ParAdapter<
         source.set_children(children);
         source
     }
+
+    /// Adapts the tree of `S`s into this `Cluster` in a such a way that we bypass
+    /// the recursion limit in Rust.
+    fn par_adapt_tree_iterative(mut source: S, params: Option<P>) -> Self {
+        let target_depth = source.depth() + crate::MAX_RECURSION_DEPTH;
+        let children = source.trim_at_depth(target_depth);
+        let mut root = Self::adapt_tree(source, params);
+        let leaf_params = root
+            .leaves()
+            .into_par_iter()
+            .filter(|l| l.depth() == target_depth)
+            .map(Self::params)
+            .collect::<Vec<_>>();
+
+        let children = children
+            .into_par_iter()
+            .zip(leaf_params)
+            .map(|(children, params)| {
+                let (others, children) = children
+                    .into_iter()
+                    .map(|(i, d, c)| ((i, d), *c))
+                    .unzip::<_, _, Vec<_>, Vec<_>>();
+                params
+                    .child_params(&children)
+                    .into_par_iter()
+                    .zip(children)
+                    .zip(others)
+                    .map(|((p, c), (i, d))| {
+                        let c = Self::par_adapt_tree_iterative(c, Some(p));
+                        (i, d, Box::new(c))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        root.graft_at_depth(target_depth, children);
+        root
+    }
 }

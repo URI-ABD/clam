@@ -28,7 +28,7 @@ impl<
         U: Number,
         Co: ParCompressible<I, U>,
         Dec: ParDecompressible<I, U>,
-        S: ParCluster<I, U, Co>,
+        S: ParCluster<I, U, Co> + core::fmt::Debug,
     > super::cluster::ParSearchable<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
 }

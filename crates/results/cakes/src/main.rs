@@ -231,10 +231,10 @@ fn main() -> Result<(), String> {
     } else {
         let (squishy_ball, codec_data) = {
             let mut data: Co = data;
-            let ball: OB = OffBall::par_adapt_tree(ball, None);
+            let ball: OB = OffBall::par_adapt_tree_iterative(ball, None);
             let permutation = ball.source().indices().collect::<Vec<_>>();
             data.permute(&permutation);
-            let mut ball = SquishyBall::par_adapt_tree(ball, None);
+            let mut ball = SquishyBall::par_adapt_tree_iterative(ball, None);
             ball.par_set_costs(&data);
             ball.trim();
             let data = CodecData::par_from_compressible(&data, &ball);

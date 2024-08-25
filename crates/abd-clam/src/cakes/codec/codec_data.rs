@@ -94,7 +94,7 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
 
 impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn par_from_compressible<D: ParCompressible<I, U> + Permutable, S: ParCluster<I, U, D>>(
+    pub fn par_from_compressible<D: ParCompressible<I, U> + Permutable, S: ParCluster<I, U, D> + core::fmt::Debug>(
         data: &D,
         root: &SquishyBall<I, U, D, Self, S>,
     ) -> Self {
@@ -258,7 +258,12 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
             .cumulative_cardinalities
             .iter()
             .position(|&i| i == decompressed_offset)
-            .unwrap_or_else(|| unreachable!("Should be impossible to not hav the offset present here."));
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "Should be impossible to not have the offset present here. {decompressed_offset} in {:?}",
+                    self.cumulative_cardinalities
+                )
+            });
         self.leaf_offsets[pos]
     }
 }
