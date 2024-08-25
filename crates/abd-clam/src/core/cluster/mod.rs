@@ -129,7 +129,7 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
     }
 
     /// Inverts the `trim_at_depth` method.
-    fn graft_at_depth(&mut self, depth: usize, children: Vec<Vec<(usize, U, Box<Self>)>>) {
+    fn graft_at_depth(&mut self, depth: usize, trimmings: Vec<Vec<(usize, U, Box<Self>)>>) {
         let mut queue = vec![self];
         let mut stack = Vec::new();
 
@@ -143,7 +143,7 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + Hash + Sized {
 
         stack
             .into_iter()
-            .zip(children)
+            .zip(trimmings)
             .for_each(|(c, children)| c.set_children(children));
     }
 

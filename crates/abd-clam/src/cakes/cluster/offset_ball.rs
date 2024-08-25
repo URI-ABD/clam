@@ -4,7 +4,6 @@ use core::fmt::Debug;
 use std::marker::PhantomData;
 
 use distances::Number;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -70,47 +69,23 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Offset>
     for OffBall<I, U, D, S>
 {
-    fn adapt_tree(mut source: S, params: Option<Offset>) -> Self {
-        let children = source.take_children();
-        let params = params.unwrap_or_default();
-
-        let mut cluster = if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params)
-        } else {
-            let (arg_extrema, others) = children
-                .into_iter()
-                .map(|(a, b, c)| (a, (b, c)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
-            let children = params
-                .child_params(&children)
-                .into_iter()
-                .zip(children)
-                .map(|(p, c)| Self::adapt_tree(c, Some(p)))
-                .zip(arg_extrema)
-                .zip(extents)
-                .map(|((c, i), d)| (i, d, Box::new(c)))
-                .collect::<Vec<_>>();
-            Self::new_adapted(source, children, params)
-        };
-
-        // Update the indices of the important instances in the `Cluster`.
-        let indices = cluster.source.indices().collect::<Vec<_>>();
-        cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
-        cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
-        for (p, _, _) in cluster.children_mut() {
-            *p = new_index(*p, &indices, params.offset);
-        }
-
-        cluster
-    }
-
     fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset) -> Self {
         Self {
             source,
             children,
             params,
             _id: PhantomData,
+        }
+    }
+
+    fn post_traversal(&mut self) {
+        // Update the indices of the important instances in the `Cluster`.
+        let offset = self.params.offset;
+        let indices = self.source.indices().collect::<Vec<_>>();
+        self.set_arg_center(new_index(self.source.arg_center(), &indices, offset));
+        self.set_arg_radial(new_index(self.source.arg_radial(), &indices, offset));
+        for (p, _, _) in self.children_mut() {
+            *p = new_index(*p, &indices, offset);
         }
     }
 
@@ -143,39 +118,8 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<I, U, D>>
     ParAdapter<I, U, D, D, S, Offset> for OffBall<I, U, D, S>
 {
-    fn par_adapt_tree(mut source: S, params: Option<Offset>) -> Self {
-        let children = source.take_children();
-        let params = params.unwrap_or_default();
-
-        let mut cluster = if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params)
-        } else {
-            let (arg_extrema, others) = children
-                .into_iter()
-                .map(|(a, b, c)| (a, (b, c)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
-            let children = params
-                .child_params(&children)
-                .into_par_iter()
-                .zip(children)
-                .map(|(p, c)| Self::par_adapt_tree(c, Some(p)))
-                .zip(arg_extrema)
-                .zip(extents)
-                .map(|((c, i), d)| (i, d, Box::new(c)))
-                .collect::<Vec<_>>();
-            Self::new_adapted(source, children, params)
-        };
-
-        // Update the indices of the important instances in the `Cluster`.
-        let indices = cluster.source.indices().collect::<Vec<_>>();
-        cluster.set_arg_center(new_index(cluster.source.arg_center(), &indices, params.offset));
-        cluster.set_arg_radial(new_index(cluster.source.arg_radial(), &indices, params.offset));
-        for (p, _, _) in cluster.children_mut() {
-            *p = new_index(*p, &indices, params.offset);
-        }
-
-        cluster
+    fn par_post_traversal(&mut self) {
+        self.post_traversal();
     }
 }
 

@@ -216,32 +216,6 @@ impl<
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Adapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> Self {
-        let children = source.take_children();
-        let params = params.unwrap_or_default();
-
-        if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params)
-        } else {
-            let (arg_extrema, others) = children
-                .into_iter()
-                .map(|(a, b, c)| (a, (b, c)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
-            let children =
-                <SquishCosts<U> as Params<I, U, Co, Dec, OffBall<I, U, Co, S>>>::child_params(&params, &children)
-                    .into_iter()
-                    .zip(children)
-                    .map(|(p, c)| Self::adapt_tree(c, Some(p)))
-                    .zip(arg_extrema)
-                    .zip(extents)
-                    .map(|((c, i), d)| (i, d, Box::new(c)))
-                    .collect();
-
-            Self::new_adapted(source, children, params)
-        }
-    }
-
     fn new_adapted(source: OffBall<I, U, Co, S>, children: Vec<(usize, U, Box<Self>)>, params: SquishCosts<U>) -> Self {
         Self {
             source,
@@ -250,6 +224,8 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
             _dc: PhantomData,
         }
     }
+
+    fn post_traversal(&mut self) {}
 
     fn source(&self) -> &OffBall<I, U, Co, S> {
         &self.source
@@ -295,31 +271,7 @@ impl<
         S: ParCluster<I, U, Co> + Debug,
     > ParAdapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn par_adapt_tree(mut source: OffBall<I, U, Co, S>, params: Option<SquishCosts<U>>) -> Self {
-        let children = source.take_children();
-        let params = params.unwrap_or_default();
-
-        if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params)
-        } else {
-            let (arg_extrema, others) = children
-                .into_iter()
-                .map(|(a, b, c)| (a, (b, c)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().map(|(e, c)| (e, *c)).unzip::<_, _, Vec<_>, Vec<_>>();
-            let children =
-                <SquishCosts<U> as Params<I, U, Co, Dec, OffBall<I, U, Co, S>>>::child_params(&params, &children)
-                    .into_par_iter()
-                    .zip(children)
-                    .map(|(p, c)| Self::par_adapt_tree(c, Some(p)))
-                    .zip(arg_extrema)
-                    .zip(extents)
-                    .map(|((c, i), d)| (i, d, Box::new(c)))
-                    .collect();
-
-            Self::new_adapted(source, children, params)
-        }
-    }
+    fn par_post_traversal(&mut self) {}
 }
 
 impl<
