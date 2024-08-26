@@ -2,7 +2,11 @@
 
 use distances::{number::Multiplication, Number};
 
-use crate::{cluster::ParCluster, dataset::ParDataset, linear_search::SizedHeap, Cluster, Dataset, LFD};
+use crate::{
+    cluster::ParCluster,
+    dataset::{ParDataset, SizedHeap},
+    Cluster, Dataset, LFD,
+};
 
 use super::rnn_clustered::{leaf_search, par_leaf_search, par_tree_search, tree_search};
 
@@ -112,8 +116,7 @@ mod tests {
         adapter::BallAdapter,
         cakes::OffBall,
         cluster::{Ball, ParCluster, Partition},
-        linear_search::LinearSearch,
-        Cluster, FlatVec,
+        Cluster, Dataset, FlatVec,
     };
 
     use crate::cakes::tests::{check_search_by_distance, gen_grid_data, gen_line_data};

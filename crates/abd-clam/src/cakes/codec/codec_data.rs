@@ -7,8 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     cluster::ParCluster,
-    dataset::{metric_space::ParMetricSpace, ParDataset},
-    linear_search::{LinearSearch, ParLinearSearch},
+    dataset::{metric_space::ParMetricSpace, ParDataset, SizedHeap},
     Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
 };
 
@@ -251,7 +250,7 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
 
 impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDecompressible<I, U> for CodecData<I, U, M> {}
 
-impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
+impl<I: Decodable, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -276,21 +275,9 @@ impl<I, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
             |center| center,
         )
     }
-}
 
-impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
-    fn metric(&self) -> &Metric<I, U> {
-        &self.metric
-    }
-
-    fn set_metric(&mut self, metric: Metric<I, U>) {
-        self.metric = metric;
-    }
-}
-
-impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
     fn knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-        let mut knn = crate::linear_search::SizedHeap::new(Some(k));
+        let mut knn = SizedHeap::new(Some(k));
         self.leaf_bytes
             .iter()
             .map(|bytes| self.decode_leaf(bytes.as_ref()))
@@ -325,13 +312,21 @@ impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
     }
 }
 
+impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
+    fn metric(&self) -> &Metric<I, U> {
+        &self.metric
+    }
+
+    fn set_metric(&mut self, metric: Metric<I, U>) {
+        self.metric = metric;
+    }
+}
+
 impl<I: Send + Sync, U: Number, M: Send + Sync> ParMetricSpace<I, U> for CodecData<I, U, M> {}
 
-impl<I: Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for CodecData<I, U, M> {}
-
-impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for CodecData<I, U, M> {
+impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for CodecData<I, U, M> {
     fn par_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-        let mut knn = crate::linear_search::SizedHeap::new(Some(k));
+        let mut knn = SizedHeap::new(Some(k));
         self.leaf_bytes
             .iter()
             .map(|bytes| self.decode_leaf(bytes.as_ref()))

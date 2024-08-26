@@ -187,9 +187,10 @@ where
 mod tests {
     use distances::Number;
 
+    use crate::Dataset;
     use crate::{
-        adapter::BallAdapter, cakes::OffBall, cluster::ParCluster, linear_search::LinearSearch, partition::ParPartition,
-        Ball, Cluster, FlatVec, Partition,
+        adapter::BallAdapter, cakes::OffBall, cluster::ParCluster, partition::ParPartition, Ball, Cluster, FlatVec,
+        Partition,
     };
 
     use crate::cakes::tests::{check_search_by_index, gen_grid_data, gen_line_data};

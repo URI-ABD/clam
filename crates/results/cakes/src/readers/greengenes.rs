@@ -1,14 +1,18 @@
 //! Readers for `GreenGenes` datasets.
 
-use abd_clam::{FlatVec, Metric};
+use abd_clam::FlatVec;
 use bio::io::fasta;
 
+use rand::prelude::*;
+
+use crate::metrics::StringDistance;
 use crate::AlignedSequence;
 
 use crate::Co;
+use crate::Queries;
 
 /// Reads a `GreenGenes` dataset from the given path.
-pub fn read(path: &std::path::Path) -> Result<Co, String> {
+pub fn read(path: &std::path::Path, num_queries: usize) -> Result<(Co, Queries), String> {
     if !path.exists() {
         return Err(format!("Path {path:?} does not exist!"));
     }
@@ -18,7 +22,6 @@ pub fn read(path: &std::path::Path) -> Result<Co, String> {
     let mut records = fasta::Reader::from_file(path).map_err(|e| e.to_string())?.records();
     let mut num_reads = 0;
 
-    let mut ids = Vec::new();
     let mut seqs = Vec::new();
 
     while let Some(Ok(record)) = records.next() {
@@ -34,9 +37,14 @@ pub fn read(path: &std::path::Path) -> Result<Co, String> {
             return Err(format!("Empty sequence for record {num_reads}."));
         }
 
-        ids.push(id);
-        seqs.push(AlignedSequence::new(seq));
+        seqs.push((id, AlignedSequence::new(seq)));
     }
+
+    // Shuffle the sequences and hold out a query set.
+    seqs.shuffle(&mut rand::thread_rng());
+    let queries = seqs.split_off(seqs.len() - num_queries);
+
+    let (ids, seqs): (Vec<_>, Vec<_>) = seqs.into_iter().unzip();
 
     let (min_seq_len, max_seq_len) = seqs.iter().fold((usize::MAX, 0), |(min, max), seq| {
         let len = seq.len();
@@ -49,9 +57,11 @@ pub fn read(path: &std::path::Path) -> Result<Co, String> {
         seqs.len()
     );
 
-    let metric = Metric::default();
-    Ok(FlatVec::new(seqs, metric)?
+    let metric = StringDistance::Hamming.metric();
+    let data = FlatVec::new(seqs, metric)?
         .with_metadata(ids)?
         .with_dim_lower_bound(min_seq_len)
-        .with_dim_upper_bound(max_seq_len))
+        .with_dim_upper_bound(max_seq_len);
+
+    Ok((data, queries))
 }

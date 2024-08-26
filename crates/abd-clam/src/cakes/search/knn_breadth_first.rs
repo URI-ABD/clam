@@ -5,7 +5,11 @@ use core::cmp::{min, Ordering};
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, linear_search::SizedHeap, Cluster, Dataset};
+use crate::{
+    cluster::ParCluster,
+    dataset::{ParDataset, SizedHeap},
+    Cluster, Dataset,
+};
 
 /// K-Nearest Neighbors search using a Breadth First sieve.
 pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize, U)>

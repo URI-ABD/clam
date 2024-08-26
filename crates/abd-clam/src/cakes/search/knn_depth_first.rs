@@ -4,7 +4,11 @@ use core::cmp::Reverse;
 
 use distances::Number;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, linear_search::SizedHeap, Cluster, Dataset};
+use crate::{
+    cluster::ParCluster,
+    dataset::{ParDataset, SizedHeap},
+    Cluster, Dataset,
+};
 
 /// K-Nearest Neighbors search using a Depth First sieve.
 pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize, U)>
@@ -170,8 +174,7 @@ pub(crate) mod tests {
         adapter::BallAdapter,
         cakes::OffBall,
         cluster::{Ball, ParCluster, Partition},
-        linear_search::LinearSearch,
-        Cluster, FlatVec,
+        Cluster, Dataset, FlatVec,
     };
 
     use crate::cakes::tests::{check_search_by_distance, gen_grid_data, gen_line_data};

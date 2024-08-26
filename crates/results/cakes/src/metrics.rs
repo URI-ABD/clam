@@ -22,12 +22,12 @@ impl StringDistance {
     /// Get the distance function.
     pub fn metric(&self) -> Metric<AlignedSequence, u32> {
         let distance_function = match self {
-            Self::Levenshtein => {
-                |x: &AlignedSequence, y: &AlignedSequence| distances::strings::levenshtein(x.sequence(), y.sequence())
-            }
-            Self::NeedlemanWunsch => {
-                |x: &AlignedSequence, y: &AlignedSequence| distances::strings::nw_distance(x.sequence(), y.sequence())
-            }
+            Self::Levenshtein => |x: &AlignedSequence, y: &AlignedSequence| {
+                distances::strings::levenshtein(&x.as_unaligned(), &y.as_unaligned())
+            },
+            Self::NeedlemanWunsch => |x: &AlignedSequence, y: &AlignedSequence| {
+                distances::strings::nw_distance(&x.as_unaligned(), &y.as_unaligned())
+            },
             Self::Hamming => {
                 |x: &AlignedSequence, y: &AlignedSequence| distances::strings::hamming(x.sequence(), y.sequence())
             }

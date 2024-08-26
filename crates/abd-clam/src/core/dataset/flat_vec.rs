@@ -3,11 +3,7 @@
 use distances::Number;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    linear_search::{LinearSearch, ParLinearSearch},
-    metric_space::ParMetricSpace,
-    Dataset, Metric, MetricSpace, ParDataset, Permutable,
-};
+use super::{metric_space::ParMetricSpace, Dataset, Metric, MetricSpace, ParDataset, Permutable};
 
 /// A `FlatVec` is a dataset that is stored as a flat vector.
 ///
@@ -236,10 +232,6 @@ impl<I, U: Number, M> Permutable for FlatVec<I, U, M> {
     }
 }
 
-impl<I, U: Number, M> LinearSearch<I, U> for FlatVec<I, U, M> {}
-
-impl<I: Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for FlatVec<I, U, M> {}
-
 impl<T: ndarray_npy::ReadableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
     /// Reads a `VecDataset` from a `.npy` file.
     ///
@@ -292,10 +284,7 @@ impl<T: ndarray_npy::WritableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
 /// Tests for the `FlatVec` struct.
 #[cfg(test)]
 mod tests {
-    use crate::{
-        linear_search::{LinearSearch, ParLinearSearch},
-        Dataset, Metric, MetricSpace, Permutable,
-    };
+    use crate::{dataset::ParDataset, Dataset, Metric, MetricSpace, Permutable};
 
     use super::FlatVec;
 

@@ -25,8 +25,8 @@ pub mod utils;
 pub use crate::{
     // chaoda::{Algorithm, Chaoda, Member, MlModel, Vertex},
     core::{
-        adapter, cluster, dataset, linear_search, partition, BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric,
-        MetricSpace, Partition, Permutable, LFD,
+        adapter, cluster, dataset, partition, BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace,
+        Partition, Permutable, LFD,
     },
 };
 

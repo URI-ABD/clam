@@ -6,7 +6,6 @@ use abd_clam::{
         cluster::{ParSearchable, Searchable},
         Algorithm, CodecData, Decodable, Encodable, OffBall, ParCompressible, SquishyBall,
     },
-    linear_search::ParLinearSearch,
     BalancedBall, Ball,
 };
 use criterion::*;
@@ -54,7 +53,7 @@ pub fn compare_permuted<I, U, Co>(
 ) where
     I: Encodable + Decodable + Send + Sync,
     U: Number,
-    Co: ParCompressible<I, U> + ParLinearSearch<I, U>,
+    Co: ParCompressible<I, U>,
 {
     let algs = vec![
         Algorithm::KnnRepeatedRnn(ks[0], U::ONE.double()),
@@ -78,10 +77,6 @@ pub fn compare_permuted<I, U, Co>(
         let alg = Algorithm::RnnClustered(radius);
 
         if !par_only {
-            group.bench_with_input(BenchmarkId::new("Linear", radius), &radius, |b, _| {
-                b.iter_with_large_drop(|| alg.batch_linear_search(data, queries));
-            });
-
             group.bench_with_input(BenchmarkId::new("Ball", radius), &radius, |b, _| {
                 b.iter_with_large_drop(|| ball.batch_search(data, queries, alg));
             });
@@ -107,10 +102,6 @@ pub fn compare_permuted<I, U, Co>(
                 });
             }
         }
-
-        group.bench_with_input(BenchmarkId::new("ParLinear", radius), &radius, |b, _| {
-            b.iter_with_large_drop(|| alg.par_batch_linear_search(data, queries));
-        });
 
         group.bench_with_input(BenchmarkId::new("ParBall", radius), &radius, |b, _| {
             b.iter_with_large_drop(|| ball.par_batch_search(data, queries, alg));
@@ -150,10 +141,6 @@ pub fn compare_permuted<I, U, Co>(
             let alg = alg.with_params(U::ZERO, k);
 
             if !par_only {
-                group.bench_with_input(BenchmarkId::new("Linear", k), &k, |b, _| {
-                    b.iter_with_large_drop(|| alg.batch_linear_search(data, queries));
-                });
-
                 group.bench_with_input(BenchmarkId::new("Ball", k), &k, |b, _| {
                     b.iter_with_large_drop(|| ball.batch_search(data, queries, alg));
                 });
@@ -179,10 +166,6 @@ pub fn compare_permuted<I, U, Co>(
                     });
                 }
             }
-
-            group.bench_with_input(BenchmarkId::new("ParLinear", k), &k, |b, _| {
-                b.iter_with_large_drop(|| alg.par_batch_linear_search(data, queries));
-            });
 
             group.bench_with_input(BenchmarkId::new("ParBall", k), &k, |b, _| {
                 b.iter_with_large_drop(|| ball.par_batch_search(data, queries, alg));

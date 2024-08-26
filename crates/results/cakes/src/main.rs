@@ -20,7 +20,7 @@ use std::path::PathBuf;
 
 use abd_clam::{
     adapter::{Adapter, ParAdapter},
-    cakes::{CodecData, Decompressible, OffBall, SquishyBall},
+    cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
     Ball, Cluster, Dataset, FlatVec, MetricSpace, Permutable,
 };
@@ -30,7 +30,11 @@ mod metrics;
 mod readers;
 mod sequence;
 
+use metrics::StringDistance;
 use sequence::AlignedSequence;
+
+/// The Vector of held-out queries
+pub type Queries = Vec<(String, AlignedSequence)>;
 
 /// The type of the compressible dataset.
 pub type Co = FlatVec<AlignedSequence, u32, String>;
@@ -51,9 +55,9 @@ struct Args {
     #[arg(short, long)]
     dataset: readers::Datasets,
 
-    /// The distance function to use.
+    /// The number of queries to hold out.
     #[arg(short, long)]
-    metric: metrics::StringDistance,
+    num_queries: usize,
 
     /// Path to the input directory.
     #[arg(short, long)]
@@ -69,7 +73,7 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
 
     mt_logger::mt_new!(
-        Some("cakes-results.log"),
+        Some("cakes-building.log"),
         mt_logger::Level::Debug,
         mt_logger::OutputStream::Both
     );
@@ -92,6 +96,7 @@ fn main() -> Result<(), String> {
 
     let ball_path = out_dir.join(args.dataset.ball_file());
     let flat_vec_path = out_dir.join(args.dataset.flat_file());
+    let queries_path = out_dir.join(args.dataset.queries_file());
 
     let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
     let codec_data_path = out_dir.join(args.dataset.compressed_file());
@@ -99,8 +104,8 @@ fn main() -> Result<(), String> {
     let start = std::time::Instant::now();
 
     // Read the dataset
-    let (data, end) = if flat_vec_path.exists() {
-        let data: Co = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
+    let (data, queries, end) = if flat_vec_path.exists() {
+        let mut data: Co = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
         let end = start.elapsed();
         mt_logger::mt_log!(
@@ -109,9 +114,14 @@ fn main() -> Result<(), String> {
             args.dataset,
             data.cardinality()
         );
-        (data, end)
+        data.set_metric(StringDistance::Hamming.metric());
+
+        let queries: Queries = bincode::deserialize_from(std::fs::File::open(&queries_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+
+        (data, queries, end)
     } else {
-        let data: Co = args.dataset.read_fasta(&inp_dir)?;
+        let (data, queries): (Co, Queries) = args.dataset.read_fasta(&inp_dir, args.num_queries)?;
         let end = start.elapsed();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -119,6 +129,7 @@ fn main() -> Result<(), String> {
             args.dataset.name(),
             data.cardinality()
         );
+
         let serde_start = std::time::Instant::now();
         bincode::serialize_into(std::fs::File::create(&flat_vec_path).map_err(|e| e.to_string())?, &data)
             .map_err(|e| e.to_string())?;
@@ -128,7 +139,14 @@ fn main() -> Result<(), String> {
             "Serialized dataset to {flat_vec_path:?} in {:.6} seconds.",
             serde_end.as_secs_f64()
         );
-        (data, end)
+
+        bincode::serialize_into(
+            std::fs::File::create(&queries_path).map_err(|e| e.to_string())?,
+            &queries,
+        )
+        .map_err(|e| e.to_string())?;
+
+        (data, queries, end)
     };
 
     mt_logger::mt_log!(
@@ -145,12 +163,7 @@ fn main() -> Result<(), String> {
         data.dimensionality_hint()
     );
 
-    let data: Co = {
-        let metric = args.metric.metric();
-        let mut data = data;
-        data.set_metric(metric);
-        data
-    };
+    mt_logger::mt_log!(mt_logger::Level::Info, "Holding out {} queries", queries.len());
 
     let start = std::time::Instant::now();
     let ball: B = if ball_path.exists() {
@@ -230,8 +243,8 @@ fn main() -> Result<(), String> {
         (squishy_ball, codec_data)
     } else {
         let (squishy_ball, codec_data) = {
-            let mut data: Co = data;
-            let ball: OB = OffBall::par_adapt_tree_iterative(ball, None);
+            let mut data: Co = data.clone();
+            let ball: OB = OffBall::par_adapt_tree_iterative(ball.clone(), None);
             let permutation = ball.source().indices().collect::<Vec<_>>();
             data.permute(&permutation);
             let mut ball = SquishyBall::par_adapt_tree_iterative(ball, None);
@@ -286,6 +299,98 @@ fn main() -> Result<(), String> {
 
     let num_leaf_bytes = codec_data.leaf_bytes().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
+
+    mt_logger::mt_flush!().map_err(|e| e.to_string())?;
+
+    // Note: Starting search benchmarks here
+
+    mt_logger::mt_new!(
+        Some("cakes-searching.log"),
+        mt_logger::Level::Debug,
+        mt_logger::OutputStream::Both
+    );
+
+    let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
+    let (data, codec_data) = {
+        let metric = StringDistance::Levenshtein.metric();
+        let mut data = data;
+        data.set_metric(metric.clone());
+        let mut codec_data = codec_data;
+        codec_data.set_metric(metric);
+        (data, codec_data)
+    };
+
+    let algorithms = {
+        let mut algorithms = Vec::new();
+
+        for radius in [5, 10, 20] {
+            algorithms.push(Algorithm::RnnLinear(radius));
+            algorithms.push(Algorithm::RnnClustered(radius));
+        }
+
+        for k in [5, 10, 20] {
+            algorithms.push(Algorithm::KnnLinear(k));
+            algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
+            algorithms.push(Algorithm::KnnBreadthFirst(k));
+            algorithms.push(Algorithm::KnnDepthFirst(k));
+        }
+
+        algorithms
+    };
+
+    mt_logger::mt_log!(
+        mt_logger::Level::Info,
+        "Starting search benchmarks on {} algorithms ...",
+        algorithms.len()
+    );
+
+    for (i, alg) in algorithms.iter().enumerate() {
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Starting {} Search ({}/{}) on Ball and FlatVec ...",
+            alg.name(),
+            i + 1,
+            algorithms.len()
+        );
+        let start = std::time::Instant::now();
+        let hits = alg.par_batch_search(&data, &ball, &queries);
+        let end = start.elapsed().as_secs_f32();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Finished {} Search ({}/{}) on Ball and FlatVec in {end:.6} seconds.",
+            alg.name(),
+            i + 1,
+            algorithms.len()
+        );
+        let mean_num_hits = abd_clam::utils::mean::<_, f32>(&hits.into_iter().map(|h| h.len()).collect::<Vec<_>>());
+        mt_logger::mt_log!(mt_logger::Level::Info, "Average number of hits was {mean_num_hits:.6}.");
+
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Starting {} Search ({}/{}) on SquishyBall and CodecData ...",
+            alg.name(),
+            i + 1,
+            algorithms.len()
+        );
+        let start = std::time::Instant::now();
+        let hits = alg.par_batch_search(&codec_data, &squishy_ball, &queries);
+        let end = start.elapsed().as_secs_f32();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Finished {} Search ({}/{}) on SquishyBall and CodecData in {end:.6} seconds.",
+            alg.name(),
+            i + 1,
+            algorithms.len()
+        );
+        let mean_num_hits = abd_clam::utils::mean::<_, f32>(&hits.into_iter().map(|h| h.len()).collect::<Vec<_>>());
+        mt_logger::mt_log!(mt_logger::Level::Info, "Average number of hits was {mean_num_hits:.6}.");
+    }
+
+    mt_logger::mt_log!(
+        mt_logger::Level::Info,
+        "Finished search benchmarks on {} algorithms ...",
+        algorithms.len()
+    );
 
     mt_logger::mt_flush!().map_err(|e| e.to_string())
 }

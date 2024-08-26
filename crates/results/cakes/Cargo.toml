@@ -11,6 +11,7 @@ distances = { workspace = true }
 mt_logger = { workspace = true }
 serde = { workspace = true }
 bincode = { workspace = true }
+rand = { workspace = true }
 
 symagen = { workspace = true }
 tempfile = "*"

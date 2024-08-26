@@ -25,7 +25,6 @@ pub mod tests {
         cakes::{OffBall, SquishyBall},
         cluster::ParCluster,
         dataset::ParDataset,
-        linear_search::ParLinearSearch,
         Ball, Cluster, FlatVec, Metric, Partition,
     };
 
@@ -109,11 +108,11 @@ pub mod tests {
     where
         I: Send + Sync,
         U: Number,
-        D: ParDataset<I, U> + ParLinearSearch<I, U>,
+        D: ParDataset<I, U>,
         C: ParCluster<I, U, D>,
     {
         for (alg, checker) in algs {
-            let true_hits = alg.par_linear_search(data, query);
+            let true_hits = alg.linear_variant().par_search(data, root, query);
             let pred_hits = alg.par_search(data, root, query);
             let alg_name = format!("{name}-{}", alg.name());
             checker(true_hits.clone(), pred_hits, &alg_name);
