@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use distances::Number;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -51,13 +50,10 @@ pub struct CodecData<I, U, M> {
     pub(crate) name: String,
     /// The centers of the clusters in the dataset.
     pub(crate) center_map: HashMap<usize, I>,
-    /// The bytes representing the leaf clusters as a flattened vector.
-    pub(crate) leaf_bytes: Box<[u8]>,
-    /// The offsets that indicate the start of the instances for each leaf
-    /// cluster in the flattened vector.
+    /// The byte-slices representing the leaf clusters.
+    pub(crate) leaf_bytes: Vec<Box<[u8]>>,
+    /// The offset-index of each leaf cluster.
     pub(crate) leaf_offsets: Vec<usize>,
-    /// The cumulative cardinalities of the leaves.
-    pub(crate) cumulative_cardinalities: Vec<usize>,
 }
 
 impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
@@ -73,7 +69,9 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             .map(|i| (i, data.get(i).clone()))
             .collect();
 
-        let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.encode_leaves(root);
+        let leaf_bytes = data.encode_leaves(root);
+        let leaf_offsets = root.leaves().iter().map(|leaf| leaf.offset()).collect();
+
         let cardinality = data.cardinality();
         let metric = data.metric().clone();
         let dimensionality_hint = data.dimensionality_hint();
@@ -87,7 +85,6 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             center_map,
             leaf_bytes,
             leaf_offsets,
-            cumulative_cardinalities,
         }
     }
 }
@@ -105,7 +102,9 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             .map(|i| (i, data.get(i).clone()))
             .collect();
 
-        let (leaf_bytes, leaf_offsets, cumulative_cardinalities) = data.par_encode_leaves(root);
+        let leaf_bytes = data.par_encode_leaves(root);
+        let leaf_offsets = root.leaves().iter().map(|leaf| leaf.offset()).collect();
+
         let cardinality = data.cardinality();
         let metric = data.metric().clone();
         let dimensionality_hint = data.dimensionality_hint();
@@ -119,7 +118,6 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             center_map,
             leaf_bytes,
             leaf_offsets,
-            cumulative_cardinalities,
         }
     }
 }
@@ -194,7 +192,6 @@ impl<I, U, M> CodecData<I, U, M> {
                 center_map: self.center_map,
                 leaf_bytes: self.leaf_bytes,
                 leaf_offsets: self.leaf_offsets,
-                cumulative_cardinalities: self.cumulative_cardinalities,
             })
         } else {
             Err(format!(
@@ -223,9 +220,9 @@ impl<I: Decodable + Clone, U: Number, M: Clone> CodecData<I, U, M> {
     #[must_use]
     pub fn to_flat_vec(&self) -> FlatVec<I, U, M> {
         let instances = self
-            .leaf_offsets
+            .leaf_bytes
             .iter()
-            .flat_map(|&o| self.decode_leaf(o))
+            .flat_map(|bytes| self.decode_leaf(bytes.as_ref()))
             .collect::<Vec<_>>();
         FlatVec {
             metric: self.metric.clone(),
@@ -243,28 +240,12 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
         &self.center_map
     }
 
-    fn leaf_bytes(&self) -> &[u8] {
+    fn leaf_bytes(&self) -> &[Box<[u8]>] {
         self.leaf_bytes.as_ref()
     }
 
     fn leaf_offsets(&self) -> &[usize] {
         &self.leaf_offsets
-    }
-
-    /// Finds the offset of the leaf's instances in the compressed form, given
-    /// the offset of the leaf in decompressed form.
-    fn find_compressed_offset(&self, decompressed_offset: usize) -> usize {
-        let pos = self
-            .cumulative_cardinalities
-            .iter()
-            .position(|&i| i == decompressed_offset)
-            .unwrap_or_else(|| {
-                unreachable!(
-                    "Should be impossible to not have the offset present here. {decompressed_offset} in {:?}",
-                    self.cumulative_cardinalities
-                )
-            });
-        self.leaf_offsets[pos]
     }
 }
 
@@ -310,11 +291,11 @@ impl<I, U: Number, M> MetricSpace<I, U> for CodecData<I, U, M> {
 impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
     fn knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let mut knn = crate::linear_search::SizedHeap::new(Some(k));
-        self.leaf_offsets
+        self.leaf_bytes
             .iter()
-            .map(|&o| self.decode_leaf(o))
-            .zip(self.cumulative_cardinalities.iter())
-            .flat_map(|(instances, o)| {
+            .map(|bytes| self.decode_leaf(bytes.as_ref()))
+            .zip(self.leaf_offsets.iter())
+            .flat_map(|(instances, &o)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -327,11 +308,11 @@ impl<I: Decodable, U: Number, M> LinearSearch<I, U> for CodecData<I, U, M> {
     }
 
     fn rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
-        self.leaf_offsets
+        self.leaf_bytes
             .iter()
-            .map(|&o| self.decode_leaf(o))
-            .zip(self.cumulative_cardinalities.iter())
-            .flat_map(|(instances, o)| {
+            .map(|bytes| self.decode_leaf(bytes.as_ref()))
+            .zip(self.leaf_offsets.iter())
+            .flat_map(|(instances, &o)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -351,11 +332,11 @@ impl<I: Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for CodecData<I
 impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U> for CodecData<I, U, M> {
     fn par_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let mut knn = crate::linear_search::SizedHeap::new(Some(k));
-        self.leaf_offsets
-            .par_iter()
-            .map(|&o| self.decode_leaf(o))
-            .zip(self.cumulative_cardinalities.par_iter())
-            .flat_map(|(instances, o)| {
+        self.leaf_bytes
+            .iter()
+            .map(|bytes| self.decode_leaf(bytes.as_ref()))
+            .zip(self.leaf_offsets.iter())
+            .flat_map(|(instances, &o)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -370,11 +351,11 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParLinearSearch<I, U
     }
 
     fn par_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
-        self.leaf_offsets
-            .par_iter()
-            .map(|&o| self.decode_leaf(o))
-            .zip(self.cumulative_cardinalities.par_iter())
-            .flat_map(|(instances, o)| {
+        self.leaf_bytes
+            .iter()
+            .map(|bytes| self.decode_leaf(bytes.as_ref()))
+            .zip(self.leaf_offsets.iter())
+            .flat_map(|(instances, &o)| {
                 let instances = instances
                     .iter()
                     .enumerate()

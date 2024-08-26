@@ -50,19 +50,19 @@ pub mod tests {
         mut pred_hits: Vec<(usize, U)>,
         name: &str,
     ) -> bool {
+        // true_hits.sort_by(|(i, p), (j, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater).then(i.cmp(j)));
+        // pred_hits.sort_by(|(i, p), (j, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater).then(i.cmp(j)));
+
         true_hits.sort_by_key(|(i, _)| *i);
         pred_hits.sort_by_key(|(i, _)| *i);
 
-        assert_eq!(
-            true_hits.len(),
-            pred_hits.len(),
-            "{name}: {true_hits:?} vs {pred_hits:?}"
-        );
+        let rest = format!("\n{true_hits:?}\nvs\n{pred_hits:?}");
+        assert_eq!(true_hits.len(), pred_hits.len(), "{name}: {rest}");
 
         for ((i, p), (j, q)) in true_hits.into_iter().zip(pred_hits) {
             let msg = format!("Failed {name} i: {i}, j: {j}, p: {p}, q: {q}");
-            assert_eq!(i, j, "{msg}");
-            assert!(p.abs_diff(q) <= U::EPSILON, "{msg}");
+            assert_eq!(i, j, "{msg} {rest}");
+            assert!(p.abs_diff(q) <= U::EPSILON, "{msg} in {rest}");
         }
 
         true

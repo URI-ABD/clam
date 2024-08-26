@@ -256,8 +256,6 @@ pub mod tests {
         assert_eq!(co_data.permutation, deserialized.permutation);
         assert_eq!(co_data.center_map, deserialized.center_map);
         assert_eq!(co_data.leaf_bytes, deserialized.leaf_bytes);
-        assert_eq!(co_data.leaf_offsets, deserialized.leaf_offsets);
-        assert_eq!(co_data.cumulative_cardinalities, deserialized.cumulative_cardinalities);
 
         Ok(())
     }

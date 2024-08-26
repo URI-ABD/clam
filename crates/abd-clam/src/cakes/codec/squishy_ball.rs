@@ -13,7 +13,7 @@ use crate::{
     adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
     cakes::OffBall,
     cluster::ParCluster,
-    dataset::ParDataset,
+    dataset::{metric_space::ParMetricSpace, ParDataset},
     Ball, Cluster, Dataset, MetricSpace, Permutable,
 };
 
@@ -347,14 +347,24 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
     }
 
     fn distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
-        self.leaves()
+        let leaf_bytes = data.leaf_bytes();
+        let leaf_offsets = data.leaf_offsets();
+        let instances = self
+            .leaves()
             .into_iter()
             .map(Self::offset)
-            .map(|o| data.find_compressed_offset(o))
-            .flat_map(|o| data.decode_leaf(o))
-            .zip(self.indices())
-            .map(|(p, i)| (i, MetricSpace::one_to_one(data, query, &p)))
-            .collect()
+            .map(|o| {
+                leaf_offsets
+                    .iter()
+                    .position(|&i| i == o)
+                    .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {o}, {leaf_offsets:?}"))
+            })
+            .map(|i| leaf_bytes[i].as_ref())
+            .flat_map(|bytes| data.decode_leaf(bytes))
+            .collect::<Vec<I>>();
+
+        let instances = self.indices().zip(instances.iter()).collect::<Vec<_>>();
+        MetricSpace::one_to_many(data, query, &instances)
     }
 
     fn is_descendant_of(&self, other: &Self) -> bool {
@@ -371,18 +381,30 @@ impl<
     > ParCluster<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
     fn par_distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
-        self.leaves()
-            .into_iter()
-            .inspect(|l| println!("Leaf: {l:?}"))
-            .map(Self::offset)
-            .inspect(|o| println!("Offset: {o:?}"))
-            .map(|o| data.find_compressed_offset(o))
-            .flat_map(|o| data.decode_leaf(o))
-            .zip(self.indices())
-            .collect::<Vec<_>>()
+        let leaf_bytes = data.leaf_bytes();
+        let leaf_offsets = data.leaf_offsets();
+        let instances = self
+            .leaves()
             .into_par_iter()
-            .map(|(p, i)| (i, MetricSpace::one_to_one(data, query, &p)))
-            .collect()
+            .map(Self::offset)
+            .map(|o| {
+                let i = leaf_offsets
+                    .iter()
+                    .position(|&i| i == o)
+                    .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {o}, {leaf_offsets:?}"));
+                (o, i)
+            })
+            .map(|(o, i)| (o, leaf_bytes[i].as_ref()))
+            .flat_map(|(o, bytes)| {
+                data.decode_leaf(bytes)
+                    .into_par_iter()
+                    .enumerate()
+                    .map(move |(i, p)| (o + i, p))
+            })
+            .collect::<Vec<_>>();
+
+        let instances = instances.iter().map(|(i, p)| (*i, p)).collect::<Vec<_>>();
+        ParMetricSpace::par_one_to_many(data, query, &instances)
     }
 }
 

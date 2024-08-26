@@ -21,21 +21,17 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
     /// dataset.
     fn centers(&self) -> &HashMap<usize, I>;
 
-    /// Returns the bytes slice representing all compressed leaves.
-    fn leaf_bytes(&self) -> &[u8];
+    /// Returns the bytes slices representing all compressed leaves.
+    fn leaf_bytes(&self) -> &[Box<[u8]>];
 
-    /// Returns the offsets of the leaves' encodings in the bytes.
+    /// Returns the offset-indices of the leaves in the dataset.
     fn leaf_offsets(&self) -> &[usize];
 
-    /// Finds the offset of the leaf's instances in the compressed form, given
-    /// the offset of the leaf in decompressed form.
-    fn find_compressed_offset(&self, decompressed_offset: usize) -> usize;
-
     /// Decodes all the instances of a leaf cluster in terms of its center.
-    fn decode_leaf(&self, mut offset: usize) -> Vec<I> {
+    fn decode_leaf(&self, bytes: &[u8]) -> Vec<I> {
         let mut instances = Vec::new();
-        let bytes = self.leaf_bytes();
 
+        let mut offset = 0;
         let arg_center = super::read_usize(bytes, &mut offset);
         let center = &self.centers()[&arg_center];
 
@@ -54,7 +50,7 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
 /// Parallel version of the `Decompressible` trait.
 pub trait ParDecompressible<I: Decodable + Send + Sync, U: Number>: Decompressible<I, U> + ParDataset<I, U> {
     /// Parallel version of the `decode_leaf` method.
-    fn par_decode_leaf(&self, offset: usize) -> Vec<I> {
-        self.decode_leaf(offset)
+    fn par_decode_leaf(&self, bytes: &[u8]) -> Vec<I> {
+        self.decode_leaf(bytes)
     }
 }
