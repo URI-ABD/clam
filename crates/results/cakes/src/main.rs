@@ -73,7 +73,7 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
 
     mt_logger::mt_new!(
-        Some("cakes-building.log"),
+        Some("cakes-results.log"),
         mt_logger::Level::Debug,
         mt_logger::OutputStream::Both
     );
@@ -304,12 +304,6 @@ fn main() -> Result<(), String> {
 
     // Note: Starting search benchmarks here
 
-    mt_logger::mt_new!(
-        Some("cakes-searching.log"),
-        mt_logger::Level::Debug,
-        mt_logger::OutputStream::Both
-    );
-
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
     let (data, codec_data) = {
         let metric = StringDistance::Levenshtein.metric();
@@ -324,12 +318,12 @@ fn main() -> Result<(), String> {
         let mut algorithms = Vec::new();
 
         for radius in [5, 10, 20] {
-            algorithms.push(Algorithm::RnnLinear(radius));
+            // algorithms.push(Algorithm::RnnLinear(radius));
             algorithms.push(Algorithm::RnnClustered(radius));
         }
 
         for k in [5, 10, 20] {
-            algorithms.push(Algorithm::KnnLinear(k));
+            // algorithms.push(Algorithm::KnnLinear(k));
             algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
             algorithms.push(Algorithm::KnnBreadthFirst(k));
             algorithms.push(Algorithm::KnnDepthFirst(k));
