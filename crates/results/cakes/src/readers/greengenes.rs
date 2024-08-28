@@ -32,7 +32,13 @@ pub fn read(path: &std::path::Path, num_queries: usize) -> Result<(Co, Queries),
             return Err(format!("Empty id for record {num_reads}."));
         }
 
-        let seq = record.seq().iter().map(|&b| b as char).collect::<String>();
+        // Read the sequence but replace the padding with gaps.
+        let seq = record
+            .seq()
+            .iter()
+            .map(|&b| b as char)
+            .map(|b| if b == '.' { '-' } else { b })
+            .collect::<String>();
         if seq.is_empty() {
             return Err(format!("Empty sequence for record {num_reads}."));
         }

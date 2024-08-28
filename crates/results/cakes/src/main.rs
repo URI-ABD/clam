@@ -238,7 +238,6 @@ fn main() -> Result<(), String> {
         );
 
         codec_data.set_metric(data.metric().clone());
-        let codec_data: Dec = codec_data.post_deserialization(data.permutation(), metadata)?;
 
         (squishy_ball, codec_data)
     } else {
@@ -305,24 +304,24 @@ fn main() -> Result<(), String> {
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    let (data, codec_data) = {
-        let metric = StringDistance::Levenshtein.metric();
-        let mut data = data;
-        data.set_metric(metric.clone());
-        let mut codec_data = codec_data;
-        codec_data.set_metric(metric);
-        (data, codec_data)
-    };
+    // let (data, codec_data) = {
+    //     let metric = StringDistance::Levenshtein.metric();
+    //     let mut data = data;
+    //     data.set_metric(metric.clone());
+    //     let mut codec_data = codec_data;
+    //     codec_data.set_metric(metric);
+    //     (data, codec_data)
+    // };
 
     let algorithms = {
         let mut algorithms = Vec::new();
 
-        for radius in [5, 10, 20] {
+        for radius in [1, 5, 10] {
             // algorithms.push(Algorithm::RnnLinear(radius));
             algorithms.push(Algorithm::RnnClustered(radius));
         }
 
-        for k in [5, 10, 20] {
+        for k in [1, 10] {
             // algorithms.push(Algorithm::KnnLinear(k));
             algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
             algorithms.push(Algorithm::KnnBreadthFirst(k));
@@ -338,6 +337,8 @@ fn main() -> Result<(), String> {
         algorithms.len()
     );
 
+    let queries = &queries[..10];
+
     for (i, alg) in algorithms.iter().enumerate() {
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -347,7 +348,7 @@ fn main() -> Result<(), String> {
             algorithms.len()
         );
         let start = std::time::Instant::now();
-        let hits = alg.par_batch_search(&data, &ball, &queries);
+        let hits = alg.par_batch_par_search(&data, &ball, queries);
         let end = start.elapsed().as_secs_f32();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
@@ -367,7 +368,7 @@ fn main() -> Result<(), String> {
             algorithms.len()
         );
         let start = std::time::Instant::now();
-        let hits = alg.par_batch_search(&codec_data, &squishy_ball, &queries);
+        let hits = alg.par_batch_par_search(&codec_data, &squishy_ball, queries);
         let end = start.elapsed().as_secs_f32();
         mt_logger::mt_log!(
             mt_logger::Level::Info,

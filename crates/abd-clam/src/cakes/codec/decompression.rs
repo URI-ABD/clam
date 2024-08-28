@@ -21,11 +21,9 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
     /// dataset.
     fn centers(&self) -> &HashMap<usize, I>;
 
-    /// Returns the bytes slices representing all compressed leaves.
-    fn leaf_bytes(&self) -> &[Box<[u8]>];
-
-    /// Returns the offset-indices of the leaves in the dataset.
-    fn leaf_offsets(&self) -> &[usize];
+    /// Returns the bytes slices representing all leaves' offsets and compressed
+    /// bytes.
+    fn leaf_bytes(&self) -> &[(usize, Box<[u8]>)];
 
     /// Decodes all the instances of a leaf cluster in terms of its center.
     fn decode_leaf(&self, bytes: &[u8]) -> Vec<I> {

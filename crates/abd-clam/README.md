@@ -160,6 +160,10 @@ bincode::serialize_into(&mut file, &ball).unwrap();
 // We can adapt the tree and dataset to allow for compression and compressed search.
 let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball, data);
 
+// The metadata types still need to be adjusted manually. We are working on a solution for this.
+let squishy_ball = squishy_ball.with_metadata_type::<String>();
+let codec_data = codec_data.with_metadata(metadata).unwrap();
+
 // We can serialize the compressed dataset to disk.
 let codec_path = temp_dir.path().join("strings.codec_data");
 let mut file = std::fs::File::create(&codec_path).unwrap();
@@ -201,15 +205,10 @@ let ball: Ball<String, u16, FlatVec<String, u16, String>> =
     bincode::deserialize_from(std::fs::File::open(&ball_path).unwrap()).unwrap();
 
 // The compressed dataset can be deserialized from disk.
-let mut codec_data: CodecData<String, u16, usize> =
+let mut codec_data: CodecData<String, u16, String> =
     bincode::deserialize_from(std::fs::File::open(&codec_path).unwrap()).unwrap();
 // The metric has to be set manually.
 codec_data.set_metric(metric.clone());
-// The CodecData, when serialized, does not contain the metadata or the permutation of the dataset. These are not necessary
-// for search but can still be restored.
-let codec_data = codec_data
-    .post_deserialization(flat_data.permutation(), metadata.clone())
-    .unwrap();
 
 // The compressed tree can be deserialized from disk.
 // You will forgive the long type signature.

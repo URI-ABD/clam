@@ -36,6 +36,7 @@ ndarray = { workspace = true }
 ndarray-npy = { workspace = true }
 ordered-float = { workspace = true }
 bincode = { workspace = true }
+flate2 = { workspace = true }
 
 # Only used in CHAODA
 # TODO: Break CHAODA out into an optional feature

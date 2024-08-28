@@ -1,11 +1,18 @@
 //! An implementation of the Compression and Decompression traits.
 
-use std::collections::HashMap;
+use core::marker::PhantomData;
+use std::{
+    collections::HashMap,
+    io::{Read, Write},
+};
 
 use distances::Number;
+use flate2::write::GzEncoder;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    cakes::codec::{read_encoding, read_usize},
     cluster::ParCluster,
     dataset::{metric_space::ParMetricSpace, ParDataset, SizedHeap},
     Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
@@ -30,29 +37,23 @@ use super::{
 /// - `I`: The type of the instances in the dataset.
 /// - `U`: The type of the numbers in the dataset.
 /// - `M`: The type of the metadata associated with the instances.
-#[derive(Serialize, Deserialize)]
 pub struct CodecData<I, U, M> {
     /// The metric space of the dataset.
-    #[serde(skip)]
     pub(crate) metric: Metric<I, U>,
     /// The cardinality of the dataset.
     pub(crate) cardinality: usize,
     /// A hint for the dimensionality of the dataset.
     pub(crate) dimensionality_hint: (usize, Option<usize>),
     /// The metadata associated with the instances.
-    #[serde(skip)]
     pub(crate) metadata: Vec<M>,
     /// The permutation of the original dataset.
-    #[serde(skip)]
     pub(crate) permutation: Vec<usize>,
     /// The name of the dataset.
     pub(crate) name: String,
     /// The centers of the clusters in the dataset.
     pub(crate) center_map: HashMap<usize, I>,
     /// The byte-slices representing the leaf clusters.
-    pub(crate) leaf_bytes: Vec<Box<[u8]>>,
-    /// The offset-index of each leaf cluster.
-    pub(crate) leaf_offsets: Vec<usize>,
+    pub(crate) leaf_bytes: Vec<(usize, Box<[u8]>)>,
 }
 
 impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
@@ -68,8 +69,11 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             .map(|i| (i, data.get(i).clone()))
             .collect();
 
-        let leaf_bytes = data.encode_leaves(root);
-        let leaf_offsets = root.leaves().iter().map(|leaf| leaf.offset()).collect();
+        let leaf_bytes = data
+            .encode_leaves(root)
+            .into_iter()
+            .map(|(leaf, bytes)| (leaf.offset(), bytes))
+            .collect();
 
         let cardinality = data.cardinality();
         let metric = data.metric().clone();
@@ -83,7 +87,6 @@ impl<I: Encodable + Decodable, U: Number> CodecData<I, U, usize> {
             name: format!("CodecData({})", data.name()),
             center_map,
             leaf_bytes,
-            leaf_offsets,
         }
     }
 }
@@ -101,8 +104,11 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             .map(|i| (i, data.get(i).clone()))
             .collect();
 
-        let leaf_bytes = data.par_encode_leaves(root);
-        let leaf_offsets = root.leaves().iter().map(|leaf| leaf.offset()).collect();
+        let leaf_bytes = data
+            .encode_leaves(root)
+            .into_par_iter()
+            .map(|(leaf, bytes)| (leaf.offset(), bytes))
+            .collect();
 
         let cardinality = data.cardinality();
         let metric = data.metric().clone();
@@ -116,50 +122,11 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             name: format!("CodecData({})", data.name()),
             center_map,
             leaf_bytes,
-            leaf_offsets,
         }
     }
 }
 
 impl<I, U, M> CodecData<I, U, M> {
-    /// Sets the permutation and metadata of the dataset after deserialization.
-    ///
-    /// # Parameters
-    ///
-    /// - `permutation`: The permutation of the original dataset.
-    /// - `metadata`: The new metadata to associate with the instances.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `Me`: The type of the new metadata.
-    ///
-    /// # Returns
-    ///
-    /// A `CodecData` with the permutation and metadata set.
-    ///
-    /// # Errors
-    ///
-    /// - If the length of the permutation vector does not match the cardinality
-    ///   of the dataset.
-    /// - If the length of the metadata vector does not match the cardinality of
-    ///   the dataset.
-    pub fn post_deserialization<Me>(
-        mut self,
-        permutation: Vec<usize>,
-        metadata: Vec<Me>,
-    ) -> Result<CodecData<I, U, Me>, String> {
-        if permutation.len() == self.cardinality {
-            self.permutation = permutation;
-            self.with_metadata(metadata)
-        } else {
-            Err(format!(
-                "The length of the permutation vector ({}) does not match the cardinality of the dataset ({}).",
-                permutation.len(),
-                self.cardinality
-            ))
-        }
-    }
-
     /// Changes the metadata of the dataset.
     ///
     /// # Parameters
@@ -190,7 +157,6 @@ impl<I, U, M> CodecData<I, U, M> {
                 name: self.name,
                 center_map: self.center_map,
                 leaf_bytes: self.leaf_bytes,
-                leaf_offsets: self.leaf_offsets,
             })
         } else {
             Err(format!(
@@ -221,7 +187,7 @@ impl<I: Decodable + Clone, U: Number, M: Clone> CodecData<I, U, M> {
         let instances = self
             .leaf_bytes
             .iter()
-            .flat_map(|bytes| self.decode_leaf(bytes.as_ref()))
+            .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref()))
             .collect::<Vec<_>>();
         FlatVec {
             metric: self.metric.clone(),
@@ -239,12 +205,8 @@ impl<I: Decodable, U: Number, M> Decompressible<I, U> for CodecData<I, U, M> {
         &self.center_map
     }
 
-    fn leaf_bytes(&self) -> &[Box<[u8]>] {
-        self.leaf_bytes.as_ref()
-    }
-
-    fn leaf_offsets(&self) -> &[usize] {
-        &self.leaf_offsets
+    fn leaf_bytes(&self) -> &[(usize, Box<[u8]>)] {
+        &self.leaf_bytes
     }
 }
 
@@ -280,9 +242,8 @@ impl<I: Decodable, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
         let mut knn = SizedHeap::new(Some(k));
         self.leaf_bytes
             .iter()
-            .map(|bytes| self.decode_leaf(bytes.as_ref()))
-            .zip(self.leaf_offsets.iter())
-            .flat_map(|(instances, &o)| {
+            .map(|(o, bytes)| (*o, self.decode_leaf(bytes.as_ref())))
+            .flat_map(|(o, instances)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -297,9 +258,8 @@ impl<I: Decodable, U: Number, M> Dataset<I, U> for CodecData<I, U, M> {
     fn rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         self.leaf_bytes
             .iter()
-            .map(|bytes| self.decode_leaf(bytes.as_ref()))
-            .zip(self.leaf_offsets.iter())
-            .flat_map(|(instances, &o)| {
+            .map(|(o, bytes)| (*o, self.decode_leaf(bytes.as_ref())))
+            .flat_map(|(o, instances)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -329,9 +289,8 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for
         let mut knn = SizedHeap::new(Some(k));
         self.leaf_bytes
             .iter()
-            .map(|bytes| self.decode_leaf(bytes.as_ref()))
-            .zip(self.leaf_offsets.iter())
-            .flat_map(|(instances, &o)| {
+            .map(|(o, bytes)| (*o, self.decode_leaf(bytes.as_ref())))
+            .flat_map(|(o, instances)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -348,9 +307,8 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for
     fn par_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         self.leaf_bytes
             .iter()
-            .map(|bytes| self.decode_leaf(bytes.as_ref()))
-            .zip(self.leaf_offsets.iter())
-            .flat_map(|(instances, &o)| {
+            .map(|(o, bytes)| (*o, self.decode_leaf(bytes.as_ref())))
+            .flat_map(|(o, instances)| {
                 let instances = instances
                     .iter()
                     .enumerate()
@@ -360,5 +318,187 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for
             })
             .filter(|&(_, d)| d <= radius)
             .collect()
+    }
+}
+
+/// A private helper struct for serializing and deserializing `CodecData`.
+#[derive(Serialize, Deserialize)]
+struct CodecDataSerde<I, U, M> {
+    /// The cardinality of the dataset.
+    cardinality: usize,
+    /// A hint for the dimensionality of the dataset.
+    dimensionality_hint: (usize, Option<usize>),
+    /// The name of the dataset.
+    name: String,
+    /// The number of bytes for the `metadata`.
+    num_metadata: usize,
+    /// The number of bytes for the `center_map`.
+    num_center_map: usize,
+    /// The number of bytes for the `leaf_bytes`.
+    num_leaf_bytes: usize,
+    /// The compressed bytes.
+    bytes: Box<[u8]>,
+    /// Phantom data.
+    _p: PhantomData<(I, U, M)>,
+}
+
+impl<I: Encodable, U, M: Encodable> CodecDataSerde<I, U, M> {
+    /// Creates a `CodecDataSerde` from a `CodecData`.
+    fn from_codec_data(data: &CodecData<I, U, M>) -> Result<Self, String> {
+        let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+
+        let metadata = data
+            .metadata
+            .iter()
+            .flat_map(|m| {
+                let mut bytes = Vec::new();
+                let encoding = m.as_bytes();
+                bytes.extend_from_slice(&encoding.len().to_le_bytes());
+                bytes.extend_from_slice(&encoding);
+                bytes
+            })
+            .collect::<Vec<_>>();
+        let num_metadata = metadata.len();
+        encoder.write_all(&metadata).map_err(|e| e.to_string())?;
+
+        let permutation = data
+            .permutation
+            .iter()
+            .flat_map(|i| i.to_le_bytes())
+            .collect::<Vec<_>>();
+        encoder.write_all(&permutation).map_err(|e| e.to_string())?;
+
+        let center_map = data
+            .center_map
+            .iter()
+            .flat_map(|(i, p)| {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(&i.to_le_bytes());
+                let encoding = p.as_bytes();
+                bytes.extend_from_slice(&encoding.len().to_le_bytes());
+                bytes.extend_from_slice(&encoding);
+                bytes
+            })
+            .collect::<Vec<_>>();
+        let num_center_map = center_map.len();
+        encoder.write_all(&center_map).map_err(|e| e.to_string())?;
+
+        let leaf_bytes = data
+            .leaf_bytes
+            .iter()
+            .flat_map(|(i, encodings)| {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(&i.to_le_bytes());
+                bytes.extend_from_slice(&encodings.len().to_le_bytes());
+                bytes.extend_from_slice(encodings);
+                bytes
+            })
+            .collect::<Vec<_>>();
+        let num_leaf_bytes = leaf_bytes.len();
+        encoder.write_all(&leaf_bytes).map_err(|e| e.to_string())?;
+
+        let bytes = encoder.finish().map_err(|e| e.to_string())?.into_boxed_slice();
+
+        Ok(Self {
+            cardinality: data.cardinality,
+            dimensionality_hint: data.dimensionality_hint,
+            name: data.name.clone(),
+            num_metadata,
+            num_center_map,
+            num_leaf_bytes,
+            bytes,
+            _p: PhantomData,
+        })
+    }
+}
+
+impl<I: Decodable, U, M: Decodable> CodecData<I, U, M> {
+    /// Creates a `CodecData` from a `CodecDataSerde`.
+    fn from_serde(data: CodecDataSerde<I, U, M>) -> Result<Self, String> {
+        let mut decoder = flate2::read::GzDecoder::new(&data.bytes[..]);
+
+        let metadata = {
+            let mut bytes = vec![0_u8; data.num_metadata];
+            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+
+            let mut metadata = Vec::new();
+            let mut offset = 0;
+            while offset < data.num_metadata {
+                let encoding = read_encoding(&bytes, &mut offset);
+                metadata.push(M::from_bytes(&encoding));
+            }
+            metadata
+        };
+
+        let permutation = {
+            let mut bytes = vec![0_u8; data.cardinality * core::mem::size_of::<usize>()];
+            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+
+            bytes
+                .chunks_exact(core::mem::size_of::<usize>())
+                .map(|b| {
+                    let mut array = [0; std::mem::size_of::<usize>()];
+                    array.copy_from_slice(&b[..std::mem::size_of::<usize>()]);
+                    usize::from_le_bytes(array)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let center_map = {
+            let mut bytes = vec![0_u8; data.num_center_map];
+            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+
+            let mut center_map = HashMap::new();
+            let mut offset = 0;
+            while offset < data.num_center_map {
+                let i = read_usize(&bytes, &mut offset);
+                let encoding = read_encoding(&bytes, &mut offset);
+                center_map.insert(i, I::from_bytes(&encoding));
+            }
+            center_map
+        };
+
+        let leaf_bytes = {
+            let mut bytes = vec![0_u8; data.num_leaf_bytes];
+            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+
+            let mut leaf_bytes = Vec::new();
+            let mut offset = 0;
+            while offset < data.num_leaf_bytes {
+                let i = read_usize(&bytes, &mut offset);
+                let encoding = read_encoding(&bytes, &mut offset);
+                leaf_bytes.push((i, encoding));
+            }
+            leaf_bytes
+        };
+
+        Ok(Self {
+            metric: Metric::default(),
+            cardinality: data.cardinality,
+            dimensionality_hint: data.dimensionality_hint,
+            metadata,
+            permutation,
+            name: data.name,
+            center_map,
+            leaf_bytes,
+        })
+    }
+}
+
+impl<I: Encodable, U, M: Encodable> Serialize for CodecData<I, U, M> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CodecDataSerde::from_codec_data(self)
+            .map_err(serde::ser::Error::custom)?
+            .serialize(serializer)
+    }
+}
+
+impl<'de, I: Decodable, U, M: Decodable> Deserialize<'de> for CodecData<I, U, M> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        CodecDataSerde::deserialize(deserializer)
+            .and_then(|serde| Self::from_serde(serde).map_err(serde::de::Error::custom))
     }
 }

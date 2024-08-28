@@ -212,9 +212,31 @@ fn deserialize_edits(bytes: &[u8]) -> Vec<needleman_wunsch::Edit> {
 pub mod tests {
     use crate::{adapter::BallAdapter, cakes::CodecData, Ball, Cluster, FlatVec, MetricSpace, Partition};
 
-    use super::SquishyBall;
+    use super::{Decodable, Encodable, SquishyBall};
 
     use crate::cakes::tests::gen_random_data;
+
+    impl Encodable for usize {
+        fn as_bytes(&self) -> Box<[u8]> {
+            self.to_le_bytes().to_vec().into_boxed_slice()
+        }
+
+        fn encode(&self, _: &Self) -> Box<[u8]> {
+            self.as_bytes()
+        }
+    }
+
+    impl Decodable for usize {
+        fn from_bytes(bytes: &[u8]) -> Self {
+            let mut array = [0; std::mem::size_of::<usize>()];
+            array.copy_from_slice(&bytes[..std::mem::size_of::<usize>()]);
+            usize::from_le_bytes(array)
+        }
+
+        fn decode(_: &Self, bytes: &[u8]) -> Self {
+            Self::from_bytes(bytes)
+        }
+    }
 
     #[test]
     fn ser_de() -> Result<(), String> {
@@ -245,9 +267,7 @@ pub mod tests {
         let co_data = co_data.with_metadata(metadata.clone())?;
 
         let serialized = bincode::serialize(&co_data).unwrap();
-        let mut deserialized = bincode::deserialize::<Dec>(&serialized)
-            .unwrap()
-            .post_deserialization(co_data.permutation.clone(), metadata)?;
+        let mut deserialized = bincode::deserialize::<Dec>(&serialized).unwrap();
         deserialized.set_metric(metric.clone());
 
         assert_eq!(co_data.cardinality, deserialized.cardinality);
