@@ -63,9 +63,7 @@ where
             .partition(|&(c, d)| (c.radius() + d) <= radius);
         confirmed.append(&mut terminal);
 
-        (terminal, non_terminal) = non_terminal
-            .into_iter()
-            .partition(|&(c, _)| c.is_leaf() || c.is_singleton());
+        (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
         straddlers.append(&mut terminal);
 
         candidates = non_terminal.into_iter().flat_map(|(c, _)| c.child_clusters()).collect();
@@ -162,25 +160,20 @@ where
     D: ParDataset<I, U>,
     C: ParCluster<I, U, D>,
 {
-    let mut hits = confirmed
-        .into_par_iter()
-        .flat_map(|(c, d)| {
-            if c.is_singleton() {
-                c.indices().map(|i| (i, d)).collect()
-            } else {
-                c.par_distances_to_query(data, query)
-            }
-        })
-        .collect::<Vec<_>>();
+    let hits = confirmed.into_par_iter().flat_map(|(c, d)| {
+        if c.is_singleton() {
+            c.indices().map(|i| (i, d)).collect()
+        } else {
+            c.par_distances_to_query(data, query)
+        }
+    });
 
     let distances = straddlers
         .into_par_iter()
         .flat_map(|(c, _)| c.par_distances_to_query(data, query))
-        .filter(|&(_, d)| d <= radius)
-        .collect::<Vec<_>>();
+        .filter(|&(_, d)| d <= radius);
 
-    hits.extend(distances);
-    hits
+    hits.chain(distances).collect()
 }
 
 #[cfg(test)]

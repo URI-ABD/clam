@@ -348,18 +348,16 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 
     fn distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         let leaf_bytes = data.leaf_bytes();
-        let first_leaf_offset = self.leaves().into_iter().next().map(Self::offset).unwrap_or_default();
-        let num_leaves = self.leaves().len();
 
         let pos = leaf_bytes
             .iter()
-            .position(|(o, _)| *o == first_leaf_offset)
-            .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {first_leaf_offset}, {leaf_bytes:?}"));
+            .position(|(o, _)| *o == self.offset())
+            .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {}, {leaf_bytes:?}", self.offset()));
 
         let instances = leaf_bytes
             .iter()
             .skip(pos)
-            .take(num_leaves)
+            .take(self.leaves().len())
             .flat_map(|(_, bytes)| data.decode_leaf(bytes.as_ref()))
             .collect::<Vec<_>>();
 
@@ -382,14 +380,13 @@ impl<
 {
     fn par_distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         let leaf_bytes = data.leaf_bytes();
-        let first_leaf_offset = self.leaves().into_iter().next().map(Self::offset).unwrap_or_default();
-        let num_leaves = self.leaves().len();
 
         let pos = leaf_bytes
             .iter()
-            .position(|(o, _)| *o == first_leaf_offset)
-            .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {first_leaf_offset}, {leaf_bytes:?}"));
+            .position(|(o, _)| *o == self.offset())
+            .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {}, {leaf_bytes:?}", self.offset()));
 
+        let num_leaves = self.leaves().len();
         let instances = leaf_bytes
             .into_par_iter()
             .skip(pos)

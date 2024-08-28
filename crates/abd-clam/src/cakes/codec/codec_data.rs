@@ -342,14 +342,14 @@ struct CodecDataSerde<I, U, M> {
     _p: PhantomData<(I, U, M)>,
 }
 
-impl<I: Encodable, U, M: Encodable> CodecDataSerde<I, U, M> {
+impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> CodecDataSerde<I, U, M> {
     /// Creates a `CodecDataSerde` from a `CodecData`.
     fn from_codec_data(data: &CodecData<I, U, M>) -> Result<Self, String> {
         let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
 
         let metadata = data
             .metadata
-            .iter()
+            .par_iter()
             .flat_map(|m| {
                 let mut bytes = Vec::new();
                 let encoding = m.as_bytes();
@@ -370,7 +370,7 @@ impl<I: Encodable, U, M: Encodable> CodecDataSerde<I, U, M> {
 
         let center_map = data
             .center_map
-            .iter()
+            .par_iter()
             .flat_map(|(i, p)| {
                 let mut bytes = Vec::new();
                 bytes.extend_from_slice(&i.to_le_bytes());
@@ -385,7 +385,7 @@ impl<I: Encodable, U, M: Encodable> CodecDataSerde<I, U, M> {
 
         let leaf_bytes = data
             .leaf_bytes
-            .iter()
+            .par_iter()
             .flat_map(|(i, encodings)| {
                 let mut bytes = Vec::new();
                 bytes.extend_from_slice(&i.to_le_bytes());
@@ -412,65 +412,53 @@ impl<I: Encodable, U, M: Encodable> CodecDataSerde<I, U, M> {
     }
 }
 
-impl<I: Decodable, U, M: Decodable> CodecData<I, U, M> {
+impl<I: Decodable + Send + Sync, U, M: Decodable + Send + Sync> CodecData<I, U, M> {
     /// Creates a `CodecData` from a `CodecDataSerde`.
     fn from_serde(data: CodecDataSerde<I, U, M>) -> Result<Self, String> {
         let mut decoder = flate2::read::GzDecoder::new(&data.bytes[..]);
 
-        let metadata = {
-            let mut bytes = vec![0_u8; data.num_metadata];
-            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+        let (metadata, permutation, center_map, leaf_bytes) = {
+            let metadata = {
+                let mut bytes = vec![0_u8; data.num_metadata];
+                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+                bytes
+            };
 
-            let mut metadata = Vec::new();
-            let mut offset = 0;
-            while offset < data.num_metadata {
-                let encoding = read_encoding(&bytes, &mut offset);
-                metadata.push(M::from_bytes(&encoding));
-            }
-            metadata
+            let permutation = {
+                let mut bytes = vec![0_u8; data.cardinality * core::mem::size_of::<usize>()];
+                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+                bytes
+            };
+
+            let center_map = {
+                let mut bytes = vec![0_u8; data.num_center_map];
+                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+                bytes
+            };
+
+            let leaf_bytes = {
+                let mut bytes = vec![0_u8; data.num_leaf_bytes];
+                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
+                bytes
+            };
+
+            (metadata, permutation, center_map, leaf_bytes)
         };
 
-        let permutation = {
-            let mut bytes = vec![0_u8; data.cardinality * core::mem::size_of::<usize>()];
-            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-
-            bytes
-                .chunks_exact(core::mem::size_of::<usize>())
-                .map(|b| {
-                    let mut array = [0; std::mem::size_of::<usize>()];
-                    array.copy_from_slice(&b[..std::mem::size_of::<usize>()]);
-                    usize::from_le_bytes(array)
-                })
-                .collect::<Vec<_>>()
-        };
-
-        let center_map = {
-            let mut bytes = vec![0_u8; data.num_center_map];
-            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-
-            let mut center_map = HashMap::new();
-            let mut offset = 0;
-            while offset < data.num_center_map {
-                let i = read_usize(&bytes, &mut offset);
-                let encoding = read_encoding(&bytes, &mut offset);
-                center_map.insert(i, I::from_bytes(&encoding));
-            }
-            center_map
-        };
-
-        let leaf_bytes = {
-            let mut bytes = vec![0_u8; data.num_leaf_bytes];
-            decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-
-            let mut leaf_bytes = Vec::new();
-            let mut offset = 0;
-            while offset < data.num_leaf_bytes {
-                let i = read_usize(&bytes, &mut offset);
-                let encoding = read_encoding(&bytes, &mut offset);
-                leaf_bytes.push((i, encoding));
-            }
-            leaf_bytes
-        };
+        let (metadata, (permutation, (center_map, leaf_bytes))) = rayon::join(
+            || Self::decode_metadata(&metadata),
+            || {
+                rayon::join(
+                    || Self::decode_permutation(&permutation),
+                    || {
+                        rayon::join(
+                            || Self::decode_center_map(&center_map),
+                            || Self::decode_leaf_bytes(&leaf_bytes),
+                        )
+                    },
+                )
+            },
+        );
 
         Ok(Self {
             metric: Metric::default(),
@@ -483,9 +471,56 @@ impl<I: Decodable, U, M: Decodable> CodecData<I, U, M> {
             leaf_bytes,
         })
     }
+
+    /// Decodes the metadata from the compressed bytes.
+    fn decode_metadata(bytes: &[u8]) -> Vec<M> {
+        let mut metadata = Vec::new();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let encoding = read_encoding(bytes, &mut offset);
+            metadata.push(M::from_bytes(&encoding));
+        }
+        metadata
+    }
+
+    /// Decodes the permutation from the compressed bytes.
+    fn decode_permutation(bytes: &[u8]) -> Vec<usize> {
+        bytes
+            .chunks_exact(core::mem::size_of::<usize>())
+            .map(|chunk| {
+                let mut array = [0; std::mem::size_of::<usize>()];
+                array.copy_from_slice(&chunk[..std::mem::size_of::<usize>()]);
+                usize::from_le_bytes(array)
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// Decodes the center map from the compressed bytes.
+    fn decode_center_map(bytes: &[u8]) -> HashMap<usize, I> {
+        let mut center_map = HashMap::new();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let i = read_usize(bytes, &mut offset);
+            let encoding = read_encoding(bytes, &mut offset);
+            center_map.insert(i, I::from_bytes(&encoding));
+        }
+        center_map
+    }
+
+    /// Decodes the leaf bytes from the compressed bytes.
+    fn decode_leaf_bytes(bytes: &[u8]) -> Vec<(usize, Box<[u8]>)> {
+        let mut leaf_bytes = Vec::new();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let i = read_usize(bytes, &mut offset);
+            let encoding = read_encoding(bytes, &mut offset);
+            leaf_bytes.push((i, encoding));
+        }
+        leaf_bytes
+    }
 }
 
-impl<I: Encodable, U, M: Encodable> Serialize for CodecData<I, U, M> {
+impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> Serialize for CodecData<I, U, M> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         CodecDataSerde::from_codec_data(self)
             .map_err(serde::ser::Error::custom)?
@@ -493,7 +528,7 @@ impl<I: Encodable, U, M: Encodable> Serialize for CodecData<I, U, M> {
     }
 }
 
-impl<'de, I: Decodable, U, M: Decodable> Deserialize<'de> for CodecData<I, U, M> {
+impl<'de, I: Decodable + Send + Sync, U, M: Decodable + Send + Sync> Deserialize<'de> for CodecData<I, U, M> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

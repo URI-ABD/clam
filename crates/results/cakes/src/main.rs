@@ -304,14 +304,14 @@ fn main() -> Result<(), String> {
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    // let (data, codec_data) = {
-    //     let metric = StringDistance::Levenshtein.metric();
-    //     let mut data = data;
-    //     data.set_metric(metric.clone());
-    //     let mut codec_data = codec_data;
-    //     codec_data.set_metric(metric);
-    //     (data, codec_data)
-    // };
+    let (data, codec_data) = {
+        let metric = StringDistance::Levenshtein.metric();
+        let mut data = data;
+        data.set_metric(metric.clone());
+        let mut codec_data = codec_data;
+        codec_data.set_metric(metric);
+        (data, codec_data)
+    };
 
     let algorithms = {
         let mut algorithms = Vec::new();
@@ -342,7 +342,7 @@ fn main() -> Result<(), String> {
     for (i, alg) in algorithms.iter().enumerate() {
         mt_logger::mt_log!(
             mt_logger::Level::Info,
-            "Starting {} Search ({}/{}) on Ball and FlatVec ...",
+            "\n\nStarting {} Search ({}/{}) on Ball and FlatVec ...",
             alg.name(),
             i + 1,
             algorithms.len()

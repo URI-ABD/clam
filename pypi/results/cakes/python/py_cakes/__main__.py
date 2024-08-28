@@ -40,7 +40,7 @@ def main(
 
     gg_car = 1_074_170
     for depth, ((s_freq, s_card), (f_freq, f_card)) in progress:
-        if depth % 256 < 16:
+        if depth % 256 < 30:
             lines = [
                 "",
                 f"Depth {depth:4d}:",
