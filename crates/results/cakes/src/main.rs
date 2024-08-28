@@ -304,14 +304,14 @@ fn main() -> Result<(), String> {
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    let (data, codec_data) = {
-        let metric = StringDistance::Levenshtein.metric();
-        let mut data = data;
-        data.set_metric(metric.clone());
-        let mut codec_data = codec_data;
-        codec_data.set_metric(metric);
-        (data, codec_data)
-    };
+    // let (data, codec_data) = {
+    //     let metric = StringDistance::Levenshtein.metric();
+    //     let mut data = data;
+    //     data.set_metric(metric.clone());
+    //     let mut codec_data = codec_data;
+    //     codec_data.set_metric(metric);
+    //     (data, codec_data)
+    // };
 
     let algorithms = {
         let mut algorithms = Vec::new();
@@ -321,7 +321,7 @@ fn main() -> Result<(), String> {
             algorithms.push(Algorithm::RnnClustered(radius));
         }
 
-        for k in [1, 10] {
+        for k in [1, 10, 100] {
             // algorithms.push(Algorithm::KnnLinear(k));
             algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
             algorithms.push(Algorithm::KnnBreadthFirst(k));

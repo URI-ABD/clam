@@ -93,7 +93,7 @@ where
             .partition(|&(c, d)| (c.radius() + d) < radius);
         confirmed.append(&mut terminal);
 
-        (terminal, non_terminal) = non_terminal.into_par_iter().partition(|&(c, _)| c.is_leaf());
+        (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
         straddlers.append(&mut terminal);
 
         candidates = non_terminal.into_iter().flat_map(|(c, _)| c.child_clusters()).collect();
