@@ -30,7 +30,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug> Debug for OffB
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OffBall")
             .field("source", &self.source)
-            .field("children", &self.children.is_empty())
+            .field("children", &!self.children.is_empty())
             .field("offset", &self.params.offset)
             .finish()
     }

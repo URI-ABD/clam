@@ -20,10 +20,11 @@ pub enum StringDistance {
 
 impl StringDistance {
     /// Get the distance function.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn metric(&self) -> Metric<AlignedSequence, u32> {
         let distance_function = match self {
             Self::Levenshtein => |x: &AlignedSequence, y: &AlignedSequence| {
-                distances::strings::levenshtein(&x.as_unaligned(), &y.as_unaligned())
+                stringzilla::sz::edit_distance(x.as_unaligned(), y.as_unaligned()) as u32
             },
             Self::NeedlemanWunsch => |x: &AlignedSequence, y: &AlignedSequence| {
                 distances::strings::nw_distance(&x.as_unaligned(), &y.as_unaligned())

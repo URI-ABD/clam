@@ -52,7 +52,7 @@ impl<
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SquishyBall")
             .field("source", &self.source)
-            .field("children", &self.children.is_empty())
+            .field("children", &!self.children.is_empty())
             .field("recursive_cost", &self.costs.recursive)
             .field("unitary_cost", &self.costs.unitary)
             .field("minimum_cost", &self.costs.minimum)

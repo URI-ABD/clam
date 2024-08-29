@@ -304,20 +304,20 @@ fn main() -> Result<(), String> {
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    // let (data, codec_data) = {
-    //     let metric = StringDistance::Levenshtein.metric();
-    //     let mut data = data;
-    //     data.set_metric(metric.clone());
-    //     let mut codec_data = codec_data;
-    //     codec_data.set_metric(metric);
-    //     (data, codec_data)
-    // };
+    let (data, codec_data) = {
+        let metric = StringDistance::Levenshtein.metric();
+        let mut data = data;
+        data.set_metric(metric.clone());
+        let mut codec_data = codec_data;
+        codec_data.set_metric(metric);
+        (data, codec_data)
+    };
 
     let algorithms = {
         let mut algorithms = Vec::new();
 
         for radius in [1, 5, 10] {
-            // algorithms.push(Algorithm::RnnLinear(radius));
+            algorithms.push(Algorithm::RnnLinear(radius));
             algorithms.push(Algorithm::RnnClustered(radius));
         }
 

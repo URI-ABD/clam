@@ -48,7 +48,7 @@ impl<I, U: Number, D: Dataset<I, U>> Debug for Ball<I, U, D> {
             .field("arg_center", &self.arg_center)
             .field("arg_radial", &self.arg_radial)
             .field("indices", &self.indices)
-            .field("children", &self.children.is_empty())
+            .field("children", &!self.children.is_empty())
             .finish()
     }
 }
@@ -289,6 +289,8 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use distances::number::{Addition, Multiplication};
 
     use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
@@ -476,5 +478,46 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn numbered_subtree() {
+        let data = (0..1024).collect::<Vec<_>>();
+        let distance_fn = |x: &u32, y: &u32| x.abs_diff(*y);
+        let metric = Metric::new(distance_fn, false);
+        let data = FlatVec::new(data, metric).unwrap();
+
+        let seed = Some(42);
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let root = Ball::new_tree(&data, &criteria, seed);
+
+        let mut numbered_subtree = root.clone().take_subtree();
+        let indices = numbered_subtree.iter().map(|(_, i, _, _)| *i).collect::<HashSet<_>>();
+        assert_eq!(indices.len(), numbered_subtree.len());
+
+        for i in 0..numbered_subtree.len() {
+            assert!(indices.contains(&i));
+        }
+
+        numbered_subtree.sort_by(|(_, i, _, _), (_, j, _, _)| i.cmp(j));
+        let numbered_subtree = numbered_subtree
+            .into_iter()
+            .map(|(a, _, _, b)| (a, b))
+            .collect::<Vec<_>>();
+
+        for (ball, child_indices) in &numbered_subtree {
+            for &(i, _) in child_indices {
+                let (child, _) = &numbered_subtree[i];
+                assert!(child.is_descendant_of(ball), "{ball:?} is not parent of {child:?}");
+            }
+        }
+
+        // let root_list = root.clone().as_indexed_list();
+        // let re_root = Ball::from_indexed_list(root_list);
+        // assert_eq!(root, re_root);
+
+        // for (l, r) in root.subtree().into_iter().zip(re_root.subtree()) {
+        //     assert_eq!(l, r);
+        // }
     }
 }

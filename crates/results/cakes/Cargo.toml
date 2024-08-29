@@ -15,3 +15,5 @@ rand = { workspace = true }
 
 symagen = { workspace = true }
 tempfile = "*"
+
+stringzilla = "3.9.3"
