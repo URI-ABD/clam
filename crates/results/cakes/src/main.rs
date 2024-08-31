@@ -19,10 +19,10 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::{Adapter, ParAdapter},
-    cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
+    adapter::ParBallAdapter,
+    cakes::{Algorithm, CodecData, Decompressible, SquishyBall},
     partition::ParPartition,
-    Ball, Cluster, Dataset, FlatVec, MetricSpace, Permutable,
+    Ball, Cluster, Dataset, FlatVec, MetricSpace,
 };
 use clap::Parser;
 
@@ -40,8 +40,6 @@ pub type Queries = Vec<(String, AlignedSequence)>;
 pub type Co = FlatVec<AlignedSequence, u32, String>;
 /// The type of the ball tree over the compressible dataset.
 type B = Ball<AlignedSequence, u32, Co>;
-/// The type of the offset ball tree used as an intermediate between the ball and the squishy ball.
-type OB = OffBall<AlignedSequence, u32, Co, B>;
 /// The type of the compressed, decompressible dataset.
 type Dec = CodecData<AlignedSequence, u32, String>;
 /// The type of the squishy ball tree.
@@ -101,44 +99,21 @@ fn main() -> Result<(), String> {
     let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
     let codec_data_path = out_dir.join(args.dataset.compressed_file());
 
-    let start = std::time::Instant::now();
-
     // Read the dataset
-    let (data, queries, end) = if flat_vec_path.exists() {
+    let (data, queries) = if flat_vec_path.exists() {
         let mut data: Co = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Deserialized {:?} dataset from {flat_vec_path:?} with {} sequences.",
-            args.dataset,
-            data.cardinality()
-        );
         data.set_metric(StringDistance::Hamming.metric());
 
         let queries: Queries = bincode::deserialize_from(std::fs::File::open(&queries_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
 
-        (data, queries, end)
+        (data, queries)
     } else {
         let (data, queries): (Co, Queries) = args.dataset.read_fasta(&inp_dir, args.num_queries)?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Read {} dataset from {inp_dir:?} with {} sequences.",
-            args.dataset.name(),
-            data.cardinality()
-        );
 
-        let serde_start = std::time::Instant::now();
         bincode::serialize_into(std::fs::File::create(&flat_vec_path).map_err(|e| e.to_string())?, &data)
             .map_err(|e| e.to_string())?;
-        let serde_end = serde_start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Serialized dataset to {flat_vec_path:?} in {:.6} seconds.",
-            serde_end.as_secs_f64()
-        );
 
         bincode::serialize_into(
             std::fs::File::create(&queries_path).map_err(|e| e.to_string())?,
@@ -146,14 +121,8 @@ fn main() -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
 
-        (data, queries, end)
+        (data, queries)
     };
-
-    mt_logger::mt_log!(
-        mt_logger::Level::Info,
-        "Read the raw data in {:.6} seconds.",
-        end.as_secs_f64()
-    );
 
     mt_logger::mt_log!(
         mt_logger::Level::Info,
@@ -165,17 +134,9 @@ fn main() -> Result<(), String> {
 
     mt_logger::mt_log!(mt_logger::Level::Info, "Holding out {} queries", queries.len());
 
-    let start = std::time::Instant::now();
     let ball: B = if ball_path.exists() {
-        let ball: Ball<_, _, _> = bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Deserialized BallTree from {ball_path:?} in {:.6} seconds.",
-            end.as_secs_f64()
-        );
-        ball
+        bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?
     } else {
         let mut depth = 0;
         let depth_delta = 256;
@@ -190,22 +151,8 @@ fn main() -> Result<(), String> {
             ball.par_partition_further(&data, &criteria, seed);
         }
 
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Built BallTree in {:.6} seconds to depth approximately {depth}.",
-            end.as_secs_f64()
-        );
-
-        let start = std::time::Instant::now();
         bincode::serialize_into(std::fs::File::create(&ball_path).map_err(|e| e.to_string())?, &ball)
             .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Serialized BallTree to {ball_path:?} in {:.6} seconds.",
-            end.as_secs_f64()
-        );
 
         ball
     };
@@ -214,78 +161,37 @@ fn main() -> Result<(), String> {
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
 
     let metadata = data.metadata().to_vec();
-    let start = std::time::Instant::now();
     let (squishy_ball, codec_data): (SB, Dec) = if squishy_ball_path.exists() && codec_data_path.exists() {
         let squishy_ball: SB =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Deserialized SquishyBall from {squishy_ball_path:?} in {:.6} seconds.",
-            end.as_secs_f64()
-        );
 
-        let start = std::time::Instant::now();
         let mut codec_data: Dec =
             bincode::deserialize_from(std::fs::File::open(&codec_data_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Deserialized CodecData from {codec_data_path:?} in {:.6} seconds.",
-            end.as_secs_f64()
-        );
 
         codec_data.set_metric(data.metric().clone());
 
         (squishy_ball, codec_data)
     } else {
-        let (squishy_ball, codec_data) = {
-            let mut data: Co = data.clone();
-            let ball: OB = OffBall::par_adapt_tree_iterative(ball.clone(), None);
-            let permutation = ball.source().indices().collect::<Vec<_>>();
-            data.permute(&permutation);
-            let mut ball = SquishyBall::par_adapt_tree_iterative(ball, None);
-            ball.par_set_costs(&data);
-            ball.trim();
-            let data = CodecData::par_from_compressible(&data, &ball);
-            (ball, data)
-        };
-        let squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Built SquishyBall in {:.6} seconds.",
-            end.as_secs_f64()
-        );
+        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone());
         let codec_data: Dec = codec_data.with_metadata(metadata)?;
 
-        let start = std::time::Instant::now();
+        let mut squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
+        // TODO: Insert table generation here
+        squishy_ball.trim();
+
         bincode::serialize_into(
             std::fs::File::create(&squishy_ball_path).map_err(|e| e.to_string())?,
             &squishy_ball,
         )
         .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Serialized SquishyBall to {squishy_ball_path:?} in {:.6} seconds.",
-            end.as_secs_f64()
-        );
 
-        let start = std::time::Instant::now();
         bincode::serialize_into(
             std::fs::File::create(&codec_data_path).map_err(|e| e.to_string())?,
             &codec_data,
         )
         .map_err(|e| e.to_string())?;
-        let end = start.elapsed();
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
-            "Serialized CodecData to {codec_data_path:?} in {:.6} seconds.",
-            end.as_secs_f64()
-        );
 
         (squishy_ball, codec_data)
     };

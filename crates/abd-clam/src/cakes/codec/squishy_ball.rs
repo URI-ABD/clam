@@ -86,7 +86,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
         let (off_ball, data) = OffBall::from_ball_tree(ball, data);
         let mut root = Self::adapt_tree_iterative(off_ball, None);
         root.set_costs(&data);
-        root.trim();
+        // root.trim();
         let data = CodecData::from_compressible(&data, &root);
         (root, data)
     }
@@ -100,7 +100,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
         let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
         let mut root = Self::par_adapt_tree_iterative(off_ball, None);
         root.par_set_costs(&data);
-        root.trim();
+        // root.trim();
         let data = CodecData::par_from_compressible(&data, &root);
         (root, data)
     }
