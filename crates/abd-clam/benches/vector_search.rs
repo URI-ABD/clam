@@ -11,8 +11,6 @@ use abd_clam::{
 use criterion::*;
 use rand::prelude::*;
 
-pub use utils::read_ann_data_npy;
-
 const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
     ("euclidean", |x: &Vec<_>, y: &Vec<_>| {
         distances::vectors::euclidean(x, y)
@@ -49,7 +47,7 @@ fn vector_search(c: &mut Criterion) {
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let ball = Ball::par_new_tree(&data, &criteria, seed);
-        let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
+        let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone(), true);
 
         let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
         let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);

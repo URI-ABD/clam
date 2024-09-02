@@ -82,11 +82,13 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
     BallAdapter<I, U, D, CodecData<I, U, usize>, SquishCosts<U>>
     for SquishyBall<I, U, D, CodecData<I, U, usize>, Ball<I, U, D>>
 {
-    fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
-        let (off_ball, data) = OffBall::from_ball_tree(ball, data);
+    fn from_ball_tree(ball: Ball<I, U, D>, data: D, trim: bool) -> (Self, CodecData<I, U, usize>) {
+        let (off_ball, data) = OffBall::from_ball_tree(ball, data, trim);
         let mut root = Self::adapt_tree_iterative(off_ball, None);
         root.set_costs(&data);
-        // root.trim();
+        if trim {
+            root.trim();
+        }
         let data = CodecData::from_compressible(&data, &root);
         (root, data)
     }
@@ -96,11 +98,13 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
     ParBallAdapter<I, U, D, CodecData<I, U, usize>, SquishCosts<U>>
     for SquishyBall<I, U, D, CodecData<I, U, usize>, Ball<I, U, D>>
 {
-    fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
-        let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
+    fn par_from_ball_tree(ball: Ball<I, U, D>, data: D, trim: bool) -> (Self, CodecData<I, U, usize>) {
+        let (off_ball, data) = OffBall::par_from_ball_tree(ball, data, trim);
         let mut root = Self::par_adapt_tree_iterative(off_ball, None);
         root.par_set_costs(&data);
-        // root.trim();
+        if trim {
+            root.trim();
+        }
         let data = CodecData::par_from_compressible(&data, &root);
         (root, data)
     }
@@ -109,6 +113,16 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     SquishyBall<I, U, Co, Dec, S>
 {
+    /// Get the unitary cost of the `SquishyBall`.
+    pub const fn unitary_cost(&self) -> U {
+        self.costs.unitary
+    }
+
+    /// Get the recursive cost of the `SquishyBall`.
+    pub const fn recursive_cost(&self) -> U {
+        self.costs.recursive
+    }
+
     /// Gets the offset of the cluster's indices in its dataset.
     pub const fn offset(&self) -> usize {
         self.source.offset()
@@ -235,7 +249,7 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
         &mut self.source
     }
 
-    fn source_owned(self) -> OffBall<I, U, Co, S> {
+    fn take_source(self) -> OffBall<I, U, Co, S> {
         self.source
     }
 
@@ -349,19 +363,25 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
     fn distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         let leaf_bytes = data.leaf_bytes();
 
-        let pos = leaf_bytes
-            .iter()
-            .position(|(o, _)| *o == self.offset())
-            .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {}, {leaf_bytes:?}", self.offset()));
+        let instances =
+            self.leaves()
+                .into_iter()
+                .map(Self::offset)
+                .map(|o| {
+                    leaf_bytes.iter().position(|(off, _)| *off == o).unwrap_or_else(|| {
+                        unreachable!("Offset not found in leaf offsets: {}, {:?}", o, data.leaf_bytes())
+                    })
+                })
+                .map(|pos| &leaf_bytes[pos])
+                .flat_map(|(o, bytes)| {
+                    data.decode_leaf(bytes)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, p)| (i + *o, p))
+                })
+                .collect::<Vec<_>>();
 
-        let instances = leaf_bytes
-            .iter()
-            .skip(pos)
-            .take(self.leaves().len())
-            .flat_map(|(_, bytes)| data.decode_leaf(bytes.as_ref()))
-            .collect::<Vec<_>>();
-
-        let instances = self.indices().zip(instances.iter()).collect::<Vec<_>>();
+        let instances = instances.iter().map(|(i, p)| (*i, p)).collect::<Vec<_>>();
         MetricSpace::one_to_many(data, query, &instances)
     }
 
@@ -381,20 +401,25 @@ impl<
     fn par_distances_to_query(&self, data: &Dec, query: &I) -> Vec<(usize, U)> {
         let leaf_bytes = data.leaf_bytes();
 
-        let pos = leaf_bytes
-            .iter()
-            .position(|(o, _)| *o == self.offset())
-            .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {}, {leaf_bytes:?}", self.offset()));
+        let instances =
+            self.leaves()
+                .into_par_iter()
+                .map(Self::offset)
+                .map(|o| {
+                    leaf_bytes.iter().position(|(off, _)| *off == o).unwrap_or_else(|| {
+                        unreachable!("Offset not found in leaf offsets: {}, {:?}", o, data.leaf_bytes())
+                    })
+                })
+                .map(|pos| &leaf_bytes[pos])
+                .flat_map(|(o, bytes)| {
+                    data.decode_leaf(bytes)
+                        .into_par_iter()
+                        .enumerate()
+                        .map(|(i, p)| (i + *o, p))
+                })
+                .collect::<Vec<_>>();
 
-        let num_leaves = self.leaves().len();
-        let instances = leaf_bytes
-            .into_par_iter()
-            .skip(pos)
-            .take(num_leaves)
-            .flat_map(|(_, bytes)| data.par_decode_leaf(bytes.as_ref()))
-            .collect::<Vec<_>>();
-
-        let instances = self.indices().zip(instances.iter()).collect::<Vec<_>>();
+        let instances = instances.iter().map(|(i, p)| (*i, p)).collect::<Vec<_>>();
         ParMetricSpace::par_one_to_many(data, query, &instances)
     }
 }

@@ -231,7 +231,7 @@ impl<I, U: Number, M> Permutable for FlatVec<I, U, M> {
         self.metadata.swap(i, j);
     }
 }
-
+#[cfg(feature = "ndarray-bindings")]
 impl<T: ndarray_npy::ReadableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
     /// Reads a `VecDataset` from a `.npy` file.
     ///
@@ -253,6 +253,7 @@ impl<T: ndarray_npy::ReadableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
     }
 }
 
+#[cfg(feature = "ndarray-bindings")]
 impl<T: ndarray_npy::WritableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
     /// Writes the `VecDataset` to a `.npy` file in the given directory.
     ///
@@ -301,6 +302,17 @@ mod tests {
         let dataset = FlatVec::new_array(instances, metric.clone())?;
         assert_eq!(dataset.cardinality(), 3);
         assert_eq!(dataset.dimensionality_hint(), (2, Some(2)));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "ndarray-bindings")]
+    #[test]
+    fn npy_io() -> Result<(), String> {
+        let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
+        let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
+        let metric = Metric::new(distance_function, false);
+        let dataset = FlatVec::new_array(instances, metric.clone())?;
 
         let tmp_dir = tempdir::TempDir::new("testing").map_err(|e| e.to_string())?;
         let path = dataset.write_npy(&tmp_dir, "test.npy")?;

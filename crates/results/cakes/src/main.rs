@@ -8,7 +8,6 @@
     clippy::perf,
     clippy::pedantic,
     clippy::nursery,
-    clippy::missing_docs_in_private_items,
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
@@ -29,6 +28,7 @@ use clap::Parser;
 mod metrics;
 mod readers;
 mod sequence;
+mod tables;
 
 use metrics::StringDistance;
 use sequence::AlignedSequence;
@@ -99,6 +99,10 @@ fn main() -> Result<(), String> {
     let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
     let codec_data_path = out_dir.join(args.dataset.compressed_file());
 
+    let ball_table_path = out_dir.join(args.dataset.ball_table("ball"));
+    let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim"));
+    let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball"));
+
     // Read the dataset
     let (data, queries) = if flat_vec_path.exists() {
         let mut data: Co = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
@@ -157,6 +161,8 @@ fn main() -> Result<(), String> {
         ball
     };
 
+    tables::write_ball_table(&ball, &ball_table_path)?;
+
     let subtree_cardinality = ball.subtree().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
 
@@ -174,12 +180,9 @@ fn main() -> Result<(), String> {
 
         (squishy_ball, codec_data)
     } else {
-        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone());
+        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone(), true);
+        let squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
         let codec_data: Dec = codec_data.with_metadata(metadata)?;
-
-        let mut squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
-        // TODO: Insert table generation here
-        squishy_ball.trim();
 
         bincode::serialize_into(
             std::fs::File::create(&squishy_ball_path).map_err(|e| e.to_string())?,
@@ -196,6 +199,14 @@ fn main() -> Result<(), String> {
         (squishy_ball, codec_data)
     };
 
+    {
+        let (pre_trim_ball, _) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone(), false);
+        let pre_trim_ball: SB = pre_trim_ball.with_metadata_type::<String>();
+        tables::write_squishy_ball_table(&pre_trim_ball, &pre_trim_table_path)?;
+    }
+
+    tables::write_squishy_ball_table(&squishy_ball, &squishy_ball_table_path)?;
+
     let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
     mt_logger::mt_log!(
         mt_logger::Level::Info,
@@ -210,14 +221,14 @@ fn main() -> Result<(), String> {
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    let (data, codec_data) = {
-        let metric = StringDistance::Levenshtein.metric();
-        let mut data = data;
-        data.set_metric(metric.clone());
-        let mut codec_data = codec_data;
-        codec_data.set_metric(metric);
-        (data, codec_data)
-    };
+    // let (data, codec_data) = {
+    //     let metric = StringDistance::Levenshtein.metric();
+    //     let mut data = data;
+    //     data.set_metric(metric.clone());
+    //     let mut codec_data = codec_data;
+    //     codec_data.set_metric(metric);
+    //     (data, codec_data)
+    // };
 
     let algorithms = {
         let mut algorithms = Vec::new();
@@ -228,7 +239,7 @@ fn main() -> Result<(), String> {
         }
 
         for k in [1, 10, 100] {
-            // algorithms.push(Algorithm::KnnLinear(k));
+            algorithms.push(Algorithm::KnnLinear(k));
             algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
             algorithms.push(Algorithm::KnnBreadthFirst(k));
             algorithms.push(Algorithm::KnnDepthFirst(k));
@@ -243,6 +254,7 @@ fn main() -> Result<(), String> {
         algorithms.len()
     );
 
+    // TODO: Remove this limit
     let queries = &queries[..10];
 
     for (i, alg) in algorithms.iter().enumerate() {

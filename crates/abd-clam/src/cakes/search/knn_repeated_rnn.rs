@@ -110,6 +110,8 @@ fn mean_lfd<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(
 
 #[cfg(test)]
 mod tests {
+    use core::fmt::Debug;
+
     use distances::Number;
 
     use crate::{
@@ -121,7 +123,7 @@ mod tests {
 
     use crate::cakes::tests::{check_search_by_distance, gen_grid_data, gen_line_data};
 
-    fn check_knn<I: Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
+    fn check_knn<I: Debug + Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
         root: &C,
         data: &FlatVec<I, U, usize>,
         query: &I,
@@ -132,7 +134,7 @@ mod tests {
 
         let pred_hits = super::search(data, root, query, k, max_multiplier);
         assert_eq!(pred_hits.len(), true_hits.len(), "Knn search failed: {pred_hits:?}");
-        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered");
+        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered", data);
 
         let pred_hits = super::par_search(data, root, query, k, max_multiplier);
         assert_eq!(
@@ -140,7 +142,7 @@ mod tests {
             true_hits.len(),
             "Parallel Knn search failed: {pred_hits:?}"
         );
-        check_search_by_distance(true_hits, pred_hits, "Par KnnClustered");
+        check_search_by_distance(true_hits, pred_hits, "Par KnnClustered", data);
 
         true
     }
@@ -159,7 +161,7 @@ mod tests {
             assert!(check_knn(&ball, &data, query, k, max_multiplier));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
         for k in [1, 4, 8] {
             assert!(check_knn(&off_ball, &perm_data, query, k, max_multiplier));
         }
@@ -181,7 +183,7 @@ mod tests {
             assert!(check_knn(&ball, &data, query, k, max_multiplier));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
         for k in [1, 4, 8, 16, 32] {
             assert!(check_knn(&off_ball, &perm_data, query, k, max_multiplier));
         }

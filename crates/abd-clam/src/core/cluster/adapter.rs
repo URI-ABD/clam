@@ -13,7 +13,7 @@ pub trait BallAdapter<I, U: Number, Din: Dataset<I, U>, Dout: Dataset<I, U>, P: 
     Cluster<I, U, Dout>
 {
     /// Adapts this `Cluster` from a `Ball` tree.
-    fn from_ball_tree(ball: Ball<I, U, Din>, data: Din) -> (Self, Dout);
+    fn from_ball_tree(ball: Ball<I, U, Din>, data: Din, trim: bool) -> (Self, Dout);
 }
 
 /// Parallel version of the `BallAdapter` trait.
@@ -27,7 +27,7 @@ pub trait ParBallAdapter<
 >: ParCluster<I, U, Dout> + BallAdapter<I, U, Din, Dout, P>
 {
     /// Parallel version of the `from_ball_tree` method.
-    fn par_from_ball_tree(ball: Ball<I, U, Din>, data: Din) -> (Self, Dout);
+    fn par_from_ball_tree(ball: Ball<I, U, Din>, data: Din, trim: bool) -> (Self, Dout);
 }
 
 /// A trait for the parameters to use for adapting a `Ball` into another `Cluster`.
@@ -86,7 +86,7 @@ pub trait Adapter<
     fn source_mut(&mut self) -> &mut S;
 
     /// Provides ownership of the underlying source `Cluster`.
-    fn source_owned(self) -> S;
+    fn take_source(self) -> S;
 
     /// Returns the params used to adapt the `Cluster`
     fn params(&self) -> &P;
@@ -184,7 +184,7 @@ pub trait Adapter<
             .map(|(i, d, c)| (i, d, Box::new(c.recover_source_tree())))
             .collect();
 
-        let mut source = self.source_owned();
+        let mut source = self.take_source();
         source.set_indices(indices);
         source.set_children(children);
         source
@@ -253,7 +253,7 @@ pub trait ParAdapter<
             .map(|(i, d, c)| (i, d, Box::new(c.par_recover_source_tree())))
             .collect();
 
-        let mut source = self.source_owned();
+        let mut source = self.take_source();
         source.set_indices(indices);
         source.set_children(children);
         source

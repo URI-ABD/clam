@@ -79,6 +79,12 @@ impl Datasets {
         }
     }
 
+    /// Returns the name of the file to use for the ball tree.
+    pub fn ball_table(&self, postfix: &str) -> String {
+        let name = self.name();
+        format!("{name}-{postfix}.arrow")
+    }
+
     /// Returns the name of the file to use for the squishy ball tree.
     pub const fn squishy_ball_file(&self) -> &str {
         match self {

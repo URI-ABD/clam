@@ -9,7 +9,7 @@ bio = "2.0.1"
 abd-clam = { workspace = true }
 distances = { workspace = true }
 mt_logger = { workspace = true }
-serde = { workspace = true }
+serde.workspace = true
 bincode = { workspace = true }
 rand = { workspace = true }
 
@@ -17,3 +17,5 @@ symagen = { workspace = true }
 tempfile = "*"
 
 stringzilla = "3.9.3"
+arrow = "52.2.0"
+arrow-json = "52.2.0"

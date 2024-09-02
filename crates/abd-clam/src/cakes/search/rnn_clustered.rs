@@ -178,6 +178,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use core::fmt::Debug;
+
     use distances::Number;
 
     use crate::Dataset;
@@ -188,7 +190,7 @@ mod tests {
 
     use crate::cakes::tests::{check_search_by_index, gen_grid_data, gen_line_data};
 
-    pub fn check_rnn<I: Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
+    pub fn check_rnn<I: Debug + Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
         root: &C,
         data: &FlatVec<I, U, usize>,
         query: &I,
@@ -198,7 +200,7 @@ mod tests {
 
         let pred_hits = super::search(data, root, query, radius);
         assert_eq!(pred_hits.len(), true_hits.len(), "Rnn search failed: {pred_hits:?}");
-        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered");
+        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered", data);
 
         let pred_hits = super::par_search(data, root, query, radius);
         assert_eq!(
@@ -206,7 +208,7 @@ mod tests {
             true_hits.len(),
             "Parallel Rnn search failed: {pred_hits:?}"
         );
-        check_search_by_index(true_hits, pred_hits, "Par RnnClustered");
+        check_search_by_index(true_hits, pred_hits, "Par RnnClustered", data);
 
         true
     }
@@ -224,7 +226,7 @@ mod tests {
             assert!(check_rnn(&ball, &data, &query, radius));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
         for radius in 0..=4 {
             assert!(check_rnn(&off_ball, &perm_data, &query, radius));
         }
@@ -245,7 +247,7 @@ mod tests {
             assert!(check_rnn(&ball, &data, &query, radius));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
             assert!(check_rnn(&off_ball, &perm_data, &query, radius));
         }

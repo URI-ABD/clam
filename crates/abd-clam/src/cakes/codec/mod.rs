@@ -263,7 +263,7 @@ pub mod tests {
 
         let criteria = |c: &B| c.cardinality() > 1;
         let ball = B::new_tree(&data, &criteria, Some(seed));
-        let (_, co_data) = Sb::from_ball_tree(ball, data);
+        let (_, co_data) = Sb::from_ball_tree(ball, data, true);
         let co_data = co_data.with_metadata(metadata.clone())?;
 
         let serialized = bincode::serialize(&co_data).unwrap();

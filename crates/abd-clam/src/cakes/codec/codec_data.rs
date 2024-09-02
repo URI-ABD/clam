@@ -37,6 +37,7 @@ use super::{
 /// - `I`: The type of the instances in the dataset.
 /// - `U`: The type of the numbers in the dataset.
 /// - `M`: The type of the metadata associated with the instances.
+#[derive(Clone)]
 pub struct CodecData<I, U, M> {
     /// The metric space of the dataset.
     pub(crate) metric: Metric<I, U>,
@@ -105,8 +106,8 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number> CodecData<I, U, usize> {
             .collect();
 
         let leaf_bytes = data
-            .encode_leaves(root)
-            .into_par_iter()
+            .par_encode_leaves(root)
+            .into_iter()
             .map(|(leaf, bytes)| (leaf.offset(), bytes))
             .collect();
 
@@ -288,7 +289,7 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for
     fn par_knn(&self, query: &I, k: usize) -> Vec<(usize, U)> {
         let mut knn = SizedHeap::new(Some(k));
         self.leaf_bytes
-            .iter()
+            .par_iter()
             .map(|(o, bytes)| (*o, self.decode_leaf(bytes.as_ref())))
             .flat_map(|(o, instances)| {
                 let instances = instances
@@ -306,7 +307,7 @@ impl<I: Decodable + Send + Sync, U: Number, M: Send + Sync> ParDataset<I, U> for
 
     fn par_rnn(&self, query: &I, radius: U) -> Vec<(usize, U)> {
         self.leaf_bytes
-            .iter()
+            .par_iter()
             .map(|(o, bytes)| (*o, self.decode_leaf(bytes.as_ref())))
             .flat_map(|(o, instances)| {
                 let instances = instances
