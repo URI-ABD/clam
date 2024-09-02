@@ -5,8 +5,8 @@ import pathlib
 
 import typer
 
-from py_cakes.wrangling_logs import clusters_by_depth
-from py_cakes.wrangling_logs import count_clusters
+from py_cakes import tables
+from py_cakes.wrangling_logs import wrangle_logs
 
 logger = logging.getLogger("py_cakes")
 logger.setLevel(logging.INFO)
@@ -21,9 +21,18 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    log_path: pathlib.Path = typer.Option(  # noqa: B008
+    pre_trim_path: pathlib.Path = typer.Option(  # noqa: B008
         ...,
-        help="Path to the log file to analyze.",
+        help="Path to the file to analyze.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+    post_trim_path: pathlib.Path = typer.Option(  # noqa: B008
+        ...,
+        help="Path to the file to analyze.",
         exists=True,
         file_okay=True,
         dir_okay=False,
@@ -32,26 +41,13 @@ def main(
     ),
 ) -> None:
     """Main entry point."""
-    msg = f"Analyzing {log_path}..."
-    logger.info(msg)
+    if "logs" in str(pre_trim_path):
+        wrangle_logs(pre_trim_path)
 
-    clusters = count_clusters(log_path)
-    progress = clusters_by_depth(clusters)
+    if "logs" in str(post_trim_path):
+        wrangle_logs(post_trim_path)
 
-    gg_car = 1_074_170
-    for depth, ((s_freq, s_card), (f_freq, f_card)) in progress:
-        if depth % 256 < 30:
-            lines = [
-                "",
-                f"Depth {depth:4d}:",
-                f"Clusters:  Started {s_freq:7d}, finished {f_freq:7d}. {100 * f_freq / s_freq:3.2f}%).",  # noqa: E501
-                f"Instances: Started {s_card:7d}, finished {f_card:7d}. {100 * f_card / s_card:3.2f}% of started, {100 * f_card / gg_car:3.2f}% of total.",  # noqa: E501
-            ]
-            msg = "\n".join(lines)
-            logger.info(msg)
-
-    msg = f"Built (or building) tree with {len(progress)} depth."
-    logger.info(msg)
+    tables.draw_plots(pre_trim_path, post_trim_path)
 
 
 if __name__ == "__main__":

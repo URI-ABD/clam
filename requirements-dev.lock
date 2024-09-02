@@ -60,7 +60,8 @@ packaging==23.2
     # via matplotlib
     # via pytest
     # via pytest-sugar
-pandas==2.2.1
+pandas==2.2.2
+    # via py-cakes
     # via seaborn
 pillow==10.2.0
     # via matplotlib

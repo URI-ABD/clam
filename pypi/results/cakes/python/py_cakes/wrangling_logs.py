@@ -46,3 +46,27 @@ def clusters_by_depth(
         depth_counts[depth] = (s_freq, s_count), (f_freq, f_count)
 
     return sorted(depth_counts.items())
+
+
+def wrangle_logs(log_path: pathlib.Path) -> None:
+    """Wrangle the logs of long Clustering runs."""
+    msg = f"Analyzing {log_path}..."
+    logger.info(msg)
+
+    clusters = count_clusters(log_path)
+    progress = clusters_by_depth(clusters)
+
+    gg_car = 1_074_170
+    for depth, ((s_freq, s_card), (f_freq, f_card)) in progress:
+        if depth % 256 < 30:
+            lines = [
+                "",
+                f"Depth {depth:4d}:",
+                f"Clusters:  Started {s_freq:7d}, finished {f_freq:7d}. {100 * f_freq / s_freq:3.2f}%).",  # noqa: E501
+                f"Instances: Started {s_card:7d}, finished {f_card:7d}. {100 * f_card / s_card:3.2f}% of started, {100 * f_card / gg_car:3.2f}% of total.",  # noqa: E501
+            ]
+            msg = "\n".join(lines)
+            logger.info(msg)
+
+    msg = f"Built (or building) tree with {len(progress)} depth."
+    logger.info(msg)

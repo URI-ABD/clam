@@ -80,9 +80,9 @@ impl Datasets {
     }
 
     /// Returns the name of the file to use for the ball tree.
-    pub fn ball_table(&self, postfix: &str) -> String {
+    pub fn ball_table(&self, postfix: &str, extension: &str) -> String {
         let name = self.name();
-        format!("{name}-{postfix}.arrow")
+        format!("{name}-{postfix}.{extension}")
     }
 
     /// Returns the name of the file to use for the squishy ball tree.

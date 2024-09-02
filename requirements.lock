@@ -17,14 +17,25 @@ mdurl==0.1.2
     # via markdown-it-py
 numpy==2.0.0
     # via abd-distances
+    # via pandas
+    # via py-cakes
+pandas==2.2.2
     # via py-cakes
 pygments==2.18.0
     # via rich
+python-dateutil==2.9.0.post0
+    # via pandas
+pytz==2024.1
+    # via pandas
 rich==13.7.1
     # via typer
 shellingham==1.5.4
     # via typer
+six==1.16.0
+    # via python-dateutil
 typer==0.12.4
     # via py-cakes
 typing-extensions==4.12.2
     # via typer
+tzdata==2024.1
+    # via pandas

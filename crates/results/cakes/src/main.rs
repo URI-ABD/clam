@@ -99,9 +99,10 @@ fn main() -> Result<(), String> {
     let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
     let codec_data_path = out_dir.join(args.dataset.compressed_file());
 
-    let ball_table_path = out_dir.join(args.dataset.ball_table("ball"));
-    let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim"));
-    let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball"));
+    let extension = "csv";
+    let ball_table_path = out_dir.join(args.dataset.ball_table("ball", extension));
+    let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim", extension));
+    let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball", extension));
 
     // Read the dataset
     let (data, queries) = if flat_vec_path.exists() {
@@ -161,7 +162,11 @@ fn main() -> Result<(), String> {
         ball
     };
 
-    tables::write_ball_table(&ball, &ball_table_path)?;
+    if extension == "csv" {
+        tables::write_ball_csv(&ball, &ball_table_path)?;
+    } else {
+        tables::write_ball_table(&ball, &ball_table_path)?;
+    }
 
     let subtree_cardinality = ball.subtree().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
@@ -202,10 +207,18 @@ fn main() -> Result<(), String> {
     {
         let (pre_trim_ball, _) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone(), false);
         let pre_trim_ball: SB = pre_trim_ball.with_metadata_type::<String>();
-        tables::write_squishy_ball_table(&pre_trim_ball, &pre_trim_table_path)?;
+        if extension == "csv" {
+            tables::write_squishy_ball_csv(&pre_trim_ball, &pre_trim_table_path)?;
+        } else {
+            tables::write_squishy_ball_table(&pre_trim_ball, &pre_trim_table_path)?;
+        }
     }
 
-    tables::write_squishy_ball_table(&squishy_ball, &squishy_ball_table_path)?;
+    if extension == "csv" {
+        tables::write_squishy_ball_csv(&squishy_ball, &squishy_ball_table_path)?;
+    } else {
+        tables::write_squishy_ball_table(&squishy_ball, &squishy_ball_table_path)?;
+    }
 
     let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
     mt_logger::mt_log!(
@@ -244,6 +257,8 @@ fn main() -> Result<(), String> {
             algorithms.push(Algorithm::KnnBreadthFirst(k));
             algorithms.push(Algorithm::KnnDepthFirst(k));
         }
+
+        algorithms.clear();
 
         algorithms
     };
