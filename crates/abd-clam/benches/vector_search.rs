@@ -47,7 +47,7 @@ fn vector_search(c: &mut Criterion) {
 
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
         let ball = Ball::par_new_tree(&data, &criteria, seed);
-        let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone(), true);
+        let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
 
         let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
         let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);

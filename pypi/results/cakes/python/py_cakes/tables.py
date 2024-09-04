@@ -45,71 +45,52 @@ def draw_plots(
     pre_trim_df["ratio"] = pre_trim_df["recursive_cost"] / pre_trim_df["unitary_cost"]
     post_trim_df["ratio"] = post_trim_df["recursive_cost"] / post_trim_df["unitary_cost"]
 
-    # Calculate the maximum ratio of "recursive_cost" to "unitary_cost" in the
-    # pre-trim and post-trim dataframes.
-    max_ratio = numpy.ceil(max(pre_trim_df["ratio"].max(), post_trim_df["ratio"].max()))
-
-    # Calculate the maximum "lfd" in the pre-trim and post-trim dataframes.
+    # Calculate the maximum values of some columns.
+    max_ratio = numpy.ceil(max(pre_trim_df["ratio"].max(), post_trim_df["ratio"].max()))  # noqa: F841
     max_lfd = max(pre_trim_df["lfd"].max(), post_trim_df["lfd"].max())
+    max_depth = max(pre_trim_df["depth"].max(), post_trim_df["depth"].max())
+    max_radius = max(pre_trim_df["radius"].max(), post_trim_df["radius"].max())  # noqa: F841
 
     dfs = {
         "pre_trim": pre_trim_df,
         "post_trim": post_trim_df,
     }
 
+    cmap = "cool"
     for name, df in dfs.items():
-        # Make a scatter plot with "depth" on the x-axis, "lfd" on the y-axis,
-        # and "ratio" as the color.
+        # Make a scatter plot with "depth" on the x-axis, "ratio" on the y-axis,
+        # and "lfd" as the color.
+        df["color"], mean, std = normalized_color_scale(df["lfd"])
         ax = df.plot.scatter(
             x="depth",
             y="lfd",
             s=0.2,
             c="ratio",
-            cmap="bwr",
-            vmin=0,
-            vmax=numpy.ceil(max_ratio),
-        )
-        # Set the minimum and maximum values of the y-axis.
-        ax.set_ylim(0, numpy.ceil(max_lfd))
-
-        # Set the title of the plot to be the name of the dataframe.
-        title = f"Recursive / Unitary ratio for {name} Clusters"
-        ax.set_title(title)
-
-        # Save the plot to a file with the name of the dataframe.
-        plot_path = pre_trim_path.parent / f"{name}-ratio.png"
-        plt.savefig(plot_path, dpi=300)
-
-        # Make a scatter plot with "depth" on the x-axis, "ratio" on the y-axis,
-        # and "lfd" as the color.
-        ax = df.plot.scatter(
-            x="depth",
-            y="ratio",
-            s=0.2,
-            c="lfd",
-            cmap="bwr",
+            cmap=cmap,
             vmin=0,
             vmax=numpy.ceil(max_lfd),
         )
         # Set the minimum and maximum values of the y-axis.
-        ax.set_ylim(0, numpy.ceil(max_ratio))
+        ax.set_xlim(0, max_depth)
+        ax.set_ylim(1, numpy.ceil(max_lfd))
 
         # Set the title of the plot to be the name of the dataframe.
+        title = f"Recursive / Unitary ratio for {pre_trim_path.stem}"
         ax.set_title(title)
 
         # Save the plot to a file with the name of the dataframe.
-        plot_path = pre_trim_path.parent / f"{name}-lfd.png"
+        plot_path = pre_trim_path.parent / f"{pre_trim_path.stem}-{name}-ratio.png"
         plt.savefig(plot_path, dpi=300)
 
         # Close the plots.
         plt.close("all")
 
 
-def normalized_color_scale(values: numpy.ndarray) -> numpy.ndarray:
+def normalized_color_scale(values: numpy.ndarray) -> tuple[numpy.ndarray, float, float]:
     """Apply Gaussian normalization to the values and return the result."""
     # Calculate the mean and standard deviation of the values.
     mean = values.mean()
     std = values.std()
 
     # Apply Gaussian normalization to the values.
-    return (values - mean) / std
+    return (values - mean) / std, mean, std

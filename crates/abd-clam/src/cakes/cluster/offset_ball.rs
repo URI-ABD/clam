@@ -46,7 +46,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> OffBall<I, U, D, S> {
 
 impl<I, U: Number, D: Dataset<I, U> + Permutable> BallAdapter<I, U, D, D, Offset> for OffBall<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
-    fn from_ball_tree(ball: Ball<I, U, D>, mut data: D, _: bool) -> (Self, D) {
+    fn from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
         let mut root = Self::adapt_tree_iterative(ball, None);
         data.permute(&root.source.indices);
         root.source.clear_indices();
@@ -58,7 +58,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
     for OffBall<I, U, D, Ball<I, U, D>>
 {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
-    fn par_from_ball_tree(ball: Ball<I, U, D>, mut data: D, _: bool) -> (Self, D) {
+    fn par_from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
         let mut root = Self::par_adapt_tree_iterative(ball, None);
         data.permute(&root.source.indices);
         root.source.clear_indices();
@@ -297,10 +297,10 @@ mod tests {
 
         let ball = Ball::new_tree(&data, &criteria, seed);
 
-        let (root, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone(), false);
+        let (root, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
         assert!(check_permutation(&root, &perm_data));
 
-        let (root, perm_data) = OffBall::par_from_ball_tree(ball, data, false);
+        let (root, perm_data) = OffBall::par_from_ball_tree(ball, data);
         assert!(check_permutation(&root, &perm_data));
 
         Ok(())

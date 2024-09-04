@@ -1,5 +1,7 @@
 //! Generating tables of data from `Cluster`s to plot later.
 
+#![allow(dead_code)]
+
 use std::path::Path;
 
 use abd_clam::Cluster;

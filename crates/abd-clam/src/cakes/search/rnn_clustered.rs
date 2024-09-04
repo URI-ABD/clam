@@ -226,7 +226,7 @@ mod tests {
             assert!(check_rnn(&ball, &data, &query, radius));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for radius in 0..=4 {
             assert!(check_rnn(&off_ball, &perm_data, &query, radius));
         }
@@ -247,7 +247,7 @@ mod tests {
             assert!(check_rnn(&ball, &data, &query, radius));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
             assert!(check_rnn(&off_ball, &perm_data, &query, radius));
         }

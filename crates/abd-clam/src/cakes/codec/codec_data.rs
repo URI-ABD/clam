@@ -331,14 +331,14 @@ struct CodecDataSerde<I, U, M> {
     dimensionality_hint: (usize, Option<usize>),
     /// The name of the dataset.
     name: String,
-    /// The number of bytes for the `metadata`.
-    num_metadata: usize,
-    /// The number of bytes for the `center_map`.
-    num_center_map: usize,
-    /// The number of bytes for the `leaf_bytes`.
-    num_leaf_bytes: usize,
-    /// The compressed bytes.
-    bytes: Box<[u8]>,
+    /// The bytes for the metadata
+    metadata: Box<[u8]>,
+    /// The bytes for the permutation.
+    permutation: Box<[u8]>,
+    /// The bytes for the center map.
+    center_map: Box<[u8]>,
+    /// The bytes for the leaf bytes.
+    leaf_bytes: Box<[u8]>,
     /// Phantom data.
     _p: PhantomData<(I, U, M)>,
 }
@@ -346,8 +346,6 @@ struct CodecDataSerde<I, U, M> {
 impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> CodecDataSerde<I, U, M> {
     /// Creates a `CodecDataSerde` from a `CodecData`.
     fn from_codec_data(data: &CodecData<I, U, M>) -> Result<Self, String> {
-        let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
-
         let metadata = data
             .metadata
             .par_iter()
@@ -359,15 +357,12 @@ impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> CodecDataSerde<I
                 bytes
             })
             .collect::<Vec<_>>();
-        let num_metadata = metadata.len();
-        encoder.write_all(&metadata).map_err(|e| e.to_string())?;
 
         let permutation = data
             .permutation
             .iter()
             .flat_map(|i| i.to_le_bytes())
             .collect::<Vec<_>>();
-        encoder.write_all(&permutation).map_err(|e| e.to_string())?;
 
         let center_map = data
             .center_map
@@ -381,8 +376,6 @@ impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> CodecDataSerde<I
                 bytes
             })
             .collect::<Vec<_>>();
-        let num_center_map = center_map.len();
-        encoder.write_all(&center_map).map_err(|e| e.to_string())?;
 
         let leaf_bytes = data
             .leaf_bytes
@@ -395,19 +388,28 @@ impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> CodecDataSerde<I
                 bytes
             })
             .collect::<Vec<_>>();
-        let num_leaf_bytes = leaf_bytes.len();
-        encoder.write_all(&leaf_bytes).map_err(|e| e.to_string())?;
 
-        let bytes = encoder.finish().map_err(|e| e.to_string())?.into_boxed_slice();
+        let bytes = [metadata, permutation, center_map, leaf_bytes]
+            .par_iter()
+            .map(|bytes| {
+                let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+                encoder.write_all(bytes).map_err(|e| e.to_string())?;
+                encoder.finish().map_err(|e| e.to_string()).map(Vec::into_boxed_slice)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let [metadata, permutation, center_map, leaf_bytes] = bytes
+            .try_into()
+            .map_err(|_| "Failed to convert bytes into array.".to_string())?;
 
         Ok(Self {
             cardinality: data.cardinality,
             dimensionality_hint: data.dimensionality_hint,
             name: data.name.clone(),
-            num_metadata,
-            num_center_map,
-            num_leaf_bytes,
-            bytes,
+            metadata,
+            permutation,
+            center_map,
+            leaf_bytes,
             _p: PhantomData,
         })
     }
@@ -416,35 +418,19 @@ impl<I: Encodable + Send + Sync, U, M: Encodable + Send + Sync> CodecDataSerde<I
 impl<I: Decodable + Send + Sync, U, M: Decodable + Send + Sync> CodecData<I, U, M> {
     /// Creates a `CodecData` from a `CodecDataSerde`.
     fn from_serde(data: CodecDataSerde<I, U, M>) -> Result<Self, String> {
-        let mut decoder = flate2::read::GzDecoder::new(&data.bytes[..]);
+        let bytes = [data.metadata, data.permutation, data.center_map, data.leaf_bytes]
+            .par_iter()
+            .map(|bytes| {
+                let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
+                let mut dec_bytes = Vec::new();
+                decoder.read_to_end(&mut dec_bytes).map_err(|e| e.to_string())?;
+                Ok(dec_bytes)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
 
-        let (metadata, permutation, center_map, leaf_bytes) = {
-            let metadata = {
-                let mut bytes = vec![0_u8; data.num_metadata];
-                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-                bytes
-            };
-
-            let permutation = {
-                let mut bytes = vec![0_u8; data.cardinality * core::mem::size_of::<usize>()];
-                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-                bytes
-            };
-
-            let center_map = {
-                let mut bytes = vec![0_u8; data.num_center_map];
-                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-                bytes
-            };
-
-            let leaf_bytes = {
-                let mut bytes = vec![0_u8; data.num_leaf_bytes];
-                decoder.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-                bytes
-            };
-
-            (metadata, permutation, center_map, leaf_bytes)
-        };
+        let [metadata, permutation, center_map, leaf_bytes]: [Vec<u8>; 4] = bytes
+            .try_into()
+            .map_err(|_| "Failed to convert bytes into array.".to_string())?;
 
         let (metadata, (permutation, (center_map, leaf_bytes))) = rayon::join(
             || Self::decode_metadata(&metadata),

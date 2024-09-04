@@ -158,7 +158,7 @@ let mut file = std::fs::File::create(&ball_path).unwrap();
 bincode::serialize_into(&mut file, &ball).unwrap();
 
 // We can adapt the tree and dataset to allow for compression and compressed search.
-let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball, data, true);
+let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball, data);
 
 // The metadata types still need to be adjusted manually. We are working on a solution for this.
 let squishy_ball = squishy_ball.with_metadata_type::<String>();

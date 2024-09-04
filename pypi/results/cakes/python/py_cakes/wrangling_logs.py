@@ -56,9 +56,9 @@ def wrangle_logs(log_path: pathlib.Path) -> None:
     clusters = count_clusters(log_path)
     progress = clusters_by_depth(clusters)
 
-    gg_car = 1_074_170
+    gg_car = 2_223_740
     for depth, ((s_freq, s_card), (f_freq, f_card)) in progress:
-        if depth % 256 < 30:
+        if depth % 256 < 50:
             lines = [
                 "",
                 f"Depth {depth:4d}:",

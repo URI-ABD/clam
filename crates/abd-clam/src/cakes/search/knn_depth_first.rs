@@ -217,7 +217,7 @@ pub(crate) mod tests {
             assert!(check_knn(&ball, &data, query, k));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for k in [1, 4, 8] {
             assert!(check_knn(&off_ball, &perm_data, query, k));
         }
@@ -238,7 +238,7 @@ pub(crate) mod tests {
             assert!(check_knn(&ball, &data, query, k));
         }
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data, true);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for k in [1, 4, 8] {
             assert!(check_knn(&off_ball, &perm_data, query, k));
         }

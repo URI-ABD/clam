@@ -16,6 +16,9 @@ pub enum Datasets {
     /// `GreenGenes` 12.10 pre-aligned dataset.
     #[clap(name = "gg_12_10_aligned")]
     GreenGenes12x10Aligned,
+    /// The `Silva` dataset.
+    #[clap(name = "silva")]
+    Silva,
 }
 
 impl Datasets {
@@ -31,6 +34,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5",
             Self::GreenGenes12x10 => "gg_12_10",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned",
+            Self::Silva => "silva-SSU-Ref",
         }
     }
 
@@ -40,6 +44,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5.fasta",
             Self::GreenGenes12x10 => "gg_12_10.fasta",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.fasta",
+            Self::Silva => "silva-SSU-Ref.fasta",
         }
     }
 
@@ -49,6 +54,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5.queries",
             Self::GreenGenes12x10 => "gg_12_10.queries",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.queries",
+            Self::Silva => "silva-SSU-Ref.queries",
         }
     }
 
@@ -58,6 +64,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5.flat_data",
             Self::GreenGenes12x10 => "gg_12_10.flat_data",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.flat_data",
+            Self::Silva => "silva-SSU-Ref.flat_data",
         }
     }
 
@@ -67,6 +74,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5.codec_data",
             Self::GreenGenes12x10 => "gg_12_10.codec_data",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.codec_data",
+            Self::Silva => "silva-SSU-Ref.codec_data",
         }
     }
 
@@ -76,6 +84,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5.ball",
             Self::GreenGenes12x10 => "gg_12_10.ball",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.ball",
+            Self::Silva => "silva-SSU-Ref.ball",
         }
     }
 
@@ -91,6 +100,7 @@ impl Datasets {
             Self::GreenGenes13x5 => "gg_13_5.squishy_ball",
             Self::GreenGenes12x10 => "gg_12_10.squishy_ball",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.squishy_ball",
+            Self::Silva => "silva-SSU-Ref.squishy_ball",
         }
     }
 }

@@ -161,10 +161,10 @@ pub mod tests {
         let ball = Ball::new_tree(&data, &criteria, seed);
         check_search(&algs, &data, &ball, query, "ball", &data);
 
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone(), true);
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
         check_search(&algs, &perm_data, &off_ball, query, "off_ball", &perm_data);
 
-        let (par_off_ball, per_perm_data) = OffBall::par_from_ball_tree(ball, data, true);
+        let (par_off_ball, per_perm_data) = OffBall::par_from_ball_tree(ball, data);
         check_search(
             &algs,
             &per_perm_data,
@@ -222,10 +222,10 @@ pub mod tests {
             let ball = Ball::new_tree(&data, &criteria, seed);
             check_search(&algs, &data, &ball, query, "ball", &data);
 
-            let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone(), true);
+            let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
             check_search(&algs, &perm_data, &off_ball, query, "off_ball", &perm_data);
 
-            let (par_off_ball, par_perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone(), true);
+            let (par_off_ball, par_perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
             check_search(
                 &algs,
                 &par_perm_data,
@@ -235,7 +235,7 @@ pub mod tests {
                 &par_perm_data,
             );
 
-            let (squishy_ball, co_data) = SquishyBall::from_ball_tree(ball.clone(), data.clone(), true);
+            let (squishy_ball, co_data) = SquishyBall::from_ball_tree(ball.clone(), data.clone());
             let (squishy_ball, co_data) = {
                 (
                     squishy_ball.with_metadata_type::<String>(),
@@ -245,7 +245,7 @@ pub mod tests {
             let co_fv_data = co_data.to_flat_vec();
             check_search(&algs, &co_data, &squishy_ball, query, "squishy_ball", &co_fv_data);
 
-            let (par_squishy_ball, par_co_data) = SquishyBall::par_from_ball_tree(ball, data, true);
+            let (par_squishy_ball, par_co_data) = SquishyBall::par_from_ball_tree(ball, data);
             let (par_squishy_ball, par_co_data) = {
                 (
                     par_squishy_ball.with_metadata_type::<String>(),

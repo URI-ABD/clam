@@ -99,10 +99,10 @@ fn main() -> Result<(), String> {
     let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
     let codec_data_path = out_dir.join(args.dataset.compressed_file());
 
-    let extension = "csv";
-    let ball_table_path = out_dir.join(args.dataset.ball_table("ball", extension));
-    let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim", extension));
-    let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball", extension));
+    // let extension = "csv";
+    // let ball_table_path = out_dir.join(args.dataset.ball_table("ball", extension));
+    // let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim", extension));
+    // let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball", extension));
 
     // Read the dataset
     let (data, queries) = if flat_vec_path.exists() {
@@ -162,14 +162,31 @@ fn main() -> Result<(), String> {
         ball
     };
 
-    if extension == "csv" {
-        tables::write_ball_csv(&ball, &ball_table_path)?;
-    } else {
-        tables::write_ball_table(&ball, &ball_table_path)?;
-    }
+    // if extension == "csv" {
+    //     tables::write_ball_csv(&ball, &ball_table_path)?;
+    // } else {
+    //     tables::write_ball_table(&ball, &ball_table_path)?;
+    // }
 
     let subtree_cardinality = ball.subtree().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
+
+    // {
+    //     let (off_ball, data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
+    //     let mut pre_trim_ball = SquishyBall::par_adapt_tree_iterative(off_ball, None);
+    //     pre_trim_ball.par_set_costs(&data);
+    //     if extension == "csv" {
+    //         tables::write_squishy_ball_csv(&pre_trim_ball, &pre_trim_table_path)?;
+    //     } else {
+    //         tables::write_squishy_ball_table(&pre_trim_ball, &pre_trim_table_path)?;
+    //     }
+
+    //     let pre_trim_subtree_cardinality = pre_trim_ball.subtree().len();
+    //     mt_logger::mt_log!(
+    //         mt_logger::Level::Info,
+    //         "Pre-trimmed SquishyBall has {pre_trim_subtree_cardinality} clusters."
+    //     );
+    // }
 
     let metadata = data.metadata().to_vec();
     let (squishy_ball, codec_data): (SB, Dec) = if squishy_ball_path.exists() && codec_data_path.exists() {
@@ -177,17 +194,62 @@ fn main() -> Result<(), String> {
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
 
+        let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
+        );
+
         let mut codec_data: Dec =
             bincode::deserialize_from(std::fs::File::open(&codec_data_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
 
+        let num_leaf_bytes = codec_data.leaf_bytes().len();
+        mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
+
         codec_data.set_metric(data.metric().clone());
 
         (squishy_ball, codec_data)
+    } else if squishy_ball_path.exists() {
+        let squishy_ball: SB =
+            bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+
+        let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
+        );
+
+        let squishy_ball = squishy_ball.with_metadata_type::<usize>();
+        let codec_data = CodecData::par_from_compressible(&data, &squishy_ball);
+
+        let num_leaf_bytes = codec_data.leaf_bytes().len();
+        mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
+
+        let squishy_ball = squishy_ball.with_metadata_type::<String>();
+        let codec_data: Dec = codec_data.with_metadata(metadata)?;
+
+        bincode::serialize_into(
+            std::fs::File::create(&codec_data_path).map_err(|e| e.to_string())?,
+            &codec_data,
+        )
+        .map_err(|e| e.to_string())?;
+
+        (squishy_ball, codec_data)
     } else {
-        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone(), true);
+        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone());
         let squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
         let codec_data: Dec = codec_data.with_metadata(metadata)?;
+
+        let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
+        );
+
+        let num_leaf_bytes = codec_data.leaf_bytes().len();
+        mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
 
         bincode::serialize_into(
             std::fs::File::create(&squishy_ball_path).map_err(|e| e.to_string())?,
@@ -204,30 +266,11 @@ fn main() -> Result<(), String> {
         (squishy_ball, codec_data)
     };
 
-    {
-        let (pre_trim_ball, _) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone(), false);
-        let pre_trim_ball: SB = pre_trim_ball.with_metadata_type::<String>();
-        if extension == "csv" {
-            tables::write_squishy_ball_csv(&pre_trim_ball, &pre_trim_table_path)?;
-        } else {
-            tables::write_squishy_ball_table(&pre_trim_ball, &pre_trim_table_path)?;
-        }
-    }
-
-    if extension == "csv" {
-        tables::write_squishy_ball_csv(&squishy_ball, &squishy_ball_table_path)?;
-    } else {
-        tables::write_squishy_ball_table(&squishy_ball, &squishy_ball_table_path)?;
-    }
-
-    let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
-    mt_logger::mt_log!(
-        mt_logger::Level::Info,
-        "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
-    );
-
-    let num_leaf_bytes = codec_data.leaf_bytes().len();
-    mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
+    // if extension == "csv" {
+    //     tables::write_squishy_ball_csv(&squishy_ball, &squishy_ball_table_path)?;
+    // } else {
+    //     tables::write_squishy_ball_table(&squishy_ball, &squishy_ball_table_path)?;
+    // }
 
     mt_logger::mt_flush!().map_err(|e| e.to_string())?;
 
@@ -258,7 +301,7 @@ fn main() -> Result<(), String> {
             algorithms.push(Algorithm::KnnDepthFirst(k));
         }
 
-        algorithms.clear();
+        // algorithms.clear();
 
         algorithms
     };

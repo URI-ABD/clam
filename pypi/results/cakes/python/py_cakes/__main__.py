@@ -44,10 +44,8 @@ def main(
     if "logs" in str(pre_trim_path):
         wrangle_logs(pre_trim_path)
 
-    if "logs" in str(post_trim_path):
-        wrangle_logs(post_trim_path)
-
-    tables.draw_plots(pre_trim_path, post_trim_path)
+    if "csv" in str(pre_trim_path) and "csv" in str(post_trim_path):
+        tables.draw_plots(pre_trim_path, post_trim_path)
 
 
 if __name__ == "__main__":
