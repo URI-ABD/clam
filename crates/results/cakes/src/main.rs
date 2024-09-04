@@ -18,8 +18,8 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::ParBallAdapter,
-    cakes::{Algorithm, CodecData, Decompressible, SquishyBall},
+    adapter::{ParAdapter, ParBallAdapter},
+    cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
     Ball, Cluster, Dataset, FlatVec, MetricSpace,
 };
@@ -99,10 +99,10 @@ fn main() -> Result<(), String> {
     let squishy_ball_path = out_dir.join(args.dataset.squishy_ball_file());
     let codec_data_path = out_dir.join(args.dataset.compressed_file());
 
-    // let extension = "csv";
-    // let ball_table_path = out_dir.join(args.dataset.ball_table("ball", extension));
-    // let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim", extension));
-    // let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball", extension));
+    let extension = "csv";
+    let ball_table_path = out_dir.join(args.dataset.ball_table("ball", extension));
+    let pre_trim_table_path = out_dir.join(args.dataset.ball_table("pre_trim", extension));
+    let squishy_ball_table_path = out_dir.join(args.dataset.ball_table("squishy_ball", extension));
 
     // Read the dataset
     let (data, queries) = if flat_vec_path.exists() {
@@ -162,34 +162,30 @@ fn main() -> Result<(), String> {
         ball
     };
 
-    // if extension == "csv" {
-    //     tables::write_ball_csv(&ball, &ball_table_path)?;
-    // } else {
-    //     tables::write_ball_table(&ball, &ball_table_path)?;
-    // }
+    tables::write_ball_csv(&ball, &ball_table_path)?;
 
     let subtree_cardinality = ball.subtree().len();
     mt_logger::mt_log!(mt_logger::Level::Info, "BallTree has {subtree_cardinality} clusters.");
 
-    // {
-    //     let (off_ball, data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
-    //     let mut pre_trim_ball = SquishyBall::par_adapt_tree_iterative(off_ball, None);
-    //     pre_trim_ball.par_set_costs(&data);
-    //     if extension == "csv" {
-    //         tables::write_squishy_ball_csv(&pre_trim_ball, &pre_trim_table_path)?;
-    //     } else {
-    //         tables::write_squishy_ball_table(&pre_trim_ball, &pre_trim_table_path)?;
-    //     }
+    let (squishy_ball, perm_data) = {
+        let (off_ball, data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
+        let mut pre_trim_ball = SquishyBall::par_adapt_tree_iterative(off_ball, None);
+        pre_trim_ball.par_set_costs(&data);
+        tables::write_squishy_ball_csv(&pre_trim_ball, &pre_trim_table_path)?;
 
-    //     let pre_trim_subtree_cardinality = pre_trim_ball.subtree().len();
-    //     mt_logger::mt_log!(
-    //         mt_logger::Level::Info,
-    //         "Pre-trimmed SquishyBall has {pre_trim_subtree_cardinality} clusters."
-    //     );
-    // }
+        let pre_trim_subtree_cardinality = pre_trim_ball.subtree().len();
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Pre-trimmed SquishyBall has {pre_trim_subtree_cardinality} clusters."
+        );
+
+        (pre_trim_ball, data)
+    };
 
     let metadata = data.metadata().to_vec();
     let (squishy_ball, codec_data): (SB, Dec) = if squishy_ball_path.exists() && codec_data_path.exists() {
+        core::mem::drop(squishy_ball);
+
         let squishy_ball: SB =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
@@ -211,6 +207,8 @@ fn main() -> Result<(), String> {
 
         (squishy_ball, codec_data)
     } else if squishy_ball_path.exists() {
+        core::mem::drop(squishy_ball);
+
         let squishy_ball: SB =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
@@ -238,7 +236,14 @@ fn main() -> Result<(), String> {
 
         (squishy_ball, codec_data)
     } else {
-        let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone());
+        let mut squishy_ball = squishy_ball;
+        squishy_ball.trim();
+
+        let squishy_ball = squishy_ball.with_metadata_type::<usize>();
+        let codec_data = CodecData::par_from_compressible(&perm_data, &squishy_ball);
+
+        core::mem::drop(perm_data);
+
         let squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
         let codec_data: Dec = codec_data.with_metadata(metadata)?;
 
@@ -266,42 +271,36 @@ fn main() -> Result<(), String> {
         (squishy_ball, codec_data)
     };
 
-    // if extension == "csv" {
-    //     tables::write_squishy_ball_csv(&squishy_ball, &squishy_ball_table_path)?;
-    // } else {
-    //     tables::write_squishy_ball_table(&squishy_ball, &squishy_ball_table_path)?;
-    // }
+    tables::write_squishy_ball_csv(&squishy_ball, &squishy_ball_table_path)?;
 
     mt_logger::mt_flush!().map_err(|e| e.to_string())?;
 
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    // let (data, codec_data) = {
-    //     let metric = StringDistance::Levenshtein.metric();
-    //     let mut data = data;
-    //     data.set_metric(metric.clone());
-    //     let mut codec_data = codec_data;
-    //     codec_data.set_metric(metric);
-    //     (data, codec_data)
-    // };
+    let (data, codec_data) = {
+        let metric = StringDistance::Levenshtein.metric();
+        let mut data = data;
+        data.set_metric(metric.clone());
+        let mut codec_data = codec_data;
+        codec_data.set_metric(metric);
+        (data, codec_data)
+    };
 
     let algorithms = {
         let mut algorithms = Vec::new();
 
         for radius in [1, 5, 10] {
-            algorithms.push(Algorithm::RnnLinear(radius));
+            // algorithms.push(Algorithm::RnnLinear(radius));
             algorithms.push(Algorithm::RnnClustered(radius));
         }
 
         for k in [1, 10, 100] {
-            algorithms.push(Algorithm::KnnLinear(k));
+            // algorithms.push(Algorithm::KnnLinear(k));
             algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
             algorithms.push(Algorithm::KnnBreadthFirst(k));
             algorithms.push(Algorithm::KnnDepthFirst(k));
         }
-
-        // algorithms.clear();
 
         algorithms
     };
