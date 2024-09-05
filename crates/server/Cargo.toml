@@ -1,0 +1,11 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rocket = { version = "0.5.1", features = ["json"] }
+abd-clam = { workspace = true }
+bincode = { workspace = true }
+symagen = { workspace = true }
+distances = { workspace = true }

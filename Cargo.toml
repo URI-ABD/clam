@@ -7,6 +7,7 @@ members = [
     "crates/results/cakes",
     "pypi/distances",
     "pypi/results/cakes",
+    "crates/server/server",
 ]
 resolver = "2"
 
