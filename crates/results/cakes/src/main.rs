@@ -129,6 +129,13 @@ fn main() -> Result<(), String> {
         (data, queries)
     };
 
+    // TODO: Only for the pdb_seq_1000max_protein dataset
+    let data = {
+        let mut data = data;
+        data.set_metric(StringDistance::Levenshtein.metric());
+        data
+    };
+
     mt_logger::mt_log!(
         mt_logger::Level::Info,
         "Working with {:?} Dataset with {} sequences in {:?} dims.",

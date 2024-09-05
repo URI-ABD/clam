@@ -19,6 +19,9 @@ pub enum Datasets {
     /// The `Silva` dataset.
     #[clap(name = "silva")]
     Silva,
+    /// The `PdbSeq` dataset.
+    #[clap(name = "pdb-seq")]
+    PdbSeq,
 }
 
 impl Datasets {
@@ -35,6 +38,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned",
             Self::Silva => "silva-SSU-Ref",
+            Self::PdbSeq => "pdb_seq_1000max_protein",
         }
     }
 
@@ -45,6 +49,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10.fasta",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.fasta",
             Self::Silva => "silva-SSU-Ref.fasta",
+            Self::PdbSeq => "pdb_seq_1000max_protein.fasta",
         }
     }
 
@@ -55,6 +60,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10.queries",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.queries",
             Self::Silva => "silva-SSU-Ref.queries",
+            Self::PdbSeq => "pdb_seq_1000max_protein.queries",
         }
     }
 
@@ -65,6 +71,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10.flat_data",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.flat_data",
             Self::Silva => "silva-SSU-Ref.flat_data",
+            Self::PdbSeq => "pdb_seq_1000max_protein.flat_data",
         }
     }
 
@@ -75,6 +82,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10.codec_data",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.codec_data",
             Self::Silva => "silva-SSU-Ref.codec_data",
+            Self::PdbSeq => "pdb_seq_1000max_protein.codec_data",
         }
     }
 
@@ -85,6 +93,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10.ball",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.ball",
             Self::Silva => "silva-SSU-Ref.ball",
+            Self::PdbSeq => "pdb_seq_1000max_protein.ball",
         }
     }
 
@@ -101,6 +110,7 @@ impl Datasets {
             Self::GreenGenes12x10 => "gg_12_10.squishy_ball",
             Self::GreenGenes12x10Aligned => "gg_12_10_aligned.squishy_ball",
             Self::Silva => "silva-SSU-Ref.squishy_ball",
+            Self::PdbSeq => "pdb_seq_1000max_protein.squishy_ball",
         }
     }
 }
