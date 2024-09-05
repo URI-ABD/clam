@@ -31,19 +31,19 @@ mod sequence;
 mod tables;
 
 use metrics::StringDistance;
-use sequence::AlignedSequence;
+// use sequence::AlignedSequence;
 
 /// The Vector of held-out queries
-pub type Queries = Vec<(String, AlignedSequence)>;
+pub type Queries = Vec<(String, String)>;
 
 /// The type of the compressible dataset.
-pub type Co = FlatVec<AlignedSequence, u32, String>;
+pub type Co = FlatVec<String, u32, String>;
 /// The type of the ball tree over the compressible dataset.
-type B = Ball<AlignedSequence, u32, Co>;
+type B = Ball<String, u32, Co>;
 /// The type of the compressed, decompressible dataset.
-type Dec = CodecData<AlignedSequence, u32, String>;
+type Dec = CodecData<String, u32, String>;
 /// The type of the squishy ball tree.
-type SB = SquishyBall<AlignedSequence, u32, Co, Dec, B>;
+type SB = SquishyBall<String, u32, Co, Dec, B>;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]

@@ -2,7 +2,7 @@
 
 use abd_clam::Metric;
 
-use crate::AlignedSequence;
+// use crate::AlignedSequence;
 
 /// Distance functions for string data.
 #[derive(clap::ValueEnum, Debug, Clone)]
@@ -21,17 +21,14 @@ pub enum StringDistance {
 impl StringDistance {
     /// Get the distance function.
     #[allow(clippy::cast_possible_truncation)]
-    pub fn metric(&self) -> Metric<AlignedSequence, u32> {
+    pub fn metric(&self) -> Metric<String, u32> {
         let distance_function = match self {
-            Self::Levenshtein => |x: &AlignedSequence, y: &AlignedSequence| {
-                stringzilla::sz::edit_distance(x.as_unaligned(), y.as_unaligned()) as u32
+            Self::Levenshtein => |x: &String, y: &String| {
+                // stringzilla::sz::edit_distance(x.as_unaligned(), y.as_unaligned()) as u32
+                stringzilla::sz::edit_distance(x, y) as u32
             },
-            Self::NeedlemanWunsch => |x: &AlignedSequence, y: &AlignedSequence| {
-                distances::strings::nw_distance(&x.as_unaligned(), &y.as_unaligned())
-            },
-            Self::Hamming => {
-                |x: &AlignedSequence, y: &AlignedSequence| distances::strings::hamming(x.sequence(), y.sequence())
-            }
+            Self::NeedlemanWunsch => |x: &String, y: &String| distances::strings::nw_distance(x, y),
+            Self::Hamming => |x: &String, y: &String| distances::strings::hamming(x, y),
         };
         let expensive = !matches!(self, Self::Hamming);
         Metric::new(distance_function, expensive)

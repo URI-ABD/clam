@@ -6,7 +6,7 @@ use bio::io::fasta;
 use rand::prelude::*;
 
 use crate::metrics::StringDistance;
-use crate::AlignedSequence;
+// use crate::AlignedSequence;
 
 use crate::Co;
 use crate::Queries;
@@ -43,7 +43,8 @@ pub fn read(path: &std::path::Path, num_queries: usize) -> Result<(Co, Queries),
             return Err(format!("Empty sequence for record {num_reads}."));
         }
 
-        seqs.push((id, AlignedSequence::new(seq)));
+        // seqs.push((id, AlignedSequence::new(seq)));
+        seqs.push((id, seq));
     }
 
     // Shuffle the sequences and hold out a query set.
