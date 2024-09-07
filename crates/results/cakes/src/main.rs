@@ -21,29 +21,45 @@ use abd_clam::{
     adapter::{ParAdapter, ParBallAdapter},
     cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
-    Ball, Cluster, Dataset, FlatVec, MetricSpace,
+    BalancedBall, Ball, Cluster, Dataset, FlatVec, MetricSpace,
 };
 use clap::Parser;
 
+mod genomic;
+mod member_set;
 mod metrics;
-mod readers;
 mod sequence;
+mod sets;
 mod tables;
 
-use metrics::StringDistance;
-// use sequence::AlignedSequence;
+use distances::Number;
+use member_set::MemberSet;
+use metrics::SetDistance;
 
 /// The Vector of held-out queries
-pub type Queries = Vec<(String, String)>;
-
+pub type QueriesGen = Vec<(String, String)>;
 /// The type of the compressible dataset.
-pub type Co = FlatVec<String, u32, String>;
+pub type CoGen = FlatVec<String, u32, String>;
 /// The type of the ball tree over the compressible dataset.
-type B = Ball<String, u32, Co>;
+#[allow(dead_code)]
+type BGen = Ball<String, u32, CoGen>;
 /// The type of the compressed, decompressible dataset.
-type Dec = CodecData<String, u32, String>;
+#[allow(dead_code)]
+type DecGen = CodecData<String, u32, String>;
 /// The type of the squishy ball tree.
-type SB = SquishyBall<String, u32, Co, Dec, B>;
+#[allow(dead_code)]
+type SBGen = SquishyBall<String, u32, CoGen, DecGen, BGen>;
+
+/// The Vector of held-out queries
+pub type QueriesSet = Vec<(usize, MemberSet)>;
+/// The type of the compressible dataset.
+pub type CoSet = FlatVec<MemberSet, f32, usize>;
+/// The type of the ball tree over the compressible dataset.
+type BSet = Ball<MemberSet, f32, CoSet>;
+/// The type of the compressed, decompressible dataset.
+type DecSet = CodecData<MemberSet, f32, usize>;
+/// The type of the squishy ball tree.
+type SBSet = SquishyBall<MemberSet, f32, CoSet, DecSet, BSet>;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -51,7 +67,8 @@ type SB = SquishyBall<String, u32, Co, Dec, B>;
 struct Args {
     /// Dataset type
     #[arg(short, long)]
-    dataset: readers::Datasets,
+    // dataset: genomic::GenomicDataset,
+    dataset: sets::SetDataset,
 
     /// The number of queries to hold out.
     #[arg(short, long)]
@@ -63,7 +80,7 @@ struct Args {
 
     /// Path to the output directory.
     #[arg(short, long)]
-    out_dir: PathBuf,
+    out_dir: Option<PathBuf>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -76,8 +93,17 @@ fn main() -> Result<(), String> {
         mt_logger::OutputStream::Both
     );
 
+    let out_dir = args.out_dir.unwrap_or_else(|| {
+        let out_dir = args.inp_dir.join("cakes-results");
+        if !out_dir.exists() {
+            #[allow(clippy::expect_used)]
+            std::fs::create_dir(&out_dir).expect("Failed to create output directory");
+        }
+        out_dir
+    });
+
     // Check that the directories exist
-    for dir in [&args.inp_dir, &args.out_dir] {
+    for dir in [&args.inp_dir, &out_dir] {
         if !dir.exists() {
             return Err(format!("{dir:?} does not exist!"));
         }
@@ -89,7 +115,7 @@ fn main() -> Result<(), String> {
     let inp_dir = args.inp_dir.canonicalize().map_err(|e| e.to_string())?;
     mt_logger::mt_log!(mt_logger::Level::Info, "Input directory: {inp_dir:?}");
 
-    let out_dir = args.out_dir.canonicalize().map_err(|e| e.to_string())?;
+    let out_dir = out_dir.canonicalize().map_err(|e| e.to_string())?;
     mt_logger::mt_log!(mt_logger::Level::Info, "Output directory: {out_dir:?}");
 
     let ball_path = out_dir.join(args.dataset.ball_file());
@@ -106,16 +132,17 @@ fn main() -> Result<(), String> {
 
     // Read the dataset
     let (data, queries) = if flat_vec_path.exists() {
-        let mut data: Co = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
+        let data: CoSet = bincode::deserialize_from(std::fs::File::open(&flat_vec_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
-        data.set_metric(StringDistance::Hamming.metric());
 
-        let queries: Queries = bincode::deserialize_from(std::fs::File::open(&queries_path).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+        let queries: QueriesSet =
+            bincode::deserialize_from(std::fs::File::open(&queries_path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
 
         (data, queries)
     } else {
-        let (data, queries): (Co, Queries) = args.dataset.read_fasta(&inp_dir, args.num_queries)?;
+        // let (data, queries): (CoGen, QueriesGen) = args.dataset.read_fasta(&inp_dir, args.num_queries)?;
+        let (data, queries): (CoSet, QueriesSet) = args.dataset.read_raw(&inp_dir)?;
 
         bincode::serialize_into(std::fs::File::create(&flat_vec_path).map_err(|e| e.to_string())?, &data)
             .map_err(|e| e.to_string())?;
@@ -129,10 +156,9 @@ fn main() -> Result<(), String> {
         (data, queries)
     };
 
-    // TODO: Only for the pdb_seq_1000max_protein dataset
     let data = {
         let mut data = data;
-        data.set_metric(StringDistance::Levenshtein.metric());
+        data.set_metric(SetDistance::Jaccard.metric());
         data
     };
 
@@ -146,21 +172,43 @@ fn main() -> Result<(), String> {
 
     mt_logger::mt_log!(mt_logger::Level::Info, "Holding out {} queries", queries.len());
 
-    let ball: B = if ball_path.exists() {
+    let ball: BSet = if ball_path.exists() {
         bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?
     } else {
-        let mut depth = 0;
-        let depth_delta = 256;
+        let mut max_depth = 0;
+        let depth_delta = abd_clam::MAX_RECURSION_DEPTH;
         let seed = Some(42);
 
-        let criteria = |c: &B| c.depth() < 1;
-        let mut ball = Ball::par_new_tree(&data, &criteria, seed);
+        let indices = (0..data.cardinality()).collect::<Vec<_>>();
+        let mut ball = BalancedBall::par_new(&data, &indices, 0, seed);
 
-        while ball.leaves().into_iter().any(|c| !c.is_singleton()) {
-            depth += depth_delta;
-            let criteria = |c: &B| c.depth() < depth;
+        loop {
+            max_depth += depth_delta;
+            let criteria =
+                |c: &BalancedBall<_, _, _>| (c.depth() < max_depth && c.radius() > 0.75) || c.cardinality() > 1_000;
             ball.par_partition_further(&data, &criteria, seed);
+
+            // If there are no leaves at the current maximum depth, break
+            if !ball.leaves().into_iter().any(|c| c.depth() == max_depth) {
+                break;
+            }
+        }
+
+        let mut ball = BSet::par_from_balanced_ball(ball);
+
+        for leaf in ball.leaves_mut() {
+            max_depth = leaf.depth();
+            loop {
+                max_depth += depth_delta;
+                let criteria = |c: &BSet| c.depth() < max_depth;
+                leaf.par_partition_further(&data, &criteria, seed);
+
+                // If there are no leaves at the current maximum depth, break
+                if !leaf.leaves().into_iter().any(|c| c.depth() == max_depth) {
+                    break;
+                }
+            }
         }
 
         bincode::serialize_into(std::fs::File::create(&ball_path).map_err(|e| e.to_string())?, &ball)
@@ -190,10 +238,10 @@ fn main() -> Result<(), String> {
     };
 
     let metadata = data.metadata().to_vec();
-    let (squishy_ball, codec_data): (SB, Dec) = if squishy_ball_path.exists() && codec_data_path.exists() {
+    let (squishy_ball, codec_data): (SBSet, DecSet) = if squishy_ball_path.exists() && codec_data_path.exists() {
         core::mem::drop(squishy_ball);
 
-        let squishy_ball: SB =
+        let squishy_ball: SBSet =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
 
@@ -203,7 +251,7 @@ fn main() -> Result<(), String> {
             "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
         );
 
-        let mut codec_data: Dec =
+        let mut codec_data: DecSet =
             bincode::deserialize_from(std::fs::File::open(&codec_data_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
 
@@ -216,7 +264,7 @@ fn main() -> Result<(), String> {
     } else if squishy_ball_path.exists() {
         core::mem::drop(squishy_ball);
 
-        let squishy_ball: SB =
+        let squishy_ball: SBSet =
             bincode::deserialize_from(std::fs::File::open(&squishy_ball_path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
 
@@ -226,14 +274,14 @@ fn main() -> Result<(), String> {
             "SquishyBall has {squishy_ball_subtree_cardinality} clusters."
         );
 
-        let squishy_ball = squishy_ball.with_metadata_type::<usize>();
+        // let squishy_ball = squishy_ball.with_metadata_type::<usize>();
         let codec_data = CodecData::par_from_compressible(&data, &squishy_ball);
 
         let num_leaf_bytes = codec_data.leaf_bytes().len();
         mt_logger::mt_log!(mt_logger::Level::Info, "CodecData has {num_leaf_bytes} leaf bytes.");
 
-        let squishy_ball = squishy_ball.with_metadata_type::<String>();
-        let codec_data: Dec = codec_data.with_metadata(metadata)?;
+        // let squishy_ball = squishy_ball.with_metadata_type::<String>();
+        let codec_data: DecSet = codec_data.with_metadata(metadata)?;
 
         bincode::serialize_into(
             std::fs::File::create(&codec_data_path).map_err(|e| e.to_string())?,
@@ -246,13 +294,13 @@ fn main() -> Result<(), String> {
         let mut squishy_ball = squishy_ball;
         squishy_ball.trim();
 
-        let squishy_ball = squishy_ball.with_metadata_type::<usize>();
+        // let squishy_ball = squishy_ball.with_metadata_type::<usize>();
         let codec_data = CodecData::par_from_compressible(&perm_data, &squishy_ball);
 
         core::mem::drop(perm_data);
 
-        let squishy_ball: SB = squishy_ball.with_metadata_type::<String>();
-        let codec_data: Dec = codec_data.with_metadata(metadata)?;
+        // let squishy_ball: SBGen = squishy_ball.with_metadata_type::<String>();
+        let codec_data: DecSet = codec_data.with_metadata(metadata)?;
 
         let squishy_ball_subtree_cardinality = squishy_ball.subtree().len();
         mt_logger::mt_log!(
@@ -285,26 +333,27 @@ fn main() -> Result<(), String> {
     // Note: Starting search benchmarks here
 
     let (_, queries): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
-    let (data, codec_data) = {
-        let metric = StringDistance::Levenshtein.metric();
-        let mut data = data;
-        data.set_metric(metric.clone());
-        let mut codec_data = codec_data;
-        codec_data.set_metric(metric);
-        (data, codec_data)
-    };
+    // let (data, codec_data) = {
+    //     let metric = StringDistance::Levenshtein.metric();
+    //     let mut data = data;
+    //     data.set_metric(metric.clone());
+    //     let mut codec_data = codec_data;
+    //     codec_data.set_metric(metric);
+    //     (data, codec_data)
+    // };
 
-    let algorithms = {
+    let algorithms: Vec<Algorithm<f32>> = {
         let mut algorithms = Vec::new();
 
         for radius in [1, 5, 10] {
-            // algorithms.push(Algorithm::RnnLinear(radius));
+            let radius = radius.as_f32() / 100.0;
+            algorithms.push(Algorithm::RnnLinear(radius));
             algorithms.push(Algorithm::RnnClustered(radius));
         }
 
         for k in [1, 10, 100] {
-            // algorithms.push(Algorithm::KnnLinear(k));
-            algorithms.push(Algorithm::KnnRepeatedRnn(k, 2));
+            algorithms.push(Algorithm::KnnLinear(k));
+            // algorithms.push(Algorithm::KnnRepeatedRnn(k, 2.0));
             algorithms.push(Algorithm::KnnBreadthFirst(k));
             algorithms.push(Algorithm::KnnDepthFirst(k));
         }
@@ -319,7 +368,8 @@ fn main() -> Result<(), String> {
     );
 
     // TODO: Remove this limit
-    let queries = &queries[..10];
+    // let queries = &queries[..100];
+    let queries = &queries;
 
     for (i, alg) in algorithms.iter().enumerate() {
         mt_logger::mt_log!(
@@ -331,10 +381,10 @@ fn main() -> Result<(), String> {
         );
         let start = std::time::Instant::now();
         let hits = alg.par_batch_par_search(&data, &ball, queries);
-        let end = start.elapsed().as_secs_f32();
+        let ball_end = start.elapsed().as_secs_f32();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
-            "Finished {} Search ({}/{}) on Ball and FlatVec in {end:.6} seconds.",
+            "Finished {} Search ({}/{}) on Ball and FlatVec in {ball_end:.6} seconds.",
             alg.name(),
             i + 1,
             algorithms.len()
@@ -351,16 +401,22 @@ fn main() -> Result<(), String> {
         );
         let start = std::time::Instant::now();
         let hits = alg.par_batch_par_search(&codec_data, &squishy_ball, queries);
-        let end = start.elapsed().as_secs_f32();
+        let comp_end = start.elapsed().as_secs_f32();
         mt_logger::mt_log!(
             mt_logger::Level::Info,
-            "Finished {} Search ({}/{}) on SquishyBall and CodecData in {end:.6} seconds.",
+            "Finished {} Search ({}/{}) on SquishyBall and CodecData in {comp_end:.6} seconds.",
             alg.name(),
             i + 1,
             algorithms.len()
         );
         let mean_num_hits = abd_clam::utils::mean::<_, f32>(&hits.into_iter().map(|h| h.len()).collect::<Vec<_>>());
         mt_logger::mt_log!(mt_logger::Level::Info, "Average number of hits was {mean_num_hits:.6}.");
+
+        let ratio = comp_end / ball_end;
+        mt_logger::mt_log!(
+            mt_logger::Level::Info,
+            "Speed ratio of Ball over SquishyBall was {ratio:.2}x."
+        );
     }
 
     mt_logger::mt_log!(

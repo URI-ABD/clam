@@ -50,6 +50,28 @@ pub fn read_usize(bytes: &[u8], offset: &mut usize) -> usize {
     usize::from_le_bytes(index_bytes)
 }
 
+impl Encodable for usize {
+    fn as_bytes(&self) -> Box<[u8]> {
+        self.to_le_bytes().to_vec().into_boxed_slice()
+    }
+
+    fn encode(&self, _: &Self) -> Box<[u8]> {
+        self.as_bytes()
+    }
+}
+
+impl Decodable for usize {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let mut array = [0; std::mem::size_of::<Self>()];
+        array.copy_from_slice(&bytes[..std::mem::size_of::<Self>()]);
+        Self::from_le_bytes(array)
+    }
+
+    fn decode(_: &Self, bytes: &[u8]) -> Self {
+        Self::from_bytes(bytes)
+    }
+}
+
 impl<F: Float> Encodable for Vec<F> {
     fn as_bytes(&self) -> Box<[u8]> {
         self.iter()
@@ -212,31 +234,9 @@ fn deserialize_edits(bytes: &[u8]) -> Vec<needleman_wunsch::Edit> {
 pub mod tests {
     use crate::{adapter::BallAdapter, cakes::CodecData, Ball, Cluster, FlatVec, MetricSpace, Partition};
 
-    use super::{Decodable, Encodable, SquishyBall};
+    use super::SquishyBall;
 
     use crate::cakes::tests::gen_random_data;
-
-    impl Encodable for usize {
-        fn as_bytes(&self) -> Box<[u8]> {
-            self.to_le_bytes().to_vec().into_boxed_slice()
-        }
-
-        fn encode(&self, _: &Self) -> Box<[u8]> {
-            self.as_bytes()
-        }
-    }
-
-    impl Decodable for usize {
-        fn from_bytes(bytes: &[u8]) -> Self {
-            let mut array = [0; std::mem::size_of::<usize>()];
-            array.copy_from_slice(&bytes[..std::mem::size_of::<usize>()]);
-            usize::from_le_bytes(array)
-        }
-
-        fn decode(_: &Self, bytes: &[u8]) -> Self {
-            Self::from_bytes(bytes)
-        }
-    }
 
     #[test]
     fn ser_de() -> Result<(), String> {

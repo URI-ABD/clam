@@ -40,7 +40,7 @@ pub fn squishy_ball_schema() -> Schema {
 pub struct BallRow {
     depth: u32,
     cardinality: u64,
-    radius: u32,
+    radius: f32,
     lfd: f32,
     arg_center: u64,
     arg_radial: u64,
@@ -64,7 +64,7 @@ impl BallRow {
 
         let depth = arrow::array::UInt32Array::from(depth);
         let cardinality = arrow::array::UInt64Array::from(cardinality);
-        let radius = arrow::array::UInt32Array::from(radius);
+        let radius = arrow::array::Float32Array::from(radius);
         let lfd = arrow::array::Float32Array::from(lfd);
         let arg_center = arrow::array::UInt64Array::from(arg_center);
         let arg_radial = arrow::array::UInt64Array::from(arg_radial);
@@ -86,7 +86,7 @@ impl BallRow {
     }
 
     /// Write a `Ball` to a CSV file.
-    pub fn write_csv<P: AsRef<Path>>(ball: &crate::B, path: &P) -> Result<(), String> {
+    pub fn write_csv<P: AsRef<Path>>(ball: &crate::BSet, path: &P) -> Result<(), String> {
         let rows = ball
             .clone()
             .unstack_tree()
@@ -119,9 +119,9 @@ impl BallRow {
     }
 }
 
-impl From<&crate::B> for BallRow {
+impl From<&crate::BSet> for BallRow {
     #[allow(clippy::cast_possible_truncation)]
-    fn from(ball: &crate::B) -> Self {
+    fn from(ball: &crate::BSet) -> Self {
         Self {
             depth: ball.depth() as u32,
             cardinality: ball.cardinality() as u64,
@@ -138,12 +138,12 @@ impl From<&crate::B> for BallRow {
 pub struct SquishyBallRow {
     depth: u32,
     cardinality: u64,
-    radius: u32,
+    radius: f32,
     lfd: f32,
     arg_center: u64,
     arg_radial: u64,
-    unitary_cost: u32,
-    recursive_cost: u32,
+    unitary_cost: f32,
+    recursive_cost: f32,
     offset: u64,
 }
 
@@ -200,13 +200,13 @@ impl SquishyBallRow {
 
         let depth = arrow::array::UInt32Array::from(depth);
         let cardinality = arrow::array::UInt64Array::from(cardinality);
-        let radius = arrow::array::UInt32Array::from(radius);
+        let radius = arrow::array::Float32Array::from(radius);
         let lfd = arrow::array::Float32Array::from(lfd);
         let arg_center = arrow::array::UInt64Array::from(arg_center);
         let arg_radial = arrow::array::UInt64Array::from(arg_radial);
         let offset = arrow::array::UInt64Array::from(offset);
-        let unitary_cost = arrow::array::UInt32Array::from(unitary_cost);
-        let recursive_cost = arrow::array::UInt32Array::from(recursive_cost);
+        let unitary_cost = arrow::array::Float32Array::from(unitary_cost);
+        let recursive_cost = arrow::array::Float32Array::from(recursive_cost);
 
         let schema = squishy_ball_schema();
 
@@ -228,7 +228,7 @@ impl SquishyBallRow {
     }
 
     /// Write a `SquishyBall` to a CSV file.
-    pub fn write_csv<P: AsRef<Path>>(ball: &crate::SB, path: &P) -> Result<(), String> {
+    pub fn write_csv<P: AsRef<Path>>(ball: &crate::SBSet, path: &P) -> Result<(), String> {
         let rows = ball
             .clone()
             .unstack_tree()
@@ -269,9 +269,9 @@ impl SquishyBallRow {
     }
 }
 
-impl From<&crate::SB> for SquishyBallRow {
+impl From<&crate::SBSet> for SquishyBallRow {
     #[allow(clippy::cast_possible_truncation)]
-    fn from(ball: &crate::SB) -> Self {
+    fn from(ball: &crate::SBSet) -> Self {
         Self {
             depth: ball.depth() as u32,
             cardinality: ball.cardinality() as u64,

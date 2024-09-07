@@ -31,7 +31,7 @@ pub use crate::{
 };
 
 /// Used to bypass the recursion limit in Rust.
-const MAX_RECURSION_DEPTH: usize = 256;
+pub const MAX_RECURSION_DEPTH: usize = 128;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.31.0";

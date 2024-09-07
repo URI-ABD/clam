@@ -8,11 +8,11 @@ use rand::prelude::*;
 use crate::metrics::StringDistance;
 // use crate::AlignedSequence;
 
-use crate::Co;
-use crate::Queries;
+use crate::CoGen;
+use crate::QueriesGen;
 
 /// Reads a `GreenGenes` dataset from the given path.
-pub fn read(path: &std::path::Path, num_queries: usize) -> Result<(Co, Queries), String> {
+pub fn read(path: &std::path::Path, num_queries: usize) -> Result<(CoGen, QueriesGen), String> {
     if !path.exists() {
         return Err(format!("Path {path:?} does not exist!"));
     }

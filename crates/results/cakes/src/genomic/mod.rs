@@ -2,11 +2,12 @@
 
 mod greengenes;
 
-use crate::{Co, Queries};
+use crate::{CoGen, QueriesGen};
 
 /// The available datasets.
 #[derive(clap::ValueEnum, Debug, Clone)]
-pub enum Datasets {
+#[allow(clippy::module_name_repetitions)]
+pub enum GenomicDataset {
     /// `GreenGenes` 13.5 dataset.
     #[clap(name = "gg_13_5")]
     GreenGenes13x5,
@@ -24,9 +25,9 @@ pub enum Datasets {
     PdbSeq,
 }
 
-impl Datasets {
+impl GenomicDataset {
     /// Reads the dataset from the given path.
-    pub fn read_fasta(&self, dir_path: &std::path::Path, num_queries: usize) -> Result<(Co, Queries), String> {
+    pub fn read_fasta(&self, dir_path: &std::path::Path, num_queries: usize) -> Result<(CoGen, QueriesGen), String> {
         let path = dir_path.join(self.raw_file());
         greengenes::read(&path, num_queries)
     }

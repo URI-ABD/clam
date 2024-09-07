@@ -12,9 +12,9 @@ use super::{partition::ParPartition, Ball, Cluster, ParCluster, Partition};
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BalancedBall<I, U: Number, D: Dataset<I, U>> {
     /// The inner `Ball` of the `BalancedBall`.
-    ball: Ball<I, U, D>,
+    pub(crate) ball: Ball<I, U, D>,
     /// The children of the `BalancedBall`.
-    children: Vec<(usize, U, Box<Self>)>,
+    pub(crate) children: Vec<(usize, U, Box<Self>)>,
 }
 
 impl<I, U: Number, D: Dataset<I, U>> core::fmt::Debug for BalancedBall<I, U, D> {

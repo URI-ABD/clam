@@ -10,7 +10,7 @@ use arrow::ipc::writer::FileWriter;
 mod cluster;
 
 /// Write an arrow array of `Ball`s to the path
-pub fn write_ball_table<P: AsRef<Path>>(ball: &crate::B, path: &P) -> Result<(), String> {
+pub fn write_ball_table<P: AsRef<Path>>(ball: &crate::BSet, path: &P) -> Result<(), String> {
     let rows = ball
         .clone()
         .unstack_tree()
@@ -30,12 +30,12 @@ pub fn write_ball_table<P: AsRef<Path>>(ball: &crate::B, path: &P) -> Result<(),
 }
 
 /// Write a CSV file of `Ball`s to the path
-pub fn write_ball_csv<P: AsRef<Path>>(ball: &crate::B, path: &P) -> Result<(), String> {
+pub fn write_ball_csv<P: AsRef<Path>>(ball: &crate::BSet, path: &P) -> Result<(), String> {
     cluster::BallRow::write_csv(ball, path)
 }
 
 /// Write an arrow array of `SquishyBall`s to the path
-pub fn write_squishy_ball_table<P: AsRef<Path>>(ball: &crate::SB, path: &P) -> Result<(), String> {
+pub fn write_squishy_ball_table<P: AsRef<Path>>(ball: &crate::SBSet, path: &P) -> Result<(), String> {
     let rows = ball
         .clone()
         .unstack_tree()
@@ -55,6 +55,6 @@ pub fn write_squishy_ball_table<P: AsRef<Path>>(ball: &crate::SB, path: &P) -> R
 }
 
 /// Write a CSV file of `SquishyBall`s to the path
-pub fn write_squishy_ball_csv<P: AsRef<Path>>(ball: &crate::SB, path: &P) -> Result<(), String> {
+pub fn write_squishy_ball_csv<P: AsRef<Path>>(ball: &crate::SBSet, path: &P) -> Result<(), String> {
     cluster::SquishyBallRow::write_csv(ball, path)
 }
