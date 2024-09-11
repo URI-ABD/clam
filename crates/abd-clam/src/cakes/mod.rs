@@ -7,8 +7,7 @@ mod search;
 
 pub use cluster::OffBall;
 pub use codec::{
-    read_encoding, read_usize, CodecData, Compressible, Decodable, Decompressible, Encodable, ParCompressible,
-    ParDecompressible, SquishyBall,
+    CodecData, Compressible, Decodable, Decompressible, Encodable, ParCompressible, ParDecompressible, SquishyBall,
 };
 pub use dataset::Shardable;
 pub use search::Algorithm;

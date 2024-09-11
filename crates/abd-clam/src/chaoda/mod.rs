@@ -298,7 +298,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, const M: usize>
         let mut models = Vec::new();
         let mut offset = 0;
         while offset < bytes.len() {
-            let model = crate::cakes::codec::read_encoding(&bytes, &mut offset);
+            let model = crate::utils::read_encoding(&bytes, &mut offset);
             let model = bincode::deserialize::<SingleMetricModel<I, U, D, S>>(&model).map_err(|e| e.to_string())?;
             models.push(model);
         }

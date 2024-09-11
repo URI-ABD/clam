@@ -81,7 +81,10 @@ pub fn read<P: AsRef<Path>, T: H5Type>(path: &P, flattened: bool) -> Result<AnnD
         let size_test = size_test.read_raw::<usize>().map_err(|e| e.to_string())?;
         ftlog::info!("Reading {} flattened test items.", queries.len());
 
-        (un_flatten(train, &size_train)?, un_flatten(queries, &size_test)?)
+        (
+            abd_clam::utils::un_flatten(train, &size_train)?,
+            abd_clam::utils::un_flatten(queries, &size_test)?,
+        )
     } else {
         unimplemented!("Non-flattened datasets are not yet supported!")
     };
@@ -107,7 +110,7 @@ pub fn read<P: AsRef<Path>, T: H5Type>(path: &P, flattened: bool) -> Result<AnnD
         let sizes = core::iter::repeat(NUM_NEIGHBORS)
             .take(queries.len())
             .collect::<Vec<_>>();
-        un_flatten(neighbors, &sizes)?
+        abd_clam::utils::un_flatten(neighbors, &sizes)?
     };
     ftlog::info!("Parsed ground truth for {} queries.", neighbors.len());
 
@@ -116,17 +119,4 @@ pub fn read<P: AsRef<Path>, T: H5Type>(path: &P, flattened: bool) -> Result<AnnD
         queries,
         neighbors,
     })
-}
-
-fn un_flatten<T>(data: Vec<T>, sizes: &[usize]) -> Result<Vec<Vec<T>>, String> {
-    let mut iter = data.into_iter();
-    let mut items = Vec::with_capacity(sizes.len());
-    for &s in sizes {
-        let mut inner = Vec::with_capacity(s);
-        for _ in 0..s {
-            inner.push(iter.next().ok_or("Not enough elements!")?);
-        }
-        items.push(inner);
-    }
-    Ok(items)
 }

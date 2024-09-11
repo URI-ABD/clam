@@ -12,6 +12,7 @@ mod fasta;
 /// The datasets we use for benchmarks.
 #[derive(clap::ValueEnum, Debug, Clone)]
 #[allow(non_camel_case_types, clippy::doc_markdown)]
+#[non_exhaustive]
 pub enum InputDataset {
     /// The GreenGenes 12.10 dataset.
     #[clap(name = "gg_12_10")]
@@ -118,6 +119,7 @@ impl InputDataset {
 
 /// Uncompressed datasets for use in benchmarks.
 #[allow(dead_code)]
+#[non_exhaustive]
 pub enum Uncompressed {
     Aligned(FlatVec<Aligned<u32>, u32, String>),
     Unaligned(FlatVec<Unaligned<u32>, u32, String>),
@@ -126,6 +128,7 @@ pub enum Uncompressed {
 
 /// Compressed datasets for use in benchmarks.
 #[allow(dead_code)]
+#[non_exhaustive]
 pub enum Compressed {
     Aligned(CodecData<Aligned<u32>, u32, String>),
     Unaligned(CodecData<Unaligned<u32>, u32, String>),
@@ -134,6 +137,7 @@ pub enum Compressed {
 
 /// Queries for use in benchmarks.
 #[allow(dead_code)]
+#[non_exhaustive]
 pub enum Queries {
     Aligned(Vec<(String, Aligned<u32>)>),
     Unaligned(Vec<(String, Unaligned<u32>)>),

@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use distances::Number;
 use ftlog::{
     appender::{FileAppender, Period},
     LevelFilter, LoggerGuard,
@@ -32,16 +31,4 @@ pub fn configure_logger(file_name: &str) -> Result<(LoggerGuard, PathBuf), Strin
         .map_err(|e| e.to_string())?;
 
     Ok((guard, log_path))
-}
-
-/// Read a number from a byte slice and increment the offset.
-pub fn read_number<U: Number>(bytes: &[u8], offset: &mut usize) -> U {
-    let num_bytes = U::num_bytes();
-    let value = U::from_le_bytes(
-        bytes[*offset..*offset + num_bytes]
-            .try_into()
-            .unwrap_or_else(|e| unreachable!("{e}")),
-    );
-    *offset += num_bytes;
-    value
 }

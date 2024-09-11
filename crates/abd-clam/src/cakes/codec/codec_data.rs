@@ -12,7 +12,6 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    cakes::codec::{read_encoding, read_usize},
     cluster::ParCluster,
     dataset::{metric_space::ParMetricSpace, ParDataset, SizedHeap},
     Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
@@ -464,7 +463,7 @@ impl<I: Decodable + Send + Sync, U, M: Decodable + Send + Sync> CodecData<I, U, 
         let mut metadata = Vec::new();
         let mut offset = 0;
         while offset < bytes.len() {
-            let encoding = read_encoding(bytes, &mut offset);
+            let encoding = crate::utils::read_encoding(bytes, &mut offset);
             metadata.push(M::from_bytes(&encoding));
         }
         metadata
@@ -487,8 +486,8 @@ impl<I: Decodable + Send + Sync, U, M: Decodable + Send + Sync> CodecData<I, U, 
         let mut center_map = HashMap::new();
         let mut offset = 0;
         while offset < bytes.len() {
-            let i = read_usize(bytes, &mut offset);
-            let encoding = read_encoding(bytes, &mut offset);
+            let i = crate::utils::read_number::<usize>(bytes, &mut offset);
+            let encoding = crate::utils::read_encoding(bytes, &mut offset);
             center_map.insert(i, I::from_bytes(&encoding));
         }
         center_map
@@ -499,8 +498,8 @@ impl<I: Decodable + Send + Sync, U, M: Decodable + Send + Sync> CodecData<I, U, 
         let mut leaf_bytes = Vec::new();
         let mut offset = 0;
         while offset < bytes.len() {
-            let i = read_usize(bytes, &mut offset);
-            let encoding = read_encoding(bytes, &mut offset);
+            let i = crate::utils::read_number::<usize>(bytes, &mut offset);
+            let encoding = crate::utils::read_encoding(bytes, &mut offset);
             leaf_bytes.push((i, encoding));
         }
         leaf_bytes

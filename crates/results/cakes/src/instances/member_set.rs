@@ -114,14 +114,14 @@ impl<T: UInt, F: Float> Decodable for MemberSet<T, F> {
 
         let mut offset = 0;
 
-        let num_new_items = crate::utils::read_number::<usize>(bytes, &mut offset);
+        let num_new_items = abd_clam::utils::read_number::<usize>(bytes, &mut offset);
         for _ in 0..num_new_items {
-            inner.insert(crate::utils::read_number(bytes, &mut offset));
+            inner.insert(abd_clam::utils::read_number(bytes, &mut offset));
         }
 
-        let num_removed_items = crate::utils::read_number::<usize>(bytes, &mut offset);
+        let num_removed_items = abd_clam::utils::read_number::<usize>(bytes, &mut offset);
         for _ in 0..num_removed_items {
-            inner.remove(&crate::utils::read_number(bytes, &mut offset));
+            inner.remove(&abd_clam::utils::read_number(bytes, &mut offset));
         }
 
         Self {

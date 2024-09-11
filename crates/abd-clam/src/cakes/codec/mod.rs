@@ -33,23 +33,6 @@ impl<
 {
 }
 
-/// Reads an encoded value from a byte array and increments the offset.
-pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
-    let len = read_usize(bytes, offset);
-    let encoding = bytes[*offset..*offset + len].to_vec();
-    *offset += len;
-    encoding.into_boxed_slice()
-}
-
-/// Reads a `usize` from a byte array and increments the offset.
-pub fn read_usize(bytes: &[u8], offset: &mut usize) -> usize {
-    let index_bytes: [u8; core::mem::size_of::<usize>()] = bytes[*offset..*offset + core::mem::size_of::<usize>()]
-        .try_into()
-        .unwrap_or_else(|e| unreachable!("Could not convert slice into array: {e:?}"));
-    *offset += core::mem::size_of::<usize>();
-    usize::from_le_bytes(index_bytes)
-}
-
 impl Encodable for usize {
     fn as_bytes(&self) -> Box<[u8]> {
         self.to_le_bytes().to_vec().into_boxed_slice()

@@ -30,13 +30,13 @@ pub trait Decompressible<I: Decodable, U: Number>: Dataset<I, U> + Sized {
         let mut instances = Vec::new();
 
         let mut offset = 0;
-        let arg_center = super::read_usize(bytes, &mut offset);
+        let arg_center = crate::utils::read_number::<usize>(bytes, &mut offset);
         let center = &self.centers()[&arg_center];
 
-        let cardinality = super::read_usize(bytes, &mut offset);
+        let cardinality = crate::utils::read_number::<usize>(bytes, &mut offset);
 
         for _ in 0..cardinality {
-            let encoding = super::read_encoding(bytes, &mut offset);
+            let encoding = crate::utils::read_encoding(bytes, &mut offset);
             let instance = I::decode(center, &encoding);
             instances.push(instance);
         }

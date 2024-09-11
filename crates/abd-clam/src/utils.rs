@@ -299,6 +299,61 @@ pub fn standard_deviation<T: Number, F: Float>(values: &[T]) -> F {
     variance(values, mean::<_, F>(values)).sqrt()
 }
 
+/// Un-flattens a vector of data into a vector of vectors.
+///
+/// # Arguments
+///
+/// * `data` - The data to un-flatten.
+/// * `sizes` - The sizes of the inner vectors.
+///
+/// # Returns
+///
+/// A vector of vectors where each inner vector has the size specified in `sizes`.
+///
+/// # Errors
+///
+/// * If the number of elements in `data` is not equal to the sum of the elements in `sizes`.
+pub fn un_flatten<T>(data: Vec<T>, sizes: &[usize]) -> Result<Vec<Vec<T>>, String> {
+    let num_elements: usize = sizes.iter().sum();
+    if data.len() != num_elements {
+        return Err(format!(
+            "Incorrect number of elements. Expected: {num_elements}. Found: {}.",
+            data.len()
+        ));
+    }
+
+    let mut iter = data.into_iter();
+    let mut items = Vec::with_capacity(sizes.len());
+    for &s in sizes {
+        let mut inner = Vec::with_capacity(s);
+        for _ in 0..s {
+            inner.push(iter.next().ok_or("Not enough elements!")?);
+        }
+        items.push(inner);
+    }
+    Ok(items)
+}
+
+/// Read a `Number` from a byte slice and increment the offset.
+pub fn read_number<U: Number>(bytes: &[u8], offset: &mut usize) -> U {
+    let num_bytes = U::num_bytes();
+    let value = U::from_le_bytes(
+        bytes[*offset..*offset + num_bytes]
+            .try_into()
+            .unwrap_or_else(|e| unreachable!("{e}")),
+    );
+    *offset += num_bytes;
+    value
+}
+
+/// Reads an encoded value from a byte array and increments the offset.
+pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
+    let len = read_number::<usize>(bytes, offset);
+    let encoding = bytes[*offset..*offset + len].to_vec();
+    *offset += len;
+    encoding.into_boxed_slice()
+}
+
 #[cfg(test)]
 mod tests {
     use rand::prelude::*;
