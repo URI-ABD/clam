@@ -6,14 +6,15 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.16", features = ["derive"] }
 ftlog = { version = "0.2.0" }
+distances = { workspace = true }
+stringzilla = "3.9.5"
+bio = "2.0.1"
+rand = { workspace = true }
+abd-clam = { workspace = true }
+hdf5 = { package = "hdf5-metno", version = "0.9.0" }
 
-# bio = "2.0.1"
-# abd-clam = { workspace = true }
-# distances = { workspace = true }
-# mt_logger = { workspace = true }
 # serde = { workspace = true }
 # bincode = { workspace = true }
-# rand = { workspace = true }
 # ndarray = { workspace = true }
 
 # symagen = { workspace = true }
@@ -23,4 +24,3 @@ ftlog = { version = "0.2.0" }
 # arrow = "53.0.0"
 # arrow-json = "53.0.0"
 # arrow-ipc = "53.0.0"
-# hdf5 = { package = "hdf5-metno", version = "0.9.0" }
