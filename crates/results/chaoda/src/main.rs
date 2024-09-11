@@ -3,12 +3,11 @@
 use std::path::Path;
 
 use abd_clam::{Ball, Chaoda, Cluster, Dataset, Metric};
-use mt_logger::{mt_flush, mt_log, mt_new, Level, OutputStream};
 
 mod data;
 
 fn main() -> Result<(), String> {
-    mt_new!(None, Level::Info, OutputStream::StdOut);
+    // mt_new!(None, Level::Info, OutputStream::StdOut);
 
     let args: Vec<String> = std::env::args().collect();
 
@@ -22,7 +21,7 @@ fn main() -> Result<(), String> {
     // Parse args[1] into path object
     let data_dir = Path::new(&args[1]);
     let data_dir = std::fs::canonicalize(data_dir).map_err(|e| e.to_string())?;
-    mt_log!(Level::Info, "Reading datasets from: {data_dir:?}");
+    // mt_log!(Level::Info, "Reading datasets from: {data_dir:?}");
 
     // Parse args[2] into boolean
     let use_pre_trained = args[2].parse::<String>().map_err(|e| e.to_string())?;
@@ -72,14 +71,14 @@ fn main() -> Result<(), String> {
             .unwrap_or_else(|_| unreachable!("We have labels for each dataset."))
     };
 
-    mt_log!(Level::Info, "Training datasets:");
-    for d in &train_datasets {
-        mt_log!(Level::Info, "{}", d.name());
-    }
+    // mt_log!(Level::Info, "Training datasets:");
+    // for d in &train_datasets {
+    //     mt_log!(Level::Info, "{}", d.name());
+    // }
 
     let model = if use_pre_trained {
         // Load the pre-trained CHAODA model
-        mt_log!(Level::Info, "Loading pre-trained model from: {model_path:?}");
+        // mt_log!(Level::Info, "Loading pre-trained model from: {model_path:?}");
         Chaoda::load(&model_path, &metrics)?
     } else {
         // Train the CHAODA model
@@ -87,15 +86,15 @@ fn main() -> Result<(), String> {
         let trees = Chaoda::par_new_trees(&mut train_datasets, &criteria, &metrics, seed);
         let mut model = Chaoda::new(&metrics, None, 4);
         model.par_train(&mut train_datasets, &trees, &labels, num_epochs, None)?;
-        mt_log!(Level::Info, "Training complete");
+        // mt_log!(Level::Info, "Training complete");
         model.save(&model_path)?;
-        mt_log!(Level::Info, "Model saved to: {model_path:?}");
+        // mt_log!(Level::Info, "Model saved to: {model_path:?}");
         model
     };
 
     // Print the ROC scores for all datasets
     for data in data::Data::read_all(&data_dir)? {
-        mt_log!(Level::Info, "Starting evaluation for: {}", data.name());
+        // mt_log!(Level::Info, "Starting evaluation for: {}", data.name());
         let mut data = [data];
         let criteria = [|c: &Ball<_, _, _>| c.cardinality() > 1];
         let trees = Chaoda::par_new_trees(&mut data, &criteria, &metrics, seed);
@@ -104,8 +103,11 @@ fn main() -> Result<(), String> {
         let mut data = data.into_iter().next().unwrap();
         let trees = trees.into_iter().next().unwrap();
         let roc_score = model.par_evaluate(&mut data, &trees, &labels);
-        mt_log!(Level::Info, "Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
+        println!("Dataset: {} ROC-AUC score: {:.6}", data.name(), roc_score);
+        // mt_log!(Level::Info, "Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
     }
 
-    mt_flush!().map_err(|e| e.to_string())
+    // mt_flush!().map_err(|e| e.to_string())
+
+    Ok(())
 }

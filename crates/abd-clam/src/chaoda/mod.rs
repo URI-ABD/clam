@@ -7,7 +7,6 @@ mod meta_ml;
 mod single_metric_model;
 
 use distances::Number;
-use mt_logger::{mt_log, Level};
 use rayon::prelude::*;
 
 pub use cluster::Vertex;
@@ -76,12 +75,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, const M: usize>
             let mut roots = Vec::new();
             for metric in metrics {
                 data.set_metric(metric.clone());
-                mt_log!(
-                    Level::Info,
-                    "Building tree on {} for metric: {}",
-                    data.name(),
-                    metric.name()
-                );
+                ftlog::info!("Building tree on {} for metric: {}", data.name(), metric.name());
 
                 let source = S::new_tree(data, criteria, seed);
                 let root = Vertex::adapt_tree(source, None);
@@ -174,15 +168,13 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, const M: usize>
         previous_data: Option<TrainingData>,
     ) -> Result<TrainingData, String> {
         let mut training_data = previous_data.unwrap_or_default();
-        mt_log!(
-            Level::Info,
+        ftlog::info!(
             "Training CHAODA on {M} metrics starting with {} training samples...",
             training_data.len()
         );
 
         for e in 0..num_epochs {
-            mt_log!(
-                Level::Info,
+            ftlog::info!(
                 "Training epoch {}/{num_epochs}, with {} samples...",
                 e + 1,
                 training_data.iter().map(Vec::len).sum::<usize>()
@@ -205,8 +197,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, const M: usize>
                         .collect::<Vec<_>>();
 
                     let roc_score = self.evaluate(data, roots, labels);
-                    mt_log!(
-                        Level::Info,
+                    ftlog::info!(
                         "Epoch {}/{num_epochs}, data: {}, roc-score: {roc_score:.6}",
                         e + 1,
                         data.name()
@@ -355,12 +346,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
             for metric in metrics {
                 data.set_metric(metric.clone());
 
-                mt_log!(
-                    Level::Info,
-                    "Building tree on {} for metric: {}",
-                    data.name(),
-                    metric.name()
-                );
+                ftlog::info!("Building tree on {} for metric: {}", data.name(), metric.name());
 
                 let source = S::par_new_tree(data, criteria, seed);
                 let root = Vertex::adapt_tree(source, None);
@@ -389,15 +375,13 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
         previous_data: Option<TrainingData>,
     ) -> Result<TrainingData, String> {
         let mut training_data = previous_data.unwrap_or_default();
-        mt_log!(
-            Level::Info,
+        ftlog::info!(
             "Training CHAODA on {M} metrics starting with {} training samples...",
             training_data.len()
         );
 
         for e in 0..num_epochs {
-            mt_log!(
-                Level::Info,
+            ftlog::info!(
                 "Training epoch {}/{num_epochs}, with {} samples...",
                 e + 1,
                 training_data.iter().map(Vec::len).sum::<usize>()
@@ -420,8 +404,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
                         .collect::<Vec<_>>();
 
                     let roc_score = self.par_evaluate(data, roots, labels);
-                    mt_log!(
-                        Level::Info,
+                    ftlog::info!(
                         "Epoch {}/{num_epochs}, data: {}, roc-score: {roc_score:.6}",
                         e + 1,
                         data.name()

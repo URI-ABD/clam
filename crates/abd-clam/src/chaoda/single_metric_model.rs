@@ -1,7 +1,6 @@
 //! A CHAODA model that works with a single metric and tree.
 
 use distances::Number;
-use mt_logger::{mt_log, Level};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use smartcore::metrics::roc_auc_score;
@@ -94,16 +93,14 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
         let y_true = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
 
         let mut graphs = if training_data.is_empty() {
-            mt_log!(
-                Level::Info,
+            ftlog::info!(
                 "Creating default graphs for {} {}...",
                 data.name(),
                 data.metric().name()
             );
             self.create_default_graphs(data, root)
         } else {
-            mt_log!(
-                Level::Info,
+            ftlog::info!(
                 "Creating meta-ml graphs for {} {}...",
                 data.name(),
                 data.metric().name()
@@ -114,8 +111,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
         let step_data = self.generate_training_data(&y_true, &mut graphs);
         self.train_models(training_data, &step_data)?;
 
-        mt_log!(
-            Level::Info,
+        ftlog::info!(
             "Training step completed on {} {}. Generated {} samples...",
             data.name(),
             data.metric().name(),
@@ -130,12 +126,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
     pub fn predict(&self, data: &mut D, root: &Vertex<I, U, D, S>) -> Vec<Vec<f32>> {
         data.set_metric(self.metric.clone());
 
-        mt_log!(
-            Level::Info,
-            "Predicting scores for {} {}...",
-            data.name(),
-            data.metric().name()
-        );
+        ftlog::info!("Predicting scores for {} {}...", data.name(), data.metric().name());
         let mut graphs = self.create_graphs(data, root);
 
         self.models
@@ -162,8 +153,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
                         .unwrap_or_else(|e| unreachable!("Failed to predict: {e}"))
                 };
                 let g = Graph::from_tree(root, data, cluster_scorer, self.min_depth);
-                mt_log!(
-                    Level::Info,
+                ftlog::info!(
                     "Graph created, via meta-ml, with {} vertices for {} {} under {} {}...",
                     g.cardinality(),
                     data.name(),
@@ -196,8 +186,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
                         .collect::<Vec<_>>()
                 };
                 let g = Graph::from_tree(root, data, cluster_scorer, self.min_depth);
-                mt_log!(
-                    Level::Info,
+                ftlog::info!(
                     "Default Graph created, with {} vertices for {} {} under {} {}...",
                     g.cardinality(),
                     data.name(),
@@ -240,7 +229,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
 
     /// Train the meta-ml models.
     fn train_models(&mut self, training_data: &TrainingData, step_data: &TrainingData) -> Result<(), String> {
-        mt_log!(Level::Info, "Training models with {} samples...", training_data.len());
+        ftlog::info!("Training models with {} samples...", training_data.len());
 
         let training_data = training_data
             .iter()
@@ -277,16 +266,14 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
         let y_true = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
 
         let mut graphs = if training_data.is_empty() {
-            mt_log!(
-                Level::Info,
+            ftlog::info!(
                 "Creating default graphs for {} {}...",
                 data.name(),
                 data.metric().name()
             );
             self.par_create_default_graphs(data, root)
         } else {
-            mt_log!(
-                Level::Info,
+            ftlog::info!(
                 "Creating meta-ml graphs for {} {}...",
                 data.name(),
                 data.metric().name()
@@ -297,8 +284,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
         let step_data = self.par_generate_training_data(&y_true, &mut graphs);
         self.par_train_models(training_data, &step_data)?;
 
-        mt_log!(
-            Level::Info,
+        ftlog::info!(
             "Training step completed on {} {}. Generated {} samples...",
             data.name(),
             data.metric().name(),
@@ -334,8 +320,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
                         .unwrap_or_else(|e| unreachable!("Failed to predict: {e}"))
                 };
                 let g = Graph::from_tree(root, data, cluster_scorer, self.min_depth);
-                mt_log!(
-                    Level::Info,
+                ftlog::info!(
                     "Graph created, via meta-ml, with {} vertices for {} {} under {} {}...",
                     g.cardinality(),
                     data.name(),
@@ -368,8 +353,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
                         .collect::<Vec<_>>()
                 };
                 let g = Graph::from_tree(root, data, cluster_scorer, self.min_depth);
-                mt_log!(
-                    Level::Info,
+                ftlog::info!(
                     "Default Graph created with {} vertices for {} {} under {} {}...",
                     g.cardinality(),
                     data.name(),
@@ -412,7 +396,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
 
     /// Parallel version of `train_models`.
     fn par_train_models(&mut self, training_data: &TrainingData, step_data: &TrainingData) -> Result<(), String> {
-        mt_log!(Level::Info, "Training models with {} samples...", training_data.len());
+        ftlog::info!("Training models with {} samples...", training_data.len());
 
         let training_data = training_data
             .par_iter()

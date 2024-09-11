@@ -63,8 +63,7 @@ impl MlModel {
         let dummy_y = [
             83.0, 88.5, 88.2, 89.5, 96.2, 98.1, 99.0, 100.0, 101.2, 104.6, 108.4, 110.8, 112.6, 114.2, 115.7, 116.9,
         ];
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
+        ftlog::info!(
             "Generating dummy MetaML model {} on {} data samples with {} dims",
             model,
             dummy_x.len(),
@@ -155,8 +154,7 @@ impl MlModel {
     ///
     /// * If the number of `labels` is not equal to the cardinality of the data.
     pub fn train(&mut self, data: &[Vec<f32>], roc_scores: &Vec<f32>) -> Result<(), String> {
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
+        ftlog::info!(
             "Training MetaML model {} on {} data samples with {} dims",
             self.name(),
             data.len(),
@@ -216,8 +214,7 @@ impl MlModel {
     /// * If the number of features in the data does not match the number of features in the model.
     /// * If the model cannot predict the data.
     pub fn predict(&self, data: &[Vec<f32>]) -> Result<Vec<f32>, String> {
-        mt_logger::mt_log!(
-            mt_logger::Level::Info,
+        ftlog::info!(
             "Predicting with MetaML model {} on {} data samples with {} dims",
             self.name(),
             data.len(),
