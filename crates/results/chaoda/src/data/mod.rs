@@ -64,6 +64,7 @@ pub enum Data {
 
 impl Data {
     /// Create a new dataset from the name.
+    #[allow(dead_code)]
     pub fn new(name: &str) -> Result<Self, String> {
         match name {
             "annthyroid" => Ok(Self::Annthyroid),

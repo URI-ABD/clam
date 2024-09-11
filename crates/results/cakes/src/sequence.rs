@@ -1,5 +1,7 @@
 //! Representing genomic sequences.
 
+#![allow(dead_code)]
+
 use abd_clam::cakes::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
 

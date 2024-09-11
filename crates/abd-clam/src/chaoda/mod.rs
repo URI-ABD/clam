@@ -84,7 +84,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>, const M: usize>
                 );
 
                 let source = S::new_tree(data, criteria, seed);
-                let (root, _) = Vertex::adapt_tree(source, None);
+                let root = Vertex::adapt_tree(source, None);
                 roots.push(root);
             }
 
@@ -363,7 +363,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
                 );
 
                 let source = S::par_new_tree(data, criteria, seed);
-                let (root, _) = Vertex::adapt_tree(source, None);
+                let root = Vertex::adapt_tree(source, None);
                 roots.push(root);
             }
 

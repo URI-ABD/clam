@@ -231,6 +231,7 @@ impl<I, U: Number, M> Permutable for FlatVec<I, U, M> {
         self.metadata.swap(i, j);
     }
 }
+
 #[cfg(feature = "ndarray-bindings")]
 impl<T: ndarray_npy::ReadableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
     /// Reads a `VecDataset` from a `.npy` file.

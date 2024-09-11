@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-abd-clam = { workspace = true }
+abd-clam = { workspace = true, features = ["chaoda", "ndarray-bindings"] }
 distances = { workspace = true }
 rand = { workspace = true }
 ndarray = { workspace = true }

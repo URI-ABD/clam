@@ -1,14 +1,19 @@
 //! Benchmarks for the suite of ANN-Benchmarks datasets.
 
-mod utils;
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use abd_clam::{
     adapter::{Adapter, ParBallAdapter},
     cakes::OffBall,
     partition::ParPartition,
-    BalancedBall, Ball, Cluster, Metric, Permutable,
+    BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric, Permutable,
 };
 use criterion::*;
+
+mod utils;
 
 /// Reads the training and query data of the given dataset from the directory.
 pub fn read_ann_data_npy(

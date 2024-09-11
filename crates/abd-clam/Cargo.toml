@@ -33,8 +33,6 @@ serde = { workspace = true }
 flate2 = { workspace = true }
 mt_logger = { workspace = true }
 
-# TODO: Break out optional features for CAKES, CHAODA, etc.
-
 # For:
 #  - IO from npy files
 #  - arrays in CHAODA
@@ -44,6 +42,8 @@ ndarray-npy = { workspace = true, optional = true }
 # For:
 #  - CHAODA
 smartcore = { version = "0.3.2", features = ["ndarray-bindings", "serde"], optional = true }
+ordered-float = { version = "4.2.2", optional = true }
+bincode = { workspace = true, optional = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
@@ -56,7 +56,7 @@ statistical = "1.0.0"
 
 [features]
 ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
-chaoda = ["ndarray-bindings", "dep:smartcore"]
+chaoda = ["dep:smartcore", "dep:ordered-float", "dep:bincode"]
 
 [[bench]]
 name = "genomic_search"
@@ -69,4 +69,4 @@ harness = false
 [[bench]]
 name = "ann_benchmarks"
 harness = false
-required-features = ["ndaarray-bindings"]
+required-features = ["ndarray-bindings"]

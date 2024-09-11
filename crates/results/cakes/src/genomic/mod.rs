@@ -1,5 +1,7 @@
 //! Readers for the various file formats of datasets used in benchmarks.
 
+#![allow(dead_code)]
+
 mod greengenes;
 
 use crate::{CoGen, QueriesGen};

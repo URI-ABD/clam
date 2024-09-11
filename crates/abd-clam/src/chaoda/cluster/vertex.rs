@@ -67,7 +67,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Vertex<I, U, D, S> {
 impl<I, U: Number, D: Dataset<I, U>> BallAdapter<I, U, D, D, Ratios> for Vertex<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
-        let (root, _) = Self::adapt_tree(ball, None);
+        let root = Self::adapt_tree(ball, None);
         (root, data)
     }
 }
@@ -77,45 +77,12 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, 
 {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
-        let (root, _) = Self::par_adapt_tree(ball, None);
+        let root = Self::par_adapt_tree(ball, None);
         (root, data)
     }
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Ratios> for Vertex<I, U, D, S> {
-    fn adapt_tree(mut source: S, params: Option<Ratios>) -> (Self, Vec<usize>) {
-        let children = source.take_children();
-        let params = params.unwrap_or_default();
-
-        let cluster = if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params)
-        } else {
-            let (arg_extrema, others) = children
-                .into_iter()
-                .map(|(a, b, c)| (a, (b, c)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let children = params
-                .child_params(&children)
-                .into_iter()
-                .zip(children)
-                .map(|(p, c)| Self::adapt_tree(*c, Some(p)).0)
-                .collect::<Vec<_>>();
-
-            let children = arg_extrema
-                .into_iter()
-                .zip(extents)
-                .zip(children)
-                .map(|((a, b), c)| (a, b, Box::new(c)))
-                .collect();
-
-            Self::new_adapted(source, children, params)
-        };
-
-        let indices = cluster.indices().collect();
-        (cluster, indices)
-    }
-
     fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Ratios) -> Self {
         Self {
             source,
@@ -125,6 +92,8 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S,
         }
     }
 
+    fn post_traversal(&mut self) {}
+
     fn source(&self) -> &S {
         &self.source
     }
@@ -133,46 +102,19 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S,
         &mut self.source
     }
 
-    fn source_owned(self) -> S {
+    fn take_source(self) -> S {
         self.source
+    }
+
+    fn params(&self) -> &Ratios {
+        &self.params
     }
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParAdapter<I, U, D, D, S, Ratios>
     for Vertex<I, U, D, S>
 {
-    fn par_adapt_tree(mut source: S, params: Option<Ratios>) -> (Self, Vec<usize>) {
-        let children = source.take_children();
-        let params = params.unwrap_or_default();
-
-        let cluster = if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params)
-        } else {
-            let (arg_extrema, others) = children
-                .into_iter()
-                .map(|(a, b, c)| (a, (b, c)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            let (extents, children) = others.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-            let children = params
-                .child_params(&children)
-                .into_par_iter()
-                .zip(children.into_par_iter())
-                .map(|(p, c)| Self::par_adapt_tree(*c, Some(p)).0)
-                .collect::<Vec<_>>();
-
-            let children = arg_extrema
-                .into_iter()
-                .zip(extents)
-                .zip(children)
-                .map(|((a, b), c)| (a, b, Box::new(c)))
-                .collect();
-
-            Self::new_adapted(source, children, params)
-        };
-
-        let indices = cluster.indices().collect();
-        (cluster, indices)
-    }
+    fn par_post_traversal(&mut self) {}
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for Vertex<I, U, D, S> {
@@ -297,21 +239,14 @@ impl Default for Ratios {
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for Ratios {
-    #[allow(clippy::similar_names)]
-    fn child_params<C: AsRef<S>>(&self, children: &[C]) -> Vec<Self> {
-        children
-            .iter()
-            .map(|child| child_params(self, child.as_ref()))
-            .collect()
+    fn child_params(&self, children: &[S]) -> Vec<Self> {
+        children.iter().map(|child| child_params(self, child)).collect()
     }
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for Ratios {
-    fn par_child_params<C: AsRef<S> + Send + Sync>(&self, children: &[C]) -> Vec<Self> {
-        children
-            .par_iter()
-            .map(|child| child_params(self, child.as_ref()))
-            .collect()
+    fn par_child_params(&self, children: &[S]) -> Vec<Self> {
+        children.par_iter().map(|child| child_params(self, child)).collect()
     }
 }
 
