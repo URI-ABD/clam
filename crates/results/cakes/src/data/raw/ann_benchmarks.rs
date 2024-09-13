@@ -7,9 +7,6 @@ use hdf5::H5Type;
 /// The number of neighbors for which ground truth is provided in the `ann-benchmarks` datasets.
 const NUM_NEIGHBORS: usize = 100;
 
-/// The ground truth for a dataset from the `ann-benchmarks` repository.
-pub type GroundTruth<T> = (Vec<Vec<T>>, Vec<Vec<(usize, f32)>>);
-
 /// A dataset from the `ann-benchmarks` repository.
 pub struct AnnDataset<T: H5Type> {
     /// The data to use for clustering.

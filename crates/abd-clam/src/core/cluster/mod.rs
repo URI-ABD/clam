@@ -6,7 +6,8 @@ mod ball;
 mod lfd;
 pub mod partition;
 
-use std::collections::HashMap;
+#[cfg(feature = "csv")]
+mod csv;
 
 use distances::Number;
 
@@ -16,6 +17,9 @@ pub use balanced_ball::BalancedBall;
 pub use ball::Ball;
 pub use lfd::LFD;
 pub use partition::Partition;
+
+#[cfg(feature = "csv")]
+pub use csv::WriteCsv;
 
 /// A `Cluster` is a collection of "similar" instances in a dataset.
 ///
@@ -103,6 +107,15 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + core::hash::Hash + Size
     /// Returns whether the `Cluster` is a descendant of another `Cluster`.
     fn is_descendant_of(&self, other: &Self) -> bool;
 
+    /// Reads the `MAX_RECURSION_DEPTH` environment variable to determine the
+    /// stride for iterative partition and adaptation.
+    fn max_recursion_depth(&self) -> usize {
+        std::env::var("MAX_RECURSION_DEPTH")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(256)
+    }
+
     /// Clears the indices stored with every cluster in the tree.
     fn clear_indices(&mut self) {
         if !self.is_leaf() {
@@ -171,103 +184,6 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + core::hash::Hash + Size
         let mut clusters = vec![self];
         self.child_clusters().for_each(|child| clusters.extend(child.subtree()));
         clusters
-    }
-
-    /// Returns the subtree, with unique integers to reference the parents and children of each `Cluster` in a `HashMap`.
-    ///
-    /// The Vec contains tuples of:
-    ///
-    /// - The `Cluster` itself.
-    /// - The index of the `Cluster` in the Vec.
-    /// - The position of the `Cluster` among its siblings.
-    /// - A Vec of tuples of:
-    ///  - The index of the parent `Cluster` in the Vec.
-    ///  - A tuple of:
-    ///     - The index of the parent `Cluster` in the Vec.
-    ///    - The extent of the child.
-    #[allow(clippy::type_complexity)]
-    fn take_subtree(mut self) -> Vec<(Self, usize, usize, Vec<(usize, (usize, U))>)> {
-        let children = self.take_children();
-        let mut clusters = vec![(self, 0, 0, vec![])];
-
-        for (e, d, children) in children.into_iter().map(|(e, d, c)| (e, d, c.take_subtree())) {
-            let offset = clusters.len();
-
-            for (ci, (child, parent_index, _, children_indices)) in children.into_iter().enumerate() {
-                let parent_index = parent_index + offset;
-                let children_indices = children_indices.into_iter().map(|(pi, ed)| (pi + offset, ed)).collect();
-                clusters.push((child, parent_index, ci, children_indices));
-            }
-
-            clusters[0].3.push((offset, (e, d)));
-        }
-
-        clusters
-    }
-
-    /// Returns the subtree as a list of `Cluster`s, with the indices required
-    /// to go from a parent to a child and vice versa.
-    ///
-    /// The Vec contains tuples of:
-    ///
-    /// - The `Cluster` itself.
-    /// - The position of the `Cluster` among its siblings.
-    /// - A Vec of tuples of:
-    ///  - The index of the parent `Cluster` in the Vec.
-    ///  - A tuple of:
-    ///     - The index of the parent `Cluster` in the Vec.
-    ///    - The extent of the child.
-    #[allow(clippy::type_complexity)]
-    fn unstack_tree(self) -> Vec<(Self, usize, Vec<(usize, (usize, U))>)> {
-        let mut subtree = self.take_subtree();
-        subtree.sort_by_key(|(_, i, _, _)| *i);
-        subtree
-            .into_iter()
-            .map(|(c, _, ci, children)| (c, ci, children))
-            .collect()
-    }
-
-    /// Inverts the `unstack_tree` method.
-    ///
-    /// The Vec contains tuples of:
-    ///
-    /// - The `Cluster` itself.
-    /// - The position of the `Cluster` among its siblings.
-    /// - A Vec of tuples of:
-    ///  - The index of the parent `Cluster` in the Vec.
-    ///  - A tuple of:
-    ///     - The index of the parent `Cluster` in the Vec.
-    ///    - The extent of the child.
-    #[allow(clippy::type_complexity)]
-    fn restack_tree(list: Vec<(Self, usize, Vec<(usize, (usize, U))>)>) -> Self {
-        let mut list = list.into_iter().enumerate().collect::<HashMap<_, _>>();
-        let mut leaves;
-
-        while list.len() > 1 {
-            (leaves, list) = list.into_iter().partition(|(_, (_, _, children))| children.is_empty());
-
-            let mut grouped_leaves = HashMap::new();
-            for (pi, (leaf, ci, _)) in leaves {
-                let entry = grouped_leaves.entry(pi).or_insert_with(Vec::new);
-                entry.push((ci, leaf));
-            }
-
-            for (pi, mut children) in grouped_leaves {
-                children.sort_by_key(|(ci, _)| *ci);
-                let (parent, _, eds) = list.get_mut(&pi).unwrap_or_else(|| unreachable!("Parent not found"));
-
-                let children = children.into_iter().map(|(_, c)| Box::new(c));
-                let eds = eds.iter().map(|(_, (e, d))| (*e, *d));
-                let children = children.zip(eds).map(|(c, (e, d))| (e, d, c)).collect();
-                parent.set_children(children);
-            }
-        }
-
-        list.into_iter()
-            .next()
-            .unwrap_or_else(|| unreachable!("Root not found"))
-            .1
-             .0
     }
 
     /// Returns all leaf `Cluster`s in the subtree of this `Cluster`, in depth-first order.

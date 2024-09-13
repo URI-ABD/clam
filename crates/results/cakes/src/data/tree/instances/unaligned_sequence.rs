@@ -2,12 +2,22 @@
 
 use abd_clam::cakes::{Decodable, Encodable};
 use distances::number::UInt;
+use serde::{Deserialize, Serialize};
 
 /// A sequence from a FASTA file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Unaligned<U: UInt> {
     seq: String,
     _phantom: std::marker::PhantomData<U>,
+}
+
+impl<U: UInt> Default for Unaligned<U> {
+    fn default() -> Self {
+        Self {
+            seq: String::default(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<U: UInt> Unaligned<U> {

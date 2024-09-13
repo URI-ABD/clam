@@ -257,6 +257,35 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Par
     }
 }
 
+#[cfg(feature = "csv")]
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> crate::WriteCsv<I, U, D, 8> for OffBall<I, U, D, S> {
+    fn header(&self) -> [String; 8] {
+        [
+            "depth".to_string(),
+            "cardinality".to_string(),
+            "radius".to_string(),
+            "lfd".to_string(),
+            "arg_center".to_string(),
+            "arg_radial".to_string(),
+            "is_leaf".to_string(),
+            "offset".to_string(),
+        ]
+    }
+
+    fn row(&self) -> [String; 8] {
+        [
+            self.depth().to_string(),
+            self.cardinality().to_string(),
+            self.radius().to_string(),
+            format!("{:.8}", self.lfd()),
+            self.arg_center().to_string(),
+            self.arg_radial().to_string(),
+            self.children().is_empty().to_string(),
+            self.params.offset.to_string(),
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{

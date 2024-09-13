@@ -6,14 +6,24 @@ use std::collections::HashSet;
 
 use abd_clam::cakes::{Decodable, Encodable};
 use distances::number::{Float, UInt};
+use serde::{Deserialize, Serialize};
 
 /// A set of named members.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemberSet<T: Hash + Eq + Copy, F: Float> {
     /// The members of the set.
     inner: HashSet<T>,
     /// To keep the type parameter.
     _phantom: std::marker::PhantomData<F>,
+}
+
+impl<T: Hash + Eq + Copy, F: Float> Default for MemberSet<T, F> {
+    fn default() -> Self {
+        Self {
+            inner: HashSet::default(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<T: Hash + Eq + Copy, F: Float> MemberSet<T, F> {

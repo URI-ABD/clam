@@ -135,7 +135,7 @@ pub trait Adapter<
     /// Adapts the tree of `S`s into this `Cluster` in a such a way that we bypass
     /// the recursion limit in Rust.
     fn adapt_tree_iterative(mut source: S, params: Option<P>) -> Self {
-        let target_depth = source.depth() + crate::MAX_RECURSION_DEPTH;
+        let target_depth = source.depth() + source.max_recursion_depth();
         let trimmings = source.trim_at_depth(target_depth);
 
         let params = params.unwrap_or_default();
@@ -262,7 +262,7 @@ pub trait ParAdapter<
     /// Adapts the tree of `S`s into this `Cluster` in a such a way that we bypass
     /// the recursion limit in Rust.
     fn par_adapt_tree_iterative(mut source: S, params: Option<P>) -> Self {
-        let target_depth = source.depth() + crate::MAX_RECURSION_DEPTH;
+        let target_depth = source.depth() + source.max_recursion_depth();
         let children = source.trim_at_depth(target_depth);
         let mut root = Self::adapt_tree(source, params);
         let leaf_params = root

@@ -316,10 +316,35 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
     }
 }
 
+#[cfg(feature = "csv")]
+impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D, 7> for Ball<I, U, D> {
+    fn header(&self) -> [String; 7] {
+        [
+            "depth".to_string(),
+            "cardinality".to_string(),
+            "radius".to_string(),
+            "lfd".to_string(),
+            "arg_center".to_string(),
+            "arg_radial".to_string(),
+            "is_leaf".to_string(),
+        ]
+    }
+
+    fn row(&self) -> [String; 7] {
+        [
+            self.depth.to_string(),
+            self.cardinality.to_string(),
+            self.radius.to_string(),
+            format!("{:.8}", self.lfd),
+            self.arg_center.to_string(),
+            self.arg_radial.to_string(),
+            self.children.is_empty().to_string(),
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use distances::number::{Addition, Multiplication};
 
     use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
@@ -468,12 +493,15 @@ mod tests {
         let seed = Some(42);
         let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
 
-        let mut intermediate_depth = crate::MAX_RECURSION_DEPTH;
+        let indices = (0..data.cardinality()).collect::<Vec<_>>();
+        let mut root = Ball::new(&data, &indices, 0, seed);
+
+        let mut intermediate_depth = root.max_recursion_depth();
         let intermediate_criteria = |c: &Ball<_, _, _>| c.depth() < intermediate_depth && criteria(c);
-        let mut root = Ball::new_tree(&data, &intermediate_criteria, seed);
+        root.partition(&data, &intermediate_criteria, seed);
 
         while root.leaves().into_iter().any(|l| !l.is_singleton()) {
-            intermediate_depth += crate::MAX_RECURSION_DEPTH;
+            intermediate_depth += root.max_recursion_depth();
             let intermediate_criteria = |c: &Ball<_, _, _>| c.depth() < intermediate_depth && criteria(c);
             root.partition_further(&data, &intermediate_criteria, seed);
         }
@@ -507,46 +535,5 @@ mod tests {
         }
 
         Ok(())
-    }
-
-    #[test]
-    fn numbered_subtree() {
-        let data = (0..1024).collect::<Vec<_>>();
-        let distance_fn = |x: &u32, y: &u32| x.abs_diff(*y);
-        let metric = Metric::new(distance_fn, false);
-        let data = FlatVec::new(data, metric).unwrap();
-
-        let seed = Some(42);
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let root = Ball::new_tree(&data, &criteria, seed);
-
-        let mut numbered_subtree = root.clone().take_subtree();
-        let indices = numbered_subtree.iter().map(|(_, i, _, _)| *i).collect::<HashSet<_>>();
-        assert_eq!(indices.len(), numbered_subtree.len());
-
-        for i in 0..numbered_subtree.len() {
-            assert!(indices.contains(&i));
-        }
-
-        numbered_subtree.sort_by(|(_, i, _, _), (_, j, _, _)| i.cmp(j));
-        let numbered_subtree = numbered_subtree
-            .into_iter()
-            .map(|(a, _, _, b)| (a, b))
-            .collect::<Vec<_>>();
-
-        for (ball, child_indices) in &numbered_subtree {
-            for &(i, _) in child_indices {
-                let (child, _) = &numbered_subtree[i];
-                assert!(child.is_descendant_of(ball), "{ball:?} is not parent of {child:?}");
-            }
-        }
-
-        // let root_list = root.clone().as_indexed_list();
-        // let re_root = Ball::from_indexed_list(root_list);
-        // assert_eq!(root, re_root);
-
-        // for (l, r) in root.subtree().into_iter().zip(re_root.subtree()) {
-        //     assert_eq!(l, r);
-        // }
     }
 }

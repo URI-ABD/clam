@@ -2,9 +2,10 @@
 
 use abd_clam::cakes::{Decodable, Encodable};
 use distances::number::UInt;
+use serde::{Deserialize, Serialize};
 
 /// A sequence from a FASTA file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Aligned<U: UInt> {
     /// The sequence without padding.
     seq: String,
@@ -16,12 +17,35 @@ pub struct Aligned<U: UInt> {
     _phantom: std::marker::PhantomData<U>,
 }
 
+impl<U: UInt> Default for Aligned<U> {
+    fn default() -> Self {
+        Self {
+            seq: String::default(),
+            start: 0,
+            end: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<U: UInt> Aligned<U> {
     /// Returns the Hamming metric for `Aligned` sequences.
     #[must_use]
-    pub fn metric() -> abd_clam::Metric<Self, U> {
+    pub fn hamming_metric() -> abd_clam::Metric<Self, U> {
         let distance_function =
             |first: &Self, second: &Self| U::from(first.chars().zip(second.chars()).filter(|(a, b)| a != b).count());
+        abd_clam::Metric::new(distance_function, false)
+    }
+
+    /// Returns the Levenshtein metric for unaligned version of the `Aligned` sequences.
+    #[must_use]
+    pub fn levenshtein_metric() -> abd_clam::Metric<Self, U> {
+        let distance_function = |first: &Self, second: &Self| {
+            U::from(stringzilla::sz::edit_distance(
+                first.as_unaligned(),
+                second.as_unaligned(),
+            ))
+        };
         abd_clam::Metric::new(distance_function, false)
     }
 
@@ -31,6 +55,10 @@ impl<U: UInt> Aligned<U> {
             .take(self.start)
             .chain(self.seq.chars())
             .chain(core::iter::repeat('-').take(self.end))
+    }
+
+    pub fn as_unaligned(&self) -> String {
+        self.chars().filter(|&c| c != '-' && c != '.').collect()
     }
 }
 

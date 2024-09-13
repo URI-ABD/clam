@@ -55,6 +55,7 @@ test-case = "3.2.1"
 statistical = "1.0.0"
 
 [features]
+csv = []  # For writing trees to CSV files.
 ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore", "dep:ordered-float", "dep:bincode"]
 

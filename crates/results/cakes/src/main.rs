@@ -20,18 +20,17 @@ use std::path::PathBuf;
 use clap::Parser;
 
 mod data;
-pub mod instances;
 mod utils;
 
-/// Simple program to greet a person
+/// Reproducible results for the CAKES and panCAKES papers.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// Dataset type
     #[arg(short('d'), long)]
-    dataset: data::InputDataset,
+    dataset: data::RawData,
 
-    /// The number of queries to hold out.
+    /// The number of queries to use for benchmarking.
     #[arg(short('q'), long)]
     num_queries: usize,
 
@@ -49,12 +48,34 @@ fn main() -> Result<(), String> {
 
     let log_name = format!("cakes-{}", args.dataset.name());
     let (_guard, log_path) = utils::configure_logger(&log_name)?;
-    println!("Log file: {}", log_path.display());
+    println!("Log file: {log_path:?}");
 
     ftlog::info!("{args:?}");
 
-    let (_data, _queries) = args.dataset.read(&args.inp_path, args.num_queries)?;
-    ftlog::info!("Read dataset and queries.");
+    let inp_path = args.inp_path.canonicalize().map_err(|e| e.to_string())?;
+
+    let out_dir = if let Some(out_dir) = args.out_dir {
+        out_dir
+    } else {
+        ftlog::info!("No output directory specified. Using default.");
+        let mut out_dir = inp_path
+            .parent()
+            .ok_or("No parent directory of `inp_dir`")?
+            .to_path_buf();
+        out_dir.push("results");
+        out_dir
+    }
+    .canonicalize()
+    .map_err(|e| e.to_string())?;
+
+    ftlog::info!("Input file: {inp_path:?}");
+    ftlog::info!("Output directory: {out_dir:?}");
+
+    let mut data = args.dataset.read(&inp_path, &out_dir)?;
+    ftlog::info!("Finished reading dataset and queries.");
+
+    data.benchmark(args.num_queries)?;
+    ftlog::info!("Finished benchmarking.");
 
     Ok(())
 }

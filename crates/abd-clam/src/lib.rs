@@ -25,13 +25,13 @@ pub use crate::core::{
     Permutable, LFD,
 };
 
+#[cfg(feature = "csv")]
+pub use crate::core::cluster::WriteCsv;
+
 #[cfg(feature = "chaoda")]
 mod chaoda;
 #[cfg(feature = "chaoda")]
 pub use crate::chaoda::{Algorithm, Chaoda, Member, MlModel, Vertex};
-
-/// Used to bypass the recursion limit in Rust.
-pub const MAX_RECURSION_DEPTH: usize = 128;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.31.0";
