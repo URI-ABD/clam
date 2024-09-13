@@ -95,11 +95,11 @@ impl<T: UInt, F: Float> Encodable for MemberSet<T, F> {
         let mut bytes = vec![];
 
         let new_items = self.inner.difference(&reference.inner).copied().collect::<Vec<_>>();
-        bytes.extend_from_slice(&(new_items.len() as u16).to_le_bytes());
+        bytes.extend_from_slice(&new_items.len().to_le_bytes());
         bytes.extend(new_items.into_iter().flat_map(T::to_le_bytes));
 
         let removed_items = reference.inner.difference(&self.inner).copied().collect::<Vec<_>>();
-        bytes.extend_from_slice(&(removed_items.len() as u16).to_le_bytes());
+        bytes.extend_from_slice(&removed_items.len().to_le_bytes());
         bytes.extend(removed_items.into_iter().flat_map(T::to_le_bytes));
 
         bytes.into_boxed_slice()

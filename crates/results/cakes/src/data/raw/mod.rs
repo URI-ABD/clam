@@ -71,6 +71,7 @@ impl RawData {
     ///
     /// * If the dataset is not readable.
     /// * If the dataset is not in the expected format.
+    #[allow(clippy::too_many_lines)]
     pub fn read<P: AsRef<std::path::Path>>(self, inp_path: &P, out_dir: &P) -> Result<super::tree::Tree, String> {
         let out_dir = out_dir.as_ref();
         let (data_path, queries_path, gt_path) = {
@@ -89,9 +90,11 @@ impl RawData {
         match self {
             Self::GreenGenes_12_10 | Self::GreenGenes_13_5 | Self::Silva_18S | Self::PdbSeq => {
                 let (mut data, queries) = if data_path.exists() && queries_path.exists() {
+                    ftlog::info!("Reading data from {data_path:?}");
                     let data = bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?)
                         .map_err(|e| e.to_string())?;
 
+                    ftlog::info!("Reading queries from {queries_path:?}");
                     let queries = bincode::deserialize_from(File::open(&queries_path).map_err(|e| e.to_string())?)
                         .map_err(|e| e.to_string())?;
 
@@ -111,23 +114,28 @@ impl RawData {
                         .map(|(name, seq)| (name, Unaligned::from(seq)))
                         .collect();
 
+                    ftlog::info!("Writing data to {data_path:?}");
                     bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
                         .map_err(|e| e.to_string())?;
 
+                    ftlog::info!("Writing queries to {queries_path:?}");
                     bincode::serialize_into(File::create(&queries_path).map_err(|e| e.to_string())?, &queries)
                         .map_err(|e| e.to_string())?;
 
                     (data, queries)
                 };
+                // Set the metric for the data, incase it was deserialized.
                 data.set_metric(Unaligned::metric());
 
                 super::tree::Tree::new_unaligned(self.name(), out_dir, data, queries)
             }
             Self::GreenGenesAligned_12_10 | Self::SilvaAligned_18S => {
                 let (mut data, queries) = if data_path.exists() && queries_path.exists() {
+                    ftlog::info!("Reading data from {data_path:?}");
                     let data = bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?)
                         .map_err(|e| e.to_string())?;
 
+                    ftlog::info!("Reading queries from {queries_path:?}");
                     let queries = bincode::deserialize_from(File::open(&queries_path).map_err(|e| e.to_string())?)
                         .map_err(|e| e.to_string())?;
 
@@ -137,7 +145,7 @@ impl RawData {
                     let (metadata, data): (Vec<_>, Vec<_>) =
                         data.into_iter().map(|(name, seq)| (name, Aligned::from(seq))).unzip();
 
-                    let data = abd_clam::FlatVec::new(data, Aligned::hamming_metric())?
+                    let data = abd_clam::FlatVec::new(data, Aligned::metric())?
                         .with_metadata(metadata)?
                         .with_dim_lower_bound(min_len)
                         .with_dim_upper_bound(max_len);
@@ -147,27 +155,33 @@ impl RawData {
                         .map(|(name, seq)| (name, Aligned::from(seq)))
                         .collect();
 
+                    ftlog::info!("Writing data to {data_path:?}");
                     bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
                         .map_err(|e| e.to_string())?;
 
+                    ftlog::info!("Writing queries to {queries_path:?}");
                     bincode::serialize_into(File::create(&queries_path).map_err(|e| e.to_string())?, &queries)
                         .map_err(|e| e.to_string())?;
 
                     (data, queries)
                 };
-                data.set_metric(Aligned::hamming_metric());
+                // Set the metric for the data, incase it was deserialized.
+                data.set_metric(Aligned::metric());
 
                 super::tree::Tree::new_aligned(self.name(), out_dir, data, queries)
             }
             Self::Kosarak | Self::MovieLens_10M => {
                 let (mut data, queries, ground_truth) =
                     if data_path.exists() && queries_path.exists() && gt_path.exists() {
+                        ftlog::info!("Reading data from {data_path:?}");
                         let data = bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?)
                             .map_err(|e| e.to_string())?;
 
+                        ftlog::info!("Reading queries from {queries_path:?}");
                         let queries = bincode::deserialize_from(File::open(&queries_path).map_err(|e| e.to_string())?)
                             .map_err(|e| e.to_string())?;
 
+                        ftlog::info!("Reading ground truth from {gt_path:?}");
                         let ground_truth = bincode::deserialize_from(File::open(&gt_path).map_err(|e| e.to_string())?)
                             .map_err(|e| e.to_string())?;
 
@@ -182,17 +196,21 @@ impl RawData {
 
                         let queries = queries.iter().map(MemberSet::<_, f32>::from).enumerate().collect();
 
+                        ftlog::info!("Writing data to {data_path:?}");
                         bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
                             .map_err(|e| e.to_string())?;
 
+                        ftlog::info!("Writing queries to {queries_path:?}");
                         bincode::serialize_into(File::create(&queries_path).map_err(|e| e.to_string())?, &queries)
                             .map_err(|e| e.to_string())?;
 
+                        ftlog::info!("Writing ground truth to {gt_path:?}");
                         bincode::serialize_into(File::create(&gt_path).map_err(|e| e.to_string())?, &ground_truth)
                             .map_err(|e| e.to_string())?;
 
                         (data, queries, ground_truth)
                     };
+                // Set the metric for the data, incase it was deserialized.
                 data.set_metric(MemberSet::metric());
 
                 super::tree::Tree::new_ann_set(self.name(), out_dir, data, queries, ground_truth)

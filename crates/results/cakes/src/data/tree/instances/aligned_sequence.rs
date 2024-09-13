@@ -7,12 +7,8 @@ use serde::{Deserialize, Serialize};
 /// A sequence from a FASTA file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Aligned<U: UInt> {
-    /// The sequence without padding.
+    /// The aligned sequence.
     seq: String,
-    /// The number of padding characters at the start of the sequence.
-    start: usize,
-    /// The number of padding characters at the end of the sequence.
-    end: usize,
     /// To keep the type parameter.
     _phantom: std::marker::PhantomData<U>,
 }
@@ -21,8 +17,6 @@ impl<U: UInt> Default for Aligned<U> {
     fn default() -> Self {
         Self {
             seq: String::default(),
-            start: 0,
-            end: 0,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -31,9 +25,17 @@ impl<U: UInt> Default for Aligned<U> {
 impl<U: UInt> Aligned<U> {
     /// Returns the Hamming metric for `Aligned` sequences.
     #[must_use]
-    pub fn hamming_metric() -> abd_clam::Metric<Self, U> {
-        let distance_function =
-            |first: &Self, second: &Self| U::from(first.chars().zip(second.chars()).filter(|(a, b)| a != b).count());
+    pub fn metric() -> abd_clam::Metric<Self, U> {
+        let distance_function = |first: &Self, second: &Self| {
+            U::from(
+                first
+                    .seq
+                    .chars()
+                    .zip(second.seq.chars())
+                    .filter(|(a, b)| a != b)
+                    .count(),
+            )
+        };
         abd_clam::Metric::new(distance_function, false)
     }
 
@@ -49,16 +51,8 @@ impl<U: UInt> Aligned<U> {
         abd_clam::Metric::new(distance_function, false)
     }
 
-    /// Returns the unaligned sequence.
-    pub fn chars(&self) -> impl Iterator<Item = char> + '_ {
-        core::iter::repeat('-')
-            .take(self.start)
-            .chain(self.seq.chars())
-            .chain(core::iter::repeat('-').take(self.end))
-    }
-
     pub fn as_unaligned(&self) -> String {
-        self.chars().filter(|&c| c != '-' && c != '.').collect()
+        self.seq.chars().filter(|&c| c != '-' && c != '.').collect()
     }
 }
 
@@ -70,27 +64,16 @@ impl<U: UInt> AsRef<str> for Aligned<U> {
 
 impl<U: UInt> From<&str> for Aligned<U> {
     fn from(seq: &str) -> Self {
-        let start = seq.chars().take_while(|&c| c == '-' || c == '.').count();
-        let end = seq.chars().rev().take_while(|&c| c == '-' || c == '.').count();
-        let seq = seq.chars().skip(start).take(seq.len() - start - end).collect();
-        Self {
-            seq,
-            start,
-            end,
-            _phantom: std::marker::PhantomData,
-        }
+        Self::from(seq.to_string())
     }
 }
 
 impl<U: UInt> From<String> for Aligned<U> {
     fn from(seq: String) -> Self {
-        Self::from(seq.as_str())
-    }
-}
-
-impl<U: UInt> From<Aligned<U>> for String {
-    fn from(seq: Aligned<U>) -> Self {
-        seq.seq
+        Self {
+            seq,
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
@@ -98,10 +81,12 @@ impl<U: UInt> Encodable for Aligned<U> {
     fn as_bytes(&self) -> Box<[u8]> {
         self.seq.as_bytes().into()
     }
+
     #[allow(clippy::cast_possible_truncation)]
     fn encode(&self, reference: &Self) -> Box<[u8]> {
-        self.chars()
-            .zip(reference.chars())
+        self.seq
+            .chars()
+            .zip(reference.seq.chars())
             .enumerate()
             .filter_map(|(i, (c, r))| if c == r { None } else { Some((i as u16, c)) })
             .flat_map(|(i, c)| {
@@ -124,7 +109,7 @@ impl<U: UInt> Decodable for Aligned<U> {
     }
 
     fn decode(reference: &Self, bytes: &[u8]) -> Self {
-        let mut sequence = reference.chars().collect::<Vec<_>>();
+        let mut sequence = reference.seq.chars().collect::<Vec<_>>();
 
         for chunk in bytes.chunks_exact(3) {
             let i = u16::from_be_bytes([chunk[0], chunk[1]]) as usize;

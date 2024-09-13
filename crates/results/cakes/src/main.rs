@@ -62,7 +62,10 @@ fn main() -> Result<(), String> {
             .parent()
             .ok_or("No parent directory of `inp_dir`")?
             .to_path_buf();
-        out_dir.push("results");
+        out_dir.push(format!("{}_results", args.dataset.name()));
+        if !out_dir.exists() {
+            std::fs::create_dir(&out_dir).map_err(|e| e.to_string())?;
+        }
         out_dir
     }
     .canonicalize()
