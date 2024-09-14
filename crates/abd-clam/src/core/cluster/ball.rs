@@ -317,9 +317,9 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
 }
 
 #[cfg(feature = "csv")]
-impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D, 7> for Ball<I, U, D> {
-    fn header(&self) -> [String; 7] {
-        [
+impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D> for Ball<I, U, D> {
+    fn header(&self) -> Vec<String> {
+        vec![
             "depth".to_string(),
             "cardinality".to_string(),
             "radius".to_string(),
@@ -330,8 +330,8 @@ impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D, 7> for Ball<I, U, 
         ]
     }
 
-    fn row(&self) -> [String; 7] {
-        [
+    fn row(&self) -> Vec<String> {
+        vec![
             self.depth.to_string(),
             self.cardinality.to_string(),
             self.radius.to_string(),

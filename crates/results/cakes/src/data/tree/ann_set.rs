@@ -259,9 +259,9 @@ impl Group {
             let compressed_hits = alg.par_batch_par_search(&self.compressed, &self.squishy_ball, queries);
             let compressed_time = compressed_start.elapsed().as_secs_f32() / num_queries.as_f32();
             ftlog::info!(
-                "Algorithm {} took {:.3e} seconds per query uncompressed time on {}",
+                "Algorithm {} took {:.3e} seconds per query compressed time on {}",
                 alg.name(),
-                uncompressed_time,
+                compressed_time,
                 self.path_manager.name()
             );
 
@@ -272,7 +272,9 @@ impl Group {
                 alg.name(),
                 (
                     format!("uncompressed: {uncompressed_time:.4e}"),
+                    format!("uncompressed_throughput: {:.4e}", 1.0 / uncompressed_time),
                     format!("compressed: {compressed_time:.4e}"),
+                    format!("compressed_throughput: {:.4e}", 1.0 / compressed_time),
                     format!("slowdown: {slowdown:.4}"),
                 ),
             );

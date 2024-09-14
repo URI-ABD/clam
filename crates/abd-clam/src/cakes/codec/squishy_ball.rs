@@ -458,36 +458,31 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 }
 
 #[cfg(feature = "csv")]
-impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
-    crate::WriteCsv<I, U, Dec, 10> for SquishyBall<I, U, Co, Dec, S>
+impl<
+        I: Encodable + Decodable,
+        U: Number,
+        Co: Compressible<I, U>,
+        Dec: Decompressible<I, U>,
+        S: crate::WriteCsv<I, U, Co>,
+    > crate::WriteCsv<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn header(&self) -> [String; 10] {
-        [
-            "depth".to_string(),
-            "cardinality".to_string(),
-            "radius".to_string(),
-            "lfd".to_string(),
-            "arg_center".to_string(),
-            "arg_radial".to_string(),
-            "is_leaf".to_string(),
-            "min_cost".to_string(),
-            "unitary_cost".to_string(),
+    fn header(&self) -> Vec<String> {
+        let mut header = self.source.header();
+        header.extend(vec![
             "recursive_cost".to_string(),
-        ]
+            "unitary_cost".to_string(),
+            "minimum_cost".to_string(),
+        ]);
+        header
     }
 
-    fn row(&self) -> [String; 10] {
-        [
-            self.depth().to_string(),
-            self.cardinality().to_string(),
-            self.radius().to_string(),
-            format!("{:.8}", self.lfd()),
-            self.arg_center().to_string(),
-            self.arg_radial().to_string(),
-            self.children.is_empty().to_string(),
-            self.costs.minimum.to_string(),
-            self.costs.unitary.to_string(),
+    fn row(&self) -> Vec<String> {
+        let mut row = self.source.row();
+        row.extend(vec![
             self.costs.recursive.to_string(),
-        ]
+            self.costs.unitary.to_string(),
+            self.costs.minimum.to_string(),
+        ]);
+        row
     }
 }

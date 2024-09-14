@@ -10,16 +10,16 @@ use super::Cluster;
 
 /// Write a `Cluster` to a CSV file.
 #[allow(clippy::module_name_repetitions)]
-pub trait WriteCsv<I, U, D, const N: usize>: Cluster<I, U, D>
+pub trait WriteCsv<I, U, D>: Cluster<I, U, D>
 where
     U: Number,
     D: Dataset<I, U>,
 {
     /// Returns the names of the columns in the CSV file.
-    fn header(&self) -> [String; N];
+    fn header(&self) -> Vec<String>;
 
     /// Returns a row, corresponding to the `Cluster`, for the CSV file.
-    fn row(&self) -> [String; N];
+    fn row(&self) -> Vec<String>;
 
     /// Write to a CSV file, all the clusters in the tree.
     ///
@@ -30,7 +30,7 @@ where
     /// - If the header cannot be written to the file.
     /// - If any row cannot be written to the file.
     fn write_to_csv<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
-        let line = |items: [String; N]| {
+        let line = |items: Vec<String>| {
             let mut line = items.join(",");
             line.push('\n');
             line

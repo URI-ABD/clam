@@ -6,7 +6,7 @@ use abd_clam::{
     adapter::{ParAdapter, ParBallAdapter},
     cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
     partition::ParPartition,
-    Ball, Cluster, FlatVec, MetricSpace, WriteCsv,
+    Ball, Cluster, Dataset, FlatVec, MetricSpace, WriteCsv,
 };
 use distances::Number;
 
@@ -60,11 +60,14 @@ impl Group {
             // Create the ball from scratch.
             ftlog::info!("Creating ball.");
             let mut depth = 0;
-            let depth_delta = 256;
             let seed = Some(42);
 
+            let indices = (0..uncompressed.cardinality()).collect::<Vec<_>>();
+            let mut ball = Ball::par_new(&uncompressed, &indices, 0, seed);
+            let depth_delta = ball.max_recursion_depth();
+
             let criteria = |c: &Ball<_, _, _>| c.depth() < 1;
-            let mut ball = Ball::par_new_tree(&uncompressed, &criteria, seed);
+            ball.par_partition(&uncompressed, &criteria, seed);
 
             while ball.leaves().into_iter().any(|c| !c.is_singleton()) {
                 depth += depth_delta;
@@ -123,6 +126,8 @@ impl Group {
 
             let num_leaves = squishy_ball.leaves().len();
             ftlog::info!("Built squishy ball with {num_leaves} leaves.");
+
+            assert!(num_leaves > 1, "Squishy ball has only one leaf.");
 
             // Create the compressed dataset and set its metadata.
             ftlog::info!("Creating compressed dataset.");
@@ -220,9 +225,9 @@ impl Group {
             let compressed_hits = alg.par_batch_par_search(&self.compressed, &self.squishy_ball, queries);
             let compressed_time = compressed_start.elapsed().as_secs_f32() / num_queries.as_f32();
             ftlog::info!(
-                "Algorithm {} took {:.3e} seconds per query uncompressed time on {}",
+                "Algorithm {} took {:.3e} seconds per query compressed time on {}",
                 alg.name(),
-                uncompressed_time,
+                compressed_time,
                 self.path_manager.name()
             );
 
@@ -233,7 +238,9 @@ impl Group {
                 alg.name(),
                 (
                     format!("uncompressed: {uncompressed_time:.4e}"),
+                    format!("uncompressed_throughput: {:.4e}", 1.0 / uncompressed_time),
                     format!("compressed: {compressed_time:.4e}"),
+                    format!("compressed_throughput: {:.4e}", 1.0 / compressed_time),
                     format!("slowdown: {slowdown:.4}"),
                 ),
             );
