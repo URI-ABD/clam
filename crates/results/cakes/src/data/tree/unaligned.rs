@@ -122,7 +122,7 @@ impl Group {
 
             // Trim the squishy ball and write it to a CSV file.
             ftlog::info!("Trimming squishy ball and writing post-trim CSV.");
-            squishy_ball.trim();
+            squishy_ball.trim(4);
             squishy_ball.write_to_csv(&path_manager.squishy_csv_path())?;
 
             let num_leaves = squishy_ball.leaves().len();

@@ -121,7 +121,7 @@ impl Group {
 
             // Trim the squishy ball and write it to a CSV file.
             ftlog::info!("Trimming squishy ball and writing to CSV.");
-            squishy_ball.trim();
+            squishy_ball.trim(4);
             squishy_ball.write_to_csv(&path_manager.squishy_csv_path())?;
 
             let num_leaves = squishy_ball.leaves().len();
@@ -186,9 +186,9 @@ impl Group {
         let radius = 5;
         let k = 10;
         let algorithms = [
-            Algorithm::RnnLinear(radius),
+            // Algorithm::RnnLinear(radius),
             Algorithm::RnnClustered(radius),
-            Algorithm::KnnLinear(k),
+            // Algorithm::KnnLinear(k),
             Algorithm::KnnRepeatedRnn(k, 2),
             Algorithm::KnnBreadthFirst(k),
             Algorithm::KnnDepthFirst(k),

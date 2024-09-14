@@ -86,7 +86,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
         let (off_ball, data) = OffBall::from_ball_tree(ball, data);
         let mut root = Self::adapt_tree_iterative(off_ball, None);
         root.set_costs(&data);
-        root.trim();
+        root.trim(4);
         let data = CodecData::from_compressible(&data, &root);
         (root, data)
     }
@@ -100,7 +100,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
         let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
         let mut root = Self::par_adapt_tree_iterative(off_ball, None);
         root.par_set_costs(&data);
-        root.trim();
+        root.trim(4);
         let data = CodecData::par_from_compressible(&data, &root);
         (root, data)
     }
@@ -126,12 +126,12 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
 
     /// Trims the tree by removing empty children of clusters whose unitary cost
     /// is greater than the recursive cost.
-    pub fn trim(&mut self) {
+    pub fn trim(&mut self, min_depth: usize) {
         if !self.children.is_empty() {
-            if self.costs.unitary <= self.costs.recursive {
+            if (self.costs.unitary <= self.costs.recursive) && (self.depth() >= min_depth) {
                 self.children.clear();
             } else {
-                self.children.iter_mut().for_each(|(_, _, c)| c.trim());
+                self.children.iter_mut().for_each(|(_, _, c)| c.trim(min_depth));
             }
         }
     }
@@ -478,7 +478,9 @@ impl<
 
     fn row(&self) -> Vec<String> {
         let mut row = self.source.row();
+        row.pop();
         row.extend(vec![
+            self.children.is_empty().to_string(),
             self.costs.recursive.to_string(),
             self.costs.unitary.to_string(),
             self.costs.minimum.to_string(),

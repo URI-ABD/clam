@@ -267,7 +267,11 @@ impl<I, U: Number, D: Dataset<I, U>, S: crate::WriteCsv<I, U, D>> crate::WriteCs
 
     fn row(&self) -> Vec<String> {
         let mut row = self.source.row();
-        row.push(self.params.offset.to_string());
+        row.pop();
+        row.extend(vec![
+            self.children.is_empty().to_string(),
+            self.params.offset.to_string(),
+        ]);
         row
     }
 }
