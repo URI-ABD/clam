@@ -12,6 +12,7 @@ use super::TrainedMetaMlModel;
 
 /// A combination of `TrainedMetaMLModel` and `GraphAlgorithm`.
 #[derive(Clone, Serialize, Deserialize)]
+#[allow(clippy::module_name_repetitions)]
 pub struct TrainedCombination {
     /// The `MetaMLModel` to use.
     meta_ml: TrainedMetaMlModel,
@@ -28,7 +29,8 @@ impl TrainedCombination {
     }
 
     /// Create a new `TrainedCombination`.
-    pub fn new(meta_ml: TrainedMetaMlModel, graph_algorithm: GraphAlgorithm) -> Self {
+    #[must_use]
+    pub const fn new(meta_ml: TrainedMetaMlModel, graph_algorithm: GraphAlgorithm) -> Self {
         Self {
             meta_ml,
             graph_algorithm,
@@ -43,8 +45,8 @@ impl TrainedCombination {
         S: Cluster<I, U, D>,
     {
         move |clusters| {
-            let props = clusters.iter().map(|c| c.ratios().to_vec()).collect::<Vec<_>>();
-            self.meta_ml.predict(&props).unwrap()
+            let props = clusters.iter().flat_map(|c| c.ratios()).collect::<Vec<_>>();
+            self.meta_ml.predict(&props).unwrap_or_else(|e| unreachable!("{e}"))
         }
     }
 

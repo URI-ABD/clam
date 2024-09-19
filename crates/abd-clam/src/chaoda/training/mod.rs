@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{adapter::Adapter, Dataset, Metric, Partition};
+use crate::{adapter::Adapter, Cluster, Dataset, Metric, Partition};
 
 mod algorithms;
 mod combination;
@@ -31,6 +31,14 @@ pub struct ChaodaTrainer<I, U: Number, const M: usize> {
 impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
     /// Create a new `ChaodaTrainer` with the given metrics and all pairs of
     /// `MetaMLModel`s and `GraphAlgorithm`s.
+    ///
+    /// # Arguments
+    ///
+    /// - `metrics`: The distance metrics to train with.
+    /// - `meta_ml_models`: The `MetaMLModel`s to train with.
+    /// - `graph_algorithms`: The `GraphAlgorithm`s to train with.
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new_all_pairs(
         metrics: [Metric<I, U>; M],
         meta_ml_models: Vec<TrainableMetaMlModel>,
@@ -56,6 +64,13 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
     }
 
     /// Create a new `ChaodaTrainer` with the given metrics and combinations.
+    ///
+    /// # Arguments
+    ///
+    /// - `metrics`: The distance metrics to train with.
+    /// - `combinations`: The combinations of `MetaMLModel`s and `GraphAlgorithm`s to train with.
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(metrics: [Metric<I, U>; M], combinations: Vec<TrainableCombination>) -> Self {
         let combinations = metrics
             .iter()
@@ -69,6 +84,23 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
     }
 
     /// Create trees for use in training.
+    ///
+    /// # Arguments
+    ///
+    /// - `datasets`: The datasets to create trees for.
+    /// - `criteria`: The criteria to use for creating the trees.
+    /// - `seed`: The seed to use for random number generation.
+    ///
+    /// # Returns
+    ///
+    /// The trees created from the datasets.
+    ///
+    /// # Type parameters
+    ///
+    /// - `N`: The number of datasets to create trees for.
+    /// - `D`: The type of the datasets.
+    /// - `S`: The type of the `Cluster` to use for creating the `Vertex` trees.
+    /// - `C`: The type of the criteria to use for creating the trees.
     pub fn create_trees<const N: usize, D: Dataset<I, U>, S: Partition<I, U, D>, C: Fn(&S) -> bool>(
         &self,
         datasets: &mut [D; N],
@@ -94,10 +126,33 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
     }
 
     /// Train the model using the given datasets.
-    pub fn train<const N: usize, D: Dataset<I, U>, S: Partition<I, U, D>>(
+    ///
+    /// # Arguments
+    ///
+    /// - `datasets`: The datasets to train with.
+    /// - `trees`: The trees built from the datasets.
+    /// - `labels`: The labels for the datasets.
+    /// - `min_depth`: The minimum depth of `Cluster`s to use for `Graph`s.
+    /// - `num_epochs`: The number of epochs to train for.
+    ///
+    /// # Returns
+    ///
+    /// The trained model.
+    ///
+    /// # Errors
+    ///
+    /// - If the number of labels for a dataset does not match the number of
+    ///   data points in that dataset.
+    ///
+    /// # Type parameters
+    ///
+    /// - `N`: The number of datasets to train with.
+    /// - `D`: The type of the datasets.
+    /// - `S`: The type of the `Cluster` that were used to create the `Vertex` trees.
+    pub fn train<const N: usize, D: Dataset<I, U>, S: Cluster<I, U, D>>(
         &mut self,
         datasets: &mut [D; N],
-        trees: [[Vertex<I, U, D, S>; N]; M],
+        trees: &[[Vertex<I, U, D, S>; N]; M],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         num_epochs: usize,
@@ -110,8 +165,8 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
         ftlog::info!("Training with {N} datasets and {M} metrics...");
 
         let mut trined_combinations = Vec::new();
-        for e in 0..num_epochs {
-            ftlog::info!("Training epoch {}/{num_epochs}", e + 1);
+        for _ in 0..num_epochs {
+            // ftlog::info!("Training epoch {}/{num_epochs}", e + 1);
 
             trined_combinations.clear();
             for ((metric, roots), combinations) in
@@ -133,10 +188,10 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
             }
         }
 
-        let trained_combinations: [_; M] = trined_combinations.try_into().unwrap_or_else(|_| {
+        let combinations: [_; M] = trined_combinations.try_into().unwrap_or_else(|_| {
             unreachable!("Could not convert Vec<Vec<TrainableCombination>> to [Vec<TrainableCombination>; {M}]")
         });
 
-        Ok(Chaoda::new(self.metrics.clone(), trained_combinations))
+        Ok(Chaoda::new(self.metrics.clone(), combinations))
     }
 }

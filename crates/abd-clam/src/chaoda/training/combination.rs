@@ -12,6 +12,7 @@ use crate::{
 
 /// A trainable combination of a `MetaMLModel` and a `GraphAlgorithm`.
 #[derive(Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub struct TrainableCombination {
     /// The `MetaMLModel` to use.
     pub meta_ml: TrainableMetaMlModel,
@@ -35,7 +36,8 @@ impl TrainableCombination {
     }
 
     /// Create a new `TrainableCombination` with the given `MetaMLModel` and `GraphAlgorithm`.
-    pub fn new(meta_ml: TrainableMetaMlModel, graph_algorithm: GraphAlgorithm) -> Self {
+    #[must_use]
+    pub const fn new(meta_ml: TrainableMetaMlModel, graph_algorithm: GraphAlgorithm) -> Self {
         Self {
             meta_ml,
             graph_algorithm,
@@ -51,13 +53,10 @@ impl TrainableCombination {
         D: Dataset<I, U>,
         S: Cluster<I, U, D>,
     {
-        let model = self
-            .meta_ml
-            .train(NUM_RATIOS, &self.train_x, &self.train_y)
-            .map_err(|e| e.to_string())?;
+        let model = self.meta_ml.train(NUM_RATIOS, &self.train_x, &self.train_y)?;
         let scorer = move |clusters: &[&Vertex<I, U, D, S>]| {
-            let props = clusters.iter().map(|c| c.ratios().to_vec()).collect::<Vec<_>>();
-            model.predict(&props).unwrap()
+            let props = clusters.iter().flat_map(|c| c.ratios()).collect::<Vec<_>>();
+            model.predict(&props).unwrap_or_else(|e| unreachable!("{e}"))
         };
         Ok(scorer)
     }

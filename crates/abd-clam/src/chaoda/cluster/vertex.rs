@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
+    chaoda::NUM_RATIOS,
     cluster::ParCluster,
     dataset::ParDataset,
     Ball, Cluster, Dataset,
@@ -51,7 +52,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Vertex<I, U, D, S> {
     /// Returns the anomaly detection properties of the `Vertex` and their
     /// exponential moving averages.
     #[must_use]
-    pub const fn ratios(&self) -> [f32; 6] {
+    pub const fn ratios(&self) -> [f32; NUM_RATIOS] {
         let [c, r, l] = self.params.ratios;
         let [c_, r_, l_] = self.params.ema_ratios;
         [c, r, l, c_, r_, l_]

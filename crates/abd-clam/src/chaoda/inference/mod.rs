@@ -12,7 +12,7 @@ use crate::{adapter::Adapter, Dataset, Metric, Partition};
 pub use combination::TrainedCombination;
 pub use meta_ml::TrainedMetaMlModel;
 
-use super::Vertex;
+use super::{roc_auc_score, Vertex};
 
 /// A pre-trained Chaoda model.
 #[derive(Clone)]
@@ -25,12 +25,14 @@ pub struct Chaoda<I, U: Number, const M: usize> {
 
 impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
     /// Create a new Chaoda model with the given metrics and trained combinations.
-    pub fn new(metrics: [Metric<I, U>; M], combinations: [Vec<TrainedCombination>; M]) -> Self {
+    #[must_use]
+    pub const fn new(metrics: [Metric<I, U>; M], combinations: [Vec<TrainedCombination>; M]) -> Self {
         Self { metrics, combinations }
     }
 
     /// Get the distance metrics used by the model.
-    pub fn metrics(&self) -> &[Metric<I, U>; M] {
+    #[must_use]
+    pub const fn metrics(&self) -> &[Metric<I, U>; M] {
         &self.metrics
     }
 
@@ -93,11 +95,28 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
         let trees = self.create_trees(data, criteria, seed);
         self.predict_from_trees(data, &trees, min_depth)
     }
+
+    /// Evaluate the model on the given data.
+    pub fn evaluate<D: Dataset<I, U>, S: Partition<I, U, D>, C: Fn(&S) -> bool>(
+        &self,
+        data: &mut D,
+        criteria: &[C; M],
+        labels: &[bool],
+        seed: Option<u64>,
+        min_depth: usize,
+    ) -> f32 {
+        let scores = self.predict(data, criteria, seed, min_depth);
+        roc_auc_score(labels, &scores)
+            .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for evaluation: {e}"))
+    }
 }
 
+/// A serializable and deserializable version of `Chaoda`.
 #[derive(Serialize, Deserialize)]
 struct ChaodaSerde<I, U: Number, const M: usize> {
+    /// The trained combinations.
     combinations: Vec<Vec<TrainedCombination>>,
+    /// Phantom data to satisfy the type system.
     _p: std::marker::PhantomData<(I, U)>,
 }
 

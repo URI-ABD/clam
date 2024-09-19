@@ -1,7 +1,11 @@
 //! Inferring with meta-ml models.
 
+use linfa::prelude::*;
 use linfa_linear::{FittedIsotonicRegression, FittedLinearRegression};
+use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use crate::chaoda::NUM_RATIOS;
 
 /// A trained meta-ml model.
 #[derive(Clone, Serialize, Deserialize)]
@@ -14,7 +18,8 @@ pub enum TrainedMetaMlModel {
 
 impl TrainedMetaMlModel {
     /// Get the name of the model.
-    pub fn name(&self) -> &str {
+    #[must_use]
+    pub const fn name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LinearRegression",
             Self::IsotonicRegression(_) => "IsotonicRegression",
@@ -22,7 +27,8 @@ impl TrainedMetaMlModel {
     }
 
     /// Get a short name for the model.
-    pub fn short_name(&self) -> &str {
+    #[must_use]
+    pub const fn short_name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LR",
             Self::IsotonicRegression(_) => "IR",
@@ -36,7 +42,7 @@ impl TrainedMetaMlModel {
     ///
     /// # Arguments
     ///
-    /// * `data`: A matrix where each row contains the aggregated anomaly properties of `Cluster`s in a `Graph`.
+    /// * `props`: A matrix where each row contains the aggregated anomaly properties of `Cluster`s in a `Graph`.
     ///
     /// # Returns
     ///
@@ -46,26 +52,30 @@ impl TrainedMetaMlModel {
     ///
     /// * If the number of features in the data does not match the number of features in the model.
     /// * If the model cannot predict the data.
-    pub fn predict(&self, props: &[Vec<f32>]) -> Result<Vec<f32>, String> {
+    pub fn predict(&self, props: &[f32]) -> Result<Vec<f32>, String> {
+        if props.is_empty() || (props.len() % NUM_RATIOS != 0) {
+            return Err(format!(
+                "Number of features in data ({}) does not match number of features in model ({})",
+                props.len(),
+                NUM_RATIOS
+            ));
+        }
+        let num_rows = props.len() / NUM_RATIOS;
+        let shape = (num_rows, NUM_RATIOS);
+        let props = Array2::from_shape_vec(shape, props.to_vec()).map_err(|e| e.to_string())?;
+
         ftlog::info!(
             "Predicting with MetaML model {} on {} data samples with {} dims",
             self.name(),
-            props.len(),
-            props[0].len()
+            num_rows,
+            NUM_RATIOS,
         );
 
-        todo!()
+        let scores = match self {
+            Self::LinearRegression(model) => model.predict(&props),
+            Self::IsotonicRegression(model) => model.predict(&props),
+        };
 
-        // let data = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        // let data = DenseMatrix::from_2d_array(&data);
-        // match self {
-        //     Self::LinearRegression(model) => model.predict(&data),
-        //     Self::ElasticNet(model) => model.predict(&data),
-        //     Self::Lasso(model) => model.predict(&data),
-        //     Self::RidgeRegression(model) => model.predict(&data),
-        //     Self::DecisionTreeRegressor(model) => model.predict(&data),
-        //     Self::RandomForestRegressor(model) => model.predict(&data),
-        // }
-        // .map_err(|e| e.to_string())
+        Ok(scores.to_vec())
     }
 }

@@ -10,11 +10,28 @@ use linfa::{metrics::BinaryClassification, prelude::Pr};
 pub use cluster::{Ratios, Vertex};
 pub use graph::Graph;
 pub use inference::{Chaoda, TrainedMetaMlModel};
+#[allow(clippy::module_name_repetitions)]
 pub use training::{ChaodaTrainer, GraphAlgorithm, TrainableMetaMlModel};
 
+/// The number of anomaly ratios we use in CHAODA
 const NUM_RATIOS: usize = 6;
 
 /// The area under the receiver operating characteristic curve.
+///
+/// # Arguments
+///
+/// * `y_true`: The true binary labels.
+/// * `y_score`: The predicted scores.
+///
+/// # Returns
+///
+/// The area under the receiver operating characteristic curve.
+///
+/// # Errors
+///
+/// * If the number of scores does not match the number of labels.
+/// * If the scores cannot be converted to probabilities.
+/// * If the ROC curve cannot be calculated.
 pub fn roc_auc_score(y_true: &[bool], y_score: &[f32]) -> Result<f32, String> {
     let scores = y_score
         .iter()

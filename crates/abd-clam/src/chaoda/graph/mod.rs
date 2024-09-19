@@ -88,6 +88,7 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Graph<'a, I, U, D,
     }
 
     /// Cet teh number of `Vertex`es in the `Graph`.
+    #[must_use]
     pub const fn cardinality(&self) -> usize {
         self.cardinality
     }
