@@ -2,4 +2,4 @@
 
 mod vertex;
 
-pub use vertex::Vertex;
+pub use vertex::{Ratios, Vertex};

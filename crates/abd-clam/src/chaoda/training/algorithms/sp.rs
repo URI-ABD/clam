@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{chaoda::Graph, Cluster, Dataset};
 
-use super::Algorithm;
+use super::GraphEvaluator;
 
 /// Clusters with smaller stationary probabilities are more anomalous.
 #[derive(Clone, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ impl StationaryProbability {
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for StationaryProbability {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D, S> for StationaryProbability {
     fn name(&self) -> &str {
         "sp"
     }

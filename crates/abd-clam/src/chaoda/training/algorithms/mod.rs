@@ -10,13 +10,11 @@ mod vd;
 use distances::Number;
 use serde::{Deserialize, Serialize};
 
-use crate::{utils, Cluster, Dataset};
-
-use super::Graph;
+use crate::{chaoda::Graph, utils, Cluster, Dataset};
 
 /// The algorithms that make up the CHAODA ensemble.
 #[derive(Clone, Serialize, Deserialize)]
-pub enum Member {
+pub enum GraphAlgorithm {
     /// The Cluster Cardinality algorithm.
     CC(cc::ClusterCardinality),
     /// The Graph Neighborhood algorithm.
@@ -31,17 +29,10 @@ pub enum Member {
     VD(vd::VertexDegree),
 }
 
-impl Member {
-    /// Create a new `ChaodaMember` algorithm using default parameters.
-    ///
-    /// # Parameters
-    ///
-    /// * `model`: The name of the algorithm.
-    ///
-    /// # Errors
-    ///
-    /// If the algorithm name is not recognized.
-    pub fn new(model: &str) -> Result<Self, String> {
+impl TryFrom<&str> for GraphAlgorithm {
+    type Error = String;
+
+    fn try_from(model: &str) -> Result<Self, Self::Error> {
         Ok(match model {
             "cc" | "CC" | "ClusterCardinality" => Self::CC(cc::ClusterCardinality),
             "gn" | "GN" | "GraphNeighborhood" => Self::GN(gn::GraphNeighborhood::default()),
@@ -52,10 +43,12 @@ impl Member {
             _ => return Err(format!("Unknown model: {model}")),
         })
     }
+}
 
+impl GraphAlgorithm {
     /// Create the default set of algorithms for the CHAODA ensemble.
     #[must_use]
-    pub fn default_members() -> Vec<Self> {
+    pub fn default_algorithms() -> Vec<Self> {
         vec![
             Self::CC(cc::ClusterCardinality),
             Self::GN(gn::GraphNeighborhood::default()),
@@ -70,25 +63,25 @@ impl Member {
     #[must_use]
     pub const fn name(&self) -> &str {
         match self {
-            Self::CC(_) => "cc",
-            Self::GN(_) => "gn",
-            Self::PC(_) => "pc",
-            Self::SC(_) => "sc",
-            Self::SP(_) => "sp",
-            Self::VD(_) => "vd",
+            Self::CC(_) => "CC",
+            Self::GN(_) => "GN",
+            Self::PC(_) => "PC",
+            Self::SC(_) => "SC",
+            Self::SP(_) => "SQ",
+            Self::VD(_) => "VD",
         }
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for Member {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D, S> for GraphAlgorithm {
     fn name(&self) -> &str {
         match self {
-            Self::CC(a) => <cc::ClusterCardinality as Algorithm<I, U, D, S>>::name(a),
-            Self::GN(a) => <gn::GraphNeighborhood as Algorithm<I, U, D, S>>::name(a),
-            Self::PC(a) => <pc::ParentCardinality as Algorithm<I, U, D, S>>::name(a),
-            Self::SC(a) => <sc::SubgraphCardinality as Algorithm<I, U, D, S>>::name(a),
-            Self::SP(a) => <sp::StationaryProbability as Algorithm<I, U, D, S>>::name(a),
-            Self::VD(a) => <vd::VertexDegree as Algorithm<I, U, D, S>>::name(a),
+            Self::CC(a) => <cc::ClusterCardinality as GraphEvaluator<I, U, D, S>>::name(a),
+            Self::GN(a) => <gn::GraphNeighborhood as GraphEvaluator<I, U, D, S>>::name(a),
+            Self::PC(a) => <pc::ParentCardinality as GraphEvaluator<I, U, D, S>>::name(a),
+            Self::SC(a) => <sc::SubgraphCardinality as GraphEvaluator<I, U, D, S>>::name(a),
+            Self::SP(a) => <sp::StationaryProbability as GraphEvaluator<I, U, D, S>>::name(a),
+            Self::VD(a) => <vd::VertexDegree as GraphEvaluator<I, U, D, S>>::name(a),
         }
     }
 
@@ -105,18 +98,18 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> 
 
     fn normalize_by_cluster(&self) -> bool {
         match self {
-            Self::CC(a) => <cc::ClusterCardinality as Algorithm<I, U, D, S>>::normalize_by_cluster(a),
-            Self::GN(a) => <gn::GraphNeighborhood as Algorithm<I, U, D, S>>::normalize_by_cluster(a),
-            Self::PC(a) => <pc::ParentCardinality as Algorithm<I, U, D, S>>::normalize_by_cluster(a),
-            Self::SC(a) => <sc::SubgraphCardinality as Algorithm<I, U, D, S>>::normalize_by_cluster(a),
-            Self::SP(a) => <sp::StationaryProbability as Algorithm<I, U, D, S>>::normalize_by_cluster(a),
-            Self::VD(a) => <vd::VertexDegree as Algorithm<I, U, D, S>>::normalize_by_cluster(a),
+            Self::CC(a) => <cc::ClusterCardinality as GraphEvaluator<I, U, D, S>>::normalize_by_cluster(a),
+            Self::GN(a) => <gn::GraphNeighborhood as GraphEvaluator<I, U, D, S>>::normalize_by_cluster(a),
+            Self::PC(a) => <pc::ParentCardinality as GraphEvaluator<I, U, D, S>>::normalize_by_cluster(a),
+            Self::SC(a) => <sc::SubgraphCardinality as GraphEvaluator<I, U, D, S>>::normalize_by_cluster(a),
+            Self::SP(a) => <sp::StationaryProbability as GraphEvaluator<I, U, D, S>>::normalize_by_cluster(a),
+            Self::VD(a) => <vd::VertexDegree as GraphEvaluator<I, U, D, S>>::normalize_by_cluster(a),
         }
     }
 }
 
-/// A trait for an algorithm in the CHAODA ensemble.
-pub trait Algorithm<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
+/// A trait for how a `Graph` should be evaluated into anomaly scores.
+pub trait GraphEvaluator<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// Get the name of the algorithm.
     fn name(&self) -> &str;
 

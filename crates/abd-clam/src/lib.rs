@@ -29,9 +29,7 @@ pub use crate::core::{
 pub use crate::core::cluster::WriteCsv;
 
 #[cfg(feature = "chaoda")]
-mod chaoda;
-#[cfg(feature = "chaoda")]
-pub use crate::chaoda::{Algorithm, Chaoda, Member, MlModel, Vertex};
+pub mod chaoda;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.31.0";

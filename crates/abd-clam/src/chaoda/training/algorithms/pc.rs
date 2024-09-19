@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{chaoda::Graph, Cluster, Dataset};
 
-use super::Algorithm;
+use super::GraphEvaluator;
 
 /// `Cluster`s with a smaller fraction of points from their parent `Cluster` are more anomalous.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ParentCardinality;
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for ParentCardinality {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D, S> for ParentCardinality {
     fn name(&self) -> &str {
         "pc"
     }

@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{chaoda::Graph, Cluster, Dataset};
 
-use super::Algorithm;
+use super::GraphEvaluator;
 
 /// `Cluster`s in subgraphs with relatively small population are more likely to be anomalous.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SubgraphCardinality;
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Algorithm<I, U, D, S> for SubgraphCardinality {
+impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D, S> for SubgraphCardinality {
     fn name(&self) -> &str {
         "sc"
     }

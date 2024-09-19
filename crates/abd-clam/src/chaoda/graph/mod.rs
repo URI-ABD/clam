@@ -35,7 +35,7 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Graph<'a, I, U, D,
     /// * `tree`: The `Tree` to create the `Graph` from.
     /// * `cluster_scorer`: A function that scores `OddBall`s.
     /// * `min_depth`: The minimum depth at which to consider a `OddBall`.
-    pub fn from_tree(
+    pub fn from_root(
         root: &'a Vertex<I, U, D, S>,
         data: &D,
         cluster_scorer: impl Fn(&[&'a Vertex<I, U, D, S>]) -> Vec<f32>,

@@ -3,11 +3,11 @@
 use distances::Number;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use smartcore::metrics::roc_auc_score;
+// use smartcore::metrics::roc_auc_score;
 
-use crate::{chaoda::members::Algorithm, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset, Metric};
+use crate::{chaoda::GraphEvaluator, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset, Metric};
 
-use super::{Graph, Member, MlModel, Vertex};
+use super::{Graph, GraphAlgorithm, TrainableMetaMlModel, Vertex};
 
 /// The type of the training data for the meta-ml models.
 ///
@@ -18,7 +18,7 @@ pub type TrainingData = Vec<Vec<(Vec<f32>, f32)>>;
 
 /// The combination of `Member` and `MlModel`, and their corresponding `Graph`s,
 /// that are used in the ensemble.
-type Models = Vec<(Member, MlModel)>;
+type Models = Vec<(GraphAlgorithm, TrainableMetaMlModel)>;
 
 /// A CHAODA model that works with a single metric and tree.
 #[derive(Serialize, Deserialize)]
@@ -37,7 +37,11 @@ pub struct SingleMetricModel<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I
 impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricModel<I, U, D, S> {
     /// Create a new `SingleMetricModel`.
     #[must_use]
-    pub fn new(metric: Metric<I, U>, model_combinations: Vec<(Member, Vec<MlModel>)>, min_depth: usize) -> Self {
+    pub fn new(
+        metric: Metric<I, U>,
+        model_combinations: Vec<(GraphAlgorithm, Vec<TrainableMetaMlModel>)>,
+        min_depth: usize,
+    ) -> Self {
         let models = model_combinations
             .into_iter()
             .flat_map(|(member, models)| models.into_iter().map(move |model| (member.clone(), model)))
@@ -90,8 +94,6 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
             ));
         }
 
-        let y_true = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
-
         let mut graphs = if training_data.is_empty() {
             ftlog::info!(
                 "Creating default graphs for {} {}...",
@@ -108,7 +110,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
             self.create_graphs(data, root)
         };
 
-        let step_data = self.generate_training_data(&y_true, &mut graphs);
+        let step_data = self.generate_training_data(labels, &mut graphs);
         self.train_models(training_data, &step_data)?;
 
         ftlog::info!(
@@ -200,7 +202,7 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
     }
 
     /// Generate the training data to use for the meta-ml models.
-    fn generate_training_data(&self, y_true: &[f32], graphs: &mut [Graph<I, U, D, S>]) -> TrainingData {
+    fn generate_training_data(&self, y_true: &[bool], graphs: &mut [Graph<I, U, D, S>]) -> TrainingData {
         self.models
             .iter()
             .zip(graphs.iter_mut())
@@ -214,11 +216,12 @@ impl<I: Clone, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> SingleMetricMod
                         let (y_true, y_pred) = v
                             .indices()
                             .map(|i| (y_true[i], anomaly_ratings[i]))
-                            .chain(core::iter::once((0.0, 0.0)))
-                            .chain(core::iter::once((1.0, 1.0)))
+                            .chain(core::iter::once((false, 0.0)))
+                            .chain(core::iter::once((true, 1.0)))
                             .unzip::<_, _, Vec<_>, Vec<_>>();
 
-                        let roc_auc = roc_auc_score(&y_true, &y_pred).as_f32();
+                        let roc_auc = super::roc_auc_score(&y_true, &y_pred)
+                            .unwrap_or_else(|e| unreachable!("Failed to calculate roc-auc score: {e}"));
 
                         (train_x, roc_auc)
                     })
@@ -263,8 +266,6 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
             ));
         }
 
-        let y_true = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
-
         let mut graphs = if training_data.is_empty() {
             ftlog::info!(
                 "Creating default graphs for {} {}...",
@@ -281,7 +282,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
             self.par_create_graphs(data, root)
         };
 
-        let step_data = self.par_generate_training_data(&y_true, &mut graphs);
+        let step_data = self.par_generate_training_data(labels, &mut graphs);
         self.par_train_models(training_data, &step_data)?;
 
         ftlog::info!(
@@ -367,7 +368,7 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
     }
 
     /// Parallel version of `generate_training_data`.
-    fn par_generate_training_data(&self, y_true: &[f32], graphs: &mut [Graph<I, U, D, S>]) -> TrainingData {
+    fn par_generate_training_data(&self, y_true: &[bool], graphs: &mut [Graph<I, U, D, S>]) -> TrainingData {
         self.models
             .par_iter()
             .zip(graphs.par_iter_mut())
@@ -381,11 +382,12 @@ impl<I: Clone + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U,
                         let (y_true, y_pred) = v
                             .indices()
                             .map(|i| (y_true[i], anomaly_ratings[i]))
-                            .chain(core::iter::once((0.0, 0.0)))
-                            .chain(core::iter::once((1.0, 1.0)))
+                            .chain(core::iter::once((false, 0.0)))
+                            .chain(core::iter::once((true, 1.0)))
                             .unzip::<_, _, Vec<_>, Vec<_>>();
 
-                        let roc_auc = roc_auc_score(&y_true, &y_pred).as_f32();
+                        let roc_auc = super::roc_auc_score(&y_true, &y_pred)
+                            .unwrap_or_else(|e| unreachable!("Failed to calculate roc-auc score: {e}"));
 
                         (train_x, roc_auc)
                     })
