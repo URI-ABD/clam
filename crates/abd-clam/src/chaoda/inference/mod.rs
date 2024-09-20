@@ -75,9 +75,15 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
                 scores.extend_from_slice(&row);
             }
         }
-        let shape = (data.cardinality(), M);
-        let scores = Array2::from_shape_vec(shape, scores)
-            .unwrap_or_else(|e| unreachable!("Could not create Array2 of shape {shape:?} from Vec<f32>: {e}"));
+        let num_scorers = self.combinations.iter().map(Vec::len).sum();
+        let shape = (data.cardinality(), num_scorers);
+        let scores_len = scores.len();
+        let scores = Array2::from_shape_vec(shape, scores).unwrap_or_else(|e| {
+            unreachable!(
+                "Could not create Array2 of shape {shape:?} from Vec<f32> of len {}: {e}",
+                scores_len
+            )
+        });
         scores
             .mean_axis(Axis(1))
             .unwrap_or_else(|| unreachable!("Could not compute mean of Array2<f32> along axis 1"))

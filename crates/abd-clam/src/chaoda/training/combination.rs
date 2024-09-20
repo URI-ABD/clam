@@ -110,10 +110,13 @@ impl TrainableCombination {
         D: Dataset<I, U>,
         S: Cluster<I, U, D>,
     {
+        ftlog::debug!("Using new Graph in {}", self.name());
+
         let props = graph.iter_anomaly_properties().flatten().copied().collect::<Vec<f32>>();
         self.train_x.extend_from_slice(&props);
 
         let predictions = self.graph_algorithm.evaluate_points(graph);
+
         let roc_scores = graph
             .iter_clusters()
             .map(|c| {
@@ -135,11 +138,13 @@ impl TrainableCombination {
             return Err("The number of clusters does not match the number of properties".to_string());
         }
         self.train_y.extend_from_slice(&roc_scores);
+        ftlog::debug!("Training {} with {} samples", self.name(), self.train_y.len());
 
         let meta_ml = self.meta_ml.train(NUM_RATIOS, &self.train_x, &self.train_y)?;
         let graph_algorithm = self.graph_algorithm.clone();
+        let roc_score = roc_auc_score(labels, &predictions)?;
 
-        Ok(inference::TrainedCombination::new(meta_ml, graph_algorithm))
+        Ok(inference::TrainedCombination::new(meta_ml, graph_algorithm, roc_score))
     }
 }
 

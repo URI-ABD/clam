@@ -1,24 +1,26 @@
 //! Meta Machine Learning models for CHAODA.
 
 use linfa::prelude::*;
-use linfa_linear::{IsotonicRegression, LinearRegression};
+use linfa_linear::{LinearRegression, TweedieRegressor, TweedieRegressorParams};
 use ndarray::prelude::*;
-use serde::{Deserialize, Serialize};
 
 /// A meta machine learning model.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub enum TrainableMetaMlModel {
     /// A linear regression model.
     LinearRegression(LinearRegression),
     /// An Isotonic Regression model.
-    IsotonicRegression(IsotonicRegression),
+    TweedieRegression(TweedieRegressorParams<f32>),
 }
 
 impl TrainableMetaMlModel {
     /// Get the default models.
     #[must_use]
     pub fn default_models() -> Vec<Self> {
-        vec![Self::LinearRegression(LinearRegression::default())]
+        vec![
+            Self::LinearRegression(LinearRegression::default()),
+            Self::TweedieRegression(TweedieRegressor::params().power(0.0)),
+        ]
     }
 
     /// Get the name of the model.
@@ -26,7 +28,7 @@ impl TrainableMetaMlModel {
     pub const fn name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LinearRegression",
-            Self::IsotonicRegression(_) => "IsotonicRegression",
+            Self::TweedieRegression(_) => "TweedieRegression",
         }
     }
 
@@ -35,7 +37,7 @@ impl TrainableMetaMlModel {
     pub const fn short_name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LR",
-            Self::IsotonicRegression(_) => "IR",
+            Self::TweedieRegression(_) => "TR",
         }
     }
 
@@ -82,9 +84,9 @@ impl TrainableMetaMlModel {
                 let model = model.fit(&data).map_err(|e| format!("Failed to train model: {e}"))?;
                 Ok(crate::chaoda::TrainedMetaMlModel::LinearRegression(model))
             }
-            Self::IsotonicRegression(model) => {
-                let model = model.fit(&data).map_err(|e| format!("Failed to train model: {e}"))?;
-                Ok(crate::chaoda::TrainedMetaMlModel::IsotonicRegression(model))
+            Self::TweedieRegression(params) => {
+                let model = params.fit(&data).map_err(|e| format!("Failed to train model: {e}"))?;
+                Ok(crate::chaoda::TrainedMetaMlModel::TweedieRegression(model))
             }
         }
     }
@@ -96,7 +98,7 @@ impl TryFrom<&str> for TrainableMetaMlModel {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "LR" | "lr" | "LinearRegression" => Ok(Self::LinearRegression(LinearRegression::default())),
-            "IR" | "ir" | "IsotonicRegression" => Ok(Self::IsotonicRegression(IsotonicRegression::default())),
+            "TR" | "tr" | "TweedieRegression" => Ok(Self::TweedieRegression(TweedieRegressor::params())),
             _ => Err(format!("Unknown model: {value}")),
         }
     }

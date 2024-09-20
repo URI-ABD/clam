@@ -51,10 +51,10 @@ impl GraphAlgorithm {
     pub fn default_algorithms() -> Vec<Self> {
         vec![
             Self::CC(cc::ClusterCardinality),
-            Self::GN(gn::GraphNeighborhood::default()),
+            // Self::GN(gn::GraphNeighborhood::default()),
             Self::PC(pc::ParentCardinality),
             Self::SC(sc::SubgraphCardinality),
-            Self::SP(sp::StationaryProbability::default()),
+            // Self::SP(sp::StationaryProbability::default()),
             Self::VD(vd::VertexDegree),
         ]
     }

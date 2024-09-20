@@ -43,7 +43,6 @@ ndarray-npy = { workspace = true, optional = true }
 #  - CHAODA
 linfa = { version = "0.7.0", features = ["serde"], optional = true }
 linfa-linear = { version = "0.7.0", features = ["serde"], optional = true }
-linfa-trees = { version = "0.7.0", features = ["serde"], optional = true }
 ordered-float = { version = "4.2.2", optional = true }
 bincode = { workspace = true, optional = true }
 
@@ -59,7 +58,7 @@ statistical = "1.0.0"
 [features]
 csv = []  # For writing trees to CSV files.
 ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
-chaoda = ["dep:linfa", "dep:linfa-linear", "dep:linfa-trees", "dep:ordered-float", "dep:bincode"]
+chaoda = ["dep:linfa", "dep:linfa-linear", "dep:ordered-float", "dep:bincode"]
 
 [[bench]]
 name = "genomic_search"

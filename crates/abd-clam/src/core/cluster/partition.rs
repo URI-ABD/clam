@@ -144,7 +144,7 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     ///   the tree.
     fn partition<C: Fn(&Self) -> bool>(&mut self, data: &D, criteria: &C, seed: Option<u64>) {
         if !self.is_singleton() && criteria(self) {
-            ftlog::debug!(
+            ftlog::trace!(
                 "Starting `partition` of a cluster at depth {}, with {} instances.",
                 self.depth(),
                 self.cardinality()
@@ -182,7 +182,7 @@ pub trait Partition<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
             // Update the `Cluster`'s children.
             self.set_children(children);
 
-            ftlog::debug!(
+            ftlog::trace!(
                 "Finished `partition` of a cluster at depth {}, with {} instances.",
                 self.depth(),
                 self.cardinality()
@@ -266,7 +266,7 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>:
     /// Parallelized version of the `partition` method.
     fn par_partition<C: (Fn(&Self) -> bool) + Send + Sync>(&mut self, data: &D, criteria: &C, seed: Option<u64>) {
         if !self.is_singleton() && criteria(self) {
-            ftlog::debug!(
+            ftlog::trace!(
                 "Starting `par_partition` of a cluster at depth {}, with {} instances.",
                 self.depth(),
                 self.cardinality()
@@ -304,7 +304,7 @@ pub trait ParPartition<I: Send + Sync, U: Number, D: ParDataset<I, U>>:
             // Update the `Cluster`'s children.
             self.set_children(children);
 
-            ftlog::debug!(
+            ftlog::trace!(
                 "Finished `par_partition` of a cluster at depth {}, with {} instances.",
                 self.depth(),
                 self.cardinality()

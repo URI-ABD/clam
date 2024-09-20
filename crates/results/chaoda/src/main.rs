@@ -36,6 +36,14 @@ struct Args {
     #[arg(short('i'), long)]
     data_dir: PathBuf,
 
+    /// Minimum depth of the clusters to use for making graphs.
+    #[arg(short('d'), long, default_value = "4")]
+    min_depth: usize,
+
+    /// The number of epochs to train the model for.
+    #[arg(short('e'), long, default_value = "10")]
+    num_epochs: usize,
+
     /// Whether to use a pre-trained model.
     #[arg(short('p'), long)]
     use_pre_trained: bool,
@@ -88,11 +96,12 @@ fn main() -> Result<(), String> {
     ];
     ftlog::info!("Using {} metrics...", metrics.len());
 
-    let mut train_datasets: [_; 5] = data::Data::read_paper_train(&data_dir)?;
+    let mut train_datasets = data::Data::read_paper_train(&data_dir)?;
+
     let criteria = {
         let mut criteria = Vec::new();
-        for _ in 0..metrics.len() {
-            criteria.push(default_criteria::<_, _, _, 5>());
+        for _ in 0..train_datasets.len() {
+            criteria.push(default_criteria::<_, _, _, 2>());
         }
         criteria
             .try_into()
@@ -113,7 +122,6 @@ fn main() -> Result<(), String> {
         ftlog::info!("{}", d.name());
     }
 
-    let min_depth = 4;
     let model = if use_pre_trained {
         // Load the pre-trained CHAODA model
         ftlog::info!("Loading pre-trained model from: {model_path:?}");
@@ -129,32 +137,8 @@ fn main() -> Result<(), String> {
         let trees = model.create_trees(&mut train_datasets, &criteria, seed);
 
         // Train the model
-        let num_epochs = 16;
-        let mut trained_model = model.train(&mut train_datasets, &trees, &labels, min_depth, 1)?;
-        for e in 0..num_epochs {
-            ftlog::info!("Finished epoch {}/{num_epochs}", e + 1);
-
-            let mut roc_scores = Vec::new();
-            for data in &mut train_datasets {
-                let labels = data.metadata().to_vec();
-                let c = default_criteria::<_, _, _, 2>();
-                let scores = trained_model.predict(data, &c, seed, min_depth);
-                roc_scores.push(abd_clam::chaoda::roc_auc_score(&labels, &scores)?);
-            }
-            let mean_roc_score: f32 = abd_clam::utils::mean(&roc_scores);
-            ftlog::info!(
-                "Epoch {}/{num_epochs} mean ROC-AUC score: {mean_roc_score:.6}, scores: {roc_scores:?}",
-                e + 1
-            );
-
-            if e < num_epochs - 1 {
-                ftlog::info!("Training epoch {}/{num_epochs}", e + 2);
-                trained_model = model.train(&mut train_datasets, &trees, &labels, min_depth, 1)?;
-            } else {
-                break;
-            }
-        }
-        ftlog::info!("Training complete");
+        let trained_model = model.train(&mut train_datasets, &trees, &labels, args.min_depth, args.num_epochs)?;
+        ftlog::info!("Completed training for {} epochs", args.num_epochs);
 
         // Save the trained model
         ftlog::info!("Saving model to: {model_path:?}");
@@ -182,7 +166,7 @@ fn main() -> Result<(), String> {
 
         let labels = data.metadata().to_vec();
         let criteria = default_criteria::<_, _, _, 2>();
-        let scores = model.predict(&mut data, &criteria, seed, min_depth);
+        let scores = model.predict(&mut data, &criteria, seed, args.min_depth);
         let roc_score = abd_clam::chaoda::roc_auc_score(&labels, &scores)?;
         ftlog::info!("Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
     }

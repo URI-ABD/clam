@@ -18,6 +18,8 @@ pub struct TrainedCombination {
     meta_ml: TrainedMetaMlModel,
     /// The `GraphAlgorithm` to use.
     graph_algorithm: GraphAlgorithm,
+    /// The roc-score achieved during training.
+    training_roc_score: f32,
 }
 
 impl TrainedCombination {
@@ -28,12 +30,19 @@ impl TrainedCombination {
         format!("{}-{}", self.meta_ml.short_name(), self.graph_algorithm.name())
     }
 
+    /// Return the roc-score achieved during training.
+    #[must_use]
+    pub const fn training_roc_score(&self) -> f32 {
+        self.training_roc_score
+    }
+
     /// Create a new `TrainedCombination`.
     #[must_use]
-    pub const fn new(meta_ml: TrainedMetaMlModel, graph_algorithm: GraphAlgorithm) -> Self {
+    pub const fn new(meta_ml: TrainedMetaMlModel, graph_algorithm: GraphAlgorithm, roc_score: f32) -> Self {
         Self {
             meta_ml,
             graph_algorithm,
+            training_roc_score: roc_score,
         }
     }
 
@@ -91,6 +100,8 @@ impl TrainedCombination {
         D: Dataset<I, U>,
         S: Cluster<I, U, D>,
     {
+        ftlog::debug!("Predicting with {}...", self.name());
+
         let mut graph = self.create_graph(root, data, min_depth);
         let scores = self.graph_algorithm.evaluate_points(&mut graph);
         (graph, scores)

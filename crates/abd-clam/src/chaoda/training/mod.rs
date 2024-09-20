@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::{adapter::Adapter, Cluster, Dataset, Metric, Partition};
+use crate::{adapter::Adapter, chaoda::inference::TrainedCombination, Cluster, Dataset, Metric, Partition};
 
 mod algorithms;
 mod combination;
@@ -104,25 +104,28 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
     pub fn create_trees<const N: usize, D: Dataset<I, U>, S: Partition<I, U, D>, C: Fn(&S) -> bool>(
         &self,
         datasets: &mut [D; N],
-        criteria: &[[C; N]; M],
+        criteria: &[[C; M]; N],
         seed: Option<u64>,
-    ) -> [[Vertex<I, U, D, S>; N]; M] {
+    ) -> [[Vertex<I, U, D, S>; M]; N] {
         let mut trees = Vec::new();
-        for (metric, criteria) in self.metrics.iter().zip(criteria) {
+        for (data, criteria) in datasets.iter_mut().zip(criteria) {
             let mut metric_trees = Vec::new();
-            for (data, criteria) in datasets.iter_mut().zip(criteria) {
+            for (metric, criteria) in self.metrics.iter().zip(criteria) {
                 data.set_metric(metric.clone());
                 let root = S::new_tree(data, criteria, seed);
                 metric_trees.push(Vertex::adapt_tree(root, None));
             }
-            let metric_trees = metric_trees
-                .try_into()
-                .unwrap_or_else(|_| unreachable!("Could not convert Vec<Vertex> to [Vertex; {M}]"));
+            let metric_trees = metric_trees.try_into().unwrap_or_else(|v: Vec<_>| {
+                unreachable!("Could not convert Vec<Vertex> to [Vertex; {M}]. Len was {}", v.len())
+            });
             trees.push(metric_trees);
         }
-        trees
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("Could not convert Vec<[Vertex; {M}]> to [[Vertex; {M}]; {N}]"))
+        trees.try_into().unwrap_or_else(|v: Vec<_>| {
+            unreachable!(
+                "Could not convert Vec<[Vertex; {M}]> to [[Vertex; {M}]; {N}]. Len was {}",
+                v.len()
+            )
+        })
     }
 
     /// Train the model using the given datasets.
@@ -152,7 +155,7 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
     pub fn train<const N: usize, D: Dataset<I, U>, S: Cluster<I, U, D>>(
         &mut self,
         datasets: &mut [D; N],
-        trees: &[[Vertex<I, U, D, S>; N]; M],
+        trees: &[[Vertex<I, U, D, S>; M]; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         num_epochs: usize,
@@ -164,33 +167,70 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
         }
         ftlog::info!("Training with {N} datasets and {M} metrics...");
 
-        let mut trined_combinations = Vec::new();
-        for _ in 0..num_epochs {
-            // ftlog::info!("Training epoch {}/{num_epochs}", e + 1);
+        let mut trained_combinations = Vec::new();
 
-            trined_combinations.clear();
-            for ((metric, roots), combinations) in
-                self.metrics.iter().zip(trees.iter()).zip(self.combinations.iter_mut())
-            {
-                trined_combinations.clear();
+        for e in 0..num_epochs {
+            ftlog::info!("Starting Training epoch {}/{num_epochs}", e + 1);
+            trained_combinations.clear();
 
-                for ((data, labels), root) in datasets.iter_mut().zip(labels.iter()).zip(roots.iter()) {
+            for (i, ((data, labels), roots)) in datasets.iter_mut().zip(labels).zip(trees.iter()).enumerate() {
+                let mut data_combinations = Vec::new();
+
+                for (j, ((metric, root), combinations)) in self
+                    .metrics
+                    .iter()
+                    .zip(roots.iter())
+                    .zip(self.combinations.iter_mut())
+                    .enumerate()
+                {
                     data.set_metric(metric.clone());
 
-                    let mut metric_trained_combinations = Vec::new();
-                    for combination in combinations.iter_mut() {
+                    let mut inner_combinations = Vec::new();
+                    let n_combos = combinations.len();
+                    for (k, combination) in combinations.iter_mut().enumerate() {
                         let mut graph = combination.create_graph(root, data, min_depth);
                         let trained_combination = combination.train_step(&mut graph, labels)?;
-                        metric_trained_combinations.push(trained_combination);
+                        ftlog::info!(
+                            "Epoch {}/{num_epochs}: Data {}/{N}, metric {}/{M}, combination {}: {}/{}, roc-auc: {:.6}",
+                            e + 1,
+                            i + 1,
+                            j + 1,
+                            trained_combination.name(),
+                            k + 1,
+                            n_combos,
+                            trained_combination.training_roc_score(),
+                        );
+                        inner_combinations.push(trained_combination);
                     }
-                    trined_combinations.push(metric_trained_combinations);
+                    data_combinations.push(inner_combinations);
                 }
+
+                trained_combinations = data_combinations;
             }
+
+            let roc_scores = trained_combinations
+                .iter()
+                .flat_map(|combos| combos.iter().map(TrainedCombination::training_roc_score))
+                .collect::<Vec<_>>();
+            let mean_roc_score: f32 = crate::utils::mean(&roc_scores);
+            ftlog::info!(
+                "Finished Training epoch {}/{num_epochs} with mean roc-auc: {mean_roc_score}",
+                e + 1
+            );
         }
 
-        let combinations: [_; M] = trined_combinations.try_into().unwrap_or_else(|_| {
-            unreachable!("Could not convert Vec<Vec<TrainableCombination>> to [Vec<TrainableCombination>; {M}]")
+        let combinations: [_; M] = trained_combinations.try_into().unwrap_or_else(|v: Vec<_>| {
+            unreachable!(
+                "Could not convert Vec<Vec<TrainableCombination>> to [Vec<TrainableCombination>; {M}], len: {}",
+                v.len()
+            )
         });
+
+        for (i, (a, b)) in combinations.iter().zip(self.combinations.iter()).enumerate() {
+            if a.len() != b.len() {
+                return Err(format!("Mismatch in number of trained combinations for metric {i}"));
+            }
+        }
 
         Ok(Chaoda::new(self.metrics.clone(), combinations))
     }
