@@ -36,6 +36,19 @@ impl TrainedCombination {
         self.training_roc_score
     }
 
+    /// Whether to invert the prediction scores.
+    #[must_use]
+    pub fn invert_scores(&self) -> bool {
+        self.training_roc_score < 0.5
+    }
+
+    /// Whether this combination is not a random coin flip.
+    #[must_use]
+    pub fn discerns(&self, tol: f32) -> bool {
+        let tol = tol.abs().min(0.5);
+        (self.training_roc_score - 0.5).abs() > tol
+    }
+
     /// Create a new `TrainedCombination`.
     #[must_use]
     pub const fn new(meta_ml: TrainedMetaMlModel, graph_algorithm: GraphAlgorithm, roc_score: f32) -> Self {
@@ -104,6 +117,13 @@ impl TrainedCombination {
 
         let mut graph = self.create_graph(root, data, min_depth);
         let scores = self.graph_algorithm.evaluate_points(&mut graph);
+
+        let scores = if self.invert_scores() {
+            scores.iter().map(|&s| 1.0 - s).collect()
+        } else {
+            scores
+        };
+
         (graph, scores)
     }
 }

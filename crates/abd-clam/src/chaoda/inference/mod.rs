@@ -67,16 +67,23 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
         trees: &[Vertex<I, U, D, S>; M],
         min_depth: usize,
     ) -> Vec<f32> {
+        // TODO: Make this a parameter.
+        let tol = 0.01;
+
+        let mut num_discerning = 0;
         let mut scores = Vec::new();
         for ((metric, root), combinations) in self.metrics.iter().zip(trees.iter()).zip(self.combinations.iter()) {
             data.set_metric(metric.clone());
             for c in combinations {
-                let (_, row) = c.predict(root, data, min_depth);
-                scores.extend_from_slice(&row);
+                if c.discerns(tol) {
+                    num_discerning += 1;
+                    let (_, row) = c.predict(root, data, min_depth);
+                    scores.extend_from_slice(&row);
+                }
             }
         }
-        let num_scorers = self.combinations.iter().map(Vec::len).sum();
-        let shape = (data.cardinality(), num_scorers);
+
+        let shape = (data.cardinality(), num_discerning);
         let scores_len = scores.len();
         let scores = Array2::from_shape_vec(shape, scores).unwrap_or_else(|e| {
             unreachable!(
