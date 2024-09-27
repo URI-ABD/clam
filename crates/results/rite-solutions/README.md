@@ -4,4 +4,6 @@ This binary crate contains some experimental code to help William to do some fan
 
 # Usage
 
-TODO
+```shell
+cargo run --release --bin rite-solutions -- --help
+```

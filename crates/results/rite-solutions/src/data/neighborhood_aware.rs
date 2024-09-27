@@ -69,8 +69,15 @@ impl NeighborhoodAware {
             .iter()
             .map(|&(i, _)| self.neighbor_distances(i))
             .collect::<Vec<_>>();
-        let distances = hits.iter().map(|&(_, d)| d).collect::<Vec<_>>();
 
+        // TODO: Compute all-pairs matrix of wasserstein distances among the neighbors' distance distributions.
+
+        // TODO: Compute the wasserstein distances for the query
+
+        // TODO: Optionally use the threshold to determine if the query is an outlier.
+
+        let distances = hits.iter().map(|&(_, d)| d).collect::<Vec<_>>();
+        // TODO: The rest of this is wrong.
         let wasserstein_distances = neighbors_distances
             .iter()
             .map(|d| wasserstein::wasserstein(d, &distances))
