@@ -176,6 +176,12 @@ impl<I, U, M> FlatVec<I, U, M> {
             ))
         }
     }
+
+    /// Get the instances in the dataset.
+    #[must_use]
+    pub fn instances(&self) -> &[I] {
+        &self.instances
+    }
 }
 
 impl<I, U: Number, M> MetricSpace<I, U> for FlatVec<I, U, M> {
@@ -300,17 +306,8 @@ impl<T: std::str::FromStr + Copy, U> FlatVec<Vec<T>, U, usize> {
     /// * If the file cannot be read.
     /// * If the types in the file are not convertible to `T` using string parsing.
     /// * If the instances cannot be converted to a `Vec`.
-    pub fn from_csv<P: AsRef<std::path::Path>>(
-        path: P,
-        metric: Metric<Vec<T>, U>,
-        delimiter: u8,
-        has_headers: bool,
-    ) -> Result<Self, String> {
-        let mut reader = csv::ReaderBuilder::new()
-            .delimiter(delimiter)
-            .has_headers(has_headers)
-            .from_path(path)
-            .map_err(|e| e.to_string())?;
+    pub fn read_csv<P: AsRef<std::path::Path>>(path: P, metric: Metric<Vec<T>, U>) -> Result<Self, String> {
+        let mut reader = csv::ReaderBuilder::new().from_path(path).map_err(|e| e.to_string())?;
         let instances = reader
             .records()
             .map(|record| {

@@ -3,12 +3,17 @@
 //! We calculate distances over collections of `Number`s.
 //! Distance values are also represented as `Number`s.
 
-use core::fmt::{Debug, Display};
+use core::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use super::{Addition, Multiplication};
 
 /// Collections of `Number`s can be used to calculate distances.
-pub trait Number: Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default {
+pub trait Number:
+    Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default + FromStr
+{
     /// The maximum possible value.
     const MAX: Self;
 

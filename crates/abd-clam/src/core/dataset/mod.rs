@@ -1,7 +1,6 @@
 //! Traits relating to datasets.
 
 mod flat_vec;
-// pub mod linear_search;
 mod metric;
 pub mod metric_space;
 mod permutable;
@@ -9,7 +8,6 @@ mod permutable;
 use distances::Number;
 
 pub use flat_vec::FlatVec;
-// use linear_search::LinearSearch;
 pub use metric::Metric;
 pub use metric_space::MetricSpace;
 pub use permutable::Permutable;

@@ -132,6 +132,15 @@ impl core::ops::SubAssign for Bool {
     }
 }
 
+impl core::str::FromStr for Bool {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let b = s.parse::<bool>().map_err(|e| e.to_string())?;
+        Ok(Self::from_bool(b))
+    }
+}
+
 impl Number for Bool {
     const MAX: Self = Self(1);
     const MIN: Self = Self(0);
