@@ -283,6 +283,80 @@ impl<T: ndarray_npy::WritableElement + Copy, U> FlatVec<Vec<T>, U, usize> {
     }
 }
 
+#[cfg(feature = "csv")]
+impl<T: std::str::FromStr + Copy, U> FlatVec<Vec<T>, U, usize> {
+    /// Reads a `VecDataset` from a `.csv` file.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: The path to the `.csv` file.
+    /// - `metric`: The metric space of the dataset.
+    /// - `delimiter`: The delimiter used in the `.csv` file.
+    /// - `has_headers`: Whether to treat the first row as headers.
+    ///
+    /// # Errors
+    ///
+    /// * If the path is invalid.
+    /// * If the file cannot be read.
+    /// * If the types in the file are not convertible to `T` using string parsing.
+    /// * If the instances cannot be converted to a `Vec`.
+    pub fn from_csv<P: AsRef<std::path::Path>>(
+        path: P,
+        metric: Metric<Vec<T>, U>,
+        delimiter: u8,
+        has_headers: bool,
+    ) -> Result<Self, String> {
+        let mut reader = csv::ReaderBuilder::new()
+            .delimiter(delimiter)
+            .has_headers(has_headers)
+            .from_path(path)
+            .map_err(|e| e.to_string())?;
+        let instances = reader
+            .records()
+            .map(|record| {
+                record.map_err(|e| e.to_string()).and_then(|record| {
+                    record
+                        .iter()
+                        .map(|field| {
+                            field
+                                .parse::<T>()
+                                .map_err(|_| "Could not parse field in csv".to_string())
+                        })
+                        .collect()
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::new_array(instances, metric)
+    }
+}
+
+#[cfg(feature = "csv")]
+impl<T: std::string::ToString + Copy, U, M> FlatVec<Vec<T>, U, M> {
+    /// Writes the `VecDataset` to a `.csv` file with the given path.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: The path to the `.csv` file.
+    /// - `delimiter`: The delimiter to use in the `.csv` file.
+    ///
+    /// # Errors
+    ///
+    /// * If the path is invalid.
+    /// * If the file cannot be created.
+    pub fn to_csv<P: AsRef<std::path::Path>>(&self, path: P, delimiter: u8) -> Result<(), String> {
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(delimiter)
+            .from_path(path)
+            .map_err(|e| e.to_string())?;
+        for instance in &self.instances {
+            writer
+                .write_record(instance.iter().map(T::to_string))
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+}
+
 /// Tests for the `FlatVec` struct.
 #[cfg(test)]
 mod tests {

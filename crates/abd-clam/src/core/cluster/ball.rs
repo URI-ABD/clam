@@ -51,6 +51,26 @@ impl<I, U: Number, D: Dataset<I, U>> Ball<I, U, D> {
         ball.children = children;
         ball
     }
+
+    /// Changes the associated `Dataset` type.
+    pub fn with_dataset_type<Dd: Dataset<I, U>>(self) -> Ball<I, U, Dd> {
+        let children = self
+            .children
+            .into_iter()
+            .map(|(e, d, b)| (e, d, Box::new(b.with_dataset_type())))
+            .collect();
+        Ball {
+            depth: self.depth,
+            cardinality: self.cardinality,
+            radius: self.radius,
+            lfd: self.lfd,
+            arg_center: self.arg_center,
+            arg_radial: self.arg_radial,
+            indices: self.indices,
+            children,
+            _id: PhantomData,
+        }
+    }
 }
 
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> Ball<I, U, D> {
