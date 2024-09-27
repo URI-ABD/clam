@@ -4,8 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use distances::Number;
 use ndarray::prelude::*;
+use rayon::prelude::*;
 
-use crate::{Cluster, Dataset};
+use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
 
 use super::Vertex;
 
@@ -301,5 +302,182 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Component<'a, I, U
     /// Get the accumulated child-parent cardinality ratio of each `OddBall` in the `Component`.
     pub fn accumulated_cp_car_ratios(&self) -> impl Iterator<Item = f32> + '_ {
         self.accumulated_cp_car_ratios.values().copied()
+    }
+}
+
+impl<'a, I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Component<'a, I, U, D, S> {
+    /// Parallel version of `new`.
+    pub fn par_new(vertices: &[&'a Vertex<I, U, D, S>], data: &D) -> Vec<Self> {
+        // TODO: This is a naive implementation of the adjacency list. We can
+        // improve this by using the search functionality from CAKES.
+        let adjacency_list: AdjacencyList<_, _> = vertices
+            .par_iter()
+            .enumerate()
+            .map(|(i, &v1)| {
+                let neighbors = vertices
+                    .par_iter()
+                    .enumerate()
+                    .filter(|&(j, _)| i != j)
+                    .filter_map(|(_, &v2)| {
+                        let (r1, r2) = (v1.radius(), v2.radius());
+                        let d = v1.distance_to_other(data, v2);
+                        if d <= r1 + r2 {
+                            Some((v2, d))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Neighbors<_, _>>();
+                (v1, neighbors)
+            })
+            .collect();
+
+        let population = vertices.iter().map(|v| v.cardinality()).sum();
+        let accumulated_cp_car_ratios = vertices.iter().map(|&v| (v, v.accumulated_cp_car_ratio())).collect();
+        let anomaly_properties = vertices.iter().map(|&v| (v, v.ratios())).collect();
+
+        let c = Self {
+            adjacency_list,
+            population,
+            eccentricities: None,
+            diameter: None,
+            neighborhood_sizes: None,
+            accumulated_cp_car_ratios,
+            anomaly_properties,
+        };
+
+        let [mut c, mut other] = c.par_partition();
+        let mut components = vec![c];
+        while !other.is_empty() {
+            [c, other] = other.par_partition();
+            components.push(c);
+        }
+
+        components
+    }
+
+    /// Parallel version of `partition`.
+    fn par_partition(mut self) -> [Self; 2] {
+        // Perform a traversal of the adjacency list to find a connected subgraph.
+        let mut visited: BTreeSet<&Vertex<I, U, D, S>> = BTreeSet::new();
+        let mut stack: Vec<&Vertex<I, U, D, S>> = self.adjacency_list.keys().copied().collect();
+        while let Some(v) = stack.pop() {
+            // Check if the cluster has already been visited.
+            if visited.contains(&v) {
+                continue;
+            }
+            // Mark the cluster as visited.
+            visited.insert(v);
+            // Add the neighbors of the cluster to the stack to be visited.
+            for &j in self.adjacency_list[&v].keys() {
+                stack.push(j);
+            }
+        }
+
+        // Partition the clusters into visited and unvisited clusters.
+        let (al_1, al_2): (AdjacencyList<_, _>, AdjacencyList<_, _>) =
+            self.adjacency_list.into_iter().partition(|(k, _)| visited.contains(k));
+        let al_1: AdjacencyList<_, _> = al_1
+            .into_par_iter()
+            .map(|(k, n)| {
+                let n = n.into_iter().filter(|(j, _)| visited.contains(j)).collect();
+                (k, n)
+            })
+            .collect();
+        let al_2: AdjacencyList<_, _> = al_2
+            .into_par_iter()
+            .map(|(k, n)| {
+                let n = n.into_iter().filter(|(j, _)| visited.contains(j)).collect();
+                (k, n)
+            })
+            .collect();
+
+        // Build a component from the clusters that were not visited in the traversal.
+        let population = al_2.keys().map(|v| v.cardinality()).sum();
+        let accumulated_cp_car_ratios = al_2.keys().map(|&v| (v, self.accumulated_cp_car_ratios[v])).collect();
+        let anomaly_properties = al_2.keys().map(|&v| (v, self.anomaly_properties[v])).collect();
+        let other = Self {
+            adjacency_list: al_2,
+            population,
+            eccentricities: None,
+            diameter: None,
+            neighborhood_sizes: None,
+            accumulated_cp_car_ratios,
+            anomaly_properties,
+        };
+
+        // Set the current component to the visited clusters.
+        self.adjacency_list = al_1;
+        self.population = self.adjacency_list.keys().map(|v| v.cardinality()).sum();
+        self.eccentricities = None;
+        self.diameter = None;
+        self.neighborhood_sizes = None;
+        self.accumulated_cp_car_ratios = self
+            .adjacency_list
+            .keys()
+            .map(|&v| (v, self.accumulated_cp_car_ratios[v]))
+            .collect();
+        self.anomaly_properties = self
+            .adjacency_list
+            .keys()
+            .map(|&v| (v, self.anomaly_properties[v]))
+            .collect();
+
+        [self, other]
+    }
+
+    /// Iterate over the `OddBall`s in the `Component` in parallel.
+    pub fn par_iter_clusters(&self) -> impl ParallelIterator<Item = &Vertex<I, U, D, S>> {
+        self.adjacency_list.par_iter().map(|(k, _)| *k)
+    }
+
+    /// Iterate over the lists of neighbors of the `OddBall`s in the `Component`
+    /// in parallel.
+    pub fn par_iter_neighbors(&self) -> impl ParallelIterator<Item = &Neighbors<&Vertex<I, U, D, S>, U>> {
+        self.adjacency_list.par_iter().map(|(_, v)| v)
+    }
+
+    /// Iterate over the anomaly properties of the `OddBall`s in the `Component`
+    /// in parallel.
+    pub fn par_iter_anomaly_properties(&self) -> impl ParallelIterator<Item = &[f32; 6]> {
+        self.anomaly_properties.par_iter().map(|(_, v)| v)
+    }
+
+    /// Parallel version of `diameter`.
+    pub fn par_diameter(&mut self) -> usize {
+        if self.diameter.is_none() {
+            if self.eccentricities.is_none() {
+                self.par_compute_eccentricities();
+            }
+            let ecc = self
+                .eccentricities
+                .as_ref()
+                .unwrap_or_else(|| unreachable!("We just computed the eccentricities"));
+            self.diameter = Some(ecc.iter().copied().max().unwrap_or(0));
+        }
+        self.diameter
+            .unwrap_or_else(|| unreachable!("We just computed the diameter"))
+    }
+
+    /// Parallel version of `compute_eccentricities`.
+    pub fn par_compute_eccentricities(&mut self) {
+        self.eccentricities = Some(self.par_neighborhood_sizes().map(Vec::len).collect());
+    }
+
+    /// Parallel version of `neighborhood_sizes`.
+    pub fn par_neighborhood_sizes(&mut self) -> impl ParallelIterator<Item = &Vec<usize>> + '_ {
+        if self.neighborhood_sizes.is_none() {
+            self.neighborhood_sizes = Some(
+                self.adjacency_list
+                    .par_iter()
+                    .map(|(&k, _)| (k, self.compute_neighborhood_sizes(k)))
+                    .collect(),
+            );
+        }
+        self.neighborhood_sizes
+            .as_ref()
+            .unwrap_or_else(|| unreachable!("We just computed the neighborhood sizes"))
+            .par_iter()
+            .map(|(_, v)| v)
     }
 }
