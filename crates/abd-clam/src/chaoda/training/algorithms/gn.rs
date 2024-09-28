@@ -34,11 +34,11 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D
         "gn"
     }
 
-    fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<I, U, D, S>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let k = (self.diameter_fraction * diameter.as_f32()).round() as usize;
-        g.neighborhood_sizes()
+        g.iter_neighborhood_sizes()
             .map(|n| if n.len() <= k { n.last().unwrap_or(&0) } else { &n[k] })
             .map(|&n| -n.as_f32())
             .collect()

@@ -85,7 +85,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D
         }
     }
 
-    fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<I, U, D, S>) -> Vec<f32> {
         match self {
             Self::CC(a) => a.evaluate_clusters(g),
             Self::GN(a) => a.evaluate_clusters(g),
@@ -119,7 +119,7 @@ pub trait GraphEvaluator<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The output vector must be the same length as the number of `OddBall`s in
     /// the `Graph`, and the order of the scores must correspond to the order of the
     /// `OddBall`s in the `Graph`.
-    fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32>;
+    fn evaluate_clusters(&self, g: &Graph<I, U, D, S>) -> Vec<f32>;
 
     /// Whether to normalize anomaly scores by cluster or by point.
     fn normalize_by_cluster(&self) -> bool;
@@ -145,7 +145,7 @@ pub trait GraphEvaluator<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// # Returns
     ///
     /// * A vector of anomaly scores for each point in the `Graph`.
-    fn evaluate_points(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {
+    fn evaluate_points(&self, g: &Graph<I, U, D, S>) -> Vec<f32> {
         let cluster_scores = {
             let scores = self.evaluate_clusters(g);
             if self.normalize_by_cluster() {

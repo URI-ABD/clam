@@ -102,7 +102,7 @@ impl TrainableCombination {
     /// the trained model.
     pub fn train_step<I, U, D, S>(
         &mut self,
-        graph: &mut Graph<I, U, D, S>,
+        graph: &Graph<I, U, D, S>,
         labels: &[bool],
     ) -> Result<inference::TrainedCombination, String>
     where
@@ -112,7 +112,7 @@ impl TrainableCombination {
     {
         ftlog::debug!("Using new Graph in {}", self.name());
 
-        let props = graph.iter_anomaly_properties().flatten().copied().collect::<Vec<f32>>();
+        let props = graph.iter_anomaly_properties().flatten().collect::<Vec<f32>>();
         self.train_x.extend_from_slice(&props);
 
         let predictions = self.graph_algorithm.evaluate_points(graph);

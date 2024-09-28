@@ -30,7 +30,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D
         "sp"
     }
 
-    fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<I, U, D, S>) -> Vec<f32> {
         g.compute_stationary_probabilities(self.num_steps)
             .into_iter()
             .map(|x| 1.0 - x)

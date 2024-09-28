@@ -115,8 +115,8 @@ impl TrainedCombination {
     {
         ftlog::debug!("Predicting with {}...", self.name());
 
-        let mut graph = self.create_graph(root, data, min_depth);
-        let scores = self.graph_algorithm.evaluate_points(&mut graph);
+        let graph = self.create_graph(root, data, min_depth);
+        let scores = self.graph_algorithm.evaluate_points(&graph);
 
         let scores = if self.invert_scores() {
             scores.iter().map(|&s| 1.0 - s).collect()

@@ -188,8 +188,8 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
                     let mut inner_combinations = Vec::new();
                     let n_combos = combinations.len();
                     for (k, combination) in combinations.iter_mut().enumerate() {
-                        let mut graph = combination.create_graph(root, data, min_depth);
-                        let trained_combination = combination.train_step(&mut graph, labels)?;
+                        let graph = combination.create_graph(root, data, min_depth);
+                        let trained_combination = combination.train_step(&graph, labels)?;
                         ftlog::info!(
                             "Epoch {}/{num_epochs}: Data {}/{N}, metric {}/{M}, combination {}: {}/{}, roc-auc: {:.6}",
                             e + 1,

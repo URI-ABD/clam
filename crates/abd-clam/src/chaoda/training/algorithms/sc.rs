@@ -16,7 +16,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D
         "sc"
     }
 
-    fn evaluate_clusters(&self, g: &mut Graph<I, U, D, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<I, U, D, S>) -> Vec<f32> {
         g.iter_components()
             .flat_map(|sg| {
                 let p = -sg.population().as_f32();
