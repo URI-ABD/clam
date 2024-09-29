@@ -163,13 +163,13 @@ impl Data {
     }
 
     /// Read the training datasets from the paper
-    pub fn read_paper_train(data_dir: &Path) -> Result<[ChaodaDataset; 3], String> {
+    pub fn read_paper_train(data_dir: &Path) -> Result<[ChaodaDataset; 4], String> {
         Ok([
             Self::Annthyroid.read(data_dir)?,
             // Self::Mnist.read(data_dir)?,
             Self::PenDigits.read(data_dir)?,
-            // Self::Satellite.read(data_dir)?,
-            // Self::Shuttle.read(data_dir)?,  // I moved this to inference because it takes too long to train
+            Self::Satellite.read(data_dir)?,
+            // Self::Shuttle.read(data_dir)?,  // It takes too long to train
             Self::Thyroid.read(data_dir)?,
         ])
     }
@@ -177,7 +177,6 @@ impl Data {
     /// Read the inference datasets from the paper
     pub fn read_paper_inference(data_dir: &Path) -> Result<Vec<ChaodaDataset>, String> {
         Ok(vec![
-            Self::Shuttle.read(data_dir)?,
             Self::Arrhythmia.read(data_dir)?,
             Self::BreastW.read(data_dir)?,
             Self::Cardio.read(data_dir)?,

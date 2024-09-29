@@ -13,6 +13,12 @@ pub enum TrainableMetaMlModel {
     TweedieRegression(TweedieRegressorParams<f32>),
 }
 
+impl Default for TrainableMetaMlModel {
+    fn default() -> Self {
+        Self::LinearRegression(LinearRegression::default())
+    }
+}
+
 impl TrainableMetaMlModel {
     /// Get the default models.
     #[must_use]

@@ -7,7 +7,12 @@ use distances::Number;
 use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{adapter::Adapter, Dataset, Metric, Partition};
+use crate::{
+    adapter::{Adapter, ParAdapter},
+    dataset::ParDataset,
+    partition::ParPartition,
+    Dataset, Metric, Partition,
+};
 
 pub use combination::TrainedCombination;
 pub use meta_ml::TrainedMetaMlModel;
@@ -119,6 +124,53 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
         min_depth: usize,
     ) -> f32 {
         let scores = self.predict(data, criteria, seed, min_depth);
+        roc_auc_score(labels, &scores)
+            .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for evaluation: {e}"))
+    }
+}
+
+impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
+    /// Parallel version of `create_trees`.
+    pub fn par_create_trees<D: ParDataset<I, U>, S: ParPartition<I, U, D>, C: (Fn(&S) -> bool) + Send + Sync>(
+        &self,
+        data: &mut D,
+        criteria: &[C; M],
+        seed: Option<u64>,
+    ) -> [Vertex<I, U, D, S>; M] {
+        let mut trees = Vec::new();
+        for (metric, criteria) in self.metrics.iter().zip(criteria.iter()) {
+            data.set_metric(metric.clone());
+            let source = S::par_new_tree(data, criteria, seed);
+            let tree = Vertex::par_adapt_tree(source, None);
+            trees.push(tree);
+        }
+        trees
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("Could not convert Vec<Vertex<I, U, D, S>> to [Vertex<I, U, D, S>; {M}]"))
+    }
+
+    /// Parallel version of `predict`.
+    pub fn par_predict<D: ParDataset<I, U>, S: ParPartition<I, U, D>, C: (Fn(&S) -> bool) + Send + Sync>(
+        &self,
+        data: &mut D,
+        criteria: &[C; M],
+        seed: Option<u64>,
+        min_depth: usize,
+    ) -> Vec<f32> {
+        let trees = self.par_create_trees(data, criteria, seed);
+        self.predict_from_trees(data, &trees, min_depth)
+    }
+
+    /// Parallel version of `evaluate`.
+    pub fn par_evaluate<D: ParDataset<I, U>, S: ParPartition<I, U, D>, C: (Fn(&S) -> bool) + Send + Sync>(
+        &self,
+        data: &mut D,
+        criteria: &[C; M],
+        labels: &[bool],
+        seed: Option<u64>,
+        min_depth: usize,
+    ) -> f32 {
+        let scores = self.par_predict(data, criteria, seed, min_depth);
         roc_auc_score(labels, &scores)
             .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for evaluation: {e}"))
     }

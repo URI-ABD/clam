@@ -7,11 +7,13 @@ use crate::{
         inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, Vertex,
         NUM_RATIOS,
     },
+    cluster::ParCluster,
+    dataset::ParDataset,
     Cluster, Dataset,
 };
 
 /// A trainable combination of a `MetaMLModel` and a `GraphAlgorithm`.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[allow(clippy::module_name_repetitions)]
 pub struct TrainableCombination {
     /// The `MetaMLModel` to use.
@@ -91,6 +93,39 @@ impl TrainableCombination {
         } else {
             let cluster_scorer = self.meta_ml_scorer().unwrap_or_else(|e| unreachable!("{e}"));
             Graph::from_root(root, data, cluster_scorer, min_depth)
+        }
+    }
+
+    /// Parallel version of `TrainableCombination::create_graph`.
+    pub fn par_create_graph<'a, I, U, D, S>(
+        &self,
+        root: &'a Vertex<I, U, D, S>,
+        data: &D,
+        min_depth: usize,
+    ) -> Graph<'a, I, U, D, S>
+    where
+        I: Send + Sync,
+        U: Number,
+        D: ParDataset<I, U>,
+        S: ParCluster<I, U, D>,
+    {
+        if self.train_x.is_empty() || self.train_y.is_empty() {
+            let cluster_scorer = |clusters: &[&Vertex<I, U, D, S>]| {
+                clusters
+                    .iter()
+                    .map(|c| {
+                        if c.depth() == min_depth || (c.is_leaf() && c.depth() < min_depth) {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            };
+            Graph::par_from_root(root, data, cluster_scorer, min_depth)
+        } else {
+            let cluster_scorer = self.meta_ml_scorer().unwrap_or_else(|e| unreachable!("{e}"));
+            Graph::par_from_root(root, data, cluster_scorer, min_depth)
         }
     }
 

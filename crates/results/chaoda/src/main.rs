@@ -90,7 +90,7 @@ fn main() -> Result<(), String> {
     let metrics = [
         Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::euclidean(x, y), false).with_name("euclidean"),
         Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::manhattan(x, y), false).with_name("manhattan"),
-        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::cosine(x, y), false).with_name("cosine"),
+        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::cosine(x, y), false).with_name("cosine"),
         // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::canberra(x, y), false).with_name("canberra"),
         // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::bray_curtis(x, y), false).with_name("bray_curtis"),
     ];
@@ -101,7 +101,7 @@ fn main() -> Result<(), String> {
     let criteria = {
         let mut criteria = Vec::new();
         for _ in 0..train_datasets.len() {
-            criteria.push(default_criteria::<_, _, _, 2>());
+            criteria.push(default_criteria::<_, _, _, 3>());
         }
         criteria
             .try_into()
@@ -134,10 +134,10 @@ fn main() -> Result<(), String> {
         let mut model = ChaodaTrainer::new_all_pairs(metrics.clone(), meta_ml_models, graph_algorithms);
 
         // Create the trees for use in training the model.
-        let trees = model.create_trees(&mut train_datasets, &criteria, seed);
+        let trees = model.par_create_trees(&mut train_datasets, &criteria, seed);
 
         // Train the model
-        let trained_model = model.train(&mut train_datasets, &trees, &labels, args.min_depth, args.num_epochs)?;
+        let trained_model = model.par_train(&mut train_datasets, &trees, &labels, args.min_depth, args.num_epochs)?;
         ftlog::info!("Completed training for {} epochs", args.num_epochs);
 
         // Save the trained model
@@ -165,9 +165,8 @@ fn main() -> Result<(), String> {
         ftlog::info!("Starting evaluation for: {}", data.name());
 
         let labels = data.metadata().to_vec();
-        let criteria = default_criteria::<_, _, _, 2>();
-        let scores = model.predict(&mut data, &criteria, seed, args.min_depth);
-        let roc_score = abd_clam::chaoda::roc_auc_score(&labels, &scores)?;
+        let criteria = default_criteria::<_, _, _, 3>();
+        let roc_score = model.par_evaluate(&mut data, &criteria, &labels, seed, args.min_depth);
         ftlog::info!("Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
     }
 

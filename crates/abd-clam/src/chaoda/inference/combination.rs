@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     chaoda::{training::GraphEvaluator, Graph, GraphAlgorithm, Vertex},
+    cluster::ParCluster,
+    dataset::ParDataset,
     Cluster, Dataset,
 };
 
@@ -34,6 +36,16 @@ impl TrainedCombination {
     #[must_use]
     pub const fn training_roc_score(&self) -> f32 {
         self.training_roc_score
+    }
+
+    /// The expected roc-score of the model.
+    #[must_use]
+    pub fn expected_roc_score(&self) -> f32 {
+        if self.invert_scores() {
+            1.0 - self.training_roc_score
+        } else {
+            self.training_roc_score
+        }
     }
 
     /// Whether to invert the prediction scores.
@@ -116,6 +128,50 @@ impl TrainedCombination {
         ftlog::debug!("Predicting with {}...", self.name());
 
         let graph = self.create_graph(root, data, min_depth);
+        let scores = self.graph_algorithm.evaluate_points(&graph);
+
+        let scores = if self.invert_scores() {
+            scores.iter().map(|&s| 1.0 - s).collect()
+        } else {
+            scores
+        };
+
+        (graph, scores)
+    }
+
+    /// Parallel version of `create_graph`.
+    pub fn par_create_graph<'a, I, U, D, S>(
+        &self,
+        root: &'a Vertex<I, U, D, S>,
+        data: &D,
+        min_depth: usize,
+    ) -> Graph<'a, I, U, D, S>
+    where
+        I: Send + Sync,
+        U: Number,
+        D: ParDataset<I, U>,
+        S: ParCluster<I, U, D>,
+    {
+        let cluster_scorer = self.meta_ml_scorer();
+        Graph::par_from_root(root, data, cluster_scorer, min_depth)
+    }
+
+    /// Parallel version of `predict`.
+    pub fn par_predict<'a, I, U, D, S>(
+        &self,
+        root: &'a Vertex<I, U, D, S>,
+        data: &D,
+        min_depth: usize,
+    ) -> (Graph<'a, I, U, D, S>, Vec<f32>)
+    where
+        I: Send + Sync,
+        U: Number,
+        D: ParDataset<I, U>,
+        S: ParCluster<I, U, D>,
+    {
+        ftlog::debug!("Predicting with {}...", self.name());
+
+        let graph = self.par_create_graph(root, data, min_depth);
         let scores = self.graph_algorithm.evaluate_points(&graph);
 
         let scores = if self.invert_scores() {

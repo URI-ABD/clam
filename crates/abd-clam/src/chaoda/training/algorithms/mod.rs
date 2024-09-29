@@ -29,6 +29,12 @@ pub enum GraphAlgorithm {
     VD(vd::VertexDegree),
 }
 
+impl Default for GraphAlgorithm {
+    fn default() -> Self {
+        Self::PC(pc::ParentCardinality)
+    }
+}
+
 impl TryFrom<&str> for GraphAlgorithm {
     type Error = String;
 
