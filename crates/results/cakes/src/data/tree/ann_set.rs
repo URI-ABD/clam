@@ -5,8 +5,9 @@ use std::collections::HashMap;
 use abd_clam::{
     adapter::{ParAdapter, ParBallAdapter},
     cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
+    cluster::WriteCsv,
     partition::ParPartition,
-    BalancedBall, Ball, Cluster, Dataset, FlatVec, MetricSpace, WriteCsv,
+    BalancedBall, Ball, Cluster, Dataset, FlatVec, MetricSpace,
 };
 use distances::Number;
 

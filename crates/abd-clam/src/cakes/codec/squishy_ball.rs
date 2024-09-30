@@ -463,8 +463,8 @@ impl<
         U: Number,
         Co: Compressible<I, U>,
         Dec: Decompressible<I, U>,
-        S: crate::WriteCsv<I, U, Co>,
-    > crate::WriteCsv<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
+        S: crate::cluster::WriteCsv<I, U, Co>,
+    > crate::cluster::WriteCsv<I, U, Dec> for SquishyBall<I, U, Co, Dec, S>
 {
     fn header(&self) -> Vec<String> {
         let mut header = self.source.header();

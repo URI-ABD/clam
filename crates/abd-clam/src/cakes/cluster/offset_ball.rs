@@ -258,7 +258,9 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Par
 }
 
 #[cfg(feature = "csv")]
-impl<I, U: Number, D: Dataset<I, U>, S: crate::WriteCsv<I, U, D>> crate::WriteCsv<I, U, D> for OffBall<I, U, D, S> {
+impl<I, U: Number, D: Dataset<I, U>, S: crate::cluster::WriteCsv<I, U, D>> crate::cluster::WriteCsv<I, U, D>
+    for OffBall<I, U, D, S>
+{
     fn header(&self) -> Vec<String> {
         let mut header = self.source.header();
         header.push("offset".to_string());

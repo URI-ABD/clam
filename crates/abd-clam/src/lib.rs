@@ -25,9 +25,6 @@ pub use crate::core::{
     Permutable, LFD,
 };
 
-#[cfg(feature = "csv")]
-pub use crate::core::cluster::WriteCsv;
-
 #[cfg(feature = "chaoda")]
 pub mod chaoda;
 
