@@ -1,9 +1,10 @@
 //! Inferring with meta-ml models.
 
-use linfa::prelude::*;
-use linfa_linear::{FittedLinearRegression, TweedieRegressor};
-use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
+use smartcore::{
+    linalg::basic::matrix::DenseMatrix, linear::linear_regression::LinearRegression,
+    tree::decision_tree_regressor::DecisionTreeRegressor,
+};
 
 use crate::chaoda::NUM_RATIOS;
 
@@ -11,9 +12,9 @@ use crate::chaoda::NUM_RATIOS;
 #[derive(Clone, Serialize, Deserialize)]
 pub enum TrainedMetaMlModel {
     /// A linear regression model.
-    LinearRegression(FittedLinearRegression<f32>),
-    /// A Tweedie regression model.
-    TweedieRegression(TweedieRegressor<f32>),
+    LinearRegression(LinearRegression<f32, f32, DenseMatrix<f32>, Vec<f32>>),
+    /// A Decision Tree model.
+    DecisionTree(DecisionTreeRegressor<f32, f32, DenseMatrix<f32>, Vec<f32>>),
 }
 
 impl TrainedMetaMlModel {
@@ -22,7 +23,7 @@ impl TrainedMetaMlModel {
     pub const fn name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LinearRegression",
-            Self::TweedieRegression(_) => "TweedieRegression",
+            Self::DecisionTree(_) => "DecisionTree",
         }
     }
 
@@ -31,7 +32,7 @@ impl TrainedMetaMlModel {
     pub const fn short_name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LR",
-            Self::TweedieRegression(_) => "TR",
+            Self::DecisionTree(_) => "DT",
         }
     }
 
@@ -60,22 +61,16 @@ impl TrainedMetaMlModel {
                 NUM_RATIOS
             ));
         }
-        let num_rows = props.len() / NUM_RATIOS;
-        let shape = (num_rows, NUM_RATIOS);
-        let props = Array2::from_shape_vec(shape, props.to_vec()).map_err(|e| e.to_string())?;
+        let props = props.chunks_exact(NUM_RATIOS).map(<[f32]>::to_vec).collect::<Vec<_>>();
+        let props = DenseMatrix::from_2d_vec(&props).map_err(|e| format!("Failed to create matrix of samples: {e}"))?;
 
-        ftlog::debug!(
-            "Predicting with MetaML model {} on {} data samples with {} dims",
-            self.name(),
-            num_rows,
-            NUM_RATIOS,
-        );
-
-        let scores = match self {
-            Self::LinearRegression(model) => model.predict(&props),
-            Self::TweedieRegression(model) => model.predict(&props),
-        };
-
-        Ok(scores.to_vec())
+        match self {
+            Self::LinearRegression(model) => model
+                .predict(&props)
+                .map_err(|e| format!("Failed to predict with LinearRegression model: {e}")),
+            Self::DecisionTree(model) => model
+                .predict(&props)
+                .map_err(|e| format!("Failed to predict with DecisionTree model: {e}")),
+        }
     }
 }

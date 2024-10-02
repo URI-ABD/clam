@@ -45,8 +45,10 @@ ndarray-npy = { workspace = true, optional = true }
 
 # For:
 #  - CHAODA
-linfa = { version = "0.7.0", features = ["serde"], optional = true }
-linfa-linear = { version = "0.7.0", features = ["serde"], optional = true }
+# smartcore = { git = "https://github.com/smartcorelib/smartcore.git", rev = "239c00428f7448d30b78bf8653923f6bc0e2c29b", features = ["serde"], optional = true }
+smartcore = { git = "https://github.com/nishaq503/smartcore.git", rev = "e5767d63d05ea5ea6a202482f9bce96034ddc920", features = ["serde"], optional = true }
+# linfa = { version = "0.7.0", features = ["serde"], optional = true }
+# linfa-linear = { version = "0.7.0", features = ["serde"], optional = true }
 ordered-float = { version = "4.2.2", optional = true }
 bincode = { workspace = true, optional = true }
 
@@ -62,7 +64,7 @@ statistical = "1.0.0"
 [features]
 csv = ["dep:csv"]  # For writing trees to CSV files.
 ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
-chaoda = ["dep:linfa", "dep:linfa-linear", "dep:ordered-float", "dep:bincode"]
+chaoda = ["dep:smartcore", "dep:ordered-float", "dep:bincode"]
 
 [[bench]]
 name = "genomic_search"

@@ -1,21 +1,23 @@
 //! Meta Machine Learning models for CHAODA.
 
-use linfa::prelude::*;
-use linfa_linear::{LinearRegression, TweedieRegressor, TweedieRegressorParams};
-use ndarray::prelude::*;
+use smartcore::{
+    linalg::basic::matrix::DenseMatrix,
+    linear::linear_regression::{LinearRegression, LinearRegressionParameters},
+    tree::decision_tree_regressor::{DecisionTreeRegressor, DecisionTreeRegressorParameters},
+};
 
 /// A meta machine learning model.
 #[derive(Clone)]
 pub enum TrainableMetaMlModel {
     /// A linear regression model.
-    LinearRegression(LinearRegression),
-    /// An Isotonic Regression model.
-    TweedieRegression(TweedieRegressorParams<f32>),
+    LinearRegression(LinearRegressionParameters),
+    /// A Decision Tree model.
+    DecisionTree(DecisionTreeRegressorParameters),
 }
 
 impl Default for TrainableMetaMlModel {
     fn default() -> Self {
-        Self::LinearRegression(LinearRegression::default())
+        Self::LinearRegression(LinearRegressionParameters::default())
     }
 }
 
@@ -24,8 +26,8 @@ impl TrainableMetaMlModel {
     #[must_use]
     pub fn default_models() -> Vec<Self> {
         vec![
-            Self::LinearRegression(LinearRegression::default()),
-            Self::TweedieRegression(TweedieRegressor::params().power(0.0)),
+            Self::LinearRegression(LinearRegressionParameters::default()),
+            Self::DecisionTree(DecisionTreeRegressorParameters::default()),
         ]
     }
 
@@ -34,7 +36,7 @@ impl TrainableMetaMlModel {
     pub const fn name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LinearRegression",
-            Self::TweedieRegression(_) => "TweedieRegression",
+            Self::DecisionTree(_) => "DecisionTree",
         }
     }
 
@@ -43,7 +45,7 @@ impl TrainableMetaMlModel {
     pub const fn short_name(&self) -> &str {
         match self {
             Self::LinearRegression(_) => "LR",
-            Self::TweedieRegression(_) => "TR",
+            Self::DecisionTree(_) => "DT",
         }
     }
 
@@ -71,28 +73,35 @@ impl TrainableMetaMlModel {
         samples: &[f32],
         scores: &[f32],
     ) -> Result<crate::chaoda::TrainedMetaMlModel, String> {
-        let num_samples = samples.len() / num_features;
-        if num_samples == 0 {
-            return Err("Number of samples is zero".to_string());
+        if samples.is_empty() {
+            return Err("No samples provided".to_string());
         }
-        if num_samples != scores.len() {
+        if samples.len() % num_features != 0 {
+            return Err("Length of samples is not a multiple of the number of features".to_string());
+        }
+
+        if (samples.len() / num_features) != scores.len() {
             return Err("Number of samples and scores do not match".to_string());
         }
 
-        let shape = (num_samples, num_features);
-        let samples = Array2::from_shape_vec(shape, samples.to_vec())
-            .map_err(|e| format!("Failed to create array of samples: {e}"))?;
-        let scores = Array1::from(scores.to_vec());
-        let data = linfa::Dataset::new(samples, scores);
+        let samples = samples
+            .chunks_exact(num_features)
+            .map(<[f32]>::to_vec)
+            .collect::<Vec<_>>();
+        let samples =
+            DenseMatrix::from_2d_vec(&samples).map_err(|e| format!("Failed to create matrix of samples: {e}"))?;
+        let scores = scores.to_vec();
 
         match self {
-            Self::LinearRegression(model) => {
-                let model = model.fit(&data).map_err(|e| format!("Failed to train model: {e}"))?;
+            Self::LinearRegression(params) => {
+                let model = LinearRegression::fit(&samples, &scores, params.clone())
+                    .map_err(|e| format!("Failed to train model: {e}"))?;
                 Ok(crate::chaoda::TrainedMetaMlModel::LinearRegression(model))
             }
-            Self::TweedieRegression(params) => {
-                let model = params.fit(&data).map_err(|e| format!("Failed to train model: {e}"))?;
-                Ok(crate::chaoda::TrainedMetaMlModel::TweedieRegression(model))
+            Self::DecisionTree(params) => {
+                let model = DecisionTreeRegressor::fit(&samples, &scores, params.clone())
+                    .map_err(|e| format!("Failed to train model: {e}"))?;
+                Ok(crate::chaoda::TrainedMetaMlModel::DecisionTree(model))
             }
         }
     }
@@ -103,8 +112,8 @@ impl TryFrom<&str> for TrainableMetaMlModel {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "LR" | "lr" | "LinearRegression" => Ok(Self::LinearRegression(LinearRegression::default())),
-            "TR" | "tr" | "TweedieRegression" => Ok(Self::TweedieRegression(TweedieRegressor::params())),
+            "LR" | "lr" | "LinearRegression" => Ok(Self::LinearRegression(LinearRegressionParameters::default())),
+            "DT" | "dt" | "DecisionTree" => Ok(Self::DecisionTree(DecisionTreeRegressorParameters::default())),
             _ => Err(format!("Unknown model: {value}")),
         }
     }

@@ -5,9 +5,8 @@ mod graph;
 mod inference;
 mod training;
 
-use linfa::{metrics::BinaryClassification, prelude::Pr};
-
 pub use cluster::{Ratios, Vertex};
+use distances::Number;
 pub use graph::Graph;
 pub use inference::{Chaoda, TrainedMetaMlModel};
 #[allow(clippy::module_name_repetitions)]
@@ -33,14 +32,15 @@ const NUM_RATIOS: usize = 6;
 /// * If the scores cannot be converted to probabilities.
 /// * If the ROC curve cannot be calculated.
 pub fn roc_auc_score(y_true: &[bool], y_score: &[f32]) -> Result<f32, String> {
-    let scores = y_score
+    if y_true.len() != y_score.len() {
+        return Err("The number of scores does not match the number of labels".to_string());
+    }
+    let y_true = y_true
         .iter()
-        .map(|&s| Pr::try_from(s))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    let roc_curve =
-        <&[Pr] as BinaryClassification<&[bool]>>::roc(&scores.as_slice(), y_true).map_err(|e| e.to_string())?;
-    Ok(roc_curve.area_under_curve())
+        .map(|&t| if t { 1_f32 } else { 0_f32 })
+        .collect::<Vec<_>>();
+    let y_pred = y_score.to_vec();
+    Ok(smartcore::metrics::roc_auc_score(&y_true, &y_pred).as_f32())
 }
 
 #[cfg(test)]
