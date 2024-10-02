@@ -155,17 +155,13 @@ impl TrainableCombination {
         let roc_scores = graph
             .iter_clusters()
             .map(|c| {
-                let mut y_true = c.indices().map(|i| labels[i]).collect::<Vec<_>>();
-                let mut y_score = c.indices().map(|i| predictions[i]).collect::<Vec<_>>();
-
-                // TODO: This is a temporary fix for the case where there is only one
-                // class in the cluster. This should be handled in a better way.
-                y_true.push(true);
-                y_score.push(1.0);
-                y_true.push(false);
-                y_score.push(0.0);
-
-                roc_auc_score(&y_true, &y_score)
+                let y_true = c
+                    .indices()
+                    .map(|i| if labels[i] { 1.0 } else { 0.0 })
+                    .collect::<Vec<_>>();
+                let y_score = c.indices().map(|i| predictions[i]).collect::<Vec<_>>();
+                let loss = distances::simd::euclidean_f32(&y_true, &y_score);
+                Ok::<_, String>(1.0 - loss)
             })
             .collect::<Result<Vec<_>, _>>()?;
 
