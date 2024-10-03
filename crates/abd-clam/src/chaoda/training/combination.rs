@@ -1,6 +1,9 @@
 //! Utilities for handling a pair of `MetaMLModel` and `GraphAlgorithm`.
 
-use distances::Number;
+use distances::{
+    number::{Addition, Multiplication},
+    Number,
+};
 
 use crate::{
     chaoda::{
@@ -27,6 +30,8 @@ pub struct TrainableCombination {
     /// The labels used to train the model so far. Each is the suitability of
     /// the `Cluster`s for selection in the `Graph`.
     pub train_y: Vec<f32>,
+    /// The ROC AUC score of the most recent training step.
+    pub roc_score: f32,
 }
 
 impl TrainableCombination {
@@ -45,6 +50,7 @@ impl TrainableCombination {
             graph_algorithm,
             train_x: Vec::new(),
             train_y: Vec::new(),
+            roc_score: 0.5,
         }
     }
 
@@ -129,53 +135,121 @@ impl TrainableCombination {
         }
     }
 
+    /// Create training data from the given `Graph`.
+    ///
+    /// # Arguments
+    ///
+    /// - `graph`: The `Graph` to use.
+    /// - `labels`: The labels to use.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of:
+    /// - An array of:
+    ///   - the flattened anomaly properties of the `Cluster`s.
+    ///   - the suitability scores of the `Cluster`s for `Graph` selection.
+    /// - The ROC AUC score of the `Graph`.
+    ///
+    /// # Errors
+    ///
+    /// - If any roc-auc score calculation fails.
+    pub fn data_from_graph<I, U, D, S>(
+        &self,
+        graph: &Graph<I, U, D, S>,
+        labels: &[bool],
+    ) -> Result<([Vec<f32>; 2], f32), String>
+    where
+        U: Number,
+        D: Dataset<I, U>,
+        S: Cluster<I, U, D>,
+    {
+        let props = graph.iter_anomaly_properties().flatten().collect::<Vec<f32>>();
+        let predictions = self.graph_algorithm.evaluate_points(graph);
+
+        let scores = graph
+            .iter_clusters()
+            .map(|c| {
+                // Get the labels and predictions and append a dummy true and false value to avoid empty classes for roc_auc_score
+                let y_true = c
+                    .indices()
+                    .map(|i| labels[i])
+                    .chain(std::iter::once(true))
+                    .chain(std::iter::once(false))
+                    .collect::<Vec<_>>();
+                let y_pred = c
+                    .indices()
+                    .map(|i| predictions[i])
+                    .chain(std::iter::once(1.0))
+                    .chain(std::iter::once(0.0))
+                    .collect::<Vec<_>>();
+
+                let roc_score = roc_auc_score(&y_true, &y_pred)?;
+                // Use (2 * |roc_score - 0.5|) as the prediction target.
+                // This is to steer the training towards assigning high scores
+                // to `Cluster`s whose ROC AUC score is very different from 0.5.
+                // `Cluster`s with high scores will be preferentially selected
+                // for `Graph`s.
+                let diff = roc_score.abs_diff(0.5).double();
+                Ok::<_, String>(diff)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if scores.len() != props.len() / NUM_RATIOS {
+            return Err("The number of clusters does not match the number of properties".to_string());
+        }
+        ftlog::debug!("Training {} with {} samples", self.name(), self.train_y.len());
+
+        let roc_score = roc_auc_score(labels, &predictions)?;
+
+        Ok(([props, scores], roc_score))
+    }
+
+    /// Append the given data to the training data for this model.
+    ///
+    /// # Arguments
+    ///
+    /// - `x`: The flattened anomaly properties of the `Cluster`s.
+    /// - `y`: The suitability scores of the `Cluster`s for `Graph` selection.
+    ///
+    /// # Errors
+    ///
+    /// - If the data are empty.
+    /// - If the number of properties is not a multiple of `NUM_RATIOS`.
+    /// - If the number of samples does not match the number of targets.
+    pub fn append_data(&mut self, x: &[f32], y: &[f32], roc_score: Option<f32>) -> Result<(), String> {
+        if x.is_empty() || y.is_empty() {
+            return Err("The data are empty".to_string());
+        }
+        if x.len() % NUM_RATIOS != 0 {
+            return Err(format!(
+                "The number of properties is not a multiple of NUM_RATIOS: {NUM_RATIOS}"
+            ));
+        }
+        if x.len() / NUM_RATIOS != y.len() {
+            return Err("The number of samples does not match the number of targets".to_string());
+        }
+
+        self.train_x.extend_from_slice(x);
+        self.train_y.extend_from_slice(y);
+        self.roc_score = roc_score.unwrap_or(0.5);
+
+        Ok(())
+    }
+
     /// Train the model using the given `Graph`.
     ///
     /// This will first append the anomaly properties and the suitability scores
     /// of the `Cluster`s in the `Graph` to the training data. After that, it
     /// will train the model using the training data. Finally, it will return
     /// the trained model.
-    pub fn train_step<I, U, D, S>(
-        &mut self,
-        graph: &Graph<I, U, D, S>,
-        labels: &[bool],
-    ) -> Result<inference::TrainedCombination, String>
-    where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
-    {
-        ftlog::debug!("Using new Graph in {}", self.name());
-
-        let props = graph.iter_anomaly_properties().flatten().collect::<Vec<f32>>();
-        self.train_x.extend_from_slice(&props);
-
-        let predictions = self.graph_algorithm.evaluate_points(graph);
-
-        let roc_scores = graph
-            .iter_clusters()
-            .map(|c| {
-                let y_true = c
-                    .indices()
-                    .map(|i| if labels[i] { 1.0 } else { 0.0 })
-                    .collect::<Vec<_>>();
-                let y_score = c.indices().map(|i| predictions[i]).collect::<Vec<_>>();
-                let loss = distances::simd::euclidean_f32(&y_true, &y_score);
-                Ok::<_, String>(1.0 - loss)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        if roc_scores.len() != props.len() / NUM_RATIOS {
-            return Err("The number of clusters does not match the number of properties".to_string());
-        }
-        self.train_y.extend_from_slice(&roc_scores);
-        ftlog::debug!("Training {} with {} samples", self.name(), self.train_y.len());
-
+    pub fn train_step(&self) -> Result<inference::TrainedCombination, String> {
         let meta_ml = self.meta_ml.train(NUM_RATIOS, &self.train_x, &self.train_y)?;
         let graph_algorithm = self.graph_algorithm.clone();
-        let roc_score = roc_auc_score(labels, &predictions)?;
-
-        Ok(inference::TrainedCombination::new(meta_ml, graph_algorithm, roc_score))
+        Ok(inference::TrainedCombination::new(
+            meta_ml,
+            graph_algorithm,
+            self.roc_score,
+        ))
     }
 }
 
@@ -195,6 +269,7 @@ impl TryFrom<&str> for TrainableCombination {
             graph_algorithm,
             train_x: Vec::new(),
             train_y: Vec::new(),
+            roc_score: 0.5,
         })
     }
 }

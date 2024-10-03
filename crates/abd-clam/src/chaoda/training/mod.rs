@@ -197,7 +197,9 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
                     let n_combos = combinations.len();
                     for (k, combination) in combinations.iter_mut().enumerate() {
                         let graph = combination.create_graph(root, data, min_depth);
-                        let trained_combination = combination.train_step(&graph, labels)?;
+                        let ([x, y], roc_score) = combination.data_from_graph(&graph, labels)?;
+                        combination.append_data(&x, &y, Some(roc_score))?;
+                        let trained_combination = combination.train_step()?;
                         ftlog::info!(
                             "Epoch {}/{num_epochs}: Data {}/{N}, metric {}/{M}, combination {}: {}/{}, roc-auc: {:.6}",
                             e + 1,
@@ -334,7 +336,9 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
                                 .par_iter_mut()
                                 .map(|combination| {
                                     let graph = combination.par_create_graph(root, data, min_depth);
-                                    combination.train_step(&graph, labels)
+                                    let ([x, y], roc_score) = combination.data_from_graph(&graph, labels)?;
+                                    combination.append_data(&x, &y, Some(roc_score))?;
+                                    combination.train_step()
                                 })
                                 .collect::<Result<Vec<_>, _>>();
                             (j, dm_combinations)
