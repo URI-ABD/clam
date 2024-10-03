@@ -1,6 +1,8 @@
 //! A `Metric` is a wrapper for a distance function that provides information
 //! about the properties of the distance function.
 
+use serde::{Deserialize, Serialize};
+
 /// A `Metric` is a wrapper for a distance function that provides information
 /// about the properties of the distance function.
 ///
@@ -165,5 +167,58 @@ impl<I, U> Metric<I, U> {
     pub const fn is_not_expensive(mut self) -> Self {
         self.expensive = false;
         self
+    }
+}
+
+/// A `SerdeMetric` is a helper for serializing and deserializing a `Metric`.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Serialize, Deserialize)]
+struct SerdeMetric<I, U> {
+    /// Whether the distance function provides an identity.
+    identity: bool,
+    /// Whether the distance function is non-negative.
+    non_negativity: bool,
+    /// Whether the distance function is symmetric.
+    symmetry: bool,
+    /// Whether the distance function satisfies the triangle inequality.
+    triangle_inequality: bool,
+    /// Whether the distance function is expensive to compute.
+    expensive: bool,
+    /// The name of the distance function.
+    name: String,
+    /// A phantom data field to ensure that the compiler is satisfied.
+    _phantom: std::marker::PhantomData<(I, U)>,
+}
+
+impl<I, U> Serialize for Metric<I, U> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let serde_metric = SerdeMetric::<I, U> {
+            identity: self.identity,
+            non_negativity: self.non_negativity,
+            symmetry: self.symmetry,
+            triangle_inequality: self.triangle_inequality,
+            expensive: self.expensive,
+            name: self.name.clone(),
+            _phantom: std::marker::PhantomData,
+        };
+        serde_metric.serialize(serializer)
+    }
+}
+
+impl<'de, I, U> Deserialize<'de> for Metric<I, U> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let serde_metric = SerdeMetric::<I, U>::deserialize(deserializer)?;
+        Ok(Self {
+            identity: serde_metric.identity,
+            non_negativity: serde_metric.non_negativity,
+            symmetry: serde_metric.symmetry,
+            triangle_inequality: serde_metric.triangle_inequality,
+            expensive: serde_metric.expensive,
+            distance_function: |_, _| unreachable!("This should never be called."),
+            name: serde_metric.name,
+        })
     }
 }

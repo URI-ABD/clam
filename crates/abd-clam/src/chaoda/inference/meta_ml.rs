@@ -9,7 +9,7 @@ use smartcore::{
 use crate::chaoda::NUM_RATIOS;
 
 /// A trained meta-ml model.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum TrainedMetaMlModel {
     /// A linear regression model.
     LinearRegression(LinearRegression<f32, f32, DenseMatrix<f32>, Vec<f32>>),

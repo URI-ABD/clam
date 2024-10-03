@@ -13,7 +13,7 @@ use crate::{
 use super::TrainedMetaMlModel;
 
 /// A combination of `TrainedMetaMLModel` and `GraphAlgorithm`.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct TrainedCombination {
     /// The `MetaMLModel` to use.

@@ -22,11 +22,13 @@ pub use meta_ml::TrainedMetaMlModel;
 use super::{roc_auc_score, Vertex};
 
 /// A pre-trained Chaoda model.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct Chaoda<I, U: Number, const M: usize> {
     /// The distance metrics to train with.
+    #[serde(with = "serde_arrays")]
     metrics: [Metric<I, U>; M],
     /// The trained models.
+    #[serde(with = "serde_arrays")]
     combinations: [Vec<TrainedCombination>; M],
 }
 
@@ -220,48 +222,5 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
         let scores = self.par_predict(data, criteria, seed, min_depth);
         roc_auc_score(labels, &scores)
             .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for evaluation: {e}"))
-    }
-}
-
-/// A serializable and deserializable version of `Chaoda`.
-#[derive(Serialize, Deserialize)]
-struct ChaodaSerde<I, U: Number, const M: usize> {
-    /// The trained combinations.
-    combinations: Vec<Vec<TrainedCombination>>,
-    /// Phantom data to satisfy the type system.
-    _p: std::marker::PhantomData<(I, U)>,
-}
-
-impl<I: Clone, U: Number, const M: usize> ChaodaSerde<I, U, M> {
-    /// Create a new `ChaodaSerde` from a `Chaoda`.
-    fn from_chaoda(chaoda: &Chaoda<I, U, M>) -> Self {
-        Self {
-            combinations: chaoda.combinations.clone().to_vec(),
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    /// Create a `Chaoda` from a `ChaodaSerde`.
-    fn into_chaoda(self) -> Chaoda<I, U, M> {
-        let metrics = vec![Metric::default(); M]
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("Could not convert Vec of default metrics into array."));
-        let combinations = self
-            .combinations
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("Could not convert Vec of TrainedCombinations into array."));
-        Chaoda::new(metrics, combinations)
-    }
-}
-
-impl<I: Clone, U: Number, const M: usize> Serialize for Chaoda<I, U, M> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        ChaodaSerde::from_chaoda(self).serialize(serializer)
-    }
-}
-
-impl<'de, I: Clone, U: Number, const M: usize> Deserialize<'de> for Chaoda<I, U, M> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        ChaodaSerde::deserialize(deserializer).map(ChaodaSerde::into_chaoda)
     }
 }
