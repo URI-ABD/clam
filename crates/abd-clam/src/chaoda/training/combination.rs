@@ -7,11 +7,8 @@ use distances::{
 
 use crate::{
     chaoda::{
-        inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, Vertex,
-        NUM_RATIOS,
+        inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, NUM_RATIOS,
     },
-    cluster::ParCluster,
-    dataset::ParDataset,
     Cluster, Dataset,
 };
 
@@ -51,87 +48,6 @@ impl TrainableCombination {
             train_x: Vec::new(),
             train_y: Vec::new(),
             roc_score: 0.5,
-        }
-    }
-
-    /// Get the meta-ML scorer function in a callable for any number of `Vertex`es.
-    pub fn meta_ml_scorer<I, U, D, S>(&self) -> Result<impl Fn(&[&Vertex<I, U, D, S>]) -> Vec<f32> + '_, String>
-    where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
-    {
-        let model = self.meta_ml.train(NUM_RATIOS, &self.train_x, &self.train_y)?;
-        let scorer = move |clusters: &[&Vertex<I, U, D, S>]| {
-            let props = clusters.iter().flat_map(|c| c.ratios()).collect::<Vec<_>>();
-            model.predict(&props).unwrap_or_else(|e| unreachable!("{e}"))
-        };
-        Ok(scorer)
-    }
-
-    /// Create a `Graph` from the `root` with the given `data` and `min_depth`
-    /// using the `TrainedMetaMLModel`.
-    pub fn create_graph<'a, I, U, D, S>(
-        &self,
-        root: &'a Vertex<I, U, D, S>,
-        data: &D,
-        min_depth: usize,
-    ) -> Graph<'a, I, U, D, S>
-    where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
-    {
-        if self.train_x.is_empty() || self.train_y.is_empty() {
-            let cluster_scorer = |clusters: &[&Vertex<I, U, D, S>]| {
-                clusters
-                    .iter()
-                    .map(|c| {
-                        if c.depth() == min_depth || (c.is_leaf() && c.depth() < min_depth) {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            };
-            Graph::from_root(root, data, cluster_scorer, min_depth)
-        } else {
-            let cluster_scorer = self.meta_ml_scorer().unwrap_or_else(|e| unreachable!("{e}"));
-            Graph::from_root(root, data, cluster_scorer, min_depth)
-        }
-    }
-
-    /// Parallel version of `TrainableCombination::create_graph`.
-    pub fn par_create_graph<'a, I, U, D, S>(
-        &self,
-        root: &'a Vertex<I, U, D, S>,
-        data: &D,
-        min_depth: usize,
-    ) -> Graph<'a, I, U, D, S>
-    where
-        I: Send + Sync,
-        U: Number,
-        D: ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
-    {
-        if self.train_x.is_empty() || self.train_y.is_empty() {
-            let cluster_scorer = |clusters: &[&Vertex<I, U, D, S>]| {
-                clusters
-                    .iter()
-                    .map(|c| {
-                        if c.depth() == min_depth || (c.is_leaf() && c.depth() < min_depth) {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            };
-            Graph::par_from_root(root, data, cluster_scorer, min_depth)
-        } else {
-            let cluster_scorer = self.meta_ml_scorer().unwrap_or_else(|e| unreachable!("{e}"));
-            Graph::par_from_root(root, data, cluster_scorer, min_depth)
         }
     }
 
