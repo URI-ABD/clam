@@ -113,6 +113,11 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Graph<'a, I, U, D,
         self.components.iter().flat_map(Component::iter_vertices)
     }
 
+    /// Iterate over the edges in the `Graph`.
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&Vertex<I, U, D, S>, &Vertex<I, U, D, S>, U)> + '_ {
+        self.components.iter().flat_map(Component::iter_edges)
+    }
+
     /// Iterate over the lists of neighbors of the `Vertex`es in the `Graph`.
     pub fn iter_neighbors(&self) -> impl Iterator<Item = &HashMap<&Vertex<I, U, D, S>, U>> + '_ {
         self.components.iter().flat_map(Component::iter_neighbors)

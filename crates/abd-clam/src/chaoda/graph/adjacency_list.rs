@@ -147,6 +147,13 @@ impl<'a, I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>> AdjacencyList<'a, 
     pub fn clusters(&self) -> Vec<&'a C> {
         self.inner.keys().copied().collect()
     }
+
+    /// Iterate over the edges in the `AdjacencyList`.
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&C, &C, U)> + '_ {
+        self.inner
+            .iter()
+            .flat_map(|(&u, neighbors)| neighbors.iter().map(move |(&v, d)| (u, v, *d)))
+    }
 }
 
 impl<'a, I: Send + Sync, U: Number, D: ParDataset<I, U>, C: ParCluster<I, U, D>> AdjacencyList<'a, I, U, D, C> {

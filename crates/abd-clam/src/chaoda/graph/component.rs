@@ -78,6 +78,11 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Component<'a, I, U
         self.node_map.keys().copied()
     }
 
+    /// Iterate over the edges in the `Component`.
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&Vertex<I, U, D, S>, &Vertex<I, U, D, S>, U)> + '_ {
+        self.adjacency_list.iter_edges()
+    }
+
     /// Iterate over the lists of neighbors of the `Node`s in the `Component`.
     pub fn iter_neighbors(&self) -> impl Iterator<Item = &HashMap<&Vertex<I, U, D, S>, U>> + '_ {
         self.adjacency_list.inner().values()

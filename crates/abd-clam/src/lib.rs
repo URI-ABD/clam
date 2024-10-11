@@ -18,6 +18,7 @@
 
 pub mod cakes;
 mod core;
+pub mod mbed;
 pub mod utils;
 
 pub use crate::core::{
