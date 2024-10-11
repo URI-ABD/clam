@@ -336,7 +336,7 @@ pub fn un_flatten<T>(data: Vec<T>, sizes: &[usize]) -> Result<Vec<Vec<T>>, Strin
 
 /// Read a `Number` from a byte slice and increment the offset.
 pub fn read_number<U: Number>(bytes: &[u8], offset: &mut usize) -> U {
-    let num_bytes = U::num_bytes();
+    let num_bytes = U::NUM_BYTES;
     let value = U::from_le_bytes(
         bytes[*offset..*offset + num_bytes]
             .try_into()

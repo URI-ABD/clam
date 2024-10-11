@@ -109,7 +109,7 @@ impl<T: UInt, F: Float> Encodable for MemberSet<T, F> {
 impl<T: UInt, F: Float> Decodable for MemberSet<T, F> {
     fn from_bytes(bytes: &[u8]) -> Self {
         let items = bytes
-            .chunks_exact(T::num_bytes())
+            .chunks_exact(T::NUM_BYTES)
             .map(T::from_le_bytes)
             .collect::<HashSet<_>>();
 

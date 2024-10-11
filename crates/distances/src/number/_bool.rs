@@ -145,6 +145,7 @@ impl Number for Bool {
     const MAX: Self = Self(1);
     const MIN: Self = Self(0);
     const EPSILON: Self = Self(1);
+    const NUM_BYTES: usize = 1;
 
     fn from<T: Number>(n: T) -> Self {
         if n == T::ZERO {
@@ -170,8 +171,12 @@ impl Number for Bool {
         self.0.as_i64()
     }
 
-    fn num_bytes() -> usize {
-        1
+    fn as_u32(self) -> u32 {
+        self.0.as_u32()
+    }
+
+    fn as_i32(self) -> i32 {
+        self.0.as_i32()
     }
 
     fn from_le_bytes(bytes: &[u8]) -> Self {

@@ -14,14 +14,52 @@ use super::{Addition, Multiplication};
 pub trait Number:
     Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default + FromStr
 {
-    /// The maximum possible value.
-    const MAX: Self;
-
     /// The minimum possible value.
     const MIN: Self;
 
+    /// The maximum possible value.
+    const MAX: Self;
+
     /// The difference between `ONE` and the next largest representable number.
     const EPSILON: Self;
+
+    /// The number of bytes used to represent this type.
+    const NUM_BYTES: usize;
+
+    /// The additive identity.
+    #[deprecated(since = "1.8.0", note = "Use `Number::ZERO` instead")]
+    #[must_use]
+    fn zero() -> Self {
+        Self::ZERO
+    }
+
+    /// The multiplicative identity.
+    #[deprecated(since = "1.8.0", note = "Use `Number::ONE` instead")]
+    #[must_use]
+    fn one() -> Self {
+        Self::ONE
+    }
+
+    /// The minimum possible value.
+    #[deprecated(since = "1.8.0", note = "Use `Number::MIN` instead")]
+    #[must_use]
+    fn min_value() -> Self {
+        Self::MIN
+    }
+
+    /// The maximum possible value.
+    #[deprecated(since = "1.8.0", note = "Use `Number::MAX` instead")]
+    #[must_use]
+    fn max_value() -> Self {
+        Self::MAX
+    }
+
+    /// The difference between `ONE` and the next largest representable number.
+    #[deprecated(since = "1.8.0", note = "Use `Number::EPSILON` instead")]
+    #[must_use]
+    fn epsilon() -> Self {
+        Self::EPSILON
+    }
 
     /// Casts a number to `Self`. This may be a lossy conversion.
     fn from<T: Number>(n: T) -> Self;
@@ -35,12 +73,21 @@ pub trait Number:
     /// Returns the number as a `u64`. This may be a lossy conversion.
     fn as_u64(self) -> u64;
 
-    /// Returns the number as a `i64`. This may be a lossy conversion.
+    /// Returns the number as an `i64`. This may be a lossy conversion.
     fn as_i64(self) -> i64;
 
+    /// Returns the number as a `u32`. This may be a lossy conversion.
+    fn as_u32(self) -> u32;
+
+    /// Returns the number as an `i32`. This may be a lossy conversion.
+    fn as_i32(self) -> i32;
+
     /// Returns the number of bytes used to represent a `Number`.
+    #[deprecated(since = "1.8.0", note = "Use `Number::NUM_BYTES` instead")]
     #[must_use]
-    fn num_bytes() -> usize;
+    fn num_bytes() -> usize {
+        Self::NUM_BYTES
+    }
 
     /// Reads a `Number` from little endian bytes.
     fn from_le_bytes(bytes: &[u8]) -> Self;
@@ -68,6 +115,7 @@ impl Number for f32 {
     const MAX: Self = Self::MAX;
     const MIN: Self = Self::MIN;
     const EPSILON: Self = Self::EPSILON;
+    const NUM_BYTES: usize = core::mem::size_of::<Self>();
 
     fn as_f32(self) -> f32 {
         self
@@ -92,8 +140,14 @@ impl Number for f32 {
         self as i64
     }
 
-    fn num_bytes() -> usize {
-        core::mem::size_of::<Self>()
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_i32(self) -> i32 {
+        self as i32
     }
 
     fn from_le_bytes(bytes: &[u8]) -> Self {
@@ -125,6 +179,7 @@ impl Number for f64 {
     const MAX: Self = Self::MAX;
     const MIN: Self = Self::MIN;
     const EPSILON: Self = Self::EPSILON;
+    const NUM_BYTES: usize = core::mem::size_of::<Self>();
 
     fn from<T: Number>(n: T) -> Self {
         n.as_f64()
@@ -149,8 +204,14 @@ impl Number for f64 {
         self as i64
     }
 
-    fn num_bytes() -> usize {
-        core::mem::size_of::<Self>()
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_i32(self) -> i32 {
+        self as i32
     }
 
     fn from_le_bytes(bytes: &[u8]) -> Self {
@@ -187,6 +248,7 @@ macro_rules! impl_number_iint {
                 const MAX: Self = <$ty>::MAX;
                 const MIN: Self = <$ty>::MIN;
                 const EPSILON: Self = 1;
+                const NUM_BYTES: usize = core::mem::size_of::<$ty>();
 
                 fn from<T: Number>(n: T) -> Self {
                     n.as_i64() as $ty
@@ -208,8 +270,12 @@ macro_rules! impl_number_iint {
                     self as i64
                 }
 
-                fn num_bytes() -> usize {
-                    core::mem::size_of::<$ty>()
+                fn as_u32(self) -> u32 {
+                    self as u32
+                }
+
+                fn as_i32(self) -> i32 {
+                    self as i32
                 }
 
                 fn from_le_bytes(bytes: &[u8]) -> Self {
@@ -251,6 +317,7 @@ macro_rules! impl_number_uint {
                 const MAX: Self = <$ty>::MAX;
                 const MIN: Self = <$ty>::MIN;
                 const EPSILON: Self = 1;
+                const NUM_BYTES: usize = core::mem::size_of::<$ty>();
 
                 fn from<T: Number>(n: T) -> Self {
                     n.as_u64() as $ty
@@ -272,8 +339,14 @@ macro_rules! impl_number_uint {
                 fn as_i64(self) -> i64 {
                     self as i64
                 }
-                fn num_bytes() -> usize {
-                    core::mem::size_of::<$ty>()
+
+                fn as_u32(self) -> u32 {
+                    self as u32
+                }
+
+                #[allow(clippy::cast_possible_wrap)]
+                fn as_i32(self) -> i32 {
+                    self as i32
                 }
 
                 fn from_le_bytes(bytes: &[u8]) -> Self {
