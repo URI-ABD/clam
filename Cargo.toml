@@ -13,7 +13,7 @@ resolver = "2"
 
 [workspace.dependencies]
 abd-clam = { version = "0.31.0", path = "crates/abd-clam" }
-distances = { version = "1.7.1", path = "crates/distances" }
+distances = { version = "1.8.0", path = "crates/distances" }
 symagen = { version = "0.4.0", path = "crates/symagen" }
 
 rayon = "1.8"
