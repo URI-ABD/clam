@@ -1,5 +1,7 @@
-//! Core modules for the crate.
+//! The core traits and structs for CLAM.
 
 pub mod cluster;
 pub mod dataset;
-pub mod tree;
+
+pub use cluster::{adapter, partition, BalancedBall, Ball, Cluster, Partition, LFD};
+pub use dataset::{Dataset, FlatVec, Metric, MetricSpace, Permutable};

@@ -1,152 +1,185 @@
-//! Reproduce the CHAODA results in Rust.
+#![deny(clippy::correctness)]
+#![warn(
+    missing_docs,
+    clippy::all,
+    clippy::suspicious,
+    clippy::style,
+    clippy::complexity,
+    clippy::perf,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::cast_lossless
+)]
+#![doc = include_str!("../README.md")]
 
-use std::path::Path;
+use std::path::PathBuf;
+
+use clap::Parser;
 
 use abd_clam::{
-    chaoda::{Chaoda, Vertex},
-    Cluster, Dataset, PartitionCriteria, VecDataset,
+    chaoda::{ChaodaTrainer, GraphAlgorithm, TrainableMetaMlModel},
+    Ball, Cluster, Dataset, Metric,
 };
+use distances::Number;
 
 mod data;
+mod utils;
 
+/// Reproducible results for the CAKES and panCAKES papers.
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Path to the directory containing the datasets.
+    #[arg(short('i'), long)]
+    data_dir: PathBuf,
+
+    /// Minimum depth of the clusters to use for making graphs.
+    #[arg(short('d'), long, default_value = "4")]
+    min_depth: usize,
+
+    /// The number of epochs to train the model for.
+    #[arg(short('e'), long, default_value = "10")]
+    num_epochs: usize,
+
+    /// Whether to use a pre-trained model.
+    #[arg(short('p'), long)]
+    use_pre_trained: bool,
+
+    /// Path to the output directory.
+    #[arg(short('o'), long)]
+    out_dir: Option<PathBuf>,
+}
+
+/// The main function.
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), String> {
-    let args: Vec<String> = std::env::args().collect();
+    #[allow(clippy::useless_format)]
+    let log_name = format!("chaoda-training");
+    let (_guard, log_path) = utils::configure_logger(&log_name)?;
+    println!("Log file: {log_path:?}");
 
-    if args.len() != 3 {
-        return Err(format!(
-            "Expected two input parameters, the directory where dataset will be read from and whether to use a pre-trained model (if found). Got {args:?} instead",
-        )
-        );
+    let args = Args::parse();
+
+    let data_dir = std::fs::canonicalize(args.data_dir).map_err(|e| e.to_string())?;
+    ftlog::info!("Reading datasets from: {data_dir:?}");
+
+    let out_dir = args.out_dir.unwrap_or_else(|| data_dir.join("results"));
+    if !out_dir.exists() {
+        std::fs::create_dir(&out_dir).map_err(|e| e.to_string())?;
     }
+    let out_dir = std::fs::canonicalize(out_dir).map_err(|e| e.to_string())?;
+    ftlog::info!("Saving results to: {out_dir:?}");
 
-    // Parse args[1] into path object
-    let data_dir = Path::new(&args[1]);
-    let data_dir = std::fs::canonicalize(data_dir).map_err(|e| e.to_string())?;
-    println!("Reading datasets from: {data_dir:?}");
-
-    // Parse args[2] into boolean
-    let use_pre_trained = args[2].parse::<String>().map_err(|e| e.to_string())?;
-    let use_pre_trained = {
-        match use_pre_trained.as_str() {
-            "true" => true,
-            "false" => false,
-            _ => {
-                return Err(format!(
-                    "Invalid value for use_pre_trained: {use_pre_trained}. Expected 'true' or 'false'"
-                ))
-            }
-        }
-    };
     // Build path to pre-trained model
-    let model_path = data_dir.join("pre-trained-chaoda-model.bin");
-    let use_pre_trained = use_pre_trained && model_path.exists();
+    let model_path = out_dir.join("chaoda.bin");
+    ftlog::info!("Model path: {model_path:?}");
+
+    let use_pre_trained = args.use_pre_trained && model_path.exists();
+    if use_pre_trained {
+        ftlog::info!("Using pre-trained model");
+    } else {
+        ftlog::info!("Training model from scratch");
+    }
 
     // Set some parameters for tree building
     let seed = Some(42);
-    let criteria = PartitionCriteria::default();
 
-    #[allow(clippy::type_complexity)]
-    let named_metrics: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
-        ("euclidean", |x, y| distances::vectors::euclidean(x, y)),
-        ("manhattan", |x, y| distances::vectors::manhattan(x, y)),
-        // ("cosine", |x, y| distances::vectors::cosine(x, y)),
-        // ("canberra", |x, y| distances::vectors::canberra(x, y)),
-        // ("bray_curtis", |x, y| distances::vectors::bray_curtis(x, y)),
+    let metrics = [
+        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::euclidean(x, y), false).with_name("euclidean"),
+        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::manhattan(x, y), false).with_name("manhattan"),
+        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::cosine(x, y), false).with_name("cosine"),
+        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::canberra(x, y), false).with_name("canberra"),
+        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::bray_curtis(x, y), false).with_name("bray_curtis"),
     ];
+    ftlog::info!("Using {} metrics...", metrics.len());
 
-    // Read the datasets and assign the metrics
-    let train_names: &[&str] = &[
-        "arrhythmia",
-        "mnist",
-        "pendigits",
-        "satellite",
-        // "shuttle",
-        "thyroid",
-    ];
-    let train_datasets = {
-        let datasets = train_names
-            .iter()
-            .map(|&name| {
-                let (train, labels) = data::Data::new(name)?.read(&data_dir)?;
-                Ok((name, (train, labels)))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let datasets = datasets
-            .into_iter()
-            .map(|(name, (train, labels))| {
-                let (metric_name, metric) = named_metrics[0];
-                let train = VecDataset::new(format!("{name}-{metric_name}"), train, metric, false);
-                let train = train.assign_metadata(labels)?;
-                let mut datasets = vec![train];
-                for &(metric_name, metric) in named_metrics.iter().skip(1) {
-                    let train = datasets[0].clone_with_new_metric(metric, false, format!("{name}-{metric_name}"));
-                    datasets.push(train);
-                }
-                Ok(datasets)
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let datasets = datasets.into_iter().flatten().collect::<Vec<_>>();
-        datasets
-            .into_iter()
-            .map(|d| {
-                let labels = d.metadata().to_vec();
-                (d, labels)
-            })
-            .collect::<Vec<_>>()
+    let mut train_datasets = data::Data::read_paper_train(&data_dir)?;
+
+    let criteria = {
+        let mut criteria = Vec::new();
+        for _ in 0..train_datasets.len() {
+            criteria.push(default_criteria::<_, _, _, 2>());
+        }
+        criteria
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("We have a criterion for each pair of metric and dataset."))
     };
-    println!("Training datasets:");
-    for (d, _) in train_datasets.iter() {
-        println!("{}", d.name());
+    let labels = {
+        let mut labels = Vec::new();
+        for data in &train_datasets {
+            labels.push(data.metadata().to_vec());
+        }
+        labels
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("We have labels for each dataset."))
+    };
+
+    ftlog::info!("Training datasets:");
+    for d in &train_datasets {
+        ftlog::info!("{}", d.name());
     }
 
     let model = if use_pre_trained {
         // Load the pre-trained CHAODA model
-        println!("Loading pre-trained model from: {model_path:?}");
-        Chaoda::load(&model_path)?
+        ftlog::info!("Loading pre-trained model from: {model_path:?}");
+        bincode::deserialize_from(std::fs::File::open(&model_path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?
     } else {
-        // Train the CHAODA model
-        let num_epochs = 16;
-        let mut model = Chaoda::default();
-        model.train::<_, _, _, Vertex<_>, _>(&train_datasets, num_epochs, &criteria, None, seed);
-        println!("Training complete");
-        model.save(&model_path)?;
-        println!("Model saved to: {model_path:?}");
+        // Create a Chaoda trainer
+        let meta_ml_models = TrainableMetaMlModel::default_models();
+        let graph_algorithms = GraphAlgorithm::default_algorithms();
+        let mut model = ChaodaTrainer::new_all_pairs(metrics.clone(), meta_ml_models, graph_algorithms);
+
+        // Create the trees for use in training the model.
+        let trees = model.par_create_trees(&mut train_datasets, &criteria, seed);
+
+        // Train the model
+        let trained_model = model.par_train(&mut train_datasets, &trees, &labels, args.min_depth, args.num_epochs)?;
+        ftlog::info!("Completed training for {} epochs", args.num_epochs);
+
+        // Save the trained model
+        ftlog::info!("Saving model to: {model_path:?}");
+        bincode::serialize_into(
+            std::fs::File::create(&model_path).map_err(|e| e.to_string())?,
+            &trained_model,
+        )
+        .map_err(|e| e.to_string())?;
+        ftlog::info!("Model saved to: {model_path:?}");
+
+        trained_model
+    };
+
+    let model = if use_pre_trained {
+        let mut model = model;
+        model.set_metrics(metrics);
+        model
+    } else {
         model
     };
 
     // Print the ROC scores for all datasets
-    for (name, (data, labels)) in data::Data::read_all(&data_dir)? {
-        println!("Starting evaluation for: {name}");
+    for mut data in data::Data::read_all(&data_dir)? {
+        ftlog::info!("Starting evaluation for: {}", data.name());
 
-        let (metric_name, metric) = named_metrics[0];
-        let dataset = VecDataset::new(format!("{name}-{metric_name}"), data, metric, false);
-        let dataset = dataset.assign_metadata(labels.clone())?;
-        let mut datasets = vec![dataset];
-
-        for &(metric_name, metric) in named_metrics.iter().skip(1) {
-            let dataset = datasets[0].clone_with_new_metric(metric, false, format!("{name}-{metric_name}"));
-            datasets.push(dataset);
-        }
-
-        let roots = datasets
-            .iter_mut()
-            .map(|dataset| Vertex::new_root(dataset, seed).partition(dataset, &criteria, seed))
-            .collect::<Vec<_>>();
-
-        let scores = datasets
-            .iter()
-            .zip(roots.iter())
-            .map(|(d, r)| model.predict(d, r))
-            .collect::<Vec<_>>();
-        let y_pred = Chaoda::aggregate_predictions(&scores);
-
-        let y_true = labels
-            .into_iter()
-            .map(|l| if l { 1.0 } else { 0.0 })
-            .collect::<Vec<_>>();
-        let roc_auc = Chaoda::roc_auc_score(&y_true, &y_pred);
-        println!("{name}: Aggregate {roc_auc:.6}");
+        let labels = data.metadata().to_vec();
+        let criteria = default_criteria::<_, _, _, 2>();
+        let roc_score = model.par_evaluate(&mut data, &criteria, &labels, seed, args.min_depth);
+        ftlog::info!("Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
     }
 
     Ok(())
+}
+
+/// Returns the default partitioning criteria, repeated `N` times.
+fn default_criteria<I, U: Number, D: Dataset<I, U>, const N: usize>() -> [impl Fn(&Ball<I, U, D>) -> bool; N] {
+    let mut criteria = Vec::with_capacity(N);
+    for _ in 0..N {
+        criteria.push(|c: &Ball<_, _, _>| c.cardinality() > 10);
+    }
+    criteria
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("We have a criterion for each dataset."))
 }

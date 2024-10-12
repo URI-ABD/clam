@@ -21,6 +21,10 @@ RUN cargo install \
     maturin \
     --locked
 
+RUN apt-get update
+RUN apt-get install build-essential
+RUN apt-get install -y libhdf5-dev
+
 ENV RYE_HOME="/opt/rye"
 RUN curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
 ENV PATH="${RYE_HOME}/shims:${PATH}"

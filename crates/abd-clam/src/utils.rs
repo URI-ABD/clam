@@ -47,7 +47,7 @@ pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
         .iter()
         .map(|&x| F::from(x))
         .map(|x| (x, x.powi(2)))
-        .fold((F::zero(), F::zero()), |(sum, sum_squares), (x, xx)| {
+        .fold((F::ZERO, F::ZERO), |(sum, sum_squares), (x, xx)| {
             (sum + x, sum_squares + xx)
         });
 
@@ -79,9 +79,9 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
     values
         .iter()
         .map(|&v| v - mean)
-        .map(|v| v / ((F::epsilon() + sd) * F::SQRT_2))
+        .map(|v| v / ((F::EPSILON + sd) * F::SQRT_2))
         .map(F::erf)
-        .map(|v| (F::one() + v) / F::from(2.))
+        .map(|v| (F::ONE + v) / F::from(2.))
         .collect()
 }
 
@@ -94,16 +94,16 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
 ///
 /// * `radius` - The radius used to compute the distances.
 /// * `distances` - The distances to compute the local fractal dimension of.
-pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
-    if radius == T::zero() {
-        1.
+pub(crate) fn compute_lfd<T: Number, F: Float>(radius: T, distances: &[T]) -> F {
+    if radius == T::ZERO {
+        F::ONE
     } else {
-        let r_2 = radius.as_f64() / 2.;
-        let half_count = distances.iter().filter(|&&d| d.as_f64() <= r_2).count();
+        let r_2 = F::from(radius) / F::from(2);
+        let half_count = distances.iter().filter(|&&d| F::from(d) <= r_2).count();
         if half_count > 0 {
-            (distances.len().as_f64() / half_count.as_f64()).log2()
+            (F::from(distances.len()) / F::from(half_count)).log2()
         } else {
-            1.
+            F::ONE
         }
     }
 }
@@ -121,18 +121,8 @@ pub(crate) fn compute_lfd<T: Number>(radius: T, distances: &[T]) -> f64 {
 #[must_use]
 pub fn next_ema<F: Float>(ratio: F, parent_ema: F) -> F {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
-    let alpha = F::from(2.) / F::from(11.);
-    alpha.mul_add(ratio, (F::one() - alpha) * parent_ema)
-}
-
-/// Return the index of the given value in the given slice of values.
-pub(crate) fn position_of<T: Eq + Copy>(values: &[T], v: T) -> Option<usize> {
-    values
-        .iter()
-        .copied()
-        .enumerate()
-        .find(|&(_, x)| x == v)
-        .map(|(i, _)| i)
+    let alpha = F::from(2) / F::from(11);
+    alpha.mul_add(ratio, (F::ONE - alpha) * parent_ema)
 }
 
 /// Transpose a matrix represented as an array of arrays (slices) to an array of Vecs.
@@ -307,6 +297,61 @@ pub fn median<T: Number>(data: &[T]) -> Option<T> {
 /// * `values` - The data to find the STD of.
 pub fn standard_deviation<T: Number, F: Float>(values: &[T]) -> F {
     variance(values, mean::<_, F>(values)).sqrt()
+}
+
+/// Un-flattens a vector of data into a vector of vectors.
+///
+/// # Arguments
+///
+/// * `data` - The data to un-flatten.
+/// * `sizes` - The sizes of the inner vectors.
+///
+/// # Returns
+///
+/// A vector of vectors where each inner vector has the size specified in `sizes`.
+///
+/// # Errors
+///
+/// * If the number of elements in `data` is not equal to the sum of the elements in `sizes`.
+pub fn un_flatten<T>(data: Vec<T>, sizes: &[usize]) -> Result<Vec<Vec<T>>, String> {
+    let num_elements: usize = sizes.iter().sum();
+    if data.len() != num_elements {
+        return Err(format!(
+            "Incorrect number of elements. Expected: {num_elements}. Found: {}.",
+            data.len()
+        ));
+    }
+
+    let mut iter = data.into_iter();
+    let mut items = Vec::with_capacity(sizes.len());
+    for &s in sizes {
+        let mut inner = Vec::with_capacity(s);
+        for _ in 0..s {
+            inner.push(iter.next().ok_or("Not enough elements!")?);
+        }
+        items.push(inner);
+    }
+    Ok(items)
+}
+
+/// Read a `Number` from a byte slice and increment the offset.
+pub fn read_number<U: Number>(bytes: &[u8], offset: &mut usize) -> U {
+    let num_bytes = U::NUM_BYTES;
+    let value = U::from_le_bytes(
+        bytes[*offset..*offset + num_bytes]
+            .try_into()
+            .unwrap_or_else(|e| unreachable!("{e}")),
+    );
+    *offset += num_bytes;
+    value
+}
+
+/// Reads an encoded value from a byte array and increments the offset.
+pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
+    let len = read_number::<usize>(bytes, offset);
+    let encoding = bytes[*offset..*offset + len].to_vec();
+    *offset += len;
+    encoding.into_boxed_slice()
 }
 
 #[cfg(test)]

@@ -9,7 +9,9 @@
 mod _bool;
 mod _number;
 mod _variants;
+mod arithmetic;
 
 pub use _bool::Bool;
 pub use _number::Number;
 pub use _variants::{Float, IInt, Int, UInt};
+pub use arithmetic::{Addition, Multiplication};

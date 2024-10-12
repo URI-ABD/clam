@@ -36,9 +36,6 @@ impl_iint!(i8, i16, i32, i64, i128, isize);
 pub trait UInt: Number + Hash + Eq + Ord {
     /// Returns the number as a `i64`.
     fn as_i64(self) -> i64;
-
-    /// Returns the number as a `u64`.
-    fn as_u64(self) -> u64;
 }
 
 /// Macro to implement `UIntNumber` for all unsigned integer types.
@@ -50,10 +47,6 @@ macro_rules! impl_uint {
                 #[allow(clippy::cast_possible_wrap)]
                 fn as_i64(self) -> i64 {
                     self as i64
-                }
-
-                fn as_u64(self) -> u64 {
-                    self as u64
                 }
             }
         )*
@@ -78,7 +71,7 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the inverse square root of a `Float`, i.e. `1.0 / self.sqrt()`.
     #[must_use]
     fn inv_sqrt(self) -> Self {
-        Self::one() / self.sqrt()
+        Self::ONE / self.sqrt()
     }
 
     /// Returns `self` raised to the power of `exp`.
@@ -88,6 +81,10 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// The error function.
     #[must_use]
     fn erf(self) -> Self;
+
+    /// Returns the logarithm of `self` with base 2.
+    #[must_use]
+    fn log2(self) -> Self;
 }
 
 impl Float for f32 {
@@ -108,6 +105,10 @@ impl Float for f32 {
     fn erf(self) -> Self {
         libm::erff(self)
     }
+
+    fn log2(self) -> Self {
+        Self::log2(self)
+    }
 }
 
 impl Float for f64 {
@@ -127,5 +128,9 @@ impl Float for f64 {
 
     fn erf(self) -> Self {
         libm::erf(self)
+    }
+
+    fn log2(self) -> Self {
+        Self::log2(self)
     }
 }

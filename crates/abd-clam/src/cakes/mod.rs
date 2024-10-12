@@ -1,417 +1,270 @@
-//! CLAM-Accelerated K-nearest-neighbor Entropy-scaling Search.
+//! Entropy Scaling Search
 
-use core::ops::Index;
-
-use std::path::Path;
-
-pub mod knn;
-pub mod rnn;
+pub mod cluster;
+pub(crate) mod codec;
+pub mod dataset;
 mod search;
-mod sharded;
-mod singular;
 
-use distances::Number;
-use rayon::prelude::*;
-use search::Search;
-use sharded::RandomlySharded;
-use singular::SingleShard;
+pub use cluster::OffBall;
+pub use codec::{
+    CodecData, Compressible, Decodable, Decompressible, Encodable, ParCompressible, ParDecompressible, SquishyBall,
+};
+pub use dataset::Shardable;
+pub use search::Algorithm;
 
-use crate::{Dataset, Instance, PartitionCriterion, Tree, UniBall};
+#[cfg(test)]
+pub mod tests {
+    use core::fmt::Debug;
 
-/// CAKES search.
-pub enum Cakes<I: Instance, U: Number, D: Dataset<I, U>> {
-    /// Search with a single shard.
-    SingleShard(SingleShard<I, U, D>),
-    /// Search with multiple shards.
-    RandomlySharded(RandomlySharded<I, U, D>),
-}
+    use distances::{number::Float, Number};
+    use rand::prelude::*;
+    use test_case::test_case;
 
-impl<I: Instance, U: Number, D: Dataset<I, U>> Cakes<I, U, D> {
-    /// Creates a new CAKES instance with a single shard dataset.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - The dataset to search.
-    /// * `seed` - The seed to use for the random number generator.
-    /// * `criteria` - The criteria to use for partitioning the tree.
-    pub fn new<P: PartitionCriterion<U>>(data: D, seed: Option<u64>, criteria: &P) -> Self {
-        Self::SingleShard(SingleShard::new(data, seed, criteria))
+    pub type Algs<I, U, M> = Vec<(
+        super::Algorithm<U>,
+        fn(Vec<(usize, U)>, Vec<(usize, U)>, &str, &FlatVec<I, U, M>) -> bool,
+    )>;
+
+    use crate::{
+        adapter::{BallAdapter, ParBallAdapter},
+        cakes::{OffBall, SquishyBall},
+        cluster::ParCluster,
+        dataset::ParDataset,
+        Ball, Cluster, Dataset, FlatVec, Metric, Partition,
+    };
+
+    pub fn gen_line_data(max: i32) -> Result<FlatVec<i32, u32, usize>, String> {
+        let data = (-max..=max).collect::<Vec<_>>();
+        let distance_fn = |a: &i32, b: &i32| a.abs_diff(*b);
+        let metric = Metric::new(distance_fn, false);
+        FlatVec::new(data, metric)
     }
 
-    /// Saves the Cakes structure to the given path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to save the Cakes structure to.
-    ///
-    /// # Errors
-    ///
-    /// * If the `path` does not exist.
-    /// * If the `path` is not a valid directory.
-    pub fn save(&self, path: &Path) -> Result<(), String> {
-        match self {
-            Self::SingleShard(ss) => ss.save(path),
-            Self::RandomlySharded(rs) => rs.save(path),
-        }
-    }
-
-    /// Loads the Cakes structure from the given path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to load the Cakes structure from.
-    /// * `metric` - The metric to use for the search.
-    /// * `is_expensive` - Whether the metric is expensive to compute.
-    ///
-    /// # Returns
-    ///
-    /// The Cakes structure.
-    ///
-    /// # Errors
-    ///
-    /// * If the `path` does not exist.
-    /// * If the `path` is not a valid directory.
-    /// * If the `path` does not contain a valid Cakes structure.
-    pub fn load(path: &Path, metric: fn(&I, &I) -> U, is_expensive: bool) -> Result<Self, String> {
-        if !path.exists() {
-            return Err(format!("Path '{}' does not exist.", path.display()));
-        }
-
-        if !path.is_dir() {
-            return Err(format!("Path '{}' is not a directory.", path.display()));
-        }
-
-        // Check if there is a subdirectory for `sample_shard`.
-        let sample_shard_path = path.join("sample_shard");
-        if sample_shard_path.exists() {
-            let rs = RandomlySharded::load(path, metric, is_expensive)?;
-            Ok(Self::RandomlySharded(rs))
-        } else {
-            let ss = SingleShard::load(path, metric, is_expensive)?;
-            Ok(Self::SingleShard(ss))
-        }
-    }
-
-    /// Returns the references to the tree(s) of the dataset.
-    pub fn trees(&self) -> Vec<&Tree<I, U, D, UniBall<U>>> {
-        match self {
-            Self::SingleShard(ss) => vec![ss.tree()],
-            Self::RandomlySharded(rs) => rs.shards().into_iter().map(SingleShard::tree).collect(),
-        }
-    }
-
-    /// Returns the references to the shard(s) of the dataset.
-    pub fn shards(&self) -> Vec<&D> {
-        match self {
-            Self::SingleShard(ss) => vec![ss.data()],
-            Self::RandomlySharded(rs) => rs.shards().into_iter().map(SingleShard::data).collect(),
-        }
-    }
-
-    /// Creates a new CAKES instance with a randomly sharded dataset.
-    ///
-    /// # Arguments
-    ///
-    /// * `shards` - The shards of the dataset to search.
-    /// * `seed` - The seed to use for the random number generator.
-    /// * `criteria` - The criteria to use for partitioning the tree.
-    #[must_use]
-    pub fn new_randomly_sharded<P: PartitionCriterion<U>>(shards: Vec<D>, seed: Option<u64>, criteria: &P) -> Self {
-        let shards = shards
-            .into_iter()
-            .map(|d| SingleShard::new(d, seed, criteria))
+    pub fn gen_grid_data(max: i32) -> Result<FlatVec<(f32, f32), f32, usize>, String> {
+        let data = (-max..=max)
+            .flat_map(|x| (-max..=max).map(move |y| (x.as_f32(), y.as_f32())))
             .collect::<Vec<_>>();
-        Self::RandomlySharded(RandomlySharded::new(shards))
+        let distance_fn = |(x1, y1): &(f32, f32), (x2, y2): &(f32, f32)| (x1 - x2).hypot(y1 - y2);
+        let metric = Metric::new(distance_fn, false);
+        FlatVec::new(data, metric)
     }
 
-    /// Returns the number of shards in the dataset.
-    pub fn num_shards(&self) -> usize {
-        match self {
-            Self::SingleShard(_) => 1,
-            Self::RandomlySharded(rs) => rs.num_shards(),
+    pub fn check_search_by_index<I: Debug, U: Number, M>(
+        mut true_hits: Vec<(usize, U)>,
+        mut pred_hits: Vec<(usize, U)>,
+        name: &str,
+        data: &FlatVec<I, U, M>,
+    ) -> bool {
+        // true_hits.sort_by(|(i, p), (j, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater).then(i.cmp(j)));
+        // pred_hits.sort_by(|(i, p), (j, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater).then(i.cmp(j)));
+
+        true_hits.sort_by_key(|(i, _)| *i);
+        pred_hits.sort_by_key(|(i, _)| *i);
+
+        let rest = format!("\n{true_hits:?}\nvs\n{pred_hits:?}");
+        assert_eq!(true_hits.len(), pred_hits.len(), "{name}: {rest}");
+
+        for ((i, p), (j, q)) in true_hits.into_iter().zip(pred_hits) {
+            let msg = format!("Failed {name} i: {i}, j: {j}, p: {p}, q: {q}");
+            assert_eq!(i, j, "{msg} {rest}");
+            let (l, r) = (data.get(i), data.get(j));
+            assert!(p.abs_diff(q) <= U::EPSILON, "{msg} in {rest}.\n{l:?} vs \n{r:?}");
         }
+
+        true
     }
 
-    /// Returns the cardinalities of the shards in the dataset.
-    pub fn shard_cardinalities(&self) -> Vec<usize> {
-        match self {
-            Self::SingleShard(ss) => ss.shard_cardinalities(),
-            Self::RandomlySharded(rs) => rs.shard_cardinalities(),
+    pub fn check_search_by_distance<I: Debug, U: Number, M>(
+        mut true_hits: Vec<(usize, U)>,
+        mut pred_hits: Vec<(usize, U)>,
+        name: &str,
+        data: &FlatVec<I, U, M>,
+    ) -> bool {
+        true_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
+        pred_hits.sort_by(|(_, p), (_, q)| p.partial_cmp(q).unwrap_or(core::cmp::Ordering::Greater));
+
+        assert_eq!(
+            true_hits.len(),
+            pred_hits.len(),
+            "{name}: {true_hits:?} vs {pred_hits:?}"
+        );
+
+        for (i, (&(l, p), &(r, q))) in true_hits.iter().zip(pred_hits.iter()).enumerate() {
+            let (l, r) = (data.get(l), data.get(r));
+            assert!(
+                p.abs_diff(q) <= U::EPSILON,
+                "Failed {name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}.\n{l:?} vs \n{r:?}"
+            );
         }
+
+        true
     }
 
-    /// Returns the total cardinality of the dataset.
-    pub fn total_cardinality(&self) -> usize {
-        self.shard_cardinalities().iter().sum()
+    pub fn gen_random_data<F: Float>(
+        car: usize,
+        dim: usize,
+        max: F,
+        seed: u64,
+    ) -> Result<FlatVec<Vec<F>, F, usize>, String> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let data = symagen::random_data::random_tabular(car, dim, -max, max, &mut rng);
+        let distance_fn = |a: &Vec<F>, b: &Vec<F>| distances::vectors::euclidean(a, b);
+        let metric = Metric::new(distance_fn, false);
+        FlatVec::new(data, metric)
     }
 
-    /// Returns the tuned RNN algorithm.
-    pub fn tuned_rnn_algorithm(&self) -> rnn::Algorithm {
-        match self {
-            Self::SingleShard(ss) => ss.tuned_rnn_algorithm(),
-            Self::RandomlySharded(rs) => rs.tuned_rnn_algorithm(),
+    pub fn check_search<I, U, D, C, M>(
+        algs: &Algs<I, U, M>,
+        data: &D,
+        root: &C,
+        query: &I,
+        name: &str,
+        fv_data: &FlatVec<I, U, M>,
+    ) -> bool
+    where
+        I: Send + Sync,
+        U: Number,
+        D: ParDataset<I, U>,
+        C: ParCluster<I, U, D>,
+    {
+        for (alg, checker) in algs {
+            let true_hits = alg.linear_variant().par_search(data, root, query);
+            let pred_hits = alg.par_search(data, root, query);
+            let alg_name = format!("{name}-{}", alg.name());
+            checker(true_hits.clone(), pred_hits, &alg_name, fv_data);
         }
+
+        true
     }
 
-    /// Performs RNN search on a batch of queries with the given algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `queries` - The queries to search.
-    /// * `radius` - The search radius.
-    /// * `algo` - The algorithm to use.
-    ///
-    /// # Returns
-    ///
-    /// A vector of vectors of tuples containing the index of the instance and
-    /// the distance to the query.
-    pub fn batch_rnn_search(&self, queries: &[&I], radius: U, algo: rnn::Algorithm) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|q| self.rnn_search(q, radius, algo)).collect()
-    }
-
-    /// Performs an RNN search with the given algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query instance.
-    /// * `radius` - The search radius.
-    /// * `algo` - The algorithm to use.
-    ///
-    /// # Returns
-    ///
-    /// A vector of tuples containing the index of the instance and the distance
-    /// to the query.
-    pub fn rnn_search(&self, query: &I, radius: U, algo: rnn::Algorithm) -> Vec<(usize, U)> {
-        match self {
-            Self::SingleShard(ss) => ss.rnn_search(query, radius, algo),
-            Self::RandomlySharded(rs) => rs.rnn_search(query, radius, algo),
+    #[test_case(1_000, 10)]
+    #[test_case(10_000, 10)]
+    #[test_case(1_000, 100)]
+    #[test_case(10_000, 100)]
+    fn vectors(car: usize, dim: usize) -> Result<(), String> {
+        let mut algs: Algs<Vec<f32>, f32, usize> = vec![];
+        for radius in [0.1, 1.0] {
+            algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
         }
-    }
-
-    /// Performs Linear RNN search on a batch of queries.
-    ///
-    /// # Arguments
-    ///
-    /// * `queries` - The queries to search.
-    /// * `radius` - The search radius.
-    ///
-    /// # Returns
-    ///
-    /// A vector of vectors of tuples containing the index of the instance and
-    /// the distance to the query.
-    pub fn batch_linear_rnn_search(&self, queries: &[&I], radius: U) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|q| self.linear_rnn_search(q, radius)).collect()
-    }
-
-    /// Performs a linear RNN search.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query instance.
-    /// * `radius` - The search radius.
-    ///
-    /// # Returns
-    ///
-    /// A vector of tuples containing the index of the instance and the distance
-    /// to the query.
-    pub fn linear_rnn_search(&self, query: &I, radius: U) -> Vec<(usize, U)> {
-        match self {
-            Self::SingleShard(ss) => ss.linear_rnn_search(query, radius),
-            Self::RandomlySharded(rs) => rs.linear_rnn_search(query, radius),
+        for k in [1, 10, 100] {
+            algs.push((super::Algorithm::KnnRepeatedRnn(k, 2.0), check_search_by_distance));
+            algs.push((super::Algorithm::KnnBreadthFirst(k), check_search_by_distance));
+            algs.push((super::Algorithm::KnnDepthFirst(k), check_search_by_distance));
         }
+
+        let seed = 42;
+        let data = gen_random_data(car, dim, 10.0, seed)?;
+        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+        let seed = Some(seed);
+        let query = &vec![0.0; dim];
+
+        let ball = Ball::new_tree(&data, &criteria, seed);
+        check_search(&algs, &data, &ball, query, "ball", &data);
+
+        let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
+        check_search(&algs, &perm_data, &off_ball, query, "off_ball", &perm_data);
+
+        let (par_off_ball, per_perm_data) = OffBall::par_from_ball_tree(ball, data);
+        check_search(
+            &algs,
+            &per_perm_data,
+            &par_off_ball,
+            query,
+            "par_off_ball",
+            &per_perm_data,
+        );
+
+        Ok(())
     }
 
-    /// Returns the tuned KNN algorithm.
-    pub fn tuned_knn_algorithm(&self) -> knn::Algorithm {
-        match self {
-            Self::SingleShard(ss) => ss.tuned_knn_algorithm(),
-            Self::RandomlySharded(rs) => rs.tuned_knn_algorithm(),
-        }
-    }
+    #[test_case::test_case(16, 16, 2)]
+    fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap();
 
-    /// Performs KNN search on a batch of queries with the given algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `queries` - The queries to search.
-    /// * `k` - The number of nearest neighbors to return.
-    /// * `algo` - The algorithm to use.
-    ///
-    /// # Returns
-    ///
-    /// A vector of vectors of tuples containing the index of the instance and
-    /// the distance to the query.
-    pub fn batch_knn_search(&self, queries: &[&I], k: usize, algo: knn::Algorithm) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|q| self.knn_search(q, k, algo)).collect()
-    }
-
-    /// Performs a KNN search with the given algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query instance.
-    /// * `k` - The number of nearest neighbors to return.
-    /// * `algo` - The algorithm to use.
-    ///
-    /// # Returns
-    ///
-    /// A vector of tuples containing the index of the instance and the distance to the query.
-    pub fn knn_search(&self, query: &I, k: usize, algo: knn::Algorithm) -> Vec<(usize, U)> {
-        match self {
-            Self::SingleShard(ss) => ss.knn_search(query, k, algo),
-            Self::RandomlySharded(rs) => rs.knn_search(query, k, algo),
-        }
-    }
-
-    /// Automatically finds the best RNN algorithm to use.
-    ///
-    /// # Arguments
-    ///
-    /// * `radius` - The search radius.
-    /// * `tuning_depth` - The number of instances to use for tuning.
-    pub fn auto_tune_rnn(&mut self, radius: U, tuning_depth: usize) {
-        match self {
-            Self::SingleShard(ss) => ss.auto_tune_rnn(radius, tuning_depth),
-            Self::RandomlySharded(rs) => rs.auto_tune_rnn(radius, tuning_depth),
-        }
-    }
-
-    /// Automatically finds the best KNN algorithm to use.
-    ///
-    /// # Arguments
-    ///
-    /// * `k` - The number of nearest neighbors to return.
-    /// * `tuning_depth` - The number of instances to use for tuning.
-    pub fn auto_tune_knn(&mut self, k: usize, tuning_depth: usize) {
-        match self {
-            Self::SingleShard(ss) => ss.auto_tune_knn(k, tuning_depth),
-            Self::RandomlySharded(rs) => rs.auto_tune_knn(k, tuning_depth),
-        }
-    }
-
-    /// Performs Linear KNN search on a batch of queries.
-    ///
-    /// # Arguments
-    ///
-    /// * `queries` - The queries to search.
-    /// * `k` - The number of nearest neighbors to return.
-    ///
-    /// # Returns
-    ///
-    /// A vector of vectors of tuples containing the index of the instance and
-    /// the distance to the query.
-    pub fn batch_linear_knn_search(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|q| self.linear_knn_search(q, k)).collect()
-    }
-
-    /// Performs a linear KNN search.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query instance.
-    /// * `k` - The number of nearest neighbors to return.
-    ///
-    /// # Returns
-    ///
-    /// A vector of tuples containing the index of the instance and the distance to the query.
-    pub fn linear_knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-        match self {
-            Self::SingleShard(ss) => ss.linear_knn_search(query, k),
-            Self::RandomlySharded(rs) => rs.linear_knn_search(query, k),
-        }
-    }
-
-    /// Performs RNN search on a batch of queries with the tuned algorithm.
-    ///
-    /// If the algorithm has not been tuned, this will use the default algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `queries` - The queries to search.
-    /// * `radius` - The search radius.
-    ///
-    /// # Returns
-    ///
-    /// A vector of vectors of tuples containing the index of the instance and
-    /// the distance to the query.
-    pub fn batch_tuned_rnn_search(&self, queries: &[&I], radius: U) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|q| self.tuned_rnn_search(q, radius)).collect()
-    }
-
-    /// Performs a RNN search with the tuned algorithm.
-    ///
-    /// If the algorithm has not been tuned, this will use the default algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query instance.
-    /// * `radius` - The search radius.
-    ///
-    /// # Returns
-    ///
-    /// A vector of tuples containing the index of the instance and the distance to the query.
-    pub fn tuned_rnn_search(&self, query: &I, radius: U) -> Vec<(usize, U)> {
-        let algo = self.tuned_rnn_algorithm();
-        self.rnn_search(query, radius, algo)
-    }
-
-    /// Performs KNN search on a batch of queries with the tuned algorithm.
-    ///
-    /// If the algorithm has not been tuned, this will use the default algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `queries` - The queries to search.
-    /// * `k` - The number of nearest neighbors to return.
-    ///
-    /// # Returns
-    ///
-    /// A vector of vectors of tuples containing the index of the instance and
-    /// the distance to the query.
-    pub fn batch_tuned_knn_search(&self, queries: &[&I], k: usize) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|q| self.tuned_knn_search(q, k)).collect()
-    }
-
-    /// Performs a KNN search with the tuned algorithm.
-    ///
-    /// If the algorithm has not been tuned, this will use the default algorithm.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query instance.
-    /// * `k` - The number of nearest neighbors to return.
-    ///
-    /// # Returns
-    ///
-    /// A vector of tuples containing the index of the instance and the distance to the query.
-    pub fn tuned_knn_search(&self, query: &I, k: usize) -> Vec<(usize, U)> {
-        let algo = self.tuned_knn_algorithm();
-        self.knn_search(query, k, algo)
-    }
-}
-
-impl<I, U, D> Index<usize> for Cakes<I, U, D>
-where
-    I: Instance,
-    U: Number,
-    D: Dataset<I, U>,
-{
-    type Output = I;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            Self::SingleShard(ss) => ss.data().index(index),
-            Self::RandomlySharded(rs) => {
-                let i = rs
-                    .offsets()
-                    .iter()
-                    .enumerate()
-                    .find(|(_, &o)| o > index)
-                    .map_or_else(|| rs.num_shards() - 1, |(i, _)| i - 1);
-
-                let index = index - rs.offsets()[i];
-                rs.shards()[i].data().index(index)
+        pool.install(|| {
+            let mut algs: Algs<String, u16, String> = vec![];
+            for radius in [4, 8, 16] {
+                algs.push((super::Algorithm::RnnClustered(radius), check_search_by_index));
             }
-        }
+            for k in [1, 10, 20] {
+                algs.push((super::Algorithm::KnnRepeatedRnn(k, 2), check_search_by_distance));
+                algs.push((super::Algorithm::KnnBreadthFirst(k), check_search_by_distance));
+                algs.push((super::Algorithm::KnnDepthFirst(k), check_search_by_distance));
+            }
+
+            let seed_length = 30;
+            let alphabet = "ACTGN".chars().collect::<Vec<_>>();
+            let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
+            let penalties = distances::strings::Penalties::default();
+            let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
+            let len_delta = seed_length / 10;
+            let (metadata, data) = symagen::random_edits::generate_clumped_data(
+                &seed_string,
+                penalties,
+                &alphabet,
+                num_clumps,
+                clump_size,
+                clump_radius,
+                inter_clump_distance_range,
+                len_delta,
+            )
+            .into_iter()
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+            let query = &seed_string;
+
+            let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
+            let metric = Metric::new(distance_fn, true);
+            let data = FlatVec::new(data, metric)?.with_metadata(metadata.clone())?;
+
+            let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+            let seed = Some(42);
+
+            let ball = Ball::new_tree(&data, &criteria, seed);
+            check_search(&algs, &data, &ball, query, "ball", &data);
+
+            let (off_ball, perm_data) = OffBall::from_ball_tree(ball.clone(), data.clone());
+            check_search(&algs, &perm_data, &off_ball, query, "off_ball", &perm_data);
+
+            let (par_off_ball, par_perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
+            check_search(
+                &algs,
+                &par_perm_data,
+                &par_off_ball,
+                query,
+                "par_off_ball",
+                &par_perm_data,
+            );
+
+            let (squishy_ball, co_data) = SquishyBall::from_ball_tree(ball.clone(), data.clone());
+            let (squishy_ball, co_data) = {
+                (
+                    squishy_ball.with_metadata_type::<String>(),
+                    co_data.with_metadata(metadata.clone())?,
+                )
+            };
+            let co_fv_data = co_data.to_flat_vec();
+            check_search(&algs, &co_data, &squishy_ball, query, "squishy_ball", &co_fv_data);
+
+            let (par_squishy_ball, par_co_data) = SquishyBall::par_from_ball_tree(ball, data);
+            let (par_squishy_ball, par_co_data) = {
+                (
+                    par_squishy_ball.with_metadata_type::<String>(),
+                    par_co_data.with_metadata(metadata.clone())?,
+                )
+            };
+            let par_co_fv_data = par_co_data.to_flat_vec();
+            check_search(
+                &algs,
+                &par_co_data,
+                &par_squishy_ball,
+                query,
+                "par_squishy_ball",
+                &par_co_fv_data,
+            );
+
+            Ok::<_, String>(())
+        })?;
+
+        Ok(())
     }
 }
