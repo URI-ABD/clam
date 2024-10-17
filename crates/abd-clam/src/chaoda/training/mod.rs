@@ -121,7 +121,7 @@ impl<I: Clone, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
             for (metric, criteria) in self.metrics.iter().zip(criteria) {
                 data.set_metric(metric.clone());
                 let root = S::new_tree(data, criteria, seed);
-                metric_trees.push(Vertex::adapt_tree(root, None));
+                metric_trees.push(Vertex::adapt_tree(root, None, data));
             }
             let metric_trees = metric_trees.try_into().unwrap_or_else(|v: Vec<_>| {
                 unreachable!("Could not convert Vec<Vertex> to [Vertex; {M}]. Len was {}", v.len())
@@ -450,7 +450,7 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> ChaodaTrainer<I, U, M> {
             for (metric, criteria) in self.metrics.iter().zip(criteria) {
                 data.set_metric(metric.clone());
                 let root = S::par_new_tree(data, criteria, seed);
-                metric_trees.push(Vertex::par_adapt_tree(root, None));
+                metric_trees.push(Vertex::par_adapt_tree(root, None, data));
             }
             let metric_trees = metric_trees.try_into().unwrap_or_else(|v: Vec<_>| {
                 unreachable!("Could not convert Vec<Vertex> to [Vertex; {M}]. Len was {}", v.len())

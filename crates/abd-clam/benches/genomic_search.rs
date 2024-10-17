@@ -71,7 +71,7 @@ fn genomic_search(c: &mut Criterion) {
         let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
         let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);
         let (balanced_off_ball, balanced_perm_data) = {
-            let balanced_off_ball = OffBall::par_adapt_tree(balanced_ball.clone(), None);
+            let balanced_off_ball = OffBall::par_adapt_tree(balanced_ball.clone(), None, &data);
             let mut balanced_perm_data = data.clone();
             let permutation = balanced_off_ball.source().indices().collect::<Vec<_>>();
             balanced_perm_data.permute(&permutation);
