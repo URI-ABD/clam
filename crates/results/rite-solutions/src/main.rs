@@ -17,9 +17,11 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{partition::ParPartition, Ball, Cluster, Dataset, Partition};
+use abd_clam::{
+    cluster::{ParPartition, Partition},
+    Ball, Cluster, Dataset,
+};
 use clap::Parser;
-use data::NeighborhoodAware;
 use rayon::prelude::*;
 
 mod data;
@@ -103,7 +105,6 @@ fn main() -> Result<(), String> {
 
     let data = data::read_or_generate(
         args.inp_path,
-        &args.metric,
         args.num_inliers,
         args.dimensionality,
         args.inlier_mean,
@@ -111,19 +112,19 @@ fn main() -> Result<(), String> {
         args.seed,
     )?;
 
-    let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+    let metric = args.metric.metric();
+    let criteria = |c: &Ball<_>| c.cardinality() > 1;
     let root = if args.parallelize {
-        Ball::par_new_tree(&data, &criteria, args.seed)
+        Ball::par_new_tree(&data, &metric, &criteria, args.seed)
     } else {
-        Ball::new_tree(&data, &criteria, args.seed)
+        Ball::new_tree(&data, &metric, &criteria, args.seed)
     };
 
     let data = if args.parallelize {
-        data::NeighborhoodAware::par_new(&data, &root, args.neighborhood_size)
+        data::NeighborhoodAware::par_new(&data, &metric, &root, args.neighborhood_size)
     } else {
-        data::NeighborhoodAware::new(&data, &root, args.neighborhood_size)
+        data::NeighborhoodAware::new(&data, &metric, &root, args.neighborhood_size)
     };
-    let root = root.with_dataset_type::<NeighborhoodAware>();
 
     let dim = data.dimensionality_hint().0;
     let outliers = data::gen_random(args.outlier_mean, args.outlier_std, args.num_outliers, dim, args.seed);
@@ -131,12 +132,12 @@ fn main() -> Result<(), String> {
     let results = if args.parallelize {
         outliers
             .par_iter()
-            .map(|outlier| data.is_outlier(&root, outlier, 0.5))
+            .map(|outlier| data.is_outlier(&metric, &root, outlier, 0.5))
             .collect::<Vec<_>>()
     } else {
         outliers
             .iter()
-            .map(|outlier| data.is_outlier(&root, outlier, 0.5))
+            .map(|outlier| data.is_outlier(&metric, &root, outlier, 0.5))
             .collect()
     };
     let results = results.into_iter().enumerate().collect::<Vec<_>>();

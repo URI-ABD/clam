@@ -1,94 +1,88 @@
 //! The most basic representation of a `Cluster` is a metric-`Ball`.
 
-use core::fmt::Debug;
-
-use rayon::prelude::*;
-use std::{hash::Hash, marker::PhantomData};
-
-use distances::Number;
-use serde::{Deserialize, Serialize};
-
-use crate::{dataset::ParDataset, utils, Dataset};
-
-use super::{
-    partition::{ParPartition, Partition},
-    BalancedBall, Cluster, ParCluster, LFD,
+use core::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
 };
 
-/// A metric-`Ball` is a collection of instances that are within a certain
-/// distance of a center.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Ball<I, U: Number, D: Dataset<I, U>> {
+use distances::Number;
+use rayon::prelude::*;
+
+use crate::{
+    core::{dataset::ParDataset, metric::ParMetric, Dataset, Metric},
+    utils,
+};
+
+use super::{partition::ParPartition, Cluster, ParCluster, Partition, LFD};
+
+/// A metric-`Ball` is a collection of items that are within a certain distance
+/// of a center.
+///
+/// # Example
+///
+/// ```rust
+/// use abd_clam::{
+///     cluster::{Partition, ParPartition},
+///     metric::AbsoluteDifference,
+///     Ball, Cluster, Dataset, FlatVec
+/// };
+///
+/// let items = (0..=100).collect::<Vec<_>>();
+/// let data = FlatVec::new(items).unwrap();
+/// let metric = AbsoluteDifference;
+///
+/// // We will create a `Ball` with all the items in the `data`.
+/// let indices = data.indices().collect::<Vec<_>>();
+/// let ball = Ball::new(&data, &metric, &indices, 0, None).unwrap();
+///
+/// assert_eq!(ball.depth(), 0);
+/// assert_eq!(ball.cardinality(), 101);
+/// assert_eq!(ball.indices(), indices);
+/// assert_eq!(ball.arg_center(), 50);
+/// assert_eq!(ball.radius(), 50);
+/// assert!([0, 100].contains(&ball.arg_radial()));
+/// assert!((ball.lfd() - 1.0).abs() < 0.1);
+///
+/// assert!(ball.is_leaf());
+///
+/// // We will now create a tree of `Ball`s with leaves being singletons.
+/// let partition_criteria = |ball: &Ball<_>| ball.cardinality() > 1;
+/// let root = Ball::new_tree(&data, &metric, &partition_criteria, None);
+/// assert!(!root.is_leaf());
+///
+/// // We can also use the equivalent parallelized methods to create the tree.
+/// let root = Ball::par_new_tree(&data, &metric, &partition_criteria, None);
+/// assert!(!root.is_leaf());
+/// ```
+#[derive(Clone)]
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
+#[cfg_attr(feature = "disk-io", bitcode(recursive))]
+pub struct Ball<T: Number> {
     /// Parameters used for creating the `Ball`.
     depth: usize,
-    /// The number of instances in the `Ball`.
+    /// The number of items in the `Ball`.
     cardinality: usize,
     /// The radius of the `Ball`.
-    radius: U,
+    radius: T,
     /// The local fractal dimension of the `Ball`.
     lfd: f32,
-    /// The index of the center instance.
+    /// The index of the center item.
     arg_center: usize,
-    /// The index of the instance that is the furthest from the center.
+    /// The index of the item that is the furthest from the center.
     arg_radial: usize,
-    /// The indices of the instances in the `Ball`.
-    pub(crate) indices: Vec<usize>,
+    /// The indices of the items in the `Ball`.
+    indices: Vec<usize>,
+    /// The extents of the `Ball`.
+    extents: Vec<(usize, T)>,
     /// The children of the `Ball`.
-    children: Vec<(usize, U, Box<Self>)>,
-    /// Phantom data to satisfy the compiler.
-    _id: PhantomData<(I, D)>,
+    children: Vec<Box<Self>>,
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Ball<I, U, D> {
-    /// Creates a new `Ball` from a `BalancedBall`.
-    pub fn from_balanced_ball(balanced_ball: BalancedBall<I, U, D>) -> Self {
-        let mut ball = balanced_ball.ball;
-        let children = balanced_ball
-            .children
-            .into_iter()
-            .map(|(e, d, b)| (e, d, Box::new(Self::from_balanced_ball(*b))))
-            .collect();
-        ball.children = children;
-        ball
-    }
-
-    /// Changes the associated `Dataset` type.
-    pub fn with_dataset_type<Dd: Dataset<I, U>>(self) -> Ball<I, U, Dd> {
-        let children = self
-            .children
-            .into_iter()
-            .map(|(e, d, b)| (e, d, Box::new(b.with_dataset_type())))
-            .collect();
-        Ball {
-            depth: self.depth,
-            cardinality: self.cardinality,
-            radius: self.radius,
-            lfd: self.lfd,
-            arg_center: self.arg_center,
-            arg_radial: self.arg_radial,
-            indices: self.indices,
-            children,
-            _id: PhantomData,
-        }
-    }
-}
-
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> Ball<I, U, D> {
-    /// Creates a new `Ball` from a `BalancedBall`.
-    pub fn par_from_balanced_ball(balanced_ball: BalancedBall<I, U, D>) -> Self {
-        let mut ball = balanced_ball.ball;
-        let children = balanced_ball
-            .children
-            .into_par_iter()
-            .map(|(e, d, b)| (e, d, Box::new(Self::from_balanced_ball(*b))))
-            .collect();
-        ball.children = children;
-        ball
-    }
-}
-
-impl<I, U: Number, D: Dataset<I, U>> Debug for Ball<I, U, D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: Number> core::fmt::Debug for Ball<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Ball")
             .field("depth", &self.depth)
             .field("cardinality", &self.cardinality)
@@ -97,27 +91,28 @@ impl<I, U: Number, D: Dataset<I, U>> Debug for Ball<I, U, D> {
             .field("arg_center", &self.arg_center)
             .field("arg_radial", &self.arg_radial)
             .field("indices", &self.indices)
+            .field("extents", &self.extents)
             .field("children", &!self.children.is_empty())
             .finish()
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> PartialEq for Ball<I, U, D> {
+impl<T: Number> PartialEq for Ball<T> {
     fn eq(&self, other: &Self) -> bool {
         self.depth == other.depth && self.cardinality == other.cardinality && self.indices == other.indices
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Eq for Ball<I, U, D> {}
+impl<T: Number> Eq for Ball<T> {}
 
-impl<I, U: Number, D: Dataset<I, U>> PartialOrd for Ball<I, U, D> {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+impl<T: Number> PartialOrd for Ball<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Ord for Ball<I, U, D> {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+impl<T: Number> Ord for Ball<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.depth
             .cmp(&other.depth)
             .then_with(|| self.cardinality.cmp(&other.cardinality))
@@ -125,14 +120,14 @@ impl<I, U: Number, D: Dataset<I, U>> Ord for Ball<I, U, D> {
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Hash for Ball<I, U, D> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl<T: Number> Hash for Ball<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         // We hash the `indices` field
         self.indices.hash(state);
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
+impl<T: Number> Cluster<T> for Ball<T> {
     fn depth(&self) -> usize {
         self.depth
     }
@@ -149,7 +144,7 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self.arg_center = arg_center;
     }
 
-    fn radius(&self) -> U {
+    fn radius(&self) -> T {
         self.radius
     }
 
@@ -165,88 +160,93 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self.lfd
     }
 
-    fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        self.indices.iter().copied()
+    fn contains(&self, index: usize) -> bool {
+        self.indices.contains(&index)
     }
 
-    fn set_indices(&mut self, indices: Vec<usize>) {
-        self.indices = indices;
+    fn indices(&self) -> Vec<usize> {
+        self.indices.clone()
     }
 
-    fn children(&self) -> &[(usize, U, Box<Self>)] {
-        self.children.as_slice()
+    fn set_indices(&mut self, indices: &[usize]) {
+        self.indices = indices.to_vec();
     }
 
-    fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)] {
-        self.children.as_mut_slice()
+    fn extents(&self) -> &[(usize, T)] {
+        &self.extents
     }
 
-    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>) {
+    fn extents_mut(&mut self) -> &mut [(usize, T)] {
+        &mut self.extents
+    }
+
+    fn add_extent(&mut self, index: usize, extent: T) {
+        self.extents.push((index, extent));
+    }
+
+    fn take_extents(&mut self) -> Vec<(usize, T)> {
+        core::mem::take(&mut self.extents)
+    }
+
+    fn children(&self) -> Vec<&Self> {
+        self.children.iter().map(AsRef::as_ref).collect()
+    }
+
+    fn children_mut(&mut self) -> Vec<&mut Self> {
+        self.children.iter_mut().map(AsMut::as_mut).collect()
+    }
+
+    fn set_children(&mut self, children: Vec<Box<Self>>) {
         self.children = children;
     }
 
-    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)> {
+    fn take_children(&mut self) -> Vec<Box<Self>> {
         core::mem::take(&mut self.children)
     }
 
-    fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        data.query_to_many(query, &self.indices)
-    }
-
     fn is_descendant_of(&self, other: &Self) -> bool {
-        let indices = other.indices().collect::<std::collections::HashSet<_>>();
-        self.indices().all(|i| indices.contains(&i))
+        self.indices.iter().all(|i| other.indices.contains(i))
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for Ball<I, U, D> {
-    fn par_distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        data.par_query_to_many(query, &self.indices().collect::<Vec<_>>())
+impl<T: Number> ParCluster<T> for Ball<T> {
+    fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
+        self.indices.par_iter().copied()
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self
-    where
-        Self: Sized,
-    {
+impl<T: Number> Partition<T> for Ball<T> {
+    fn new<I, D: Dataset<I>, M: Metric<I, T>>(
+        data: &D,
+        metric: &M,
+        indices: &[usize],
+        depth: usize,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
         if indices.is_empty() {
-            unreachable!("Cannot create a Ball with no instances")
+            return Err("Cannot create a Ball with no items".to_string());
         }
 
         let cardinality = indices.len();
-
         let samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            #[allow(clippy::cast_possible_truncation)]
-            let n = if cardinality < 10_100 {
-                // We use the square root of the cardinality as the number of samples
-                (cardinality - 100).as_f64().sqrt().as_u64() as usize
-            } else {
-                // We use the logarithm of the cardinality as the number of samples
-                #[allow(clippy::cast_possible_truncation)]
-                let n = (cardinality - 10_100).as_f64().log2().as_u64() as usize;
-                n + 100
-            };
-
-            let n = n + 100;
-            Dataset::choose_unique(data, indices, n, seed)
+            let num_samples = utils::num_samples(cardinality, 100, 10_000);
+            data.choose_unique(indices, num_samples, seed, metric)
         };
 
-        let arg_center = Dataset::median(data, &samples);
+        let arg_center = data.median(&samples, metric);
 
-        let distances = Dataset::one_to_many(data, arg_center, indices);
+        let distances = data.one_to_many(arg_center, indices, metric).collect::<Vec<_>>();
         let &(arg_radial, radius) = distances
             .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
         let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd_scale = radius.half();
-        let lfd = LFD::from_radial_distances(&distances, lfd_scale);
+        let lfd = LFD::from_radial_distances(&distances, radius.half());
 
-        Self {
+        Ok(Self {
             depth,
             cardinality,
             radius,
@@ -254,64 +254,55 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
             arg_center,
             arg_radial,
             indices: indices.to_vec(),
+            extents: vec![(arg_center, radius)],
             children: Vec::new(),
-            _id: PhantomData,
-        }
+        })
     }
 
-    fn find_extrema(&self, data: &D) -> Vec<usize> {
-        let l_distances = Dataset::one_to_many(data, self.arg_radial, &self.indices);
-
-        let &(arg_l, _) = l_distances
-            .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+    fn find_extrema<I, D: Dataset<I>, M: Metric<I, T>>(&mut self, data: &D, metric: &M) -> Vec<usize> {
+        let (arg_l, d) = data
+            .one_to_many(self.arg_radial, &self.indices, metric)
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
+
+        self.add_extent(self.arg_radial, d);
 
         vec![arg_l, self.arg_radial]
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for Ball<I, U, D> {
-    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self
-    where
-        Self: Sized,
-    {
+impl<T: Number> ParPartition<T> for Ball<T> {
+    fn par_new<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        data: &D,
+        metric: &M,
+        indices: &[usize],
+        depth: usize,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
         if indices.is_empty() {
-            unreachable!("Cannot create a Ball with no instances")
+            return Err("Cannot create a Ball with no items".to_string());
         }
 
         let cardinality = indices.len();
-
         let samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            #[allow(clippy::cast_possible_truncation)]
-            let n = if cardinality < 10_100 {
-                // We use the square root of the cardinality as the number of samples
-                (cardinality - 100).as_f64().sqrt().as_u64() as usize
-            } else {
-                // We use the logarithm of the cardinality as the number of samples
-                #[allow(clippy::cast_possible_truncation)]
-                let n = (cardinality - 10_100).as_f64().log2().as_u64() as usize;
-                n + 100
-            };
-
-            let n = n + 100;
-            ParDataset::par_choose_unique(data, indices, n, seed)
+            let num_samples = utils::num_samples(cardinality, 100, 10_000);
+            data.choose_unique(indices, num_samples, seed, metric)
         };
 
-        let arg_center = ParDataset::par_median(data, &samples);
+        let arg_center = data.par_median(&samples, metric);
 
-        let distances = ParDataset::par_one_to_many(data, arg_center, indices);
+        let distances = data.par_one_to_many(arg_center, indices, metric).collect::<Vec<_>>();
         let &(arg_radial, radius) = distances
             .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
         let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd = utils::compute_lfd(radius, &distances);
+        let lfd = LFD::from_radial_distances(&distances, radius.half());
 
-        Self {
+        Ok(Self {
             depth,
             cardinality,
             radius,
@@ -319,25 +310,29 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
             arg_center,
             arg_radial,
             indices: indices.to_vec(),
+            extents: vec![(arg_center, radius)],
             children: Vec::new(),
-            _id: PhantomData,
-        }
+        })
     }
 
-    fn par_find_extrema(&self, data: &D) -> Vec<usize> {
-        let l_distances = ParDataset::par_one_to_many(data, self.arg_radial, &self.indices);
-
-        let &(arg_l, _) = l_distances
-            .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &mut self,
+        data: &D,
+        metric: &M,
+    ) -> Vec<usize> {
+        let (arg_l, d) = data
+            .par_one_to_many(self.arg_radial, &self.indices, metric)
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
+
+        self.add_extent(self.arg_radial, d);
 
         vec![arg_l, self.arg_radial]
     }
 }
 
-#[cfg(feature = "csv")]
-impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D> for Ball<I, U, D> {
+#[cfg(feature = "disk-io")]
+impl<T: Number> super::Csv<T> for Ball<T> {
     fn header(&self) -> Vec<String> {
         vec![
             "depth".to_string(),
@@ -363,197 +358,11 @@ impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D> for Ball<I, U, D> 
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use distances::number::{Addition, Multiplication};
+#[cfg(feature = "disk-io")]
+impl<T: Number> super::ParCsv<T> for Ball<T> {}
 
-    use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
+#[cfg(feature = "disk-io")]
+impl<T: Number> super::ClusterIO<T> for Ball<T> {}
 
-    use super::Ball;
-
-    type F = FlatVec<Vec<i32>, i32, usize>;
-    type B = Ball<Vec<i32>, i32, F>;
-
-    fn gen_tiny_data() -> Result<FlatVec<Vec<i32>, i32, usize>, String> {
-        let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
-        let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
-        let metric = Metric::new(distance_function, false);
-        FlatVec::new_array(instances.clone(), metric)
-    }
-
-    fn gen_pathological_line() -> FlatVec<f64, f64, usize> {
-        let min_delta = 1e-12;
-        let mut delta = min_delta;
-        let mut line = vec![0_f64];
-
-        while line.len() < 900 {
-            let last = *line.last().unwrap();
-            line.push(last + delta);
-            delta *= 2.0;
-            delta += min_delta;
-        }
-
-        let distance_fn = |x: &f64, y: &f64| x.abs_diff(*y);
-        let metric = Metric::new(distance_fn, false);
-        FlatVec::new(line, metric).unwrap()
-    }
-
-    #[test]
-    fn new() -> Result<(), String> {
-        let data = gen_tiny_data()?;
-
-        let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let seed = Some(42);
-        let root = Ball::new(&data, &indices, 0, seed);
-        let arg_r = root.arg_radial();
-
-        assert_eq!(arg_r, data.cardinality() - 1);
-        assert_eq!(root.depth(), 0);
-        assert_eq!(root.cardinality(), 5);
-        assert_eq!(root.arg_center(), 2);
-        assert_eq!(root.radius(), 12);
-        assert_eq!(root.arg_radial(), arg_r);
-        assert!(root.children().is_empty());
-        assert_eq!(root.indices().collect::<Vec<_>>(), indices);
-
-        let root = Ball::par_new(&data, &indices, 0, seed);
-        let arg_r = root.arg_radial();
-
-        assert_eq!(arg_r, data.cardinality() - 1);
-        assert_eq!(root.depth(), 0);
-        assert_eq!(root.cardinality(), 5);
-        assert_eq!(root.arg_center(), 2);
-        assert_eq!(root.radius(), 12);
-        assert_eq!(root.arg_radial(), arg_r);
-        assert!(root.children().is_empty());
-        assert_eq!(root.indices().collect::<Vec<_>>(), indices);
-
-        Ok(())
-    }
-
-    fn check_partition(root: &B) -> bool {
-        let indices = root.indices().collect::<Vec<_>>();
-
-        assert!(!root.children().is_empty());
-        assert_eq!(indices, &[0, 1, 2, 4, 3]);
-
-        let children = root.child_clusters().collect::<Vec<_>>();
-        assert_eq!(children.len(), 2);
-        for &c in &children {
-            assert_eq!(c.depth(), 1);
-            assert!(c.children().is_empty());
-        }
-
-        let (left, right) = (children[0], children[1]);
-
-        assert_eq!(left.cardinality(), 3);
-        assert_eq!(left.arg_center(), 1);
-        assert_eq!(left.radius(), 4);
-        assert!([0, 2].contains(&left.arg_radial()));
-
-        assert_eq!(right.cardinality(), 2);
-        assert_eq!(right.radius(), 8);
-        assert!([3, 4].contains(&right.arg_center()));
-        assert!([3, 4].contains(&right.arg_radial()));
-
-        true
-    }
-
-    #[test]
-    fn tree() -> Result<(), String> {
-        let data = gen_tiny_data()?;
-
-        let seed = Some(42);
-        let criteria = |c: &B| c.depth() < 1;
-
-        let root = Ball::new_tree(&data, &criteria, seed);
-        assert_eq!(root.indices().count(), data.cardinality());
-        assert!(check_partition(&root));
-
-        let root = Ball::par_new_tree(&data, &criteria, seed);
-        assert_eq!(root.indices().count(), data.cardinality());
-        assert!(check_partition(&root));
-
-        Ok(())
-    }
-
-    #[test]
-    fn partition_further() -> Result<(), String> {
-        let data = gen_tiny_data()?;
-
-        let seed = Some(42);
-        let criteria_one = |c: &B| c.depth() < 1;
-        let criteria_two = |c: &B| c.depth() < 2;
-
-        let mut root = Ball::new_tree(&data, &criteria_one, seed);
-        for leaf in root.leaves() {
-            assert_eq!(leaf.depth(), 1);
-        }
-        root.partition_further(&data, &criteria_two, seed);
-        for leaf in root.leaves() {
-            assert_eq!(leaf.depth(), 2);
-        }
-
-        let mut root = Ball::par_new_tree(&data, &criteria_one, seed);
-        for leaf in root.leaves() {
-            assert_eq!(leaf.depth(), 1);
-        }
-        root.par_partition_further(&data, &criteria_two, seed);
-        for leaf in root.leaves() {
-            assert_eq!(leaf.depth(), 2);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn tree_iterative() {
-        let data = gen_pathological_line();
-
-        let seed = Some(42);
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-
-        let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let mut root = Ball::new(&data, &indices, 0, seed);
-
-        let mut intermediate_depth = root.max_recursion_depth();
-        let intermediate_criteria = |c: &Ball<_, _, _>| c.depth() < intermediate_depth && criteria(c);
-        root.partition(&data, &intermediate_criteria, seed);
-
-        while root.leaves().into_iter().any(|l| !l.is_singleton()) {
-            intermediate_depth += root.max_recursion_depth();
-            let intermediate_criteria = |c: &Ball<_, _, _>| c.depth() < intermediate_depth && criteria(c);
-            root.partition_further(&data, &intermediate_criteria, seed);
-        }
-
-        assert!(!root.is_leaf());
-    }
-
-    #[test]
-    fn trim_and_graft() -> Result<(), String> {
-        let line = (0..1024).collect();
-        let distance_fn = |x: &u32, y: &u32| x.abs_diff(*y);
-        let metric = Metric::new(distance_fn, false);
-        let data = FlatVec::new(line, metric)?;
-
-        let seed = Some(42);
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let root = Ball::new_tree(&data, &criteria, seed);
-
-        let target_depth = 4;
-        let mut grafted_root = root.clone();
-        let children = grafted_root.trim_at_depth(target_depth);
-
-        let leaves = grafted_root.leaves();
-        assert_eq!(leaves.len(), 2.powi(target_depth as i32));
-        assert_eq!(leaves.len(), children.len());
-
-        grafted_root.graft_at_depth(target_depth, children);
-        assert_eq!(grafted_root, root);
-        for (l, c) in root.subtree().into_iter().zip(grafted_root.subtree()) {
-            assert_eq!(l, c);
-        }
-
-        Ok(())
-    }
-}
+#[cfg(feature = "disk-io")]
+impl<T: Number> super::ParClusterIO<T> for Ball<T> {}

@@ -1,5 +1,5 @@
 use distances::strings::{
-    Edit, _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x_to_y_alignment,
+    aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x2y_helper, x_to_y_alignment, Edit,
 };
 
 #[test]
@@ -7,7 +7,7 @@ fn tiny_aligned() {
     let x = "A-C";
     let y = "AAC";
 
-    let actual = _x_to_y(x, y);
+    let actual = x2y_helper(x, y);
     let expected = vec![Edit::Sub(1, 'A')];
 
     assert_eq!(actual, expected);
@@ -18,7 +18,7 @@ fn medium_aligned() {
     let x = "NAJIB-PEPPERSEATS";
     let y = "NAJIBEATSPEPPE-RS";
 
-    let actual = _x_to_y(x, y);
+    let actual = x2y_helper(x, y);
     let expected = vec![
         Edit::Sub(5, 'E'),
         Edit::Sub(6, 'A'),

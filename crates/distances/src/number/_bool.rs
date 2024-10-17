@@ -198,4 +198,8 @@ impl Number for Bool {
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
         Self(rng.gen())
     }
+
+    fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
 }

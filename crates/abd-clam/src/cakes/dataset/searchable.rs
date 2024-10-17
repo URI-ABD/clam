@@ -1,49 +1,27 @@
-//! Searchable dataset.
+//! An extension of `Dataset` that supports search operations.
 
 use distances::Number;
-use rayon::prelude::*;
+use rayon::iter::ParallelIterator;
 
-use crate::{cakes::Algorithm, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
+use crate::{cluster::ParCluster, dataset::ParDataset, metric::ParMetric, Cluster, Dataset, Metric};
 
-/// A dataset that can be searched with entropy-scaling algorithms.
-pub trait Searchable<I, U: Number, C: Cluster<I, U, Self>>: Dataset<I, U> + Sized {
-    /// Searches the dataset for the `query` instance and returns the
-    /// indices of and distances to the nearest neighbors.
-    fn search(&self, root: &C, query: &I, alg: Algorithm<U>) -> Vec<(usize, U)> {
-        alg.search(self, root, query)
-    }
+/// A dataset that supports search operations.
+pub trait Searchable<I, T: Number, C: Cluster<T>, M: Metric<I, T>>: Dataset<I> {
+    /// Returns the distance from a query to the center of the given cluster.
+    fn query_to_center(&self, metric: &M, query: &I, cluster: &C) -> T;
 
-    /// Batch version of the `search` method, to search for multiple queries.
-    fn batch_search(&self, root: &C, queries: &[I], alg: Algorithm<U>) -> Vec<Vec<(usize, U)>> {
-        queries.iter().map(|query| self.search(root, query, alg)).collect()
-    }
+    /// Returns the distances from a query to all items in the given cluster.
+    fn query_to_all(&self, metric: &M, query: &I, cluster: &C) -> impl Iterator<Item = (usize, T)>;
 }
 
-/// Parallel version of the `Searchable` trait.
+/// A parallel version of [`Searchable`](crate::cakes::dataset::searchable::Searchable).
 #[allow(clippy::module_name_repetitions)]
-pub trait ParSearchable<I: Send + Sync, U: Number, C: ParCluster<I, U, Self>>:
-    Searchable<I, U, C> + ParDataset<I, U>
+pub trait ParSearchable<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>>:
+    ParDataset<I> + Searchable<I, T, C, M>
 {
-    /// Parallel version of the `search` method.
-    fn par_search(&self, root: &C, query: &I, alg: Algorithm<U>) -> Vec<(usize, U)> {
-        alg.par_search(self, root, query)
-    }
+    /// Parallel version of [`Searchable::query_to_center`](crate::cakes::dataset::searchable::Searchable::query_to_center).
+    fn par_query_to_center(&self, metric: &M, query: &I, cluster: &C) -> T;
 
-    /// Batch version of the `par_search` method.
-    fn batch_par_search(&self, root: &C, queries: &[I], alg: Algorithm<U>) -> Vec<Vec<(usize, U)>> {
-        queries.iter().map(|query| self.par_search(root, query, alg)).collect()
-    }
-
-    /// Parallel version of the `batch_search` method.
-    fn par_batch_search(&self, root: &C, queries: &[I], alg: Algorithm<U>) -> Vec<Vec<(usize, U)>> {
-        queries.par_iter().map(|query| self.search(root, query, alg)).collect()
-    }
-
-    /// Parallel version of the `batch_par_search` method.
-    fn par_batch_par_search(&self, root: &C, queries: &[I], alg: Algorithm<U>) -> Vec<Vec<(usize, U)>> {
-        queries
-            .par_iter()
-            .map(|query| self.par_search(root, query, alg))
-            .collect()
-    }
+    /// Parallel version of [`Searchable::query_to_all`](crate::cakes::dataset::searchable::Searchable::query_to_all).
+    fn par_query_to_all(&self, metric: &M, query: &I, cluster: &C) -> impl ParallelIterator<Item = (usize, T)>;
 }

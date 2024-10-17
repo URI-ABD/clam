@@ -4,38 +4,62 @@
 # last locked with the following flags:
 #   pre: false
 #   features: []
-#   all-features: true
+#   all-features: false
 #   with-sources: false
 
 -e file:pypi/distances
--e file:pypi/results/cakes
-click==8.1.7
+-e file:benches/py-cakes
+click==8.1.8
     # via typer
+contourpy==1.3.0
+    # via matplotlib
+cycler==0.12.1
+    # via matplotlib
+fonttools==4.55.3
+    # via matplotlib
+importlib-resources==6.4.5
+    # via matplotlib
+kiwisolver==1.4.7
+    # via matplotlib
 markdown-it-py==3.0.0
     # via rich
+matplotlib==3.9.4
+    # via py-cakes
 mdurl==0.1.2
     # via markdown-it-py
-numpy==2.0.0
+numpy==2.0.2
     # via abd-distances
+    # via contourpy
+    # via matplotlib
     # via pandas
     # via py-cakes
-pandas==2.2.2
+packaging==24.2
+    # via matplotlib
+pandas==2.2.3
     # via py-cakes
+pillow==11.0.0
+    # via matplotlib
 pygments==2.18.0
     # via rich
+pyparsing==3.2.0
+    # via matplotlib
 python-dateutil==2.9.0.post0
+    # via matplotlib
     # via pandas
-pytz==2024.1
+pytz==2024.2
     # via pandas
-rich==13.7.1
+rich==13.9.4
     # via typer
 shellingham==1.5.4
     # via typer
-six==1.16.0
+six==1.17.0
     # via python-dateutil
-typer==0.12.4
+typer==0.15.1
     # via py-cakes
 typing-extensions==4.12.2
+    # via rich
     # via typer
-tzdata==2024.1
+tzdata==2024.2
     # via pandas
+zipp==3.21.0
+    # via importlib-resources

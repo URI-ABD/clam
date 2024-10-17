@@ -2,7 +2,7 @@
 
 use distances::{number::Addition, Number};
 
-/// Local Fractal Dimension.
+/// Helpers for dealing with Local Fractal Dimension (LFD) calculations.
 ///
 /// The LFD of a `Cluster` is a measure of the fractal dimension of the
 /// `Cluster` at a local scale. It is calculated as the logarithm of the ratio
@@ -36,9 +36,9 @@ impl LFD {
 
     /// Calculate LFD from distances and a given scale.
     ///
-    /// This is calculated as the ratio of the logarithms of the number of points
-    /// in the cluster and the number of points within the given scale to the
-    /// logarithm of the two scales.
+    /// This is calculated as the ratio of the logarithms of the number of
+    /// points in the cluster and the number of points within the given scale to
+    /// the logarithm of the two scales.
     ///
     /// # Arguments
     ///

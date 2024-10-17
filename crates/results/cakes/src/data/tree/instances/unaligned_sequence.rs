@@ -1,73 +1,62 @@
 //! Unaligned sequence with Levenshtein distance and Needleman-Wunsch Edits.
 
-use abd_clam::cakes::{Decodable, Encodable};
-use distances::number::UInt;
+use abd_clam::{
+    msa::Sequence,
+    pancakes::{Decodable, Encodable},
+};
+use distances::Number;
 use serde::{Deserialize, Serialize};
 
 /// A sequence from a FASTA file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Unaligned<U: UInt> {
-    seq: String,
-    _phantom: std::marker::PhantomData<U>,
-}
+#[derive(Debug, Clone, Serialize, Deserialize, Default, bitcode::Encode, bitcode::Decode)]
+pub struct Unaligned(String);
 
-impl<U: UInt> Default for Unaligned<U> {
-    fn default() -> Self {
-        Self {
-            seq: String::default(),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<U: UInt> Unaligned<U> {
-    /// Returns the Levenshtein metric for `Unaligned` sequences.
-    #[must_use]
-    pub fn metric() -> abd_clam::Metric<Self, U> {
-        let distance_function =
-            |first: &Self, second: &Self| U::from(stringzilla::sz::edit_distance(first.as_ref(), second.as_ref()));
-        abd_clam::Metric::new(distance_function, true)
-    }
-}
-
-impl<U: UInt> AsRef<str> for Unaligned<U> {
+impl AsRef<str> for Unaligned {
     fn as_ref(&self) -> &str {
-        &self.seq
+        &self.0
     }
 }
 
-impl<U: UInt> From<&str> for Unaligned<U> {
+impl AsRef<[u8]> for Unaligned {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl From<&str> for Unaligned {
     fn from(seq: &str) -> Self {
-        let seq = seq.chars().filter(|&c| c != '-' && c != '.').collect();
-        Self {
-            seq,
-            _phantom: std::marker::PhantomData,
-        }
+        Self(seq.chars().filter(|&c| c != '-' && c != '.').collect())
     }
 }
 
-impl<U: UInt> From<String> for Unaligned<U> {
+impl From<String> for Unaligned {
     fn from(seq: String) -> Self {
         Self::from(seq.as_str())
     }
 }
 
-impl<U: UInt> From<Unaligned<U>> for String {
-    fn from(seq: Unaligned<U>) -> Self {
-        seq.seq
+impl<'a, T: Number> From<Sequence<'a, T>> for Unaligned {
+    fn from(seq: Sequence<'a, T>) -> Self {
+        Self::from(seq.as_ref())
     }
 }
 
-impl<U: UInt> Encodable for Unaligned<U> {
+impl From<Unaligned> for String {
+    fn from(seq: Unaligned) -> Self {
+        seq.0
+    }
+}
+
+impl Encodable for Unaligned {
     fn as_bytes(&self) -> Box<[u8]> {
-        self.seq.as_bytes().into()
+        self.0.as_bytes().into()
     }
 
     fn encode(&self, reference: &Self) -> Box<[u8]> {
         let (x, y) = (self.as_ref(), reference.as_ref());
 
         let penalties = distances::strings::Penalties::default();
-        let table = distances::strings::needleman_wunsch::compute_table::<U>(x, y, penalties);
+        let table = distances::strings::needleman_wunsch::compute_table::<u32>(x, y, penalties);
 
         #[allow(clippy::tuple_array_conversions)]
         let (x, y) = distances::strings::needleman_wunsch::trace_back_recursive(&table, [x, y]);
@@ -77,7 +66,7 @@ impl<U: UInt> Encodable for Unaligned<U> {
 }
 
 /// This uses the Needleman-Wunsch algorithm to decode strings.
-impl<U: UInt> Decodable for Unaligned<U> {
+impl Decodable for Unaligned {
     fn from_bytes(bytes: &[u8]) -> Self {
         let seq =
             String::from_utf8(bytes.to_vec()).unwrap_or_else(|e| unreachable!("Could not cast back to string: {e:?}"));

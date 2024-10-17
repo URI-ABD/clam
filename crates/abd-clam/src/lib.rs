@@ -18,16 +18,19 @@
 
 pub mod cakes;
 mod core;
-pub mod mbed;
+pub mod pancakes;
 pub mod utils;
 
-pub use crate::core::{
-    adapter, cluster, dataset, partition, BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace, Partition,
-    Permutable, LFD,
-};
+pub use core::{cluster, dataset, metric, Ball, Cluster, Dataset, FlatVec, Metric, SizedHeap, Tree, LFD};
 
 #[cfg(feature = "chaoda")]
 pub mod chaoda;
 
+#[cfg(feature = "mbed")]
+pub mod mbed;
+
+#[cfg(feature = "msa")]
+pub mod msa;
+
 /// The current version of the crate.
-pub const VERSION: &str = "0.31.0";
+pub const VERSION: &str = "0.32.0";

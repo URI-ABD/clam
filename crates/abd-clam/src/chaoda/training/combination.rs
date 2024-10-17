@@ -9,7 +9,7 @@ use crate::{
     chaoda::{
         inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, NUM_RATIOS,
     },
-    Cluster, Dataset,
+    Cluster,
 };
 
 /// A trainable combination of a `MetaMLModel` and a `GraphAlgorithm`.
@@ -69,15 +69,10 @@ impl TrainableCombination {
     /// # Errors
     ///
     /// - If any roc-auc score calculation fails.
-    pub fn data_from_graph<I, U, D, S>(
-        &self,
-        graph: &Graph<I, U, D, S>,
-        labels: &[bool],
-    ) -> Result<([Vec<f32>; 2], f32), String>
+    pub fn data_from_graph<T, S>(&self, graph: &Graph<T, S>, labels: &[bool]) -> Result<([Vec<f32>; 2], f32), String>
     where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
+        T: Number,
+        S: Cluster<T>,
     {
         let props = graph.iter_anomaly_properties().flatten().collect::<Vec<f32>>();
         let predictions = self.graph_algorithm.evaluate_points(graph);
@@ -86,15 +81,16 @@ impl TrainableCombination {
             .iter_clusters()
             .map(|c| {
                 // Get the labels and predictions and append a dummy true and false value to avoid empty classes for roc_auc_score
-                let y_true = c
-                    .indices()
-                    .map(|i| labels[i])
+                let indices = c.indices();
+                let y_true = indices
+                    .iter()
+                    .map(|&i| labels[i])
                     .chain(std::iter::once(true))
                     .chain(std::iter::once(false))
                     .collect::<Vec<_>>();
-                let y_pred = c
-                    .indices()
-                    .map(|i| predictions[i])
+                let y_pred = indices
+                    .iter()
+                    .map(|&i| predictions[i])
                     .chain(std::iter::once(1.0))
                     .chain(std::iter::once(0.0))
                     .collect::<Vec<_>>();

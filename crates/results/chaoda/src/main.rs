@@ -20,8 +20,10 @@ use std::path::PathBuf;
 use clap::Parser;
 
 use abd_clam::{
-    chaoda::{ChaodaTrainer, GraphAlgorithm, TrainableMetaMlModel},
-    Ball, Cluster, Dataset, Metric,
+    chaoda::{GraphAlgorithm, TrainableMetaMlModel, TrainableSmc},
+    dataset::AssociatesMetadata,
+    metric::{Euclidean, Manhattan},
+    Ball, Cluster, Dataset,
 };
 use distances::Number;
 
@@ -86,27 +88,8 @@ fn main() -> Result<(), String> {
 
     // Set some parameters for tree building
     let seed = Some(42);
-
-    let metrics = [
-        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::euclidean(x, y), false).with_name("euclidean"),
-        Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::manhattan(x, y), false).with_name("manhattan"),
-        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::cosine(x, y), false).with_name("cosine"),
-        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::canberra(x, y), false).with_name("canberra"),
-        // Metric::new(|x: &Vec<f64>, y: &Vec<f64>| distances::vectors::bray_curtis(x, y), false).with_name("bray_curtis"),
-    ];
-    ftlog::info!("Using {} metrics...", metrics.len());
-
-    let mut train_datasets = data::Data::read_paper_train(&data_dir)?;
-
-    let criteria = {
-        let mut criteria = Vec::new();
-        for _ in 0..train_datasets.len() {
-            criteria.push(default_criteria::<_, _, _, 2>());
-        }
-        criteria
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("We have a criterion for each pair of metric and dataset."))
-    };
+    let train_datasets = data::Data::read_train_data(&data_dir)?;
+    let criteria = default_criteria(&train_datasets);
     let labels = {
         let mut labels = Vec::new();
         for data in &train_datasets {
@@ -116,13 +99,14 @@ fn main() -> Result<(), String> {
             .try_into()
             .unwrap_or_else(|_| unreachable!("We have labels for each dataset."))
     };
+    let depths = (args.min_depth..).step_by(5).take(5).collect::<Vec<_>>();
 
     ftlog::info!("Training datasets:");
     for d in &train_datasets {
         ftlog::info!("{}", d.name());
     }
 
-    let model = if use_pre_trained {
+    let [model_euc, model_man] = if use_pre_trained {
         // Load the pre-trained CHAODA model
         ftlog::info!("Loading pre-trained model from: {model_path:?}");
         bincode::deserialize_from(std::fs::File::open(&model_path).map_err(|e| e.to_string())?)
@@ -131,53 +115,81 @@ fn main() -> Result<(), String> {
         // Create a Chaoda trainer
         let meta_ml_models = TrainableMetaMlModel::default_models();
         let graph_algorithms = GraphAlgorithm::default_algorithms();
-        let mut model = ChaodaTrainer::new_all_pairs(metrics.clone(), meta_ml_models, graph_algorithms);
 
-        // Create the trees for use in training the model.
-        let trees = model.par_create_trees(&mut train_datasets, &criteria, seed);
+        let mut smc_euc = TrainableSmc::new(&meta_ml_models, &graph_algorithms);
+        let trees = smc_euc.par_create_trees(&train_datasets, &criteria, &Euclidean, seed);
+        let trained_euc = smc_euc.par_train(
+            &train_datasets,
+            &Euclidean,
+            &trees,
+            &labels,
+            args.min_depth,
+            &depths,
+            args.num_epochs,
+        )?;
+        ftlog::info!(
+            "Completed training for {} epochs with Euclidean metric",
+            args.num_epochs
+        );
 
-        // Train the model
-        let trained_model = model.par_train(&mut train_datasets, &trees, &labels, args.min_depth, args.num_epochs)?;
-        ftlog::info!("Completed training for {} epochs", args.num_epochs);
+        let mut smc_man = TrainableSmc::new(&meta_ml_models, &graph_algorithms);
+        let trees = smc_man.par_create_trees(&train_datasets, &criteria, &Manhattan, seed);
+        let trained_man = smc_man.par_train(
+            &train_datasets,
+            &Manhattan,
+            &trees,
+            &labels,
+            args.min_depth,
+            &depths,
+            args.num_epochs,
+        )?;
+        ftlog::info!(
+            "Completed training for {} epochs with Manhattan metric",
+            args.num_epochs
+        );
+
+        let trained_models = [trained_euc, trained_man];
 
         // Save the trained model
         ftlog::info!("Saving model to: {model_path:?}");
         bincode::serialize_into(
             std::fs::File::create(&model_path).map_err(|e| e.to_string())?,
-            &trained_model,
+            &trained_models,
         )
         .map_err(|e| e.to_string())?;
         ftlog::info!("Model saved to: {model_path:?}");
 
-        trained_model
-    };
-
-    let model = if use_pre_trained {
-        let mut model = model;
-        model.set_metrics(metrics);
-        model
-    } else {
-        model
+        trained_models
     };
 
     // Print the ROC scores for all datasets
-    for mut data in data::Data::read_all(&data_dir)? {
+    for data in data::Data::read_all(&data_dir)? {
         ftlog::info!("Starting evaluation for: {}", data.name());
 
         let labels = data.metadata().to_vec();
-        let criteria = default_criteria::<_, _, _, 2>();
-        let roc_score = model.par_evaluate(&mut data, &criteria, &labels, seed, args.min_depth);
-        ftlog::info!("Dataset: {} ROC-AUC score: {roc_score:.6}", data.name());
+        let criteria = |c: &Ball<_>| c.cardinality() > 10;
+
+        let roc_score = model_euc.par_evaluate(&data, &labels, &Euclidean, &criteria, seed, args.min_depth, 0.02);
+        ftlog::info!(
+            "Dataset: {}, Metric: Euclidean ROC-AUC score: {roc_score:.6}",
+            data.name()
+        );
+
+        let roc_score = model_man.par_evaluate(&data, &labels, &Manhattan, &criteria, seed, args.min_depth, 0.02);
+        ftlog::info!(
+            "Dataset: {}, Metric: Manhattan ROC-AUC score: {roc_score:.6}",
+            data.name()
+        );
     }
 
     Ok(())
 }
 
 /// Returns the default partitioning criteria, repeated `N` times.
-fn default_criteria<I, U: Number, D: Dataset<I, U>, const N: usize>() -> [impl Fn(&Ball<I, U, D>) -> bool; N] {
+fn default_criteria<A, T: Number, const N: usize>(_: &[A; N]) -> [impl Fn(&Ball<T>) -> bool; N] {
     let mut criteria = Vec::with_capacity(N);
     for _ in 0..N {
-        criteria.push(|c: &Ball<_, _, _>| c.cardinality() > 10);
+        criteria.push(|c: &Ball<_>| c.cardinality() > 10);
     }
     criteria
         .try_into()

@@ -4,11 +4,11 @@ line-length = 100
 [lint]
 select = [ "ALL" ]
 ignore = [
-  "ANN101",  # Missing type annotation for self in method
-  "ANN102",  # Missing type annotation for cls in classmethod
   "PLR2004", # Use of magic value in comparison
   "ANN401",  # Dynamically typed expressions are disallowed
   "ICN001",  # {name} should be imported as {asname}  # I like my numpy imports
+  "COM812",
+  "ISC001",
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 

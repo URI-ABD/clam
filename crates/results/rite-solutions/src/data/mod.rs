@@ -2,13 +2,12 @@
 
 use std::path::Path;
 
-use abd_clam::FlatVec;
-
 mod gen_random;
 mod neighborhood_aware;
 mod vec_metric;
 mod wasserstein;
 
+use abd_clam::FlatVec;
 pub use gen_random::gen_random;
 pub use neighborhood_aware::NeighborhoodAware;
 pub use vec_metric::VecMetric;
@@ -16,15 +15,12 @@ pub use vec_metric::VecMetric;
 /// Read data from the given path or generate random data.
 pub fn read_or_generate<P: AsRef<Path>>(
     path: Option<P>,
-    metric: &VecMetric,
     num_inliers: Option<usize>,
     dimensionality: Option<usize>,
     inlier_mean: Option<f32>,
     inlier_std: Option<f32>,
     seed: Option<u64>,
-) -> Result<FlatVec<Vec<f32>, f32, usize>, String> {
-    let metric = metric.metric::<f32, f32>();
-
+) -> Result<FlatVec<Vec<f32>, usize>, String> {
     let data = if let Some(path) = path {
         let path = path.as_ref();
         if !path.exists() {
@@ -35,8 +31,8 @@ pub fn read_or_generate<P: AsRef<Path>>(
         ext.map_or_else(
             || Err(format!("File extension not found in {path:?}")),
             |ext| match ext {
-                "csv" => FlatVec::read_csv(path, metric),
-                "npy" => FlatVec::read_npy(path, metric),
+                "csv" => FlatVec::read_csv(&path),
+                "npy" => FlatVec::read_npy(&path),
                 _ => Err(format!("Unsupported file extension: {ext}. Must be `csv` or `npy`")),
             },
         )
@@ -48,11 +44,11 @@ pub fn read_or_generate<P: AsRef<Path>>(
         let std = inlier_std.ok_or("inlier_std must be provided")?;
 
         let data = gen_random(mean, std, car, dim, seed);
-        FlatVec::new_array(data, metric)
+        FlatVec::new_array(data)
     }?;
 
-    let dim = data.instances().first().map(Vec::len).ok_or("No instances found")?;
-    if data.instances().iter().any(|v| v.len() != dim) {
+    let dim = data.items().first().map(Vec::len).ok_or("No instances found")?;
+    if data.items().iter().any(|v| v.len() != dim) {
         return Err("Inconsistent dimensionality".to_string());
     }
 

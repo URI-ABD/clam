@@ -1,14 +1,14 @@
 //! Stationary Probabilities Algorithm.
 
 use distances::Number;
-use serde::{Deserialize, Serialize};
 
-use crate::{chaoda::Graph, Cluster, Dataset};
+use crate::{chaoda::Graph, Cluster};
 
 use super::GraphEvaluator;
 
 /// Clusters with smaller stationary probabilities are more anomalous.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
 pub struct StationaryProbability {
     /// The Random Walk will be simulated for 2^`num_steps` steps.
     num_steps: usize,
@@ -25,12 +25,12 @@ impl StationaryProbability {
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> GraphEvaluator<I, U, D, S> for StationaryProbability {
+impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for StationaryProbability {
     fn name(&self) -> &str {
         "sp"
     }
 
-    fn evaluate_clusters(&self, g: &Graph<I, U, D, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<T, S>) -> Vec<f32> {
         g.compute_stationary_probabilities(self.num_steps)
             .into_iter()
             .map(|x| 1.0 - x)

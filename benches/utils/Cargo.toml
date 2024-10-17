@@ -1,0 +1,19 @@
+[package]
+name = "bench-utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
+hdf5 = { workspace = true }
+ndarray = { workspace = true }
+ftlog = { workspace = true }
+symagen = { workspace = true }
+distances = { workspace = true }
+abd-clam = { workspace = true, features = ["all"]}
+bitcode = { workspace = true }
+csv = { workspace = true }
+stringzilla = "3.9.5"
+bio = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }

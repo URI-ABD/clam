@@ -32,7 +32,7 @@ pub struct Spring<'a, const DIM: usize> {
 
 impl<'a, const DIM: usize> Spring<'a, DIM> {
     /// Create a new `Spring`.
-    pub fn new<U: Number>(a: &'a Mass<DIM>, b: &'a Mass<DIM>, k: f32, l0: U) -> Self {
+    pub fn new<T: Number>(a: &'a Mass<DIM>, b: &'a Mass<DIM>, k: f32, l0: T) -> Self {
         let mut s = Self {
             a,
             b,
@@ -99,16 +99,16 @@ impl<'a, const DIM: usize> Spring<'a, DIM> {
     }
 }
 
-impl<'a, const DIM: usize> core::hash::Hash for Spring<'a, DIM> {
+impl<const DIM: usize> core::hash::Hash for Spring<'_, DIM> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.hash_key().hash(state);
     }
 }
 
-impl<'a, const DIM: usize> PartialEq for Spring<'a, DIM> {
+impl<const DIM: usize> PartialEq for Spring<'_, DIM> {
     fn eq(&self, other: &Self) -> bool {
         self.hash_key() == other.hash_key()
     }
 }
 
-impl<'a, const DIM: usize> Eq for Spring<'a, DIM> {}
+impl<const DIM: usize> Eq for Spring<'_, DIM> {}

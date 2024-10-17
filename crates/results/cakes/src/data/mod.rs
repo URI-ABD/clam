@@ -4,4 +4,8 @@ mod raw;
 mod tree;
 
 #[allow(clippy::module_name_repetitions)]
-pub use raw::RawData;
+#[allow(unused_imports)]
+pub use raw::{fasta, RawData};
+
+#[allow(unused_imports)]
+pub use tree::PathManager;

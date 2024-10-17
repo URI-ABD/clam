@@ -1,17 +1,35 @@
 //! Number variants for floats, integers, and unsigned integers.
 
-use core::hash::Hash;
+use core::{hash::Hash, ops::Neg};
+
+use num_integer::Integer;
 
 use crate::Number;
 
 /// Sub-trait of `Number` for all integer types.
-pub trait Int: Number + Hash + Eq + Ord {}
+pub trait Int: Number + Hash + Eq + Ord {
+    /// Returns the Greatest Common Divisor of two integers.
+    #[must_use]
+    fn gcd(&self, other: &Self) -> Self;
+
+    /// Returns the Least Common Multiple of two integers.
+    #[must_use]
+    fn lcm(&self, other: &Self) -> Self;
+}
 
 /// Macro to implement `IntNumber` for all integer types.
 macro_rules! impl_int {
     ($($ty:ty),*) => {
         $(
-            impl Int for $ty {}
+            impl Int for $ty {
+                fn gcd(&self, other: &Self) -> Self {
+                    Integer::gcd(&self, other)
+                }
+
+                fn lcm(&self, other: &Self) -> Self {
+                    Integer::lcm(&self, other)
+                }
+            }
         )*
     }
 }
@@ -19,7 +37,7 @@ macro_rules! impl_int {
 impl_int!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
 
 /// Sub-trait of `Number` for all signed integer types.
-pub trait IInt: Number + Hash + Eq + Ord {}
+pub trait IInt: Number + Neg<Output = Self> + Hash + Eq + Ord {}
 
 /// Macro to implement `IIntNumber` for all signed integer types.
 macro_rules! impl_iint {
@@ -85,6 +103,16 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the logarithm of `self` with base 2.
     #[must_use]
     fn log2(self) -> Self;
+
+    /// Returns the smaller of two numbers.
+    #[must_use]
+    fn min(self, other: Self) -> Self {
+        if self < other {
+            self
+        } else {
+            other
+        }
+    }
 }
 
 impl Float for f32 {

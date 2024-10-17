@@ -1,7 +1,7 @@
 //! Metrics for Vector datasets.
 
-use abd_clam::Metric;
-use distances::{number::Float, Number};
+use abd_clam::metric::{Cosine, Euclidean, Manhattan, ParMetric};
+use distances::number::Float;
 
 #[derive(clap::ValueEnum, Debug, Clone)]
 pub enum VecMetric {
@@ -21,12 +21,11 @@ pub enum VecMetric {
 impl VecMetric {
     /// Returns the metric.
     #[must_use]
-    pub fn metric<T: Number, U: Float>(&self) -> Metric<Vec<T>, U> {
-        let distance_fn = match self {
-            Self::Euclidean => |x: &Vec<T>, y: &Vec<T>| distances::vectors::euclidean::<T, U>(x, y),
-            Self::Manhattan => |x: &Vec<T>, y: &Vec<T>| U::from(distances::vectors::manhattan::<T>(x, y)),
-            Self::Cosine => |x: &Vec<T>, y: &Vec<T>| distances::vectors::cosine::<T, U>(x, y),
-        };
-        Metric::new(distance_fn, false)
+    pub fn metric<I: AsRef<[T]> + Send + Sync, T: Float>(&self) -> Box<dyn ParMetric<I, T>> {
+        match self {
+            Self::Euclidean => Box::new(Euclidean),
+            Self::Manhattan => Box::new(Manhattan),
+            Self::Cosine => Box::new(Cosine),
+        }
     }
 }

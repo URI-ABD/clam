@@ -2,6 +2,10 @@
 
 pub mod cluster;
 pub mod dataset;
+pub mod metric;
+mod tree;
 
-pub use cluster::{adapter, partition, BalancedBall, Ball, Cluster, Partition, LFD};
-pub use dataset::{Dataset, FlatVec, Metric, MetricSpace, Permutable};
+pub use cluster::{Ball, Cluster, LFD};
+pub use dataset::{Dataset, FlatVec, SizedHeap};
+pub use metric::Metric;
+pub use tree::Tree;

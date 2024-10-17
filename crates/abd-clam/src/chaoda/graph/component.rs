@@ -5,21 +5,19 @@ use std::collections::HashMap;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
+use crate::{cluster::ParCluster, Cluster};
 
-use super::adjacency_list::AdjacencyList;
-use super::node::Node;
-use super::Vertex;
+use super::{adjacency_list::AdjacencyList, node::Node, Vertex};
 
 /// A `Component` is a collection of `Node`s that are connected by edges in a
 /// `Graph`. Every `Node` in a `Component` is reachable from every other `Node`
 /// via a path along edges.
-pub struct Component<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
+pub struct Component<'a, T: Number, S: Cluster<T>> {
     /// A map from each `Vertex` to the `Node` that represents it.
     #[allow(clippy::type_complexity)]
-    node_map: HashMap<&'a Vertex<I, U, D, S>, Node<'a, I, U, D, S>>,
+    node_map: HashMap<&'a Vertex<T, S>, Node<'a, T, S>>,
     /// The `AdjacencyList` of the `Component`.
-    adjacency_list: AdjacencyList<'a, I, U, D, Vertex<I, U, D, S>>,
+    adjacency_list: AdjacencyList<'a, T, Vertex<T, S>>,
     // adjacency_list: HashMap<Node<'a, I, U, D, S>, HashMap<&'a Node<'a, I, U, D, S>, U>>,
     /// Diameter of the `Component`, i.e. the maximum eccentricity of its `Node`s.
     diameter: usize,
@@ -27,14 +25,14 @@ pub struct Component<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     population: usize,
 }
 
-impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Component<'a, I, U, D, S> {
+impl<'a, T: Number, S: Cluster<T>> Component<'a, T, S> {
     /// Create a new `Component` from a `Vec` of `Vertex`es and the `AdjacencyList`
     /// of the `Graph`.
     ///
     /// # Arguments
     ///
     /// * `adjacency_list`: The `AdjacencyList` of the `Graph`.
-    pub fn new(adjacency_list: AdjacencyList<'a, I, U, D, Vertex<I, U, D, S>>) -> Self {
+    pub fn new(adjacency_list: AdjacencyList<'a, T, Vertex<T, S>>) -> Self {
         let node_map = adjacency_list
             .clusters()
             .into_iter()
@@ -74,17 +72,17 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Component<'a, I, U
     }
 
     /// Iterate over the `Vertex`es in the `Component`.
-    pub fn iter_vertices(&self) -> impl Iterator<Item = &Vertex<I, U, D, S>> + '_ {
+    pub fn iter_vertices(&self) -> impl Iterator<Item = &Vertex<T, S>> + '_ {
         self.node_map.keys().copied()
     }
 
     /// Iterate over the edges in the `Component`.
-    pub fn iter_edges(&self) -> impl Iterator<Item = (&Vertex<I, U, D, S>, &Vertex<I, U, D, S>, U)> + '_ {
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&Vertex<T, S>, &Vertex<T, S>, T)> + '_ {
         self.adjacency_list.iter_edges()
     }
 
     /// Iterate over the lists of neighbors of the `Node`s in the `Component`.
-    pub fn iter_neighbors(&self) -> impl Iterator<Item = &HashMap<&Vertex<I, U, D, S>, U>> + '_ {
+    pub fn iter_neighbors(&self) -> impl Iterator<Item = &HashMap<&Vertex<T, S>, T>> + '_ {
         self.adjacency_list.inner().values()
     }
 
@@ -139,9 +137,9 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Component<'a, I, U
     }
 }
 
-impl<'a, I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Component<'a, I, U, D, S> {
-    /// Parallel version of `Component::new`.
-    pub fn par_new(adjacency_list: AdjacencyList<'a, I, U, D, Vertex<I, U, D, S>>) -> Self {
+impl<'a, T: Number, S: ParCluster<T>> Component<'a, T, S> {
+    /// Parallel version of [`Component::new`](crate::chaoda::graph::component::Component::new).
+    pub fn par_new(adjacency_list: AdjacencyList<'a, T, Vertex<T, S>>) -> Self {
         let node_map = adjacency_list
             .clusters()
             .into_par_iter()

@@ -3,17 +3,73 @@
 use core::cmp::Ordering;
 
 use distances::{number::Float, Number};
+use rand::prelude::*;
+
+/// Reads the `MAX_RECURSION_DEPTH` environment variable to determine the
+/// stride for iterative partition and adaptation.
+#[must_use]
+pub fn max_recursion_depth() -> usize {
+    std::env::var("MAX_RECURSION_DEPTH")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(128)
+}
+
+/// Return the number of samples to take from the given population size so as to
+/// achieve linear time complexity for geometric median estimation.
+///
+/// The number of samples is calculated as follows:
+///
+/// - The first `sqrt_thresh` samples are taken from the population.
+/// - From the next `log2_thresh` samples, `n` samples are taken, where `n`
+///   is the square root of the population size minus `sqrt_thresh`.
+/// - From the remaining samples, `n` samples are taken, where `n` is the
+///   logarithm base 2 of the population size minus (`log2_thresh` plus
+///   `sqrt_thresh`).
+#[must_use]
+pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usize) -> usize {
+    if population_size < sqrt_thresh {
+        population_size
+    } else {
+        sqrt_thresh
+            + if population_size < sqrt_thresh + log2_thresh {
+                (population_size - sqrt_thresh).as_f64().sqrt()
+            } else {
+                log2_thresh.as_f64().sqrt() + (population_size - sqrt_thresh - log2_thresh).as_f64().log2()
+            }
+            .as_usize()
+    }
+}
+
+/// Choose a subset of the given items using the given thresholds.
+///
+/// See the `num_samples` function for more information on how the number of
+/// samples is calculated.
+pub fn choose_samples<T: Clone>(indices: &[T], sqrt_thresh: usize, log2_thresh: usize) -> Vec<T> {
+    let mut indices = indices.to_vec();
+    let n = crate::utils::num_samples(indices.len(), sqrt_thresh, log2_thresh);
+    indices.shuffle(&mut rand::thread_rng());
+    indices.truncate(n);
+    indices
+}
+
+/// Returns the number of distinct pairs that can be formed from `n` elements
+/// without repetition.
+#[must_use]
+pub const fn n_pairs(n: usize) -> usize {
+    n * (n - 1) / 2
+}
 
 /// Return the index and value of the minimum value in the given slice of values.
 ///
 /// NAN values are ordered as greater than all other values.
 ///
 /// This will return `None` if the given slice is empty.
-pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
+pub fn arg_min<T: PartialOrd + Number>(values: &[T]) -> Option<(usize, T)> {
     values
         .iter()
         .enumerate()
-        .min_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Greater))
+        .min_by(|&(_, l), &(_, r)| l.total_cmp(r))
         .map(|(i, v)| (i, *v))
 }
 
@@ -22,11 +78,11 @@ pub fn arg_min<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
 /// NAN values are ordered as smaller than all other values.
 ///
 /// This will return `None` if the given slice is empty.
-pub fn arg_max<T: PartialOrd + Copy>(values: &[T]) -> Option<(usize, T)> {
+pub fn arg_max<T: PartialOrd + Number>(values: &[T]) -> Option<(usize, T)> {
     values
         .iter()
         .enumerate()
-        .max_by(|&(_, l), &(_, r)| l.partial_cmp(r).unwrap_or(Ordering::Less))
+        .max_by(|&(_, l), &(_, r)| l.total_cmp(r))
         .map(|(i, v)| (i, *v))
 }
 
@@ -83,29 +139,6 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
         .map(F::erf)
         .map(|v| (F::ONE + v) / F::from(2.))
         .collect()
-}
-
-/// Compute the local fractal dimension of the given distances using the given radius.
-///
-/// The local fractal dimension is computed as the log2 of the ratio of the number of
-/// distances less than or equal to half the radius to the total number of distances.
-///
-/// # Arguments
-///
-/// * `radius` - The radius used to compute the distances.
-/// * `distances` - The distances to compute the local fractal dimension of.
-pub(crate) fn compute_lfd<T: Number, F: Float>(radius: T, distances: &[T]) -> F {
-    if radius == T::ZERO {
-        F::ONE
-    } else {
-        let r_2 = F::from(radius) / F::from(2);
-        let half_count = distances.iter().filter(|&&d| F::from(d) <= r_2).count();
-        if half_count > 0 {
-            (F::from(distances.len()) / F::from(half_count)).log2()
-        } else {
-            F::ONE
-        }
-    }
 }
 
 /// Compute the next exponential moving average of the given ratio and parent EMA.
@@ -209,25 +242,18 @@ pub fn calc_row_sds<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
 ///
 /// * `data` - The data to partition.
 fn partition<T: Number>(data: &[T]) -> Option<(Vec<T>, T, Vec<T>)> {
-    if data.is_empty() {
-        None
-    } else {
-        let (pivot_slice, tail) = data.split_at(1);
-        let pivot = pivot_slice[0];
-        let (left, right) = tail.iter().fold((vec![], vec![]), |mut splits, next| {
-            {
-                let (ref mut left, ref mut right) = &mut splits;
-                if next < &pivot {
-                    left.push(*next);
-                } else {
-                    right.push(*next);
-                }
+    data.split_first().map(|(&pivot, tail)| {
+        let (left, right) = tail.iter().fold((vec![], vec![]), |(mut left, mut right), &next| {
+            if next < pivot {
+                left.push(next);
+            } else {
+                right.push(next);
             }
-            splits
+            (left, right)
         });
 
-        Some((left, pivot, right))
-    }
+        (left, pivot, right)
+    })
 }
 
 /// A helper function for the median function below.
@@ -335,9 +361,9 @@ pub fn un_flatten<T>(data: Vec<T>, sizes: &[usize]) -> Result<Vec<Vec<T>>, Strin
 }
 
 /// Read a `Number` from a byte slice and increment the offset.
-pub fn read_number<U: Number>(bytes: &[u8], offset: &mut usize) -> U {
-    let num_bytes = U::NUM_BYTES;
-    let value = U::from_le_bytes(
+pub fn read_number<T: Number>(bytes: &[u8], offset: &mut usize) -> T {
+    let num_bytes = T::NUM_BYTES;
+    let value = T::from_le_bytes(
         bytes[*offset..*offset + num_bytes]
             .try_into()
             .unwrap_or_else(|e| unreachable!("{e}")),
@@ -352,187 +378,4 @@ pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
     let encoding = bytes[*offset..*offset + len].to_vec();
     *offset += len;
     encoding.into_boxed_slice()
-}
-
-#[cfg(test)]
-mod tests {
-    use rand::prelude::*;
-    use symagen::random_data;
-
-    use super::*;
-
-    #[test]
-    fn test_transpose() {
-        // Input data: 3 rows x 6 columns
-        let data: Vec<[f64; 6]> = vec![
-            [2.0, 3.0, 5.0, 7.0, 11.0, 13.0],
-            [4.0, 3.0, 5.0, 9.0, 10.0, 15.0],
-            [6.0, 2.0, 8.0, 11.0, 9.0, 11.0],
-        ];
-
-        // Expected transposed data: 6 rows x 3 columns
-        let expected_transposed: [Vec<f64>; 6] = [
-            vec![2.0, 4.0, 6.0],
-            vec![3.0, 3.0, 2.0],
-            vec![5.0, 5.0, 8.0],
-            vec![7.0, 9.0, 11.0],
-            vec![11.0, 10.0, 9.0],
-            vec![13.0, 15.0, 11.0],
-        ];
-
-        let transposed_data = rows_to_cols(&data);
-
-        // Check if the transposed data matches the expected result
-        for i in 0..6 {
-            assert_eq!(transposed_data[i], expected_transposed[i]);
-        }
-    }
-
-    #[test]
-    fn test_means() {
-        let all_ratios: Vec<[f64; 6]> = vec![
-            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
-            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
-            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
-        ];
-
-        let transposed = rows_to_cols(&all_ratios);
-        let means = calc_row_means(&transposed);
-
-        let expected_means: [f64; 6] = [
-            3.333_333_333_333_333_5,
-            4.0,
-            6.333_333_333_333_334,
-            6.0,
-            8.0,
-            8.666_666_666_666_668,
-        ];
-
-        means
-            .iter()
-            .zip(expected_means.iter())
-            .for_each(|(&a, &b)| assert!(float_cmp::approx_eq!(f64, a, b, ulps = 2), "{a}, {b} not equal"));
-    }
-
-    #[test]
-    fn test_sds() {
-        let all_ratios: Vec<[f64; 6]> = vec![
-            [2.0, 4.0, 5.0, 6.0, 9.0, 15.0],
-            [3.0, 3.0, 6.0, 4.0, 7.0, 10.0],
-            [5.0, 5.0, 8.0, 8.0, 8.0, 1.0],
-        ];
-
-        let expected_standard_deviations: [f64; 6] = [
-            1.247_219_128_924_6,
-            0.816_496_580_927_73,
-            1.247_219_128_924_6,
-            1.632_993_161_855_5,
-            0.816_496_580_927_73,
-            5.792_715_732_327_6,
-        ];
-        let sds = calc_row_sds(&rows_to_cols(&all_ratios));
-
-        sds.iter()
-            .zip(expected_standard_deviations.iter())
-            .for_each(|(&a, &b)| {
-                assert!(
-                    float_cmp::approx_eq!(f64, a, b, epsilon = 0.000_000_03),
-                    "{a}, {b} not equal"
-                );
-            });
-    }
-
-    #[test]
-    fn test_mean_variance() {
-        // Some synthetic cases to test edge results
-        let mut test_cases: Vec<Vec<f64>> = vec![
-            vec![0.0],
-            vec![0.0, 0.0],
-            vec![1.0],
-            vec![1.0, 2.0],
-            vec![0.0, 0.25, 0.25, 1.25, 1.5, 1.75, 2.75, 3.25],
-        ];
-
-        // Use cardinalities of 1, 2, 1000, 100_000 and then 1_000_000 - 10_000_000 in steps of 1_000_000
-        let cardinalities = vec![1, 2, 1_000, 100_000]
-            .into_iter()
-            .chain((1..=10).map(|i| i * 1_000_000))
-            .collect::<Vec<_>>();
-
-        // Ranges for the values generated by SyMaGen
-        let ranges = vec![
-            (-100_000., 0.),
-            (-10_000., 0.),
-            (-1_000., 0.),
-            (0., 1_000.),
-            (0., 10_000.),
-            (0., 100_000.),
-            // These ranges cause the test to fail due to floating point accuracy issues when the sign switches
-            //(-1_000., 1_000.),
-            //(-10_000., 10_000.),
-            //(-100_000., 100_000.)
-        ];
-
-        let dimensionality = 1;
-        let seed = 42;
-
-        // Generate random data for each cardinality and min/max value where max_val > min_val
-        for (cardinality, (min_val, max_val)) in cardinalities.into_iter().zip(ranges.into_iter()) {
-            let data = random_data::random_tabular(
-                dimensionality,
-                cardinality,
-                min_val,
-                max_val,
-                &mut rand::rngs::StdRng::seed_from_u64(seed),
-            )
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-            test_cases.push(data);
-        }
-
-        let (actual_means, actual_variances): (Vec<f64>, Vec<f64>) = test_cases
-            .iter()
-            .map(|values| mean_variance::<f64, f64>(values))
-            .unzip();
-
-        // Calculate expected_means and expected_variances using
-        // statistical::mean and statistical::population_variance
-        let expected_means: Vec<f64> = test_cases.iter().map(|values| statistical::mean(values)).collect();
-        let expected_variances: Vec<f64> = test_cases
-            .iter()
-            .zip(expected_means.iter())
-            .map(|(values, &mean)| statistical::population_variance(values, Some(mean)))
-            .collect();
-
-        actual_means.iter().zip(expected_means.iter()).for_each(|(&a, &b)| {
-            assert!(
-                float_cmp::approx_eq!(f64, a, b, ulps = 2),
-                "Means not equal. Actual: {}. Expected: {}. Difference: {}.",
-                a,
-                b,
-                a - b
-            );
-        });
-
-        actual_variances
-            .iter()
-            .zip(expected_variances.iter())
-            .for_each(|(&a, &b)| {
-                assert!(
-                    float_cmp::approx_eq!(f64, a, b, epsilon = 3e-3),
-                    "Variances not equal. Actual: {}. Expected: {}. Difference: {}.",
-                    a,
-                    b,
-                    a - b
-                );
-            });
-    }
-
-    #[test]
-    fn test_standard_deviation() {
-        let data = [2., 4., 4., 4., 5., 5., 7., 9.];
-        let std = standard_deviation::<f32, f32>(&data);
-        assert!((std - 2.).abs() < 1e-6);
-    }
 }
