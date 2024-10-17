@@ -9,6 +9,8 @@ mod impl_adapter;
 mod impl_cluster;
 
 /// A trait for types that can be aligned in a multiple sequence alignment.
+///
+/// We provide an implementation for `String`.
 pub trait Alignable: Sized + Clone {
     /// Inserts a gap at the given index.
     fn insert_gap(&mut self, idx: usize);
@@ -30,7 +32,8 @@ impl Alignable for String {
     }
 }
 
-/// A type of `Cluster` that stores information about partial alignments.
+/// A variant of `Cluster` used to recursively build partial MSAs from the leaves
+/// up to the root. At the root level, this will contain the full MSA.
 pub struct PartialMSA<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The source cluster used to create this partial MSA.
     source: S,
