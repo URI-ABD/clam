@@ -189,6 +189,10 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for O
         self.source.lfd()
     }
 
+    fn contains(&self, index: usize) -> bool {
+        (self.params.offset..(self.params.offset + self.cardinality())).contains(&index)
+    }
+
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.params.offset..(self.params.offset + self.cardinality())
     }

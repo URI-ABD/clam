@@ -6,6 +6,7 @@ members = [
     "crates/results/chaoda",
     "crates/results/cakes",
     "crates/results/rite-solutions",
+    "crates/results/msa",
     "pypi/distances",
     "pypi/results/cakes",
 ]
@@ -31,6 +32,9 @@ flate2 = { version = "1.0", features = ["zlib"] }
 numpy = "0.20.0"
 pyo3 = { version = "0.20", features = ["extension-module", "abi3-py39"] }
 pyo3-ffi = { version = "0.20", features = ["extension-module", "abi3-py39"] }
+
+# For reading fasta files.
+bio = "2.0"
 
 [profile.test]
 opt-level = 3

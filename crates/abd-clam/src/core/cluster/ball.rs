@@ -165,6 +165,10 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for Ball<I, U, D> {
         self.lfd
     }
 
+    fn contains(&self, index: usize) -> bool {
+        self.indices.contains(&index)
+    }
+
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.indices.iter().copied()
     }

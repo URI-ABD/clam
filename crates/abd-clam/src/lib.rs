@@ -18,7 +18,6 @@
 
 pub mod cakes;
 mod core;
-pub mod mbed;
 pub mod msa;
 pub mod utils;
 
@@ -26,6 +25,9 @@ pub use crate::core::{
     adapter, cluster, dataset, partition, BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace, Partition,
     Permutable, LFD,
 };
+
+#[cfg(feature = "chaoda")]
+pub mod mbed;
 
 #[cfg(feature = "chaoda")]
 pub mod chaoda;

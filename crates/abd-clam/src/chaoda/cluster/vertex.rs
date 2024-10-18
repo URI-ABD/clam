@@ -155,6 +155,10 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for V
         self.source.lfd()
     }
 
+    fn contains(&self, index: usize) -> bool {
+        self.source.contains(index)
+    }
+
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.source.indices()
     }

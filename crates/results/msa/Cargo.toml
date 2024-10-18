@@ -1,0 +1,13 @@
+[package]
+name = "results-msa"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
+ftlog = { version = "0.2.0" }
+results-cakes = { path = "../cakes" }
+abd-clam = { workspace = true }
+distances = { workspace = true }
+bincode = { workspace = true }
+bio = { workspace = true }

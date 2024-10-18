@@ -99,35 +99,51 @@ pub struct PathManager {
 }
 
 impl PathManager {
+    /// Creates a new `PathManager`.
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn new<P: AsRef<Path>>(name: &str, out_dir: P) -> Self {
+        Self {
+            name: name.to_string(),
+            out_dir: out_dir.as_ref().to_path_buf(),
+        }
+    }
+
     /// The name of the dataset.
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// The directory where the dataset is stored.
+    #[must_use]
     pub fn out_dir(&self) -> &Path {
         &self.out_dir
     }
 
     /// The path to the binary file containing the `Ball` tree.
+    #[must_use]
     pub fn ball_path(&self) -> PathBuf {
         let name = format!("{}.ball", self.name());
         self.out_dir().join(name)
     }
 
     /// The path to the binary file containing the `SquishyBall` tree.
+    #[must_use]
     pub fn squishy_ball_path(&self) -> PathBuf {
         let name = format!("{}.squishy_ball", self.name());
         self.out_dir().join(name)
     }
 
     /// The path to the binary file containing the compressed data.
+    #[must_use]
     pub fn compressed_path(&self) -> PathBuf {
         let name = format!("{}.compressed", self.name());
         self.out_dir().join(name)
     }
 
     /// The path to the binary file containing the queries.
+    #[must_use]
     pub fn queries_path(&self) -> PathBuf {
         let name = format!("{}.queries", self.name());
         self.out_dir().join(name)
@@ -136,32 +152,61 @@ impl PathManager {
     /// The path to the binary file containing the ground truth.
     ///
     /// This is only relevant for ANN sets.
+    #[must_use]
     pub fn ground_truth_path(&self) -> PathBuf {
         let name = format!("{}.ground_truth", self.name());
         self.out_dir().join(name)
     }
 
     /// The path to the CSV file containing the `Ball` tree.
+    #[must_use]
     pub fn ball_csv_path(&self) -> PathBuf {
         let name = format!("{}_ball.csv", self.name());
         self.out_dir().join(name)
     }
 
     /// The path to the CSV file containing the `SquishyBall` tree before it is trimmed.
+    #[must_use]
     pub fn pre_trim_csv_path(&self) -> PathBuf {
         let name = format!("{}_pre_trim.csv", self.name());
         self.out_dir().join(name)
     }
 
     /// The path to the CSV file containing the `SquishyBall` tree after it is trimmed.
+    #[must_use]
     pub fn squishy_csv_path(&self) -> PathBuf {
         let name = format!("{}_squishy.csv", self.name());
         self.out_dir().join(name)
     }
 
     /// Path to json file containing the times taken to search the dataset.
+    #[must_use]
     pub fn times_path(&self) -> PathBuf {
         let name = format!("{}_times.json", self.name());
+        self.out_dir().join(name)
+    }
+
+    /// Path to file containing tree used toe making an MSA.
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn msa_ball_path(&self) -> PathBuf {
+        let name = format!("{}_ball.msa", self.name());
+        self.out_dir().join(name)
+    }
+
+    /// Path to file containing containing the MSA of the dataset.
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn msa_data_path(&self) -> PathBuf {
+        let name = format!("{}.msa", self.name());
+        self.out_dir().join(name)
+    }
+
+    /// Path to file containing the MSA of the dataset in FASTA format.
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn msa_fasta_path(&self) -> PathBuf {
+        let name = format!("{}_msa.fasta", self.name());
         self.out_dir().join(name)
     }
 }

@@ -346,6 +346,10 @@ impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompres
         self.source.lfd()
     }
 
+    fn contains(&self, index: usize) -> bool {
+        self.source.contains(index)
+    }
+
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.source.indices()
     }

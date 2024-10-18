@@ -1,5 +1,7 @@
 //! Implementation of the `Adapter` trait for the `PartialMSA` struct.
 
+use core::fmt::Debug;
+
 use distances::Number;
 
 use crate::{
@@ -23,8 +25,8 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> Par
     }
 }
 
-impl<I: Alignable + AsRef<str>, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, GapIds>
-    for PartialMSA<I, U, D, S>
+impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug>
+    Adapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
 {
     fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: GapIds, d_in: &D) -> Self {
         let params = if children.is_empty() {
@@ -37,10 +39,18 @@ impl<I: Alignable + AsRef<str>, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>
             // We get the centers for the left and right children.
             let x = l_child.aligned_point(d_in, l_child.arg_center());
             let y = r_child.aligned_point(d_in, r_child.arg_center());
+            let (x, y) = (x.as_ref(), y.as_ref());
 
             // We get the indices at which gaps need to be added to bring the
             // children into alignment.
-            let [left, right] = distances::strings::needleman_wunsch::x_to_y_alignment(x.as_ref(), y.as_ref());
+            let [left, right] = distances::strings::needleman_wunsch::x_to_y_alignment(x, y);
+            if x.len() + left.len() != y.len() + right.len() {
+                unreachable!(
+                    "Failed to align {x} {} and {y} {} with {left:?} and {right:?} for {source:?}",
+                    x.len(),
+                    y.len()
+                );
+            }
 
             GapIds { left, right }
         };
@@ -48,7 +58,7 @@ impl<I: Alignable + AsRef<str>, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>
         Self {
             source,
             children,
-            params,
+            gap_ids: params,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -68,12 +78,16 @@ impl<I: Alignable + AsRef<str>, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>
     }
 
     fn params(&self) -> &GapIds {
-        &self.params
+        &self.gap_ids
     }
 }
 
-impl<I: Alignable + AsRef<str> + Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>>
-    ParAdapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
+impl<
+        I: Alignable + AsRef<str> + Send + Sync + Debug,
+        U: Number,
+        D: ParDataset<I, U>,
+        S: ParCluster<I, U, D> + Debug,
+    > ParAdapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
 {
     fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: GapIds, d_in: &D) -> Self {
         let params = if children.is_empty() {
@@ -88,10 +102,18 @@ impl<I: Alignable + AsRef<str> + Send + Sync, U: Number, D: ParDataset<I, U>, S:
                 || l_child.aligned_point(d_in, l_child.arg_center()),
                 || r_child.aligned_point(d_in, r_child.arg_center()),
             );
+            let (x, y) = (x.as_ref(), y.as_ref());
 
             // We get the indices at which gaps need to be added to bring the
             // children into alignment.
-            let [left, right] = distances::strings::needleman_wunsch::x_to_y_alignment(x.as_ref(), y.as_ref());
+            let [left, right] = distances::strings::needleman_wunsch::x_to_y_alignment(x, y);
+            if x.len() + left.len() != y.len() + right.len() {
+                unreachable!(
+                    "Failed to align {x} {} and {y} {} with {left:?} and {right:?} for {source:?}",
+                    x.len(),
+                    y.len()
+                );
+            }
 
             GapIds { left, right }
         };
@@ -99,7 +121,7 @@ impl<I: Alignable + AsRef<str> + Send + Sync, U: Number, D: ParDataset<I, U>, S:
         Self {
             source,
             children,
-            params,
+            gap_ids: params,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -107,7 +129,7 @@ impl<I: Alignable + AsRef<str> + Send + Sync, U: Number, D: ParDataset<I, U>, S:
     fn par_post_traversal(&mut self) {}
 }
 
-impl<I: Alignable + AsRef<str>, U: Number, D: Dataset<I, U>> BallAdapter<I, U, D, D, GapIds>
+impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>> BallAdapter<I, U, D, D, GapIds>
     for PartialMSA<I, U, D, Ball<I, U, D>>
 {
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
@@ -116,7 +138,7 @@ impl<I: Alignable + AsRef<str>, U: Number, D: Dataset<I, U>> BallAdapter<I, U, D
     }
 }
 
-impl<I: Alignable + AsRef<str> + Send + Sync, U: Number, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, GapIds>
+impl<I: Alignable + AsRef<str> + Send + Sync + Debug, U: Number, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, GapIds>
     for PartialMSA<I, U, D, Ball<I, U, D>>
 {
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {

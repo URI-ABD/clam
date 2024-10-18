@@ -7,7 +7,7 @@ use abd_clam::MetricSpace;
 use super::tree::instances::{Aligned, MemberSet, Unaligned};
 
 mod ann_benchmarks;
-mod fasta;
+pub mod fasta;
 
 /// The datasets we use for benchmarks.
 #[derive(clap::ValueEnum, Debug, Clone)]
@@ -42,6 +42,7 @@ pub enum RawData {
 
 impl RawData {
     /// Returns the name of the dataset as a string.
+    #[must_use]
     pub const fn name(&self) -> &str {
         match self {
             Self::GreenGenes_12_10 => "gg_12_10",

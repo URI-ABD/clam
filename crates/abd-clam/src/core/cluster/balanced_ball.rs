@@ -91,6 +91,10 @@ impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for BalancedBall<I, U, D> 
         self.ball.lfd()
     }
 
+    fn contains(&self, index: usize) -> bool {
+        self.ball.contains(index)
+    }
+
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.ball.indices()
     }

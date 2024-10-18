@@ -81,6 +81,9 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + core::hash::Hash + Size
     /// Returns the Local Fractional Dimension (LFD) of the `Cluster`.
     fn lfd(&self) -> f32;
 
+    /// Returns whether this `Cluster` contains the given `index`ed point.
+    fn contains(&self, index: usize) -> bool;
+
     /// Gets the indices of the instances in the `Cluster`.
     fn indices(&self) -> impl Iterator<Item = usize> + '_;
 
