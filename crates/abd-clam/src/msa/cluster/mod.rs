@@ -2,7 +2,7 @@
 
 use core::fmt::Debug;
 
-use distances::Number;
+use distances::number::UInt;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +45,7 @@ impl Alignable for String {
 /// A variant of `Cluster` used to recursively build partial MSAs from the leaves
 /// up to the root. At the root level, this will contain the full MSA.
 #[derive(Serialize, Deserialize)]
-pub struct PartialMSA<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
+pub struct PartialMSA<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     /// The source cluster used to create this partial MSA.
     source: S,
     /// The children of this cluster.
@@ -67,7 +67,7 @@ pub struct GapIds {
     right: Vec<usize>,
 }
 
-impl<I: Alignable + Debug, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug> PartialMSA<I, U, D, S> {
+impl<I: Alignable + Debug, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug> PartialMSA<I, U, D, S> {
     /// Returns the indexed point as if it were in a multiple sequence alignment.
     pub fn aligned_point(&self, data: &D, index: usize) -> I {
         if self.children.is_empty() {
@@ -134,7 +134,7 @@ impl<I: Alignable + Debug, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + De
     }
 }
 
-impl<I: Alignable + Send + Sync + Debug, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D> + Debug>
+impl<I: Alignable + Send + Sync + Debug, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D> + Debug>
     PartialMSA<I, U, D, S>
 {
     /// Parallel version of `full_msa`.

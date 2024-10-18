@@ -2,7 +2,7 @@
 
 use std::fs::File;
 
-use abd_clam::{FlatVec, Metric, MetricSpace};
+use abd_clam::{Dataset, FlatVec, Metric, MetricSpace};
 
 use results_cakes::data::fasta;
 
@@ -85,7 +85,7 @@ impl RawData {
             bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
                 .map_err(|e| e.to_string())?;
 
-            data
+            data.with_name(self.name())
         };
 
         // Set the metric for the data, incase it was deserialized.

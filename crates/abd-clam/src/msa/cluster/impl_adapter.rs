@@ -2,7 +2,7 @@
 
 use core::fmt::Debug;
 
-use distances::Number;
+use distances::number::UInt;
 
 use crate::{
     adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
@@ -13,19 +13,19 @@ use crate::{
 
 use super::{Alignable, GapIds, PartialMSA};
 
-impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for GapIds {
+impl<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for GapIds {
     fn child_params(&self, children: &[S]) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for GapIds {
+impl<I: Send + Sync, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for GapIds {
     fn par_child_params(&self, children: &[S]) -> Vec<Self> {
         self.child_params(children)
     }
 }
 
-impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug>
+impl<I: Alignable + AsRef<str> + Debug, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug>
     Adapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
 {
     fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: GapIds, d_in: &D) -> Self {
@@ -43,7 +43,7 @@ impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>, S: Cluster<
 
             // We get the indices at which gaps need to be added to bring the
             // children into alignment.
-            let [left, right] = distances::strings::needleman_wunsch::x_to_y_alignment(x, y);
+            let [left, right] = distances::strings::needleman_wunsch::alignment_gaps::<U>(x, y);
             if x.len() + left.len() != y.len() + right.len() {
                 unreachable!(
                     "Failed to align {x} {} and {y} {} with {left:?} and {right:?} for {source:?}",
@@ -82,12 +82,8 @@ impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>, S: Cluster<
     }
 }
 
-impl<
-        I: Alignable + AsRef<str> + Send + Sync + Debug,
-        U: Number,
-        D: ParDataset<I, U>,
-        S: ParCluster<I, U, D> + Debug,
-    > ParAdapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
+impl<I: Alignable + AsRef<str> + Send + Sync + Debug, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D> + Debug>
+    ParAdapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
 {
     fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: GapIds, d_in: &D) -> Self {
         let params = if children.is_empty() {
@@ -129,7 +125,7 @@ impl<
     fn par_post_traversal(&mut self) {}
 }
 
-impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>> BallAdapter<I, U, D, D, GapIds>
+impl<I: Alignable + AsRef<str> + Debug, U: UInt, D: Dataset<I, U>> BallAdapter<I, U, D, D, GapIds>
     for PartialMSA<I, U, D, Ball<I, U, D>>
 {
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
@@ -138,7 +134,7 @@ impl<I: Alignable + AsRef<str> + Debug, U: Number, D: Dataset<I, U>> BallAdapter
     }
 }
 
-impl<I: Alignable + AsRef<str> + Send + Sync + Debug, U: Number, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, GapIds>
+impl<I: Alignable + AsRef<str> + Send + Sync + Debug, U: UInt, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, GapIds>
     for PartialMSA<I, U, D, Ball<I, U, D>>
 {
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
