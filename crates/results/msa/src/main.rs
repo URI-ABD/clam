@@ -18,12 +18,8 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::{ParAdapter, ParBallAdapter},
-    cakes::OffBall,
-    cluster::WriteCsv,
-    msa::PartialMSA,
-    partition::ParPartition,
-    Ball, Cluster, Dataset, FlatVec, Metric,
+    adapter::ParBallAdapter, cluster::WriteCsv, msa::PartialMSA, partition::ParPartition, Ball, Cluster, Dataset,
+    FlatVec, Metric,
 };
 use clap::Parser;
 
@@ -146,8 +142,8 @@ fn main() -> Result<(), String> {
 
         (msa_ball, msa_data)
     } else {
-        let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
-        let msa_root = PartialMSA::par_adapt_tree_iterative(off_ball, None, &data);
+        // let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
+        let (msa_root, data) = PartialMSA::par_from_ball_tree(ball, data);
         ftlog::info!("Finished building MSA tree.");
 
         let aligned_sequences = msa_root.full_msa(&data);
