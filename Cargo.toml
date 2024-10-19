@@ -42,7 +42,7 @@ debug = true
 overflow-checks = true
 
 [profile.release]
-strip = false
+strip = true
 lto = true
 codegen-units = 1
 

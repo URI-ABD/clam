@@ -9,47 +9,47 @@ use crate::{
     Ball, Cluster, Dataset,
 };
 
-use super::{Alignable, GapIds, PartialMSA};
+use super::{Alignable, Gaps, PartialMSA};
 
-impl<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for GapIds {
+impl<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> Params<I, U, D, D, S> for Gaps {
     fn child_params(&self, children: &[S]) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
     }
 }
 
-impl<I: Send + Sync, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for GapIds {
+impl<I: Send + Sync, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParParams<I, U, D, D, S> for Gaps {
     fn par_child_params(&self, children: &[S]) -> Vec<Self> {
         self.child_params(children)
     }
 }
 
-impl<I: Alignable + AsRef<str>, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, GapIds>
+impl<I: Alignable + AsRef<str>, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Gaps>
     for PartialMSA<I, U, D, S>
 {
-    fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: GapIds, d_in: &D) -> Self {
-        let params = if children.is_empty() {
-            GapIds::default()
+    fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: Gaps, data: &D) -> Self {
+        let gap_ids = if children.is_empty() {
+            Gaps::default()
         } else {
             // Here we assume that there are only two children.
             let l_child = children[0].2.as_ref();
             let r_child = children[1].2.as_ref();
 
             // We get the centers for the left and right children.
-            let l_center = l_child.aligned_point(d_in, l_child.arg_center());
-            let r_center = r_child.aligned_point(d_in, r_child.arg_center());
+            let l_center = l_child.aligned_point(data, l_child.arg_center());
+            let r_center = r_child.aligned_point(data, r_child.arg_center());
             let (x, y) = (l_center.as_ref(), r_center.as_ref());
 
             // We get the indices at which gaps need to be added to bring the
             // children into alignment.
-            let [left, right] = distances::strings::needleman_wunsch::alignment_gaps::<U>(x, y);
+            let [l, r] = distances::strings::needleman_wunsch::alignment_gaps::<U>(x, y);
 
-            GapIds { left, right }
+            Gaps { l, r }
         };
 
         Self {
             source,
             children,
-            gap_ids: params,
+            gaps: gap_ids,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -68,17 +68,17 @@ impl<I: Alignable + AsRef<str>, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> 
         self.source
     }
 
-    fn params(&self) -> &GapIds {
-        &self.gap_ids
+    fn params(&self) -> &Gaps {
+        &self.gaps
     }
 }
 
 impl<I: Alignable + AsRef<str> + Send + Sync, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D>>
-    ParAdapter<I, U, D, D, S, GapIds> for PartialMSA<I, U, D, S>
+    ParAdapter<I, U, D, D, S, Gaps> for PartialMSA<I, U, D, S>
 {
-    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: GapIds, d_in: &D) -> Self {
-        let params = if children.is_empty() {
-            GapIds::default()
+    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, _: Gaps, data: &D) -> Self {
+        let gap_ids = if children.is_empty() {
+            Gaps::default()
         } else {
             // Here we assume that there are only two children.
             let l_child = children[0].2.as_ref();
@@ -86,22 +86,22 @@ impl<I: Alignable + AsRef<str> + Send + Sync, U: UInt, D: ParDataset<I, U>, S: P
 
             // We get the centers for the left and right children.
             let (l_center, r_center) = rayon::join(
-                || l_child.aligned_point(d_in, l_child.arg_center()),
-                || r_child.aligned_point(d_in, r_child.arg_center()),
+                || l_child.aligned_point(data, l_child.arg_center()),
+                || r_child.aligned_point(data, r_child.arg_center()),
             );
             let (l_center, r_center) = (l_center.as_ref(), r_center.as_ref());
 
             // We get the indices at which gaps need to be added to bring the
             // children into alignment.
-            let [left, right] = distances::strings::needleman_wunsch::x_to_y_alignment(l_center, r_center);
+            let [l, r] = distances::strings::needleman_wunsch::x_to_y_alignment(l_center, r_center);
 
-            GapIds { left, right }
+            Gaps { l, r }
         };
 
         Self {
             source,
             children,
-            gap_ids: params,
+            gaps: gap_ids,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -109,7 +109,7 @@ impl<I: Alignable + AsRef<str> + Send + Sync, U: UInt, D: ParDataset<I, U>, S: P
     fn par_post_traversal(&mut self) {}
 }
 
-impl<I: Alignable + AsRef<str>, U: UInt, D: Dataset<I, U>> BallAdapter<I, U, D, D, GapIds>
+impl<I: Alignable + AsRef<str>, U: UInt, D: Dataset<I, U>> BallAdapter<I, U, D, D, Gaps>
     for PartialMSA<I, U, D, Ball<I, U, D>>
 {
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
@@ -118,7 +118,7 @@ impl<I: Alignable + AsRef<str>, U: UInt, D: Dataset<I, U>> BallAdapter<I, U, D, 
     }
 }
 
-impl<I: Alignable + AsRef<str> + Send + Sync, U: UInt, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, GapIds>
+impl<I: Alignable + AsRef<str> + Send + Sync, U: UInt, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, Gaps>
     for PartialMSA<I, U, D, Ball<I, U, D>>
 {
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {

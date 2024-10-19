@@ -10,8 +10,8 @@ impl<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D> + core::fmt::Debug> core:
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("PartialMSA")
             .field("source", &self.source)
-            .field("children", &!self.children.is_empty())
-            .field("gap_ids", &self.gap_ids)
+            .field("children", &!self.is_leaf())
+            .field("gaps", &self.gaps)
             .finish()
     }
 }
@@ -75,8 +75,8 @@ impl<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> Cluster<I, U, D> for Par
         self.source.lfd()
     }
 
-    fn contains(&self, index: usize) -> bool {
-        self.source.contains(index)
+    fn contains(&self, idx: usize) -> bool {
+        self.source.contains(idx)
     }
 
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {

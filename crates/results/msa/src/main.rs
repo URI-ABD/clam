@@ -37,7 +37,7 @@ struct Args {
 
     /// The number of samples to use for the dataset.
     #[arg(short('n'), long)]
-    num_samples: usize,
+    num_samples: Option<usize>,
 
     /// Path to the input file.
     #[arg(short('i'), long)]
@@ -146,7 +146,7 @@ fn main() -> Result<(), String> {
         let (msa_root, data) = PartialMSA::par_from_ball_tree(ball, data);
         ftlog::info!("Finished building MSA tree.");
 
-        let aligned_sequences = msa_root.full_msa(&data);
+        let aligned_sequences = msa_root.par_full_msa(&data);
         let width = aligned_sequences[0].len();
 
         let distance_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);

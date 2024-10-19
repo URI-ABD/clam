@@ -84,7 +84,7 @@ pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + core::hash::Hash + Size
     fn lfd(&self) -> f32;
 
     /// Returns whether this `Cluster` contains the given `index`ed point.
-    fn contains(&self, index: usize) -> bool;
+    fn contains(&self, idx: usize) -> bool;
 
     /// Gets the indices of the instances in the `Cluster`.
     fn indices(&self) -> impl Iterator<Item = usize> + '_;

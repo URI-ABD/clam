@@ -61,7 +61,7 @@ impl RawData {
         self,
         inp_path: &P,
         out_dir: &P,
-        num_samples: usize,
+        num_samples: Option<usize>,
     ) -> Result<FlatVec<String, u32, String>, String> {
         let out_dir = out_dir.as_ref();
         let data_path = {
@@ -76,7 +76,9 @@ impl RawData {
         } else {
             let (data, min_len, max_len) = {
                 let ([mut data, _], [min_len, max_len]) = fasta::read(inp_path, 0)?;
-                let _ = data.split_off(num_samples);
+                if let Some(num_samples) = num_samples {
+                    data.truncate(num_samples);
+                }
                 (data, min_len, max_len)
             };
 
@@ -92,8 +94,13 @@ impl RawData {
                 .map_err(|e| e.to_string())?;
 
             data
-        }
-        .with_name(self.name());
+        };
+
+        let name = num_samples.map_or_else(
+            || self.name().to_string(),
+            |num_samples| format!("{}-{}", self.name(), num_samples),
+        );
+        data = data.with_name(&name);
 
         // Set the metric for the data, incase it was deserialized.
         let distance_fn = |x: &String, y: &String| distances::strings::levenshtein::<u32>(x, y);

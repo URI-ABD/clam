@@ -24,8 +24,8 @@ pub trait Alignable: Sized + Clone + Debug {
     /// Applies gaps to the alignable type. The gaps will be added in reverse
     /// order.
     #[must_use]
-    fn apply_gaps(mut self, gap_ids: &[usize]) -> Self {
-        for &idx in gap_ids.iter().rev() {
+    fn apply_gaps(mut self, gaps: &[usize]) -> Self {
+        for &idx in gaps.iter().rev() {
             self.insert_gap(idx);
         }
         self
@@ -52,7 +52,7 @@ pub struct PartialMSA<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> {
     children: Vec<(usize, U, Box<Self>)>,
     /// The indices at which gaps were added in the left and right children to
     /// bring them into alignment.
-    gap_ids: GapIds,
+    gaps: Gaps,
     /// Phantom data for the compiler.
     _phantom: core::marker::PhantomData<(I, D)>,
 }
@@ -60,26 +60,26 @@ pub struct PartialMSA<I, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> {
 /// The indices at which gaps were added in the left and right children to bring
 /// them into alignment.
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct GapIds {
+pub struct Gaps {
     /// The indices at which gaps were added in the left child center.
-    left: Vec<usize>,
+    l: Vec<usize>,
     /// The indices at which gaps were added in the right child center.
-    right: Vec<usize>,
+    r: Vec<usize>,
 }
 
 impl<I: Alignable, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> PartialMSA<I, U, D, S> {
     /// Returns the indexed point as if it were in a multiple sequence alignment.
-    pub fn aligned_point(&self, data: &D, index: usize) -> I {
+    pub fn aligned_point(&self, data: &D, idx: usize) -> I {
         if self.is_leaf() {
-            data.get(index).clone()
+            data.get(idx).clone()
         } else {
             let l_child = self.children[0].2.as_ref();
             let r_child = self.children[1].2.as_ref();
 
-            if l_child.contains(index) {
-                l_child.aligned_point(data, index).apply_gaps(&self.gap_ids.left)
+            if l_child.contains(idx) {
+                l_child.aligned_point(data, idx).apply_gaps(&self.gaps.l)
             } else {
-                r_child.aligned_point(data, index).apply_gaps(&self.gap_ids.right)
+                r_child.aligned_point(data, idx).apply_gaps(&self.gaps.r)
             }
         }
     }
@@ -95,12 +95,12 @@ impl<I: Alignable, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> PartialMSA<I,
         } else {
             self.children()
                 .iter()
-                .zip([&self.gap_ids.left, &self.gap_ids.right])
-                .flat_map(|((_, _, child), gap_ids)| {
+                .zip([&self.gaps.l, &self.gaps.r])
+                .flat_map(|((_, _, child), gaps)| {
                     child
                         .full_msa(data)
                         .into_iter()
-                        .map(move |point| point.apply_gaps(gap_ids))
+                        .map(move |point| point.apply_gaps(gaps))
                 })
                 .collect()
         }
@@ -115,12 +115,12 @@ impl<I: Alignable + Send + Sync, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, 
         } else {
             self.children()
                 .par_iter()
-                .zip([&self.gap_ids.left, &self.gap_ids.right])
-                .flat_map(|((_, _, child), gap_ids)| {
+                .zip([&self.gaps.l, &self.gaps.r])
+                .flat_map(|((_, _, child), gaps)| {
                     child
                         .par_full_msa(data)
                         .into_par_iter()
-                        .map(move |point| point.apply_gaps(gap_ids))
+                        .map(move |point| point.apply_gaps(gaps))
                 })
                 .collect()
         }

@@ -2,4 +2,4 @@
 
 mod cluster;
 
-pub use cluster::{Alignable, GapIds, PartialMSA};
+pub use cluster::{Alignable, Gaps, PartialMSA};

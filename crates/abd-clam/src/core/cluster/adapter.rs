@@ -98,20 +98,20 @@ pub trait Adapter<
     /// - `source`: The `S` to adapt.
     /// - `params`: The parameters to use for adapting `S`. If `None`, assume
     ///   that `S` is a root `Cluster` and use the default parameters.
-    fn adapt_tree(source: S, params: Option<P>, d_in: &Din) -> Self {
+    fn adapt_tree(source: S, params: Option<P>, data: &Din) -> Self {
         let params = params.unwrap_or_default();
-        let mut cluster = Self::traverse(source, params, d_in);
+        let mut cluster = Self::traverse(source, params, data);
         cluster.post_traversal();
         cluster
     }
 
     /// Recursively adapts a tree of `S`s into a `Cluster` without any pre- or post-
     /// traversal operations.
-    fn traverse(mut source: S, params: P, d_in: &Din) -> Self {
+    fn traverse(mut source: S, params: P, data: &Din) -> Self {
         let children = source.take_children();
 
         if children.is_empty() {
-            Self::new_adapted(source, Vec::new(), params, d_in)
+            Self::new_adapted(source, Vec::new(), params, data)
         } else {
             let (arg_extrema, others) = children
                 .into_iter()
@@ -122,24 +122,23 @@ pub trait Adapter<
                 .child_params(&children)
                 .into_iter()
                 .zip(children)
-                .map(|(p, c)| Self::adapt_tree(c, Some(p), d_in))
+                .map(|(p, c)| Self::adapt_tree(c, Some(p), data))
                 .zip(arg_extrema)
                 .zip(extents)
                 .map(|((c, i), d)| (i, d, Box::new(c)))
                 .collect();
 
-            Self::new_adapted(source, children, params, d_in)
+            Self::new_adapted(source, children, params, data)
         }
     }
 
     /// Adapts the tree of `S`s into this `Cluster` in a such a way that we bypass
     /// the recursion limit in Rust.
-    fn adapt_tree_iterative(mut source: S, params: Option<P>, d_in: &Din) -> Self {
+    fn adapt_tree_iterative(mut source: S, params: Option<P>, data: &Din) -> Self {
         let target_depth = source.depth() + source.max_recursion_depth();
         let trimmings = source.trim_at_depth(target_depth);
 
-        let params = params.unwrap_or_default();
-        let mut root = Self::traverse(source, params, d_in);
+        let mut root = Self::adapt_tree(source, params, data);
 
         let leaf_params = root
             .leaves()
@@ -162,7 +161,7 @@ pub trait Adapter<
                     .zip(children)
                     .zip(others)
                     .map(|((p, c), (i, d))| {
-                        let c = Self::adapt_tree_iterative(c, Some(p), d_in);
+                        let c = Self::adapt_tree_iterative(c, Some(p), data);
                         (i, d, Box::new(c))
                     })
                     .collect::<Vec<_>>()
@@ -212,18 +211,18 @@ pub trait ParAdapter<
 >: ParCluster<I, U, Dout> + Adapter<I, U, Din, Dout, S, P>
 {
     /// Parallel version of the `new_adapted` method.
-    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: P, d_in: &Din) -> Self;
+    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: P, data: &Din) -> Self;
 
     /// Parallel version of the `post_traversal` method.
     fn par_post_traversal(&mut self);
 
     /// Parallel version of the `adapt` method.
-    fn par_adapt_tree(mut source: S, params: Option<P>, d_in: &Din) -> Self {
+    fn par_adapt_tree(mut source: S, params: Option<P>, data: &Din) -> Self {
         let children = source.take_children();
         let params = params.unwrap_or_default();
 
         let mut cluster = if children.is_empty() {
-            Self::par_new_adapted(source, Vec::new(), params, d_in)
+            Self::par_new_adapted(source, Vec::new(), params, data)
         } else {
             let (arg_extrema, others) = children
                 .into_iter()
@@ -234,12 +233,12 @@ pub trait ParAdapter<
                 .child_params(&children)
                 .into_par_iter()
                 .zip(children)
-                .map(|(p, c)| Self::par_adapt_tree(c, Some(p), d_in))
+                .map(|(p, c)| Self::par_adapt_tree(c, Some(p), data))
                 .zip(arg_extrema)
                 .zip(extents)
                 .map(|((c, i), d)| (i, d, Box::new(c)))
                 .collect::<Vec<_>>();
-            Self::par_new_adapted(source, children, params, d_in)
+            Self::par_new_adapted(source, children, params, data)
         };
 
         cluster.par_post_traversal();
@@ -267,7 +266,9 @@ pub trait ParAdapter<
     fn par_adapt_tree_iterative(mut source: S, params: Option<P>, d_in: &Din) -> Self {
         let target_depth = source.depth() + source.max_recursion_depth();
         let children = source.trim_at_depth(target_depth);
-        let mut root = Self::adapt_tree(source, params, d_in);
+
+        let mut root = Self::par_adapt_tree(source, params, d_in);
+
         let leaf_params = root
             .leaves()
             .into_par_iter()
