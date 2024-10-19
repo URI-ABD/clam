@@ -39,6 +39,10 @@ struct Args {
     #[arg(short('d'), long)]
     dataset: data::RawData,
 
+    /// The number of samples to use for the dataset.
+    #[arg(short('n'), long)]
+    num_samples: usize,
+
     /// Path to the input file.
     #[arg(short('i'), long)]
     inp_path: PathBuf,
@@ -48,6 +52,7 @@ struct Args {
     out_dir: Option<PathBuf>,
 }
 
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
@@ -79,11 +84,12 @@ fn main() -> Result<(), String> {
     ftlog::info!("Input file: {inp_path:?}");
     ftlog::info!("Output directory: {out_dir:?}");
 
-    let data = args.dataset.read(&inp_path, &out_dir)?;
+    let data = args.dataset.read(&inp_path, &out_dir, args.num_samples)?;
     ftlog::info!("Finished reading dataset.");
     let path_manager = PathManager::new(data.name(), &out_dir);
 
     let ball_path = path_manager.ball_path();
+    ftlog::info!("Ball path: {ball_path:?}");
     let ball = if ball_path.exists() {
         ftlog::info!("Reading ball from {ball_path:?}");
         // Deserialize the ball from disk.
@@ -124,6 +130,8 @@ fn main() -> Result<(), String> {
         ball
     };
 
+    ftlog::info!("Finished building/reading ball with {} leaves.", ball.leaves().len());
+
     let msa_ball_path = path_manager.msa_ball_path();
     let msa_data_path = path_manager.msa_data_path();
 
@@ -140,7 +148,9 @@ fn main() -> Result<(), String> {
     } else {
         let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
         let msa_root = PartialMSA::par_adapt_tree_iterative(off_ball, None, &data);
-        let aligned_sequences = msa_root.par_full_msa(&data);
+        ftlog::info!("Finished building MSA tree.");
+
+        let aligned_sequences = msa_root.full_msa(&data);
         let width = aligned_sequences[0].len();
 
         let distance_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);

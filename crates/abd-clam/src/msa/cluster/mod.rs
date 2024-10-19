@@ -14,7 +14,7 @@ mod impl_cluster;
 /// A trait for types that can be aligned in a multiple sequence alignment.
 ///
 /// We provide an implementation for `String`.
-pub trait Alignable: Sized + Clone {
+pub trait Alignable: Sized + Clone + Debug {
     /// Returns the width of the Aligned type in the MSA.
     fn width(&self) -> usize;
 
@@ -67,22 +67,20 @@ pub struct GapIds {
     right: Vec<usize>,
 }
 
-impl<I: Alignable + Debug, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D> + Debug> PartialMSA<I, U, D, S> {
+impl<I: Alignable, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D>> PartialMSA<I, U, D, S> {
     /// Returns the indexed point as if it were in a multiple sequence alignment.
     pub fn aligned_point(&self, data: &D, index: usize) -> I {
-        if self.children.is_empty() {
+        if self.is_leaf() {
             data.get(index).clone()
         } else {
             let l_child = self.children[0].2.as_ref();
             let r_child = self.children[1].2.as_ref();
 
-            let (gap_ids, aligned) = if l_child.contains(index) {
-                (&self.gap_ids.left, l_child.aligned_point(data, index))
+            if l_child.contains(index) {
+                l_child.aligned_point(data, index).apply_gaps(&self.gap_ids.left)
             } else {
-                (&self.gap_ids.right, r_child.aligned_point(data, index))
-            };
-
-            aligned.apply_gaps(gap_ids)
+                r_child.aligned_point(data, index).apply_gaps(&self.gap_ids.right)
+            }
         }
     }
 
@@ -91,92 +89,40 @@ impl<I: Alignable + Debug, U: UInt, D: Dataset<I, U>, S: Cluster<I, U, D> + Debu
     ///
     /// The sequences will be returned in the order of a depth-first traversal
     /// of the tree.
-    ///
-    /// # Panics
-    ///
-    /// WIP
     pub fn full_msa(&self, data: &D) -> Vec<I> {
         if self.children.is_empty() {
             self.indices().map(|i| data.get(i).clone()).collect()
         } else {
-            let l_msa = self.children[0].2.full_msa(data);
-            let l_gap_ids = &self.gap_ids.left;
-
-            let l_width = l_msa[0].width();
-            assert!(
-                l_msa.iter().all(|point| point.width() == l_width),
-                "Left MSA has inconsistent widths in {self:?}"
-            );
-
-            let r_msa = self.children[1].2.full_msa(data);
-            let r_gap_ids = &self.gap_ids.right;
-
-            let r_width = r_msa[0].width();
-            assert!(
-                r_msa.iter().all(|point| point.width() == r_width),
-                "Right MSA has inconsistent widths in {self:?}"
-            );
-
-            let msa = l_msa
-                .into_iter()
-                .map(|point| point.apply_gaps(l_gap_ids))
-                .chain(r_msa.into_iter().map(|point| point.apply_gaps(r_gap_ids)))
-                .collect::<Vec<_>>();
-
-            let width = msa[0].width();
-            if msa.iter().any(|point| point.width() != width) {
-                let widths = msa.iter().map(I::width).collect::<Vec<_>>();
-                unreachable!("MSA {msa:?} has inconsistent widths {widths:?} in {self:?}");
-            }
-
-            msa
+            self.children()
+                .iter()
+                .zip([&self.gap_ids.left, &self.gap_ids.right])
+                .flat_map(|((_, _, child), gap_ids)| {
+                    child
+                        .full_msa(data)
+                        .into_iter()
+                        .map(move |point| point.apply_gaps(gap_ids))
+                })
+                .collect()
         }
     }
 }
 
-impl<I: Alignable + Send + Sync + Debug, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D> + Debug>
-    PartialMSA<I, U, D, S>
-{
+impl<I: Alignable + Send + Sync, U: UInt, D: ParDataset<I, U>, S: ParCluster<I, U, D>> PartialMSA<I, U, D, S> {
     /// Parallel version of `full_msa`.
-    ///
-    /// # Panics
-    ///
-    /// WIP
     pub fn par_full_msa(&self, data: &D) -> Vec<I> {
-        let msa = if self.children.is_empty() {
-            self.indices().map(|i| data.get(i).clone()).collect::<Vec<_>>()
+        if self.children.is_empty() {
+            self.indices().map(|i| data.get(i).clone()).collect()
         } else {
-            let l_msa = self.children[0].2.par_full_msa(data);
-            let l_gap_ids = &self.gap_ids.left;
-
-            let l_width = l_msa[0].width();
-            assert!(
-                l_msa.iter().all(|point| point.width() == l_width),
-                "Left MSA has inconsistent widths in {self:?}"
-            );
-
-            let r_msa = self.children[1].2.par_full_msa(data);
-            let r_gap_ids = &self.gap_ids.right;
-
-            let r_width = r_msa[0].width();
-            assert!(
-                r_msa.iter().all(|point| point.width() == r_width),
-                "Right MSA has inconsistent widths in {self:?}"
-            );
-
-            l_msa
-                .into_par_iter()
-                .map(|point| point.apply_gaps(l_gap_ids))
-                .chain(r_msa.into_par_iter().map(|point| point.apply_gaps(r_gap_ids)))
+            self.children()
+                .par_iter()
+                .zip([&self.gap_ids.left, &self.gap_ids.right])
+                .flat_map(|((_, _, child), gap_ids)| {
+                    child
+                        .par_full_msa(data)
+                        .into_par_iter()
+                        .map(move |point| point.apply_gaps(gap_ids))
+                })
                 .collect()
-        };
-
-        let width = msa[0].width();
-        if msa.iter().any(|point| point.width() != width) {
-            let widths = msa.iter().map(I::width).collect::<Vec<_>>();
-            unreachable!("MSA {msa:?} has inconsistent widths {widths:?} in {self:?}");
         }
-
-        msa
     }
 }

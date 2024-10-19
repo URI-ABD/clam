@@ -9,6 +9,8 @@ pub mod partition;
 #[cfg(feature = "csv")]
 mod csv;
 
+use core::fmt::Debug;
+
 use distances::Number;
 
 use super::{dataset::ParDataset, Dataset, MetricSpace};
@@ -52,7 +54,7 @@ pub use csv::WriteCsv;
 /// - The distance from that extremal instance to the farthest instance that was
 ///   assigned to the child. We refer to this as the "extent" of the child.
 /// - The child `Cluster`.
-pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + core::hash::Hash + Sized {
+pub trait Cluster<I, U: Number, D: Dataset<I, U>>: Ord + core::hash::Hash + Sized + Debug {
     /// Returns the depth os the `Cluster` in the tree.
     fn depth(&self) -> usize;
 

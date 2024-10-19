@@ -61,6 +61,7 @@ impl RawData {
         self,
         inp_path: &P,
         out_dir: &P,
+        num_samples: usize,
     ) -> Result<FlatVec<String, u32, String>, String> {
         let out_dir = out_dir.as_ref();
         let data_path = {
@@ -73,7 +74,12 @@ impl RawData {
             ftlog::info!("Reading data from {data_path:?}");
             bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?
         } else {
-            let ([data, _], [min_len, max_len]) = fasta::read(inp_path, 0)?;
+            let (data, min_len, max_len) = {
+                let ([mut data, _], [min_len, max_len]) = fasta::read(inp_path, 0)?;
+                let _ = data.split_off(num_samples);
+                (data, min_len, max_len)
+            };
+
             let (metadata, data): (Vec<_>, Vec<_>) = data.into_iter().unzip();
 
             let data = abd_clam::FlatVec::new(data, Metric::default())?
@@ -85,8 +91,9 @@ impl RawData {
             bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
                 .map_err(|e| e.to_string())?;
 
-            data.with_name(self.name())
-        };
+            data
+        }
+        .with_name(self.name());
 
         // Set the metric for the data, incase it was deserialized.
         let distance_fn = |x: &String, y: &String| distances::strings::levenshtein::<u32>(x, y);
