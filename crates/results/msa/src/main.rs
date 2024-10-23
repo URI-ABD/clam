@@ -52,6 +52,11 @@ struct Args {
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
+    // let pool = rayon::ThreadPoolBuilder::new()
+    //     .num_threads(1)
+    //     .build()
+    //     .map_err(|e| e.to_string())?;
+
     let log_name = format!("msa-{}", args.dataset.name());
     let (_guard, log_path) = configure_logger(&log_name)?;
     println!("Log file: {log_path:?}");
@@ -143,6 +148,7 @@ fn main() -> Result<(), String> {
         (msa_ball, msa_data)
     } else {
         // let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
+        // let (msa_root, data) = pool.install(|| PartialMSA::par_from_ball_tree(ball, data));
         let (msa_root, data) = PartialMSA::par_from_ball_tree(ball, data);
         ftlog::info!("Finished building MSA tree.");
 

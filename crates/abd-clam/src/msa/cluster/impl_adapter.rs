@@ -93,7 +93,7 @@ impl<I: Alignable + AsRef<str> + Send + Sync, U: UInt, D: ParDataset<I, U>, S: P
 
             // We get the indices at which gaps need to be added to bring the
             // children into alignment.
-            let [l, r] = distances::strings::needleman_wunsch::x_to_y_alignment(l_center, r_center);
+            let [l, r] = distances::strings::needleman_wunsch::alignment_gaps::<U>(l_center, r_center);
 
             Gaps { l, r }
         };

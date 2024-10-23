@@ -21,12 +21,19 @@ pub trait Alignable: Sized + Clone + Debug {
     /// Inserts a gap at the given index.
     fn insert_gap(&mut self, idx: usize);
 
+    /// Appends a gap to the end of the alignable type.
+    fn append_gap(&mut self);
+
     /// Applies gaps to the alignable type. The gaps will be added in reverse
     /// order.
     #[must_use]
     fn apply_gaps(mut self, gaps: &[usize]) -> Self {
         for &idx in gaps.iter().rev() {
-            self.insert_gap(idx);
+            if idx == self.width() {
+                self.append_gap();
+            } else {
+                self.insert_gap(idx);
+            }
         }
         self
     }
@@ -39,6 +46,10 @@ impl Alignable for String {
 
     fn insert_gap(&mut self, idx: usize) {
         self.insert(idx, '-');
+    }
+
+    fn append_gap(&mut self) {
+        self.push('-');
     }
 }
 

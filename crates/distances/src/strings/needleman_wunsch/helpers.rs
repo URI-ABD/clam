@@ -388,8 +388,6 @@ pub fn aligned_x_to_y_no_sub(x: &str, y: &str) -> Vec<Edit> {
 pub fn x_to_y_alignment(x: &str, y: &str) -> [Vec<usize>; 2] {
     let table = compute_table::<u16>(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
-    println!("aligned_x: {aligned_x}");
-    println!("aligned_y: {aligned_y}");
     let mut gap_indices: [Vec<usize>; 2] = [Vec::new(), Vec::new()];
     let mut modifier: usize = 0;
     aligned_x

@@ -144,7 +144,8 @@ pub trait Adapter<
             .leaves()
             .into_iter()
             .filter(|l| l.depth() == target_depth)
-            .map(Self::params);
+            .map(Self::params)
+            .collect::<Vec<_>>();
 
         let trimmings = trimmings
             .into_iter()
@@ -263,11 +264,11 @@ pub trait ParAdapter<
 
     /// Adapts the tree of `S`s into this `Cluster` in a such a way that we bypass
     /// the recursion limit in Rust.
-    fn par_adapt_tree_iterative(mut source: S, params: Option<P>, d_in: &Din) -> Self {
+    fn par_adapt_tree_iterative(mut source: S, params: Option<P>, data: &Din) -> Self {
         let target_depth = source.depth() + source.max_recursion_depth();
-        let children = source.trim_at_depth(target_depth);
+        let trimmings = source.trim_at_depth(target_depth);
 
-        let mut root = Self::par_adapt_tree(source, params, d_in);
+        let mut root = Self::par_adapt_tree(source, params, data);
 
         let leaf_params = root
             .leaves()
@@ -276,7 +277,7 @@ pub trait ParAdapter<
             .map(Self::params)
             .collect::<Vec<_>>();
 
-        let children = children
+        let trimmings = trimmings
             .into_par_iter()
             .zip(leaf_params)
             .map(|(children, params)| {
@@ -284,20 +285,23 @@ pub trait ParAdapter<
                     .into_iter()
                     .map(|(i, d, c)| ((i, d), *c))
                     .unzip::<_, _, Vec<_>, Vec<_>>();
+
                 params
                     .child_params(&children)
                     .into_par_iter()
                     .zip(children)
                     .zip(others)
                     .map(|((p, c), (i, d))| {
-                        let c = Self::par_adapt_tree_iterative(c, Some(p), d_in);
+                        let c = Self::par_adapt_tree_iterative(c, Some(p), data);
                         (i, d, Box::new(c))
                     })
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
 
-        root.graft_at_depth(target_depth, children);
+        root.graft_at_depth(target_depth, trimmings);
+        root.par_post_traversal();
+
         root
     }
 }

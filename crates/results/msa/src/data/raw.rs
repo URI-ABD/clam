@@ -66,7 +66,7 @@ impl RawData {
         let out_dir = out_dir.as_ref();
         let data_path = {
             let mut data_path = out_dir.to_path_buf();
-            data_path.push(self.data_name());
+            data_path.push(self.data_name(num_samples));
             data_path
         };
 
@@ -111,7 +111,10 @@ impl RawData {
     }
 
     /// Returns the name of the file containing the uncompressed data as a serialized `FlatVec`.
-    fn data_name(&self) -> String {
-        format!("{}.flat_data", self.name())
+    fn data_name(&self, num_samples: Option<usize>) -> String {
+        num_samples.map_or_else(
+            || format!("{}.flat_data", self.name()),
+            |num_samples| format!("{}.flat_data-{}", self.name(), num_samples),
+        )
     }
 }
