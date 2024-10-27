@@ -18,8 +18,8 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::ParBallAdapter, cluster::WriteCsv, msa::PartialMSA, partition::ParPartition, Ball, Cluster, Dataset,
-    FlatVec, Metric,
+    adapter::ParBallAdapter, cakes::OffBall, cluster::WriteCsv, partition::ParPartition, Ball, Cluster, Dataset,
+    FlatVec, MetricSpace,
 };
 use clap::Parser;
 
@@ -136,50 +136,32 @@ fn main() -> Result<(), String> {
     let msa_ball_path = path_manager.msa_ball_path();
     let msa_data_path = path_manager.msa_data_path();
 
-    let (msa_root, data) = if msa_ball_path.exists() && msa_data_path.exists() {
+    let (off_ball, data) = if msa_ball_path.exists() && msa_data_path.exists() {
         ftlog::info!("Reading MSA ball from {msa_ball_path:?}");
-        let msa_ball = bincode::deserialize_from(std::fs::File::open(&msa_ball_path).map_err(|e| e.to_string())?)
+        let off_ball = bincode::deserialize_from(std::fs::File::open(&msa_ball_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
 
         ftlog::info!("Reading MSA data from {msa_data_path:?}");
-        let msa_data = bincode::deserialize_from(std::fs::File::open(&msa_data_path).map_err(|e| e.to_string())?)
+        let data = bincode::deserialize_from(std::fs::File::open(&msa_data_path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
 
-        (msa_ball, msa_data)
+        (off_ball, data)
     } else {
-        // let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
-        // let (msa_root, data) = pool.install(|| PartialMSA::par_from_ball_tree(ball, data));
-        let (msa_root, data) = PartialMSA::par_from_ball_tree(ball, data);
-        ftlog::info!("Finished building MSA tree.");
-
-        let aligned_sequences = msa_root.par_full_msa(&data);
-        let width = aligned_sequences[0].len();
-
-        let distance_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
-        let msa_metric = Metric::new(distance_fn, false);
-        let aligned_data = FlatVec::new(aligned_sequences, msa_metric)?
-            .with_dim_lower_bound(width)
-            .with_dim_upper_bound(width)
-            .with_metadata(data.metadata().to_vec())?;
-
-        ftlog::info!("Writing MSA ball to {msa_ball_path:?}");
-        bincode::serialize_into(
-            std::fs::File::create(&msa_ball_path).map_err(|e| e.to_string())?,
-            &msa_root,
-        )
-        .map_err(|e| e.to_string())?;
-
-        ftlog::info!("Writing MSA to {msa_data_path:?}");
-        bincode::serialize_into(
-            std::fs::File::create(&msa_data_path).map_err(|e| e.to_string())?,
-            &aligned_data,
-        )
-        .map_err(|e| e.to_string())?;
-
-        (msa_root, aligned_data)
+        OffBall::par_from_ball_tree(ball, data)
     };
 
-    ftlog::info!("Finished building MSA with {} sequences.", msa_root.cardinality());
+    let aligner = abd_clam::msa::NeedlemanWunschAligner::<i32>::default();
+    let msa_builder = abd_clam::msa::MsaBuilder::new(&aligner).with_binary_tree(&off_ball, &data);
+    let aligned_sequences = msa_builder
+        .as_msa()
+        .into_iter()
+        .map(String::from_utf8)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    ftlog::info!("Finished building MSA with {} sequences.", aligned_sequences.len());
+
+    let data = FlatVec::new(aligned_sequences, data.metric().clone())?.with_metadata(data.metadata().to_vec())?;
 
     let msa_fasta_path = path_manager.msa_fasta_path();
     if !msa_fasta_path.exists() {

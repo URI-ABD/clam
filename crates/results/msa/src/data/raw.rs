@@ -62,7 +62,7 @@ impl RawData {
         inp_path: &P,
         out_dir: &P,
         num_samples: Option<usize>,
-    ) -> Result<FlatVec<String, u32, String>, String> {
+    ) -> Result<FlatVec<String, i32, String>, String> {
         let out_dir = out_dir.as_ref();
         let data_path = {
             let mut data_path = out_dir.to_path_buf();
@@ -103,7 +103,7 @@ impl RawData {
         data = data.with_name(&name);
 
         // Set the metric for the data, incase it was deserialized.
-        let distance_fn = |x: &String, y: &String| distances::strings::levenshtein::<u32>(x, y);
+        let distance_fn = |x: &String, y: &String| abd_clam::msa::NeedlemanWunschAligner::default().distance(x, y);
         let metric = Metric::new(distance_fn, true);
         data.set_metric(metric);
 

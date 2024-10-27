@@ -18,7 +18,6 @@
 
 pub mod cakes;
 mod core;
-pub mod msa;
 pub mod utils;
 
 pub use crate::core::{
@@ -31,6 +30,9 @@ pub mod mbed;
 
 #[cfg(feature = "chaoda")]
 pub mod chaoda;
+
+#[cfg(feature = "msa")]
+pub mod msa;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.31.0";

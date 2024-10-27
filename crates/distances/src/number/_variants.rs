@@ -1,6 +1,6 @@
 //! Number variants for floats, integers, and unsigned integers.
 
-use core::hash::Hash;
+use core::{hash::Hash, ops::Neg};
 
 use crate::Number;
 
@@ -19,7 +19,7 @@ macro_rules! impl_int {
 impl_int!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
 
 /// Sub-trait of `Number` for all signed integer types.
-pub trait IInt: Number + Hash + Eq + Ord {}
+pub trait IInt: Number + Neg<Output = Self> + Hash + Eq + Ord {}
 
 /// Macro to implement `IIntNumber` for all signed integer types.
 macro_rules! impl_iint {
