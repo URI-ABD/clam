@@ -3,9 +3,9 @@
 ## Usage
 
 ```shell
-cargo run -r -p results-msa -- \
-    -d gg_12_10 \
-    -i ../data/string-data/greengenes/gg_12_10.fasta \
+╰─ cargo run -r -p results-msa -- \                                                                                                                                               ─╯
+    -d gg_13_5 \
+    -i ../data/string-data/greengenes/gg_13_5.fasta \
     -o ../data/string-data/greengenes/msa-results
 ```
 

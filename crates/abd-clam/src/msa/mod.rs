@@ -4,11 +4,12 @@ mod cluster;
 mod needleman_wunsch;
 
 use distances::number::IInt;
+use rayon::prelude::*;
 
 pub use cluster::{Alignable, Gaps, PartialMSA};
 pub use needleman_wunsch::{CostMatrix, NeedlemanWunschAligner};
 
-use crate::{cakes::OffBall, Cluster, Dataset};
+use crate::{cakes::OffBall, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
 
 /// A multiple sequence alignment (MSA) builder.
 #[allow(clippy::module_name_repetitions)]
@@ -182,6 +183,81 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
                 rows.push(self.columns.iter().map(|col| col[i]).collect());
             }
             rows
+        }
+    }
+}
+
+impl<'a, T: AsRef<[u8]> + Send + Sync, U: IInt> MsaBuilder<'a, T, U> {
+    /// Parallel version of `with_binary_tree`.
+    #[must_use]
+    pub fn par_with_binary_tree<D: ParDataset<T, U>, C: ParCluster<T, U, D>>(
+        self,
+        c: &OffBall<T, U, D, C>,
+        data: &D,
+    ) -> Self {
+        if c.children().is_empty() {
+            self.with_cluster(c, data)
+        } else {
+            if c.children().len() != 2 {
+                unreachable!("Binary tree has more than two children.");
+            }
+            let aligner = self.aligner;
+            let left = c.children()[0].2.as_ref();
+            let right = c.children()[1].2.as_ref();
+
+            let (l_msa, r_msa) = rayon::join(
+                || Self::new(aligner, self.gap).par_with_binary_tree(left, data),
+                || Self::new(aligner, self.gap).par_with_binary_tree(right, data),
+            );
+
+            let l_center = left
+                .indices()
+                .position(|i| i == left.arg_center())
+                .unwrap_or_else(|| unreachable!("Left center not found"));
+            let r_center = right
+                .indices()
+                .position(|i| i == right.arg_center())
+                .unwrap_or_else(|| unreachable!("Right center not found"));
+
+            l_msa.par_merge(l_center, r_msa, r_center)
+        }
+    }
+
+    /// Parallel version of `merge`.
+    #[must_use]
+    pub fn par_merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
+        let x = self.get_sequence(self_center);
+        let y = other.get_sequence(other_center);
+        let (_, [x_to_y, y_to_x]) = self.aligner.gaps(&x, &y);
+
+        for i in x_to_y {
+            self.add_gap(i).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+
+        for i in y_to_x {
+            other.add_gap(i).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+
+        if self.width() == other.width() {
+            let aligner = self.aligner;
+            let columns = self
+                .columns
+                .into_par_iter()
+                .zip(other.columns)
+                .map(|(mut x, mut y)| {
+                    x.append(&mut y);
+                    x
+                })
+                .collect();
+
+            Self {
+                aligner,
+                gap: self.gap,
+                columns,
+                _phantom: std::marker::PhantomData,
+            }
+        } else {
+            unreachable!("MSAs have different widths: {} vs {}", self.width(), other.width());
         }
     }
 }
