@@ -15,6 +15,8 @@ use crate::{cakes::OffBall, Cluster, Dataset};
 pub struct MsaBuilder<'a, T: AsRef<[u8]>, U: IInt> {
     /// The Needleman-Wunsch aligner.
     aligner: &'a NeedlemanWunschAligner<U>,
+    /// The gap character.
+    gap: u8,
     /// The columns of the partial MSA.
     columns: Vec<Vec<u8>>,
     /// Just to satisfy the compiler.
@@ -23,9 +25,10 @@ pub struct MsaBuilder<'a, T: AsRef<[u8]>, U: IInt> {
 
 impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
     /// Create a new MSA builder.
-    pub const fn new(aligner: &'a NeedlemanWunschAligner<U>) -> Self {
+    pub const fn new(aligner: &'a NeedlemanWunschAligner<U>, gap: u8) -> Self {
         Self {
             aligner,
+            gap,
             columns: Vec::new(),
             _phantom: std::marker::PhantomData,
         }
@@ -44,8 +47,8 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
             let left = c.children()[0].2.as_ref();
             let right = c.children()[1].2.as_ref();
 
-            let l_msa = Self::new(aligner).with_binary_tree(left, data);
-            let r_msa = Self::new(aligner).with_binary_tree(right, data);
+            let l_msa = Self::new(aligner, self.gap).with_binary_tree(left, data);
+            let r_msa = Self::new(aligner, self.gap).with_binary_tree(right, data);
 
             let l_center = left
                 .indices()
@@ -73,11 +76,11 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
     /// Adds sequences from a `Cluster` to the MSA.
     #[must_use]
     pub fn with_cluster<D: Dataset<T, U>, C: Cluster<T, U, D>>(self, c: &C, data: &D) -> Self {
-        let center = Self::new(self.aligner).with_sequence(data.get(c.arg_center()));
+        let center = Self::new(self.aligner, self.gap).with_sequence(data.get(c.arg_center()));
         c.indices()
             .filter(|&i| i != c.arg_center())
             .map(|i| data.get(i))
-            .map(|s| Self::new(self.aligner).with_sequence(s))
+            .map(|s| Self::new(self.aligner, self.gap).with_sequence(s))
             .fold(center, |center, other| center.merge(0, other, 0))
     }
 
@@ -134,6 +137,7 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
 
             Self {
                 aligner,
+                gap: self.gap,
                 columns,
                 _phantom: std::marker::PhantomData,
             }
@@ -155,10 +159,13 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
     pub fn add_gap(&mut self, index: usize) -> Result<(), String> {
         if self.columns.is_empty() {
             Err("MSA is empty.".to_string())
-        } else if index > self.columns.len() {
-            Err("Index is greater than the number of columns.".to_string())
+        } else if index > self.width() {
+            Err(format!(
+                "Index is greater than the width of the MSA: {index} > {}",
+                self.width()
+            ))
         } else {
-            let gap_col = vec![b'-'; self.columns[0].len()];
+            let gap_col = vec![self.gap; self.columns[0].len()];
             self.columns.insert(index, gap_col);
             Ok(())
         }

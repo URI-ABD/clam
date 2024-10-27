@@ -34,9 +34,14 @@ impl<T: IInt> Default for CostMatrix<T> {
 impl<T: IInt> CostMatrix<T> {
     /// Create a new substitution matrix.
     #[must_use]
-    pub const fn new(default_sub_cost: T, default_ins_cost: T, default_del_cost: T) -> Self {
+    pub fn new(default_sub_cost: T, default_ins_cost: T, default_del_cost: T) -> Self {
+        let mut sub_matrix = [[default_sub_cost; NUM_CHARS]; NUM_CHARS];
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..NUM_CHARS {
+            sub_matrix[i][i] = T::ZERO;
+        }
         Self {
-            sub_matrix: [[default_sub_cost; NUM_CHARS]; NUM_CHARS],
+            sub_matrix,
             ins_costs: [default_ins_cost; NUM_CHARS],
             ins_ext_costs: [default_ins_cost; NUM_CHARS],
             del_costs: [default_del_cost; NUM_CHARS],

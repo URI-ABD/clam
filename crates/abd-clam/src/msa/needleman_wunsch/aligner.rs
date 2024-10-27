@@ -148,7 +148,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
     ///
     /// # Returns
     ///
-    /// The aligned sequences.
+    /// The alignment distance and the aligned sequences as bytes.
     pub fn align<S: AsRef<[u8]>>(&self, x: S, y: S, table: &NwTable<T>, gap: u8) -> (T, [Vec<u8>; 2]) {
         let (x, y) = (x.as_ref(), y.as_ref());
         let [mut row_i, mut col_i] = [y.len(), x.len()];
@@ -260,7 +260,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
                     row_i -= 1;
                 }
                 Direction::Left => {
-                    y_gaps.push(col_i);
+                    y_gaps.push(row_i);
                     col_i -= 1;
                 }
             }

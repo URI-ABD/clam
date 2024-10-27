@@ -151,7 +151,7 @@ fn main() -> Result<(), String> {
     };
 
     let aligner = abd_clam::msa::NeedlemanWunschAligner::<i32>::default();
-    let msa_builder = abd_clam::msa::MsaBuilder::new(&aligner).with_binary_tree(&off_ball, &data);
+    let msa_builder = abd_clam::msa::MsaBuilder::new(&aligner, b'-').with_binary_tree(&off_ball, &data);
     let aligned_sequences = msa_builder
         .as_msa()
         .into_iter()

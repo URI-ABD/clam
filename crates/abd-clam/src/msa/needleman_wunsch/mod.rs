@@ -92,7 +92,7 @@ mod tests {
 
         assert_eq!(d, 3);
         assert_eq!(x_gaps, vec![]);
-        assert_eq!(y_gaps, vec![14, 15]);
+        assert_eq!(y_gaps, vec![13, 13]);
 
         let (d, [x_gaps, y_gaps]) = nw_aligner.gaps(&y, &x);
         assert_eq!(d, 3);
