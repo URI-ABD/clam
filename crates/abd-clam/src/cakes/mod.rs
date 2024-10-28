@@ -33,6 +33,7 @@ pub mod tests {
         Ball, Cluster, Dataset, FlatVec, Metric, Partition,
     };
 
+    #[allow(clippy::pedantic)]
     pub fn gen_line_data(max: i32) -> Result<FlatVec<i32, u32, usize>, String> {
         let data = (-max..=max).collect::<Vec<_>>();
         let distance_fn = |a: &i32, b: &i32| a.abs_diff(*b);
@@ -40,6 +41,7 @@ pub mod tests {
         FlatVec::new(data, metric)
     }
 
+    #[allow(clippy::pedantic)]
     pub fn gen_grid_data(max: i32) -> Result<FlatVec<(f32, f32), f32, usize>, String> {
         let data = (-max..=max)
             .flat_map(|x| (-max..=max).map(move |y| (x.as_f32(), y.as_f32())))
@@ -49,6 +51,7 @@ pub mod tests {
         FlatVec::new(data, metric)
     }
 
+    #[allow(clippy::pedantic)]
     pub fn check_search_by_index<I: Debug, U: Number, M>(
         mut true_hits: Vec<(usize, U)>,
         mut pred_hits: Vec<(usize, U)>,
@@ -74,6 +77,7 @@ pub mod tests {
         true
     }
 
+    #[allow(clippy::pedantic)]
     pub fn check_search_by_distance<I: Debug, U: Number, M>(
         mut true_hits: Vec<(usize, U)>,
         mut pred_hits: Vec<(usize, U)>,
@@ -100,6 +104,7 @@ pub mod tests {
         true
     }
 
+    #[allow(clippy::pedantic)]
     pub fn gen_random_data<F: Float>(
         car: usize,
         dim: usize,
@@ -179,7 +184,10 @@ pub mod tests {
 
     #[test_case::test_case(16, 16, 2)]
     fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
-        let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap_or_else(|_| unreachable!());
 
         pool.install(|| {
             let mut algs: Algs<String, u16, String> = vec![];
@@ -249,7 +257,7 @@ pub mod tests {
             let (par_squishy_ball, par_co_data) = {
                 (
                     par_squishy_ball.with_metadata_type::<String>(),
-                    par_co_data.with_metadata(metadata.clone())?,
+                    par_co_data.with_metadata(metadata)?,
                 )
             };
             let par_co_fv_data = par_co_data.to_flat_vec();

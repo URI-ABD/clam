@@ -371,7 +371,7 @@ mod tests {
         assert_eq!(dataset.cardinality(), 3);
         assert_eq!(dataset.dimensionality_hint(), (0, None));
 
-        let dataset = FlatVec::new_array(instances, metric.clone())?;
+        let dataset = FlatVec::new_array(instances, metric)?;
         assert_eq!(dataset.cardinality(), 3);
         assert_eq!(dataset.dimensionality_hint(), (2, Some(2)));
 
@@ -381,6 +381,8 @@ mod tests {
     #[cfg(feature = "ndarray-bindings")]
     #[test]
     fn npy_io() -> Result<(), String> {
+        use std::ffi::OsStr;
+
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
         let metric = Metric::new(distance_function, false);
@@ -397,7 +399,7 @@ mod tests {
         }
 
         let path = dataset.write_npy(&tmp_dir, "test-test.npy")?;
-        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "test-test.npy");
+        assert_eq!(path.file_name().map(OsStr::to_str), Some(Some("test-test.npy")));
 
         let new_dataset = FlatVec::read_npy(&path, metric.clone())?;
         assert_eq!(new_dataset.cardinality(), 3);
@@ -587,7 +589,7 @@ mod tests {
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
         let metric = Metric::new(distance_function, false);
-        let dataset: Fv = FlatVec::new_array(instances.clone(), metric.clone())?;
+        let dataset: Fv = FlatVec::new_array(instances, metric.clone())?;
 
         let serialized: Vec<u8> = bincode::serialize(&dataset).map_err(|e| e.to_string())?;
         let mut deserialized: Fv = bincode::deserialize(&serialized).map_err(|e| e.to_string())?;

@@ -247,11 +247,11 @@ pub mod tests {
         let criteria = |c: &B| c.cardinality() > 1;
         let ball = B::new_tree(&data, &criteria, Some(seed));
         let (_, co_data) = Sb::from_ball_tree(ball, data);
-        let co_data = co_data.with_metadata(metadata.clone())?;
+        let co_data = co_data.with_metadata(metadata)?;
 
-        let serialized = bincode::serialize(&co_data).unwrap();
-        let mut deserialized = bincode::deserialize::<Dec>(&serialized).unwrap();
-        deserialized.set_metric(metric.clone());
+        let serialized = bincode::serialize(&co_data).map_err(|e| e.to_string())?;
+        let mut deserialized = bincode::deserialize::<Dec>(&serialized).map_err(|e| e.to_string())?;
+        deserialized.set_metric(metric);
 
         assert_eq!(co_data.cardinality, deserialized.cardinality);
         assert_eq!(co_data.dimensionality_hint, deserialized.dimensionality_hint);

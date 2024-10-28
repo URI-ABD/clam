@@ -303,7 +303,7 @@ mod tests {
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
         let metric = Metric::new(distance_function, false);
-        FlatVec::new_array(instances.clone(), metric)
+        FlatVec::new_array(instances, metric)
     }
 
     fn check_permutation(root: &Ob, data: &FlatVec<Vec<i32>, i32, usize>) -> bool {

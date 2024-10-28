@@ -30,6 +30,7 @@ use distances::Number;
 /// - `I`: The type of the items in the dataset.
 /// - `U`: The type of the scalars used to measure distances.
 /// - `Co`: The type of the original dataset.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn compare_permuted<I, U, Co>(
     c: &mut Criterion,
     data_name: &str,

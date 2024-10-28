@@ -223,12 +223,12 @@ mod tests {
 
         let ball = Ball::new_tree(&data, &criteria, seed);
         for radius in 0..=4 {
-            assert!(check_rnn(&ball, &data, &query, radius));
+            assert!(check_rnn(&ball, &data, query, radius));
         }
 
         let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for radius in 0..=4 {
-            assert!(check_rnn(&off_ball, &perm_data, &query, radius));
+            assert!(check_rnn(&off_ball, &perm_data, query, radius));
         }
 
         Ok(())
@@ -244,12 +244,12 @@ mod tests {
 
         let ball = Ball::par_new_tree(&data, &criteria, seed);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
-            assert!(check_rnn(&ball, &data, &query, radius));
+            assert!(check_rnn(&ball, &data, query, radius));
         }
 
         let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
         for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
-            assert!(check_rnn(&off_ball, &perm_data, &query, radius));
+            assert!(check_rnn(&off_ball, &perm_data, query, radius));
         }
 
         Ok(())

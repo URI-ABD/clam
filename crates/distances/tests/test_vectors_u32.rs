@@ -1,5 +1,3 @@
-use core::f32::EPSILON;
-
 use rand::prelude::*;
 use symagen::random_data;
 
@@ -71,28 +69,28 @@ fn lp_u32() {
             let e_l2s = l2_sq(x, y);
             let a_l2s: f32 = euclidean_sq(x, y);
             assert!(
-                (e_l2s - a_l2s).abs() <= EPSILON,
+                (e_l2s - a_l2s).abs() <= f32::EPSILON,
                 "Euclidean squared: expected: {e_l2s}, actual: {a_l2s}"
             );
 
             let e_l2 = l2(x, y);
             let a_l2: f32 = euclidean(x, y);
             assert!(
-                (e_l2 - a_l2).abs() <= EPSILON,
+                (e_l2 - a_l2).abs() <= f32::EPSILON,
                 "Euclidean: expected: {e_l2}, actual: {a_l2}"
             );
 
             let e_l3 = l3(x, y);
             let a_l3: f32 = l3_norm(x, y);
             assert!(
-                (e_l3 - a_l3).abs() <= EPSILON,
+                (e_l3 - a_l3).abs() <= f32::EPSILON,
                 "L3 norm: expected: {e_l3}, actual: {a_l3}"
             );
 
             let e_l4 = l4(x, y);
             let a_l4: f32 = l4_norm(x, y);
             assert!(
-                (e_l4 - a_l4).abs() <= EPSILON,
+                (e_l4 - a_l4).abs() <= f32::EPSILON,
                 "L4 norm: expected: {e_l4}, actual: {a_l4}"
             );
 

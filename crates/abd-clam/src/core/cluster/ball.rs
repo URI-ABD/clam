@@ -369,7 +369,10 @@ impl<I, U: Number, D: Dataset<I, U>> super::WriteCsv<I, U, D> for Ball<I, U, D> 
 
 #[cfg(test)]
 mod tests {
-    use distances::number::{Addition, Multiplication};
+    use distances::{
+        number::{Addition, Multiplication},
+        Number,
+    };
 
     use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
 
@@ -382,7 +385,7 @@ mod tests {
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
         let metric = Metric::new(distance_function, false);
-        FlatVec::new_array(instances.clone(), metric)
+        FlatVec::new_array(instances, metric)
     }
 
     fn gen_pathological_line() -> FlatVec<f64, f64, usize> {
@@ -391,7 +394,7 @@ mod tests {
         let mut line = vec![0_f64];
 
         while line.len() < 900 {
-            let last = *line.last().unwrap();
+            let last = *line.last().unwrap_or_else(|| unreachable!());
             line.push(last + delta);
             delta *= 2.0;
             delta += min_delta;
@@ -399,7 +402,7 @@ mod tests {
 
         let distance_fn = |x: &f64, y: &f64| x.abs_diff(*y);
         let metric = Metric::new(distance_fn, false);
-        FlatVec::new(line, metric).unwrap()
+        FlatVec::new(line, metric).unwrap_or_else(|e| unreachable!("{e}"))
     }
 
     #[test]
@@ -549,7 +552,7 @@ mod tests {
         let children = grafted_root.trim_at_depth(target_depth);
 
         let leaves = grafted_root.leaves();
-        assert_eq!(leaves.len(), 2.powi(target_depth as i32));
+        assert_eq!(leaves.len(), 2.powi(target_depth.as_i32()));
         assert_eq!(leaves.len(), children.len());
 
         grafted_root.graft_at_depth(target_depth, children);

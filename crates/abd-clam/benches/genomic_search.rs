@@ -11,6 +11,7 @@ use abd_clam::{
 use criterion::*;
 use rand::prelude::*;
 
+#[allow(clippy::type_complexity)]
 const METRICS: &[(&str, fn(&String, &String) -> u64)] = &[
     ("levenshtein", |x: &String, y: &String| {
         distances::strings::levenshtein(x, y)

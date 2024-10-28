@@ -11,6 +11,7 @@ use abd_clam::{
 use criterion::*;
 use rand::prelude::*;
 
+#[allow(clippy::type_complexity)]
 const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
     ("euclidean", |x: &Vec<_>, y: &Vec<_>| {
         distances::vectors::euclidean(x, y)

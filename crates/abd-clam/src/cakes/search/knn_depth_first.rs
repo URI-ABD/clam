@@ -167,7 +167,7 @@ fn par_leaf_into_hits<I, U, D, C>(
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use core::fmt::Debug;
 
     use distances::Number;
@@ -199,7 +199,7 @@ pub(crate) mod tests {
             true_hits.len(),
             "Parallel Knn search failed: {pred_hits:?}"
         );
-        check_search_by_distance(true_hits.clone(), pred_hits, "Par KnnClustered", data);
+        check_search_by_distance(true_hits, pred_hits, "Par KnnClustered", data);
 
         true
     }

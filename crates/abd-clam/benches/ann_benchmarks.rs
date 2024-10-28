@@ -122,6 +122,8 @@ fn ann_benchmarks(c: &mut Criterion) {
 
     let euclidean = |x: &Vec<_>, y: &Vec<_>| distances::vectors::euclidean(x, y);
     let cosine = |x: &Vec<_>, y: &Vec<_>| distances::vectors::cosine(x, y);
+
+    #[allow(clippy::type_complexity)]
     let data_names: Vec<(&str, &str, Metric<Vec<f32>, f32>)> = vec![
         ("fashion-mnist", "euclidean", Metric::new(euclidean, false)),
         ("glove-25", "cosine", Metric::new(cosine, false)),
@@ -167,7 +169,7 @@ fn ann_benchmarks(c: &mut Criterion) {
             (&balanced_ball, &data),
             (&balanced_off_ball, &balanced_perm_data),
             None,
-            &queries,
+            queries,
             &radii,
             &ks,
             true,
