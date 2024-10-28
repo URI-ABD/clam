@@ -170,7 +170,6 @@ pub trait Adapter<
             .collect::<Vec<_>>();
 
         root.graft_at_depth(target_depth, trimmings);
-        root.post_traversal();
 
         root
     }
@@ -300,7 +299,6 @@ pub trait ParAdapter<
             .collect::<Vec<_>>();
 
         root.graft_at_depth(target_depth, trimmings);
-        root.par_post_traversal();
 
         root
     }
