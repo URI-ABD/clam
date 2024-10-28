@@ -12,3 +12,4 @@ distances = { workspace = true }
 bincode = { workspace = true }
 bio = { workspace = true }
 rayon = { workspace = true }
+stringzilla = { workspace = true }

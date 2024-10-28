@@ -4,6 +4,7 @@ use std::fs::File;
 
 use abd_clam::{Dataset, FlatVec, Metric, MetricSpace};
 
+use distances::Number;
 use results_cakes::data::fasta;
 
 /// The datasets we use for benchmarks.
@@ -103,7 +104,7 @@ impl RawData {
         data = data.with_name(&name);
 
         // Set the metric for the data, incase it was deserialized.
-        let distance_fn = |x: &String, y: &String| abd_clam::msa::NeedlemanWunschAligner::default().distance(x, y);
+        let distance_fn = |x: &String, y: &String| stringzilla::sz::edit_distance(x, y).as_i32();
         let metric = Metric::new(distance_fn, true);
         data.set_metric(metric);
 

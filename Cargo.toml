@@ -36,6 +36,9 @@ pyo3-ffi = { version = "0.20", features = ["extension-module", "abi3-py39"] }
 # For reading fasta files.
 bio = "2.0"
 
+# For faster implementation of Levenshtein distance.
+stringzilla = "3.10.5"
+
 [profile.test]
 opt-level = 3
 debug = true
