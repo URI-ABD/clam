@@ -1,12 +1,10 @@
 //! Multiple Sequence Alignment with CLAM
 
-mod cluster;
 mod needleman_wunsch;
 
 use distances::number::IInt;
 use rayon::prelude::*;
 
-pub use cluster::{Alignable, Gaps, PartialMSA};
 pub use needleman_wunsch::{CostMatrix, NeedlemanWunschAligner};
 
 use crate::{cakes::OffBall, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
