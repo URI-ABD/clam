@@ -32,11 +32,11 @@ impl NeighborhoodAware {
             .map(|query| alg.search(data, root, query))
             .zip(data.metadata().iter())
             .map(|(h, &i)| (i, h))
-            .collect();
+            .collect::<Vec<_>>();
 
         let data = data
             .clone()
-            .with_metadata(results)
+            .with_metadata(&results)
             .unwrap_or_else(|e| unreachable!("We created the correct size for neighborhood aware data: {e}"));
         Self { data, k }
     }
@@ -51,11 +51,11 @@ impl NeighborhoodAware {
             .map(|query| alg.par_search(data, root, query))
             .zip(data.metadata().par_iter())
             .map(|(h, &i)| (i, h))
-            .collect();
+            .collect::<Vec<_>>();
 
         let data = data
             .clone()
-            .with_metadata(results)
+            .with_metadata(&results)
             .unwrap_or_else(|e| unreachable!("We created the correct size for neighborhood aware data: {e}"));
         Self { data, k }
     }

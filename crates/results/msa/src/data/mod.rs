@@ -7,8 +7,7 @@ use distances::Number;
 
 mod raw;
 
-#[allow(clippy::module_name_repetitions)]
-pub use raw::RawData;
+pub use raw::FastaFile;
 
 /// Write a CLAM `Dataset` to a FASTA file.
 pub fn write_fasta<U: Number, P: AsRef<Path>>(data: &FlatVec<String, U, String>, path: P) -> Result<(), String> {

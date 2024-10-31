@@ -2,7 +2,9 @@
 
 mod needleman_wunsch;
 
-use distances::number::IInt;
+use std::string::FromUtf8Error;
+
+use distances::number::Int;
 use rayon::prelude::*;
 
 pub use needleman_wunsch::{CostMatrix, NeedlemanWunschAligner};
@@ -11,7 +13,7 @@ use crate::{cakes::OffBall, cluster::ParCluster, dataset::ParDataset, Cluster, D
 
 /// A multiple sequence alignment (MSA) builder.
 #[allow(clippy::module_name_repetitions)]
-pub struct MsaBuilder<'a, T: AsRef<[u8]>, U: IInt> {
+pub struct MsaBuilder<'a, T: AsRef<[u8]>, U: Int> {
     /// The Needleman-Wunsch aligner.
     aligner: &'a NeedlemanWunschAligner<U>,
     /// The gap character.
@@ -22,7 +24,7 @@ pub struct MsaBuilder<'a, T: AsRef<[u8]>, U: IInt> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
+impl<'a, T: AsRef<[u8]>, U: Int> MsaBuilder<'a, T, U> {
     /// Create a new MSA builder.
     pub const fn new(aligner: &'a NeedlemanWunschAligner<U>, gap: u8) -> Self {
         Self {
@@ -170,22 +172,27 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
         }
     }
 
-    /// Convert the MSA builder into a multiple sequence alignment.
+    /// Extract the multiple sequence alignment.
     #[must_use]
-    pub fn as_msa(&self) -> Vec<Vec<u8>> {
+    pub fn extract_msa(&self) -> Vec<Vec<u8>> {
         if self.is_empty() {
             Vec::new()
         } else {
-            let mut rows = Vec::with_capacity(self.columns[0].len());
-            for i in 0..self.columns[0].len() {
-                rows.push(self.columns.iter().map(|col| col[i]).collect());
-            }
-            rows
+            (0..self.len()).map(|i| self.get_sequence(i)).collect()
         }
+    }
+
+    /// Extract the multiple sequence alignment over `String`s.
+    ///
+    /// # Errors
+    ///
+    /// - If any of the sequences are not valid UTF-8.
+    pub fn extract_msa_strings(&self) -> Result<Vec<String>, FromUtf8Error> {
+        self.extract_msa().into_iter().map(String::from_utf8).collect()
     }
 }
 
-impl<'a, T: AsRef<[u8]> + Send + Sync, U: IInt> MsaBuilder<'a, T, U> {
+impl<'a, T: AsRef<[u8]> + Send + Sync, U: Int> MsaBuilder<'a, T, U> {
     /// Parallel version of `with_binary_tree`.
     #[must_use]
     pub fn par_with_binary_tree<D: ParDataset<T, U>, C: ParCluster<T, U, D>>(
@@ -257,5 +264,24 @@ impl<'a, T: AsRef<[u8]> + Send + Sync, U: IInt> MsaBuilder<'a, T, U> {
         } else {
             unreachable!("MSAs have different widths: {} vs {}", self.width(), other.width());
         }
+    }
+
+    /// Parallel version of `extract_msa`.
+    #[must_use]
+    pub fn par_extract_msa(&self) -> Vec<Vec<u8>> {
+        if self.is_empty() {
+            Vec::new()
+        } else {
+            (0..self.len()).into_par_iter().map(|i| self.get_sequence(i)).collect()
+        }
+    }
+
+    /// Parallel version of `extract_msa_strings`.
+    ///
+    /// # Errors
+    ///
+    /// See `extract_msa_strings`.
+    pub fn par_extract_msa_strings(&self) -> Result<Vec<String>, FromUtf8Error> {
+        self.extract_msa().into_par_iter().map(String::from_utf8).collect()
     }
 }

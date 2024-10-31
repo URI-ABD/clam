@@ -1,6 +1,8 @@
 //! The Needleman-Wunsch aligner.
 
-use distances::number::IInt;
+use core::ops::Neg;
+
+use distances::number::Int;
 
 use super::{CostMatrix, Direction, Edit, Edits};
 
@@ -13,53 +15,35 @@ type NwTable<T> = Vec<Vec<(T, Direction)>>;
 /// with strings.
 #[derive(Clone)]
 #[allow(clippy::module_name_repetitions)]
-pub struct NeedlemanWunschAligner<T: IInt> {
+pub struct NeedlemanWunschAligner<T: Int> {
     /// The cost matrix for the alignment.
     matrix: CostMatrix<T>,
     /// The gap character.
     gap: u8,
-    /// Whether to minimize the cost.
-    minimizer: bool,
 }
 
-impl<T: IInt> Default for NeedlemanWunschAligner<T> {
+impl<T: Int> Default for NeedlemanWunschAligner<T> {
     fn default() -> Self {
         Self {
             matrix: CostMatrix::default(),
             gap: b'-',
-            minimizer: true,
         }
     }
 }
 
-impl<T: IInt> NeedlemanWunschAligner<T> {
+impl<T: Int> NeedlemanWunschAligner<T> {
     /// Create a new Needleman-Wunsch aligner that minimizes the cost.
     pub fn new_minimizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
         Self {
             matrix: matrix.clone(),
             gap,
-            minimizer: true,
         }
     }
 
-    /// Create a new Needleman-Wunsch aligner that maximizes the cost.
-    pub fn new_maximizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
-        Self {
-            matrix: matrix.negative_matrix(),
-            gap,
-            minimizer: false,
-        }
-    }
-
-    /// Compute the edit distance between two sequences.
-    pub fn distance<S: AsRef<[u8]>>(&self, x: S, y: S) -> T {
+    /// Compute the minimized edit distance between two sequences.
+    pub fn distance<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> T {
         let table = self.dp_table(x, y);
-        let dist = table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d);
-        if self.minimizer {
-            dist
-        } else {
-            -dist
-        }
+        table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d)
     }
 
     /// Compute the dynamic programming table for the Needleman-Wunsch algorithm.
@@ -79,7 +63,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
     /// # Returns
     ///
     /// The DP table.
-    pub fn dp_table<S: AsRef<[u8]>>(&self, x: S, y: S) -> NwTable<T> {
+    pub fn dp_table<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> NwTable<T> {
         let (x, y) = (x.as_ref(), y.as_ref());
 
         // Initialize the DP table.
@@ -154,7 +138,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
     /// # Returns
     ///
     /// The alignment distance and the aligned sequences as bytes.
-    pub fn align<S: AsRef<[u8]>>(&self, x: S, y: S, table: &NwTable<T>) -> (T, [Vec<u8>; 2]) {
+    pub fn align<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> (T, [Vec<u8>; 2]) {
         let (x, y) = (x.as_ref(), y.as_ref());
         let [mut row_i, mut col_i] = [y.len(), x.len()];
         let [mut x_aligned, mut y_aligned] = [
@@ -187,16 +171,12 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
         y_aligned.reverse();
 
         let d = table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d);
-        if self.minimizer {
-            (d, [x_aligned, y_aligned])
-        } else {
-            (-d, [x_aligned, y_aligned])
-        }
+        (d, [x_aligned, y_aligned])
     }
 
     /// Align two strings using the Needleman-Wunsch algorithm.
-    pub fn align_str<S: AsRef<str>>(&self, x: S, y: S, table: &NwTable<T>) -> (T, [String; 2]) {
-        let (d, [x_aligned, y_aligned]) = self.align(x.as_ref(), y.as_ref(), table);
+    pub fn align_str<S: AsRef<str>>(&self, x: &S, y: &S, table: &NwTable<T>) -> (T, [String; 2]) {
+        let (d, [x_aligned, y_aligned]) = self.align(&x.as_ref(), &y.as_ref(), table);
         (
             d,
             [
@@ -219,22 +199,9 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
     /// # Returns
     ///
     /// The `Edits` needed to align the two sequences.
-    pub fn edits<S: AsRef<[u8]>>(&self, x: S, y: S) -> (T, [Edits; 2]) {
-        let table = self.dp_table(&x, &y);
+    pub fn edits<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Edits; 2]) {
+        let table = self.dp_table(x, y);
         let (d, [x_aligned, y_aligned]) = self.align(x, y, &table);
-        (
-            d,
-            [
-                aligned_x_to_y(&x_aligned, &y_aligned),
-                aligned_x_to_y(&y_aligned, &x_aligned),
-            ],
-        )
-    }
-
-    /// Returns the `Edits` needed to align two strings
-    pub fn edits_str<S: AsRef<str>>(&self, x: S, y: S) -> (T, [Edits; 2]) {
-        let table = self.dp_table(x.as_ref(), y.as_ref());
-        let (d, [x_aligned, y_aligned]) = self.align_str(&x, &y, &table);
         (
             d,
             [
@@ -275,11 +242,99 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
         y_gaps.reverse();
 
         let d = table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d);
-        if self.minimizer {
-            (d, [x_gaps, y_gaps])
-        } else {
-            (-d, [x_gaps, y_gaps])
+        (d, [x_gaps, y_gaps])
+    }
+}
+
+impl<T: Int + Neg<Output = T>> NeedlemanWunschAligner<T> {
+    /// Create a new Needleman-Wunsch aligner that maximizes the cost.
+    pub fn new_maximizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
+        Self {
+            matrix: matrix.negative_matrix(),
+            gap,
         }
+    }
+
+    /// Compute the maximized edit similarity between two sequences.
+    pub fn similarity<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> T {
+        -self.distance(x, y)
+    }
+
+    /// Compute the maximized dynamic programming table for the Needleman-Wunsch
+    /// algorithm.
+    pub fn dp_table_maximized<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> NwTable<T> {
+        self.dp_table(x, y)
+            .into_iter()
+            .map(|row| row.into_iter().map(|(d, _)| (-d, Direction::Diagonal)).collect())
+            .collect()
+    }
+
+    /// Align two sequences using the Needleman-Wunsch algorithm to maximize the
+    /// similarity.
+    pub fn align_maximized<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Vec<u8>; 2]) {
+        let table = self.dp_table_maximized(x, y);
+        self.align(x, y, &table)
+    }
+
+    /// Align two strings using the Needleman-Wunsch algorithm to maximize the
+    /// similarity.
+    pub fn align_str_maximized<S: AsRef<str>>(&self, x: &S, y: &S) -> (T, [String; 2]) {
+        let (d, [x, y]) = self.align_maximized(&x.as_ref(), &y.as_ref());
+        (
+            d,
+            [
+                String::from_utf8(x).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
+                String::from_utf8(y).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
+            ],
+        )
+    }
+
+    /// Returns the `Edits` needed to align two sequences to maximize the
+    /// similarity.
+    pub fn edits_maximized<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Edits; 2]) {
+        let table = self.dp_table_maximized(x, y);
+        let (d, [x_aligned, y_aligned]) = self.align(x, y, &table);
+        (
+            -d,
+            [
+                aligned_x_to_y(&x_aligned, &y_aligned),
+                aligned_x_to_y(&y_aligned, &x_aligned),
+            ],
+        )
+    }
+
+    /// Returns the indices where gaps need to be inserted to align two
+    /// sequences to maximize the similarity.
+    pub fn alignment_gaps_maximized<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Vec<usize>; 2]) {
+        let table = self.dp_table_maximized(x, y);
+
+        let (x, y) = (x.as_ref(), y.as_ref());
+
+        let [mut row_i, mut col_i] = [y.len(), x.len()];
+        let [mut x_gaps, mut y_gaps] = [Vec::new(), Vec::new()];
+
+        while row_i > 0 || col_i > 0 {
+            match table[row_i][col_i].1 {
+                Direction::Diagonal => {
+                    row_i -= 1;
+                    col_i -= 1;
+                }
+                Direction::Up => {
+                    x_gaps.push(col_i);
+                    row_i -= 1;
+                }
+                Direction::Left => {
+                    y_gaps.push(row_i);
+                    col_i -= 1;
+                }
+            }
+        }
+
+        x_gaps.reverse();
+        y_gaps.reverse();
+
+        let d = table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d);
+        (-d, [x_gaps, y_gaps])
     }
 }
 

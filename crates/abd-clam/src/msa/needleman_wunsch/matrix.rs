@@ -1,6 +1,8 @@
 //! Substitution matrix for the Needleman-Wunsch aligner.
 
-use distances::number::IInt;
+use core::ops::Neg;
+
+use distances::number::Int;
 
 /// The number of characters.
 const NUM_CHARS: usize = 256;
@@ -8,7 +10,7 @@ const NUM_CHARS: usize = 256;
 /// A substitution matrix for the Needleman-Wunsch aligner.
 #[derive(Clone)]
 #[allow(clippy::module_name_repetitions)]
-pub struct CostMatrix<T: IInt> {
+pub struct CostMatrix<T: Int> {
     /// The cost of substituting one character for another.
     sub_matrix: [[T; NUM_CHARS]; NUM_CHARS],
     /// The cost of inserting a character.
@@ -21,7 +23,7 @@ pub struct CostMatrix<T: IInt> {
     del_ext_costs: [T; NUM_CHARS],
 }
 
-impl<T: IInt> Default for CostMatrix<T> {
+impl<T: Int> Default for CostMatrix<T> {
     fn default() -> Self {
         let mut matrix = Self::new(T::ONE, T::ONE, T::ONE);
         for i in 0..NUM_CHARS {
@@ -31,7 +33,7 @@ impl<T: IInt> Default for CostMatrix<T> {
     }
 }
 
-impl<T: IInt> CostMatrix<T> {
+impl<T: Int> CostMatrix<T> {
     /// Create a new substitution matrix.
     #[must_use]
     pub fn new(default_sub_cost: T, default_ins_cost: T, default_del_cost: T) -> Self {
@@ -52,7 +54,10 @@ impl<T: IInt> CostMatrix<T> {
     /// Create a matrix with all costs set to the negative of the costs in this
     /// matrix.
     #[must_use]
-    pub fn negative_matrix(&self) -> Self {
+    pub fn negative_matrix(&self) -> Self
+    where
+        T: Neg<Output = T>,
+    {
         let mut neg_matrix = Self::default();
         for i in 0..NUM_CHARS {
             for j in 0..NUM_CHARS {

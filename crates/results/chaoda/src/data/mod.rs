@@ -215,5 +215,5 @@ fn read_xy(path: &Path, name: &str) -> Result<ChaodaDataset, String> {
     let x_path = path.join(format!("{name}.npy"));
     let fv: FlatVec<Vec<f64>, f64, usize> = FlatVec::read_npy(x_path, Metric::default())?;
 
-    fv.with_name(name).with_metadata(labels)
+    fv.with_name(name).with_metadata(&labels)
 }

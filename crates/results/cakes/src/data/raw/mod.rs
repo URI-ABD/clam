@@ -106,7 +106,7 @@ impl RawData {
                         data.into_iter().map(|(name, seq)| (name, Unaligned::from(seq))).unzip();
 
                     let data = abd_clam::FlatVec::new(data, Unaligned::metric())?
-                        .with_metadata(metadata)?
+                        .with_metadata(&metadata)?
                         .with_dim_lower_bound(min_len)
                         .with_dim_upper_bound(max_len);
 
@@ -147,7 +147,7 @@ impl RawData {
                         data.into_iter().map(|(name, seq)| (name, Aligned::from(seq))).unzip();
 
                     let data = abd_clam::FlatVec::new(data, Aligned::metric())?
-                        .with_metadata(metadata)?
+                        .with_metadata(&metadata)?
                         .with_dim_lower_bound(min_len)
                         .with_dim_upper_bound(max_len);
 

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use abd_clam::{
     adapter::ParBallAdapter, cakes::OffBall, cluster::WriteCsv, partition::ParPartition, Ball, Cluster, Dataset,
-    FlatVec, MetricSpace,
+    FlatVec, Metric,
 };
 use clap::Parser;
 
@@ -31,17 +31,13 @@ mod data;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Dataset type
-    #[arg(short('d'), long)]
-    dataset: data::RawData,
+    /// Path to the input fasta file.
+    #[arg(short('i'), long)]
+    inp_path: PathBuf,
 
     /// The number of samples to use for the dataset.
     #[arg(short('n'), long)]
     num_samples: Option<usize>,
-
-    /// Path to the input file.
-    #[arg(short('i'), long)]
-    inp_path: PathBuf,
 
     /// Path to the output directory.
     #[arg(short('o'), long)]
@@ -51,43 +47,25 @@ struct Args {
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), String> {
     let args = Args::parse();
+    ftlog::info!("{args:?}");
 
     // let pool = rayon::ThreadPoolBuilder::new()
     //     .num_threads(1)
     //     .build()
     //     .map_err(|e| e.to_string())?;
 
-    let log_name = format!("msa-{}", args.dataset.name());
+    let fasta_file = data::FastaFile::new(args.inp_path, args.out_dir)?;
+
+    let log_name = format!("msa-{}", fasta_file.name());
     let (_guard, log_path) = configure_logger(&log_name)?;
     println!("Log file: {log_path:?}");
 
-    ftlog::info!("{args:?}");
+    ftlog::info!("Input file: {:?}", fasta_file.raw_path());
+    ftlog::info!("Output directory: {:?}", fasta_file.out_dir());
 
-    let inp_path = args.inp_path.canonicalize().map_err(|e| e.to_string())?;
-
-    let out_dir = if let Some(out_dir) = args.out_dir {
-        out_dir
-    } else {
-        ftlog::info!("No output directory specified. Using default.");
-        let mut out_dir = inp_path
-            .parent()
-            .ok_or("No parent directory of `inp_dir`")?
-            .to_path_buf();
-        out_dir.push(format!("{}_results", args.dataset.name()));
-        if !out_dir.exists() {
-            std::fs::create_dir(&out_dir).map_err(|e| e.to_string())?;
-        }
-        out_dir
-    }
-    .canonicalize()
-    .map_err(|e| e.to_string())?;
-
-    ftlog::info!("Input file: {inp_path:?}");
-    ftlog::info!("Output directory: {out_dir:?}");
-
-    let data = args.dataset.read(&inp_path, &out_dir, args.num_samples)?;
+    let data = fasta_file.read(args.num_samples)?;
     ftlog::info!("Finished reading dataset.");
-    let path_manager = PathManager::new(data.name(), &out_dir);
+    let path_manager = PathManager::new(data.name(), fasta_file.out_dir());
 
     let ball_path = path_manager.ball_path();
     ftlog::info!("Ball path: {ball_path:?}");
@@ -147,27 +125,42 @@ fn main() -> Result<(), String> {
 
         (off_ball, data)
     } else {
-        OffBall::par_from_ball_tree(ball, data)
-    };
+        let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
 
-    let aligner = abd_clam::msa::NeedlemanWunschAligner::<i32>::default();
-    let msa_builder = abd_clam::msa::MsaBuilder::new(&aligner, b'-').par_with_binary_tree(&off_ball, &data);
-    let aligned_sequences = msa_builder
-        .as_msa()
-        .into_iter()
-        .map(String::from_utf8)
-        .collect::<Result<Vec<_>, _>>()
+        ftlog::info!("Writing MSA ball to {msa_ball_path:?}");
+        bincode::serialize_into(
+            std::fs::File::create(&msa_ball_path).map_err(|e| e.to_string())?,
+            &off_ball,
+        )
         .map_err(|e| e.to_string())?;
 
-    ftlog::info!("Finished building MSA with {} sequences.", aligned_sequences.len());
+        ftlog::info!("Writing MSA data to {msa_data_path:?}");
+        bincode::serialize_into(std::fs::File::create(&msa_data_path).map_err(|e| e.to_string())?, &data)
+            .map_err(|e| e.to_string())?;
 
-    let data = FlatVec::new(aligned_sequences, data.metric().clone())?.with_metadata(data.metadata().to_vec())?;
+        (off_ball, data)
+    };
+
+    ftlog::info!(
+        "Finished adapting/reading Offset Ball with {} leaves.",
+        off_ball.leaves().len()
+    );
+
+    let aligner = abd_clam::msa::NeedlemanWunschAligner::<i32>::default();
+    let aligned_sequences = abd_clam::msa::MsaBuilder::new(&aligner, b'-')
+        .par_with_binary_tree(&off_ball, &data)
+        .extract_msa_strings()
+        .map_err(|e| e.to_string())?;
+
+    ftlog::info!("Finished aligning {} sequences.", aligned_sequences.len());
+
+    let hamming_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
+    let metric = Metric::new(hamming_fn, false);
+    let data = FlatVec::new(aligned_sequences, metric)?.with_metadata(data.metadata())?;
 
     let msa_fasta_path = path_manager.msa_fasta_path();
-    if !msa_fasta_path.exists() {
-        ftlog::info!("Writing MSA to {msa_fasta_path:?}");
-        data::write_fasta(&data, &msa_fasta_path)?;
-    }
+    ftlog::info!("Writing MSA to {msa_fasta_path:?}");
+    data::write_fasta(&data, &msa_fasta_path)?;
 
     Ok(())
 }

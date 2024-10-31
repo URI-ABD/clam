@@ -1,53 +1,91 @@
 //! Reading data from various sources.
 
-use std::fs::File;
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
 
 use abd_clam::{Dataset, FlatVec, Metric, MetricSpace};
 
-use distances::Number;
+use distances::number::Int;
 use results_cakes::data::fasta;
 
-/// The datasets we use for benchmarks.
-#[derive(clap::ValueEnum, Debug, Clone)]
-#[allow(non_camel_case_types, clippy::doc_markdown, clippy::module_name_repetitions)]
-#[non_exhaustive]
-pub enum RawData {
-    /// A small hand-crafted dataset.
-    #[clap(name = "small")]
-    Small,
-    /// The GreenGenes 12.10 dataset.
-    #[clap(name = "gg_12_10")]
-    GreenGenes_12_10,
-    /// The GreenGenes 13.5 dataset.
-    #[clap(name = "gg_13_5")]
-    GreenGenes_13_5,
-    /// The Silva 18S dataset.
-    #[clap(name = "silva_18S")]
-    Silva_18S,
-    /// The PDB sequence dataset.
-    #[clap(name = "pdb_seq")]
-    PdbSeq,
+/// We exclusively use Fasta files for the raw data.
+pub struct FastaFile {
+    raw_path: PathBuf,
+    out_dir: PathBuf,
+    name: String,
 }
 
-impl RawData {
-    /// Returns the name of the dataset as a string.
-    pub const fn name(&self) -> &str {
-        match self {
-            Self::Small => "small",
-            Self::GreenGenes_12_10 => "gg_12_10",
-            Self::GreenGenes_13_5 => "gg_13_5",
-            Self::Silva_18S => "silva_18S",
-            Self::PdbSeq => "pdb_seq",
+impl FastaFile {
+    /// Creates a new `FastaFile` from the given path.
+    pub fn new<P: Into<PathBuf>>(raw_path: P, out_dir: Option<P>) -> Result<Self, String> {
+        let raw_path: PathBuf = raw_path.into().canonicalize().map_err(|e| e.to_string())?;
+        let name = raw_path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .ok_or("No file name found")?;
+
+        let out_dir = if let Some(out_dir) = out_dir {
+            out_dir.into()
+        } else {
+            ftlog::info!("No output directory specified. Using default.");
+            let mut out_dir = raw_path
+                .parent()
+                .ok_or("No parent directory of `inp_dir`")?
+                .to_path_buf();
+            out_dir.push(format!("{name}_results"));
+            if !out_dir.exists() {
+                std::fs::create_dir(&out_dir).map_err(|e| e.to_string())?;
+            }
+            out_dir
         }
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+        if !raw_path.exists() {
+            return Err(format!("Path does not exist: {raw_path:?}"));
+        }
+
+        if !raw_path.is_file() {
+            return Err(format!("Path is not a file: {raw_path:?}"));
+        }
+
+        if !out_dir.exists() {
+            return Err(format!("Output directory does not exist: {out_dir:?}"));
+        }
+
+        if !out_dir.is_dir() {
+            return Err(format!("Output directory is not a directory: {out_dir:?}"));
+        }
+
+        Ok(Self {
+            raw_path,
+            out_dir,
+            name,
+        })
+    }
+
+    /// Returns the name of the fasta file without the extension.
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    /// Returns the path to the raw fasta file.
+    pub fn raw_path(&self) -> &Path {
+        &self.raw_path
+    }
+
+    /// Returns the path to the output directory.
+    pub fn out_dir(&self) -> &Path {
+        &self.out_dir
     }
 
     /// Reads the dataset from the given path.
     ///
     /// # Arguments
     ///
-    /// * `inp_path`: The path to the file with the raw data.
-    /// * `holdout`: The number of queries to hold out. Only used for the fasta datasets.
-    /// * `our_dir`: The directory where the output files will be saved.
+    /// * `num_samples` - The number of samples to read from the dataset. If `None`, all samples are read.
     ///
     /// # Returns
     ///
@@ -58,15 +96,9 @@ impl RawData {
     /// * If the dataset is not readable.
     /// * If the dataset is not in the expected format.
     #[allow(clippy::too_many_lines)]
-    pub fn read<P: AsRef<std::path::Path>>(
-        self,
-        inp_path: &P,
-        out_dir: &P,
-        num_samples: Option<usize>,
-    ) -> Result<FlatVec<String, i32, String>, String> {
-        let out_dir = out_dir.as_ref();
+    pub fn read<U: Int>(&self, num_samples: Option<usize>) -> Result<FlatVec<String, U, String>, String> {
         let data_path = {
-            let mut data_path = out_dir.to_path_buf();
+            let mut data_path = self.out_dir.clone();
             data_path.push(self.data_name(num_samples));
             data_path
         };
@@ -76,7 +108,7 @@ impl RawData {
             bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?
         } else {
             let (data, min_len, max_len) = {
-                let ([mut data, _], [min_len, max_len]) = fasta::read(inp_path, 0)?;
+                let ([mut data, _], [min_len, max_len]) = fasta::read(&self.raw_path, 0)?;
                 if let Some(num_samples) = num_samples {
                     data.truncate(num_samples);
                 }
@@ -86,7 +118,7 @@ impl RawData {
             let (metadata, data): (Vec<_>, Vec<_>) = data.into_iter().unzip();
 
             let data = abd_clam::FlatVec::new(data, Metric::default())?
-                .with_metadata(metadata)?
+                .with_metadata(&metadata)?
                 .with_dim_lower_bound(min_len)
                 .with_dim_upper_bound(max_len);
 
@@ -104,7 +136,7 @@ impl RawData {
         data = data.with_name(&name);
 
         // Set the metric for the data, incase it was deserialized.
-        let distance_fn = |x: &String, y: &String| stringzilla::sz::edit_distance(x, y).as_i32();
+        let distance_fn = |x: &String, y: &String| U::from(stringzilla::sz::edit_distance(x, y));
         let metric = Metric::new(distance_fn, true);
         data.set_metric(metric);
 

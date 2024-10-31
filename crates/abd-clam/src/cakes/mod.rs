@@ -222,7 +222,7 @@ pub mod tests {
 
             let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b);
             let metric = Metric::new(distance_fn, true);
-            let data = FlatVec::new(data, metric)?.with_metadata(metadata.clone())?;
+            let data = FlatVec::new(data, metric)?.with_metadata(&metadata)?;
 
             let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
             let seed = Some(42);

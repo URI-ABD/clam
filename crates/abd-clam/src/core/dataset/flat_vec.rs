@@ -157,8 +157,9 @@ impl<I, U, M> FlatVec<I, U, M> {
     /// # Errors
     ///
     /// * If the metadata length does not match the number of instances.
-    pub fn with_metadata<Me>(self, mut metadata: Vec<Me>) -> Result<FlatVec<I, U, Me>, String> {
+    pub fn with_metadata<Me: Clone>(self, metadata: &[Me]) -> Result<FlatVec<I, U, Me>, String> {
         if metadata.len() == self.instances.len() {
+            let mut metadata = metadata.to_vec();
             metadata.permute(&self.permutation);
             Ok(FlatVec {
                 metric: self.metric,
