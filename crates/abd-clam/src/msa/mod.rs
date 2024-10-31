@@ -112,7 +112,7 @@ impl<'a, T: AsRef<[u8]>, U: IInt> MsaBuilder<'a, T, U> {
     pub fn merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
         let x = self.get_sequence(self_center);
         let y = other.get_sequence(other_center);
-        let (_, [x_to_y, y_to_x]) = self.aligner.gaps(&x, &y);
+        let (_, [x_to_y, y_to_x]) = self.aligner.alignment_gaps(&x, &y);
 
         for i in x_to_y {
             self.add_gap(i).unwrap_or_else(|e| unreachable!("{e}"));
@@ -226,7 +226,7 @@ impl<'a, T: AsRef<[u8]> + Send + Sync, U: IInt> MsaBuilder<'a, T, U> {
     pub fn par_merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
         let x = self.get_sequence(self_center);
         let y = other.get_sequence(other_center);
-        let (_, [x_to_y, y_to_x]) = self.aligner.gaps(&x, &y);
+        let (_, [x_to_y, y_to_x]) = self.aligner.alignment_gaps(&x, &y);
 
         for i in x_to_y {
             self.add_gap(i).unwrap_or_else(|e| unreachable!("{e}"));

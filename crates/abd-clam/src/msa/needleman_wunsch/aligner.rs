@@ -16,6 +16,8 @@ type NwTable<T> = Vec<Vec<(T, Direction)>>;
 pub struct NeedlemanWunschAligner<T: IInt> {
     /// The cost matrix for the alignment.
     matrix: CostMatrix<T>,
+    /// The gap character.
+    gap: u8,
     /// Whether to minimize the cost.
     minimizer: bool,
 }
@@ -24,6 +26,7 @@ impl<T: IInt> Default for NeedlemanWunschAligner<T> {
     fn default() -> Self {
         Self {
             matrix: CostMatrix::default(),
+            gap: b'-',
             minimizer: true,
         }
     }
@@ -31,17 +34,19 @@ impl<T: IInt> Default for NeedlemanWunschAligner<T> {
 
 impl<T: IInt> NeedlemanWunschAligner<T> {
     /// Create a new Needleman-Wunsch aligner that minimizes the cost.
-    pub fn new_minimizer(matrix: &CostMatrix<T>) -> Self {
+    pub fn new_minimizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
         Self {
             matrix: matrix.clone(),
+            gap,
             minimizer: true,
         }
     }
 
     /// Create a new Needleman-Wunsch aligner that maximizes the cost.
-    pub fn new_maximizer(matrix: &CostMatrix<T>) -> Self {
+    pub fn new_maximizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
         Self {
             matrix: matrix.negative_matrix(),
+            gap,
             minimizer: false,
         }
     }
@@ -57,14 +62,14 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
         }
     }
 
-    /// Compute the DP table for the Needleman-Wunsch algorithm.
+    /// Compute the dynamic programming table for the Needleman-Wunsch algorithm.
     ///
     /// The DP table is a 2D array of edit distances between prefixes of the two
     /// sequences. The value at position `(i, j)` is the edit distance between
     /// the first `i` characters of the first sequence and the first `j`
     /// characters of the second sequence.
     ///
-    /// This implementation with try to minimize the edit distance.
+    /// This implementation will minimize the edit distance.
     ///
     /// # Arguments
     ///
@@ -149,7 +154,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
     /// # Returns
     ///
     /// The alignment distance and the aligned sequences as bytes.
-    pub fn align<S: AsRef<[u8]>>(&self, x: S, y: S, table: &NwTable<T>, gap: u8) -> (T, [Vec<u8>; 2]) {
+    pub fn align<S: AsRef<[u8]>>(&self, x: S, y: S, table: &NwTable<T>) -> (T, [Vec<u8>; 2]) {
         let (x, y) = (x.as_ref(), y.as_ref());
         let [mut row_i, mut col_i] = [y.len(), x.len()];
         let [mut x_aligned, mut y_aligned] = [
@@ -166,13 +171,13 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
                     col_i -= 1;
                 }
                 Direction::Up => {
-                    x_aligned.push(gap);
+                    x_aligned.push(self.gap);
                     y_aligned.push(y[row_i - 1]);
                     row_i -= 1;
                 }
                 Direction::Left => {
                     x_aligned.push(x[col_i - 1]);
-                    y_aligned.push(gap);
+                    y_aligned.push(self.gap);
                     col_i -= 1;
                 }
             }
@@ -191,7 +196,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
 
     /// Align two strings using the Needleman-Wunsch algorithm.
     pub fn align_str<S: AsRef<str>>(&self, x: S, y: S, table: &NwTable<T>) -> (T, [String; 2]) {
-        let (d, [x_aligned, y_aligned]) = self.align(x.as_ref(), y.as_ref(), table, b'-');
+        let (d, [x_aligned, y_aligned]) = self.align(x.as_ref(), y.as_ref(), table);
         (
             d,
             [
@@ -214,9 +219,9 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
     /// # Returns
     ///
     /// The `Edits` needed to align the two sequences.
-    pub fn edits<S: AsRef<[u8]>>(&self, x: S, y: S, gap: u8) -> (T, [Edits; 2]) {
+    pub fn edits<S: AsRef<[u8]>>(&self, x: S, y: S) -> (T, [Edits; 2]) {
         let table = self.dp_table(&x, &y);
-        let (d, [x_aligned, y_aligned]) = self.align(x, y, &table, gap);
+        let (d, [x_aligned, y_aligned]) = self.align(x, y, &table);
         (
             d,
             [
@@ -241,7 +246,7 @@ impl<T: IInt> NeedlemanWunschAligner<T> {
 
     /// Returns the indices where gaps need to be inserted to align two
     /// sequences.
-    pub fn gaps<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Vec<usize>; 2]) {
+    pub fn alignment_gaps<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Vec<usize>; 2]) {
         let table = self.dp_table(x, y);
 
         let (x, y) = (x.as_ref(), y.as_ref());

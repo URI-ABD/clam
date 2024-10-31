@@ -88,13 +88,13 @@ mod tests {
 
         let x = "MDIAIHHPWIRRP---";
         let y = "MDIAIHHPWIRRPF";
-        let (d, [x_gaps, y_gaps]) = nw_aligner.gaps(&x, &y);
+        let (d, [x_gaps, y_gaps]) = nw_aligner.alignment_gaps(&x, &y);
 
         assert_eq!(d, 3);
         assert_eq!(x_gaps, vec![]);
         assert_eq!(y_gaps, vec![13, 13]);
 
-        let (d, [x_gaps, y_gaps]) = nw_aligner.gaps(&y, &x);
+        let (d, [x_gaps, y_gaps]) = nw_aligner.alignment_gaps(&y, &x);
         assert_eq!(d, 3);
         assert_eq!(x_gaps, vec![13, 13]);
         assert_eq!(y_gaps, vec![]);
