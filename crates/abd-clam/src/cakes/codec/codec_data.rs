@@ -145,8 +145,9 @@ impl<I, U, M> CodecData<I, U, M> {
     ///
     /// If the length of the metadata vector does not match the cardinality of
     /// the dataset.
-    pub fn with_metadata<Me>(self, mut metadata: Vec<Me>) -> Result<CodecData<I, U, Me>, String> {
+    pub fn with_metadata<Me: Clone>(self, metadata: &[Me]) -> Result<CodecData<I, U, Me>, String> {
         if metadata.len() == self.cardinality {
+            let mut metadata = metadata.to_vec();
             metadata.permute(&self.permutation);
             Ok(CodecData {
                 metric: self.metric,

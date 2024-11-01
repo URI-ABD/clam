@@ -5,11 +5,10 @@ use core::ops::Neg;
 use distances::number::Int;
 
 /// The number of characters.
-const NUM_CHARS: usize = 256;
+const NUM_CHARS: usize = 1 + (u8::MAX as usize);
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
 #[derive(Clone)]
-#[allow(clippy::module_name_repetitions)]
 pub struct CostMatrix<T: Int> {
     /// The cost of substituting one character for another.
     sub_matrix: [[T; NUM_CHARS]; NUM_CHARS],
@@ -51,24 +50,19 @@ impl<T: Int> CostMatrix<T> {
         }
     }
 
-    /// Create a matrix with all costs set to the negative of the costs in this
-    /// matrix.
+    /// Shift all costs in the matrix by a constant.
     #[must_use]
-    pub fn negative_matrix(&self) -> Self
-    where
-        T: Neg<Output = T>,
-    {
-        let mut neg_matrix = Self::default();
+    pub fn shift(mut self, shift: T) -> Self {
         for i in 0..NUM_CHARS {
             for j in 0..NUM_CHARS {
-                neg_matrix.sub_matrix[i][j] = -self.sub_matrix[i][j];
+                self.sub_matrix[i][j] += shift;
             }
-            neg_matrix.ins_costs[i] = -self.ins_costs[i];
-            neg_matrix.ins_ext_costs[i] = -self.ins_ext_costs[i];
-            neg_matrix.del_costs[i] = -self.del_costs[i];
-            neg_matrix.del_ext_costs[i] = -self.del_ext_costs[i];
+            self.ins_costs[i] += shift;
+            self.ins_ext_costs[i] += shift;
+            self.del_costs[i] += shift;
+            self.del_ext_costs[i] += shift;
         }
-        neg_matrix
+        self
     }
 
     /// Set the cost of substituting one character for another.
@@ -140,5 +134,42 @@ impl<T: Int> CostMatrix<T> {
     /// Get the cost of deleting a character immediately after another deletion.
     pub const fn del_ext_cost(&self, a: u8) -> T {
         self.del_ext_costs[a as usize]
+    }
+}
+
+impl<T: Int + Neg<Output = T>> CostMatrix<T> {
+    /// Linearly increase all costs in the matrix so that the minimum cost is
+    /// zero.
+    #[must_use]
+    pub fn normalize(self) -> Self {
+        let mut shift = T::MAX;
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                shift = shift.min(self.sub_matrix[i][j]);
+            }
+            shift = shift.min(self.ins_costs[i]);
+            shift = shift.min(self.ins_ext_costs[i]);
+            shift = shift.min(self.del_costs[i]);
+            shift = shift.min(self.del_ext_costs[i]);
+        }
+        self.shift(-shift)
+    }
+}
+
+impl<T: Int + Neg<Output = T>> Neg for CostMatrix<T> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        let mut neg_matrix = Self::default();
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                neg_matrix.sub_matrix[i][j] = -self.sub_matrix[i][j];
+            }
+            neg_matrix.ins_costs[i] = -self.ins_costs[i];
+            neg_matrix.ins_ext_costs[i] = -self.ins_ext_costs[i];
+            neg_matrix.del_costs[i] = -self.del_costs[i];
+            neg_matrix.del_ext_costs[i] = -self.del_ext_costs[i];
+        }
+        neg_matrix
     }
 }

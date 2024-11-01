@@ -247,7 +247,7 @@ pub mod tests {
             let (squishy_ball, co_data) = {
                 (
                     squishy_ball.with_metadata_type::<String>(),
-                    co_data.with_metadata(metadata.clone())?,
+                    co_data.with_metadata(&metadata)?,
                 )
             };
             let co_fv_data = co_data.to_flat_vec();
@@ -257,7 +257,7 @@ pub mod tests {
             let (par_squishy_ball, par_co_data) = {
                 (
                     par_squishy_ball.with_metadata_type::<String>(),
-                    par_co_data.with_metadata(metadata)?,
+                    par_co_data.with_metadata(&metadata)?,
                 )
             };
             let par_co_fv_data = par_co_data.to_flat_vec();

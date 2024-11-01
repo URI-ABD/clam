@@ -132,8 +132,8 @@ impl Group {
 
             // Create the compressed dataset and set its metadata.
             ftlog::info!("Creating compressed dataset.");
-            let codec_data = CodecData::from_compressible(&perm_data, &squishy_ball)
-                .with_metadata(uncompressed.metadata().to_vec())?;
+            let codec_data =
+                CodecData::from_compressible(&perm_data, &squishy_ball).with_metadata(uncompressed.metadata())?;
 
             let num_bytes = codec_data
                 .leaf_bytes()

@@ -14,15 +14,14 @@ type NwTable<T> = Vec<Vec<(T, Direction)>>;
 /// This works with any sequence of bytes, and also provides helpers for working
 /// with strings.
 #[derive(Clone)]
-#[allow(clippy::module_name_repetitions)]
-pub struct NeedlemanWunschAligner<T: Int> {
+pub struct Aligner<T: Int> {
     /// The cost matrix for the alignment.
     matrix: CostMatrix<T>,
     /// The gap character.
     gap: u8,
 }
 
-impl<T: Int> Default for NeedlemanWunschAligner<T> {
+impl<T: Int> Default for Aligner<T> {
     fn default() -> Self {
         Self {
             matrix: CostMatrix::default(),
@@ -31,9 +30,9 @@ impl<T: Int> Default for NeedlemanWunschAligner<T> {
     }
 }
 
-impl<T: Int> NeedlemanWunschAligner<T> {
+impl<T: Int> Aligner<T> {
     /// Create a new Needleman-Wunsch aligner that minimizes the cost.
-    pub fn new_minimizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
+    pub fn new(matrix: &CostMatrix<T>, gap: u8) -> Self {
         Self {
             matrix: matrix.clone(),
             gap,
@@ -246,15 +245,7 @@ impl<T: Int> NeedlemanWunschAligner<T> {
     }
 }
 
-impl<T: Int + Neg<Output = T>> NeedlemanWunschAligner<T> {
-    /// Create a new Needleman-Wunsch aligner that maximizes the cost.
-    pub fn new_maximizer(matrix: &CostMatrix<T>, gap: u8) -> Self {
-        Self {
-            matrix: matrix.negative_matrix(),
-            gap,
-        }
-    }
-
+impl<T: Int + Neg<Output = T>> Aligner<T> {
     /// Compute the maximized edit similarity between two sequences.
     pub fn similarity<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> T {
         -self.distance(x, y)

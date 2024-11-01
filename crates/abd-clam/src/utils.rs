@@ -4,6 +4,23 @@ use core::cmp::Ordering;
 
 use distances::{number::Float, Number};
 
+/// Return the number of samples to take from the given population size so as to
+/// achieve linear time complexity for geometric median estimation.
+#[must_use]
+pub fn num_samples(cardinality: usize, sqrt_thresh: usize, log2_thresh: usize) -> usize {
+    if cardinality < sqrt_thresh {
+        cardinality
+    } else {
+        let n = if cardinality < log2_thresh {
+            (cardinality - sqrt_thresh).as_f64().sqrt().as_usize()
+        } else {
+            let n = (cardinality - log2_thresh).as_f64().log2().as_usize();
+            n + sqrt_thresh
+        };
+        n + sqrt_thresh
+    }
+}
+
 /// Return the index and value of the minimum value in the given slice of values.
 ///
 /// NAN values are ordered as greater than all other values.
@@ -209,25 +226,18 @@ pub fn calc_row_sds<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
 ///
 /// * `data` - The data to partition.
 fn partition<T: Number>(data: &[T]) -> Option<(Vec<T>, T, Vec<T>)> {
-    if data.is_empty() {
-        None
-    } else {
-        let (pivot_slice, tail) = data.split_at(1);
-        let pivot = pivot_slice[0];
-        let (left, right) = tail.iter().fold((vec![], vec![]), |mut splits, next| {
-            {
-                let (ref mut left, ref mut right) = &mut splits;
-                if next < &pivot {
-                    left.push(*next);
-                } else {
-                    right.push(*next);
-                }
+    data.split_first().map(|(&pivot, tail)| {
+        let (left, right) = tail.iter().fold((vec![], vec![]), |(mut left, mut right), &next| {
+            if next < pivot {
+                left.push(next);
+            } else {
+                right.push(next);
             }
-            splits
+            (left, right)
         });
 
-        Some((left, pivot, right))
-    }
+        (left, pivot, right)
+    })
 }
 
 /// A helper function for the median function below.

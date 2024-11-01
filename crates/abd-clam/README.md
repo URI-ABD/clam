@@ -54,7 +54,7 @@ let metric = Metric::new(euclidean, false);
 let data = FlatVec::new(rows, metric).unwrap();
 
 // We can assign the labels as metadata to the dataset.
-let data = data.with_metadata(labels).unwrap();
+let data = data.with_metadata(&labels).unwrap();
 
 // We define the criteria for building the tree to partition the `Cluster`s until each contains a single point.
 let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
@@ -138,7 +138,7 @@ let distance_fn = |a: &String, b: &String| distances::strings::levenshtein::<u16
 let metric = Metric::new(distance_fn, true);
 let data = FlatVec::new(data, metric.clone())
     .unwrap()
-    .with_metadata(metadata.clone())
+    .with_metadata(&metadata)
     .unwrap();
 
 // We can serialize the dataset to disk without compression.
@@ -162,7 +162,7 @@ let (squishy_ball, codec_data) = SquishyBall::par_from_ball_tree(ball, data);
 
 // The metadata types still need to be adjusted manually. We are working on a solution for this.
 let squishy_ball = squishy_ball.with_metadata_type::<String>();
-let codec_data = codec_data.with_metadata(metadata).unwrap();
+let codec_data = codec_data.with_metadata(&metadata).unwrap();
 
 // We can serialize the compressed dataset to disk.
 let codec_path = temp_dir.path().join("strings.codec_data");

@@ -70,6 +70,18 @@ pub trait Number:
     /// Returns the number as a `f64`. This may be a lossy conversion.
     fn as_f64(self) -> f64;
 
+    /// Returns the number as a `usize`. This may be a lossy conversion.
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_usize(self) -> usize {
+        self.as_u64() as usize
+    }
+
+    /// Returns the number as a `isize`. This may be a lossy conversion.
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_isize(self) -> isize {
+        self.as_i64() as isize
+    }
+
     /// Returns the number as a `u64`. This may be a lossy conversion.
     fn as_u64(self) -> u64;
 

@@ -18,8 +18,12 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    adapter::ParBallAdapter, cakes::OffBall, cluster::WriteCsv, partition::ParPartition, Ball, Cluster, Dataset,
-    FlatVec, Metric,
+    adapter::ParBallAdapter,
+    cakes::OffBall,
+    cluster::WriteCsv,
+    msa::{self, Aligner, Msa},
+    partition::ParPartition,
+    Ball, Cluster, Dataset, FlatVec, Metric,
 };
 use clap::Parser;
 
@@ -146,13 +150,12 @@ fn main() -> Result<(), String> {
         off_ball.leaves().len()
     );
 
-    let aligner = abd_clam::msa::NeedlemanWunschAligner::<i32>::default();
-    let aligned_sequences = abd_clam::msa::MsaBuilder::new(&aligner, b'-')
-        .par_with_binary_tree(&off_ball, &data)
-        .extract_msa_strings()
-        .map_err(|e| e.to_string())?;
+    let aligner = Aligner::<i32>::default();
+    let builder = msa::Builder::new(&aligner, b'-').par_with_binary_tree(&off_ball, &data);
+    let msa = Msa::from(&builder);
+    let aligned_sequences = msa.strings();
 
-    ftlog::info!("Finished aligning {} sequences.", aligned_sequences.len());
+    ftlog::info!("Finished aligning {} sequences.", builder.len());
 
     let hamming_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
     let metric = Metric::new(hamming_fn, false);

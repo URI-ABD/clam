@@ -1,12 +1,11 @@
 //! Needleman-Wunsch algorithm for global sequence alignment.
 
 mod aligner;
-mod matrix;
+mod cost_matrix;
 mod ops;
 
-#[allow(clippy::module_name_repetitions)]
-pub use aligner::NeedlemanWunschAligner;
-pub use matrix::CostMatrix;
+pub use aligner::Aligner;
+pub use cost_matrix::CostMatrix;
 pub use ops::{Direction, Edit, Edits};
 
 #[cfg(test)]
@@ -15,7 +14,7 @@ mod tests {
 
     #[test]
     fn distance() {
-        let nw_aligner = NeedlemanWunschAligner::<i16>::default();
+        let nw_aligner = Aligner::<i16>::default();
 
         let x = "NAJIBEATSPEPPERS";
         let y = "NAJIBPEPPERSEATS";
@@ -32,7 +31,7 @@ mod tests {
     fn test_compute_table() {
         let x = "NAJIBPEPPERSEATS";
         let y = "NAJIBEATSPEPPERS";
-        let nw_aligner = NeedlemanWunschAligner::default();
+        let nw_aligner = Aligner::default();
         let table = nw_aligner.dp_table(&x, &y);
 
         #[rustfmt::skip]
@@ -61,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_trace_back() {
-        let nw_aligner = NeedlemanWunschAligner::<i16>::default();
+        let nw_aligner = Aligner::<i16>::default();
 
         let peppers_x = "NAJIBPEPPERSEATS";
         let peppers_y = "NAJIBEATSPEPPERS";
@@ -84,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_alignment_gaps() {
-        let nw_aligner = NeedlemanWunschAligner::<i16>::default();
+        let nw_aligner = Aligner::<i16>::default();
 
         let x = "MDIAIHHPWIRRP---";
         let y = "MDIAIHHPWIRRPF";
