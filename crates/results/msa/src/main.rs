@@ -150,20 +150,39 @@ fn main() -> Result<(), String> {
         off_ball.leaves().len()
     );
 
-    let aligner = Aligner::<i32>::default();
-    let builder = msa::Builder::new(&aligner, b'-').par_with_binary_tree(&off_ball, &data);
-    let msa = Msa::from(&builder);
-    let aligned_sequences = msa.strings();
-
-    ftlog::info!("Finished aligning {} sequences.", builder.len());
+    let msa_fasta_path = path_manager.msa_fasta_path();
 
     let hamming_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
     let metric = Metric::new(hamming_fn, false);
-    let data = FlatVec::new(aligned_sequences, metric)?.with_metadata(data.metadata())?;
 
-    let msa_fasta_path = path_manager.msa_fasta_path();
-    ftlog::info!("Writing MSA to {msa_fasta_path:?}");
-    data::write_fasta(&data, &msa_fasta_path)?;
+    let data = if msa_fasta_path.exists() {
+        let ([aligned_sequences, _], [width, _]) = results_cakes::data::fasta::read(&msa_fasta_path, 0)?;
+        let (aligned_sequences, metadata): (Vec<_>, Vec<_>) = aligned_sequences.into_iter().unzip();
+        FlatVec::new(aligned_sequences, metric)?
+            .with_metadata(&metadata)?
+            .with_dim_lower_bound(width)
+            .with_dim_upper_bound(width)
+    } else {
+        let aligner = Aligner::<i32>::default();
+        let builder = msa::Builder::new(&aligner, b'-').par_with_binary_tree(&off_ball, &data);
+        let msa = Msa::par_from_builder(&builder);
+        let aligned_sequences = msa.strings();
+        let width = builder.width();
+
+        ftlog::info!("Finished aligning {} sequences.", builder.len());
+        let data = FlatVec::new(aligned_sequences, metric)?.with_metadata(data.metadata())?;
+
+        ftlog::info!("Writing MSA to {msa_fasta_path:?}");
+        data::write_fasta(&data, &msa_fasta_path)?;
+
+        data.with_dim_lower_bound(width).with_dim_upper_bound(width)
+    };
+
+    ftlog::info!(
+        "Finished reading/aligning {} sequences with width = {}.",
+        data.cardinality(),
+        data.dimensionality_hint().0
+    );
 
     Ok(())
 }

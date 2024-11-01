@@ -49,12 +49,31 @@ impl Index<usize> for Msa {
     }
 }
 
-impl<'a, T: AsRef<[u8]>, U: Int> From<&Builder<'a, T, U>> for Msa {
-    fn from(builder: &Builder<'a, T, U>) -> Self {
+impl Msa {
+    /// Create a new MSA from a builder.
+    #[must_use]
+    pub fn from_builder<T: AsRef<[u8]>, U: Int>(builder: &Builder<T, U>) -> Self {
         let sequences = builder.extract_msa();
         Self {
             sequences,
             gap: builder.gap,
         }
+    }
+
+    /// Parallel version of `from_builder`.
+    #[must_use]
+    pub fn par_from_builder<T: AsRef<[u8]> + Send + Sync, U: Int>(builder: &Builder<T, U>) -> Self {
+        let sequences = builder.par_extract_msa();
+        Self {
+            sequences,
+            gap: builder.gap,
+        }
+    }
+}
+
+impl<T: AsRef<str>> From<&[T]> for Msa {
+    fn from(sequences: &[T]) -> Self {
+        let sequences = sequences.iter().map(|s| s.as_ref().as_bytes().to_vec()).collect();
+        Self { sequences, gap: b'-' }
     }
 }

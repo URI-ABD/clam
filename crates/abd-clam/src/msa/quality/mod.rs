@@ -28,8 +28,8 @@ impl Msa {
     #[must_use]
     pub fn scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> usize {
         let mut indices = (0..self.sequences.len()).collect::<Vec<_>>();
-        if self.sequences.len() > 100 {
-            let n = crate::utils::num_samples(indices.len(), 100, 10_000);
+        if self.sequences.len() > 10 {
+            let n = crate::utils::num_samples(indices.len(), 10, 100);
             indices.shuffle(&mut rand::thread_rng());
             indices.truncate(n);
         };
@@ -77,8 +77,8 @@ impl Msa {
     #[must_use]
     pub fn par_scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> usize {
         let mut indices = (0..self.sequences.len()).collect::<Vec<_>>();
-        if self.sequences.len() > 100 {
-            let n = crate::utils::num_samples(indices.len(), 100, 10_000);
+        if self.sequences.len() > 10 {
+            let n = crate::utils::num_samples(indices.len(), 10, 100);
             indices.shuffle(&mut rand::thread_rng());
             indices.truncate(n);
         };

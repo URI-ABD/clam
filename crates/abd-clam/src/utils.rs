@@ -6,18 +6,27 @@ use distances::{number::Float, Number};
 
 /// Return the number of samples to take from the given population size so as to
 /// achieve linear time complexity for geometric median estimation.
+///
+/// The number of samples is calculated as follows:
+///
+/// - The first `sqrt_thresh` samples are taken from the population.
+/// - From the next `log2_thresh` samples, `n` samples are taken, where `n`
+///   is the square root of the population size minus `sqrt_thresh`.
+/// - From the remaining samples, `n` samples are taken, where `n` is the
+///   logarithm base 2 of the population size minus (`log2_thresh` plus
+///   `sqrt_thresh`).
 #[must_use]
-pub fn num_samples(cardinality: usize, sqrt_thresh: usize, log2_thresh: usize) -> usize {
-    if cardinality < sqrt_thresh {
-        cardinality
+pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usize) -> usize {
+    if population_size < sqrt_thresh {
+        population_size
     } else {
-        let n = if cardinality < log2_thresh {
-            (cardinality - sqrt_thresh).as_f64().sqrt().as_usize()
-        } else {
-            let n = (cardinality - log2_thresh).as_f64().log2().as_usize();
-            n + sqrt_thresh
-        };
-        n + sqrt_thresh
+        sqrt_thresh
+            + if population_size < sqrt_thresh + log2_thresh {
+                (population_size - sqrt_thresh).as_f64().sqrt()
+            } else {
+                log2_thresh.as_f64().sqrt() + (population_size - sqrt_thresh - log2_thresh).as_f64().log2()
+            }
+            .as_usize()
     }
 }
 

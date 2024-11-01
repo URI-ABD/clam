@@ -19,6 +19,16 @@ pub trait MetricSpace<I, U: Number> {
     /// Changes the underlying metric.
     fn set_metric(&mut self, metric: Metric<I, U>);
 
+    /// Changes the underlying metric and returns the modified dataset.
+    #[must_use]
+    fn with_metric(mut self, metric: Metric<I, U>) -> Self
+    where
+        Self: Sized,
+    {
+        self.set_metric(metric);
+        self
+    }
+
     /// Whether the distance function provides an identity.
     ///
     /// Identity is defined as: `d(x, y) = 0 <=> x = y`.
