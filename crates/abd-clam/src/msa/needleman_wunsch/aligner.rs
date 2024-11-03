@@ -2,7 +2,7 @@
 
 use core::ops::Neg;
 
-use distances::number::Int;
+use distances::Number;
 
 use super::{CostMatrix, Direction, Edit, Edits};
 
@@ -14,29 +14,17 @@ type NwTable<T> = Vec<Vec<(T, Direction)>>;
 /// This works with any sequence of bytes, and also provides helpers for working
 /// with strings.
 #[derive(Clone)]
-pub struct Aligner<T: Int> {
+pub struct Aligner<'a, T: Number> {
     /// The cost matrix for the alignment.
-    matrix: CostMatrix<T>,
+    matrix: &'a CostMatrix<T>,
     /// The gap character.
-    gap: u8,
+    pub(crate) gap: u8,
 }
 
-impl<T: Int> Default for Aligner<T> {
-    fn default() -> Self {
-        Self {
-            matrix: CostMatrix::default(),
-            gap: b'-',
-        }
-    }
-}
-
-impl<T: Int> Aligner<T> {
+impl<'a, T: Number> Aligner<'a, T> {
     /// Create a new Needleman-Wunsch aligner that minimizes the cost.
-    pub fn new(matrix: &CostMatrix<T>, gap: u8) -> Self {
-        Self {
-            matrix: matrix.clone(),
-            gap,
-        }
+    pub const fn new(matrix: &'a CostMatrix<T>, gap: u8) -> Self {
+        Self { matrix, gap }
     }
 
     /// Compute the minimized edit distance between two sequences.
@@ -245,7 +233,7 @@ impl<T: Int> Aligner<T> {
     }
 }
 
-impl<T: Int + Neg<Output = T>> Aligner<T> {
+impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
     /// Compute the maximized edit similarity between two sequences.
     pub fn similarity<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> T {
         -self.distance(x, y)

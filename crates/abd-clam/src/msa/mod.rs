@@ -56,7 +56,7 @@ impl Msa {
         let sequences = builder.extract_msa();
         Self {
             sequences,
-            gap: builder.gap,
+            gap: builder.aligner.gap,
         }
     }
 
@@ -66,7 +66,7 @@ impl Msa {
         let sequences = builder.par_extract_msa();
         Self {
             sequences,
-            gap: builder.gap,
+            gap: builder.aligner.gap,
         }
     }
 }

@@ -23,8 +23,8 @@ impl Msa {
         self._scoring_pairwise(gap_penalty, mismatch_penalty, &indices)
     }
 
-    /// Same as `scoring_pairwise`, but only considers the sequences at the given
-    /// indices.
+    /// Same as `scoring_pairwise`, but only estimates the score for a subset of
+    /// the pairwise alignments.
     #[must_use]
     pub fn scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> usize {
         let mut indices = (0..self.sequences.len()).collect::<Vec<_>>();
@@ -66,14 +66,14 @@ impl Msa {
 
 // Parallelized implementations here
 impl Msa {
-    /// Parallelized version of `scoring_pairwise`.
+    /// Parallel version of `scoring_pairwise`.
     #[must_use]
     pub fn par_scoring_pairwise(&self, gap_penalty: usize, mismatch_penalty: usize) -> usize {
         let indices = (0..self.sequences.len()).collect::<Vec<_>>();
         self._par_scoring_pairwise(gap_penalty, mismatch_penalty, &indices)
     }
 
-    /// Parallelized version of `scoring_pairwise_subsample`.
+    /// Parallel version of `scoring_pairwise_subsample`.
     #[must_use]
     pub fn par_scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> usize {
         let mut indices = (0..self.sequences.len()).collect::<Vec<_>>();
@@ -86,7 +86,7 @@ impl Msa {
         self._par_scoring_pairwise(gap_penalty, mismatch_penalty, &indices)
     }
 
-    /// Parallelized version of `_scoring_pairwise`.
+    /// Parallel version of `_scoring_pairwise`.
     fn _par_scoring_pairwise(&self, gap_penalty: usize, mismatch_penalty: usize, indices: &[usize]) -> usize {
         indices
             .par_iter()

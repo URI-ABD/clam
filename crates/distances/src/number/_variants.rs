@@ -2,16 +2,34 @@
 
 use core::{hash::Hash, ops::Neg};
 
+use num_integer::Integer;
+
 use crate::Number;
 
 /// Sub-trait of `Number` for all integer types.
-pub trait Int: Number + Hash + Eq + Ord {}
+pub trait Int: Number + Hash + Eq + Ord {
+    /// Returns the Greatest Common Divisor of two integers.
+    #[must_use]
+    fn gcd(&self, other: &Self) -> Self;
+
+    /// Returns the Least Common Multiple of two integers.
+    #[must_use]
+    fn lcm(&self, other: &Self) -> Self;
+}
 
 /// Macro to implement `IntNumber` for all integer types.
 macro_rules! impl_int {
     ($($ty:ty),*) => {
         $(
-            impl Int for $ty {}
+            impl Int for $ty {
+                fn gcd(&self, other: &Self) -> Self {
+                    Integer::gcd(&self, other)
+                }
+
+                fn lcm(&self, other: &Self) -> Self {
+                    Integer::lcm(&self, other)
+                }
+            }
         )*
     }
 }

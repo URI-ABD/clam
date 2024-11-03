@@ -21,7 +21,7 @@ use abd_clam::{
     adapter::ParBallAdapter,
     cakes::OffBall,
     cluster::WriteCsv,
-    msa::{self, Aligner, Msa},
+    msa::{self, Aligner, CostMatrix, Msa},
     partition::ParPartition,
     Ball, Cluster, Dataset, FlatVec, Metric,
 };
@@ -163,8 +163,9 @@ fn main() -> Result<(), String> {
             .with_dim_lower_bound(width)
             .with_dim_upper_bound(width)
     } else {
-        let aligner = Aligner::<i32>::default();
-        let builder = msa::Builder::new(&aligner, b'-').par_with_binary_tree(&off_ball, &data);
+        let cost_matrix = CostMatrix::extended_iupac();
+        let aligner = Aligner::<u32>::new(&cost_matrix, b'-');
+        let builder = msa::Builder::new(&aligner).par_with_binary_tree(&off_ball, &data);
         let msa = Msa::par_from_builder(&builder);
         let aligned_sequences = msa.strings();
         let width = builder.width();

@@ -2,14 +2,14 @@
 
 use core::ops::Neg;
 
-use distances::number::Int;
+use distances::{number::Int, Number};
 
 /// The number of characters.
 const NUM_CHARS: usize = 1 + (u8::MAX as usize);
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
 #[derive(Clone)]
-pub struct CostMatrix<T: Int> {
+pub struct CostMatrix<T: Number> {
     /// The cost of substituting one character for another.
     sub_matrix: [[T; NUM_CHARS]; NUM_CHARS],
     /// The cost of inserting a character.
@@ -22,7 +22,7 @@ pub struct CostMatrix<T: Int> {
     del_ext_costs: [T; NUM_CHARS],
 }
 
-impl<T: Int> Default for CostMatrix<T> {
+impl<T: Number> Default for CostMatrix<T> {
     fn default() -> Self {
         let mut matrix = Self::new(T::ONE, T::ONE, T::ONE);
         for i in 0..NUM_CHARS {
@@ -32,7 +32,7 @@ impl<T: Int> Default for CostMatrix<T> {
     }
 }
 
-impl<T: Int> CostMatrix<T> {
+impl<T: Number> CostMatrix<T> {
     /// Create a new substitution matrix.
     #[must_use]
     pub fn new(default_sub_cost: T, default_ins_cost: T, default_del_cost: T) -> Self {
@@ -137,7 +137,7 @@ impl<T: Int> CostMatrix<T> {
     }
 }
 
-impl<T: Int + Neg<Output = T>> CostMatrix<T> {
+impl<T: Number + Neg<Output = T> + Ord> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
     /// zero.
     #[must_use]
@@ -156,7 +156,7 @@ impl<T: Int + Neg<Output = T>> CostMatrix<T> {
     }
 }
 
-impl<T: Int + Neg<Output = T>> Neg for CostMatrix<T> {
+impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -171,5 +171,109 @@ impl<T: Int + Neg<Output = T>> Neg for CostMatrix<T> {
             neg_matrix.del_ext_costs[i] = -self.del_ext_costs[i];
         }
         neg_matrix
+    }
+}
+
+impl<T: Int> CostMatrix<T> {
+    /// A substitution matrix for the Needleman-Wunsch aligner using the extended
+    /// IUPAC alphabet for nucleotides.
+    ///
+    /// See [here](https://www.bioinformatics.org/sms/iupac.html) for a breakdown.
+    pub fn extended_iupac() -> Self {
+        // For each pair of IUPAC characters, the cost is 1 - n / m, where m is
+        // the number possible pairs of nucleotides that can be represented by
+        // the IUPAC characters, and n is the number of matching pairs.
+        #[rustfmt::skip]
+        let costs = vec![
+            ('A', 'R', 1, 2), ('C', 'Y', 1, 2), ('G', 'R', 1, 2), ('T', 'Y', 1, 2),
+            ('A', 'W', 1, 2), ('C', 'S', 1, 2), ('G', 'S', 1, 2), ('T', 'W', 1, 2),
+            ('A', 'M', 1, 2), ('C', 'M', 1, 2), ('G', 'K', 1, 2), ('T', 'K', 1, 2),
+            ('A', 'D', 1, 3), ('C', 'B', 1, 3), ('G', 'B', 1, 3), ('T', 'B', 1, 3),
+            ('A', 'H', 1, 3), ('C', 'H', 1, 3), ('G', 'D', 1, 3), ('T', 'D', 1, 3),
+            ('A', 'V', 1, 3), ('C', 'V', 1, 3), ('G', 'V', 1, 3), ('T', 'H', 1, 3),
+            ('A', 'N', 1, 4), ('C', 'N', 1, 4), ('G', 'N', 1, 4), ('T', 'N', 1, 4),
+
+            ('R', 'A', 1, 2), ('Y', 'C', 1, 2), ('S', 'G', 1, 2), ('W', 'A', 1, 2), ('K', 'G', 1, 2), ('M', 'A', 1, 2),
+            ('R', 'G', 1, 2), ('Y', 'T', 1, 2), ('S', 'C', 1, 2), ('W', 'T', 1, 2), ('K', 'T', 1, 2), ('M', 'C', 1, 2),
+            ('R', 'S', 1, 4), ('Y', 'S', 1, 4), ('S', 'R', 1, 4), ('W', 'R', 1, 4), ('K', 'R', 1, 4), ('M', 'R', 1, 4),
+            ('R', 'W', 1, 4), ('Y', 'W', 1, 4), ('S', 'Y', 1, 4), ('W', 'Y', 1, 4), ('K', 'Y', 1, 4), ('M', 'Y', 1, 4),
+            ('R', 'K', 1, 4), ('Y', 'K', 1, 4), ('S', 'K', 1, 4), ('W', 'K', 1, 4), ('K', 'S', 1, 4), ('M', 'S', 1, 4),
+            ('R', 'M', 1, 4), ('Y', 'M', 1, 4), ('S', 'M', 1, 4), ('W', 'M', 1, 4), ('K', 'W', 1, 4), ('M', 'W', 1, 4),
+            ('R', 'B', 1, 6), ('Y', 'B', 2, 6), ('S', 'B', 2, 6), ('W', 'B', 1, 6), ('K', 'B', 2, 6), ('M', 'B', 1, 6),
+            ('R', 'D', 2, 6), ('Y', 'D', 1, 6), ('S', 'D', 1, 6), ('W', 'D', 2, 6), ('K', 'D', 2, 6), ('M', 'D', 1, 6),
+            ('R', 'H', 1, 6), ('Y', 'H', 2, 6), ('S', 'H', 1, 6), ('W', 'H', 2, 6), ('K', 'H', 1, 6), ('M', 'H', 2, 6),
+            ('R', 'V', 2, 6), ('Y', 'V', 1, 6), ('S', 'V', 2, 6), ('W', 'V', 1, 6), ('K', 'V', 1, 6), ('M', 'V', 2, 6),
+            ('R', 'N', 2, 8), ('Y', 'N', 2, 8), ('S', 'N', 2, 8), ('W', 'N', 2, 8), ('K', 'N', 1, 8), ('M', 'N', 2, 8),
+            ('R', 'R', 1, 2), ('Y', 'Y', 1, 2), ('S', 'S', 1, 2), ('W', 'W', 1, 2), ('K', 'K', 1, 2), ('M', 'M', 1, 2),
+
+            ('B', 'C', 1,  3), ('D', 'A', 1,  3), ('H', 'A', 1,  3), ('V', 'A', 1,  3),  ('N', 'A', 1, 4),
+            ('B', 'G', 1,  3), ('D', 'G', 1,  3), ('H', 'C', 1,  3), ('V', 'C', 1,  3),  ('N', 'C', 1, 4),
+            ('B', 'T', 1,  3), ('D', 'T', 1,  3), ('H', 'T', 1,  3), ('V', 'D', 1,  3),  ('N', 'G', 1, 4),
+            ('B', 'R', 1,  6), ('D', 'R', 2,  6), ('H', 'R', 1,  6), ('V', 'R', 2,  6),  ('N', 'T', 1, 4),
+            ('B', 'Y', 2,  6), ('D', 'Y', 1,  6), ('H', 'Y', 2,  6), ('V', 'Y', 1,  6),  ('N', 'R', 1, 4),
+            ('B', 'S', 2,  6), ('D', 'S', 1,  6), ('H', 'S', 1,  6), ('V', 'S', 2,  6),  ('N', 'Y', 1, 4),
+            ('B', 'W', 1,  6), ('D', 'W', 2,  6), ('H', 'W', 2,  6), ('V', 'W', 1,  6),  ('N', 'S', 1, 4),
+            ('B', 'K', 2,  6), ('D', 'K', 2,  6), ('H', 'K', 1,  6), ('V', 'K', 1,  6),  ('N', 'W', 1, 4),
+            ('B', 'M', 1,  6), ('D', 'M', 1,  6), ('H', 'M', 2,  6), ('V', 'M', 2,  6),  ('N', 'K', 1, 4),
+            ('B', 'D', 2,  9), ('D', 'B', 2,  9), ('H', 'B', 2,  9), ('V', 'B', 2,  9),  ('N', 'M', 1, 4),
+            ('B', 'H', 2,  9), ('D', 'H', 2,  9), ('H', 'D', 2,  9), ('V', 'D', 2,  9),  ('N', 'B', 1, 4),
+            ('B', 'V', 2,  9), ('D', 'V', 2,  9), ('H', 'V', 2,  9), ('V', 'H', 2,  9),  ('N', 'D', 1, 4),
+            ('B', 'N', 3, 12), ('D', 'N', 3, 12), ('H', 'N', 3, 12), ('V', 'N', 3, 12),  ('N', 'H', 1, 4),
+            ('B', 'B', 1,  3), ('D', 'D', 1,  3), ('H', 'H', 1,  3), ('V', 'V', 1,  3),  ('N', 'V', 1, 4),
+                                                                                         ('N', 'N', 1, 4),
+        ];
+
+        // Calculate the least common multiple of the denominators so we can
+        // scale the costs to integers.
+        let lcm = costs.iter().map(|&(_, _, _, m)| m).fold(1, |a, b| a.lcm(&b));
+
+        // T and U are interchangeable.
+        let t_to_u = costs
+            .iter()
+            .filter(|&&(a, _, _, _)| a == 'T')
+            .map(|&(_, b, n, m)| ('U', b, n, m))
+            .chain(
+                costs
+                    .iter()
+                    .filter(|&&(_, b, _, _)| b == 'T')
+                    .map(|&(a, _, n, m)| (a, 'U', n, m)),
+            )
+            .collect::<Vec<_>>();
+
+        // The initial matrix with the default costs, except for gaps which are
+        // interchangeable.
+        let matrix = Self::default()
+            .with_sub_cost(b'-', b'.', T::ZERO)
+            .with_sub_cost(b'.', b'-', T::ZERO);
+
+        // Add all costs to the matrix.
+        let matrix = costs
+            .into_iter()
+            .chain(t_to_u)
+            // Scale the costs to integers.
+            .map(|(a, b, n, m)| (a, b, T::from((n * lcm) / m)))
+            .flat_map(|(a, b, cost)| {
+                // Add the costs for the upper and lower case versions of the
+                // characters.
+                [
+                    (a, b, cost),
+                    (a.to_ascii_lowercase(), b, cost),
+                    (a, b.to_ascii_lowercase(), cost),
+                    (a.to_ascii_lowercase(), b.to_ascii_lowercase(), cost),
+                ]
+            })
+            .map(|(a, b, cost)| (a as u8, b as u8, cost))
+            .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost));
+
+        // Set each insertion and deletion cost to be equal to the LCM.
+        let cost = T::from(lcm);
+        let ext_cost = T::from(lcm / 9);
+        (0..=u8::MAX).fold(matrix, |matrix, a| {
+            matrix
+                .with_ins_cost(a, cost)
+                .with_del_cost(a, cost)
+                .with_ins_ext_cost(a, ext_cost)
+                .with_del_ext_cost(a, ext_cost)
+        })
     }
 }
