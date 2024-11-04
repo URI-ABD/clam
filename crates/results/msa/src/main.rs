@@ -15,6 +15,7 @@
 )]
 #![doc = include_str!("../README.md")]
 
+use core::ops::Neg;
 use std::path::PathBuf;
 
 use abd_clam::{
@@ -27,6 +28,7 @@ use abd_clam::{
 };
 use clap::Parser;
 
+use distances::Number;
 use results_cakes::{data::PathManager, utils::configure_logger};
 
 mod data;
@@ -43,9 +45,54 @@ struct Args {
     #[arg(short('n'), long)]
     num_samples: Option<usize>,
 
+    /// The cost matrix to use for the alignment.
+    #[arg(short, long, default_value = "default")]
+    matrix: SpecialMatrix,
+
     /// Path to the output directory.
     #[arg(short('o'), long)]
     out_dir: Option<PathBuf>,
+}
+
+/// The datasets we use for benchmarks.
+#[derive(clap::ValueEnum, Debug, Clone)]
+#[allow(non_camel_case_types, clippy::doc_markdown)]
+#[non_exhaustive]
+pub enum SpecialMatrix {
+    /// The default matrix.
+    #[clap(name = "default")]
+    Default,
+    /// Default but with affine gap penalties. Gap opening is 10 and ext is 1.
+    #[clap(name = "default-affine")]
+    DefaultAffine,
+    /// Extended IUPAC matrix.
+    #[clap(name = "extended-iupac")]
+    ExtendedIupac,
+    /// Blosum62 matrix.
+    #[clap(name = "blosum62")]
+    Blosum62,
+}
+
+impl SpecialMatrix {
+    /// Get the cost matrix.
+    #[must_use]
+    pub fn cost_matrix<T: Number + Neg<Output = T>>(&self) -> CostMatrix<T> {
+        match self {
+            Self::Default => CostMatrix::default(),
+            Self::DefaultAffine => CostMatrix::default_affine(),
+            Self::ExtendedIupac => CostMatrix::extended_iupac(),
+            Self::Blosum62 => CostMatrix::blosum62(),
+        }
+    }
+
+    /// Whether the matrix is used for minimization.
+    #[must_use]
+    pub const fn is_minimizer(&self) -> bool {
+        match self {
+            Self::Default | Self::DefaultAffine | Self::ExtendedIupac => true,
+            Self::Blosum62 => false,
+        }
+    }
 }
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
@@ -163,8 +210,12 @@ fn main() -> Result<(), String> {
             .with_dim_lower_bound(width)
             .with_dim_upper_bound(width)
     } else {
-        let cost_matrix = CostMatrix::extended_iupac();
-        let aligner = Aligner::<u32>::new(&cost_matrix, b'-');
+        let cost_matrix = args.matrix.cost_matrix::<i32>();
+        let aligner = if args.matrix.is_minimizer() {
+            Aligner::new_minimizer(&cost_matrix, b'-')
+        } else {
+            Aligner::new_maximizer(&cost_matrix, b'-')
+        };
         let builder = msa::Builder::new(&aligner).par_with_binary_tree(&off_ball, &data);
         let msa = Msa::par_from_builder(&builder);
         let aligned_sequences = msa.strings();

@@ -50,6 +50,16 @@ impl<T: Number> CostMatrix<T> {
         }
     }
 
+    /// Create a new substitution matrix with affine gap penalties.
+    #[must_use]
+    pub fn default_affine() -> Self {
+        let ten = T::from(10);
+        let matrix = Self::new(T::ONE, ten, ten);
+        (0..=u8::MAX).fold(matrix, |matrix, a| {
+            matrix.with_ins_ext_cost(a, T::ONE).with_del_ext_cost(a, T::ONE)
+        })
+    }
+
     /// Shift all costs in the matrix by a constant.
     #[must_use]
     pub fn shift(mut self, shift: T) -> Self {
@@ -174,7 +184,7 @@ impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
     }
 }
 
-impl<T: Int> CostMatrix<T> {
+impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     /// A substitution matrix for the Needleman-Wunsch aligner using the extended
     /// IUPAC alphabet for nucleotides.
     ///
@@ -274,6 +284,67 @@ impl<T: Int> CostMatrix<T> {
                 .with_del_cost(a, cost)
                 .with_ins_ext_cost(a, ext_cost)
                 .with_del_ext_cost(a, ext_cost)
+        })
+    }
+
+    /// The BLOSUM62 substitution matrix for proteins.
+    ///
+    /// See [here](https://en.wikipedia.org/wiki/BLOSUM) for more information.
+    #[must_use]
+    pub fn blosum62() -> Self {
+        #[rustfmt::skip]
+        let costs = [
+            vec![ 9],  // C
+            vec![-1,  4],  // S
+            vec![-1,  1,  5],  // T
+            vec![ 0,  1,  0,  4],  // A
+            vec![-3,  0, -2,  0,  6],  // G
+            vec![-3, -1, -1, -1, -2,  7],  // P
+            vec![-3,  0, -1, -2, -1, -1,  6],  // D
+            vec![-4,  0, -1, -1, -2, -1,  2,  5],  // E
+            vec![-3,  0, -1, -1, -2, -1,  0,  2,  5],  // Q
+            vec![-3,  1,  0, -2,  0, -2,  1,  0,  0,  6],  // N
+            vec![-3, -1, -2, -2, -2, -2,  1,  0,  0,  1,  8],  // H
+            vec![-3, -1, -1, -1, -2, -2, -2,  0,  1,  0,  0,  5],  // R
+            vec![-3,  0, -1, -1, -2, -1, -1,  1,  1,  0, -1,  2,  5],  // K
+            vec![-1, -1, -1, -1, -3, -2, -3, -2,  0, -2, -2, -1, -1,  5],  // M
+            vec![-1, -2, -1, -1, -4, -3, -3, -3, -3, -3, -3, -3, -3,  1,  4],  // I
+            vec![-1, -2, -1, -1, -4, -3, -4, -3, -2, -3, -3, -2, -2,  2,  2,  4],  // L
+            vec![-1, -2,  0,  0, -3, -2, -3, -2, -2, -3, -3, -3, -2,  1,  3,  1,  4],  // V
+            vec![-2, -3, -2, -3, -2, -4, -4, -3, -2, -4, -2, -3, -3, -1, -3, -2, -3, 11],  // W
+            vec![-2, -2, -2, -2, -3, -3, -3, -2, -1, -2,  2, -2, -2, -1, -1, -1, -1,  2,  7],  // Y
+            vec![-2, -2, -2, -2, -3, -4, -3, -3, -3, -3, -1, -3, -3,  0,  0,  0, -1,  1,  3,  6],  // F
+        ];
+
+        // Create the initial matrix with affine gap penalties.
+        let codes = b"CSTAGPDEQNHRKMILVWYF";
+        let ten = T::from(10);
+        let matrix = codes.iter().fold(Self::default(), |matrix, &a| {
+            matrix
+                .with_ins_cost(a, ten)
+                .with_del_cost(a, ten)
+                .with_ins_ext_cost(a, T::ONE)
+                .with_del_ext_cost(a, T::ONE)
+        });
+
+        // Flatten the costs into a vector of (a, b, cost) tuples.
+        let costs = codes.iter().zip(costs.iter()).flat_map(|(&a, costs)| {
+            codes
+                .iter()
+                .zip(costs.iter())
+                .map(move |(&b, &cost)| (a, b, T::from(cost)))
+        });
+
+        // // TODO: Deal with B, Z, X, J.
+        // let max_cost = costs
+        //     .iter()
+        //     .map(|&(_, _, cost)| cost)
+        //     .fold(T::MIN, |a, b| if a > b { a } else { b });
+        // assert_eq!(max_cost, T::from(11));
+        // ftlog::trace!("Blosum62 max_cost: {}", max_cost);
+
+        costs.fold(matrix, |matrix, (a, b, cost)| {
+            matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost)
         })
     }
 }

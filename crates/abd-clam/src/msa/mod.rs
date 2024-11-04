@@ -4,10 +4,11 @@ mod builder;
 mod needleman_wunsch;
 pub mod quality;
 
-use core::ops::Index;
+use core::ops::{Index, Neg};
+
+use distances::Number;
 
 pub use builder::Builder;
-use distances::number::Int;
 pub use needleman_wunsch::{Aligner, CostMatrix};
 
 /// A multiple sequence alignment (MSA).
@@ -39,20 +40,10 @@ impl Msa {
             .map(|v| String::from_utf8_lossy(v).to_string())
             .collect()
     }
-}
 
-impl Index<usize> for Msa {
-    type Output = [u8];
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.sequences[index]
-    }
-}
-
-impl Msa {
     /// Create a new MSA from a builder.
     #[must_use]
-    pub fn from_builder<T: AsRef<[u8]>, U: Int>(builder: &Builder<T, U>) -> Self {
+    pub fn from_builder<T: AsRef<[u8]>, U: Number + Neg<Output = U>>(builder: &Builder<T, U>) -> Self {
         let sequences = builder.extract_msa();
         Self {
             sequences,
@@ -62,12 +53,20 @@ impl Msa {
 
     /// Parallel version of `from_builder`.
     #[must_use]
-    pub fn par_from_builder<T: AsRef<[u8]> + Send + Sync, U: Int>(builder: &Builder<T, U>) -> Self {
+    pub fn par_from_builder<T: AsRef<[u8]> + Send + Sync, U: Number + Neg<Output = U>>(builder: &Builder<T, U>) -> Self {
         let sequences = builder.par_extract_msa();
         Self {
             sequences,
             gap: builder.aligner.gap,
         }
+    }
+}
+
+impl Index<usize> for Msa {
+    type Output = [u8];
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.sequences[index]
     }
 }
 
