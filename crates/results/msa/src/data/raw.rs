@@ -147,7 +147,7 @@ impl FastaFile {
     fn data_name(&self, num_samples: Option<usize>) -> String {
         num_samples.map_or_else(
             || format!("{}.flat_data", self.name()),
-            |num_samples| format!("{}.flat_data-{}", self.name(), num_samples),
+            |num_samples| format!("{}-{num_samples}.flat_data", self.name()),
         )
     }
 }

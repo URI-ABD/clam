@@ -7,7 +7,8 @@ If you want to run the MSA on all a sequences in a fasta file, you can use the f
 ```shell
 cargo run -r -p results-msa -- \
     -i ../data/string-data/greengenes/gg_13_5.fasta \
-    -o ../data/string-data/greengenes/msa-results
+    -o ../data/string-data/greengenes/msa-results \
+    -m extended-iupac
 ```
 
 If you want to run the MSA on a subset of the sequences in a fasta file, you can use use the optional `-n` flag to specify the number of sequences to use:
@@ -15,8 +16,9 @@ If you want to run the MSA on a subset of the sequences in a fasta file, you can
 ```shell
 cargo run -r -p results-msa -- \
     -i ../data/string-data/greengenes/gg_13_5.fasta \
-    -n 1000 \
-    -o ../data/string-data/greengenes/msa-results
+    -o ../data/string-data/greengenes/msa-results \
+    -m extended-iupac \
+    -n 1000
 ```
 
 ## Citation

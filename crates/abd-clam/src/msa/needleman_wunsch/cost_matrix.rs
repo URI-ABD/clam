@@ -147,21 +147,21 @@ impl<T: Number> CostMatrix<T> {
     }
 }
 
-impl<T: Number + Neg<Output = T> + Ord> CostMatrix<T> {
+impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
     /// zero.
     #[must_use]
     pub fn normalize(self) -> Self {
-        let mut shift = T::MAX;
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                shift = shift.min(self.sub_matrix[i][j]);
-            }
-            shift = shift.min(self.ins_costs[i]);
-            shift = shift.min(self.ins_ext_costs[i]);
-            shift = shift.min(self.del_costs[i]);
-            shift = shift.min(self.del_ext_costs[i]);
-        }
+        let shift = self
+            .sub_matrix
+            .iter()
+            .flat_map(|row| row.iter())
+            .chain(self.ins_costs.iter())
+            .chain(self.ins_ext_costs.iter())
+            .chain(self.del_costs.iter())
+            .chain(self.del_ext_costs.iter())
+            .fold(T::MAX, |a, &b| if a < b { a } else { b });
+
         self.shift(-shift)
     }
 }

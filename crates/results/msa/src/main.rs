@@ -33,7 +33,7 @@ use results_cakes::{data::PathManager, utils::configure_logger};
 
 mod data;
 
-/// Reproducible results for the CAKES and panCAKES papers.
+/// Reproducible results for the MSA paper.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -46,8 +46,8 @@ struct Args {
     num_samples: Option<usize>,
 
     /// The cost matrix to use for the alignment.
-    #[arg(short, long, default_value = "default")]
-    matrix: SpecialMatrix,
+    #[arg(short('m'), long)]
+    cost_matrix: SpecialMatrix,
 
     /// Path to the output directory.
     #[arg(short('o'), long)]
@@ -210,13 +210,18 @@ fn main() -> Result<(), String> {
             .with_dim_lower_bound(width)
             .with_dim_upper_bound(width)
     } else {
-        let cost_matrix = args.matrix.cost_matrix::<i32>();
-        let aligner = if args.matrix.is_minimizer() {
+        ftlog::info!("Setting up aligner...");
+        let cost_matrix = args.cost_matrix.cost_matrix::<i32>();
+        let aligner = if args.cost_matrix.is_minimizer() {
             Aligner::new_minimizer(&cost_matrix, b'-')
         } else {
             Aligner::new_maximizer(&cost_matrix, b'-')
         };
+
+        ftlog::info!("Aligning sequences...");
         let builder = msa::Builder::new(&aligner).par_with_binary_tree(&off_ball, &data);
+
+        ftlog::info!("Extracting aligned sequences...");
         let msa = Msa::par_from_builder(&builder);
         let aligned_sequences = msa.strings();
         let width = builder.width();
