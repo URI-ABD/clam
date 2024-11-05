@@ -241,5 +241,9 @@ fn main() -> Result<(), String> {
         data.dimensionality_hint().0
     );
 
+    let ps_metric = data.par_scoring_pairwise(b'-', 1, 1);
+    // let ps_metric = data.par_scoring_pairwise_subsample(b'-', 1, 1);
+    ftlog::info!("Pairwise scoring metric: {ps_metric}");
+
     Ok(())
 }

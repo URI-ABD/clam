@@ -30,6 +30,13 @@ pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usiz
     }
 }
 
+/// Returns the number of distinct pairs that can be formed from `n` elements
+/// without repetition.
+#[must_use]
+pub const fn n_pairs(n: usize) -> usize {
+    n * (n - 1) / 2
+}
+
 /// Return the index and value of the minimum value in the given slice of values.
 ///
 /// NAN values are ordered as greater than all other values.
