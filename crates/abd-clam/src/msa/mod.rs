@@ -43,21 +43,19 @@ impl Msa {
 
     /// Create a new MSA from a builder.
     #[must_use]
-    pub fn from_builder<T: AsRef<[u8]>, U: Number + Neg<Output = U>>(builder: &Builder<T, U>) -> Self {
-        let sequences = builder.extract_msa();
+    pub fn from_builder<U: Number + Neg<Output = U>>(builder: &Builder<U>) -> Self {
         Self {
-            sequences,
-            gap: builder.aligner.gap,
+            sequences: builder.extract_msa(),
+            gap: builder.gap(),
         }
     }
 
     /// Parallel version of `from_builder`.
     #[must_use]
-    pub fn par_from_builder<T: AsRef<[u8]> + Send + Sync, U: Number + Neg<Output = U>>(builder: &Builder<T, U>) -> Self {
-        let sequences = builder.par_extract_msa();
+    pub fn par_from_builder<U: Number + Neg<Output = U>>(builder: &Builder<U>) -> Self {
         Self {
-            sequences,
-            gap: builder.aligner.gap,
+            sequences: builder.par_extract_msa(),
+            gap: builder.gap(),
         }
     }
 }

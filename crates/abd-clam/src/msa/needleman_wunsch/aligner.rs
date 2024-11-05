@@ -18,7 +18,7 @@ pub struct Aligner<'a, T: Number + Neg<Output = T>> {
     /// The cost matrix for the alignment.
     matrix: &'a CostMatrix<T>,
     /// The gap character.
-    pub(crate) gap: u8,
+    gap: u8,
     /// Whether to minimize the distance or maximize the similarity.
     minimizer: bool,
 }
@@ -40,6 +40,12 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
             gap,
             minimizer: false,
         }
+    }
+
+    /// Get the gap character.
+    #[must_use]
+    pub const fn gap(&self) -> u8 {
+        self.gap
     }
 
     /// Compute the minimized edit distance between two sequences' DP table.
@@ -81,14 +87,14 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
         // Initialize the first row to the cost of inserting characters from the
         // first sequence.
         for i in 1..dp[0].len() {
-            let cost = dp[0][i - 1].0 + self.matrix.ins_ext_cost(x[i - 1]);
+            let cost = dp[0][i - 1].0 + self.matrix.gap_ext_cost();
             dp[0][i] = (cost, Direction::Left);
         }
 
         // Initialize the first column to the cost of inserting characters from
         // the second sequence.
         for j in 1..dp.len() {
-            let cost = dp[j - 1][0].0 + self.matrix.ins_ext_cost(y[j - 1]);
+            let cost = dp[j - 1][0].0 + self.matrix.gap_ext_cost();
             dp[j][0] = (cost, Direction::Up);
         }
 
@@ -109,13 +115,13 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
                 // operation.
                 let up_cost = dp[i][j + 1].0
                     + match dp[i][j + 1].1 {
-                        Direction::Up => self.matrix.ins_ext_cost(yc),
-                        _ => self.matrix.ins_cost(yc),
+                        Direction::Up => self.matrix.gap_ext_cost(),
+                        _ => self.matrix.gap_open_cost(),
                     };
                 let left_cost = dp[i + 1][j].0
                     + match dp[i + 1][j].1 {
-                        Direction::Left => self.matrix.ins_ext_cost(xc),
-                        _ => self.matrix.ins_cost(xc),
+                        Direction::Left => self.matrix.gap_ext_cost(),
+                        _ => self.matrix.gap_open_cost(),
                     };
 
                 // Choose the operation with the minimum cost. If there is a tie,
