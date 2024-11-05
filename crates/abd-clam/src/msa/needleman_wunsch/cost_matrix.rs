@@ -12,8 +12,6 @@ const NUM_CHARS: usize = 1 + (u8::MAX as usize);
 pub struct CostMatrix<T: Number> {
     /// The cost of substituting one character for another.
     sub_matrix: [[T; NUM_CHARS]; NUM_CHARS],
-    /// The cost of inserting a character.
-    ins_costs: [T; NUM_CHARS],
     /// The cost to open a gap.
     gap_open: T,
     /// The cost to extend a gap.
@@ -22,7 +20,7 @@ pub struct CostMatrix<T: Number> {
 
 impl<T: Number> Default for CostMatrix<T> {
     fn default() -> Self {
-        let mut matrix = Self::new(T::ONE, T::ONE, T::ONE, T::ONE);
+        let mut matrix = Self::new(T::ONE, T::ONE, T::ONE);
         for i in 0..NUM_CHARS {
             matrix.sub_matrix[i][i] = T::ZERO;
         }
@@ -33,18 +31,15 @@ impl<T: Number> Default for CostMatrix<T> {
 impl<T: Number> CostMatrix<T> {
     /// Create a new substitution matrix.
     #[must_use]
-    pub fn new(default_sub: T, default_ins: T, gap_open: T, gap_ext: T) -> Self {
+    pub fn new(default_sub: T, gap_open: T, gap_ext: T) -> Self {
         let mut sub_matrix = [[default_sub; NUM_CHARS]; NUM_CHARS];
         #[allow(clippy::needless_range_loop)]
         for i in 0..NUM_CHARS {
             sub_matrix[i][i] = T::ZERO;
         }
 
-        let ins_costs = [default_ins; NUM_CHARS];
-
         Self {
             sub_matrix,
-            ins_costs,
             gap_open,
             gap_ext,
         }
@@ -53,7 +48,7 @@ impl<T: Number> CostMatrix<T> {
     /// Create a new substitution matrix with affine gap penalties.
     #[must_use]
     pub fn default_affine() -> Self {
-        Self::new(T::ONE, T::ONE, T::ONE, T::from(10))
+        Self::new(T::ONE, T::from(10), T::ONE)
     }
 
     /// Shift all costs in the matrix by a constant.
@@ -63,7 +58,6 @@ impl<T: Number> CostMatrix<T> {
             for j in 0..NUM_CHARS {
                 self.sub_matrix[i][j] += shift;
             }
-            self.ins_costs[i] += shift;
         }
         self.gap_open += shift;
         self.gap_ext += shift;
@@ -80,13 +74,6 @@ impl<T: Number> CostMatrix<T> {
     #[must_use]
     pub const fn with_sub_cost(mut self, a: u8, b: u8, cost: T) -> Self {
         self.sub_matrix[a as usize][b as usize] = cost;
-        self
-    }
-
-    /// Set the cost of inserting a character.
-    #[must_use]
-    pub const fn with_ins_cost(mut self, a: u8, cost: T) -> Self {
-        self.ins_costs[a as usize] = cost;
         self
     }
 
@@ -114,11 +101,6 @@ impl<T: Number> CostMatrix<T> {
         self.sub_matrix[a as usize][b as usize]
     }
 
-    /// Get the cost of inserting a character.
-    pub const fn ins_cost(&self, a: u8) -> T {
-        self.ins_costs[a as usize]
-    }
-
     /// Get the cost of opening a gap.
     pub const fn gap_open_cost(&self) -> T {
         self.gap_open
@@ -139,7 +121,6 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             .sub_matrix
             .iter()
             .flat_map(|row| row.iter())
-            .chain(self.ins_costs.iter())
             .fold(T::MAX, |a, &b| if a < b { a } else { b });
 
         self.shift(-shift)
@@ -149,15 +130,13 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
     type Output = Self;
 
-    fn neg(self) -> Self::Output {
-        let mut neg_matrix = Self::default();
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                neg_matrix.sub_matrix[i][j] = -self.sub_matrix[i][j];
-            }
-            neg_matrix.ins_costs[i] = -self.ins_costs[i];
-        }
-        neg_matrix
+    fn neg(mut self) -> Self::Output {
+        self.sub_matrix.iter_mut().for_each(|row| {
+            row.iter_mut().for_each(|cost| *cost = -*cost);
+        });
+        self.gap_open = -self.gap_open;
+        self.gap_ext = -self.gap_ext;
+        self
     }
 }
 
@@ -234,7 +213,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             .with_sub_cost(b'.', b'-', T::ZERO);
 
         // Add all costs to the matrix.
-        let matrix = costs
+        costs
             .into_iter()
             .chain(t_to_u)
             // Scale the costs to integers.
@@ -250,15 +229,9 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
                 ]
             })
             .map(|(a, b, cost)| (a as u8, b as u8, cost))
-            .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost));
-
-        // Set each insertion and deletion cost to be equal to the LCM.
-        let cost = T::from(lcm);
-        let ext_cost = T::from(lcm / 9);
-        (0..=u8::MAX)
-            .fold(matrix, |matrix, a| matrix.with_ins_cost(a, cost))
-            .with_gap_open(cost)
-            .with_gap_ext(ext_cost)
+            .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
+            .with_gap_open(T::from(lcm))
+            .with_gap_ext(T::from(lcm / 9))
     }
 
     /// The BLOSUM62 substitution matrix for proteins.
@@ -290,33 +263,28 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             vec![-2, -2, -2, -2, -3, -4, -3, -3, -3, -3, -1, -3, -3,  0,  0,  0, -1,  1,  3,  6],  // F
         ];
 
-        // Create the initial matrix with affine gap penalties.
+        // The amino acid codes.
         let codes = b"CSTAGPDEQNHRKMILVWYF";
-        let ten = T::from(10);
-        let matrix = codes
-            .iter()
-            .fold(Self::default(), |matrix, &a| matrix.with_ins_cost(a, ten))
-            .with_gap_open(ten)
-            .with_gap_ext(T::ONE);
+
+        // The initial matrix with the default costs, except for gaps which are
+        // interchangeable.
+        let matrix = Self::default_affine()
+            .with_sub_cost(b'-', b'.', T::ZERO)
+            .with_sub_cost(b'.', b'-', T::ZERO);
 
         // Flatten the costs into a vector of (a, b, cost) tuples.
-        let costs = codes.iter().zip(costs.iter()).flat_map(|(&a, costs)| {
-            codes
-                .iter()
-                .zip(costs.iter())
-                .map(move |(&b, &cost)| (a, b, T::from(cost)))
-        });
-
-        // // TODO: Deal with B, Z, X, J.
-        // let max_cost = costs
-        //     .iter()
-        //     .map(|&(_, _, cost)| cost)
-        //     .fold(T::MIN, |a, b| if a > b { a } else { b });
-        // assert_eq!(max_cost, T::from(11));
-        // ftlog::trace!("Blosum62 max_cost: {}", max_cost);
-
-        costs.fold(matrix, |matrix, (a, b, cost)| {
-            matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost)
-        })
+        codes
+            .iter()
+            .zip(costs.iter())
+            .flat_map(|(&a, costs)| {
+                codes
+                    .iter()
+                    .zip(costs.iter())
+                    .map(move |(&b, &cost)| (a, b, T::from(cost)))
+            })
+            // And combine them into a matrix.
+            .fold(matrix, |matrix, (a, b, cost)| {
+                matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost)
+            })
     }
 }
