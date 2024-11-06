@@ -4,8 +4,9 @@ use std::path::Path;
 
 use abd_clam::{
     adapter::ParBallAdapter, cakes::OffBall, cluster::WriteCsv, msa, partition::ParPartition, Ball, Cluster, Dataset,
-    FlatVec, Metric,
+    FlatVec, Metric, MetricSpace,
 };
+use distances::Number;
 
 type Fv<U> = FlatVec<String, U, String>;
 type B<U> = Ball<String, U, Fv<U>>;
@@ -48,6 +49,20 @@ pub fn build_aligned<P: AsRef<Path>>(
     Ok(data)
 }
 
+/// Read the aligned fasta file.
+pub fn read_aligned<P: AsRef<Path>, U: Number>(path: P, metric: Metric<String, U>) -> Result<Fv<U>, String> {
+    ftlog::info!("Reading aligned sequences from {:?}", path.as_ref());
+
+    let ([aligned_sequences, _], [width, _]) = results_cakes::data::fasta::read(path, 0)?;
+    let (aligned_sequences, metadata): (_, Vec<_>) = aligned_sequences.into_iter().unzip();
+    let data = FlatVec::new(aligned_sequences, metric)?
+        .with_metadata(&metadata)?
+        .with_dim_lower_bound(width)
+        .with_dim_upper_bound(width);
+
+    Ok(data)
+}
+
 /// Build the Offset Ball and the dataset.
 pub fn build_offset_ball<P: AsRef<Path>>(
     ball: B<i32>,
@@ -55,19 +70,37 @@ pub fn build_offset_ball<P: AsRef<Path>>(
     ball_path: P,
     data_path: P,
 ) -> Result<(Ob<i32>, Fv<i32>), String> {
+    ftlog::info!("Building Offset Ball and permuted dataset.");
     let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
 
-    let ball_path = ball_path.as_ref();
-    ftlog::info!("Writing MSA ball to {ball_path:?}");
+    ftlog::info!("Writing MSA ball to {:?}", ball_path.as_ref());
     bincode::serialize_into(std::fs::File::create(ball_path).map_err(|e| e.to_string())?, &off_ball)
         .map_err(|e| e.to_string())?;
 
-    let data_path = data_path.as_ref();
-    ftlog::info!("Writing MSA data to {data_path:?}");
+    ftlog::info!("Writing MSA data to {:?}", data_path.as_ref());
     bincode::serialize_into(std::fs::File::create(data_path).map_err(|e| e.to_string())?, &data)
         .map_err(|e| e.to_string())?;
 
     Ok((off_ball, data))
+}
+
+/// Read the Offset Ball and the dataset from disk.
+pub fn read_offset_ball<P: AsRef<Path>>(
+    ball_path: P,
+    data_path: P,
+    metric: Metric<String, i32>,
+) -> Result<(Ob<i32>, Fv<i32>), String> {
+    ftlog::info!("Reading MSA ball from {:?}", ball_path.as_ref());
+    let off_ball = bincode::deserialize_from(std::fs::File::open(ball_path).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+
+    ftlog::info!("Reading MSA data from {:?}", data_path.as_ref());
+    let data: Fv<i32> = bincode::deserialize_from(std::fs::File::open(data_path).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+
+    ftlog::info!("Finished reading MSA ball and data.");
+
+    Ok((off_ball, data.with_metric(metric)))
 }
 
 /// Build the Ball and the dataset.
@@ -103,6 +136,18 @@ pub fn build_ball<P: AsRef<Path>>(data: &Fv<i32>, ball_path: P, csv_path: P) -> 
     let csv_path = csv_path.as_ref();
     ftlog::info!("Writing ball to CSV at {csv_path:?}");
     ball.write_to_csv(&csv_path)?;
+
+    Ok(ball)
+}
+
+/// Read the Ball from disk.
+pub fn read_ball<P: AsRef<Path>>(path: P) -> Result<B<i32>, String> {
+    ftlog::info!("Reading ball from {:?}", path.as_ref());
+
+    let reader = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let ball = bincode::deserialize_from(reader).map_err(|e| e.to_string())?;
+
+    ftlog::info!("Finished reading Ball.");
 
     Ok(ball)
 }

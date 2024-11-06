@@ -6,8 +6,6 @@ use rayon::prelude::*;
 
 use crate::{utils, Dataset, FlatVec};
 
-// TODO: Generalize the type signatures
-
 impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     /// Subsample some indices from for the MSA for approximating the quality
     /// metrics.

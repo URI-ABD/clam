@@ -18,7 +18,7 @@
 use core::ops::Neg;
 use std::path::PathBuf;
 
-use abd_clam::{msa::CostMatrix, Cluster, Dataset, FlatVec, Metric};
+use abd_clam::{msa::CostMatrix, Cluster, Dataset, Metric, MetricSpace};
 use clap::Parser;
 
 use distances::Number;
@@ -89,19 +89,14 @@ impl SpecialMatrix {
     }
 }
 
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), String> {
     let args = Args::parse();
     ftlog::info!("{args:?}");
 
-    // let pool = rayon::ThreadPoolBuilder::new()
-    //     .num_threads(1)
-    //     .build()
-    //     .map_err(|e| e.to_string())?;
-
     let fasta_file = data::FastaFile::new(args.inp_path, args.out_dir)?;
 
     let log_name = format!("msa-{}", fasta_file.name());
+    // We need the `_guard` in scope to ensure proper logging.
     let (_guard, log_path) = configure_logger(&log_name)?;
     println!("Log file: {log_path:?}");
 
@@ -115,55 +110,36 @@ fn main() -> Result<(), String> {
     // Set up the Hamming metric for the aligned sequences.
     let msa_fasta_path = path_manager.msa_fasta_path();
     let hamming_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
-    let metric = Metric::new(hamming_fn, false);
+    let hamming_metric = Metric::new(hamming_fn, false);
 
-    // Read or build the data of aligned sequences.
     let data = if msa_fasta_path.exists() {
-        ftlog::info!("Reading aligned sequences from {msa_fasta_path:?}");
-
-        let ([aligned_sequences, _], [width, _]) = results_cakes::data::fasta::read(&msa_fasta_path, 0)?;
-        let (aligned_sequences, metadata): (Vec<_>, Vec<_>) = aligned_sequences.into_iter().unzip();
-        FlatVec::new(aligned_sequences, metric)?
-            .with_metadata(&metadata)?
-            .with_dim_lower_bound(width)
-            .with_dim_upper_bound(width)
+        // Read the aligned sequences.
+        steps::read_aligned(msa_fasta_path, hamming_metric)?
     } else {
         let msa_ball_path = path_manager.msa_ball_path();
         let msa_data_path = path_manager.msa_data_path();
 
-        // Read or build the Offset Ball.
         let (off_ball, data) = if msa_ball_path.exists() && msa_data_path.exists() {
-            ftlog::info!("Reading MSA ball from {msa_ball_path:?}");
-            let off_ball = bincode::deserialize_from(std::fs::File::open(&msa_ball_path).map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-
-            ftlog::info!("Reading MSA data from {msa_data_path:?}");
-            let data = bincode::deserialize_from(std::fs::File::open(&msa_data_path).map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-
-            (off_ball, data)
+            // Read the Offset Ball and the dataset.
+            steps::read_offset_ball(msa_ball_path, msa_data_path, data.metric().clone())?
         } else {
             let ball_path = path_manager.ball_path();
-            ftlog::info!("Ball path: {ball_path:?}");
             let ball = if ball_path.exists() {
-                ftlog::info!("Reading ball from {ball_path:?}");
-                // Deserialize the ball from disk.
-                bincode::deserialize_from(std::fs::File::open(&ball_path).map_err(|e| e.to_string())?)
-                    .map_err(|e| e.to_string())?
+                // Read the Ball.
+                steps::read_ball(ball_path)?
             } else {
+                // Build the Ball.
                 steps::build_ball(&data, ball_path, path_manager.ball_csv_path())?
             };
-            ftlog::info!("Finished building/reading ball with {} leaves.", ball.leaves().len());
+            ftlog::info!("Ball has {} leaves.", ball.leaves().len());
 
+            // Build the Offset Ball and the dataset.
             steps::build_offset_ball(ball, data, msa_ball_path, msa_data_path)?
         };
+        ftlog::info!("Offset Ball has {} leaves.", off_ball.leaves().len());
 
-        ftlog::info!(
-            "Finished adapting/reading Offset Ball with {} leaves.",
-            off_ball.leaves().len()
-        );
-
-        steps::build_aligned(metric, &args.cost_matrix, &off_ball, &data, msa_fasta_path)?
+        // Build the MSA.
+        steps::build_aligned(hamming_metric, &args.cost_matrix, &off_ball, &data, msa_fasta_path)?
     };
 
     ftlog::info!(
@@ -172,9 +148,9 @@ fn main() -> Result<(), String> {
         data.dimensionality_hint().0
     );
 
-    // let ps_metric = data.par_scoring_pairwise(b'-', 1, 1);
-    let ps_metric = data.par_scoring_pairwise_subsample(b'-', 1, 1);
-    ftlog::info!("Pairwise scoring metric: {ps_metric}");
+    // let ps_quality = data.par_scoring_pairwise(b'-', 1, 1);
+    let ps_quality = data.par_scoring_pairwise_subsample(b'-', 1, 1);
+    ftlog::info!("Pairwise scoring metric: {ps_quality}");
 
     Ok(())
 }

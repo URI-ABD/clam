@@ -26,7 +26,7 @@ type NamedSequences = Vec<(String, String)>;
 /// * If the extension is not `.fasta`.
 /// * If the file cannot be read as a FASTA file.
 /// * If any ID or sequence is empty.
-pub fn read<P: AsRef<Path>>(path: &P, holdout: usize) -> Result<([NamedSequences; 2], [usize; 2]), String> {
+pub fn read<P: AsRef<Path>>(path: P, holdout: usize) -> Result<([NamedSequences; 2], [usize; 2]), String> {
     let path = path.as_ref();
     if !path.exists() {
         return Err(format!("Path {path:?} does not exist!"));
