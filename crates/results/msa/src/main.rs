@@ -107,19 +107,12 @@ fn main() -> Result<(), String> {
     ftlog::info!("Finished reading original dataset.");
     let path_manager = PathManager::new(data.name(), fasta_file.out_dir());
 
-    // Set up the Hamming metric for the aligned sequences.
     let msa_fasta_path = path_manager.msa_fasta_path();
-    let hamming_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
-    let hamming_metric = Metric::new(hamming_fn, false);
-
-    let data = if msa_fasta_path.exists() {
-        // Read the aligned sequences.
-        steps::read_aligned(msa_fasta_path, hamming_metric)?
-    } else {
+    if !msa_fasta_path.exists() {
         let msa_ball_path = path_manager.msa_ball_path();
         let msa_data_path = path_manager.msa_data_path();
 
-        let (off_ball, data) = if msa_ball_path.exists() && msa_data_path.exists() {
+        let (off_ball, perm_data) = if msa_ball_path.exists() && msa_data_path.exists() {
             // Read the Offset Ball and the dataset.
             steps::read_offset_ball(msa_ball_path, msa_data_path, data.metric().clone())?
         } else {
@@ -139,18 +132,27 @@ fn main() -> Result<(), String> {
         ftlog::info!("Offset Ball has {} leaves.", off_ball.leaves().len());
 
         // Build the MSA.
-        steps::build_aligned(hamming_metric, &args.cost_matrix, &off_ball, &data, msa_fasta_path)?
+        steps::build_aligned(&args.cost_matrix, &off_ball, &perm_data, &msa_fasta_path)?;
+        ftlog::info!("Finished building MSA.");
     };
 
+    // Set up the Hamming metric for the aligned sequences and load the data.
+    let hamming_fn = |x: &String, y: &String| distances::strings::hamming::<u32>(x, y);
+    let hamming_metric = Metric::new(hamming_fn, false);
+    ftlog::info!("Reading aligned sequences from: {msa_fasta_path:?}");
+    let msa_data = steps::read_aligned(msa_fasta_path, hamming_metric)?;
+
     ftlog::info!(
-        "Finished reading/aligning {} sequences with width = {}.",
-        data.cardinality(),
-        data.dimensionality_hint().0
+        "Finished reading {} aligned sequences with width = {}.",
+        msa_data.cardinality(),
+        msa_data.dimensionality_hint().0
     );
 
-    // let ps_quality = data.par_scoring_pairwise(b'-', 1, 1);
-    let ps_quality = data.par_scoring_pairwise_subsample(b'-', 1, 1);
-    ftlog::info!("Pairwise scoring metric: {ps_quality}");
+    let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 1, 1);
+    ftlog::info!("Pairwise scoring metric estimate: {ps_quality}");
+
+    // let ps_quality = msa_data.par_scoring_pairwise(b'-', 1, 1);
+    // ftlog::info!("Pairwise scoring metric: {ps_quality}");
 
     Ok(())
 }

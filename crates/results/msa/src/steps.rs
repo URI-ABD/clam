@@ -14,12 +14,11 @@ type Ob<U> = OffBall<String, U, Fv<U>, B<U>>;
 
 /// Build the aligned datasets.
 pub fn build_aligned<P: AsRef<Path>>(
-    metric: Metric<String, u32>,
     matrix: &crate::SpecialMatrix,
     off_ball: &Ob<i32>,
     data: &Fv<i32>,
     out_path: P,
-) -> Result<FlatVec<String, u32, String>, String> {
+) -> Result<(), String> {
     ftlog::info!("Setting up aligner...");
     let cost_matrix = matrix.cost_matrix::<i32>();
     let aligner = if matrix.is_minimizer() {
@@ -37,6 +36,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     let width = builder.width();
 
     ftlog::info!("Finished aligning {} sequences.", builder.len());
+    let metric = Metric::<_, i32>::default();
     let data = FlatVec::new(aligned_sequences, metric)?
         .with_metadata(data.metadata())?
         .with_dim_lower_bound(width)
@@ -46,7 +46,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     ftlog::info!("Writing MSA to {path:?}");
     crate::data::write_fasta(&data, path)?;
 
-    Ok(data)
+    Ok(())
 }
 
 /// Read the aligned fasta file.
