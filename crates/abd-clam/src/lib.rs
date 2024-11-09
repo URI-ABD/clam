@@ -21,8 +21,8 @@ mod core;
 pub mod utils;
 
 pub use crate::core::{
-    adapter, cluster, dataset, partition, BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace, Partition,
-    Permutable, LFD,
+    adapter, cluster, dataset, partition, Ball, Cluster, Dataset, FlatVec, Metric, MetricSpace, Partition, Permutable,
+    LFD,
 };
 
 #[cfg(feature = "chaoda")]

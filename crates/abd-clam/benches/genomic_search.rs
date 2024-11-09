@@ -3,10 +3,10 @@
 mod utils;
 
 use abd_clam::{
-    adapter::{Adapter, ParAdapter, ParBallAdapter},
+    adapter::ParBallAdapter,
     cakes::{OffBall, SquishyBall},
     partition::ParPartition,
-    BalancedBall, Ball, Cluster, FlatVec, Metric, Permutable,
+    Ball, Cluster, FlatVec, Metric,
 };
 use criterion::*;
 use rand::prelude::*;
@@ -69,16 +69,6 @@ fn genomic_search(c: &mut Criterion) {
         let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
         let (squishy_ball, dec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone());
 
-        let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
-        let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);
-        let (balanced_off_ball, balanced_perm_data) = {
-            let balanced_off_ball = OffBall::par_adapt_tree(balanced_ball.clone(), None, &data);
-            let mut balanced_perm_data = data.clone();
-            let permutation = balanced_off_ball.source().indices().collect::<Vec<_>>();
-            balanced_perm_data.permute(&permutation);
-            (balanced_off_ball, balanced_perm_data)
-        };
-
         utils::compare_permuted(
             c,
             "genomic-search",
@@ -86,9 +76,6 @@ fn genomic_search(c: &mut Criterion) {
             (&ball, &data),
             (&off_ball, &perm_data),
             Some((&squishy_ball, &dec_data)),
-            (&balanced_ball, &data),
-            (&balanced_off_ball, &balanced_perm_data),
-            None,
             &queries,
             &radii,
             &ks,

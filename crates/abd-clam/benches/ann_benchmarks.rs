@@ -6,10 +6,7 @@ use std::{
 };
 
 use abd_clam::{
-    adapter::{Adapter, ParBallAdapter},
-    cakes::OffBall,
-    partition::ParPartition,
-    BalancedBall, Ball, Cluster, Dataset, FlatVec, Metric, Permutable,
+    adapter::ParBallAdapter, cakes::OffBall, partition::ParPartition, Ball, Cluster, Dataset, FlatVec, Metric,
 };
 use criterion::*;
 
@@ -149,25 +146,12 @@ fn ann_benchmarks(c: &mut Criterion) {
         let ball = Ball::par_new_tree(&data, &criteria, seed);
         let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
 
-        let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
-        let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);
-        let (balanced_off_ball, balanced_perm_data) = {
-            let balanced_off_ball = OffBall::adapt_tree(balanced_ball.clone(), None, &data);
-            let mut balanced_perm_data = data.clone();
-            let permutation = balanced_off_ball.source().indices().collect::<Vec<_>>();
-            balanced_perm_data.permute(&permutation);
-            (balanced_off_ball, balanced_perm_data)
-        };
-
         utils::compare_permuted(
             c,
             data_name,
             metric_name,
             (&ball, &data),
             (&off_ball, &perm_data),
-            None,
-            (&balanced_ball, &data),
-            (&balanced_off_ball, &balanced_perm_data),
             None,
             queries,
             &radii,

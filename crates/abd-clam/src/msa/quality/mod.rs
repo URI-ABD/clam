@@ -6,6 +6,9 @@ use rayon::prelude::*;
 
 use crate::{utils, Dataset, FlatVec};
 
+// TODO: Consider adding a new trait for MSA datasets. Then move these methods
+// to that trait.
+
 impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     /// Subsample some indices from for the MSA for approximating the quality
     /// metrics.
@@ -118,7 +121,8 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
         m.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }
 
-    /// Helper function for `weighted_scoring_pairwise` and `weighted_scoring_pairwise_subsample`.
+    /// Helper function for `weighted_scoring_pairwise` and
+    /// `weighted_scoring_pairwise_subsample`.
     fn _weighted_scoring_pairwise(
         &self,
         gap_char: u8,

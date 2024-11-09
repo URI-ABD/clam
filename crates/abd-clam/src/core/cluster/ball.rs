@@ -1,8 +1,5 @@
 //! The most basic representation of a `Cluster` is a metric-`Ball`.
 
-use core::fmt::Debug;
-
-use rayon::prelude::*;
 use std::{hash::Hash, marker::PhantomData};
 
 use distances::Number;
@@ -12,7 +9,7 @@ use crate::{dataset::ParDataset, utils, Dataset};
 
 use super::{
     partition::{ParPartition, Partition},
-    BalancedBall, Cluster, ParCluster, LFD,
+    Cluster, ParCluster, LFD,
 };
 
 /// A metric-`Ball` is a collection of instances that are within a certain
@@ -40,18 +37,6 @@ pub struct Ball<I, U: Number, D: Dataset<I, U>> {
 }
 
 impl<I, U: Number, D: Dataset<I, U>> Ball<I, U, D> {
-    /// Creates a new `Ball` from a `BalancedBall`.
-    pub fn from_balanced_ball(balanced_ball: BalancedBall<I, U, D>) -> Self {
-        let mut ball = balanced_ball.ball;
-        let children = balanced_ball
-            .children
-            .into_iter()
-            .map(|(e, d, b)| (e, d, Box::new(Self::from_balanced_ball(*b))))
-            .collect();
-        ball.children = children;
-        ball
-    }
-
     /// Changes the associated `Dataset` type.
     pub fn with_dataset_type<Dd: Dataset<I, U>>(self) -> Ball<I, U, Dd> {
         let children = self
@@ -73,21 +58,7 @@ impl<I, U: Number, D: Dataset<I, U>> Ball<I, U, D> {
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> Ball<I, U, D> {
-    /// Creates a new `Ball` from a `BalancedBall`.
-    pub fn par_from_balanced_ball(balanced_ball: BalancedBall<I, U, D>) -> Self {
-        let mut ball = balanced_ball.ball;
-        let children = balanced_ball
-            .children
-            .into_par_iter()
-            .map(|(e, d, b)| (e, d, Box::new(Self::from_balanced_ball(*b))))
-            .collect();
-        ball.children = children;
-        ball
-    }
-}
-
-impl<I, U: Number, D: Dataset<I, U>> Debug for Ball<I, U, D> {
+impl<I, U: Number, D: Dataset<I, U>> core::fmt::Debug for Ball<I, U, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
             .field("depth", &self.depth)

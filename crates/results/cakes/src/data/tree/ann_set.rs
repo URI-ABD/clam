@@ -7,7 +7,7 @@ use abd_clam::{
     cakes::{Algorithm, CodecData, Decompressible, OffBall, SquishyBall},
     cluster::WriteCsv,
     partition::ParPartition,
-    BalancedBall, Ball, Cluster, Dataset, FlatVec, MetricSpace,
+    Ball, Cluster, FlatVec, MetricSpace,
 };
 use distances::Number;
 
@@ -77,45 +77,10 @@ impl Group {
                 .map_err(|e| e.to_string())?
         } else {
             // Create the ball from scratch.
-            ftlog::info!("Creating ball with balanced partition.");
-            let mut max_depth = 0;
+            ftlog::info!("Creating Ball with default partition.");
             let seed = Some(42);
-
-            let indices = (0..uncompressed.cardinality()).collect::<Vec<_>>();
-            let mut ball = BalancedBall::par_new(&uncompressed, &indices, 0, seed);
-            let depth_delta = ball.max_recursion_depth();
-
-            loop {
-                max_depth += depth_delta;
-                let criteria =
-                    |c: &BalancedBall<_, _, _>| (c.depth() < max_depth && c.radius() > 0.75) || c.cardinality() > 1_000;
-                ball.par_partition_further(&uncompressed, &criteria, seed);
-
-                // If there are no leaves at the current maximum depth, break
-                if !ball.leaves().into_iter().any(|c| c.depth() == max_depth) {
-                    break;
-                }
-            }
-
-            let num_leaves = ball.leaves().len();
-            ftlog::info!("Balanced ball has {} leaves", num_leaves);
-
-            ftlog::info!("Switching to default partition.");
-            let mut ball = Ball::par_from_balanced_ball(ball);
-
-            for leaf in ball.leaves_mut() {
-                max_depth = leaf.depth();
-                loop {
-                    max_depth += depth_delta;
-                    let criteria = |c: &Ball<_, _, _>| c.depth() < max_depth;
-                    leaf.par_partition_further(&uncompressed, &criteria, seed);
-
-                    // If there are no leaves at the current maximum depth, break
-                    if !leaf.leaves().into_iter().any(|c| c.depth() == max_depth) {
-                        break;
-                    }
-                }
-            }
+            let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
+            let ball = Ball::par_new_tree(&uncompressed, &criteria, seed);
 
             let num_leaves = ball.leaves().len();
             ftlog::info!("Ball has {} leaves", num_leaves);

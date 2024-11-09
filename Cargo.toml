@@ -27,18 +27,17 @@ ndarray = { version = "0.15.6", features = ["rayon", "approx"] }
 ndarray-npy = "0.8.0"
 ordered-float = "4.2"
 flate2 = { version = "1.0", features = ["zlib"] }
+# For GCD and LCM calculations.
 num-integer = "0.1"
+# For reading fasta files.
+bio = "2.0"
+# For faster implementation of Levenshtein distance.
+stringzilla = "3.10.5"
 
 # Python wrapper dependencies
 numpy = "0.20.0"
 pyo3 = { version = "0.20", features = ["extension-module", "abi3-py39"] }
 pyo3-ffi = { version = "0.20", features = ["extension-module", "abi3-py39"] }
-
-# For reading fasta files.
-bio = "2.0"
-
-# For faster implementation of Levenshtein distance.
-stringzilla = "3.10.5"
 
 [profile.test]
 opt-level = 3
