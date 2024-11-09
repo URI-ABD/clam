@@ -107,8 +107,7 @@ fn main() -> Result<(), String> {
     ftlog::info!("Input file: {:?}", fasta_file.raw_path());
     ftlog::info!("Output directory: {:?}", fasta_file.out_dir());
 
-    let data = fasta_file.read::<i32>(args.num_samples)?;
-    let data = if args.pre_aligned { data } else { data.par_remove_gaps() };
+    let data = fasta_file.read::<i32>(args.num_samples, args.pre_aligned)?;
     ftlog::info!(
         "Finished reading original dataset: length range = {:?}",
         data.dimensionality_hint()

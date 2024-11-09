@@ -14,6 +14,7 @@ type NamedSequences = Vec<(String, String)>;
 ///
 /// * `path`: The path to the FASTA file.
 /// * `holdout`: The number of sequences to hold out for queries.
+/// * `remove_gaps`: Whether to remove gaps from the sequences.
 ///
 /// # Returns
 ///
@@ -26,7 +27,11 @@ type NamedSequences = Vec<(String, String)>;
 /// * If the extension is not `.fasta`.
 /// * If the file cannot be read as a FASTA file.
 /// * If any ID or sequence is empty.
-pub fn read<P: AsRef<Path>>(path: P, holdout: usize) -> Result<([NamedSequences; 2], [usize; 2]), String> {
+pub fn read<P: AsRef<Path>>(
+    path: P,
+    holdout: usize,
+    remove_gaps: bool,
+) -> Result<([NamedSequences; 2], [usize; 2]), String> {
     let path = path.as_ref();
     if !path.exists() {
         return Err(format!("Path {path:?} does not exist!"));
@@ -51,7 +56,16 @@ pub fn read<P: AsRef<Path>>(path: P, holdout: usize) -> Result<([NamedSequences;
             return Err(format!("Empty ID for record {}.", seqs.len()));
         }
 
-        let seq = record.seq().iter().map(|&b| b as char).collect::<String>();
+        let seq: String = if remove_gaps {
+            record
+                .seq()
+                .iter()
+                .map(|&b| b as char)
+                .filter(|&c| !(c == '-' || c == '.'))
+                .collect()
+        } else {
+            record.seq().iter().map(|&b| b as char).collect()
+        };
         if seq.is_empty() {
             return Err(format!("Empty sequence for record {} with ID {name}.", seqs.len()));
         }

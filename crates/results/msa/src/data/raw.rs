@@ -96,7 +96,11 @@ impl FastaFile {
     /// * If the dataset is not readable.
     /// * If the dataset is not in the expected format.
     #[allow(clippy::too_many_lines)]
-    pub fn read<U: Int>(&self, num_samples: Option<usize>) -> Result<FlatVec<String, U, String>, String> {
+    pub fn read<U: Int>(
+        &self,
+        num_samples: Option<usize>,
+        remove_gaps: bool,
+    ) -> Result<FlatVec<String, U, String>, String> {
         let data_path = {
             let mut data_path = self.out_dir.clone();
             data_path.push(self.data_name(num_samples));
@@ -108,7 +112,7 @@ impl FastaFile {
             bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?
         } else {
             let (data, min_len, max_len) = {
-                let ([mut data, _], [min_len, max_len]) = fasta::read(&self.raw_path, 0)?;
+                let ([mut data, _], [min_len, max_len]) = fasta::read(&self.raw_path, 0, remove_gaps)?;
                 if let Some(num_samples) = num_samples {
                     data.truncate(num_samples);
                 }

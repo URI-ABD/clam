@@ -101,7 +101,7 @@ impl RawData {
 
                     (data, queries)
                 } else {
-                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000)?;
+                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000, false)?;
                     let (metadata, data): (Vec<_>, Vec<_>) =
                         data.into_iter().map(|(name, seq)| (name, Unaligned::from(seq))).unzip();
 
@@ -142,7 +142,7 @@ impl RawData {
 
                     (data, queries)
                 } else {
-                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000)?;
+                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000, false)?;
                     let (metadata, data): (Vec<_>, Vec<_>) =
                         data.into_iter().map(|(name, seq)| (name, Aligned::from(seq))).unzip();
 
