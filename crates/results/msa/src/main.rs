@@ -35,6 +35,10 @@ struct Args {
     #[arg(short('i'), long)]
     inp_path: PathBuf,
 
+    /// Whether the original fasta file was pre-aligned by the provider.
+    #[arg(short('p'), long)]
+    pre_aligned: bool,
+
     /// The number of samples to use for the dataset.
     #[arg(short('n'), long)]
     num_samples: Option<usize>,
@@ -103,7 +107,8 @@ fn main() -> Result<(), String> {
     ftlog::info!("Input file: {:?}", fasta_file.raw_path());
     ftlog::info!("Output directory: {:?}", fasta_file.out_dir());
 
-    let data = fasta_file.read(args.num_samples)?;
+    let data = fasta_file.read::<i32>(args.num_samples)?;
+    let data = if args.pre_aligned { data } else { data.par_remove_gaps() };
     ftlog::info!(
         "Finished reading original dataset: length range = {:?}",
         data.dimensionality_hint()

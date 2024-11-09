@@ -6,6 +6,32 @@ use rayon::prelude::*;
 
 use crate::{utils, Dataset, FlatVec};
 
+impl<U: Number, M> FlatVec<String, U, M> {
+    /// Remove all gaps from all sequences in the MSA.
+    #[must_use]
+    pub fn remove_gaps(mut self) -> Self {
+        self.instances = self
+            .instances
+            .into_iter()
+            .map(|s| s.chars().filter(|&c| c != '-').collect::<String>())
+            .collect();
+        self
+    }
+}
+
+impl<U: Number, M: Send + Sync> FlatVec<String, U, M> {
+    /// Parallel version of `remove_gaps`.
+    #[must_use]
+    pub fn par_remove_gaps(mut self) -> Self {
+        self.instances = self
+            .instances
+            .into_par_iter()
+            .map(|s| s.chars().filter(|&c| c != '-').collect::<String>())
+            .collect();
+        self
+    }
+}
+
 // TODO: Consider adding a new trait for MSA datasets. Then move these methods
 // to that trait.
 
