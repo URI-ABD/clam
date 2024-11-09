@@ -35,4 +35,4 @@ pub mod chaoda;
 pub mod msa;
 
 /// The current version of the crate.
-pub const VERSION: &str = "0.31.0";
+pub const VERSION: &str = "0.32.0";

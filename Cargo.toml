@@ -13,7 +13,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-abd-clam = { version = "0.31.0", path = "crates/abd-clam" }
+abd-clam = { version = "0.32.0", path = "crates/abd-clam" }
 distances = { version = "1.8.0", path = "crates/distances" }
 symagen = { version = "0.5.0", path = "crates/symagen" }
 
