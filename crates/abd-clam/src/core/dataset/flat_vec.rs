@@ -382,8 +382,6 @@ mod tests {
     #[cfg(feature = "ndarray-bindings")]
     #[test]
     fn npy_io() -> Result<(), String> {
-        use std::ffi::OsStr;
-
         let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
         let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
         let metric = Metric::new(distance_function, false);
@@ -400,7 +398,10 @@ mod tests {
         }
 
         let path = dataset.write_npy(&tmp_dir, "test-test.npy")?;
-        assert_eq!(path.file_name().map(OsStr::to_str), Some(Some("test-test.npy")));
+        assert_eq!(
+            path.file_name().map(std::ffi::OsStr::to_str),
+            Some(Some("test-test.npy"))
+        );
 
         let new_dataset = FlatVec::read_npy(&path, metric.clone())?;
         assert_eq!(new_dataset.cardinality(), 3);

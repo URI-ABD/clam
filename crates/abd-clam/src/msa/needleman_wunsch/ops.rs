@@ -22,24 +22,19 @@ pub enum Edit {
 }
 
 /// The sequence of edits needed to turn one unaligned sequence into another.
-pub struct Edits {
-    /// The edits and the corresponding positions in the sequences.
-    edits: Vec<(usize, Edit)>,
-}
+pub struct Edits(Vec<(usize, Edit)>);
 
 impl IntoIterator for Edits {
     type Item = (usize, Edit);
     type IntoIter = std::vec::IntoIter<(usize, Edit)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.edits.into_iter()
+        self.0.into_iter()
     }
 }
 
 impl FromIterator<(usize, Edit)> for Edits {
     fn from_iter<I: IntoIterator<Item = (usize, Edit)>>(iter: I) -> Self {
-        Self {
-            edits: iter.into_iter().collect(),
-        }
+        Self(iter.into_iter().collect())
     }
 }

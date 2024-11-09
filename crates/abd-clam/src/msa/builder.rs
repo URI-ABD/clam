@@ -13,7 +13,7 @@ use crate::{cakes::OffBall, cluster::ParCluster, dataset::ParDataset, Cluster, D
 /// A multiple sequence alignment (MSA) builder.
 pub struct Builder<'a, U: Number + Neg<Output = U>> {
     /// The Needleman-Wunsch aligner.
-    pub(crate) aligner: &'a Aligner<'a, U>,
+    aligner: &'a Aligner<'a, U>,
     /// The columns of the partial MSA.
     columns: Vec<Vec<u8>>,
 }

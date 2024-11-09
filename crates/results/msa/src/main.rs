@@ -151,10 +151,10 @@ fn main() -> Result<(), String> {
         msa_data.dimensionality_hint().0
     );
 
-    let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 10, 10);
+    let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 1, 1);
     ftlog::info!("Pairwise scoring metric estimate: {ps_quality}");
 
-    // let ps_quality = msa_data.par_scoring_pairwise(b'-', 10, 10);
+    // let ps_quality = msa_data.par_scoring_pairwise(b'-', 1, 1);
     // ftlog::info!("Pairwise scoring metric: {ps_quality}");
 
     let wps_quality = msa_data.par_weighted_scoring_pairwise_subsample(b'-', 10, 1, 10);

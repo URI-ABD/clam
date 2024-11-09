@@ -437,41 +437,6 @@ pub fn apply_edits(x: &str, edits: &[Edit]) -> String {
     x.into_iter().collect()
 }
 
-/// Returns the indices where gaps need to added to align the given sequences.
-///
-/// This function can work with sequences that were already partially aligned
-/// and makes no assumptions on whether gaps have been aligned with gaps.
-#[must_use]
-pub fn alignment_gaps<U: UInt>(x: &str, y: &str) -> [Vec<usize>; 2] {
-    let table = compute_table::<U>(x, y, Penalties::default());
-    let (x, y) = (x.as_bytes(), y.as_bytes());
-
-    let [mut row_i, mut col_i] = [y.len(), x.len()];
-    let [mut x_gaps, mut y_gaps] = [Vec::new(), Vec::new()];
-
-    while row_i > 0 || col_i > 0 {
-        match table[row_i][col_i].1 {
-            Direction::Diagonal => {
-                row_i -= 1;
-                col_i -= 1;
-            }
-            Direction::Left => {
-                y_gaps.push(row_i);
-                col_i -= 1;
-            }
-            Direction::Up => {
-                x_gaps.push(col_i);
-                row_i -= 1;
-            }
-        }
-    }
-
-    x_gaps.reverse();
-    y_gaps.reverse();
-
-    [x_gaps, y_gaps]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -531,19 +496,5 @@ mod tests {
         let (aligned_x, aligned_y) = trace_back_iterative(&guilty_table, [guilty_x, guilty_y]);
         assert_eq!(aligned_x, "NOTGUILTY");
         assert_eq!(aligned_y, "NOTGUILTY");
-    }
-
-    #[test]
-    fn test_x_to_y_alignment() {
-        let x = "MDIAIHHPWIRRP---";
-        let y = "MDIAIHHPWIRRPF";
-        let [x_gaps, y_gaps] = alignment_gaps::<u16>(x, y);
-        assert_eq!(x_gaps, vec![]);
-        assert_eq!(y_gaps, vec![13, 13]);
-
-        let (y, x) = (x, y);
-        let [x_gaps, y_gaps] = alignment_gaps::<u16>(x, y);
-        assert_eq!(x_gaps, vec![13, 13]);
-        assert_eq!(y_gaps, vec![]);
     }
 }
