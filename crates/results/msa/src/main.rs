@@ -104,7 +104,10 @@ fn main() -> Result<(), String> {
     ftlog::info!("Output directory: {:?}", fasta_file.out_dir());
 
     let data = fasta_file.read(args.num_samples)?;
-    ftlog::info!("Finished reading original dataset.");
+    ftlog::info!(
+        "Finished reading original dataset: length range = {:?}",
+        data.dimensionality_hint()
+    );
     let path_manager = PathManager::new(data.name(), fasta_file.out_dir());
 
     let msa_fasta_path = path_manager.msa_fasta_path();
@@ -148,11 +151,17 @@ fn main() -> Result<(), String> {
         msa_data.dimensionality_hint().0
     );
 
-    let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 1, 1);
+    let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 10, 10);
     ftlog::info!("Pairwise scoring metric estimate: {ps_quality}");
 
-    // let ps_quality = msa_data.par_scoring_pairwise(b'-', 1, 1);
+    // let ps_quality = msa_data.par_scoring_pairwise(b'-', 10, 10);
     // ftlog::info!("Pairwise scoring metric: {ps_quality}");
+
+    let wps_quality = msa_data.par_weighted_scoring_pairwise_subsample(b'-', 10, 1, 10);
+    ftlog::info!("Windowed pairwise scoring metric estimate: {wps_quality}");
+
+    // let wps_quality = msa_data.par_weighted_scoring_pairwise(b'-', 10, 1, 10);
+    // ftlog::info!("Windowed pairwise scoring metric: {wps_quality}");
 
     Ok(())
 }

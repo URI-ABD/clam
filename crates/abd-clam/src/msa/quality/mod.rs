@@ -72,6 +72,93 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
             })
             .sum()
     }
+
+    /// Scores each pairwise alignment in the MSA, applying penalties for
+    /// opening a gap, extending a gap, and mismatches.
+    ///
+    /// # Arguments
+    ///
+    /// * `gap_open_penalty` - The penalty for opening a gap.
+    /// * `gap_ext_penalty` - The penalty for extending a gap.
+    /// * `mismatch_penalty` - The penalty for a mismatch.
+    ///
+    /// # Returns
+    ///
+    /// The sum of the penalties for all pairwise alignments divided by the
+    /// number of pairwise alignments.
+    #[must_use]
+    pub fn weighted_scoring_pairwise(
+        &self,
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+    ) -> f32 {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let m = self._weighted_scoring_pairwise(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty, &indices);
+        m.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+    }
+
+    /// Same as `weighted_scoring_pairwise`, but only estimates the score for a subset of
+    /// the pairwise alignments.
+    #[must_use]
+    pub fn weighted_scoring_pairwise_subsample(
+        &self,
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+    ) -> f32 {
+        let indices = self.subsample_indices();
+        let m = self._weighted_scoring_pairwise(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty, &indices);
+        m.as_f32() / utils::n_pairs(indices.len()).as_f32()
+    }
+
+    /// Helper function for `weighted_scoring_pairwise` and `weighted_scoring_pairwise_subsample`.
+    fn _weighted_scoring_pairwise(
+        &self,
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+        indices: &[usize],
+    ) -> usize {
+        indices
+            .iter()
+            .map(|&i| self.get(i).as_ref())
+            .enumerate()
+            .flat_map(|(i, s1)| {
+                indices
+                    .iter()
+                    .skip(i + 1)
+                    .map(move |&j| (s1, self.get(j).as_ref()))
+                    .map(|(s1, s2)| {
+                        let start = if s1[0] == gap_char || s2[0] == gap_char {
+                            gap_open_penalty
+                        } else if s1[0] != s2[0] {
+                            mismatch_penalty
+                        } else {
+                            0
+                        };
+
+                        s1.iter()
+                            .zip(s1.iter().skip(1))
+                            .zip(s2.iter().zip(s1.iter().skip(1)))
+                            .fold(start, |score, ((&a1, &a2), (&b1, &b2))| {
+                                if (a2 == gap_char && a1 != gap_char) || (b2 == gap_char && b1 != gap_char) {
+                                    score + gap_open_penalty
+                                } else if a2 == gap_char || b2 == gap_char {
+                                    score + gap_ext_penalty
+                                } else if a2 != b2 {
+                                    score + mismatch_penalty
+                                } else {
+                                    score
+                                }
+                            })
+                    })
+            })
+            .sum()
+    }
 }
 
 // Parallelized implementations here
@@ -119,6 +206,82 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
                                 score
                             }
                         })
+                    })
+            })
+            .sum()
+    }
+
+    /// Parallel version of `weighted_scoring_pairwise`.
+    #[must_use]
+    pub fn par_weighted_scoring_pairwise(
+        &self,
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+    ) -> f32 {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let m =
+            self._par_weighted_scoring_pairwise(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty, &indices);
+        m.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+    }
+
+    /// Parallel version of `weighted_scoring_pairwise_subsample`.
+    #[must_use]
+    pub fn par_weighted_scoring_pairwise_subsample(
+        &self,
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+    ) -> f32 {
+        let indices = self.subsample_indices();
+        let m =
+            self._par_weighted_scoring_pairwise(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty, &indices);
+        m.as_f32() / utils::n_pairs(indices.len()).as_f32()
+    }
+
+    /// Parallel version of `_weighted_scoring_pairwise`.
+    fn _par_weighted_scoring_pairwise(
+        &self,
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+        indices: &[usize],
+    ) -> usize {
+        indices
+            .par_iter()
+            .map(|&i| self.get(i).as_ref())
+            .enumerate()
+            .flat_map(|(i, s1)| {
+                indices
+                    .par_iter()
+                    .skip(i + 1)
+                    .map(move |&j| (s1, self.get(j).as_ref()))
+                    .map(|(s1, s2)| {
+                        let start = if s1[0] == gap_char || s2[0] == gap_char {
+                            gap_open_penalty
+                        } else if s1[0] != s2[0] {
+                            mismatch_penalty
+                        } else {
+                            0
+                        };
+
+                        s1.iter()
+                            .zip(s1.iter().skip(1))
+                            .zip(s2.iter().zip(s1.iter().skip(1)))
+                            .fold(start, |score, ((&a1, &a2), (&b1, &b2))| {
+                                if (a2 == gap_char && a1 != gap_char) || (b2 == gap_char && b1 != gap_char) {
+                                    score + gap_open_penalty
+                                } else if a2 == gap_char || b2 == gap_char {
+                                    score + gap_ext_penalty
+                                } else if a2 != b2 {
+                                    score + mismatch_penalty
+                                } else {
+                                    score
+                                }
+                            })
                     })
             })
             .sum()
