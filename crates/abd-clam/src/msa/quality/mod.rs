@@ -58,19 +58,23 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
                     .iter()
                     .skip(i + 1)
                     .map(move |&j| (s1, self.get(j).as_ref()))
-                    .map(|(s1, s2)| {
-                        s1.iter().zip(s2.iter()).fold(0, |score, (&a, &b)| {
-                            if a == gap_char || b == gap_char {
-                                score + gap_penalty
-                            } else if a != b {
-                                score + mismatch_penalty
-                            } else {
-                                score
-                            }
-                        })
-                    })
+                    .map(|(s1, s2)| Self::_sp_inner(s1, s2, gap_char, gap_penalty, mismatch_penalty))
             })
             .sum()
+    }
+
+    /// Scores a single pairwise alignment in the MSA, applying a penalty for
+    /// gaps and mismatches.
+    fn _sp_inner(s1: &[u8], s2: &[u8], gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> usize {
+        s1.iter().zip(s2.iter()).fold(0, |score, (&a, &b)| {
+            if a == gap_char || b == gap_char {
+                score + gap_penalty
+            } else if a != b {
+                score + mismatch_penalty
+            } else {
+                score
+            }
+        })
     }
 
     /// Scores each pairwise alignment in the MSA, applying penalties for
@@ -133,31 +137,44 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
                     .skip(i + 1)
                     .map(move |&j| (s1, self.get(j).as_ref()))
                     .map(|(s1, s2)| {
-                        let start = if s1[0] == gap_char || s2[0] == gap_char {
-                            gap_open_penalty
-                        } else if s1[0] != s2[0] {
-                            mismatch_penalty
-                        } else {
-                            0
-                        };
-
-                        s1.iter()
-                            .zip(s1.iter().skip(1))
-                            .zip(s2.iter().zip(s1.iter().skip(1)))
-                            .fold(start, |score, ((&a1, &a2), (&b1, &b2))| {
-                                if (a2 == gap_char && a1 != gap_char) || (b2 == gap_char && b1 != gap_char) {
-                                    score + gap_open_penalty
-                                } else if a2 == gap_char || b2 == gap_char {
-                                    score + gap_ext_penalty
-                                } else if a2 != b2 {
-                                    score + mismatch_penalty
-                                } else {
-                                    score
-                                }
-                            })
+                        Self::_wsp_inner(s1, s2, gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty)
                     })
             })
             .sum()
+    }
+
+    /// Scores a single pairwise alignment in the MSA, applying a penalty for
+    /// opening a gap, extending a gap, and mismatches.
+    fn _wsp_inner(
+        s1: &[u8],
+        s2: &[u8],
+        gap_char: u8,
+        gap_open_penalty: usize,
+        gap_ext_penalty: usize,
+        mismatch_penalty: usize,
+    ) -> usize {
+        let start = if s1[0] == gap_char || s2[0] == gap_char {
+            gap_open_penalty
+        } else if s1[0] != s2[0] {
+            mismatch_penalty
+        } else {
+            0
+        };
+
+        s1.iter()
+            .zip(s1.iter().skip(1))
+            .zip(s2.iter().zip(s1.iter().skip(1)))
+            .fold(start, |score, ((&a1, &a2), (&b1, &b2))| {
+                if (a2 == gap_char && a1 != gap_char) || (b2 == gap_char && b1 != gap_char) {
+                    score + gap_open_penalty
+                } else if a2 == gap_char || b2 == gap_char {
+                    score + gap_ext_penalty
+                } else if a2 != b2 {
+                    score + mismatch_penalty
+                } else {
+                    score
+                }
+            })
     }
 }
 
@@ -196,17 +213,7 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
                     .par_iter()
                     .skip(i + 1)
                     .map(move |&j| (s1, self.get(j).as_ref()))
-                    .map(|(s1, s2)| {
-                        s1.iter().zip(s2.iter()).fold(0, |score, (&a, &b)| {
-                            if a == gap_char || b == gap_char {
-                                score + gap_penalty
-                            } else if a != b {
-                                score + mismatch_penalty
-                            } else {
-                                score
-                            }
-                        })
-                    })
+                    .map(|(s1, s2)| Self::_sp_inner(s1, s2, gap_char, gap_penalty, mismatch_penalty))
             })
             .sum()
     }
@@ -260,28 +267,7 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
                     .skip(i + 1)
                     .map(move |&j| (s1, self.get(j).as_ref()))
                     .map(|(s1, s2)| {
-                        let start = if s1[0] == gap_char || s2[0] == gap_char {
-                            gap_open_penalty
-                        } else if s1[0] != s2[0] {
-                            mismatch_penalty
-                        } else {
-                            0
-                        };
-
-                        s1.iter()
-                            .zip(s1.iter().skip(1))
-                            .zip(s2.iter().zip(s1.iter().skip(1)))
-                            .fold(start, |score, ((&a1, &a2), (&b1, &b2))| {
-                                if (a2 == gap_char && a1 != gap_char) || (b2 == gap_char && b1 != gap_char) {
-                                    score + gap_open_penalty
-                                } else if a2 == gap_char || b2 == gap_char {
-                                    score + gap_ext_penalty
-                                } else if a2 != b2 {
-                                    score + mismatch_penalty
-                                } else {
-                                    score
-                                }
-                            })
+                        Self::_wsp_inner(s1, s2, gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty)
                     })
             })
             .sum()
