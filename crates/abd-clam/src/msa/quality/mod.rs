@@ -13,7 +13,7 @@ impl<U: Number, M> FlatVec<String, U, M> {
         self.instances = self
             .instances
             .into_iter()
-            .map(|s| s.chars().filter(|&c| c != '-').collect::<String>())
+            .map(|s| s.chars().filter(|&c| !(c == '-' || c == '.')).collect())
             .collect();
         self
     }
@@ -26,7 +26,7 @@ impl<U: Number, M: Send + Sync> FlatVec<String, U, M> {
         self.instances = self
             .instances
             .into_par_iter()
-            .map(|s| s.chars().filter(|&c| c != '-').collect::<String>())
+            .map(|s| s.chars().filter(|&c| !(c == '-' || c == '.')).collect())
             .collect();
         self
     }
