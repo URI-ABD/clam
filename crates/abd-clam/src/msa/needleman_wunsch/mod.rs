@@ -10,7 +10,7 @@ pub use ops::{Direction, Edit, Edits};
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Aligner, CostMatrix, Direction};
 
     #[test]
     fn distance() {
