@@ -54,7 +54,7 @@ bincode = { workspace = true, optional = true }
 
 # For:
 #  - MSA
-stringzilla = { workspace = true }
+stringzilla = { workspace = true, optional = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
@@ -69,7 +69,7 @@ statistical = "1.0.0"
 csv = ["dep:csv"]  # For writing trees to CSV files.
 ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore", "dep:ordered-float", "dep:bincode"]
-msa = []
+msa = ["dep:stringzilla"]
 
 [[bench]]
 name = "genomic_search"
