@@ -52,6 +52,10 @@ smartcore = { git = "https://github.com/smartcorelib/smartcore.git", rev = "239c
 ordered-float = { version = "4.2.2", optional = true }
 bincode = { workspace = true, optional = true }
 
+# For:
+#  - MSA
+stringzilla = { workspace = true }
+
 [dev-dependencies]
 symagen = { workspace = true }
 bincode = { workspace = true }
