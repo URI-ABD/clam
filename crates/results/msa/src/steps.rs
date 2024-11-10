@@ -54,7 +54,7 @@ pub fn read_aligned<P: AsRef<Path>, U: Number>(path: P, metric: Metric<String, U
     ftlog::info!("Reading aligned sequences from {:?}", path.as_ref());
 
     let ([aligned_sequences, _], [width, _]) = results_cakes::data::fasta::read(path, 0, false)?;
-    let (aligned_sequences, metadata): (_, Vec<_>) = aligned_sequences.into_iter().unzip();
+    let (metadata, aligned_sequences): (Vec<_>, Vec<_>) = aligned_sequences.into_iter().unzip();
     let data = FlatVec::new(aligned_sequences, metric)?
         .with_metadata(&metadata)?
         .with_dim_lower_bound(width)

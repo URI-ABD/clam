@@ -1,6 +1,6 @@
 //! Recursively build up the MSA using the CLAM tree.
 
-use core::ops::Neg;
+use core::ops::{Index, Neg};
 use std::string::FromUtf8Error;
 
 use distances::Number;
@@ -16,6 +16,14 @@ pub struct Builder<'a, U: Number + Neg<Output = U>> {
     aligner: &'a Aligner<'a, U>,
     /// The columns of the partial MSA.
     columns: Vec<Vec<u8>>,
+}
+
+impl<'a, U: Number + Neg<Output = U>> Index<usize> for Builder<'a, U> {
+    type Output = Vec<u8>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.columns[index]
+    }
 }
 
 impl<'a, U: Number + Neg<Output = U>> Builder<'a, U> {
@@ -111,6 +119,12 @@ impl<'a, U: Number + Neg<Output = U>> Builder<'a, U> {
     /// Whether the MSA is empty.
     pub fn is_empty(&self) -> bool {
         self.columns.is_empty() || self.columns.iter().all(Vec::is_empty)
+    }
+
+    /// Get the columns of the MSA.
+    #[must_use]
+    pub fn columns(&self) -> &[Vec<u8>] {
+        &self.columns
     }
 
     /// Get the sequence at the given index.

@@ -93,6 +93,7 @@ impl SpecialMatrix {
     }
 }
 
+#[allow(clippy::similar_names)]
 fn main() -> Result<(), String> {
     let args = Args::parse();
     ftlog::info!("{args:?}");
@@ -166,6 +167,20 @@ fn main() -> Result<(), String> {
 
     // let wps_quality = msa_data.par_weighted_scoring_pairwise(b'-', 10, 1, 10);
     // ftlog::info!("Weighted pairwise scoring metric: {wps_quality}");
+
+    ftlog::info!("Finished scoring row-wise.");
+
+    ftlog::info!("Convert to column-major format.");
+    let metric = Metric::default();
+    let col_ms_data = msa_data.as_col_major::<Vec<_>>(metric);
+
+    let cs_quality = col_ms_data.par_scoring_columns(b'-', 1, 1);
+    ftlog::info!("Column scoring metric estimate: {cs_quality}");
+
+    let wcs_quality = col_ms_data.par_weighted_scoring_columns(b'-', 10, 1, 10);
+    ftlog::info!("Weighted column scoring metric estimate: {wcs_quality}");
+
+    ftlog::info!("Finished scoring column-wise.");
 
     Ok(())
 }

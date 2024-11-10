@@ -41,6 +41,11 @@ pub trait Dataset<I, U: Number>: MetricSpace<I, U> {
     /// of bounds.
     fn get(&self, index: usize) -> &I;
 
+    /// Get a Vec of all indices in the dataset.
+    fn indices(&self) -> Vec<usize> {
+        (0..self.cardinality()).collect()
+    }
+
     /// Computes the distance between two instances by their indices.
     fn one_to_one(&self, i: usize, j: usize) -> U {
         MetricSpace::one_to_one(self, self.get(i), self.get(j))
