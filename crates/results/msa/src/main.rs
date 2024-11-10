@@ -150,9 +150,9 @@ fn main() -> Result<(), String> {
     let msa_data = steps::read_aligned(msa_fasta_path, hamming_metric)?;
 
     ftlog::info!(
-        "Finished reading {} aligned sequences with width = {}.",
+        "Finished reading {} aligned sequences with width = {:?}.",
         msa_data.cardinality(),
-        msa_data.dimensionality_hint().0
+        msa_data.dimensionality_hint()
     );
 
     let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 1, 1);
@@ -162,10 +162,10 @@ fn main() -> Result<(), String> {
     // ftlog::info!("Pairwise scoring metric: {ps_quality}");
 
     let wps_quality = msa_data.par_weighted_scoring_pairwise_subsample(b'-', 10, 1, 10);
-    ftlog::info!("Windowed pairwise scoring metric estimate: {wps_quality}");
+    ftlog::info!("Weighted pairwise scoring metric estimate: {wps_quality}");
 
     // let wps_quality = msa_data.par_weighted_scoring_pairwise(b'-', 10, 1, 10);
-    // ftlog::info!("Windowed pairwise scoring metric: {wps_quality}");
+    // ftlog::info!("Weighted pairwise scoring metric: {wps_quality}");
 
     Ok(())
 }
