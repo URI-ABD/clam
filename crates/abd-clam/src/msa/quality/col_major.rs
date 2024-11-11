@@ -13,7 +13,8 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
         let score = self
             .instances
             .iter()
-            .map(|c| sc_inner(c.as_ref(), gap_char, gap_penalty, mismatch_penalty))
+            .map(AsRef::as_ref)
+            .map(|c| sc_inner(c, gap_char, gap_penalty, mismatch_penalty))
             .sum::<usize>();
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
@@ -43,7 +44,8 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
         let score = self
             .instances
             .par_iter()
-            .map(|c| sc_inner(c.as_ref(), gap_char, gap_penalty, mismatch_penalty))
+            .map(AsRef::as_ref)
+            .map(|c| sc_inner(c, gap_char, gap_penalty, mismatch_penalty))
             .sum::<usize>();
         score.as_f32() / utils::n_pairs(num_seqs).as_f32()
     }
