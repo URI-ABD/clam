@@ -1,6 +1,7 @@
 //! Substitution matrix for the Needleman-Wunsch aligner.
 
 use core::ops::Neg;
+use std::collections::HashSet;
 
 use distances::{number::Int, Number};
 
@@ -51,7 +52,7 @@ impl<T: Number> CostMatrix<T> {
         Self::new(T::ONE, T::from(10), T::ONE)
     }
 
-    /// Shift all costs in the matrix by a constant.
+    /// Shift all substitution costs by a constant.
     #[must_use]
     pub fn shift(mut self, shift: T) -> Self {
         for i in 0..NUM_CHARS {
@@ -61,6 +62,19 @@ impl<T: Number> CostMatrix<T> {
         }
         self.gap_open += shift;
         self.gap_ext += shift;
+        self
+    }
+
+    /// Scale all substitution costs by a constant.
+    #[must_use]
+    pub fn scale(mut self, scale: T) -> Self {
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                self.sub_matrix[i][j] *= scale;
+            }
+        }
+        self.gap_open *= scale;
+        self.gap_ext *= scale;
         self
     }
 
@@ -191,7 +205,12 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // Calculate the least common multiple of the denominators so we can
         // scale the costs to integers.
-        let lcm = costs.iter().map(|&(_, _, _, m)| m).fold(1, |a, b| a.lcm(&b));
+        let lcm = costs
+            .iter()
+            .map(|&(_, _, _, m)| m)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .fold(1, |a, b| a.lcm(&b));
 
         // T and U are interchangeable.
         let t_to_u = costs
@@ -208,16 +227,17 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
-        let matrix = Self::default()
+        let matrix = Self::default_affine()
             .with_sub_cost(b'-', b'.', T::ZERO)
-            .with_sub_cost(b'.', b'-', T::ZERO);
+            .with_sub_cost(b'.', b'-', T::ZERO)
+            .scale(T::from(lcm));
 
         // Add all costs to the matrix.
         costs
             .into_iter()
             .chain(t_to_u)
             // Scale the costs to integers.
-            .map(|(a, b, n, m)| (a, b, T::from((n * lcm) / m)))
+            .map(|(a, b, n, m)| (a, b, T::from(n * (lcm / m))))
             .flat_map(|(a, b, cost)| {
                 // Add the costs for the upper and lower case versions of the
                 // characters.
@@ -230,8 +250,6 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             })
             .map(|(a, b, cost)| (a as u8, b as u8, cost))
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
-            .with_gap_open(T::from(lcm))
-            .with_gap_ext(T::from(lcm / 9))
     }
 
     /// The BLOSUM62 substitution matrix for proteins.

@@ -112,12 +112,20 @@ impl FastaFile {
             bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?
         } else {
             let (data, min_len, max_len) = {
-                let ([mut data, _], [min_len, max_len]) = fasta::read(&self.raw_path, 0, remove_gaps)?;
+                let ([mut data, _], _) = fasta::read(&self.raw_path, 0, remove_gaps)?;
                 if let Some(num_samples) = num_samples {
                     data.truncate(num_samples);
                 }
+                let (min_len, max_len) = data
+                    .iter()
+                    .fold((usize::MAX, usize::MIN), |(min_len, max_len), (_, s)| {
+                        let len = s.len();
+                        (min_len.min(len), max_len.max(len))
+                    });
                 (data, min_len, max_len)
             };
+
+            ftlog::info!("Kept {} sequences with lengths in [{min_len}, {max_len}].", data.len());
 
             let (metadata, data): (Vec<_>, Vec<_>) = data.into_iter().unzip();
 

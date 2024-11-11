@@ -5,6 +5,8 @@ use rayon::prelude::*;
 
 use crate::{utils, Dataset, FlatVec};
 
+use super::{LOG2_THRESH, SQRT_THRESH};
+
 impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     /// Scores each pair of columns in the MSA, applying a penalty for gaps and
     /// mismatches.
@@ -24,7 +26,7 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     pub fn scoring_columns_subsample(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let num_rows = self.get(0).as_ref().len();
         let row_indices = (0..num_rows).collect::<Vec<_>>();
-        let samples = utils::choose_samples(&row_indices, 1000, 100_000);
+        let samples = utils::choose_samples(&row_indices, SQRT_THRESH, LOG2_THRESH);
         let score = self
             .instances
             .iter()
@@ -55,7 +57,7 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     pub fn par_scoring_columns_subsample(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let num_rows = self.get(0).as_ref().len();
         let row_indices = (0..num_rows).collect::<Vec<_>>();
-        let seq_ids = utils::choose_samples(&row_indices, 1000, 100_000);
+        let seq_ids = utils::choose_samples(&row_indices, SQRT_THRESH, LOG2_THRESH);
         let score = self
             .instances
             .par_iter()

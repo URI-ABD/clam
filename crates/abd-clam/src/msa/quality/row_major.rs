@@ -5,13 +5,10 @@ use rayon::prelude::*;
 
 use crate::{utils, Dataset, FlatVec, Metric};
 
+use super::{LOG2_THRESH, SQRT_THRESH};
+
 // TODO: Consider adding a new trait for MSA datasets. Then move these methods
 // to that trait.
-
-/// The square root threshold for sub-sampling.
-const SQRT_THRESH: usize = 1000;
-/// The logarithmic threshold for sub-sampling.
-const LOG2_THRESH: usize = 100_000;
 
 impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     /// Converts the dataset into a column-major format.
