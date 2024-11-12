@@ -3,6 +3,8 @@
 mod data;
 mod utils;
 
+pub use data::{NeighborhoodAware, NeighborhoodAwareScore, VecMetric};
+
 #[test]
 fn test_neighborhood_aware() {
     use utils::configure_logger;

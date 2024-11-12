@@ -11,7 +11,7 @@ pub mod wasserstein;
 
 pub use gen_random::gen_random;
 #[allow(unused_imports)]
-pub use neighborhood_aware::NeighborhoodAware;
+pub use neighborhood_aware::{NeighborhoodAware, NeighborhoodAwareScore};
 pub use vec_metric::VecMetric;
 
 /// Read data from the given path or generate random data.

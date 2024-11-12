@@ -3,12 +3,17 @@
 use abd_clam::{
     cluster::ParCluster, dataset::{metric_space::ParMetricSpace, ParDataset}, utils::{mean, standard_deviation}, Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable
 };
-use ftlog::{debug, info};
+use ftlog::debug;
 use rayon::prelude::*;
 
 use super::wasserstein::wasserstein;
 
 type Fv = FlatVec<Vec<f32>, f32, usize>;
+
+pub struct NeighborhoodAwareScore{
+    pub score: f32,
+    pub standard_deviation: f32
+}
 
 /// A `Dataset` in which every point stores the distances to its `k` nearest neighbors.
 #[allow(clippy::type_complexity)]
@@ -69,9 +74,8 @@ impl NeighborhoodAware {
         Self { data, k }
     }
     
-    /// Check if a point is an outlier.
-    pub fn is_outlier<C: Cluster<Vec<f32>, f32, Self>>(&self, root: &C, query: &Vec<f32>) -> bool {
-        info!("Entering is_outlier.");
+    pub fn outlier_score<C: Cluster<Vec<f32>, f32, Self>>(&self, root: &C, query: &Vec<f32>) -> NeighborhoodAwareScore {
+        debug!("Entering is_outlier.");
         
         let alg = abd_clam::cakes::Algorithm::KnnLinear(self.k);
         
@@ -144,11 +148,24 @@ impl NeighborhoodAware {
         
         let average_mean_squared_error: f32 = mean(&mean_squeared_errors);
         
-        let sigma_range = 2f32 * neighbor_standard_deviation;
+        NeighborhoodAwareScore{
+            score: average_mean_squared_error,
+            standard_deviation: neighbor_standard_deviation,
+        }
+    }
+    
+    /// Check if a point is an outlier.
+    pub fn is_outlier<C: Cluster<Vec<f32>, f32, Self>>(&self, root: &C, query: &Vec<f32>) -> bool {
+        let NeighborhoodAwareScore {
+            score,
+            standard_deviation 
+        } = self.outlier_score(root, query);
         
-        debug!("Average mean squared error: {average_mean_squared_error}, standard deviation: {neighbor_standard_deviation}");
+        let sigma_range = 2f32 * standard_deviation;
         
-        average_mean_squared_error.abs() > sigma_range
+        debug!("Score: {score}, standard deviation: {standard_deviation}");
+        
+        score.abs() > sigma_range
     }
 
     /// Get the distances to the `k` nearest neighbors of a point.
