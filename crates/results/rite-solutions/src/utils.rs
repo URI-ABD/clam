@@ -5,6 +5,7 @@ use ftlog::{
     LevelFilter, LoggerGuard,
 };
 
+#[allow(dead_code)]
 pub fn configure_logger<P: AsRef<std::path::Path>>(log_path: P) -> Result<LoggerGuard, String> {
     let writer = FileAppender::builder().path(&log_path).rotate(Period::Day).build();
 

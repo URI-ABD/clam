@@ -7,15 +7,17 @@ use abd_clam::FlatVec;
 mod gen_random;
 mod neighborhood_aware;
 mod vec_metric;
-mod wasserstein;
+pub mod wasserstein;
 
 pub use gen_random::gen_random;
+#[allow(unused_imports)]
 pub use neighborhood_aware::NeighborhoodAware;
 pub use vec_metric::VecMetric;
 
 /// Read data from the given path or generate random data.
-pub fn read_or_generate<P: AsRef<Path>>(
-    path: Option<P>,
+#[allow(dead_code)]
+pub fn read_or_generate(
+    path: Option<String>,
     metric: &VecMetric,
     num_inliers: Option<usize>,
     dimensionality: Option<usize>,
@@ -26,7 +28,7 @@ pub fn read_or_generate<P: AsRef<Path>>(
     let metric = metric.metric::<f32, f32>();
 
     let data = if let Some(path) = path {
-        let path = path.as_ref();
+        let path = Path::new(&path);
         if !path.exists() {
             return Err(format!("{path:?} does not exist"));
         }
