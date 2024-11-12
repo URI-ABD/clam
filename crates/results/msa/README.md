@@ -2,6 +2,12 @@
 
 ## Usage
 
+Run the following command to see the usage information:
+
+```shell
+cargo run -r -p results-msa -- --help
+```
+
 If you want to run the MSA on all a sequences in a fasta file, you can use the following command:
 
 ```shell

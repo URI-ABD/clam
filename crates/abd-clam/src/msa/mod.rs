@@ -11,6 +11,13 @@ use distances::Number;
 pub use builder::Builder;
 pub use needleman_wunsch::{Aligner, CostMatrix};
 
+/// The number of characters.
+pub(crate) const NUM_CHARS: usize = 1 + (u8::MAX as usize);
+/// The square root threshold for sub-sampling.
+pub(crate) const SQRT_THRESH: usize = 1000;
+/// The logarithmic threshold for sub-sampling.
+pub(crate) const LOG2_THRESH: usize = 100_000;
+
 /// A multiple sequence alignment (MSA).
 pub struct Msa {
     /// The aligned sequences.

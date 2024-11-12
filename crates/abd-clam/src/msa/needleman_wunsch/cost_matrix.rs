@@ -5,8 +5,7 @@ use std::collections::HashSet;
 
 use distances::{number::Int, Number};
 
-/// The number of characters.
-const NUM_CHARS: usize = 1 + (u8::MAX as usize);
+use super::super::NUM_CHARS;
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
 #[derive(Clone)]

@@ -156,22 +156,29 @@ fn main() -> Result<(), String> {
         msa_data.dimensionality_hint()
     );
 
-    let ps_quality = msa_data.par_scoring_pairwise_subsample(b'-', 1, 1);
+    let gap_char = b'-';
+    let gap_penalty = 1;
+    let mismatch_penalty = 1;
+    let gap_open_penalty = 10;
+    let gap_ext_penalty = 1;
+
+    let ps_quality = msa_data.par_scoring_pairwise_subsample(gap_char, gap_penalty, mismatch_penalty);
     ftlog::info!("Pairwise scoring metric estimate: {ps_quality}");
 
-    // let ps_quality = msa_data.par_scoring_pairwise(b'-', 1, 1);
+    // let ps_quality = msa_data.par_scoring_pairwise(gap_char, gap_penalty, mismatch_penalty);
     // ftlog::info!("Pairwise scoring metric: {ps_quality}");
 
-    let wps_quality = msa_data.par_weighted_scoring_pairwise_subsample(b'-', 10, 1, 10);
+    let wps_quality =
+        msa_data.par_weighted_scoring_pairwise_subsample(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
     ftlog::info!("Weighted pairwise scoring metric estimate: {wps_quality}");
 
-    // let wps_quality = msa_data.par_weighted_scoring_pairwise(b'-', 10, 1, 10);
+    // let wps_quality = msa_data.par_weighted_scoring_pairwise(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
     // ftlog::info!("Weighted pairwise scoring metric: {wps_quality}");
 
-    let dd_quality = msa_data.par_distance_distortion_subsample(b'-');
+    let dd_quality = msa_data.par_distance_distortion_subsample(gap_char);
     ftlog::info!("Distance distortion metric estimate: {dd_quality}");
 
-    // let dd_quality = msa_data.par_distance_distortion(b'-');
+    // let dd_quality = msa_data.par_distance_distortion(gap_char);
     // ftlog::info!("Distance distortion metric: {dd_quality}");
 
     ftlog::info!("Finished scoring row-wise.");
@@ -181,11 +188,8 @@ fn main() -> Result<(), String> {
     let col_ms_data = msa_data.as_col_major::<Vec<_>>(metric);
     ftlog::info!("Finished converting to column-major format.");
 
-    // let cs_quality = col_ms_data.par_scoring_columns(b'-', 1, 1);
-    // ftlog::info!("Column scoring metric estimate: {cs_quality}");
-
-    let cs_quality = col_ms_data.par_scoring_columns_subsample(b'-', 1, 1);
-    ftlog::info!("Column scoring metric estimate: {cs_quality}");
+    let cs_quality = col_ms_data.par_scoring_columns(gap_char, gap_penalty, mismatch_penalty);
+    ftlog::info!("Column scoring metric: {cs_quality}");
 
     ftlog::info!("Finished scoring column-wise.");
 

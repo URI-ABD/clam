@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::{utils, Dataset, FlatVec, Metric};
 
-use super::{LOG2_THRESH, SQRT_THRESH};
+use super::super::{LOG2_THRESH, SQRT_THRESH};
 
 // TODO: Consider adding a new trait for MSA datasets. Then move these methods
 // to that trait.
