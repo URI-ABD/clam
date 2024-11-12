@@ -175,6 +175,12 @@ fn main() -> Result<(), String> {
     // let wps_quality = msa_data.par_weighted_scoring_pairwise(gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
     // ftlog::info!("Weighted pairwise scoring metric: {wps_quality}");
 
+    let (avg_p, max_p) = msa_data.par_p_distance_stats_subsample(gap_char);
+    ftlog::info!("Pairwise distance stats estimate: avg = {avg_p:.4}, max = {max_p:.4}");
+
+    // let (avg_p, max_p) = msa_data.par_p_distance_stats(gap_char);
+    // ftlog::info!("Pairwise distance stats: avg = {avg_p}, max = {max_p}");
+
     let dd_quality = msa_data.par_distance_distortion_subsample(gap_char);
     ftlog::info!("Distance distortion metric estimate: {dd_quality}");
 
