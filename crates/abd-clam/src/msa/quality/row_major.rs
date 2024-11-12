@@ -66,7 +66,7 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     /// Calculates the `p-distance` of each pairwise alignment in the MSA.
     fn p_distances(&self, gap_char: u8) -> Vec<f32> {
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
-        self.apply_pairwise(&self.indices(), scorer)
+        self.apply_pairwise(&self.indices(), scorer).collect()
     }
 
     /// Same as `p_distances`, but only estimates the score for a subset of the
@@ -74,7 +74,7 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     fn p_distances_subsample(&self, gap_char: u8) -> Vec<f32> {
         let indices = utils::choose_samples(&self.indices(), SQRT_THRESH, LOG2_THRESH);
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
-        self.apply_pairwise(&indices, scorer)
+        self.apply_pairwise(&indices, scorer).collect()
     }
 
     /// Scores the MSA using the distortion of the Levenshtein edit distance
@@ -168,22 +168,20 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     }
 
     /// Applies a pairwise scorer to all pairs of sequences in the MSA.
-    pub(crate) fn apply_pairwise<F, G: Number>(&self, indices: &[usize], scorer: F) -> Vec<G>
+    pub(crate) fn apply_pairwise<'a, F, G: Number>(
+        &'a self,
+        indices: &'a [usize],
+        scorer: F,
+    ) -> impl Iterator<Item = G> + 'a
     where
-        F: (Fn(&[u8], &[u8]) -> G),
+        F: (Fn(&[u8], &[u8]) -> G) + 'a,
     {
         indices
             .iter()
             .map(|&i| self.get(i).as_ref())
             .enumerate()
-            .flat_map(|(i, s1)| {
-                indices
-                    .iter()
-                    .skip(i + 1)
-                    .map(move |&j| (s1, self.get(j).as_ref()))
-                    .map(|(s1, s2)| scorer(s1, s2))
-            })
-            .collect()
+            .flat_map(move |(i, s1)| indices.iter().skip(i + 1).map(move |&j| (s1, self.get(j).as_ref())))
+            .map(move |(s1, s2)| scorer(s1, s2))
     }
 
     /// Calculate the sum of the pairwise scores for a given scorer.
@@ -191,7 +189,7 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     where
         F: Fn(&[u8], &[u8]) -> G,
     {
-        self.apply_pairwise(indices, scorer).into_iter().sum()
+        self.apply_pairwise(indices, scorer).sum()
     }
 }
 
@@ -226,14 +224,14 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     /// Calculates the `p-distance` of each pairwise alignment in the MSA.
     fn par_p_distances(&self, gap_char: u8) -> Vec<f32> {
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
-        self.par_apply_pairwise(&self.indices(), scorer)
+        self.par_apply_pairwise(&self.indices(), scorer).collect()
     }
 
     /// Parallel version of `p_distance_stats_subsample`.
     fn par_p_distances_subsample(&self, gap_char: u8) -> Vec<f32> {
         let indices = utils::choose_samples(&self.indices(), SQRT_THRESH, LOG2_THRESH);
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
-        self.par_apply_pairwise(&indices, scorer)
+        self.par_apply_pairwise(&indices, scorer).collect()
     }
 
     /// Parallel version of `distance_distortion`.
@@ -300,22 +298,20 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     }
 
     /// Parallel version of `apply_pairwise`.
-    pub(crate) fn par_apply_pairwise<F, G: Number>(&self, indices: &[usize], scorer: F) -> Vec<G>
+    pub(crate) fn par_apply_pairwise<'a, F, G: Number>(
+        &'a self,
+        indices: &'a [usize],
+        scorer: F,
+    ) -> impl ParallelIterator<Item = G> + 'a
     where
-        F: (Fn(&[u8], &[u8]) -> G) + Send + Sync,
+        F: (Fn(&[u8], &[u8]) -> G) + Send + Sync + 'a,
     {
         indices
             .par_iter()
             .map(|&i| self.get(i).as_ref())
             .enumerate()
-            .flat_map(|(i, s1)| {
-                indices
-                    .par_iter()
-                    .skip(i + 1)
-                    .map(move |&j| (s1, self.get(j).as_ref()))
-                    .map(|(s1, s2)| scorer(s1, s2))
-            })
-            .collect()
+            .flat_map(move |(i, s1)| indices.par_iter().skip(i + 1).map(move |&j| (s1, self.get(j).as_ref())))
+            .map(move |(s1, s2)| scorer(s1, s2))
     }
 
     /// Calculate the sum of the pairwise scores for a given scorer.
@@ -323,7 +319,7 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     where
         F: (Fn(&[u8], &[u8]) -> G) + Send + Sync,
     {
-        self.apply_pairwise(indices, scorer).into_iter().sum()
+        self.apply_pairwise(indices, scorer).sum()
     }
 }
 
