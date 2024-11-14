@@ -131,29 +131,6 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
         .collect()
 }
 
-/// Compute the local fractal dimension of the given distances using the given radius.
-///
-/// The local fractal dimension is computed as the log2 of the ratio of the number of
-/// distances less than or equal to half the radius to the total number of distances.
-///
-/// # Arguments
-///
-/// * `radius` - The radius used to compute the distances.
-/// * `distances` - The distances to compute the local fractal dimension of.
-pub(crate) fn compute_lfd<T: Number, F: Float>(radius: T, distances: &[T]) -> F {
-    if radius == T::ZERO {
-        F::ONE
-    } else {
-        let r_2 = F::from(radius) / F::from(2);
-        let half_count = distances.iter().filter(|&&d| F::from(d) <= r_2).count();
-        if half_count > 0 {
-            (F::from(distances.len()) / F::from(half_count)).log2()
-        } else {
-            F::ONE
-        }
-    }
-}
-
 /// Compute the next exponential moving average of the given ratio and parent EMA.
 ///
 /// The EMA is computed as `alpha * ratio + (1 - alpha) * parent_ema`, where `alpha`

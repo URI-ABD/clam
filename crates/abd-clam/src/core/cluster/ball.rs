@@ -193,8 +193,8 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
         let samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            let choose = utils::num_samples(cardinality, 100, 10_000);
-            Dataset::choose_unique(data, indices, choose, seed)
+            let num_samples = utils::num_samples(cardinality, 100, 10_000);
+            Dataset::choose_unique(data, indices, num_samples, seed)
         };
 
         let arg_center = Dataset::median(data, &samples);
@@ -206,8 +206,7 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for Ball<I, U, D> {
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
         let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd_scale = radius.half();
-        let lfd = LFD::from_radial_distances(&distances, lfd_scale);
+        let lfd = LFD::from_radial_distances(&distances, radius.half());
 
         Self {
             depth,
@@ -244,23 +243,11 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
         }
 
         let cardinality = indices.len();
-
         let samples = if cardinality < 100 {
             indices.to_vec()
         } else {
-            #[allow(clippy::cast_possible_truncation)]
-            let n = if cardinality < 10_100 {
-                // We use the square root of the cardinality as the number of samples
-                (cardinality - 100).as_f64().sqrt().as_u64() as usize
-            } else {
-                // We use the logarithm of the cardinality as the number of samples
-                #[allow(clippy::cast_possible_truncation)]
-                let n = (cardinality - 10_100).as_f64().log2().as_u64() as usize;
-                n + 100
-            };
-
-            let n = n + 100;
-            ParDataset::par_choose_unique(data, indices, n, seed)
+            let num_samples = utils::num_samples(cardinality, 100, 10_000);
+            ParDataset::par_choose_unique(data, indices, num_samples, seed)
         };
 
         let arg_center = ParDataset::par_median(data, &samples);
@@ -272,7 +259,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for B
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
         let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd = utils::compute_lfd(radius, &distances);
+        let lfd = LFD::from_radial_distances(&distances, radius.half());
 
         Self {
             depth,
