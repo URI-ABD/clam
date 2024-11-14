@@ -48,21 +48,21 @@ impl Msa {
             .collect()
     }
 
-    /// Create a new MSA from a builder.
+    /// Create a new MSA from the columnar builder.
     #[must_use]
-    pub fn from_builder<U: Number + Neg<Output = U>>(builder: &Columnar<U>) -> Self {
+    pub fn from_columnar<U: Number + Neg<Output = U>>(columnar: &Columnar<U>) -> Self {
         Self {
-            sequences: builder.extract_msa(),
-            gap: builder.gap(),
+            sequences: columnar.extract_msa(),
+            gap: columnar.gap(),
         }
     }
 
-    /// Parallel version of `from_builder`.
+    /// Parallel version of `from_columnar`.
     #[must_use]
-    pub fn par_from_builder<U: Number + Neg<Output = U>>(builder: &Columnar<U>) -> Self {
+    pub fn par_from_columnar<U: Number + Neg<Output = U>>(columnar: &Columnar<U>) -> Self {
         Self {
-            sequences: builder.par_extract_msa(),
-            gap: builder.gap(),
+            sequences: columnar.par_extract_msa(),
+            gap: columnar.gap(),
         }
     }
 }
