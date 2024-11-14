@@ -34,16 +34,14 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
             name,
         }
     }
-}
 
-impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
-    /// Calculates the average and maximum `p-distance`s of all pairwise
+    /// Calculates the mean and maximum `p-distance`s of all pairwise
     /// alignments in the MSA.
     #[must_use]
     pub fn p_distance_stats(&self, gap_char: u8) -> (f32, f32) {
-        let p_dists = self.p_distances(gap_char);
-        let n_pairs = p_dists.len();
-        let (sum, max) = p_dists
+        let p_distances = self.p_distances(gap_char);
+        let n_pairs = p_distances.len();
+        let (sum, max) = p_distances
             .into_iter()
             .fold((0.0, 0.0), |(sum, max), dist| (sum + dist, f32::max(max, dist)));
         let avg = sum / n_pairs.as_f32();
@@ -54,9 +52,9 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     /// the pairwise alignments.
     #[must_use]
     pub fn p_distance_stats_subsample(&self, gap_char: u8) -> (f32, f32) {
-        let p_dists = self.p_distances_subsample(gap_char);
-        let n_pairs = p_dists.len();
-        let (sum, max) = p_dists
+        let p_distances = self.p_distances_subsample(gap_char);
+        let n_pairs = p_distances.len();
+        let (sum, max) = p_distances
             .into_iter()
             .fold((0.0, 0.0), |(sum, max), dist| (sum + dist, f32::max(max, dist)));
         let avg = sum / n_pairs.as_f32();
@@ -178,9 +176,9 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
     {
         indices
             .iter()
-            .map(|&i| self.get(i).as_ref())
             .enumerate()
-            .flat_map(move |(i, s1)| indices.iter().skip(i + 1).map(move |&j| (s1, self.get(j).as_ref())))
+            .flat_map(move |(i, &s1)| indices.iter().skip(i + 1).map(move |&s2| (s1, s2)))
+            .map(|(s1, s2)| (self.get(s1).as_ref(), self.get(s2).as_ref()))
             .map(move |(s1, s2)| scorer(s1, s2))
     }
 
@@ -308,9 +306,9 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     {
         indices
             .par_iter()
-            .map(|&i| self.get(i).as_ref())
             .enumerate()
-            .flat_map(move |(i, s1)| indices.par_iter().skip(i + 1).map(move |&j| (s1, self.get(j).as_ref())))
+            .flat_map(move |(i, &s1)| indices.par_iter().skip(i + 1).map(move |&s2| (s1, s2)))
+            .map(|(s1, s2)| (self.get(s1).as_ref(), self.get(s2).as_ref()))
             .map(move |(s1, s2)| scorer(s1, s2))
     }
 
@@ -319,7 +317,7 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     where
         F: (Fn(&[u8], &[u8]) -> G) + Send + Sync,
     {
-        self.apply_pairwise(indices, scorer).sum()
+        self.par_apply_pairwise(indices, scorer).sum()
     }
 }
 
