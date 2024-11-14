@@ -1,6 +1,7 @@
 //! Substitution matrix for the Needleman-Wunsch aligner.
 
 use core::ops::Neg;
+
 use std::collections::HashSet;
 
 use distances::{number::Int, Number};
@@ -32,11 +33,11 @@ impl<T: Number> CostMatrix<T> {
     /// Create a new substitution matrix.
     #[must_use]
     pub fn new(default_sub: T, gap_open: T, gap_ext: T) -> Self {
+        // Initialize the substitution matrix.
         let mut sub_matrix = [[default_sub; NUM_CHARS]; NUM_CHARS];
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..NUM_CHARS {
-            sub_matrix[i][i] = T::ZERO;
-        }
+
+        // Set the diagonal to zero.
+        sub_matrix.iter_mut().enumerate().for_each(|(i, row)| row[i] = T::ZERO);
 
         Self {
             sub_matrix,
@@ -51,7 +52,7 @@ impl<T: Number> CostMatrix<T> {
         Self::new(T::ONE, T::from(10), T::ONE)
     }
 
-    /// Shift all substitution costs by a constant.
+    /// Add a constant to all costs.
     #[must_use]
     pub fn shift(mut self, shift: T) -> Self {
         for i in 0..NUM_CHARS {
@@ -64,7 +65,7 @@ impl<T: Number> CostMatrix<T> {
         self
     }
 
-    /// Scale all substitution costs by a constant.
+    /// Multiply all costs by a constant.
     #[must_use]
     pub fn scale(mut self, scale: T) -> Self {
         for i in 0..NUM_CHARS {
@@ -127,7 +128,7 @@ impl<T: Number> CostMatrix<T> {
 
 impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
-    /// zero.
+    /// zero and all non-zero costs are positive.
     #[must_use]
     pub fn normalize(self) -> Self {
         let shift = self
@@ -144,9 +145,7 @@ impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
-        self.sub_matrix.iter_mut().for_each(|row| {
-            row.iter_mut().for_each(|cost| *cost = -*cost);
-        });
+        self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost = -*cost);
         self.gap_open = -self.gap_open;
         self.gap_ext = -self.gap_ext;
         self
