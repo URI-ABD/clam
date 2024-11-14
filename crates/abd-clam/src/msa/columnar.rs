@@ -153,7 +153,8 @@ impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
     pub fn merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
         let x = self.get_sequence(self_center);
         let y = other.get_sequence(other_center);
-        let (_, [x_to_y, y_to_x]) = self.aligner.alignment_gaps(&x, &y);
+        let table = self.aligner.dp_table(&x, &y);
+        let [x_to_y, y_to_x] = self.aligner.alignment_gaps(&x, &y, &table);
 
         for i in x_to_y {
             self.add_gap(i).unwrap_or_else(|e| unreachable!("{e}"));
@@ -268,7 +269,8 @@ impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
     pub fn par_merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
         let x = self.get_sequence(self_center);
         let y = other.get_sequence(other_center);
-        let (_, [x_to_y, y_to_x]) = self.aligner.alignment_gaps(&x, &y);
+        let table = self.aligner.dp_table(&x, &y);
+        let [x_to_y, y_to_x] = self.aligner.alignment_gaps(&x, &y, &table);
 
         for i in x_to_y {
             self.add_gap(i).unwrap_or_else(|e| unreachable!("{e}"));

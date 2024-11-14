@@ -79,26 +79,27 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
         let (x, y) = (x.as_ref(), y.as_ref());
 
         // Initialize the DP table.
-        let mut dp = vec![vec![(T::ZERO, Direction::Diagonal); x.len() + 1]; y.len() + 1];
+        let mut table = vec![vec![(T::ZERO, Direction::Diagonal); x.len() + 1]; y.len() + 1];
 
         // The top-left cell is the cost of aligning two empty sequences.
-        dp[0][0] = (T::ZERO, Direction::Diagonal);
+        table[0][0] = (T::ZERO, Direction::Diagonal);
 
         // Initialize the first row to the cost of inserting characters from the
         // first sequence.
-        for i in 1..dp[0].len() {
-            let cost = dp[0][i - 1].0 + self.matrix.gap_ext_cost();
-            dp[0][i] = (cost, Direction::Left);
+        for i in 1..table[0].len() {
+            let cost = table[0][i - 1].0 + self.matrix.gap_ext_cost();
+            table[0][i] = (cost, Direction::Left);
         }
 
         // Initialize the first column to the cost of inserting characters from
         // the second sequence.
-        for j in 1..dp.len() {
-            let cost = dp[j - 1][0].0 + self.matrix.gap_ext_cost();
-            dp[j][0] = (cost, Direction::Up);
+        for j in 1..table.len() {
+            let cost = table[j - 1][0].0 + self.matrix.gap_ext_cost();
+            table[j][0] = (cost, Direction::Up);
         }
 
         // Fill in the DP table.
+        // On iteration (i, j), we will fill in the cell at (i + 1, j + 1).
         for (i, &yc) in y.iter().enumerate() {
             for (j, &xc) in x.iter().enumerate() {
                 // The cost of a mismatch is the substitution cost.
@@ -109,17 +110,17 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
                 };
 
                 // Compute the costs of the three possible operations.
-                let diag_cost = dp[i][j].0 + mismatch_penalty;
+                let diag_cost = table[i][j].0 + mismatch_penalty;
 
                 // The cost of inserting a character depends on the previous
                 // operation.
-                let up_cost = dp[i][j + 1].0
-                    + match dp[i][j + 1].1 {
+                let up_cost = table[i][j + 1].0
+                    + match table[i][j + 1].1 {
                         Direction::Up => self.matrix.gap_ext_cost(),
                         _ => self.matrix.gap_open_cost(),
                     };
-                let left_cost = dp[i + 1][j].0
-                    + match dp[i + 1][j].1 {
+                let left_cost = table[i + 1][j].0
+                    + match table[i + 1][j].1 {
                         Direction::Left => self.matrix.gap_ext_cost(),
                         _ => self.matrix.gap_open_cost(),
                     };
@@ -127,7 +128,7 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
                 // Choose the operation with the minimum cost. If there is a tie,
                 // prefer the diagonal operation so that the aligned sequences
                 // are as short as possible.
-                dp[i + 1][j + 1] = if diag_cost <= up_cost && diag_cost <= left_cost {
+                table[i + 1][j + 1] = if diag_cost <= up_cost && diag_cost <= left_cost {
                     (diag_cost, Direction::Diagonal)
                 } else if up_cost <= left_cost {
                     (up_cost, Direction::Up)
@@ -137,7 +138,7 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
             }
         }
 
-        dp
+        table
     }
 
     /// Align two sequences using the Needleman-Wunsch algorithm.
@@ -150,7 +151,7 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
     /// # Returns
     ///
     /// The alignment distance and the aligned sequences as bytes.
-    pub fn align<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> (T, [Vec<u8>; 2]) {
+    pub fn align<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Vec<u8>; 2] {
         let (x, y) = (x.as_ref(), y.as_ref());
         let [mut row_i, mut col_i] = [y.len(), x.len()];
         let [mut x_aligned, mut y_aligned] = [
@@ -182,19 +183,16 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
         x_aligned.reverse();
         y_aligned.reverse();
 
-        (self.distance(table), [x_aligned, y_aligned])
+        [x_aligned, y_aligned]
     }
 
     /// Align two strings using the Needleman-Wunsch algorithm.
-    pub fn align_str<S: AsRef<str>>(&self, x: &S, y: &S, table: &NwTable<T>) -> (T, [String; 2]) {
-        let (d, [x_aligned, y_aligned]) = self.align(&x.as_ref(), &y.as_ref(), table);
-        (
-            d,
-            [
-                String::from_utf8(x_aligned).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
-                String::from_utf8(y_aligned).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
-            ],
-        )
+    pub fn align_str<S: AsRef<str>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [String; 2] {
+        let [x_aligned, y_aligned] = self.align(&x.as_ref(), &y.as_ref(), table);
+        [
+            String::from_utf8(x_aligned).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
+            String::from_utf8(y_aligned).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
+        ]
     }
 
     /// Returns the `Edits` needed to align two sequences.
@@ -210,22 +208,18 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
     /// # Returns
     ///
     /// The `Edits` needed to align the two sequences.
-    pub fn edits<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Edits; 2]) {
-        let table = self.dp_table(x, y);
-        let (d, [x_aligned, y_aligned]) = self.align(x, y, &table);
-        (
-            d,
-            [
-                aligned_x_to_y(&x_aligned, &y_aligned),
-                aligned_x_to_y(&y_aligned, &x_aligned),
-            ],
-        )
+    pub fn edits<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Edits; 2] {
+        let [x_aligned, y_aligned] = self.align(x, y, table);
+        [
+            aligned_x_to_y(&x_aligned, &y_aligned),
+            aligned_x_to_y(&y_aligned, &x_aligned),
+        ]
     }
 
     /// Returns the indices where gaps need to be inserted to align two
     /// sequences.
-    pub fn alignment_gaps<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> (T, [Vec<usize>; 2]) {
-        let table = self.dp_table(x, y);
+    pub fn alignment_gaps<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Vec<usize>; 2] {
+        // let table = self.dp_table(x, y);
 
         let (x, y) = (x.as_ref(), y.as_ref());
 
@@ -252,7 +246,7 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
         x_gaps.reverse();
         y_gaps.reverse();
 
-        (self.distance(&table), [x_gaps, y_gaps])
+        [x_gaps, y_gaps]
     }
 }
 

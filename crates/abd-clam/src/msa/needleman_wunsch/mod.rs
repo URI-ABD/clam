@@ -69,8 +69,10 @@ mod tests {
         let peppers_y = "NAJIBEATSPEPPERS";
         let peppers_table = nw_aligner.dp_table(&peppers_x, &peppers_y);
 
-        let (d, [aligned_x, aligned_y]) = nw_aligner.align_str(&peppers_x, &peppers_y, &peppers_table);
+        let d = nw_aligner.distance(&peppers_table);
         assert_eq!(d, 8);
+
+        let [aligned_x, aligned_y] = nw_aligner.align_str(&peppers_x, &peppers_y, &peppers_table);
         assert_eq!(aligned_x, "NAJIB-PEPPERSEATS");
         assert_eq!(aligned_y, "NAJIBEATSPEPPE-RS");
 
@@ -78,8 +80,10 @@ mod tests {
         let guilty_y = "NOTGUILTY";
         let guilty_table = nw_aligner.dp_table(&guilty_x, &guilty_y);
 
-        let (d, [aligned_x, aligned_y]) = nw_aligner.align_str(&guilty_x, &guilty_y, &guilty_table);
+        let d = nw_aligner.distance(&guilty_table);
         assert_eq!(d, 0);
+
+        let [aligned_x, aligned_y] = nw_aligner.align_str(&guilty_x, &guilty_y, &guilty_table);
         assert_eq!(aligned_x, "NOTGUILTY");
         assert_eq!(aligned_y, "NOTGUILTY");
     }
@@ -91,14 +95,20 @@ mod tests {
 
         let x = "MDIAIHHPWIRRP---";
         let y = "MDIAIHHPWIRRPF";
-        let (d, [x_gaps, y_gaps]) = nw_aligner.alignment_gaps(&x, &y);
+        let table = nw_aligner.dp_table(&x, &y);
 
+        let d = nw_aligner.distance(&table);
         assert_eq!(d, 3);
+
+        let [x_gaps, y_gaps] = nw_aligner.alignment_gaps(&x, &y, &table);
         assert_eq!(x_gaps, vec![]);
         assert_eq!(y_gaps, vec![13, 13]);
 
-        let (d, [x_gaps, y_gaps]) = nw_aligner.alignment_gaps(&y, &x);
+        let table = nw_aligner.dp_table(&y, &x);
+        let d = nw_aligner.distance(&table);
         assert_eq!(d, 3);
+
+        let [x_gaps, y_gaps] = nw_aligner.alignment_gaps(&y, &x, &table);
         assert_eq!(x_gaps, vec![13, 13]);
         assert_eq!(y_gaps, vec![]);
     }
