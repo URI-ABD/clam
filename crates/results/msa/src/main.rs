@@ -18,7 +18,7 @@
 use core::ops::Neg;
 use std::path::PathBuf;
 
-use abd_clam::{msa::CostMatrix, Cluster, Dataset, Metric, MetricSpace};
+use abd_clam::{msa, Cluster, Dataset, Metric, MetricSpace};
 use clap::Parser;
 
 use distances::Number;
@@ -45,18 +45,18 @@ struct Args {
 
     /// The cost matrix to use for the alignment.
     #[arg(short('m'), long)]
-    cost_matrix: SpecialMatrix,
+    cost_matrix: CostMatrix,
 
     /// Path to the output directory.
     #[arg(short('o'), long)]
     out_dir: Option<PathBuf>,
 }
 
-/// The datasets we use for benchmarks.
+/// The cost matrix to use for the alignment.
 #[derive(clap::ValueEnum, Debug, Clone)]
 #[allow(non_camel_case_types, clippy::doc_markdown)]
 #[non_exhaustive]
-pub enum SpecialMatrix {
+pub enum CostMatrix {
     /// The default matrix.
     #[clap(name = "default")]
     Default,
@@ -71,15 +71,15 @@ pub enum SpecialMatrix {
     Blosum62,
 }
 
-impl SpecialMatrix {
+impl CostMatrix {
     /// Get the cost matrix.
     #[must_use]
-    pub fn cost_matrix<T: Number + Neg<Output = T>>(&self) -> CostMatrix<T> {
+    pub fn cost_matrix<T: Number + Neg<Output = T>>(&self) -> msa::CostMatrix<T> {
         match self {
-            Self::Default => CostMatrix::default(),
-            Self::DefaultAffine => CostMatrix::default_affine(),
-            Self::ExtendedIupac => CostMatrix::extended_iupac(),
-            Self::Blosum62 => CostMatrix::blosum62(),
+            Self::Default => msa::CostMatrix::default(),
+            Self::DefaultAffine => msa::CostMatrix::default_affine(),
+            Self::ExtendedIupac => msa::CostMatrix::extended_iupac(),
+            Self::Blosum62 => msa::CostMatrix::blosum62(),
         }
     }
 
@@ -156,6 +156,8 @@ fn main() -> Result<(), String> {
         msa_data.dimensionality_hint()
     );
 
+    // Compute the quality metrics.
+
     let gap_char = b'-';
     let gap_penalty = 1;
     let mismatch_penalty = 1;
@@ -191,10 +193,10 @@ fn main() -> Result<(), String> {
 
     ftlog::info!("Converting to column-major format.");
     let metric = Metric::default();
-    let col_ms_data = msa_data.as_col_major::<Vec<_>>(metric);
+    let col_msa_data = msa_data.as_col_major::<Vec<_>>(metric);
     ftlog::info!("Finished converting to column-major format.");
 
-    let cs_quality = col_ms_data.par_scoring_columns(gap_char, gap_penalty, mismatch_penalty);
+    let cs_quality = col_msa_data.par_scoring_columns(gap_char, gap_penalty, mismatch_penalty);
     ftlog::info!("Column scoring metric: {cs_quality}");
 
     ftlog::info!("Finished scoring column-wise.");

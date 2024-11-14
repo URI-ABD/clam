@@ -14,7 +14,7 @@ type Ob<U> = OffBall<String, U, Fv<U>, B<U>>;
 
 /// Build the aligned datasets.
 pub fn build_aligned<P: AsRef<Path>>(
-    matrix: &crate::SpecialMatrix,
+    matrix: &crate::CostMatrix,
     off_ball: &Ob<i32>,
     data: &Fv<i32>,
     out_path: P,
