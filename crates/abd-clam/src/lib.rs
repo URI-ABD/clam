@@ -26,10 +26,10 @@ pub use crate::core::{
 };
 
 #[cfg(feature = "chaoda")]
-pub mod mbed;
-
-#[cfg(feature = "chaoda")]
 pub mod chaoda;
+
+#[cfg(feature = "mbed")]
+pub mod mbed;
 
 #[cfg(feature = "msa")]
 pub mod msa;

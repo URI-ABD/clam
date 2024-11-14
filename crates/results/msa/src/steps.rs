@@ -28,7 +28,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     };
 
     ftlog::info!("Aligning sequences...");
-    let builder = msa::Builder::<i32>::new(&aligner).par_with_binary_tree(off_ball, data);
+    let builder = msa::Columnar::<i32>::new(&aligner).par_with_binary_tree(off_ball, data);
 
     ftlog::info!("Extracting aligned sequences...");
     let msa = msa::Msa::par_from_builder(&builder);

@@ -1,6 +1,6 @@
 //! Multiple Sequence Alignment with CLAM
 
-mod builder;
+mod columnar;
 mod needleman_wunsch;
 pub mod quality;
 
@@ -8,7 +8,7 @@ use core::ops::{Index, Neg};
 
 use distances::Number;
 
-pub use builder::Builder;
+pub use columnar::Columnar;
 pub use needleman_wunsch::{Aligner, CostMatrix};
 
 /// The number of characters.
@@ -50,7 +50,7 @@ impl Msa {
 
     /// Create a new MSA from a builder.
     #[must_use]
-    pub fn from_builder<U: Number + Neg<Output = U>>(builder: &Builder<U>) -> Self {
+    pub fn from_builder<U: Number + Neg<Output = U>>(builder: &Columnar<U>) -> Self {
         Self {
             sequences: builder.extract_msa(),
             gap: builder.gap(),
@@ -59,7 +59,7 @@ impl Msa {
 
     /// Parallel version of `from_builder`.
     #[must_use]
-    pub fn par_from_builder<U: Number + Neg<Output = U>>(builder: &Builder<U>) -> Self {
+    pub fn par_from_builder<U: Number + Neg<Output = U>>(builder: &Columnar<U>) -> Self {
         Self {
             sequences: builder.par_extract_msa(),
             gap: builder.gap(),

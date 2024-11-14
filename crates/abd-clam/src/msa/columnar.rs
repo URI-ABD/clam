@@ -11,14 +11,14 @@ use super::needleman_wunsch::Aligner;
 use crate::{cakes::OffBall, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
 
 /// A multiple sequence alignment (MSA) builder.
-pub struct Builder<'a, U: Number + Neg<Output = U>> {
+pub struct Columnar<'a, U: Number + Neg<Output = U>> {
     /// The Needleman-Wunsch aligner.
     aligner: &'a Aligner<'a, U>,
     /// The columns of the partial MSA.
     columns: Vec<Vec<u8>>,
 }
 
-impl<'a, U: Number + Neg<Output = U>> Index<usize> for Builder<'a, U> {
+impl<'a, U: Number + Neg<Output = U>> Index<usize> for Columnar<'a, U> {
     type Output = Vec<u8>;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -26,7 +26,7 @@ impl<'a, U: Number + Neg<Output = U>> Index<usize> for Builder<'a, U> {
     }
 }
 
-impl<'a, U: Number + Neg<Output = U>> Builder<'a, U> {
+impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
     /// Create a new MSA builder.
     #[must_use]
     pub const fn new(aligner: &'a Aligner<U>) -> Self {
@@ -226,7 +226,7 @@ impl<'a, U: Number + Neg<Output = U>> Builder<'a, U> {
     }
 }
 
-impl<'a, U: Number + Neg<Output = U>> Builder<'a, U> {
+impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
     /// Parallel version of `with_binary_tree`.
     #[must_use]
     pub fn par_with_binary_tree<T, D, C>(self, c: &OffBall<T, U, D, C>, data: &D) -> Self

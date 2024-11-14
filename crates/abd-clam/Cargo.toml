@@ -69,6 +69,7 @@ statistical = "1.0.0"
 csv = ["dep:csv"]  # For writing trees to CSV files.
 ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore", "dep:ordered-float", "dep:bincode"]
+mbed = ["chaoda"]
 msa = ["dep:stringzilla"]
 
 [[bench]]
