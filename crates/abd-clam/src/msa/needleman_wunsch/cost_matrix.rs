@@ -134,7 +134,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
         let shift = self
             .sub_matrix
             .iter()
-            .flat_map(|row| row.iter())
+            .flatten()
             .fold(T::MAX, |a, &b| if a < b { a } else { b });
 
         self.shift(-shift)
@@ -225,7 +225,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
-        let matrix = Self::default_affine()
+        let matrix = Self::default()
             .with_sub_cost(b'-', b'.', T::ZERO)
             .with_sub_cost(b'.', b'-', T::ZERO)
             .scale(T::from(lcm));
@@ -248,6 +248,8 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             })
             .map(|(a, b, cost)| (a as u8, b as u8, cost))
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
+            .with_gap_open(T::from(lcm))
+            .with_gap_ext(T::ONE)
     }
 
     /// The BLOSUM62 substitution matrix for proteins.
@@ -284,7 +286,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
-        let matrix = Self::default_affine()
+        let matrix = Self::default()
             .with_sub_cost(b'-', b'.', T::ZERO)
             .with_sub_cost(b'.', b'-', T::ZERO);
 
@@ -302,5 +304,11 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             .fold(matrix, |matrix, (a, b, cost)| {
                 matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost)
             })
+            // Finally, convert the matrix into a form that can be used to
+            // minimize the edit distances.
+            .neg()
+            .with_gap_open(T::from(15))
+            .with_gap_ext(T::ONE)
+            .normalize()
     }
 }

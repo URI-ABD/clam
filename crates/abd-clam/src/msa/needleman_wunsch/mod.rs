@@ -15,7 +15,7 @@ mod tests {
     #[test]
     fn distance() {
         let matrix = CostMatrix::default();
-        let nw_aligner = Aligner::<i16>::new_minimizer(&matrix, b'-');
+        let nw_aligner = Aligner::<i16>::new(&matrix, b'-');
 
         let x = "NAJIBEATSPEPPERS";
         let y = "NAJIBPEPPERSEATS";
@@ -33,7 +33,7 @@ mod tests {
         let x = "NAJIBPEPPERSEATS";
         let y = "NAJIBEATSPEPPERS";
         let matrix = CostMatrix::default();
-        let nw_aligner = Aligner::new_minimizer(&matrix, b'-');
+        let nw_aligner = Aligner::new(&matrix, b'-');
         let table = nw_aligner.dp_table(&x, &y);
 
         #[rustfmt::skip]
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_trace_back() {
         let matrix = CostMatrix::default();
-        let nw_aligner = Aligner::<i16>::new_minimizer(&matrix, b'-');
+        let nw_aligner = Aligner::<i16>::new(&matrix, b'-');
 
         let peppers_x = "NAJIBPEPPERSEATS";
         let peppers_y = "NAJIBEATSPEPPERS";
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn test_alignment_gaps() {
         let matrix = CostMatrix::default();
-        let nw_aligner = Aligner::<i16>::new_minimizer(&matrix, b'-');
+        let nw_aligner = Aligner::<i16>::new(&matrix, b'-');
 
         let x = "MDIAIHHPWIRRP---";
         let y = "MDIAIHHPWIRRPF";

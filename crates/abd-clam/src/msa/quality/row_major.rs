@@ -321,9 +321,18 @@ impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
     }
 }
 
+/// Removes gap-only columns from two aligned sequences.
+fn remove_gap_only_cols(s1: &[u8], s2: &[u8], gap_char: u8) -> (Vec<u8>, Vec<u8>) {
+    s1.iter()
+        .zip(s2.iter())
+        .filter(|(&a, &b)| !(a == gap_char && b == gap_char))
+        .unzip()
+}
+
 /// Scores a single pairwise alignment in the MSA, applying a penalty for
 /// gaps and mismatches.
 fn sp_inner(s1: &[u8], s2: &[u8], gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> usize {
+    let (s1, s2) = remove_gap_only_cols(s1, s2, gap_char);
     s1.iter().zip(s2.iter()).fold(0, |score, (&a, &b)| {
         if a == gap_char || b == gap_char {
             score + gap_penalty
@@ -345,6 +354,8 @@ fn wsp_inner(
     gap_ext_penalty: usize,
     mismatch_penalty: usize,
 ) -> usize {
+    let (s1, s2) = remove_gap_only_cols(s1, s2, gap_char);
+
     let start = if s1[0] == gap_char || s2[0] == gap_char {
         gap_open_penalty
     } else if s1[0] != s2[0] {
@@ -372,6 +383,7 @@ fn wsp_inner(
 /// Measures the distortion of the Levenshtein edit distance between the
 /// unaligned sequences and the Hamming distance between the aligned sequences.
 fn dd_inner(s1: &[u8], s2: &[u8], gap_char: u8) -> f32 {
+    let (s1, s2) = remove_gap_only_cols(s1, s2, gap_char);
     let ham = s1.iter().zip(s2.iter()).filter(|(&a, &b)| a != b).count();
 
     let s1 = s1.iter().filter(|&&c| c != gap_char).copied().collect::<Vec<_>>();
@@ -387,6 +399,7 @@ fn dd_inner(s1: &[u8], s2: &[u8], gap_char: u8) -> f32 {
 
 /// Calculates the p-distance of a pair of sequences.
 fn pd_inner(s1: &[u8], s2: &[u8], gap_char: u8) -> f32 {
+    let (s1, s2) = remove_gap_only_cols(s1, s2, gap_char);
     let num_mismatches = s1
         .iter()
         .zip(s2.iter())

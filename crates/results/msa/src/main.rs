@@ -82,15 +82,6 @@ impl CostMatrix {
             Self::Blosum62 => msa::CostMatrix::blosum62(),
         }
     }
-
-    /// Whether the matrix is used for minimization.
-    #[must_use]
-    pub const fn is_minimizer(&self) -> bool {
-        match self {
-            Self::Default | Self::DefaultAffine | Self::ExtendedIupac => true,
-            Self::Blosum62 => false,
-        }
-    }
 }
 
 #[allow(clippy::similar_names)]

@@ -21,11 +21,7 @@ pub fn build_aligned<P: AsRef<Path>>(
 ) -> Result<(), String> {
     ftlog::info!("Setting up aligner...");
     let cost_matrix = matrix.cost_matrix::<i32>();
-    let aligner = if matrix.is_minimizer() {
-        msa::Aligner::new_minimizer(&cost_matrix, b'-')
-    } else {
-        msa::Aligner::new_maximizer(&cost_matrix, b'-')
-    };
+    let aligner = msa::Aligner::new(&cost_matrix, b'-');
 
     ftlog::info!("Aligning sequences...");
     let builder = msa::Columnar::<i32>::new(&aligner).par_with_binary_tree(off_ball, data);

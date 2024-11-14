@@ -19,27 +19,12 @@ pub struct Aligner<'a, T: Number + Neg<Output = T>> {
     matrix: &'a CostMatrix<T>,
     /// The gap character.
     gap: u8,
-    /// Whether to minimize the distance or maximize the similarity.
-    minimizer: bool,
 }
 
 impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
     /// Create a new Needleman-Wunsch aligner that minimizes the cost.
-    pub const fn new_minimizer(matrix: &'a CostMatrix<T>, gap: u8) -> Self {
-        Self {
-            matrix,
-            gap,
-            minimizer: true,
-        }
-    }
-
-    /// Create a new Needleman-Wunsch aligner that minimizes the cost.
-    pub const fn new_maximizer(matrix: &'a CostMatrix<T>, gap: u8) -> Self {
-        Self {
-            matrix,
-            gap,
-            minimizer: false,
-        }
+    pub const fn new(matrix: &'a CostMatrix<T>, gap: u8) -> Self {
+        Self { matrix, gap }
     }
 
     /// Get the gap character.
@@ -50,12 +35,7 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
 
     /// Compute the minimized edit distance between two sequences' DP table.
     pub fn distance(&self, dp_table: &NwTable<T>) -> T {
-        let d = dp_table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d);
-        if self.minimizer {
-            d
-        } else {
-            -d
-        }
+        dp_table.last().and_then(|row| row.last()).map_or(T::ZERO, |(d, _)| *d)
     }
 
     /// Compute the dynamic programming table for the Needleman-Wunsch algorithm.
