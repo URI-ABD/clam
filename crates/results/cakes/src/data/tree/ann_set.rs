@@ -116,7 +116,7 @@ impl Group {
             ftlog::info!("Creating squishy ball and permuted dataset.");
             let (mut squishy_ball, perm_data) = {
                 let (off_ball, data) = OffBall::par_from_ball_tree(ball.clone(), uncompressed.clone());
-                let mut squishy_ball = SquishyBall::par_adapt_tree_iterative(off_ball, None, &data);
+                let mut squishy_ball = SquishyBall::par_adapt_tree_iterative(off_ball, None);
 
                 // Set the costs of the squishy ball and write it to a CSV file.
                 ftlog::info!("Setting costs and writing pre-trim ball to CSV file.");

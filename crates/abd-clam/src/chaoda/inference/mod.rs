@@ -61,7 +61,7 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
         for (metric, criteria) in self.metrics.iter().zip(criteria.iter()) {
             data.set_metric(metric.clone());
             let source = S::new_tree(data, criteria, seed);
-            let tree = Vertex::adapt_tree(source, None, data);
+            let tree = Vertex::adapt_tree(source, None);
             trees.push(tree);
         }
         trees
@@ -145,7 +145,7 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
         for (metric, criteria) in self.metrics.iter().zip(criteria.iter()) {
             data.set_metric(metric.clone());
             let source = S::par_new_tree(data, criteria, seed);
-            let tree = Vertex::par_adapt_tree(source, None, data);
+            let tree = Vertex::par_adapt_tree(source, None);
             trees.push(tree);
         }
         trees

@@ -68,7 +68,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Vertex<I, U, D, S> {
 impl<I, U: Number, D: Dataset<I, U>> BallAdapter<I, U, D, D, Ratios> for Vertex<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
-        let root = Self::adapt_tree(ball, None, &data);
+        let root = Self::adapt_tree(ball, None);
         (root, data)
     }
 }
@@ -78,13 +78,13 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParBallAdapter<I, U, D, D, 
 {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, D) {
-        let root = Self::par_adapt_tree(ball, None, &data);
+        let root = Self::par_adapt_tree(ball, None);
         (root, data)
     }
 }
 
 impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Ratios> for Vertex<I, U, D, S> {
-    fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Ratios, _: &D) -> Self {
+    fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Ratios) -> Self {
         Self {
             source,
             children,
@@ -115,8 +115,8 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Adapter<I, U, D, D, S,
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U>, S: ParCluster<I, U, D>> ParAdapter<I, U, D, D, S, Ratios>
     for Vertex<I, U, D, S>
 {
-    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Ratios, d_in: &D) -> Self {
-        Self::new_adapted(source, children, params, d_in)
+    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Ratios) -> Self {
+        Self::new_adapted(source, children, params)
     }
 
     fn par_post_traversal(&mut self) {}

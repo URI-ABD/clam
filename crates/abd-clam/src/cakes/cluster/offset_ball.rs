@@ -47,7 +47,7 @@ impl<I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> OffBall<I, U, D, S> {
 impl<I, U: Number, D: Dataset<I, U> + Permutable> BallAdapter<I, U, D, D, Offset> for OffBall<I, U, D, Ball<I, U, D>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
-        let mut root = Self::adapt_tree_iterative(ball, None, &data);
+        let mut root = Self::adapt_tree_iterative(ball, None);
         data.permute(&root.source.indices);
         root.source.clear_indices();
         (root, data)
@@ -59,7 +59,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
     fn par_from_ball_tree(ball: Ball<I, U, D>, mut data: D) -> (Self, D) {
-        let mut root = Self::par_adapt_tree_iterative(ball, None, &data);
+        let mut root = Self::par_adapt_tree_iterative(ball, None);
         data.permute(&root.source.indices);
         root.source.clear_indices();
         (root, data)
@@ -69,7 +69,7 @@ impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable> ParBallAdapter
 impl<I, U: Number, D: Dataset<I, U> + Permutable, S: Cluster<I, U, D>> Adapter<I, U, D, D, S, Offset>
     for OffBall<I, U, D, S>
 {
-    fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset, _: &D) -> Self {
+    fn new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset) -> Self {
         Self {
             source,
             children,
@@ -118,8 +118,8 @@ fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
 impl<I: Send + Sync, U: Number, D: ParDataset<I, U> + Permutable, S: ParCluster<I, U, D>>
     ParAdapter<I, U, D, D, S, Offset> for OffBall<I, U, D, S>
 {
-    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset, d_in: &D) -> Self {
-        Self::new_adapted(source, children, params, d_in)
+    fn par_new_adapted(source: S, children: Vec<(usize, U, Box<Self>)>, params: Offset) -> Self {
+        Self::new_adapted(source, children, params)
     }
 
     fn par_post_traversal(&mut self) {

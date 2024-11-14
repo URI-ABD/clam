@@ -84,7 +84,7 @@ impl<I: Encodable + Decodable, U: Number, D: Compressible<I, U> + Permutable>
 {
     fn from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
         let (off_ball, data) = OffBall::from_ball_tree(ball, data);
-        let mut root = Self::adapt_tree_iterative(off_ball, None, &data);
+        let mut root = Self::adapt_tree_iterative(off_ball, None);
         root.set_costs(&data);
         root.trim(4);
         let data = CodecData::from_compressible(&data, &root);
@@ -98,7 +98,7 @@ impl<I: Encodable + Decodable + Send + Sync, U: Number, D: ParCompressible<I, U>
 {
     fn par_from_ball_tree(ball: Ball<I, U, D>, data: D) -> (Self, CodecData<I, U, usize>) {
         let (off_ball, data) = OffBall::par_from_ball_tree(ball, data);
-        let mut root = Self::par_adapt_tree_iterative(off_ball, None, &data);
+        let mut root = Self::par_adapt_tree_iterative(off_ball, None);
         root.par_set_costs(&data);
         root.trim(4);
         let data = CodecData::par_from_compressible(&data, &root);
@@ -226,12 +226,7 @@ impl<
 impl<I: Encodable + Decodable, U: Number, Co: Compressible<I, U>, Dec: Decompressible<I, U>, S: Cluster<I, U, Co>>
     Adapter<I, U, Co, Dec, OffBall<I, U, Co, S>, SquishCosts<U>> for SquishyBall<I, U, Co, Dec, S>
 {
-    fn new_adapted(
-        source: OffBall<I, U, Co, S>,
-        children: Vec<(usize, U, Box<Self>)>,
-        params: SquishCosts<U>,
-        _: &Co,
-    ) -> Self {
+    fn new_adapted(source: OffBall<I, U, Co, S>, children: Vec<(usize, U, Box<Self>)>, params: SquishCosts<U>) -> Self {
         Self {
             source,
             children,
@@ -290,9 +285,8 @@ impl<
         source: OffBall<I, U, Co, S>,
         children: Vec<(usize, U, Box<Self>)>,
         params: SquishCosts<U>,
-        d_in: &Co,
     ) -> Self {
-        Self::new_adapted(source, children, params, d_in)
+        Self::new_adapted(source, children, params)
     }
 
     fn par_post_traversal(&mut self) {}
