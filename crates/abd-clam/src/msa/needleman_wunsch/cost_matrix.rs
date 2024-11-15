@@ -52,29 +52,17 @@ impl<T: Number> CostMatrix<T> {
         Self::new(T::ONE, T::from(10), T::ONE)
     }
 
-    /// Add a constant to all costs.
+    /// Add a constant to all substitution costs.
     #[must_use]
     pub fn shift(mut self, shift: T) -> Self {
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                self.sub_matrix[i][j] += shift;
-            }
-        }
-        self.gap_open += shift;
-        self.gap_ext += shift;
+        self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost += shift);
         self
     }
 
-    /// Multiply all costs by a constant.
+    /// Multiply all substitution costs by a constant.
     #[must_use]
     pub fn scale(mut self, scale: T) -> Self {
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                self.sub_matrix[i][j] *= scale;
-            }
-        }
-        self.gap_open *= scale;
-        self.gap_ext *= scale;
+        self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost *= scale);
         self
     }
 
@@ -146,8 +134,6 @@ impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
 
     fn neg(mut self) -> Self::Output {
         self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost = -*cost);
-        self.gap_open = -self.gap_open;
-        self.gap_ext = -self.gap_ext;
         self
     }
 }
@@ -246,8 +232,11 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
                     (a.to_ascii_lowercase(), b.to_ascii_lowercase(), cost),
                 ]
             })
+            // Cast the characters to bytes.
             .map(|(a, b, cost)| (a as u8, b as u8, cost))
+            // Add the costs to the substitution matrix.
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
+            // Add affine gap penalties.
             .with_gap_open(T::from(lcm))
             .with_gap_ext(T::ONE)
     }
@@ -282,7 +271,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
         ];
 
         // The amino acid codes.
-        let codes = b"CSTAGPDEQNHRKMILVWYF";
+        let codes = "CSTAGPDEQNHRKMILVWYF";
 
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
@@ -292,23 +281,36 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // Flatten the costs into a vector of (a, b, cost) tuples.
         codes
-            .iter()
+            .chars()
             .zip(costs.iter())
-            .flat_map(|(&a, costs)| {
+            .flat_map(|(a, costs)| {
                 codes
-                    .iter()
+                    .chars()
                     .zip(costs.iter())
-                    .map(move |(&b, &cost)| (a, b, T::from(cost)))
+                    .map(move |(b, &cost)| (a, b, T::from(cost)))
             })
+            .flat_map(|(a, b, cost)| {
+                // Add the costs for the upper and lower case versions of the
+                // characters.
+                [
+                    (a, b, cost),
+                    (a.to_ascii_lowercase(), b, cost),
+                    (a, b.to_ascii_lowercase(), cost),
+                    (a.to_ascii_lowercase(), b.to_ascii_lowercase(), cost),
+                ]
+            })
+            // Convert the characters to bytes.
+            .map(|(a, b, cost)| (a as u8, b as u8, cost))
             // And combine them into a matrix.
             .fold(matrix, |matrix, (a, b, cost)| {
                 matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost)
             })
-            // Finally, convert the matrix into a form that can be used to
-            // minimize the edit distances.
+            // Convert the matrix into a form that can be used to minimize the
+            // edit distances.
             .neg()
+            .normalize()
+            // Add affine gap penalties.
             .with_gap_open(T::from(15))
             .with_gap_ext(T::ONE)
-            .normalize()
     }
 }
