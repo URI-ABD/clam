@@ -95,6 +95,11 @@ impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
         D: Dataset<T, U>,
         C: Cluster<T, U, D>,
     {
+        ftlog::trace!(
+            "Adding cluster to MSA. Depth: {}, Cardinality: {}",
+            c.depth(),
+            c.cardinality()
+        );
         let center = Self::new(self.aligner).with_sequence(data.get(c.arg_center()));
         c.indices()
             .filter(|&i| i != c.arg_center())
@@ -151,6 +156,11 @@ impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
     /// Merge two MSAs.
     #[must_use]
     pub fn merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
+        ftlog::trace!(
+            "Merging MSAs with cardinalities: {} and {}, and centers {self_center} and {other_center}",
+            self.len(),
+            other.len()
+        );
         let x = self.get_sequence(self_center);
         let y = other.get_sequence(other_center);
         let table = self.aligner.dp_table(&x, &y);
@@ -267,6 +277,11 @@ impl<'a, U: Number + Neg<Output = U>> Columnar<'a, U> {
     /// Parallel version of `merge`.
     #[must_use]
     pub fn par_merge(mut self, self_center: usize, mut other: Self, other_center: usize) -> Self {
+        ftlog::trace!(
+            "Parallel Merging MSAs with cardinalities: {} and {}, and centers {self_center} and {other_center}",
+            self.len(),
+            other.len()
+        );
         let x = self.get_sequence(self_center);
         let y = other.get_sequence(other_center);
         let table = self.aligner.dp_table(&x, &y);

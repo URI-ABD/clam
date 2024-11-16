@@ -17,11 +17,7 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
         let rows = self.instances.iter().map(AsRef::as_ref).collect::<Vec<_>>();
         let width = rows[0].len();
 
-        let mut instances = Vec::with_capacity(width);
-        for i in 0..width {
-            let col = rows.iter().map(|row| row[i]).collect();
-            instances.push(col);
-        }
+        let instances = (0..width).map(|i| rows.iter().map(|row| row[i]).collect()).collect();
 
         let dimensionality_hint = (self.cardinality(), Some(self.cardinality()));
         let name = format!("ColMajor({})", self.name);
@@ -193,6 +189,28 @@ impl<T: AsRef<[u8]>, U: Number, M> FlatVec<T, U, M> {
 
 // Parallelized implementations here
 impl<T: AsRef<[u8]> + Send + Sync, U: Number, M: Send + Sync> FlatVec<T, U, M> {
+    /// Parallelized version of `as_col_major`.
+    #[must_use]
+    pub fn par_as_col_major<Tn: FromIterator<u8> + Send + Sync>(&self, metric: Metric<Tn, U>) -> FlatVec<Tn, U, usize> {
+        let rows = self.instances.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+        let width = rows[0].len();
+
+        let instances = (0..width)
+            .into_par_iter()
+            .map(|i| rows.iter().map(|row| row[i]).collect())
+            .collect();
+
+        let dimensionality_hint = (self.cardinality(), Some(self.cardinality()));
+        let name = format!("ColMajor({})", self.name);
+        FlatVec {
+            metric,
+            instances,
+            dimensionality_hint,
+            permutation: (0..width).collect(),
+            metadata: (0..width).collect(),
+            name,
+        }
+    }
     /// Calculates the average and maximum `p-distance`s of all pairwise
     /// alignments in the MSA.
     #[must_use]

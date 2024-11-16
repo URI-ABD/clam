@@ -184,7 +184,7 @@ fn main() -> Result<(), String> {
 
     ftlog::info!("Converting to column-major format.");
     let metric = Metric::default();
-    let col_msa_data = msa_data.as_col_major::<Vec<_>>(metric);
+    let col_msa_data = msa_data.par_as_col_major::<Vec<_>>(metric);
     ftlog::info!("Finished converting to column-major format.");
 
     let cs_quality = col_msa_data.par_scoring_columns(gap_char, gap_penalty, mismatch_penalty);

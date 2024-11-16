@@ -47,6 +47,9 @@ impl<T: Number> CostMatrix<T> {
     }
 
     /// Create a new substitution matrix with affine gap penalties.
+    ///
+    /// All substitution costs are set to 1, the gap opening cost is 10, and the
+    /// gap extension cost is 1.
     #[must_use]
     pub fn default_affine() -> Self {
         Self::new(T::ONE, T::from(10), T::ONE)
@@ -55,14 +58,26 @@ impl<T: Number> CostMatrix<T> {
     /// Add a constant to all substitution costs.
     #[must_use]
     pub fn shift(mut self, shift: T) -> Self {
-        self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost += shift);
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                self.sub_matrix[i][j] += shift;
+            }
+        }
+        // self.gap_open += shift;
+        // self.gap_ext += shift;
         self
     }
 
     /// Multiply all substitution costs by a constant.
     #[must_use]
     pub fn scale(mut self, scale: T) -> Self {
-        self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost *= scale);
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                self.sub_matrix[i][j] *= scale;
+            }
+        }
+        // self.gap_open *= scale;
+        // self.gap_ext *= scale;
         self
     }
 
@@ -133,7 +148,13 @@ impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
-        self.sub_matrix.iter_mut().flatten().for_each(|cost| *cost = -*cost);
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                self.sub_matrix[i][j] = -self.sub_matrix[i][j];
+            }
+        }
+        self.gap_open = -self.gap_open;
+        self.gap_ext = -self.gap_ext;
         self
     }
 }
@@ -237,8 +258,8 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             // Add the costs to the substitution matrix.
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
             // Add affine gap penalties.
-            .with_gap_open(T::from(lcm))
-            .with_gap_ext(T::ONE)
+            .with_gap_open(T::from(lcm * 10))
+            .with_gap_ext(T::from(lcm))
     }
 
     /// The BLOSUM62 substitution matrix for proteins.
@@ -310,7 +331,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             .neg()
             .normalize()
             // Add affine gap penalties.
-            .with_gap_open(T::from(15))
-            .with_gap_ext(T::ONE)
+            .with_gap_open(T::from(15 * 10))
+            .with_gap_ext(T::from(15))
     }
 }
