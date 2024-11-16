@@ -82,15 +82,8 @@ impl<'a, T: Number + Neg<Output = T>> Aligner<'a, T> {
         // On iteration (i, j), we will fill in the cell at (i + 1, j + 1).
         for (i, &yc) in y.iter().enumerate() {
             for (j, &xc) in x.iter().enumerate() {
-                // The cost of a mismatch is the substitution cost.
-                let mismatch_penalty = if yc == xc {
-                    T::ZERO
-                } else {
-                    self.matrix.sub_cost(xc, yc)
-                };
-
                 // Compute the costs of the three possible operations.
-                let diag_cost = table[i][j].0 + mismatch_penalty;
+                let diag_cost = table[i][j].0 + self.matrix.sub_cost(xc, yc);
 
                 // The cost of inserting a character depends on the previous
                 // operation.
