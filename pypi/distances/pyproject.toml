@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "abd-distances"
 description = "Distance functions: A drop-in replacement for, and a super-set of the scipy.spatial.distance module."
-version = "1.0.3"
+version = "1.0.4"
 requires-python = ">=3.9"
 keywords = ["distance", "metric", "simd"]
 classifiers = [

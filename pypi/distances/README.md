@@ -1,4 +1,4 @@
-# Algorithms for Big Data: Distances (v1.0.3)
+# Algorithms for Big Data: Distances (v1.0.4)
 
 This package contains algorithms for computing distances between data points.
 It is a thin Python wrapper around the `distances` crate, in Rust.
