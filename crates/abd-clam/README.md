@@ -13,7 +13,7 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 
 ```rust
 use abd_clam::{
-    cakes::{cluster::Searchable, Algorithm},
+    cakes::{Algorithm, Searchable},
     Ball, Cluster, FlatVec, Metric, Partition,
 };
 use rand::prelude::*;
@@ -105,7 +105,7 @@ We can then perform compressed search on the compressed dataset without having t
 ```rust
 use abd_clam::{
     adapter::ParBallAdapter,
-    cakes::{cluster::ParSearchable, Algorithm, CodecData, SquishyBall},
+    cakes::{Algorithm, CodecData, ParSearchable, SquishyBall},
     partition::ParPartition,
     Ball, Cluster, FlatVec, Metric, MetricSpace, Permutable,
 };

@@ -1,8 +1,5 @@
 //! Utilities for running inference with pre-trained Chaoda models.
 
-mod combination;
-mod meta_ml;
-
 use distances::Number;
 use ndarray::prelude::*;
 use rayon::prelude::*;
@@ -16,10 +13,13 @@ use crate::{
     Dataset, Metric, Partition,
 };
 
+use super::{roc_auc_score, Vertex};
+
+mod combination;
+mod meta_ml;
+
 pub use combination::TrainedCombination;
 pub use meta_ml::TrainedMetaMlModel;
-
-use super::{roc_auc_score, Vertex};
 
 /// A pre-trained Chaoda model.
 #[derive(Serialize, Deserialize)]

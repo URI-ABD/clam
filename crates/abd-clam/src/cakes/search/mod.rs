@@ -1,14 +1,14 @@
 //! Entropy scaling search algorithms.
 
-mod knn_breadth_first;
-mod knn_depth_first;
-mod knn_repeated_rnn;
-mod rnn_clustered;
-
 use distances::Number;
 use rayon::prelude::*;
 
 use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
+
+mod knn_breadth_first;
+mod knn_depth_first;
+mod knn_repeated_rnn;
+mod rnn_clustered;
 
 /// The different algorithms that can be used for search.
 ///

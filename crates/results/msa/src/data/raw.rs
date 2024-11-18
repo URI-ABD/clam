@@ -6,7 +6,6 @@ use std::{
 };
 
 use abd_clam::{Dataset, FlatVec, Metric, MetricSpace};
-
 use distances::number::Int;
 use results_cakes::data::fasta;
 

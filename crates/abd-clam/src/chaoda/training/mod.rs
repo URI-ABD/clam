@@ -12,6 +12,8 @@ use crate::{
     Cluster, Dataset, Metric, Partition,
 };
 
+use super::{inference::Chaoda, Graph, Vertex};
+
 mod algorithms;
 mod combination;
 mod meta_ml;
@@ -19,8 +21,6 @@ mod meta_ml;
 pub use algorithms::{GraphAlgorithm, GraphEvaluator};
 pub use combination::TrainableCombination;
 pub use meta_ml::TrainableMetaMlModel;
-
-use super::{inference::Chaoda, Graph, Vertex};
 
 /// A trainer for Chaoda models.
 ///

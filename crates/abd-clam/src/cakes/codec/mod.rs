@@ -1,10 +1,5 @@
 //! Compression and Decompression with CLAM
 
-mod codec_data;
-mod compression;
-mod decompression;
-mod squishy_ball;
-
 use distances::{number::Float, strings::needleman_wunsch, Number};
 
 #[allow(clippy::module_name_repetitions)]
@@ -14,6 +9,11 @@ pub use decompression::{Decodable, Decompressible, ParDecompressible};
 pub use squishy_ball::SquishyBall;
 
 use crate::{cluster::ParCluster, Cluster, FlatVec};
+
+mod codec_data;
+mod compression;
+mod decompression;
+mod squishy_ball;
 
 impl<I: Encodable, U: Number, M> Compressible<I, U> for FlatVec<I, U, M> {}
 impl<I: Encodable + Send + Sync, U: Number, M: Send + Sync> ParCompressible<I, U> for FlatVec<I, U, M> {}

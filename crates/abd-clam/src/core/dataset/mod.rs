@@ -1,18 +1,18 @@
 //! Traits relating to datasets.
 
+use distances::Number;
+
 mod flat_vec;
 mod metric;
 pub mod metric_space;
 mod permutable;
 
-use distances::Number;
+use metric_space::ParMetricSpace;
 
 pub use flat_vec::FlatVec;
 pub use metric::Metric;
 pub use metric_space::MetricSpace;
 pub use permutable::Permutable;
-
-use metric_space::ParMetricSpace;
 
 /// A dataset is a collection of instances.
 ///

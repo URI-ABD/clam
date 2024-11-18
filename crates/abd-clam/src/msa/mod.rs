@@ -1,12 +1,12 @@
 //! Multiple Sequence Alignment with CLAM
 
-mod columnar;
-mod needleman_wunsch;
-pub mod quality;
-
 use core::ops::{Index, Neg};
 
 use distances::Number;
+
+mod columnar;
+mod needleman_wunsch;
+pub mod quality;
 
 pub use columnar::Columnar;
 pub use needleman_wunsch::{Aligner, CostMatrix};

@@ -1,6 +1,7 @@
 //! An implementation of the Compression and Decompression traits.
 
 use core::marker::PhantomData;
+
 use std::{
     collections::HashMap,
     io::{Read, Write},

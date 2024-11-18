@@ -1,6 +1,7 @@
 //! Recursively build up the MSA using the CLAM tree.
 
 use core::ops::{Index, Neg};
+
 use std::string::FromUtf8Error;
 
 use distances::Number;

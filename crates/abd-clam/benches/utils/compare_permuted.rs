@@ -3,8 +3,7 @@
 
 use abd_clam::{
     cakes::{
-        cluster::{ParSearchable, Searchable},
-        Algorithm, CodecData, Decodable, Encodable, OffBall, ParCompressible, SquishyBall,
+        Algorithm, CodecData, Decodable, Encodable, OffBall, ParCompressible, ParSearchable, Searchable, SquishyBall,
     },
     Ball,
 };

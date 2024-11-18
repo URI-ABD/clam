@@ -16,11 +16,11 @@
 #![doc = include_str!("../README.md")]
 
 use core::ops::Neg;
+
 use std::path::PathBuf;
 
 use abd_clam::{msa, Cluster, Dataset, Metric, MetricSpace};
 use clap::Parser;
-
 use distances::Number;
 use results_cakes::{data::PathManager, utils::configure_logger};
 

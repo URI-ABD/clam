@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::{cakes::Algorithm, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
 
-/// A dataset that can be searched with entropy-scaling algorithms.
+/// A `Cluster` that can be searched with entropy-scaling algorithms.
 pub trait Searchable<I, U: Number, D: Dataset<I, U>>: Cluster<I, U, D> {
     /// Searches the dataset for the `query` instance and returns the
     /// indices of and distances to the nearest neighbors.
