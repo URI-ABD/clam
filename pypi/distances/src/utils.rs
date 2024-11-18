@@ -15,7 +15,7 @@ pub enum Scalar {
 }
 
 impl<'a> FromPyObject<'a> for Scalar {
-    fn extract(ob: &'a PyAny) -> PyResult<Self> {
+    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
         if let Ok(a) = ob.extract::<f32>() {
             Ok(Scalar::F32(a))
         } else if let Ok(a) = ob.extract::<f64>() {
@@ -66,7 +66,7 @@ impl<'a> Vector1<'a> {
 }
 
 impl<'a> FromPyObject<'a> for Vector1<'a> {
-    fn extract(ob: &'a PyAny) -> PyResult<Self> {
+    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
         if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f32>>() {
             Ok(Vector1::F32(a))
         } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f64>>() {
@@ -124,7 +124,7 @@ impl<'a> Vector2<'a> {
 }
 
 impl<'a> FromPyObject<'a> for Vector2<'a> {
-    fn extract(ob: &'a PyAny) -> PyResult<Self> {
+    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
         if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f32>>() {
             Ok(Vector2::F32(a))
         } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f64>>() {
@@ -192,7 +192,7 @@ where
         .collect::<Vec<_>>()
 }
 
-pub fn _pdist<T, U, F>(py: Python<'_>, a: ndarray::ArrayView2<T>, metric: F) -> Py<PyArray1<U>>
+pub fn _pdist<'py, T, U, F>(py: Python<'py>, a: ndarray::ArrayView2<T>, metric: F) -> Bound<'py, PyArray1<U>>
 where
     T: Number + numpy::Element,
     U: Number + numpy::Element,
@@ -209,5 +209,5 @@ where
                 .map(move |col| metric(row.as_slice().unwrap(), col.as_slice().unwrap()))
         })
         .collect::<Vec<_>>();
-    PyArray1::from_vec(py, result).to_owned()
+    PyArray1::from_vec_bound(py, result)
 }

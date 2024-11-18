@@ -8,20 +8,19 @@ use crate::utils::Scalar;
 
 use super::utils::{parse_metric, Vector1, Vector2, _cdist, _chebyshev, _manhattan, _pdist};
 
-pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "vectors")?;
-    m.add_function(wrap_pyfunction!(braycurtis, m)?)?;
-    m.add_function(wrap_pyfunction!(canberra, m)?)?;
-    m.add_function(wrap_pyfunction!(chebyshev, m)?)?;
-    m.add_function(wrap_pyfunction!(euclidean, m)?)?;
-    m.add_function(wrap_pyfunction!(sqeuclidean, m)?)?;
-    m.add_function(wrap_pyfunction!(manhattan, m)?)?;
-    m.add_function(wrap_pyfunction!(minkowski, m)?)?;
-    m.add_function(wrap_pyfunction!(cosine, m)?)?;
-    m.add_function(wrap_pyfunction!(cdist, m)?)?;
-    m.add_function(wrap_pyfunction!(pdist, m)?)?;
-    pm.add_submodule(m)?;
-    Ok(())
+pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(pm.py(), "vectors")?;
+    m.add_function(wrap_pyfunction!(braycurtis, &m)?)?;
+    m.add_function(wrap_pyfunction!(canberra, &m)?)?;
+    m.add_function(wrap_pyfunction!(chebyshev, &m)?)?;
+    m.add_function(wrap_pyfunction!(euclidean, &m)?)?;
+    m.add_function(wrap_pyfunction!(sqeuclidean, &m)?)?;
+    m.add_function(wrap_pyfunction!(manhattan, &m)?)?;
+    m.add_function(wrap_pyfunction!(minkowski, &m)?)?;
+    m.add_function(wrap_pyfunction!(cosine, &m)?)?;
+    m.add_function(wrap_pyfunction!(cdist, &m)?)?;
+    m.add_function(wrap_pyfunction!(pdist, &m)?)?;
+    pm.add_submodule(&m)
 }
 
 macro_rules! build_fn {
@@ -216,7 +215,14 @@ fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
 
 /// Compute the pairwise distances between two collections of vectors.
 #[pyfunction]
-fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -> PyResult<Py<PyArray2<f64>>> {
+#[pyo3(signature = (a, b, metric, p=None))]
+fn cdist<'py>(
+    py: Python<'py>,
+    a: Vector2,
+    b: Vector2,
+    metric: &str,
+    p: Option<i32>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
     match p {
         Some(p) => {
             if metric.to_lowercase() != "minkowski" {
@@ -226,82 +232,82 @@ fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -
                 // The types are the same
                 (Vector2::F32(a), Vector2::F32(b)) => {
                     let metric = |a: &[f32], b: &[f32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::F64(a), Vector2::F64(b)) => {
                     let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::U8(a), Vector2::U8(b)) => {
                     let metric = |a: &[u8], b: &[u8]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::U16(a), Vector2::U16(b)) => {
                     let metric = |a: &[u16], b: &[u16]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::U32(a), Vector2::U32(b)) => {
                     let metric = |a: &[u32], b: &[u32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::U64(a), Vector2::U64(b)) => {
                     let metric = |a: &[u64], b: &[u64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::I8(a), Vector2::I8(b)) => {
                     let metric = |a: &[i8], b: &[i8]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::I16(a), Vector2::I16(b)) => {
                     let metric = |a: &[i16], b: &[i16]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::I32(a), Vector2::I32(b)) => {
                     let metric = |a: &[i32], b: &[i32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::I64(a), Vector2::I64(b)) => {
                     let metric = |a: &[i64], b: &[i64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
                 }
                 // The types are different
                 (Vector2::F64(a), _) => {
                     let b = b.cast::<f64>();
                     let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
                 }
                 (_, Vector2::F64(b)) => {
                     let a = a.cast::<f64>();
                     let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
                 }
                 (Vector2::U64(_), _) | (Vector2::I64(_), _) => {
                     let a = a.cast::<f64>();
                     let b = b.cast::<f64>();
                     let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
                 }
                 (_, Vector2::U64(_)) | (_, Vector2::I64(_)) => {
                     let a = a.cast::<f64>();
                     let b = b.cast::<f64>();
                     let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
                 }
                 (Vector2::F32(a), _) => {
                     let b = b.cast::<f32>();
                     let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
                 }
                 (_, Vector2::F32(b)) => {
                     let a = a.cast::<f32>();
                     let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
                 }
                 _ => {
                     let a = a.cast::<f32>();
                     let b = b.cast::<f32>();
                     let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(a, b);
-                    Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
+                    Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
                 }
             }
         }
@@ -309,82 +315,82 @@ fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -
             // The types are the same
             (Vector2::F32(a), Vector2::F32(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::F64(a), Vector2::F64(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::U8(a), Vector2::U8(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::U16(a), Vector2::U16(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::U32(a), Vector2::U32(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::U64(a), Vector2::U64(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::I8(a), Vector2::I8(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::I16(a), Vector2::I16(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::I32(a), Vector2::I32(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::I64(a), Vector2::I64(b)) => {
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.as_array(), metric))?.to_owned())
             }
             // The types are different
             (Vector2::F64(a), _) => {
                 let b = b.cast::<f64>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
             }
             (_, Vector2::F64(b)) => {
                 let a = a.cast::<f64>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
             }
             (Vector2::U64(_), _) | (Vector2::I64(_), _) => {
                 let a = a.cast::<f64>();
                 let b = b.cast::<f64>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
             }
             (_, Vector2::U64(_)) | (_, Vector2::I64(_)) => {
                 let a = a.cast::<f64>();
                 let b = b.cast::<f64>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
             }
             (Vector2::F32(a), _) => {
                 let b = b.cast::<f32>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.as_array(), b.view(), metric))?.to_owned())
             }
             (_, Vector2::F32(b)) => {
                 let a = a.cast::<f32>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.as_array(), metric))?.to_owned())
             }
             _ => {
                 let a = a.cast::<f32>();
                 let b = b.cast::<f32>();
                 let metric = parse_metric(metric)?;
-                Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
+                Ok(PyArray2::from_vec2_bound(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
             }
         },
     }
@@ -392,7 +398,8 @@ fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -
 
 /// Compute the pairwise distances between all vectors in a collection.
 #[pyfunction]
-fn pdist(py: Python<'_>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<Py<PyArray1<f64>>> {
+#[pyo3(signature = (a, metric, p=None))]
+fn pdist<'py>(py: Python<'py>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<Bound<'py, PyArray1<f64>>> {
     match p {
         Some(p) => {
             if metric.to_lowercase() != "minkowski" {
