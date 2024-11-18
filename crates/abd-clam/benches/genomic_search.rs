@@ -9,12 +9,16 @@ use abd_clam::{
     Ball, Cluster, FlatVec, Metric,
 };
 use criterion::*;
+use distances::Number;
 use rand::prelude::*;
 
 #[allow(clippy::type_complexity)]
 const METRICS: &[(&str, fn(&String, &String) -> u64)] = &[
     ("levenshtein", |x: &String, y: &String| {
         distances::strings::levenshtein(x, y)
+    }),
+    ("stringzilla", |x: &String, y: &String| {
+        stringzilla::sz::edit_distance(x, y).as_u64()
     }),
     // ("needleman-wunsch", |x: &String, y: &String| {
     //     distances::strings::nw_distance(x, y)

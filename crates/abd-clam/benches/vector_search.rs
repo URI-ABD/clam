@@ -11,7 +11,10 @@ const METRICS: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
     ("euclidean", |x: &Vec<_>, y: &Vec<_>| {
         distances::vectors::euclidean(x, y)
     }),
-    ("cosine", |x: &Vec<_>, y: &Vec<_>| distances::vectors::cosine(x, y)),
+    ("euclidean_simd", |x: &Vec<_>, y: &Vec<_>| {
+        distances::simd::euclidean_f32(x, y)
+    }),
+    // ("cosine", |x: &Vec<_>, y: &Vec<_>| distances::vectors::cosine(x, y)),
 ];
 
 fn vector_search(c: &mut Criterion) {

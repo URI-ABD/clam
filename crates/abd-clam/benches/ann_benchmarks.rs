@@ -114,8 +114,9 @@ impl AnnDataset {
 
 fn ann_benchmarks(c: &mut Criterion) {
     let root_str = std::env::var("ANN_DATA_ROOT").unwrap();
+    println!("ANN data root: {root_str}");
     let ann_data_root = std::path::Path::new(&root_str).canonicalize().unwrap();
-    println!("ANN data root: {:?}", ann_data_root);
+    println!("ANN data root: {ann_data_root:?}");
 
     let euclidean = |x: &Vec<_>, y: &Vec<_>| distances::vectors::euclidean(x, y);
     let cosine = |x: &Vec<_>, y: &Vec<_>| distances::vectors::cosine(x, y);
