@@ -69,6 +69,7 @@ ndarray-bindings = ["dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore", "dep:ordered-float", "dep:bincode"]
 mbed = ["chaoda"]
 msa = ["dep:stringzilla"]
+all = ["csv", "ndarray-bindings", "chaoda", "mbed", "msa"]
 
 [[bench]]
 name = "genomic_search"

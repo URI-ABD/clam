@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 clap = { workspace = true }
 ftlog = { workspace = true }
+abd-clam = { workspace = true, features = ["all"] }
