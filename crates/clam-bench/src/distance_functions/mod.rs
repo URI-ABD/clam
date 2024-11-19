@@ -17,6 +17,7 @@ pub enum DistanceFunctions {
     Hamming,
     /// Jaccard distance.
     #[clap(name = "jaccard")]
+    Jaccard,
     /// Levenshtein edit distance.
     #[clap(name = "levenshtein")]
     Levenshtein,
