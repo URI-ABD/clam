@@ -123,7 +123,7 @@ impl FastaFile {
                     .iter()
                     .fold((usize::MAX, usize::MIN), |(min_len, max_len), (_, s)| {
                         let len = s.len();
-                        (min_len.min(len), max_len.max(len))
+                        (Ord::min(min_len, len), Ord::max(max_len, len))
                     });
                 (data, min_len, max_len)
             };

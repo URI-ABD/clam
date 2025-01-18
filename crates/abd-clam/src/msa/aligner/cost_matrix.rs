@@ -304,10 +304,9 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // Calculate the maximum difference between any two substitution costs.
         let max_delta = {
-            let (min, max) = costs
-                .iter()
-                .flatten()
-                .fold((i32::MAX, i32::MIN), |(min, max), &cost| (min.min(cost), max.max(cost)));
+            let (min, max) = costs.iter().flatten().fold((i32::MAX, i32::MIN), |(min, max), &cost| {
+                (Ord::min(min, cost), Ord::max(max, cost))
+            });
             <usize as Number>::from(max.abs_diff(min))
         };
 

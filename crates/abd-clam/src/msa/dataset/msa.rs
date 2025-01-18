@@ -120,7 +120,9 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
             .items()
             .iter()
             .map(|item| item.as_ref().len())
-            .fold((usize::MAX, 0), |(min, max), len| (min.min(len), max.max(len)));
+            .fold((usize::MAX, 0), |(min, max), len| {
+                (Ord::min(min, len), Ord::max(max, len))
+            });
 
         if min_len == 0 {
             Err("Empty sequences are not allowed in an MSA.".to_string())

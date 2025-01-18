@@ -194,7 +194,7 @@ impl Group {
     ///
     /// - If there is an error writing the times to disk.
     pub fn bench_compressive_search(&self, num_queries: usize) -> Result<(), String> {
-        let num_queries = num_queries.min(self.queries.len());
+        let num_queries = Ord::min(num_queries, self.queries.len());
         ftlog::info!("Running benchmarks for compressive search on {num_queries} queries with");
 
         let mut times = HashMap::new();

@@ -103,16 +103,6 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the logarithm of `self` with base 2.
     #[must_use]
     fn log2(self) -> Self;
-
-    /// Returns the smaller of two numbers.
-    #[must_use]
-    fn min(self, other: Self) -> Self {
-        if self < other {
-            self
-        } else {
-            other
-        }
-    }
 }
 
 impl Float for f32 {

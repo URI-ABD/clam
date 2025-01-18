@@ -124,6 +124,26 @@ pub trait Number:
 
     /// Returns a total ordering of the number.
     fn total_cmp(&self, other: &Self) -> core::cmp::Ordering;
+
+    /// Returns the smaller of two numbers.
+    #[must_use]
+    fn min(self, other: Self) -> Self {
+        if self < other {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// Returns the larger of two numbers.
+    #[must_use]
+    fn max(self, other: Self) -> Self {
+        if self > other {
+            self
+        } else {
+            other
+        }
+    }
 }
 
 impl Number for f32 {

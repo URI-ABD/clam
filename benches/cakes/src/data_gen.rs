@@ -210,7 +210,9 @@ pub fn read_tabular_and_augment<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>
     let (min_dim, max_dim) = train
         .iter()
         .chain(queries.iter())
-        .fold((usize::MAX, 0), |(min, max), x| (min.min(x.len()), max.max(x.len())));
+        .fold((usize::MAX, 0), |(min, max), x| {
+            (Ord::min(min, x.len()), Ord::max(max, x.len()))
+        });
 
     let data = FlatVec::new(train)?
         .with_name(dataset.name())
