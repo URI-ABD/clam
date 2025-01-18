@@ -80,7 +80,9 @@ def summarize_rust(
                 multiplier=multiplier,
             )
         datasets[dataset_name].add_csv_path(cardinality, f)
-        ball_csv_lists[dataset_name] = list(filter(lambda x: x.stem.startswith(dataset_name), ball_csv_paths))
+        ball_csv_lists[dataset_name] = list(
+            filter(lambda x: x.stem.startswith(dataset_name), ball_csv_paths)
+        )
 
     for dataset in datasets.values():
         dataset.summarize_results(out_dir)
@@ -91,11 +93,18 @@ def summarize_rust(
         logger.info(f"Making plots for {dataset_name}")
         paths = list(filter(lambda x: "balanced" not in x.stem, paths))
         paths = list(filter(lambda x: "permuted" not in x.stem, paths))
-        keyed_paths = [(int(path.stem[len(dataset_name) + 1 :].split("-")[0]), path) for path in paths]
+        keyed_paths = [
+            (int(path.stem[len(dataset_name) + 1 :].split("-")[0]), path)
+            for path in paths
+        ]
         keyed_paths.sort(key=lambda x: x[0])
         paths = [path for _, path in keyed_paths]
 
-        all_props = [("lfd", "LFD"), ("radius", "Radius"), ("fractal_density", "Fractal Density")]
+        all_props = [
+            ("lfd", "LFD"),
+            ("radius", "Radius"),
+            ("fractal_density", "Fractal Density"),
+        ]
         for prop, alias in all_props[1:]:
             plot_prop_percentiles(
                 out_dir=out_dir,
@@ -185,7 +194,9 @@ class Dataset:
         out_df["k"] = out_df["k"].astype(int)
 
         # Sort the dataframe by the "cardinality", "cluster" and "algorithm" columns
-        out_df.sort_values(by=["k", "cardinality", "cluster", "algorithm"], inplace=True)
+        out_df.sort_values(
+            by=["k", "cardinality", "cluster", "algorithm"], inplace=True
+        )
         # Drop the "radius" column
         out_df.drop(columns=["radius"], inplace=True)
 
@@ -196,7 +207,9 @@ class Dataset:
 
         # Get the subset of the dataframe where the "algorithm" column is "KnnLinear"
         # And "k" is 10.
-        knn_linear_10 = out_df[(out_df["algorithm"] == "KnnLinear") & (out_df["k"] == 10)]
+        knn_linear_10 = out_df[
+            (out_df["algorithm"] == "KnnLinear") & (out_df["k"] == 10)
+        ]
         # Set k to "100" in this subset
         knn_linear_10["k"] = 100
         # Append this subset to the dataframe
@@ -248,7 +261,7 @@ def plot_throughput(
     fig: plt.Figure
     ax: plt.Axes
     m = 0.8
-    fig, ax = plt.subplots(figsize=(6 * m, 4 * m))
+    fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
     # Group by the "algorithm" column
     for alg, g in group.groupby("algorithm"):
@@ -257,7 +270,13 @@ def plot_throughput(
         # Plot the "cardinality" column on the x-axis against the "throughput"
         # column on the y-axis
         marker, color = ALG_MARKERS_COLORS[alg]
-        ax.plot(g["cardinality"], g["throughput"], label=f"{alg}", marker=marker, color=color)
+        ax.plot(
+            g["cardinality"],
+            g["throughput"],
+            label=f"{alg}",
+            marker=marker,
+            color=color,
+        )
 
     min_throughput = float(group["throughput"].min())
     max_throughput = float(group["throughput"].max())
@@ -268,7 +287,9 @@ def plot_throughput(
         comp_dir = pathlib.Path(__file__).parent / "competitors"
         assert comp_dir.exists(), f"{comp_dir} does not exist"
         assert comp_dir.is_dir(), f"{comp_dir} is not a directory"
-        comp_paths = [comp_dir / f"{name}.csv" for name in ["hnsw", "annoy", "faiss-ivf"]]
+        comp_paths = [
+            comp_dir / f"{name}.csv" for name in ["hnsw", "annoy", "faiss-ivf"]
+        ]
         assert all(p.exists() for p in comp_paths), f"Missing files: {comp_paths}"
         for path in comp_paths:
             comp_df = pandas.read_csv(path)
@@ -276,7 +297,13 @@ def plot_throughput(
             comp_df = comp_df[(comp_df["dataset"] == dataset) & (comp_df["k"] == k)]
             alg = path.stem
             marker, color = COMP_COLOR_MARKERS[alg]
-            ax.plot(comp_df["cardinality"], comp_df["throughput"], label=alg.upper(), marker=marker, color=color)
+            ax.plot(
+                comp_df["cardinality"],
+                comp_df["throughput"],
+                label=alg.upper(),
+                marker=marker,
+                color=color,
+            )
 
             max_throughput = max(max_throughput, comp_df["throughput"].max())
             min_throughput = min(min_throughput, comp_df["throughput"].min())
@@ -318,7 +345,7 @@ def plot_throughput(
 
     # Put a legend above the plot
     ax.legend(
-        loc='upper center',
+        loc="upper center",
         bbox_to_anchor=(0.49, 1.45),
         fancybox=True,
         ncol=3,
@@ -351,7 +378,7 @@ def plot_distance_counts(
     fig: plt.Figure
     ax: plt.Axes
     m = 0.8
-    fig, ax = plt.subplots(figsize=(6 * m, 4 * m))
+    fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
     # Group by the "cluster" column
     for cluster, g in group.groupby("cluster"):
@@ -360,7 +387,13 @@ def plot_distance_counts(
         # Plot the "cardinality" column on the x-axis against the
         # "mean_distance_computations" column on the y-axis
         marker, color = CLUSTER_MARKERS_COLORS[cluster]
-        ax.plot(g["cardinality"], g["mean_distance_computations"], label=f"{cluster}", marker=marker, color=color)
+        ax.plot(
+            g["cardinality"],
+            g["mean_distance_computations"],
+            label=f"{cluster}",
+            marker=marker,
+            color=color,
+        )
 
     # Set the title and labels
     ax.set_xlabel("Cardinality")
@@ -374,20 +407,20 @@ def plot_distance_counts(
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    # # Shrink y-axis by 20%
-    # box = ax.get_position()
-    # ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
+    # Shrink y-axis by 20%
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
 
-    # # Put a legend above the plot
-    # ax.legend(
-    #     loc='upper center',
-    #     bbox_to_anchor=(0.49, 1.45),
-    #     fancybox=True,
-    #     ncol=2,
-    # )
+    # Put a legend above the plot
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.49, 1.45),
+        fancybox=True,
+        ncol=2,
+    )
 
-    # Tighten the layout
-    plt.tight_layout()
+    # # Tighten the layout
+    # plt.tight_layout()
 
     # Save the figure
     out_path = out_dir / "distance_counts" / f"{dataset}_{algorithm}_{k}_counts.png"
@@ -398,7 +431,7 @@ def plot_distance_counts(
     plt.close(fig)
 
     # Plot the throughput of all algorithms.
-    fig, ax = plt.subplots(figsize=(6 * m, 4 * m))
+    fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
     # Group by the "cluster" column
     for cluster, g in group.groupby("cluster"):
@@ -407,7 +440,13 @@ def plot_distance_counts(
         # Plot the "cardinality" column on the x-axis against the
         # "mean_distance_computations" column on the y-axis
         marker, color = CLUSTER_MARKERS_COLORS[cluster]
-        ax.plot(g["cardinality"], g["throughput"], label=f"{cluster}", marker=marker, color=color)
+        ax.plot(
+            g["cardinality"],
+            g["throughput"],
+            label=f"{cluster}",
+            marker=marker,
+            color=color,
+        )
 
     # Set the title and labels
     ax.set_xlabel("Cardinality")
@@ -421,20 +460,20 @@ def plot_distance_counts(
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    # # Shrink y-axis by 20%
-    # box = ax.get_position()
-    # ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
+    # Shrink y-axis by 20%
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
 
-    # # Put a legend above the plot
-    # ax.legend(
-    #     loc='upper center',
-    #     bbox_to_anchor=(0.49, 1.45),
-    #     fancybox=True,
-    #     ncol=2,
-    # )
+    # Put a legend above the plot
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.49, 1.45),
+        fancybox=True,
+        ncol=2,
+    )
 
-    # Tighten the layout
-    plt.tight_layout()
+    # # Tighten the layout
+    # plt.tight_layout()
 
     # Save the figure
     out_path = out_path.parent / f"{dataset}_{algorithm}_{k}_throughput.png"
@@ -452,7 +491,9 @@ def plot_prop_percentiles(
     prop: str,
     prop_alias: str,
 ):
-    logger.info(f"  Plotting {prop_alias} percentiles {dataset = } with ball = {ball_csv_path.name}")
+    logger.info(
+        f"  Plotting {prop_alias} percentiles {dataset = } with ball = {ball_csv_path.name}"
+    )
 
     col_tuples = [
         ("minimum", 0, "tab:pink", "dotted", 0.2 * 2),
@@ -491,7 +532,9 @@ def plot_prop_percentiles(
 
         # Fractal density is defined as cardinality / (radius) ^ lfd
         # Add a new column for fractal density
-        inp_df["fractal_density"] = inp_df["cardinality"] / (inp_df["radius"] ** inp_df["lfd"])
+        inp_df["fractal_density"] = inp_df["cardinality"] / (
+            inp_df["radius"] ** inp_df["lfd"]
+        )
 
     # We will make a new dataframe in which each row is one depth level in the
     # ball tree and the columns are the percentiles of the property values for
@@ -521,7 +564,7 @@ def plot_prop_percentiles(
     fig: plt.Figure
     ax: plt.Axes
     m = 0.8
-    fig, ax = plt.subplots(figsize=(6 * m, 4 * m))
+    fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
     y_min = prop_df.max().max()
     y_max = prop_df.min().min()
@@ -532,10 +575,14 @@ def plot_prop_percentiles(
         y = prop_df[col]
         y_min = min(y_min, y.min())
         y_max = max(y_max, y.max())
-        ax.plot(x, y, label=col, color=colors[i], linestyle=styles[i], linewidth=widths[i])
+        ax.plot(
+            x, y, label=col, color=colors[i], linestyle=styles[i], linewidth=widths[i]
+        )
 
     # Shade the are between each pair of percentiles
-    for (y_lower, y_upper, (color, alpha)) in zip(columns[:-1], columns[1:], shades_alphas):
+    for y_lower, y_upper, (color, alpha) in zip(
+        columns[:-1], columns[1:], shades_alphas
+    ):
         ax.fill_between(
             prop_df.index,
             prop_df[y_lower],
@@ -585,20 +632,20 @@ def plot_prop_percentiles(
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
 
-    # # Put a legend above the plot
-    # handles, labels = plt.gca().get_legend_handles_labels()
-    # order = [0, 3, 6, 1, 5, 2, 4]
-    # ax.legend(
-    #     [handles[idx] for idx in order],
-    #     [labels[idx] for idx in order],
-    #     loc='upper center',
-    #     bbox_to_anchor=(0.49, 1.45),
-    #     fancybox=True,
-    #     ncol=3,
-    # )
+    # Put a legend above the plot
+    handles, labels = plt.gca().get_legend_handles_labels()
+    order = [0, 3, 6, 1, 5, 2, 4]
+    ax.legend(
+        [handles[idx] for idx in order],
+        [labels[idx] for idx in order],
+        loc="upper center",
+        bbox_to_anchor=(0.49, 1.45),
+        fancybox=True,
+        ncol=3,
+    )
 
-    # Tighten the layout
-    plt.tight_layout()
+    # # Tighten the layout
+    # plt.tight_layout()
 
     # Save the figure
     out_path = out_dir / prop / f"{dataset}.png"
