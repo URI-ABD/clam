@@ -5,6 +5,11 @@ use core::cmp::Ordering;
 use distances::{number::Float, Number};
 use rand::prelude::*;
 
+/// The square root threshold for sub-sampling.
+pub(crate) const SQRT_THRESH: usize = 1000;
+/// The logarithmic threshold for sub-sampling.
+pub(crate) const LOG2_THRESH: usize = 100_000;
+
 /// Reads the `MAX_RECURSION_DEPTH` environment variable to determine the
 /// stride for iterative partition and adaptation.
 #[must_use]

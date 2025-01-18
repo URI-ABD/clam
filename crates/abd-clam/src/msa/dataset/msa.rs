@@ -5,8 +5,9 @@ use rayon::prelude::*;
 
 use crate::{
     dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset, Permutable},
-    msa::{LOG2_THRESH, NUM_CHARS, SQRT_THRESH},
-    utils, Dataset, FlatVec,
+    msa::NUM_CHARS,
+    utils::{self, LOG2_THRESH, SQRT_THRESH},
+    Dataset, FlatVec,
 };
 
 use super::super::Aligner;
