@@ -210,11 +210,11 @@ impl<T: Number, S: Cluster<T>> Cluster<T> for SquishyBall<T, S> {
     }
 
     fn extents(&self) -> &[(usize, T)] {
-        self.source.extents()
+        &self.source.extents()[..1]
     }
 
     fn extents_mut(&mut self) -> &mut [(usize, T)] {
-        self.source.extents_mut()
+        &mut self.source.extents_mut()[..1]
     }
 
     fn add_extent(&mut self, idx: usize, extent: T) {
