@@ -2,11 +2,11 @@
 
 use std::path::Path;
 
-use abd_clam::{Dataset, FlatVec, Metric};
+use abd_clam::{dataset::AssociatesMetadataMut, Dataset, FlatVec};
 use ndarray::prelude::*;
 use ndarray_npy::ReadNpyExt;
 
-type ChaodaDataset = FlatVec<Vec<f64>, f64, bool>;
+type ChaodaDataset = FlatVec<Vec<f64>, bool>;
 
 /// The datasets used for anomaly detection.
 ///
@@ -163,7 +163,7 @@ impl Data {
     }
 
     /// Read the training datasets from the paper
-    pub fn read_paper_train(data_dir: &Path) -> Result<[ChaodaDataset; 4], String> {
+    pub fn read_train_data(data_dir: &Path) -> Result<[ChaodaDataset; 4], String> {
         Ok([
             Self::Annthyroid.read(data_dir)?,
             // Self::Mnist.read(data_dir)?,
@@ -175,7 +175,7 @@ impl Data {
     }
 
     /// Read the inference datasets from the paper
-    pub fn read_paper_inference(data_dir: &Path) -> Result<Vec<ChaodaDataset>, String> {
+    pub fn read_infer_data(data_dir: &Path) -> Result<Vec<ChaodaDataset>, String> {
         Ok(vec![
             Self::Arrhythmia.read(data_dir)?,
             Self::BreastW.read(data_dir)?,
@@ -200,20 +200,19 @@ impl Data {
 
     /// Read all the datasets
     pub fn read_all(data_dir: &Path) -> Result<Vec<ChaodaDataset>, String> {
-        let mut datasets = Self::read_paper_train(data_dir)?.to_vec();
-        datasets.extend(Self::read_paper_inference(data_dir)?);
+        let mut datasets = Self::read_train_data(data_dir)?.to_vec();
+        datasets.extend(Self::read_infer_data(data_dir)?);
         Ok(datasets)
     }
 }
 
 fn read_xy(path: &Path, name: &str) -> Result<ChaodaDataset, String> {
     let labels_path = path.join(format!("{name}_labels.npy"));
-    let reader = std::fs::File::open(labels_path).map_err(|e| e.to_string())?;
-    let labels = Array1::<u8>::read_npy(reader).map_err(|e| e.to_string())?;
+    let reader = std::fs::File::open(labels_path).map_err(|e| format!("Could not open file: {e}"))?;
+    let labels = Array1::<u8>::read_npy(reader).map_err(|e| format!("Could not read labels from file {path:?}: {e}"))?;
     let labels = labels.mapv(|y| y == 1).to_vec();
 
     let x_path = path.join(format!("{name}.npy"));
-    let fv: FlatVec<Vec<f64>, f64, usize> = FlatVec::read_npy(x_path, Metric::default())?;
-
-    fv.with_name(name).with_metadata(labels)
+    let fv: FlatVec<Vec<f64>, usize> = FlatVec::read_npy(&x_path)?;
+    fv.with_name(name).with_metadata(&labels)
 }

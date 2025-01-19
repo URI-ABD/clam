@@ -7,7 +7,7 @@ authors = [
     { name = "Tom", email = "info@tomhoward.codes" },
 ]
 dependencies = [
-    "numpy<=2.0.0",
+    "numpy",
 ]
 readme = "README.md"
 requires-python = ">= 3.9"
@@ -28,5 +28,5 @@ dev-dependencies = [
 [tool.rye.workspace]
 members = [
     "pypi/distances",
-    "pypi/results/cakes",
+    "benches/py-cakes",
 ]

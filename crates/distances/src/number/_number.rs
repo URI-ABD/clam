@@ -70,6 +70,18 @@ pub trait Number:
     /// Returns the number as a `f64`. This may be a lossy conversion.
     fn as_f64(self) -> f64;
 
+    /// Returns the number as a `usize`. This may be a lossy conversion.
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_usize(self) -> usize {
+        self.as_u64() as usize
+    }
+
+    /// Returns the number as a `isize`. This may be a lossy conversion.
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_isize(self) -> isize {
+        self.as_i64() as isize
+    }
+
     /// Returns the number as a `u64`. This may be a lossy conversion.
     fn as_u64(self) -> u64;
 
@@ -109,6 +121,29 @@ pub trait Number:
 
     /// Returns a random `Number`.
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self;
+
+    /// Returns a total ordering of the number.
+    fn total_cmp(&self, other: &Self) -> core::cmp::Ordering;
+
+    /// Returns the smaller of two numbers.
+    #[must_use]
+    fn min(self, other: Self) -> Self {
+        if self < other {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// Returns the larger of two numbers.
+    #[must_use]
+    fn max(self, other: Self) -> Self {
+        if self > other {
+            self
+        } else {
+            other
+        }
+    }
 }
 
 impl Number for f32 {
@@ -172,6 +207,10 @@ impl Number for f32 {
 
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
         rng.gen()
+    }
+
+    fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.total_cmp(other)
     }
 }
 
@@ -237,6 +276,10 @@ impl Number for f64 {
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
         rng.gen()
     }
+
+    fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.total_cmp(other)
+    }
 }
 
 /// A macro to implement the `Number` trait for primitive types.
@@ -300,6 +343,10 @@ macro_rules! impl_number_iint {
 
                 fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
                     rng.gen()
+                }
+
+                fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+                    self.cmp(other)
                 }
             }
         )*
@@ -371,6 +418,10 @@ macro_rules! impl_number_uint {
 
                 fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
                     rng.gen()
+                }
+
+                fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+                    self.cmp(other)
                 }
             }
         )*

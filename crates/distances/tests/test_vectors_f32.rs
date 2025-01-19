@@ -1,5 +1,3 @@
-use core::f32::EPSILON;
-
 use rand::prelude::*;
 use symagen::random_data;
 
@@ -55,7 +53,7 @@ fn lp_f32() {
             let e_l1 = l1(x, y);
             let a_l1: f32 = manhattan(x, y);
             assert!(
-                (e_l1 - a_l1).abs() <= EPSILON,
+                (e_l1 - a_l1).abs() <= f32::EPSILON,
                 "Manhattan: expected: {}, actual: {}",
                 e_l1,
                 a_l1
@@ -64,7 +62,7 @@ fn lp_f32() {
             let expected = l2_sq(x, y);
             let actual: f32 = euclidean_sq(x, y);
             assert!(
-                (expected - actual).abs() <= EPSILON,
+                (expected - actual).abs() <= f32::EPSILON,
                 "Euclidean squared: expected: {}, actual: {}",
                 expected,
                 actual
@@ -73,7 +71,7 @@ fn lp_f32() {
             let expected = l2(x, y);
             let actual: f32 = euclidean(x, y);
             assert!(
-                (expected - actual).abs() <= EPSILON,
+                (expected - actual).abs() <= f32::EPSILON,
                 "Euclidean: expected: {}, actual: {}",
                 expected,
                 actual
@@ -82,7 +80,7 @@ fn lp_f32() {
             let e_l3 = l3(x, y);
             let a_l3: f32 = l3_norm(x, y);
             assert!(
-                (e_l3 - a_l3).abs() <= EPSILON,
+                (e_l3 - a_l3).abs() <= f32::EPSILON,
                 "L3 norm: expected: {}, actual: {}",
                 e_l3,
                 a_l3
@@ -91,7 +89,7 @@ fn lp_f32() {
             let e_l4 = l4(x, y);
             let a_l4: f32 = l4_norm(x, y);
             assert!(
-                (e_l4 - a_l4).abs() <= EPSILON,
+                (e_l4 - a_l4).abs() <= f32::EPSILON,
                 "L4 norm: expected: {}, actual: {}",
                 e_l4,
                 a_l4
@@ -100,7 +98,7 @@ fn lp_f32() {
             let e_l_inf = l_inf(x, y);
             let a_l_inf: f32 = chebyshev(x, y);
             assert!(
-                (e_l_inf - a_l_inf).abs() <= EPSILON,
+                (e_l_inf - a_l_inf).abs() <= f32::EPSILON,
                 "Chebyshev: expected: {}, actual: {}",
                 e_l_inf,
                 a_l_inf

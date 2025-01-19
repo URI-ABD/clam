@@ -3,7 +3,7 @@
 use distances::Number;
 use rand::prelude::*;
 
-use crate::{adapter::Adapter, cakes::OffBall, chaoda::Vertex, Cluster, Dataset};
+use crate::{cakes::PermutedBall, chaoda::Vertex, Cluster};
 
 /// A `Mass` in the mass-spring system for dimensionality reduction.
 ///
@@ -77,13 +77,12 @@ impl<const DIM: usize> Mass<DIM> {
     /// This assigns the `position` and `velocity` of the `Mass` to be the zero
     /// vector, and the `mass` to be the cardinality of the `Cluster`.
     #[must_use]
-    pub fn from_vertex<I, U, D, C>(c: &Vertex<I, U, D, OffBall<I, U, D, C>>) -> Self
+    pub fn from_vertex<T, C>(c: &Vertex<T, PermutedBall<T, C>>) -> Self
     where
-        U: Number,
-        D: Dataset<I, U>,
-        C: Cluster<I, U, D>,
+        T: Number,
+        C: Cluster<T>,
     {
-        Self::new(c.arg_center(), c.source().offset(), c.cardinality())
+        Self::new(c.arg_center(), c.source.offset(), c.cardinality())
     }
 
     /// Returns a hash-key for the `Mass`.

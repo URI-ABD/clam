@@ -1,13 +1,11 @@
 //! Reading data from various sources.
 
-use std::fs::File;
-
-use abd_clam::MetricSpace;
+use abd_clam::{dataset::AssociatesMetadataMut, FlatVec};
 
 use super::tree::instances::{Aligned, MemberSet, Unaligned};
 
 mod ann_benchmarks;
-mod fasta;
+pub mod fasta;
 
 /// The datasets we use for benchmarks.
 #[derive(clap::ValueEnum, Debug, Clone)]
@@ -42,6 +40,7 @@ pub enum RawData {
 
 impl RawData {
     /// Returns the name of the dataset as a string.
+    #[must_use]
     pub const fn name(&self) -> &str {
         match self {
             Self::GreenGenes_12_10 => "gg_12_10",
@@ -89,23 +88,23 @@ impl RawData {
 
         match self {
             Self::GreenGenes_12_10 | Self::GreenGenes_13_5 | Self::Silva_18S | Self::PdbSeq => {
-                let (mut data, queries) = if data_path.exists() && queries_path.exists() {
+                let (data, queries) = if data_path.exists() && queries_path.exists() {
                     ftlog::info!("Reading data from {data_path:?}");
-                    let data = bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?)
-                        .map_err(|e| e.to_string())?;
+                    let bytes: Vec<u8> = std::fs::read(&data_path).map_err(|e| e.to_string())?;
+                    let data = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
                     ftlog::info!("Reading queries from {queries_path:?}");
-                    let queries = bincode::deserialize_from(File::open(&queries_path).map_err(|e| e.to_string())?)
-                        .map_err(|e| e.to_string())?;
+                    let bytes: Vec<u8> = std::fs::read(&queries_path).map_err(|e| e.to_string())?;
+                    let queries = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
                     (data, queries)
                 } else {
-                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000)?;
+                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000, false)?;
                     let (metadata, data): (Vec<_>, Vec<_>) =
                         data.into_iter().map(|(name, seq)| (name, Unaligned::from(seq))).unzip();
 
-                    let data = abd_clam::FlatVec::new(data, Unaligned::metric())?
-                        .with_metadata(metadata)?
+                    let data = FlatVec::new(data)?
+                        .with_metadata(&metadata)?
                         .with_dim_lower_bound(min_len)
                         .with_dim_upper_bound(max_len);
 
@@ -115,38 +114,36 @@ impl RawData {
                         .collect();
 
                     ftlog::info!("Writing data to {data_path:?}");
-                    bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
-                        .map_err(|e| e.to_string())?;
+                    let bytes = bitcode::encode(&data).map_err(|e| e.to_string())?;
+                    std::fs::write(&data_path, &bytes).map_err(|e| e.to_string())?;
 
                     ftlog::info!("Writing queries to {queries_path:?}");
-                    bincode::serialize_into(File::create(&queries_path).map_err(|e| e.to_string())?, &queries)
-                        .map_err(|e| e.to_string())?;
+                    let bytes = bitcode::encode(&queries).map_err(|e| e.to_string())?;
+                    std::fs::write(&queries_path, &bytes).map_err(|e| e.to_string())?;
 
                     (data, queries)
                 };
-                // Set the metric for the data, incase it was deserialized.
-                data.set_metric(Unaligned::metric());
 
                 super::tree::Tree::new_unaligned(self.name(), out_dir, data, queries)
             }
             Self::GreenGenesAligned_12_10 | Self::SilvaAligned_18S => {
-                let (mut data, queries) = if data_path.exists() && queries_path.exists() {
+                let (data, queries) = if data_path.exists() && queries_path.exists() {
                     ftlog::info!("Reading data from {data_path:?}");
-                    let data = bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?)
-                        .map_err(|e| e.to_string())?;
+                    let bytes: Vec<u8> = std::fs::read(&data_path).map_err(|e| e.to_string())?;
+                    let data = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
                     ftlog::info!("Reading queries from {queries_path:?}");
-                    let queries = bincode::deserialize_from(File::open(&queries_path).map_err(|e| e.to_string())?)
-                        .map_err(|e| e.to_string())?;
+                    let bytes: Vec<u8> = std::fs::read(&queries_path).map_err(|e| e.to_string())?;
+                    let queries = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
                     (data, queries)
                 } else {
-                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000)?;
+                    let ([data, queries], [min_len, max_len]) = fasta::read(inp_path, 1000, false)?;
                     let (metadata, data): (Vec<_>, Vec<_>) =
                         data.into_iter().map(|(name, seq)| (name, Aligned::from(seq))).unzip();
 
-                    let data = abd_clam::FlatVec::new(data, Aligned::metric())?
-                        .with_metadata(metadata)?
+                    let data = FlatVec::new(data)?
+                        .with_metadata(&metadata)?
                         .with_dim_lower_bound(min_len)
                         .with_dim_upper_bound(max_len);
 
@@ -156,62 +153,56 @@ impl RawData {
                         .collect();
 
                     ftlog::info!("Writing data to {data_path:?}");
-                    bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
-                        .map_err(|e| e.to_string())?;
+                    let bytes = bitcode::encode(&data).map_err(|e| e.to_string())?;
+                    std::fs::write(&data_path, &bytes).map_err(|e| e.to_string())?;
 
                     ftlog::info!("Writing queries to {queries_path:?}");
-                    bincode::serialize_into(File::create(&queries_path).map_err(|e| e.to_string())?, &queries)
-                        .map_err(|e| e.to_string())?;
+                    let bytes = bitcode::encode(&queries).map_err(|e| e.to_string())?;
+                    std::fs::write(&queries_path, &bytes).map_err(|e| e.to_string())?;
 
                     (data, queries)
                 };
-                // Set the metric for the data, incase it was deserialized.
-                data.set_metric(Aligned::metric());
 
                 super::tree::Tree::new_aligned(self.name(), out_dir, data, queries)
             }
             Self::Kosarak | Self::MovieLens_10M => {
-                let (mut data, queries, ground_truth) =
-                    if data_path.exists() && queries_path.exists() && gt_path.exists() {
-                        ftlog::info!("Reading data from {data_path:?}");
-                        let data = bincode::deserialize_from(File::open(&data_path).map_err(|e| e.to_string())?)
-                            .map_err(|e| e.to_string())?;
+                let (data, queries, ground_truth) = if data_path.exists() && queries_path.exists() && gt_path.exists() {
+                    ftlog::info!("Reading data from {data_path:?}");
+                    let bytes = std::fs::read(&data_path).map_err(|e| e.to_string())?;
+                    let data = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
-                        ftlog::info!("Reading queries from {queries_path:?}");
-                        let queries = bincode::deserialize_from(File::open(&queries_path).map_err(|e| e.to_string())?)
-                            .map_err(|e| e.to_string())?;
+                    ftlog::info!("Reading queries from {queries_path:?}");
+                    let bytes = std::fs::read(&queries_path).map_err(|e| e.to_string())?;
+                    let queries = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
-                        ftlog::info!("Reading ground truth from {gt_path:?}");
-                        let ground_truth = bincode::deserialize_from(File::open(&gt_path).map_err(|e| e.to_string())?)
-                            .map_err(|e| e.to_string())?;
+                    ftlog::info!("Reading ground truth from {gt_path:?}");
+                    let bytes = std::fs::read(&gt_path).map_err(|e| e.to_string())?;
+                    let ground_truth = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
-                        (data, queries, ground_truth)
-                    } else {
-                        let data = ann_benchmarks::read::<_, usize>(inp_path, true)?;
-                        let (data, queries, ground_truth) = (data.train, data.queries, data.neighbors);
+                    (data, queries, ground_truth)
+                } else {
+                    let data = ann_benchmarks::read::<_, usize>(inp_path, true)?;
+                    let (data, queries, ground_truth) = (data.train, data.queries, data.neighbors);
 
-                        let metric = MemberSet::metric();
-                        let data = data.iter().map(MemberSet::<_, f32>::from).collect();
-                        let data = abd_clam::FlatVec::new(data, metric)?;
+                    let data = data.iter().map(MemberSet::<_>::from).collect();
+                    let data = FlatVec::new(data)?;
 
-                        let queries = queries.iter().map(MemberSet::<_, f32>::from).enumerate().collect();
+                    let queries = queries.iter().map(MemberSet::<_>::from).enumerate().collect();
 
-                        ftlog::info!("Writing data to {data_path:?}");
-                        bincode::serialize_into(File::create(&data_path).map_err(|e| e.to_string())?, &data)
-                            .map_err(|e| e.to_string())?;
+                    ftlog::info!("Writing data to {data_path:?}");
+                    let bytes = bitcode::encode(&data).map_err(|e| e.to_string())?;
+                    std::fs::write(&data_path, &bytes).map_err(|e| e.to_string())?;
 
-                        ftlog::info!("Writing queries to {queries_path:?}");
-                        bincode::serialize_into(File::create(&queries_path).map_err(|e| e.to_string())?, &queries)
-                            .map_err(|e| e.to_string())?;
+                    ftlog::info!("Writing queries to {queries_path:?}");
+                    let bytes = bitcode::encode(&queries).map_err(|e| e.to_string())?;
+                    std::fs::write(&queries_path, &bytes).map_err(|e| e.to_string())?;
 
-                        ftlog::info!("Writing ground truth to {gt_path:?}");
-                        bincode::serialize_into(File::create(&gt_path).map_err(|e| e.to_string())?, &ground_truth)
-                            .map_err(|e| e.to_string())?;
+                    ftlog::info!("Writing ground truth to {gt_path:?}");
+                    let bytes = bitcode::encode(&ground_truth).map_err(|e| e.to_string())?;
+                    std::fs::write(&gt_path, &bytes).map_err(|e| e.to_string())?;
 
-                        (data, queries, ground_truth)
-                    };
-                // Set the metric for the data, incase it was deserialized.
-                data.set_metric(MemberSet::metric());
+                    (data, queries, ground_truth)
+                };
 
                 super::tree::Tree::new_ann_set(self.name(), out_dir, data, queries, ground_truth)
             }

@@ -1,19 +1,19 @@
 //! Utilities for handling a pair of `MetaMLModel` and `GraphAlgorithm`.
 
 use distances::Number;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     chaoda::{training::GraphEvaluator, Graph, GraphAlgorithm, Vertex},
     cluster::ParCluster,
     dataset::ParDataset,
-    Cluster, Dataset,
+    metric::ParMetric,
+    Cluster, Dataset, Metric,
 };
 
 use super::TrainedMetaMlModel;
 
 /// A combination of `TrainedMetaMLModel` and `GraphAlgorithm`.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::module_name_repetitions)]
 pub struct TrainedCombination {
     /// The `MetaMLModel` to use.
@@ -72,11 +72,10 @@ impl TrainedCombination {
     }
 
     /// Get the meta-ML scorer function in a callable for any number of `Vertex`es.
-    pub fn meta_ml_scorer<I, U, D, S>(&self) -> impl Fn(&[&Vertex<I, U, D, S>]) -> Vec<f32> + '_
+    pub fn meta_ml_scorer<T, S>(&self) -> impl Fn(&[&Vertex<T, S>]) -> Vec<f32> + '_
     where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
+        T: Number,
+        S: Cluster<T>,
     {
         move |clusters| {
             let props = clusters.iter().flat_map(|c| c.ratios()).collect::<Vec<_>>();
@@ -86,19 +85,21 @@ impl TrainedCombination {
 
     /// Create a `Graph` from the `root` with the given `data` and `min_depth`
     /// using the `TrainedMetaMLModel`.
-    pub fn create_graph<'a, I, U, D, S>(
+    pub fn create_graph<'a, I, T, D, M, S>(
         &self,
-        root: &'a Vertex<I, U, D, S>,
+        root: &'a Vertex<T, S>,
         data: &D,
+        metric: &M,
         min_depth: usize,
-    ) -> Graph<'a, I, U, D, S>
+    ) -> Graph<'a, T, S>
     where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
+        T: Number,
+        D: Dataset<I>,
+        M: Metric<I, T>,
+        S: Cluster<T>,
     {
         let cluster_scorer = self.meta_ml_scorer();
-        Graph::from_root(root, data, cluster_scorer, min_depth)
+        Graph::from_root(root, data, metric, cluster_scorer, min_depth)
     }
 
     /// Predict the anomaly scores of the points in the `data`.
@@ -114,20 +115,22 @@ impl TrainedCombination {
     /// A tuple of:
     /// * The `Graph` constructed from the `root`.
     /// * The anomaly scores of the points in the `data`.
-    pub fn predict<'a, I, U, D, S>(
+    pub fn predict<'a, I, T, D, M, S>(
         &self,
-        root: &'a Vertex<I, U, D, S>,
+        root: &'a Vertex<T, S>,
         data: &D,
+        metric: &M,
         min_depth: usize,
-    ) -> (Graph<'a, I, U, D, S>, Vec<f32>)
+    ) -> (Graph<'a, T, S>, Vec<f32>)
     where
-        U: Number,
-        D: Dataset<I, U>,
-        S: Cluster<I, U, D>,
+        T: Number,
+        D: Dataset<I>,
+        M: Metric<I, T>,
+        S: Cluster<T>,
     {
         ftlog::debug!("Predicting with {}...", self.name());
 
-        let graph = self.create_graph(root, data, min_depth);
+        let graph = self.create_graph(root, data, metric, min_depth);
         let scores = self.graph_algorithm.evaluate_points(&graph);
 
         let scores = if self.invert_scores() {
@@ -139,39 +142,43 @@ impl TrainedCombination {
         (graph, scores)
     }
 
-    /// Parallel version of `create_graph`.
-    pub fn par_create_graph<'a, I, U, D, S>(
+    /// Parallel version of [`TrainingCombination::create_graph`](crate::chaoda::inference::combination::TrainedCombination::create_graph).
+    pub fn par_create_graph<'a, I, T, D, M, S>(
         &self,
-        root: &'a Vertex<I, U, D, S>,
+        root: &'a Vertex<T, S>,
         data: &D,
+        metric: &M,
         min_depth: usize,
-    ) -> Graph<'a, I, U, D, S>
+    ) -> Graph<'a, T, S>
     where
         I: Send + Sync,
-        U: Number,
-        D: ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
+        T: Number,
+        D: ParDataset<I>,
+        M: ParMetric<I, T>,
+        S: ParCluster<T>,
     {
         let cluster_scorer = self.meta_ml_scorer();
-        Graph::par_from_root(root, data, cluster_scorer, min_depth)
+        Graph::par_from_root(root, data, metric, cluster_scorer, min_depth)
     }
 
-    /// Parallel version of `predict`.
-    pub fn par_predict<'a, I, U, D, S>(
+    /// Parallel version of [`TrainingCombination::predict`](crate::chaoda::inference::combination::TrainedCombination::predict).
+    pub fn par_predict<'a, I, T, D, M, S>(
         &self,
-        root: &'a Vertex<I, U, D, S>,
+        root: &'a Vertex<T, S>,
         data: &D,
+        metric: &M,
         min_depth: usize,
-    ) -> (Graph<'a, I, U, D, S>, Vec<f32>)
+    ) -> (Graph<'a, T, S>, Vec<f32>)
     where
         I: Send + Sync,
-        U: Number,
-        D: ParDataset<I, U>,
-        S: ParCluster<I, U, D>,
+        T: Number,
+        D: ParDataset<I>,
+        M: ParMetric<I, T>,
+        S: ParCluster<T>,
     {
         ftlog::debug!("Predicting with {}...", self.name());
 
-        let graph = self.par_create_graph(root, data, min_depth);
+        let graph = self.par_create_graph(root, data, metric, min_depth);
         let scores = self.graph_algorithm.evaluate_points(&graph);
 
         let scores = if self.invert_scores() {

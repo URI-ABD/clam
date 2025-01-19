@@ -1,0 +1,15 @@
+[package]
+name = "results-msa"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { workspace = true }
+ftlog = { workspace = true }
+results-cakes = { path = "../cakes" }
+abd-clam = { workspace = true, features = ["msa", "disk-io"] }
+distances = { workspace = true }
+bio = { workspace = true }
+rayon = { workspace = true }
+stringzilla = { workspace = true }
+bench-utils = { path = "../../../benches/utils" }

@@ -77,6 +77,13 @@ fn main() -> Result<(), String> {
     let mut data = args.dataset.read(&inp_path, &out_dir)?;
     ftlog::info!("Finished reading dataset and queries.");
 
+    // let pool = rayon::ThreadPoolBuilder::new()
+    //     .num_threads(1)
+    //     .build()
+    //     .map_err(|e| e.to_string())?;
+
+    // pool.install(|| data.benchmark(args.num_queries))?;
+
     data.benchmark(args.num_queries)?;
     ftlog::info!("Finished benchmarking.");
 

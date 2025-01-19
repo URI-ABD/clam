@@ -100,21 +100,21 @@ fn bounds_test() {
     distance = jaccard(&x, &x);
     assert!(distance < f32::EPSILON);
     distance = jaccard(&x, &y);
-    assert!(distance - 1.0 < f32::EPSILON);
+    assert!((distance - 1.0).abs() < f32::EPSILON);
     distance = jaccard(&y, &y);
-    assert!(distance - 1.0 < f32::EPSILON);
+    assert!((distance - 1.0).abs() < f32::EPSILON);
 
     distance = dice(&x, &x);
     assert!(distance < f32::EPSILON);
     distance = dice(&x, &y);
-    assert!(distance - 1.0 < f32::EPSILON);
+    assert!((distance - 1.0).abs() < f32::EPSILON);
     distance = dice(&y, &y);
-    assert!(distance - 1.0 < f32::EPSILON);
+    assert!((distance - 1.0).abs() < f32::EPSILON);
 
     distance = kulsinski(&x, &x);
     assert!(distance < f32::EPSILON);
     distance = kulsinski(&x, &y);
-    assert!(distance - 1.0 < f32::EPSILON);
+    assert!((distance - 1.0).abs() < f32::EPSILON);
     distance = kulsinski(&y, &y);
-    assert!(distance - 1.0 < f32::EPSILON);
+    assert!((distance - 1.0).abs() < f32::EPSILON);
 }

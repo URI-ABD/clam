@@ -8,20 +8,19 @@ use crate::utils::Scalar;
 
 use super::utils::{parse_metric, Vector1, Vector2, _cdist, _chebyshev, _manhattan, _pdist};
 
-pub fn register(py: Python<'_>, pm: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "vectors")?;
-    m.add_function(wrap_pyfunction!(braycurtis, m)?)?;
-    m.add_function(wrap_pyfunction!(canberra, m)?)?;
-    m.add_function(wrap_pyfunction!(chebyshev, m)?)?;
-    m.add_function(wrap_pyfunction!(euclidean, m)?)?;
-    m.add_function(wrap_pyfunction!(sqeuclidean, m)?)?;
-    m.add_function(wrap_pyfunction!(manhattan, m)?)?;
-    m.add_function(wrap_pyfunction!(minkowski, m)?)?;
-    m.add_function(wrap_pyfunction!(cosine, m)?)?;
-    m.add_function(wrap_pyfunction!(cdist, m)?)?;
-    m.add_function(wrap_pyfunction!(pdist, m)?)?;
-    pm.add_submodule(m)?;
-    Ok(())
+pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new(pm.py(), "vectors")?;
+    m.add_function(wrap_pyfunction!(braycurtis, &m)?)?;
+    m.add_function(wrap_pyfunction!(canberra, &m)?)?;
+    m.add_function(wrap_pyfunction!(chebyshev, &m)?)?;
+    m.add_function(wrap_pyfunction!(euclidean, &m)?)?;
+    m.add_function(wrap_pyfunction!(sqeuclidean, &m)?)?;
+    m.add_function(wrap_pyfunction!(manhattan, &m)?)?;
+    m.add_function(wrap_pyfunction!(minkowski, &m)?)?;
+    m.add_function(wrap_pyfunction!(cosine, &m)?)?;
+    m.add_function(wrap_pyfunction!(cdist, &m)?)?;
+    m.add_function(wrap_pyfunction!(pdist, &m)?)?;
+    pm.add_submodule(&m)
 }
 
 macro_rules! build_fn {
@@ -216,7 +215,14 @@ fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
 
 /// Compute the pairwise distances between two collections of vectors.
 #[pyfunction]
-fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -> PyResult<Py<PyArray2<f64>>> {
+#[pyo3(signature = (a, b, metric, p=None))]
+fn cdist<'py>(
+    py: Python<'py>,
+    a: Vector2,
+    b: Vector2,
+    metric: &str,
+    p: Option<i32>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
     match p {
         Some(p) => {
             if metric.to_lowercase() != "minkowski" {
@@ -392,7 +398,8 @@ fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -
 
 /// Compute the pairwise distances between all vectors in a collection.
 #[pyfunction]
-fn pdist(py: Python<'_>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<Py<PyArray1<f64>>> {
+#[pyo3(signature = (a, metric, p=None))]
+fn pdist<'py>(py: Python<'py>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<Bound<'py, PyArray1<f64>>> {
     match p {
         Some(p) => {
             if metric.to_lowercase() != "minkowski" {

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.16", features = ["derive"] }
-abd-clam = { workspace = true, features = ["chaoda", "ndarray-bindings", "csv"] }
+abd-clam = { workspace = true, features = ["chaoda", "disk-io"] }
 distances = { workspace = true }
 symagen = { workspace = true }
 rand = { workspace = true }

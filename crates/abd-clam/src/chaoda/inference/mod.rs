@@ -1,67 +1,66 @@
 //! Utilities for running inference with pre-trained Chaoda models.
 
-mod combination;
-mod meta_ml;
-
 use distances::Number;
 use ndarray::prelude::*;
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::{
-    adapter::{Adapter, ParAdapter},
-    cluster::ParCluster,
+    cluster::{
+        adapter::{Adapter, ParAdapter},
+        ParCluster, ParPartition, Partition,
+    },
     dataset::ParDataset,
-    partition::ParPartition,
-    Dataset, Metric, Partition,
+    metric::ParMetric,
+    Dataset,
 };
-
-pub use combination::TrainedCombination;
-pub use meta_ml::TrainedMetaMlModel;
 
 use super::{roc_auc_score, Vertex};
 
+mod combination;
+mod meta_ml;
+mod trained_smc;
+
+pub use combination::TrainedCombination;
+pub use meta_ml::TrainedMetaMlModel;
+pub use trained_smc::TrainedSmc;
+
 /// A pre-trained Chaoda model.
-#[derive(Serialize, Deserialize)]
-pub struct Chaoda<I, U: Number, const M: usize> {
+pub struct Chaoda<I, T: Number, const M: usize> {
     /// The distance metrics to train with.
-    #[serde(with = "serde_arrays")]
-    metrics: [Metric<I, U>; M],
+    metrics: [Box<dyn ParMetric<I, T>>; M],
     /// The trained models.
-    #[serde(with = "serde_arrays")]
     combinations: [Vec<TrainedCombination>; M],
 }
 
-impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
+impl<I: Clone, T: Number, const M: usize> Chaoda<I, T, M> {
     /// Create a new Chaoda model with the given metrics and trained combinations.
     #[must_use]
-    pub const fn new(metrics: [Metric<I, U>; M], combinations: [Vec<TrainedCombination>; M]) -> Self {
+    pub const fn new(metrics: [Box<dyn ParMetric<I, T>>; M], combinations: [Vec<TrainedCombination>; M]) -> Self {
         Self { metrics, combinations }
     }
 
     /// Get the distance metrics used by the model.
     #[must_use]
-    pub const fn metrics(&self) -> &[Metric<I, U>; M] {
+    pub const fn metrics(&self) -> &[Box<dyn ParMetric<I, T>>; M] {
         &self.metrics
     }
 
     /// Set the distance metrics to be used by the model.
-    pub fn set_metrics(&mut self, metrics: [Metric<I, U>; M]) {
+    pub fn set_metrics(&mut self, metrics: [Box<dyn ParMetric<I, T>>; M]) {
         self.metrics = metrics;
     }
 
     /// Create trees to use for inference, one for each metric.
-    pub fn create_trees<D: Dataset<I, U>, S: Partition<I, U, D>, C: Fn(&S) -> bool>(
+    pub fn create_trees<D: Dataset<I>, S: Partition<T>, C: Fn(&S) -> bool>(
         &self,
-        data: &mut D,
+        data: &D,
         criteria: &[C; M],
         seed: Option<u64>,
-    ) -> [Vertex<I, U, D, S>; M] {
+    ) -> [Vertex<T, S>; M] {
         let mut trees = Vec::new();
         for (metric, criteria) in self.metrics.iter().zip(criteria.iter()) {
-            data.set_metric(metric.clone());
-            let source = S::new_tree(data, criteria, seed);
-            let tree = Vertex::adapt_tree(source, None);
+            let source = S::new_tree(data, metric, criteria, seed);
+            let tree = Vertex::adapt_tree(source, None, data, metric);
             trees.push(tree);
         }
         trees
@@ -70,10 +69,10 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
     }
 
     /// Run inference on the given data.
-    pub fn predict_from_trees<D: Dataset<I, U>, S: Partition<I, U, D>>(
+    pub fn predict_from_trees<D: Dataset<I>, S: Partition<T>>(
         &self,
-        data: &mut D,
-        trees: &[Vertex<I, U, D, S>; M],
+        data: &D,
+        trees: &[Vertex<T, S>; M],
         min_depth: usize,
     ) -> Vec<f32> {
         // TODO: Make this a parameter.
@@ -82,11 +81,10 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
         let mut num_discerning = 0;
         let mut scores = Vec::new();
         for ((metric, root), combinations) in self.metrics.iter().zip(trees.iter()).zip(self.combinations.iter()) {
-            data.set_metric(metric.clone());
             for c in combinations {
                 if c.discerns(tol) {
                     num_discerning += 1;
-                    let (_, row) = c.predict(root, data, min_depth);
+                    let (_, row) = c.predict(root, data, metric, min_depth);
                     scores.extend_from_slice(&row);
                 }
             }
@@ -107,9 +105,9 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
     }
 
     /// Run inference on the given data.
-    pub fn predict<D: Dataset<I, U>, S: Partition<I, U, D>, C: Fn(&S) -> bool>(
+    pub fn predict<D: Dataset<I>, S: Partition<T>, C: Fn(&S) -> bool>(
         &self,
-        data: &mut D,
+        data: &D,
         criteria: &[C; M],
         seed: Option<u64>,
         min_depth: usize,
@@ -119,9 +117,9 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
     }
 
     /// Evaluate the model on the given data.
-    pub fn evaluate<D: Dataset<I, U>, S: Partition<I, U, D>, C: Fn(&S) -> bool>(
+    pub fn evaluate<D: Dataset<I>, S: Partition<T>, C: Fn(&S) -> bool>(
         &self,
-        data: &mut D,
+        data: &D,
         criteria: &[C; M],
         labels: &[bool],
         seed: Option<u64>,
@@ -133,19 +131,18 @@ impl<I: Clone, U: Number, const M: usize> Chaoda<I, U, M> {
     }
 }
 
-impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
-    /// Parallel version of `create_trees`.
-    pub fn par_create_trees<D: ParDataset<I, U>, S: ParPartition<I, U, D>, C: (Fn(&S) -> bool) + Send + Sync>(
+impl<I: Clone + Send + Sync, T: Number, const M: usize> Chaoda<I, T, M> {
+    /// Parallel version of [`Chaoda::create_trees`](crate::chaoda::Chaoda::create_trees).
+    pub fn par_create_trees<D: ParDataset<I>, S: ParPartition<T>, C: (Fn(&S) -> bool) + Send + Sync>(
         &self,
-        data: &mut D,
+        data: &D,
         criteria: &[C; M],
         seed: Option<u64>,
-    ) -> [Vertex<I, U, D, S>; M] {
+    ) -> [Vertex<T, S>; M] {
         let mut trees = Vec::new();
         for (metric, criteria) in self.metrics.iter().zip(criteria.iter()) {
-            data.set_metric(metric.clone());
-            let source = S::par_new_tree(data, criteria, seed);
-            let tree = Vertex::par_adapt_tree(source, None);
+            let source = S::par_new_tree(data, metric, criteria, seed);
+            let tree = Vertex::par_adapt_tree(source, None, data, metric);
             trees.push(tree);
         }
         trees
@@ -153,11 +150,11 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
             .unwrap_or_else(|_| unreachable!("Could not convert Vec<Vertex<I, U, D, S>> to [Vertex<I, U, D, S>; {M}]"))
     }
 
-    /// Run inference on the given data.
-    pub fn par_predict_from_trees<D: ParDataset<I, U>, S: ParCluster<I, U, D>>(
+    /// Parallel version of [`Chaoda::predict_from_trees`](crate::chaoda::Chaoda::predict_from_trees).
+    pub fn par_predict_from_trees<D: ParDataset<I>, S: ParCluster<T>>(
         &self,
-        data: &mut D,
-        trees: &[Vertex<I, U, D, S>; M],
+        data: &D,
+        trees: &[Vertex<T, S>; M],
         min_depth: usize,
     ) -> Vec<f32> {
         // TODO: Make this a parameter.
@@ -167,12 +164,11 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
         let mut scores = Vec::new();
 
         for ((metric, root), combinations) in self.metrics.iter().zip(trees.iter()).zip(self.combinations.iter()) {
-            data.set_metric(metric.clone());
             let new_scores = combinations
                 .par_iter()
                 .filter_map(|c| {
                     if c.discerns(tol) {
-                        let (_, row) = c.predict(root, data, min_depth);
+                        let (_, row) = c.predict(root, data, metric, min_depth);
                         Some(row)
                     } else {
                         None
@@ -198,10 +194,10 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
             .to_vec()
     }
 
-    /// Parallel version of `predict`.
-    pub fn par_predict<D: ParDataset<I, U>, S: ParPartition<I, U, D>, C: (Fn(&S) -> bool) + Send + Sync>(
+    /// Parallel version of [`Chaoda::predict`](crate::chaoda::Chaoda::predict).
+    pub fn par_predict<D: ParDataset<I>, S: ParPartition<T>, C: (Fn(&S) -> bool) + Send + Sync>(
         &self,
-        data: &mut D,
+        data: &D,
         criteria: &[C; M],
         seed: Option<u64>,
         min_depth: usize,
@@ -210,8 +206,8 @@ impl<I: Clone + Send + Sync, U: Number, const M: usize> Chaoda<I, U, M> {
         self.par_predict_from_trees(data, &trees, min_depth)
     }
 
-    /// Parallel version of `evaluate`.
-    pub fn par_evaluate<D: ParDataset<I, U>, S: ParPartition<I, U, D>, C: (Fn(&S) -> bool) + Send + Sync>(
+    /// Parallel version of [`Chaoda::evaluate`](crate::chaoda::Chaoda::evaluate).
+    pub fn par_evaluate<D: ParDataset<I>, S: ParPartition<T>, C: (Fn(&S) -> bool) + Send + Sync>(
         &self,
         data: &mut D,
         criteria: &[C; M],

@@ -20,6 +20,7 @@ publish = true
 rand = { workspace = true }
 serde = { workspace = true }
 libm = { workspace = true }
+num-integer = { workspace = true }
 
 [dev-dependencies]
 symagen = { workspace = true }

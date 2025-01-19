@@ -1,20 +1,22 @@
 //! A `Dataset` in which every point stores the distances to its `k` nearest neighbors.
 
 use abd_clam::{
+    cakes::{self, ParSearchAlgorithm, ParSearchable, SearchAlgorithm, Searchable},
     cluster::ParCluster,
-    dataset::{metric_space::ParMetricSpace, ParDataset},
-    Cluster, Dataset, FlatVec, Metric, MetricSpace, Permutable,
+    dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset, Permutable},
+    metric::ParMetric,
+    Cluster, Dataset, FlatVec, Metric,
 };
 use rayon::prelude::*;
 
 use super::wasserstein;
 
-type Fv = FlatVec<Vec<f32>, f32, usize>;
+type Fv = FlatVec<Vec<f32>, usize>;
 
 /// A `Dataset` in which every point stores the distances to its `k` nearest neighbors.
 #[allow(clippy::type_complexity)]
 pub struct NeighborhoodAware {
-    data: FlatVec<Vec<f32>, f32, (usize, Vec<(usize, f32)>)>,
+    data: FlatVec<Vec<f32>, (usize, Vec<(usize, f32)>)>,
     k: usize,
 }
 
@@ -23,48 +25,54 @@ impl NeighborhoodAware {
     ///
     /// This will run knn-search on every point in the dataset and store the
     /// results in the dataset.
-    pub fn new<C: Cluster<Vec<f32>, f32, Fv>>(data: &Fv, root: &C, k: usize) -> Self {
-        let alg = abd_clam::cakes::Algorithm::KnnLinear(k);
+    pub fn new<C: Cluster<f32>, M: Metric<Vec<f32>, f32>>(data: &Fv, metric: &M, root: &C, k: usize) -> Self {
+        let alg = cakes::KnnLinear(k);
 
         let results = data
-            .instances()
+            .items()
             .iter()
-            .map(|query| alg.search(data, root, query))
+            .map(|query| alg.search(data, metric, root, query))
             .zip(data.metadata().iter())
             .map(|(h, &i)| (i, h))
-            .collect();
+            .collect::<Vec<_>>();
 
         let data = data
             .clone()
-            .with_metadata(results)
+            .with_metadata(&results)
             .unwrap_or_else(|e| unreachable!("We created the correct size for neighborhood aware data: {e}"));
         Self { data, k }
     }
 
     /// Parallel version of `new`.
-    pub fn par_new<C: ParCluster<Vec<f32>, f32, Fv>>(data: &Fv, root: &C, k: usize) -> Self {
-        let alg = abd_clam::cakes::Algorithm::KnnLinear(k);
+    pub fn par_new<C: ParCluster<f32>, M: ParMetric<Vec<f32>, f32>>(data: &Fv, metric: &M, root: &C, k: usize) -> Self {
+        let alg = cakes::KnnLinear(k);
 
         let results = data
-            .instances()
+            .items()
             .par_iter()
-            .map(|query| alg.par_search(data, root, query))
+            .map(|query| alg.par_search(data, metric, root, query))
             .zip(data.metadata().par_iter())
             .map(|(h, &i)| (i, h))
-            .collect();
+            .collect::<Vec<_>>();
 
         let data = data
             .clone()
-            .with_metadata(results)
+            .with_metadata(&results)
             .unwrap_or_else(|e| unreachable!("We created the correct size for neighborhood aware data: {e}"));
         Self { data, k }
     }
 
     /// Check if a point is an outlier.
-    pub fn is_outlier<C: Cluster<Vec<f32>, f32, Self>>(&self, root: &C, query: &Vec<f32>, threshold: f32) -> bool {
-        let alg = abd_clam::cakes::Algorithm::KnnLinear(self.k);
+    pub fn is_outlier<C: Cluster<f32>, M: Metric<Vec<f32>, f32>>(
+        &self,
+        metric: &M,
+        root: &C,
+        query: &Vec<f32>,
+        threshold: f32,
+    ) -> bool {
+        let alg = cakes::KnnLinear(self.k);
 
-        let hits = alg.search(self, root, query);
+        let hits = alg.search(self, metric, root, query);
         let neighbors_distances = hits
             .iter()
             .map(|&(i, _)| self.neighbor_distances(i))
@@ -93,17 +101,7 @@ impl NeighborhoodAware {
     }
 }
 
-impl MetricSpace<Vec<f32>, f32> for NeighborhoodAware {
-    fn metric(&self) -> &Metric<Vec<f32>, f32> {
-        self.data.metric()
-    }
-
-    fn set_metric(&mut self, metric: Metric<Vec<f32>, f32>) {
-        self.data.set_metric(metric);
-    }
-}
-
-impl Dataset<Vec<f32>, f32> for NeighborhoodAware {
+impl Dataset<Vec<f32>> for NeighborhoodAware {
     fn name(&self) -> &str {
         self.data.name()
     }
@@ -142,6 +140,24 @@ impl Permutable for NeighborhoodAware {
     }
 }
 
-impl ParMetricSpace<Vec<f32>, f32> for NeighborhoodAware {}
+impl ParDataset<Vec<f32>> for NeighborhoodAware {}
 
-impl ParDataset<Vec<f32>, f32> for NeighborhoodAware {}
+impl<C: Cluster<f32>, M: Metric<Vec<f32>, f32>> Searchable<Vec<f32>, f32, C, M> for NeighborhoodAware {
+    fn query_to_center(&self, metric: &M, query: &Vec<f32>, cluster: &C) -> f32 {
+        self.data.query_to_center(metric, query, cluster)
+    }
+
+    fn query_to_all(&self, metric: &M, query: &Vec<f32>, cluster: &C) -> impl Iterator<Item = (usize, f32)> {
+        self.data.query_to_all(metric, query, cluster)
+    }
+}
+
+impl<C: ParCluster<f32>, M: ParMetric<Vec<f32>, f32>> ParSearchable<Vec<f32>, f32, C, M> for NeighborhoodAware {
+    fn par_query_to_center(&self, metric: &M, query: &Vec<f32>, cluster: &C) -> f32 {
+        self.data.par_query_to_center(metric, query, cluster)
+    }
+
+    fn par_query_to_all(&self, metric: &M, query: &Vec<f32>, cluster: &C) -> impl ParallelIterator<Item = (usize, f32)> {
+        self.data.par_query_to_all(metric, query, cluster)
+    }
+}

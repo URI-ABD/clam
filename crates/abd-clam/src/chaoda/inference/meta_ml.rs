@@ -1,6 +1,5 @@
 //! Inferring with meta-ml models.
 
-use serde::{Deserialize, Serialize};
 use smartcore::{
     linalg::basic::matrix::DenseMatrix, linear::linear_regression::LinearRegression,
     tree::decision_tree_regressor::DecisionTreeRegressor,
@@ -9,7 +8,7 @@ use smartcore::{
 use crate::chaoda::NUM_RATIOS;
 
 /// A trained meta-ml model.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
 pub enum TrainedMetaMlModel {
     /// A linear regression model.
     LinearRegression(LinearRegression<f32, f32, DenseMatrix<f32>, Vec<f32>>),

@@ -1,31 +1,49 @@
-//! Ranged Nearest Neighbors search using the tree.
+//! Ranged Nearest Neighbors search using a tree, as described in the CHESS
+//! paper.
 
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
+use crate::{
+    cakes::{ParSearchable, Searchable},
+    cluster::ParCluster,
+    metric::ParMetric,
+    Cluster, Metric,
+};
 
-/// Clustered search for the ranged nearest neighbors of a query.
-pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, radius: U) -> Vec<(usize, U)>
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
+use super::{ParSearchAlgorithm, RnnLinear, SearchAlgorithm};
+
+/// Ranged Nearest Neighbors search using a tree.
+pub struct RnnClustered<T: Number>(pub T);
+
+impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
+    for RnnClustered<T>
 {
-    let [confirmed, straddlers] = tree_search(data, root, query, radius);
-    leaf_search(data, confirmed, straddlers, query, radius)
+    fn name(&self) -> &str {
+        "RnnClustered"
+    }
+
+    fn radius(&self) -> Option<T> {
+        Some(self.0)
+    }
+
+    fn k(&self) -> Option<usize> {
+        None
+    }
+
+    fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+        let [confirmed, straddlers] = tree_search(data, metric, root, query, self.0);
+        leaf_search(data, metric, confirmed, straddlers, query, self.0)
+    }
 }
 
-/// Parallel clustered search for the ranged nearest neighbors of a query.
-pub fn par_search<I, U, D, C>(data: &D, root: &C, query: &I, radius: U) -> Vec<(usize, U)>
-where
-    I: Send + Sync,
-    U: Number,
-    D: ParDataset<I, U>,
-    C: ParCluster<I, U, D>,
+impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
+    ParSearchAlgorithm<I, T, C, M, D> for RnnClustered<T>
 {
-    let [confirmed, straddlers] = par_tree_search(data, root, query, radius);
-    par_leaf_search(data, confirmed, straddlers, query, radius)
+    fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+        let [confirmed, straddlers] = par_tree_search(data, metric, root, query, self.0);
+        par_leaf_search(data, metric, confirmed, straddlers, query, self.0)
+    }
 }
 
 /// Perform coarse-grained tree search.
@@ -44,59 +62,82 @@ where
 /// query ball, and the second element is the straddlers, i.e. those that
 /// overlap the query ball. The 2-tuples are the clusters and the distance
 /// from the query to the cluster center.
-pub fn tree_search<'a, I, U, D, C>(data: &D, root: &'a C, query: &I, radius: U) -> [Vec<(&'a C, U)>; 2]
+#[inline(never)]
+pub fn tree_search<'a, I, T, C, M, D>(data: &D, metric: &M, root: &'a C, query: &I, radius: T) -> [Vec<(&'a C, T)>; 2]
 where
-    U: Number + 'a,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
+    T: Number + 'a,
+    C: Cluster<T>,
+    M: Metric<I, T>,
+    D: Searchable<I, T, C, M>,
 {
+    let (overlap, distances) = root.overlaps_with(data, metric, query, radius);
+    if !overlap {
+        return [Vec::new(), Vec::new()];
+    }
+
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
-    let mut candidates = vec![root];
+    let mut candidates = vec![(root, distances[0])];
 
-    let (mut terminal, mut non_terminal): (Vec<_>, Vec<_>);
     while !candidates.is_empty() {
-        (terminal, non_terminal) = candidates
-            .into_iter()
-            .map(|c| (c, c.distance_to_center(data, query)))
-            .filter(|&(c, d)| d <= (c.radius() + radius))
-            .partition(|&(c, d)| (c.radius() + d) <= radius);
-        confirmed.append(&mut terminal);
-
-        (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
-        straddlers.append(&mut terminal);
-
-        candidates = non_terminal.into_iter().flat_map(|(c, _)| c.child_clusters()).collect();
+        candidates = candidates.into_iter().fold(Vec::new(), |mut next_candidates, (c, d)| {
+            if (c.radius() + d) <= radius {
+                confirmed.push((c, d));
+            } else if c.is_leaf() {
+                straddlers.push((c, d));
+            } else {
+                next_candidates.extend(
+                    c.overlapping_children(data, metric, query, radius)
+                        .into_iter()
+                        .map(|(c, ds)| (c, ds[0])),
+                );
+            }
+            next_candidates
+        });
     }
 
     [confirmed, straddlers]
 }
 
-/// Parallelized version of the tree search.
-pub fn par_tree_search<'a, I, U, D, C>(data: &D, root: &'a C, query: &I, radius: U) -> [Vec<(&'a C, U)>; 2]
+/// Parallel version of [`tree_search`](crate::cakes::search::rnn_clustered::tree_search).
+pub fn par_tree_search<'a, I, T, C, M, D>(
+    data: &D,
+    metric: &M,
+    root: &'a C,
+    query: &I,
+    radius: T,
+) -> [Vec<(&'a C, T)>; 2]
 where
     I: Send + Sync,
-    U: Number + 'a,
-    D: ParDataset<I, U>,
-    C: ParCluster<I, U, D>,
+    T: Number + 'a,
+    C: ParCluster<T>,
+    M: ParMetric<I, T>,
+    D: ParSearchable<I, T, C, M>,
 {
+    let (overlap, distances) = root.par_overlaps_with(data, metric, query, radius);
+    if !overlap {
+        return [Vec::new(), Vec::new()];
+    }
+
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
-    let mut candidates = vec![root];
+    let mut candidates = vec![(root, distances[0])];
 
-    let (mut terminal, mut non_terminal): (Vec<_>, Vec<_>);
     while !candidates.is_empty() {
-        (terminal, non_terminal) = candidates
-            .into_par_iter()
-            .map(|c| (c, c.distance_to_center(data, query)))
-            .filter(|&(c, d)| d <= (c.radius() + radius))
-            .partition(|&(c, d)| (c.radius() + d) < radius);
-        confirmed.append(&mut terminal);
-
-        (terminal, non_terminal) = non_terminal.into_iter().partition(|&(c, _)| c.is_leaf());
-        straddlers.append(&mut terminal);
-
-        candidates = non_terminal.into_iter().flat_map(|(c, _)| c.child_clusters()).collect();
+        candidates = candidates.into_iter().fold(Vec::new(), |mut next_candidates, (c, d)| {
+            if (c.radius() + d) <= radius {
+                confirmed.push((c, d));
+            } else if c.is_leaf() {
+                straddlers.push((c, d));
+            } else {
+                next_candidates.extend(
+                    c.par_overlapping_children(data, metric, query, radius)
+                        .into_iter()
+                        .map(|(c, ds)| (c, ds[0])),
+                );
+            }
+            next_candidates
+        });
     }
 
     [confirmed, straddlers]
@@ -118,140 +159,67 @@ where
 /// # Returns
 ///
 /// The `(index, distance)` pairs of the points within the query ball.
-pub fn leaf_search<I, U, D, C>(
+#[inline(never)]
+pub fn leaf_search<I, T, D, M, C>(
     data: &D,
-    confirmed: Vec<(&C, U)>,
-    straddlers: Vec<(&C, U)>,
+    metric: &M,
+    confirmed: Vec<(&C, T)>,
+    straddlers: Vec<(&C, T)>,
     query: &I,
-    radius: U,
-) -> Vec<(usize, U)>
+    radius: T,
+) -> Vec<(usize, T)>
 where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
+    T: Number,
+    C: Cluster<T>,
+    M: Metric<I, T>,
+    D: Searchable<I, T, C, M>,
 {
-    let hits = confirmed.into_iter().flat_map(|(c, d)| {
-        if c.is_singleton() {
-            c.indices().map(|i| (i, d)).collect()
-        } else {
-            c.distances_to_query(data, query)
-        }
-    });
-
-    let distances = straddlers
+    confirmed
         .into_iter()
-        .flat_map(|(c, _)| c.distances_to_query(data, query))
-        .filter(|&(_, d)| d <= radius);
-
-    hits.chain(distances).collect()
+        .flat_map(|(c, d)| {
+            if c.is_singleton() {
+                c.indices().into_iter().map(|i| (i, d)).collect::<Vec<_>>()
+            } else {
+                data.query_to_all(metric, query, c).collect()
+            }
+        })
+        .chain(
+            straddlers
+                .into_iter()
+                .flat_map(|(c, _)| RnnLinear(radius).search(data, metric, c, query)),
+        )
+        .collect()
 }
 
-/// Parallelized version of the leaf search.
-pub fn par_leaf_search<I, U, D, C>(
+/// Parallel version of [`leaf_search`](crate::cakes::search::rnn_clustered::leaf_search).
+pub fn par_leaf_search<I, T, C, M, D>(
     data: &D,
-    confirmed: Vec<(&C, U)>,
-    straddlers: Vec<(&C, U)>,
+    metric: &M,
+    confirmed: Vec<(&C, T)>,
+    straddlers: Vec<(&C, T)>,
     query: &I,
-    radius: U,
-) -> Vec<(usize, U)>
+    radius: T,
+) -> Vec<(usize, T)>
 where
     I: Send + Sync,
-    U: Number,
-    D: ParDataset<I, U>,
-    C: ParCluster<I, U, D>,
+    T: Number,
+    C: ParCluster<T>,
+    M: ParMetric<I, T>,
+    D: ParSearchable<I, T, C, M>,
 {
-    let hits = confirmed.into_par_iter().flat_map(|(c, d)| {
-        if c.is_singleton() {
-            c.indices().map(|i| (i, d)).collect()
-        } else {
-            c.par_distances_to_query(data, query)
-        }
-    });
-
-    let distances = straddlers
+    confirmed
         .into_par_iter()
-        .flat_map(|(c, _)| c.par_distances_to_query(data, query))
-        .filter(|&(_, d)| d <= radius);
-
-    hits.chain(distances).collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use core::fmt::Debug;
-
-    use distances::Number;
-
-    use crate::Dataset;
-    use crate::{
-        adapter::BallAdapter, cakes::OffBall, cluster::ParCluster, partition::ParPartition, Ball, Cluster, FlatVec,
-        Partition,
-    };
-
-    use crate::cakes::tests::{check_search_by_index, gen_grid_data, gen_line_data};
-
-    pub fn check_rnn<I: Debug + Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
-        root: &C,
-        data: &FlatVec<I, U, usize>,
-        query: &I,
-        radius: U,
-    ) -> bool {
-        let true_hits = data.rnn(query, radius);
-
-        let pred_hits = super::search(data, root, query, radius);
-        assert_eq!(pred_hits.len(), true_hits.len(), "Rnn search failed: {pred_hits:?}");
-        check_search_by_index(true_hits.clone(), pred_hits, "RnnClustered", data);
-
-        let pred_hits = super::par_search(data, root, query, radius);
-        assert_eq!(
-            pred_hits.len(),
-            true_hits.len(),
-            "Parallel Rnn search failed: {pred_hits:?}"
-        );
-        check_search_by_index(true_hits, pred_hits, "Par RnnClustered", data);
-
-        true
-    }
-
-    #[test]
-    fn line() -> Result<(), String> {
-        let data = gen_line_data(10)?;
-        let query = &0;
-
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(42);
-
-        let ball = Ball::new_tree(&data, &criteria, seed);
-        for radius in 0..=4 {
-            assert!(check_rnn(&ball, &data, &query, radius));
-        }
-
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
-        for radius in 0..=4 {
-            assert!(check_rnn(&off_ball, &perm_data, &query, radius));
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn grid() -> Result<(), String> {
-        let data = gen_grid_data(10)?;
-        let query = &(0.0, 0.0);
-
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(42);
-
-        let ball = Ball::par_new_tree(&data, &criteria, seed);
-        for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
-            assert!(check_rnn(&ball, &data, &query, radius));
-        }
-
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
-        for radius in [1.0, 4.0, 8.0, 16.0, 32.0] {
-            assert!(check_rnn(&off_ball, &perm_data, &query, radius));
-        }
-
-        Ok(())
-    }
+        .flat_map(|(c, d)| {
+            if c.is_singleton() {
+                c.indices().into_iter().map(|i| (i, d)).collect::<Vec<_>>()
+            } else {
+                data.par_query_to_all(metric, query, c).collect()
+            }
+        })
+        .chain(
+            straddlers
+                .into_par_iter()
+                .flat_map(|(c, _)| RnnLinear(radius).par_search(data, metric, c, query)),
+        )
+        .collect()
 }

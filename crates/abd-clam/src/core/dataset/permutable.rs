@@ -6,11 +6,11 @@
 /// the `CAKES` paper.
 ///
 /// We may *not* want to permute the dataset in-place, e.g. for use with
-/// `CHAODA` because it needs to deal with a given set of instances under
-/// multiple metrics.
+/// `CHAODA` because it needs to deal with a given set of items under multiple
+/// metrics.
 pub trait Permutable {
     /// Gets the current permutation of the collection, i.e. the ordering of the
-    /// original instances into the current order.
+    /// original items into the current order.
     ///
     /// Our implementation of this method on `Vec<T>` and `&mut [T]` will always
     /// return the identity permutation.
@@ -19,7 +19,7 @@ pub trait Permutable {
     /// Sets the permutation of the collection without modifying the collection.
     fn set_permutation(&mut self, permutation: &[usize]);
 
-    /// Swaps the location of two instances in the collection.
+    /// Swaps the location of two items in the collection.
     ///
     /// # Arguments
     ///

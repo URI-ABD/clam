@@ -6,15 +6,14 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 
 use crate::utils::{Scalar, Vector1, Vector2, _cdist, _pdist};
 
-pub fn register(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
-    let simd_module = PyModule::new(py, "simd")?;
-    simd_module.add_function(wrap_pyfunction!(euclidean, simd_module)?)?;
-    simd_module.add_function(wrap_pyfunction!(sqeuclidean, simd_module)?)?;
-    simd_module.add_function(wrap_pyfunction!(cosine, simd_module)?)?;
-    simd_module.add_function(wrap_pyfunction!(cdist, simd_module)?)?;
-    simd_module.add_function(wrap_pyfunction!(pdist, simd_module)?)?;
-    parent_module.add_submodule(simd_module)?;
-    Ok(())
+pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
+    let simd_module = PyModule::new(pm.py(), "simd")?;
+    simd_module.add_function(wrap_pyfunction!(euclidean, &simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(sqeuclidean, &simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(cosine, &simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(cdist, &simd_module)?)?;
+    simd_module.add_function(wrap_pyfunction!(pdist, &simd_module)?)?;
+    pm.add_submodule(&simd_module)
 }
 
 macro_rules! build_fn {
@@ -140,7 +139,7 @@ build_fn!(sqeuclidean, euclidean_sq_f32, euclidean_sq_f64);
 build_fn!(cosine, cosine_f32, cosine_f64);
 
 #[pyfunction]
-fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str) -> PyResult<Py<PyArray2<f64>>> {
+fn cdist<'py>(py: Python<'py>, a: Vector2, b: Vector2, metric: &str) -> PyResult<Bound<'py, PyArray2<f64>>> {
     match (&a, &b) {
         // The types are the same
         (Vector2::F32(a), Vector2::F32(b)) => {
@@ -236,7 +235,7 @@ fn cdist(py: Python<'_>, a: Vector2, b: Vector2, metric: &str) -> PyResult<Py<Py
 }
 
 #[pyfunction]
-fn pdist(py: Python<'_>, a: Vector2, metric: &str) -> PyResult<Py<PyArray1<f64>>> {
+fn pdist<'py>(py: Python<'py>, a: Vector2, metric: &str) -> PyResult<Bound<'py, PyArray1<f64>>> {
     match &a {
         Vector2::F32(a) => {
             let metric = _parse_metric_f32(metric)?;

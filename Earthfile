@@ -31,7 +31,7 @@ ENV PATH="${RYE_HOME}/shims:${PATH}"
 
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
-    COPY --dir crates pypi .
+    COPY --dir benches crates pypi .
     COPY Cargo.toml .
     RUN cargo chef prepare
     SAVE ARTIFACT recipe.json
@@ -42,6 +42,7 @@ chef-cook:
     RUN cargo chef cook --release
     COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml rustfmt.toml .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
+    COPY --dir benches .
     COPY --dir crates .
     COPY --dir pypi .
     RUN rye sync --no-lock
@@ -67,17 +68,18 @@ lint:
 # Apply any automated fixes.
 fix:
     FROM +chef-cook
-    RUN cargo fmt --all
+    RUN cargo fmt --all --all-features
     RUN rye fmt --all
     RUN cargo clippy --fix --allow-no-vcs
     RUN rye lint --fix
+    SAVE ARTIFACT benches AS LOCAL ./
     SAVE ARTIFACT crates AS LOCAL ./
     SAVE ARTIFACT pypi AS LOCAL ./
 
 # This target runs the tests.
 test:
     FROM +chef-cook
-    RUN cargo test --release --lib --bins --examples --tests --all-features
+    RUN cargo test -r -p abd-clam --all-features -p distances -p symagen
     # TODO: switch to --all, blocked on https://github.com/astral-sh/rye/issues/853
     RUN rye test --package abd-distances
 

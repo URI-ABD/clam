@@ -3,75 +3,90 @@
 use core::cmp::Reverse;
 
 use distances::Number;
+use rayon::prelude::*;
 
 use crate::{
+    cakes::{ParSearchable, Searchable},
     cluster::ParCluster,
-    dataset::{ParDataset, SizedHeap},
-    Cluster, Dataset,
+    dataset::SizedHeap,
+    metric::ParMetric,
+    Cluster, Metric,
 };
 
+use super::{ParSearchAlgorithm, SearchAlgorithm};
+
 /// K-Nearest Neighbors search using a Depth First sieve.
-pub fn search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize, U)>
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
+pub struct KnnDepthFirst(pub usize);
+
+impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
+    for KnnDepthFirst
 {
-    let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
-    let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
-
-    let d = root.distance_to_center(data, query);
-    candidates.push((Reverse(d_min(root, d)), root));
-
-    while !hits.is_full()  // We do not have enough hits.
-        || (!candidates.is_empty()  // We have candidates.
-            && hits  // and
-                .peek()
-                .map_or_else(|| unreachable!("`hits` is non-empty."), |(d, _)| *d)  // the farthest hit
-                >= candidates  // is farther than
-                    .peek() // the closest candidate
-                    .map_or_else(|| unreachable!("`candidates` is non-empty."), |(d, _)| d.0))
-    {
-        let (d, leaf) = pop_till_leaf(data, query, &mut candidates);
-        leaf_into_hits(data, query, &mut hits, d, leaf);
+    fn name(&self) -> &str {
+        "KnnDepthFirst"
     }
-    hits.items().map(|(d, i)| (i, d)).collect()
+
+    fn radius(&self) -> Option<T> {
+        None
+    }
+
+    fn k(&self) -> Option<usize> {
+        Some(self.0)
+    }
+
+    fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+        let mut candidates = SizedHeap::<(Reverse<T>, &C)>::new(None);
+        let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));
+
+        let d = data.query_to_center(metric, query, root);
+        candidates.push((Reverse(d_min(root, d)), root));
+
+        while !hits.is_full()  // We do not have enough hits.
+            || (!candidates.is_empty()  // We have candidates.
+                && hits  // and
+                    .peek()
+                    .map_or_else(|| unreachable!("`hits` is non-empty."), |(d, _)| *d)  // the farthest hit
+                    >= candidates  // is farther than
+                        .peek() // the closest candidate
+                        .map_or_else(|| unreachable!("`candidates` is non-empty."), |(d, _)| d.0))
+        {
+            let (d, leaf) = pop_till_leaf(data, metric, query, &mut candidates);
+            leaf_into_hits(data, metric, query, &mut hits, d, leaf);
+        }
+        hits.items().map(|(d, i)| (i, d)).collect()
+    }
 }
 
-/// Parallel K-Nearest Neighbors search using a Depth First sieve.
-pub fn par_search<I, U, D, C>(data: &D, root: &C, query: &I, k: usize) -> Vec<(usize, U)>
-where
-    I: Send + Sync,
-    U: Number,
-    D: ParDataset<I, U>,
-    C: ParCluster<I, U, D>,
+impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
+    ParSearchAlgorithm<I, T, C, M, D> for KnnDepthFirst
 {
-    let mut candidates = SizedHeap::<(Reverse<U>, &C)>::new(None);
-    let mut hits = SizedHeap::<(U, usize)>::new(Some(k));
+    fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+        let mut candidates = SizedHeap::<(Reverse<T>, &C)>::new(None);
+        let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));
 
-    let d = root.distance_to_center(data, query);
-    candidates.push((Reverse(d_min(root, d)), root));
+        let d = data.par_query_to_center(metric, query, root);
+        candidates.push((Reverse(d_min(root, d)), root));
 
-    while !hits.is_full()  // We do not have enough hits.
-        || (!candidates.is_empty()  // We have candidates.
-            && hits  // and
-                .peek()
-                .map_or_else(|| unreachable!("`hits` is non-empty."), |(d, _)| *d)  // the farthest hit
-                >= candidates  // is farther than
-                    .peek() // the closest candidate
-                    .map_or_else(|| unreachable!("`candidates` is non-empty."), |(d, _)| d.0))
-    {
-        par_pop_till_leaf(data, query, &mut candidates);
-        par_leaf_into_hits(data, query, &mut hits, &mut candidates);
+        while !hits.is_full()  // We do not have enough hits.
+            || (!candidates.is_empty()  // We have candidates.
+                && hits  // and
+                    .peek()
+                    .map_or_else(|| unreachable!("`hits` is non-empty."), |(d, _)| *d)  // the farthest hit
+                    >= candidates  // is farther than
+                        .peek() // the closest candidate
+                        .map_or_else(|| unreachable!("`candidates` is non-empty."), |(d, _)| d.0))
+        {
+            par_pop_till_leaf(data, metric, query, &mut candidates);
+            par_leaf_into_hits(data, metric, query, &mut hits, &mut candidates);
+        }
+        hits.items().map(|(d, i)| (i, d)).collect()
     }
-    hits.items().map(|(d, i)| (i, d)).collect()
 }
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
-pub fn d_min<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C, d: U) -> U {
+pub fn d_min<T: Number, C: Cluster<T>>(c: &C, d: T) -> T {
     if d < c.radius() {
-        U::ZERO
+        T::ZERO
     } else {
         d - c.radius()
     }
@@ -79,51 +94,17 @@ pub fn d_min<I, U: Number, D: Dataset<I, U>, C: Cluster<I, U, D>>(c: &C, d: U) -
 
 /// Pops from the top of `candidates` until the top candidate is a leaf cluster.
 /// Then, pops and returns the leaf cluster.
-fn pop_till_leaf<'a, I, U, D, C>(data: &D, query: &I, candidates: &mut SizedHeap<(Reverse<U>, &'a C)>) -> (U, &'a C)
+fn pop_till_leaf<'a, I, T, C, M, D>(
+    data: &D,
+    metric: &M,
+    query: &I,
+    candidates: &mut SizedHeap<(Reverse<T>, &'a C)>,
+) -> (T, &'a C)
 where
-    U: Number + 'a,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
-{
-    while candidates
-        .peek() // The top candidate is a leaf
-        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| !c.is_leaf())
-    {
-        let parent = candidates
-            .pop()
-            .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| c);
-        for child in parent.child_clusters() {
-            candidates.push((Reverse(d_min(child, child.distance_to_center(data, query))), child));
-        }
-    }
-    candidates
-        .pop()
-        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c))
-}
-
-/// Pops from the top of `candidates` and adds its points to `hits`.
-fn leaf_into_hits<I, U, D, C>(data: &D, query: &I, hits: &mut SizedHeap<(U, usize)>, d: U, leaf: &C)
-where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
-{
-    if leaf.is_singleton() {
-        leaf.indices().for_each(|i| hits.push((d, i)));
-    } else {
-        leaf.distances_to_query(data, query)
-            .into_iter()
-            .for_each(|(i, d)| hits.push((d, i)));
-    };
-}
-
-/// Parallel version of `pop_till_leaf`.
-fn par_pop_till_leaf<'a, I, U, D, C>(data: &D, query: &I, candidates: &mut SizedHeap<(Reverse<U>, &'a C)>)
-where
-    I: Send + Sync,
-    U: Number + 'a,
-    D: ParDataset<I, U>,
-    C: ParCluster<I, U, D>,
+    T: Number + 'a,
+    C: Cluster<T>,
+    M: Metric<I, T>,
+    D: Searchable<I, T, C, M>,
 {
     while candidates
         .peek() // The top candidate
@@ -133,116 +114,81 @@ where
         let parent = candidates
             .pop()
             .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| c);
-        let children = parent.child_clusters().collect::<Vec<_>>();
-        let indices = children.iter().map(|c| c.arg_center()).collect::<Vec<_>>();
-        data.par_query_to_many(query, &indices)
+        parent.children().into_iter().for_each(|child| {
+            candidates.push((Reverse(d_min(child, data.query_to_center(metric, query, child))), child));
+        });
+    }
+    candidates
+        .pop()
+        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c))
+}
+
+/// Parallel version of [`pop_till_leaf`](crate::cakes::search::knn_depth_first::pop_till_leaf).
+fn par_pop_till_leaf<'a, I, T, C, M, D>(data: &D, metric: &M, query: &I, candidates: &mut SizedHeap<(Reverse<T>, &'a C)>)
+where
+    I: Send + Sync,
+    T: Number + 'a,
+    C: ParCluster<T>,
+    M: ParMetric<I, T>,
+    D: ParSearchable<I, T, C, M>,
+{
+    while candidates
+        .peek() // The top candidate
+        .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| !c.is_leaf())
+    // is not a leaf
+    {
+        let parent = candidates
+            .pop()
+            .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| c);
+        parent
+            .children()
+            .into_par_iter()
+            .map(|child| (child, data.par_query_to_center(metric, query, child)))
+            .collect::<Vec<_>>()
             .into_iter()
-            .zip(children)
-            .for_each(|((_, d), c)| candidates.push((Reverse(d_min(c, d)), c)));
+            .for_each(|(child, d)| candidates.push((Reverse(d_min(child, d)), child)));
     }
 }
 
-/// Parallel version of `leaf_into_hits`.
-fn par_leaf_into_hits<I, U, D, C>(
+/// Pops from the top of `candidates` and adds its points to `hits`.
+fn leaf_into_hits<I, T, C, M, D>(data: &D, metric: &M, query: &I, hits: &mut SizedHeap<(T, usize)>, d: T, leaf: &C)
+where
+    T: Number,
+    C: Cluster<T>,
+    M: Metric<I, T>,
+    D: Searchable<I, T, C, M>,
+{
+    if leaf.is_singleton() {
+        leaf.indices().into_iter().for_each(|i| hits.push((d, i)));
+    } else {
+        data.query_to_all(metric, query, leaf)
+            .for_each(|(i, d)| hits.push((d, i)));
+    };
+}
+
+/// Parallel version of [`leaf_into_hits`](crate::cakes::search::knn_depth_first::leaf_into_hits).
+fn par_leaf_into_hits<I, T, C, M, D>(
     data: &D,
+    metric: &M,
     query: &I,
-    hits: &mut SizedHeap<(U, usize)>,
-    candidates: &mut SizedHeap<(Reverse<U>, &C)>,
+    hits: &mut SizedHeap<(T, usize)>,
+    candidates: &mut SizedHeap<(Reverse<T>, &C)>,
 ) where
     I: Send + Sync,
-    U: Number,
-    D: ParDataset<I, U>,
-    C: ParCluster<I, U, D>,
+    T: Number,
+    C: ParCluster<T>,
+    M: ParMetric<I, T>,
+    D: ParSearchable<I, T, C, M>,
 {
     let (d, leaf) = candidates
         .pop()
         .map_or_else(|| unreachable!("`candidates` is non-empty"), |(Reverse(d), c)| (d, c));
     if leaf.is_singleton() {
-        leaf.indices().for_each(|i| hits.push((d, i)));
+        leaf.indices().into_iter().for_each(|i| hits.push((d, i)));
     } else {
-        leaf.par_distances_to_query(data, query)
+        data.query_to_all(metric, query, leaf)
+            .collect::<Vec<_>>()
             .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
     };
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use core::fmt::Debug;
-
-    use distances::Number;
-
-    use crate::{
-        adapter::BallAdapter,
-        cakes::OffBall,
-        cluster::{Ball, ParCluster, Partition},
-        Cluster, Dataset, FlatVec,
-    };
-
-    use crate::cakes::tests::{check_search_by_distance, gen_grid_data, gen_line_data};
-
-    pub fn check_knn<I: Debug + Send + Sync, U: Number, C: ParCluster<I, U, FlatVec<I, U, usize>>>(
-        root: &C,
-        data: &FlatVec<I, U, usize>,
-        query: &I,
-        k: usize,
-    ) -> bool {
-        let true_hits = data.knn(query, k);
-
-        let pred_hits = super::search(data, root, query, k);
-        assert_eq!(pred_hits.len(), true_hits.len(), "Knn search failed: {pred_hits:?}");
-        check_search_by_distance(true_hits.clone(), pred_hits, "KnnClustered", data);
-
-        let pred_hits = super::par_search(data, root, query, k);
-        assert_eq!(
-            pred_hits.len(),
-            true_hits.len(),
-            "Parallel Knn search failed: {pred_hits:?}"
-        );
-        check_search_by_distance(true_hits.clone(), pred_hits, "Par KnnClustered", data);
-
-        true
-    }
-
-    #[test]
-    fn line() -> Result<(), String> {
-        let data = gen_line_data(10)?;
-        let query = &0;
-
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(42);
-
-        let ball = Ball::new_tree(&data, &criteria, seed);
-        for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &data, query, k));
-        }
-
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
-        for k in [1, 4, 8] {
-            assert!(check_knn(&off_ball, &perm_data, query, k));
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn grid() -> Result<(), String> {
-        let data = gen_grid_data(10)?;
-        let query = &(0.0, 0.0);
-
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let seed = Some(42);
-
-        let ball = Ball::new_tree(&data, &criteria, seed);
-        for k in [1, 4, 8] {
-            assert!(check_knn(&ball, &data, query, k));
-        }
-
-        let (off_ball, perm_data) = OffBall::from_ball_tree(ball, data);
-        for k in [1, 4, 8] {
-            assert!(check_knn(&off_ball, &perm_data, query, k));
-        }
-
-        Ok(())
-    }
 }

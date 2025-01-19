@@ -2,13 +2,11 @@
 //! some additional information for the `Graph`-based anomaly detection
 //! algorithms.
 
-use core::hash::{Hash, Hasher};
-
 use std::collections::HashSet;
 
 use distances::Number;
 
-use crate::{chaoda::Vertex, Cluster, Dataset};
+use crate::{chaoda::Vertex, Cluster};
 
 use super::adjacency_list::AdjacencyList;
 
@@ -16,15 +14,15 @@ use super::adjacency_list::AdjacencyList;
 /// some additional information for the `Graph`-based anomaly detection
 /// algorithms.
 #[derive(Clone)]
-pub struct Node<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> {
+pub struct Node<'a, T: Number, S: Cluster<T>> {
     /// The `Vertex` that the `Node` represents.
-    vertex: &'a Vertex<I, U, D, S>,
+    vertex: &'a Vertex<T, S>,
     /// The cumulative size of the `Graph` neighborhood of the `Node` at each
     /// step of a breadth-first traversal.
     neighborhood_sizes: Vec<usize>,
 }
 
-impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Node<'a, I, U, D, S> {
+impl<'a, T: Number, S: Cluster<T>> Node<'a, T, S> {
     /// Create a new `Node` from a `Vertex` and an `AdjacencyList`.
     ///
     /// # Arguments
@@ -32,7 +30,7 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Node<'a, I, U, D, 
     /// * `vertex`: The `Vertex` that the `Node` represents.
     /// * `adjacency_list`: The `AdjacencyList` of the `Component` that the
     ///   `Vertex` belongs to.
-    pub fn new(vertex: &'a Vertex<I, U, D, S>, adjacency_list: &AdjacencyList<I, U, D, Vertex<I, U, D, S>>) -> Self {
+    pub fn new(vertex: &'a Vertex<T, S>, adjacency_list: &AdjacencyList<T, Vertex<T, S>>) -> Self {
         let neighborhood_sizes = Self::compute_neighborhood_sizes(vertex, adjacency_list);
 
         Self {
@@ -44,8 +42,8 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Node<'a, I, U, D, 
     /// Get the cumulative size of the `Graph` neighborhood of the `Node` at
     /// each step of a breadth-first traversal.
     fn compute_neighborhood_sizes(
-        vertex: &'a Vertex<I, U, D, S>,
-        adjacency_list: &AdjacencyList<I, U, D, Vertex<I, U, D, S>>,
+        vertex: &'a Vertex<T, S>,
+        adjacency_list: &AdjacencyList<T, Vertex<T, S>>,
     ) -> Vec<usize> {
         let mut frontier_sizes = vec![];
         let mut visited = HashSet::new();
@@ -100,16 +98,16 @@ impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Node<'a, I, U, D, 
     }
 }
 
-impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Eq for Node<'a, I, U, D, S> {}
+impl<T: Number, S: Cluster<T>> Eq for Node<'_, T, S> {}
 
-impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> PartialEq for Node<'a, I, U, D, S> {
+impl<T: Number, S: Cluster<T>> PartialEq for Node<'_, T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.vertex == other.vertex
     }
 }
 
-impl<'a, I, U: Number, D: Dataset<I, U>, S: Cluster<I, U, D>> Hash for Node<'a, I, U, D, S> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl<T: Number, S: Cluster<T>> core::hash::Hash for Node<'_, T, S> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.vertex.hash(state);
     }
 }

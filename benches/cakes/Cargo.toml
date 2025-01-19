@@ -1,0 +1,16 @@
+[package]
+name = "bench-cakes"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
+bench-utils = { path = "../utils" }
+ftlog = { workspace = true }
+bitcode = { workspace = true }
+abd-clam = { workspace = true, features = ["disk-io"] }
+distances = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+stringzilla = "3.9.5"
+augurs-dtw = { version = "0.8.1", features = ["parallel"] }

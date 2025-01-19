@@ -7,6 +7,12 @@ use ftlog::{
     LevelFilter, LoggerGuard,
 };
 
+/// Configures the logger.
+///
+/// # Errors
+///
+/// - If a logs directory could not be located/created.
+/// - If the logger could not be initialized.
 pub fn configure_logger(file_name: &str) -> Result<(LoggerGuard, PathBuf), String> {
     let root_dir = PathBuf::from(".").canonicalize().map_err(|e| e.to_string())?;
     let logs_dir = root_dir.join("logs");

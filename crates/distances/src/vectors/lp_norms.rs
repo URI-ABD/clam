@@ -1,7 +1,5 @@
 //! Provides functions for calculating Lp-norms between two vectors.
 
-use core::cmp::Ordering;
-
 use crate::{number::Float, Number};
 
 use super::utils::abs_diff_iter;
@@ -186,9 +184,7 @@ pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// assert!((distance - 5.0).abs() <= f64::EPSILON);
 /// ```
 pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
-    abs_diff_iter(x, y)
-        .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less))
-        .unwrap_or(T::ZERO)
+    abs_diff_iter(x, y).max_by(Number::total_cmp).unwrap_or(T::ZERO)
 }
 
 /// General (Lp-norm)^p between two vectors.

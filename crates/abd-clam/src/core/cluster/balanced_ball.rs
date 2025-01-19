@@ -1,181 +1,258 @@
-//! A `Cluster` that provides a balanced clustering.
+//! A `BalancedBall` is a data structure that represents a balanced binary tree.
 
 use distances::Number;
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 
-use crate::{dataset::ParDataset, Dataset};
+use crate::{dataset::ParDataset, metric::ParMetric, Dataset, Metric};
 
-use super::{partition::ParPartition, Ball, Cluster, ParCluster, Partition};
+use super::{Ball, Cluster, ParCluster, ParPartition, Partition};
 
-/// A `Cluster` that provides a balanced clustering.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct BalancedBall<I, U: Number, D: Dataset<I, U>> {
-    /// The inner `Ball` of the `BalancedBall`.
-    pub(crate) ball: Ball<I, U, D>,
-    /// The children of the `BalancedBall`.
-    pub(crate) children: Vec<(usize, U, Box<Self>)>,
+/// A `BalancedBall` is a data structure that represents a balanced binary tree.
+#[derive(Clone)]
+pub struct BalancedBall<T: Number>(Ball<T>, Vec<Box<Self>>);
+
+impl<T: Number> BalancedBall<T> {
+    /// Converts the `BalancedBall` into a `Ball`.
+    pub fn into_ball(mut self) -> Ball<T> {
+        if !self.1.is_empty() {
+            let children = self.1.into_iter().map(|c| c.into_ball()).map(Box::new).collect();
+            self.0.set_children(children);
+        }
+        self.0
+    }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> core::fmt::Debug for BalancedBall<I, U, D> {
+impl<T: Number> core::fmt::Debug for BalancedBall<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Ball")
-            .field("depth", &self.ball.depth())
-            .field("cardinality", &self.ball.cardinality())
-            .field("radius", &self.ball.radius())
-            .field("lfd", &self.ball.lfd())
-            .field("arg_center", &self.ball.arg_center())
-            .field("arg_radial", &self.ball.arg_radial())
-            .field("indices", &self.ball.indices)
-            .field("children", &self.children.is_empty())
+        f.debug_struct("BalancedBall")
+            .field("depth", &self.depth())
+            .field("cardinality", &self.cardinality())
+            .field("radius", &self.radius())
+            .field("lfd", &self.lfd())
+            .field("arg_center", &self.arg_center())
+            .field("arg_radial", &self.arg_radial())
+            .field("indices", &self.indices())
+            .field("extents", &self.extents())
+            .field("children", &!self.is_leaf())
             .finish()
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> PartialEq for BalancedBall<I, U, D> {
+impl<T: Number> PartialEq for BalancedBall<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.ball.eq(&other.ball)
+        self.0 == other.0 && self.1 == other.1
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Eq for BalancedBall<I, U, D> {}
+impl<T: Number> Eq for BalancedBall<T> {}
 
-impl<I, U: Number, D: Dataset<I, U>> PartialOrd for BalancedBall<I, U, D> {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+impl<T: Number> PartialOrd for BalancedBall<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Ord for BalancedBall<I, U, D> {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.ball.cmp(&other.ball)
+impl<T: Number> Ord for BalancedBall<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> std::hash::Hash for BalancedBall<I, U, D> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.ball.hash(state);
+impl<T: Number> core::hash::Hash for BalancedBall<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Cluster<I, U, D> for BalancedBall<I, U, D> {
+impl<T: Number> Cluster<T> for BalancedBall<T> {
     fn depth(&self) -> usize {
-        self.ball.depth()
+        self.0.depth()
     }
 
     fn cardinality(&self) -> usize {
-        self.ball.cardinality()
+        self.0.cardinality()
     }
 
     fn arg_center(&self) -> usize {
-        self.ball.arg_center()
+        self.0.arg_center()
     }
 
     fn set_arg_center(&mut self, arg_center: usize) {
-        self.ball.set_arg_center(arg_center);
+        self.0.set_arg_center(arg_center);
     }
 
-    fn radius(&self) -> U {
-        self.ball.radius()
+    fn radius(&self) -> T {
+        self.0.radius()
     }
 
     fn arg_radial(&self) -> usize {
-        self.ball.arg_radial()
+        self.0.arg_radial()
     }
 
     fn set_arg_radial(&mut self, arg_radial: usize) {
-        self.ball.set_arg_radial(arg_radial);
+        self.0.set_arg_radial(arg_radial);
     }
 
     fn lfd(&self) -> f32 {
-        self.ball.lfd()
+        self.0.lfd()
     }
 
-    fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        self.ball.indices()
+    fn contains(&self, idx: usize) -> bool {
+        self.0.contains(idx)
     }
 
-    fn set_indices(&mut self, indices: Vec<usize>) {
-        self.ball.set_indices(indices);
+    fn indices(&self) -> Vec<usize> {
+        self.0.indices()
     }
 
-    fn children(&self) -> &[(usize, U, Box<Self>)] {
-        &self.children
+    fn set_indices(&mut self, indices: &[usize]) {
+        self.0.set_indices(indices);
     }
 
-    fn children_mut(&mut self) -> &mut [(usize, U, Box<Self>)] {
-        &mut self.children
+    fn extents(&self) -> &[(usize, T)] {
+        self.0.extents()
     }
 
-    fn set_children(&mut self, children: Vec<(usize, U, Box<Self>)>) {
-        self.children = children;
+    fn extents_mut(&mut self) -> &mut [(usize, T)] {
+        self.0.extents_mut()
     }
 
-    fn take_children(&mut self) -> Vec<(usize, U, Box<Self>)> {
-        core::mem::take(&mut self.children)
+    fn add_extent(&mut self, idx: usize, extent: T) {
+        self.0.add_extent(idx, extent);
     }
 
-    fn distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        self.ball.distances_to_query(data, query)
+    fn take_extents(&mut self) -> Vec<(usize, T)> {
+        self.0.take_extents()
+    }
+
+    fn children(&self) -> Vec<&Self> {
+        self.1.iter().map(AsRef::as_ref).collect()
+    }
+
+    fn children_mut(&mut self) -> Vec<&mut Self> {
+        self.1.iter_mut().map(AsMut::as_mut).collect()
+    }
+
+    fn set_children(&mut self, children: Vec<Box<Self>>) {
+        self.1 = children;
+    }
+
+    fn take_children(&mut self) -> Vec<Box<Self>> {
+        core::mem::take(&mut self.1)
     }
 
     fn is_descendant_of(&self, other: &Self) -> bool {
-        self.ball.is_descendant_of(&other.ball)
+        self.0.is_descendant_of(&other.0)
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParCluster<I, U, D> for BalancedBall<I, U, D> {
-    fn par_distances_to_query(&self, data: &D, query: &I) -> Vec<(usize, U)> {
-        self.ball.par_distances_to_query(data, query)
+impl<T: Number> ParCluster<T> for BalancedBall<T> {
+    fn par_indices(&self) -> impl rayon::prelude::ParallelIterator<Item = usize> {
+        self.0.par_indices()
     }
 }
 
-impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for BalancedBall<I, U, D> {
-    fn new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self {
-        let ball = Ball::new(data, indices, depth, seed);
-        let children = Vec::new();
-        Self { ball, children }
+impl<T: Number> Partition<T> for BalancedBall<T> {
+    fn new<I, D: Dataset<I>, M: Metric<I, T>>(
+        data: &D,
+        metric: &M,
+        indices: &[usize],
+        depth: usize,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
+        Ball::new(data, metric, indices, depth, seed).map(|ball| Self(ball, Vec::new()))
     }
 
-    fn find_extrema(&self, data: &D) -> Vec<usize> {
-        self.ball.find_extrema(data)
+    fn find_extrema<I, D: Dataset<I>, M: Metric<I, T>>(&mut self, data: &D, metric: &M) -> Vec<usize> {
+        self.0.find_extrema(data, metric)
     }
 
-    fn split_by_extrema(&self, data: &D, extrema: &[usize]) -> (Vec<Vec<usize>>, Vec<U>) {
-        let mut instances = self.indices().filter(|&i| !extrema.contains(&i)).collect::<Vec<_>>();
+    #[allow(clippy::similar_names)]
+    fn split_by_extrema<I, D: Dataset<I>, M: Metric<I, T>>(
+        &self,
+        data: &D,
+        metric: &M,
+        extrema: &[usize],
+    ) -> (Vec<Vec<usize>>, Vec<T>) {
+        let [l, r] = [extrema[0], extrema[1]];
+        let lr = data.one_to_one(l, r, metric);
 
-        // Calculate the number of instances per child for a balanced split
-        let num_per_child = instances.len() / extrema.len();
-        let last_child_size = if instances.len() % extrema.len() == 0 {
-            num_per_child
+        let items = self
+            .indices()
+            .into_iter()
+            .filter(|&i| !(i == l || i == r))
+            .collect::<Vec<_>>();
+
+        // Find the distances from each extremum to each item.
+        let l_distances = data.one_to_many(l, &items, metric);
+        let r_distances = data.one_to_many(r, &items, metric);
+
+        let child_stacks = if metric.obeys_triangle_inequality() {
+            let lr = lr.as_f32();
+
+            // Find the distance from `l` to each item projected onto the line
+            // connecting `l` and `r`.
+            let lr_distances = {
+                let mut lr_distances = l_distances
+                    .map(|(a, d)| (a, d.as_f32()))
+                    .zip(r_distances.map(|(_, d)| d.as_f32()))
+                    .map(|((a, al), ar)| {
+                        let cos = ar.mul_add(-ar, lr.mul_add(lr, al.powi(2))) / (2.0 * al * lr);
+                        (a, al * cos)
+                    })
+                    .collect::<Vec<_>>();
+                lr_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
+                lr_distances
+                    .into_iter()
+                    .map(|(a, d)| (a, T::from(d)))
+                    .collect::<Vec<_>>()
+            };
+
+            // Half of the items will be assigned to the left child and the
+            // other half to the right child.
+            let mid = if lr_distances.len() % 2 == 0 {
+                lr_distances.len() / 2
+            } else {
+                1 + lr_distances.len() / 2
+            };
+            let (ls, rs) = lr_distances.split_at(mid);
+            let l_stack = core::iter::once((l, T::ZERO))
+                .chain(ls.iter().copied())
+                .collect::<Vec<_>>();
+            let r_stack = core::iter::once((r, T::ZERO))
+                .chain(rs.iter().copied())
+                .collect::<Vec<_>>();
+
+            vec![l_stack, r_stack]
         } else {
-            num_per_child + 1
+            // If the metric does not obey the triangle inequality, we just sort
+            // the items by their distance to `l`.
+            let l_distances = {
+                let mut l_distances = l_distances.collect::<Vec<_>>();
+                l_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
+                l_distances
+            };
+
+            // Half of the items will be assigned to the left child and the
+            // other half to the right child.
+            let (ls, rs) = l_distances.split_at(l_distances.len() / 2);
+            let l_stack = core::iter::once((l, T::ZERO))
+                .chain(ls.iter().copied())
+                .collect::<Vec<_>>();
+            let r_stack = core::iter::once((r, T::ZERO))
+                .chain(rs.iter().map(|&(a, d)| (a, lr - d)))
+                .collect::<Vec<_>>();
+
+            vec![l_stack, r_stack]
         };
-        let child_sizes =
-            core::iter::once(last_child_size).chain(core::iter::repeat(num_per_child).take(extrema.len() - 1));
 
-        // Initialize the child stacks with the extrema
-        let mut child_stacks = extrema.iter().map(|&e| vec![(e, U::ZERO)]).collect::<Vec<_>>();
-        for (child_stack, s) in child_stacks.iter_mut().zip(child_sizes) {
-            // Calculate the distances to the instances from the extremum
-            let mut distances = Dataset::one_to_many(data, child_stack[0].0, &instances);
-            distances.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap_or(core::cmp::Ordering::Less));
-
-            // Remove the closest instances from the distances and add them to the child stack
-            child_stack.extend(distances.split_off(instances.len() - s));
-
-            // Update the instances for the next child
-            instances = distances.into_iter().map(|(i, _)| i).collect();
-        }
-
-        // Unzip the child stacks into the indices and calculate the extent of each child
         child_stacks
             .into_iter()
             .map(|stack| {
                 let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
                 let extent = distances
                     .into_iter()
-                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+                    .max_by(Number::total_cmp)
                     .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
                 (indices, extent)
             })
@@ -183,151 +260,111 @@ impl<I, U: Number, D: Dataset<I, U>> Partition<I, U, D> for BalancedBall<I, U, D
     }
 }
 
-impl<I: Send + Sync, U: Number, D: ParDataset<I, U>> ParPartition<I, U, D> for BalancedBall<I, U, D> {
-    fn par_new(data: &D, indices: &[usize], depth: usize, seed: Option<u64>) -> Self {
-        let ball = Ball::par_new(data, indices, depth, seed);
-        let children = Vec::new();
-        Self { ball, children }
+impl<T: Number> ParPartition<T> for BalancedBall<T> {
+    fn par_new<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        data: &D,
+        metric: &M,
+        indices: &[usize],
+        depth: usize,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
+        Ball::par_new(data, metric, indices, depth, seed).map(|ball| Self(ball, Vec::new()))
     }
 
-    fn par_find_extrema(&self, data: &D) -> Vec<usize> {
-        self.ball.par_find_extrema(data)
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &mut self,
+        data: &D,
+        metric: &M,
+    ) -> Vec<usize> {
+        self.0.par_find_extrema(data, metric)
     }
 
-    fn par_split_by_extrema(&self, data: &D, extrema: &[usize]) -> (Vec<Vec<usize>>, Vec<U>) {
-        let mut instances = self.indices().filter(|&i| !extrema.contains(&i)).collect::<Vec<_>>();
+    #[allow(clippy::similar_names)]
+    fn par_split_by_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &self,
+        data: &D,
+        metric: &M,
+        extrema: &[usize],
+    ) -> (Vec<Vec<usize>>, Vec<T>) {
+        let [l, r] = [extrema[0], extrema[1]];
+        let lr = data.par_one_to_one(l, r, metric);
 
-        // Calculate the number of instances per child for a balanced split
-        let num_per_child = instances.len() / extrema.len();
-        let last_child_size = if instances.len() % extrema.len() == 0 {
-            num_per_child
+        let items = self.par_indices().filter(|&i| !(i == l || i == r)).collect::<Vec<_>>();
+
+        // Find the distances from each extremum to each item.
+        let l_distances = data.par_one_to_many(l, &items, metric).collect::<Vec<_>>();
+        let r_distances = data.par_one_to_many(r, &items, metric).collect::<Vec<_>>();
+
+        let child_stacks = if metric.obeys_triangle_inequality() {
+            let lr = lr.as_f32();
+
+            // Find the distance from `l` to each item projected onto the line
+            // connecting `l` and `r`.
+            let lr_distances = {
+                let mut lr_distances = l_distances
+                    .into_par_iter()
+                    .map(|(a, d)| (a, d.as_f32()))
+                    .zip(r_distances.into_par_iter().map(|(_, d)| d.as_f32()))
+                    .map(|((a, al), ar)| {
+                        let cos = ar.mul_add(-ar, lr.mul_add(lr, al.powi(2))) / (2.0 * al * lr);
+                        (a, al * cos)
+                    })
+                    .collect::<Vec<_>>();
+                lr_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
+                lr_distances
+                    .into_par_iter()
+                    .map(|(a, d)| (a, T::from(d)))
+                    .collect::<Vec<_>>()
+            };
+
+            // Half of the items will be assigned to the left child and the
+            // other half to the right child.
+            let mid = if lr_distances.len() % 2 == 0 {
+                lr_distances.len() / 2
+            } else {
+                1 + lr_distances.len() / 2
+            };
+            let (ls, rs) = lr_distances.split_at(mid);
+            let l_stack = core::iter::once((l, T::ZERO))
+                .chain(ls.iter().copied())
+                .collect::<Vec<_>>();
+            let r_stack = core::iter::once((r, T::ZERO))
+                .chain(rs.iter().copied())
+                .collect::<Vec<_>>();
+
+            vec![l_stack, r_stack]
         } else {
-            num_per_child + 1
+            // If the metric does not obey the triangle inequality, we just sort
+            // the items by their distance to `l`.
+            let l_distances = {
+                let mut l_distances = l_distances;
+                l_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
+                l_distances
+            };
+
+            // Half of the items will be assigned to the left child and the
+            // other half to the right child.
+            let (ls, rs) = l_distances.split_at(l_distances.len() / 2);
+            let l_stack = core::iter::once((l, T::ZERO))
+                .chain(ls.iter().copied())
+                .collect::<Vec<_>>();
+            let r_stack = core::iter::once((r, T::ZERO))
+                .chain(rs.iter().map(|&(a, d)| (a, lr - d)))
+                .collect::<Vec<_>>();
+
+            vec![l_stack, r_stack]
         };
-        let child_sizes =
-            core::iter::once(last_child_size).chain(core::iter::repeat(num_per_child).take(extrema.len() - 1));
 
-        // Initialize the child stacks with the extrema
-        let mut child_stacks = extrema.iter().map(|&e| vec![(e, U::ZERO)]).collect::<Vec<_>>();
-        for (child_stack, s) in child_stacks.iter_mut().zip(child_sizes) {
-            // Calculate the distances to the instances from the extremum
-            let mut distances = ParDataset::par_one_to_many(data, child_stack[0].0, &instances);
-            distances.par_sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap_or(core::cmp::Ordering::Less));
-
-            // Remove the closest instances from the distances and add them to the child stack
-            child_stack.extend(distances.split_off(instances.len() - s));
-
-            // Update the instances for the next child
-            instances = distances.into_iter().map(|(i, _)| i).collect();
-        }
-
-        // Unzip the child stacks into the indices and calculate the extent of each child
         child_stacks
             .into_par_iter()
             .map(|stack| {
                 let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
                 let extent = distances
                     .into_iter()
-                    .max_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less))
+                    .max_by(Number::total_cmp)
                     .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
                 (indices, extent)
             })
             .unzip()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{partition::ParPartition, Cluster, Dataset, FlatVec, Metric, Partition};
-
-    use super::BalancedBall;
-
-    type F = FlatVec<Vec<i32>, i32, usize>;
-    type B = BalancedBall<Vec<i32>, i32, F>;
-
-    fn gen_tiny_data() -> Result<FlatVec<Vec<i32>, i32, usize>, String> {
-        let instances = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
-        let distance_function = |a: &Vec<i32>, b: &Vec<i32>| distances::vectors::manhattan(a, b);
-        let metric = Metric::new(distance_function, false);
-        FlatVec::new_array(instances.clone(), metric)
-    }
-
-    #[test]
-    fn new() -> Result<(), String> {
-        let data = gen_tiny_data()?;
-
-        let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let seed = Some(42);
-        let root = B::new(&data, &indices, 0, seed);
-        let arg_r = root.arg_radial();
-
-        assert_eq!(arg_r, data.cardinality() - 1);
-        assert_eq!(root.depth(), 0);
-        assert_eq!(root.cardinality(), 5);
-        assert_eq!(root.arg_center(), 2);
-        assert_eq!(root.radius(), 12);
-        assert_eq!(root.arg_radial(), arg_r);
-        assert!(root.children().is_empty());
-        assert_eq!(root.indices().collect::<Vec<_>>(), indices);
-
-        let root = B::par_new(&data, &indices, 0, seed);
-        let arg_r = root.arg_radial();
-
-        assert_eq!(arg_r, data.cardinality() - 1);
-        assert_eq!(root.depth(), 0);
-        assert_eq!(root.cardinality(), 5);
-        assert_eq!(root.arg_center(), 2);
-        assert_eq!(root.radius(), 12);
-        assert_eq!(root.arg_radial(), arg_r);
-        assert!(root.children().is_empty());
-        assert_eq!(root.indices().collect::<Vec<_>>(), indices);
-
-        Ok(())
-    }
-
-    fn check_partition(root: &B) -> bool {
-        let indices = root.indices().collect::<Vec<_>>();
-
-        assert!(!root.children().is_empty());
-        assert_eq!(indices, &[0, 2, 1, 4, 3]);
-
-        let children = root.child_clusters().collect::<Vec<_>>();
-        assert_eq!(children.len(), 2);
-        for &c in &children {
-            assert_eq!(c.depth(), 1);
-            assert!(c.children().is_empty());
-        }
-
-        let (left, right) = (children[0], children[1]);
-
-        assert_eq!(left.cardinality(), 3);
-        assert_eq!(left.arg_center(), 1);
-        assert_eq!(left.radius(), 4);
-        assert!([0, 2].contains(&left.arg_radial()));
-
-        assert_eq!(right.cardinality(), 2);
-        assert_eq!(right.radius(), 8);
-        assert!([3, 4].contains(&right.arg_center()));
-        assert!([3, 4].contains(&right.arg_radial()));
-
-        true
-    }
-
-    #[test]
-    fn tree() -> Result<(), String> {
-        let data = gen_tiny_data()?;
-
-        let seed = Some(42);
-        let criteria = |c: &B| c.depth() < 1;
-
-        let root = B::new_tree(&data, &criteria, seed);
-        assert_eq!(root.indices().count(), data.cardinality(), "{root:?}");
-        assert!(check_partition(&root));
-
-        let root = B::par_new_tree(&data, &criteria, seed);
-        assert_eq!(root.indices().count(), data.cardinality(), "{root:?}");
-        assert!(check_partition(&root));
-
-        Ok(())
     }
 }

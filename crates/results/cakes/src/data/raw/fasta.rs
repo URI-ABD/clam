@@ -1,12 +1,7 @@
 //! Reading FASTA files
 
-use std::path::Path;
-
+use abd_clam::{dataset::AssociatesMetadata, Dataset};
 use clap::error::Result;
-use rand::seq::SliceRandom;
-
-/// A collection of named sequences.
-type NamedSequences = Vec<(String, String)>;
 
 /// Reads a FASTA file from the given path.
 ///
@@ -14,6 +9,7 @@ type NamedSequences = Vec<(String, String)>;
 ///
 /// * `path`: The path to the FASTA file.
 /// * `holdout`: The number of sequences to hold out for queries.
+/// * `remove_gaps`: Whether to remove gaps from the sequences.
 ///
 /// # Returns
 ///
@@ -26,48 +22,20 @@ type NamedSequences = Vec<(String, String)>;
 /// * If the extension is not `.fasta`.
 /// * If the file cannot be read as a FASTA file.
 /// * If any ID or sequence is empty.
-pub fn read<P: AsRef<Path>>(path: &P, holdout: usize) -> Result<([NamedSequences; 2], [usize; 2]), String> {
-    let path = path.as_ref();
-    if !path.exists() {
-        return Err(format!("Path {path:?} does not exist!"));
-    }
+#[allow(clippy::type_complexity)]
+pub fn read<P: AsRef<std::path::Path>>(
+    path: &P,
+    holdout: usize,
+    remove_gaps: bool,
+) -> Result<([Vec<(String, String)>; 2], [usize; 2]), String> {
+    let (data, queries) = bench_utils::fasta::read(path, holdout, remove_gaps)?;
+    let (min_len, max_len) = data.dimensionality_hint();
+    let max_len = max_len.unwrap_or(min_len);
 
-    if !path.extension().map_or(false, |ext| ext == "fasta") {
-        return Err(format!("Path {path:?} does not have the `.fasta` extension!"));
-    }
+    let seqs = data.items();
+    let ids = data.metadata();
 
-    ftlog::info!("Reading FASTA file from {path:?}.");
-
-    let mut records = bio::io::fasta::Reader::from_file(path)
-        .map_err(|e| e.to_string())?
-        .records();
-
-    let mut seqs = Vec::new();
-    let (mut min_len, mut max_len) = (usize::MAX, 0);
-
-    while let Some(Ok(record)) = records.next() {
-        let name = record.id().to_string();
-        if name.is_empty() {
-            return Err(format!("Empty ID for record {}.", seqs.len()));
-        }
-
-        let seq = record.seq().iter().map(|&b| b as char).collect::<String>();
-        if seq.is_empty() {
-            return Err(format!("Empty sequence for record {} with ID {name}.", seqs.len()));
-        }
-
-        min_len = min_len.min(seq.len());
-        max_len = max_len.max(seq.len());
-
-        seqs.push((name, seq));
-    }
-
-    ftlog::info!("Read {} sequences from {path:?}.", seqs.len());
-    ftlog::info!("Minimum length: {min_len}, Maximum length: {max_len}.");
-
-    // Shuffle the sequences and hold out a query set.
-    seqs.shuffle(&mut rand::thread_rng());
-    let queries = seqs.split_off(seqs.len() - holdout);
+    let seqs = ids.iter().cloned().zip(seqs.iter().cloned()).collect();
 
     #[allow(clippy::tuple_array_conversions)]
     Ok(([seqs, queries], [min_len, max_len]))

@@ -5,7 +5,8 @@ pub mod needleman_wunsch;
 use crate::number::UInt;
 
 pub use needleman_wunsch::{
-    _x_to_y, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y, x_to_y_alignment, Edit,
+    aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y, x2y_helper, x_to_y_alignment,
+    Edit,
 };
 
 /// Penalties to use in the Needleman-Wunsch distance calculation.
@@ -76,9 +77,9 @@ pub fn levenshtein_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str, &st
             U::from(x.len())
         } else if x.len() < y.len() {
             // require tat a is no shorter than b
-            _levenshtein(y, x, penalties)
+            lev_helper(y, x, penalties)
         } else {
-            _levenshtein(x, y, penalties)
+            lev_helper(x, y, penalties)
         }
     }
 }
@@ -139,9 +140,9 @@ pub fn levenshtein<U: UInt>(x: &str, y: &str) -> U {
         U::from(x.len())
     } else if x.len() < y.len() {
         // require tat a is no shorter than b
-        _levenshtein(y, x, Penalties::default())
+        lev_helper(y, x, Penalties::default())
     } else {
-        _levenshtein(x, y, Penalties::default())
+        lev_helper(x, y, Penalties::default())
     }
 }
 
@@ -149,7 +150,7 @@ pub fn levenshtein<U: UInt>(x: &str, y: &str) -> U {
 /// This function actually performs the dynamic programming for the
 /// Levenshtein edit distance, using the `penalties` struct.
 #[allow(unused_variables)]
-fn _levenshtein<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> U {
+fn lev_helper<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> U {
     // initialize DP table for string y
     // this is a bit ugly with the U casts
     let mut cur = (0..=y.len()).map(U::from).collect::<Vec<_>>();

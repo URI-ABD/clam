@@ -9,9 +9,9 @@ use pyo3::prelude::*;
 
 /// The `abd-distances` module implemented in Rust.
 #[pymodule]
-fn abd_distances(py: Python, m: &PyModule) -> PyResult<()> {
-    simd::register(py, m)?;
-    strings::register(py, m)?;
-    vectors::register(py, m)?;
+fn abd_distances(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    simd::register(m)?;
+    strings::register(m)?;
+    vectors::register(m)?;
     Ok(())
 }

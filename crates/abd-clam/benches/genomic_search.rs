@@ -1,26 +1,25 @@
 //! Benchmark for genomic search.
 
-mod utils;
+use std::collections::HashMap;
 
 use abd_clam::{
-    adapter::{Adapter, ParAdapter, ParBallAdapter},
-    cakes::{OffBall, SquishyBall},
-    partition::ParPartition,
-    BalancedBall, Ball, Cluster, FlatVec, Metric, Permutable,
+    cakes::{HintedDataset, PermutedBall},
+    cluster::{adapter::ParBallAdapter, BalancedBall, ParPartition},
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
+    metric::Levenshtein,
+    msa::{Aligner, CostMatrix, Sequence},
+    pancakes::SquishyBall,
+    Ball, Cluster, Dataset, FlatVec,
 };
 use criterion::*;
 use rand::prelude::*;
 
-const METRICS: &[(&str, fn(&String, &String) -> u64)] = &[
-    ("levenshtein", |x: &String, y: &String| {
-        distances::strings::levenshtein(x, y)
-    }),
-    // ("needleman-wunsch", |x: &String, y: &String| {
-    //     distances::strings::nw_distance(x, y)
-    // }),
-];
+mod utils;
 
 fn genomic_search(c: &mut Criterion) {
+    let matrix = CostMatrix::<u16>::default();
+    let aligner = Aligner::new(&matrix, b'-');
+
     let seed_length = 250;
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
@@ -30,7 +29,7 @@ fn genomic_search(c: &mut Criterion) {
     let clump_radius = 10_u16;
     let inter_clump_distance_range = (50_u16, 80_u16);
     let len_delta = 10;
-    let (_, genomes) = symagen::random_edits::generate_clumped_data(
+    let (metadata, genomes) = symagen::random_edits::generate_clumped_data(
         &seed_string,
         penalties,
         &alphabet,
@@ -41,6 +40,7 @@ fn genomic_search(c: &mut Criterion) {
         len_delta,
     )
     .into_iter()
+    .map(|(m, seq)| (m, Sequence::new(seq, Some(&aligner))))
     .unzip::<_, _, Vec<_>, Vec<_>>();
 
     let seed = 42;
@@ -57,43 +57,53 @@ fn genomic_search(c: &mut Criterion) {
     };
 
     let seed = Some(seed);
-    let radii = vec![];
-    let ks = vec![1, 10, 20];
-    for &(metric_name, distance_fn) in METRICS {
-        let metric = Metric::new(distance_fn, true);
-        let data = FlatVec::new(genomes.clone(), metric).unwrap();
+    let radii = vec![1_u32, 5, 10];
+    let ks = vec![1, 10, 100];
 
-        let criteria = |c: &Ball<_, _, _>| c.cardinality() > 1;
-        let ball = Ball::par_new_tree(&data, &criteria, seed);
-        let (off_ball, perm_data) = OffBall::par_from_ball_tree(ball.clone(), data.clone());
-        let (squishy_ball, dec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone());
+    let data = FlatVec::new(genomes)
+        .unwrap()
+        .with_metadata(&metadata)
+        .unwrap()
+        .with_name("genomic-search");
+    let metric = Levenshtein;
 
-        let criteria = |c: &BalancedBall<_, _, _>| c.cardinality() > 1;
-        let balanced_ball = BalancedBall::par_new_tree(&data, &criteria, seed);
-        let (balanced_off_ball, balanced_perm_data) = {
-            let balanced_off_ball = OffBall::par_adapt_tree(balanced_ball.clone(), None);
-            let mut balanced_perm_data = data.clone();
-            let permutation = balanced_off_ball.source().indices().collect::<Vec<_>>();
-            balanced_perm_data.permute(&permutation);
-            (balanced_off_ball, balanced_perm_data)
-        };
+    let criteria = |c: &Ball<_>| c.cardinality() > 1;
+    let ball = Ball::par_new_tree(&data, &metric, &criteria, seed);
 
-        utils::compare_permuted(
-            c,
-            "genomic-search",
-            metric_name,
-            (&ball, &data),
-            (&off_ball, &perm_data),
-            Some((&squishy_ball, &dec_data)),
-            (&balanced_ball, &data),
-            (&balanced_off_ball, &balanced_perm_data),
-            None,
-            &queries,
-            &radii,
-            &ks,
-            true,
-        );
-    }
+    let criteria = |c: &BalancedBall<_>| c.cardinality() > 1;
+    let balanced_ball = BalancedBall::par_new_tree(&data, &metric, &criteria, seed).into_ball();
+
+    let (_, max_radius) = abd_clam::utils::arg_max(&radii).unwrap();
+    let (_, max_k) = abd_clam::utils::arg_max(&ks).unwrap();
+    let data = data
+        .transform_metadata(|s| (s.clone(), HashMap::new()))
+        .with_hints_from_tree(&ball, &metric)
+        .with_hints_from(&metric, &balanced_ball, max_radius, max_k);
+
+    let (perm_ball, perm_data) = PermutedBall::par_from_ball_tree(ball.clone(), data.clone(), &metric);
+    let (squishy_ball, dec_data) = SquishyBall::par_from_ball_tree(ball.clone(), data.clone(), &metric);
+    let dec_data = dec_data.with_metadata(perm_data.metadata()).unwrap();
+
+    let (perm_balanced_ball, perm_balanced_data) =
+        PermutedBall::par_from_ball_tree(balanced_ball.clone(), data.clone(), &metric);
+    let (squishy_balanced_ball, dec_balanced_data) =
+        SquishyBall::par_from_ball_tree(balanced_ball.clone(), data.clone(), &metric);
+    let dec_balanced_data = dec_balanced_data.with_metadata(perm_balanced_data.metadata()).unwrap();
+
+    utils::compare_permuted(
+        c,
+        &metric,
+        (&ball, &data),
+        (&balanced_ball, &perm_balanced_data),
+        (&perm_ball, &perm_data),
+        (&perm_balanced_ball, &perm_balanced_data),
+        Some((&squishy_ball, &dec_data)),
+        Some((&squishy_balanced_ball, &dec_balanced_data)),
+        &queries,
+        &radii,
+        &ks,
+        true,
+    );
 }
 
 criterion_group!(benches, genomic_search);

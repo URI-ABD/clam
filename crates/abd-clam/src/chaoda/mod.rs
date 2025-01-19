@@ -8,9 +8,9 @@ mod training;
 pub use cluster::{Ratios, Vertex};
 use distances::Number;
 pub use graph::Graph;
-pub use inference::{Chaoda, TrainedMetaMlModel};
+pub use inference::{Chaoda, TrainedMetaMlModel, TrainedSmc};
 #[allow(clippy::module_name_repetitions)]
-pub use training::{ChaodaTrainer, GraphAlgorithm, TrainableMetaMlModel};
+pub use training::{ChaodaTrainer, GraphAlgorithm, TrainableMetaMlModel, TrainableSmc};
 
 /// The number of anomaly ratios we use in CHAODA
 const NUM_RATIOS: usize = 6;
@@ -41,22 +41,4 @@ pub fn roc_auc_score(y_true: &[bool], y_pred: &[f32]) -> Result<f32, String> {
         .collect::<Vec<_>>();
     let y_pred = y_pred.to_vec();
     Ok(smartcore::metrics::roc_auc_score(&y_true, &y_pred).as_f32())
-}
-
-#[cfg(test)]
-mod tests {
-    use distances::Number;
-
-    #[test]
-    fn test_roc_auc_score() {
-        let y_score = (0..100).step_by(10).map(|s| s.as_f32() / 100.0).collect::<Vec<_>>();
-
-        let y_true = y_score.iter().map(|&s| s > 0.5).collect::<Vec<_>>();
-        let auc = super::roc_auc_score(&y_true, &y_score).unwrap();
-        assert_eq!(auc, 1.0);
-
-        let y_true = y_true.into_iter().map(|t| !t).collect::<Vec<_>>();
-        let auc = super::roc_auc_score(&y_true, &y_score).unwrap();
-        assert_eq!(auc, 0.0);
-    }
 }

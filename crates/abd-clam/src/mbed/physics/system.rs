@@ -7,10 +7,9 @@ use rand::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
-    adapter::Adapter,
-    cakes::OffBall,
+    cakes::PermutedBall,
     chaoda::{Graph, Vertex},
-    Cluster, Dataset, FlatVec, Metric,
+    Cluster, FlatVec,
 };
 
 use super::{Mass, Spring};
@@ -31,13 +30,12 @@ pub struct System<'a, const DIM: usize> {
 }
 
 /// Get the hash key of a `Vertex` for use in the `System`.
-fn c_hash_key<I, U, D, C>(c: &Vertex<I, U, D, OffBall<I, U, D, C>>) -> (usize, usize)
+fn c_hash_key<T, C>(c: &Vertex<T, PermutedBall<T, C>>) -> (usize, usize)
 where
-    U: Number,
-    D: Dataset<I, U>,
-    C: Cluster<I, U, D>,
+    T: Number,
+    C: Cluster<T>,
 {
-    (c.source().offset(), c.cardinality())
+    (c.source.offset(), c.cardinality())
 }
 
 impl<'a, const DIM: usize> System<'a, DIM> {
@@ -58,11 +56,10 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     /// - `D`: The dataset.
     /// - `C`: The type of the `Cluster`s in the `Graph`.
     #[must_use]
-    pub fn from_graph<I, U, D, C>(g: &Graph<I, U, D, OffBall<I, U, D, C>>, beta: f32) -> Self
+    pub fn from_graph<T, C>(g: &Graph<T, PermutedBall<T, C>>, beta: f32) -> Self
     where
-        U: Number,
-        D: Dataset<I, U>,
-        C: Cluster<I, U, D>,
+        T: Number,
+        C: Cluster<T>,
     {
         let masses = g
             .iter_clusters()
@@ -78,11 +75,10 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     }
 
     /// Resets the `System`'s `Springs` to match the `Graph`.
-    pub fn reset_springs<I, U, D, C>(&'a mut self, g: &Graph<I, U, D, OffBall<I, U, D, C>>, k: f32)
+    pub fn reset_springs<T, C>(&'a mut self, g: &Graph<T, PermutedBall<T, C>>, k: f32)
     where
-        U: Number,
-        D: Dataset<I, U>,
-        C: Cluster<I, U, D>,
+        T: Number,
+        C: Cluster<T>,
     {
         self.springs = g
             .iter_edges()
@@ -236,7 +232,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     ///   represented by the `Mass`es.
     /// - The distance function is the Euclidean distance.
     #[must_use]
-    pub fn get_reduced_embedding(&self) -> FlatVec<Vec<f32>, f32, usize> {
+    pub fn get_reduced_embedding(&self) -> FlatVec<Vec<f32>, usize> {
         let masses = {
             let mut masses = self.masses.iter().collect::<Vec<_>>();
             masses.sort_by(|&(a, _), &(b, _)| a.cmp(b));
@@ -248,10 +244,10 @@ impl<'a, const DIM: usize> System<'a, DIM> {
             .flat_map(|&(&(_, c), m)| (0..c).map(move |_| m.position().to_vec()).collect::<Vec<_>>())
             .collect::<Vec<_>>();
 
-        let distance_fn = |x: &Vec<f32>, y: &Vec<f32>| distances::simd::euclidean_f32(x, y);
-        let metric = Metric::new(distance_fn, false);
+        // let distance_fn = |x: &Vec<f32>, y: &Vec<f32>| distances::simd::euclidean_f32(x, y);
+        // let metric = Metric::new(distance_fn, false);
 
-        FlatVec::new(positions, metric).unwrap_or_else(|e| unreachable!("Error creating FlatVec: {e}"))
+        FlatVec::new(positions).unwrap_or_else(|e| unreachable!("Error creating FlatVec: {e}"))
     }
 
     /// Simulate the `System` until reaching the target stability, saving the
@@ -270,7 +266,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     /// # Errors
     ///
     /// If there is an error writing the embeddings to disk.
-    #[cfg(feature = "ndarray-bindings")]
+    #[cfg(feature = "disk-io")]
     #[allow(clippy::too_many_arguments)]
     pub fn evolve_to_stability_with_saves<P: AsRef<std::path::Path>>(
         &mut self,
@@ -291,8 +287,8 @@ impl<'a, const DIM: usize> System<'a, DIM> {
         while stability < target && i < max_steps {
             if i % save_every == 0 {
                 ftlog::debug!("{name}: Saving step {}", i + 1);
-                self.get_reduced_embedding()
-                    .write_npy(&dir, &format!("{}.npy", i + 1))?;
+                let path = dir.as_ref().join(format!("{}.npy", i + 1));
+                self.get_reduced_embedding().write_npy(&path)?;
             }
 
             ftlog::debug!("Step {i}, Stability: {stability:.6}");
@@ -318,7 +314,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     /// # Errors
     ///
     /// If there is an error writing the embeddings to disk.
-    #[cfg(feature = "ndarray-bindings")]
+    #[cfg(feature = "disk-io")]
     pub fn evolve_with_saves<P: AsRef<std::path::Path>>(
         &mut self,
         dt: f32,
@@ -332,8 +328,8 @@ impl<'a, const DIM: usize> System<'a, DIM> {
         for i in 0..steps {
             if i % save_every == 0 {
                 ftlog::debug!("{name}: Saving step {}/{steps}", i + 1);
-                self.get_reduced_embedding()
-                    .write_npy(&dir, &format!("{}.npy", i + 1))?;
+                let path = dir.as_ref().join(format!("{}.npy", i + 1));
+                self.get_reduced_embedding().write_npy(&path)?;
             }
             self.update_step(dt);
         }
