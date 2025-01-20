@@ -27,7 +27,7 @@ pub fn configure_logger(file_name: &str) -> Result<(LoggerGuard, PathBuf), Strin
 
     let guard = ftlog::Builder::new()
         // global max log level
-        .max_log_level(LevelFilter::Trace)
+        .max_log_level(LevelFilter::Info)
         // define root appender, pass None would write to stderr
         .root(writer)
         // write `Warn` and `Error` logs in ftlog::appender to `err_path` instead of `log_path`
