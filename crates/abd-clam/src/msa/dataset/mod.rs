@@ -1,7 +1,7 @@
 //! `Dataset` extensions that can be used to build MSAs.
 
-mod columnar;
+mod columns;
 mod msa;
 
-pub use columnar::Columnar;
+pub use columns::Columns;
 pub use msa::MSA;

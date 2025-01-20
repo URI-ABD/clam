@@ -119,6 +119,7 @@ fn main() -> Result<(), String> {
 
     let metric = Levenshtein;
 
+    let start = std::time::Instant::now();
     let msa_fasta_path = path_manager.msa_fasta_path();
     if !msa_fasta_path.exists() {
         let msa_ball_path = path_manager.msa_ball_path();
@@ -151,6 +152,9 @@ fn main() -> Result<(), String> {
         steps::build_aligned(&args.cost_matrix, args.gap_open, &off_ball, &perm_data, &msa_fasta_path)?;
         ftlog::info!("Finished building MSA.");
     };
+    let elapsed = start.elapsed().as_secs_f32();
+    ftlog::info!("MSA took {elapsed:.2} seconds.");
+    println!("MSA took {elapsed:.2} seconds.");
 
     // Read the aligned sequences and load the data.
     ftlog::info!("Reading aligned sequences from: {msa_fasta_path:?}");
@@ -163,7 +167,7 @@ fn main() -> Result<(), String> {
     );
 
     // Compute the quality metrics.
-
+    let start = std::time::Instant::now();
     let gap_char = b'-';
     let gap_penalty = 1;
     let mismatch_penalty = 1;
@@ -204,7 +208,9 @@ fn main() -> Result<(), String> {
     let cs_quality = col_msa_data.par_scoring_columns(gap_char, gap_penalty, mismatch_penalty);
     ftlog::info!("Column scoring metric: {cs_quality}");
 
-    ftlog::info!("Finished scoring column-wise.");
+    let elapsed = start.elapsed().as_secs_f32();
+    ftlog::info!("Quality metrics took {elapsed:.2} seconds.");
+    println!("Quality metrics took {elapsed:.2} seconds.");
 
     Ok(())
 }

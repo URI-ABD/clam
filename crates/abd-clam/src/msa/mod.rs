@@ -5,7 +5,7 @@ mod dataset;
 mod sequence;
 
 pub use aligner::{ops, Aligner, CostMatrix};
-pub use dataset::{Columnar, MSA};
+pub use dataset::{Columns, MSA};
 pub use sequence::Sequence;
 
 /// The number of characters.

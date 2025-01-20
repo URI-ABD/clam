@@ -23,12 +23,12 @@ pub fn build_aligned<P: AsRef<Path>>(
     out_path: P,
 ) -> Result<(), String> {
     ftlog::info!("Setting up aligner...");
+    let gap = b'-';
     let cost_matrix = matrix.cost_matrix::<i32>(gap_open);
-    let aligner = msa::Aligner::new(&cost_matrix, b'-');
+    let aligner = msa::Aligner::new(&cost_matrix, gap);
 
     ftlog::info!("Aligning sequences...");
-    // let builder = msa::Columnar::<i32>::new(&aligner).par_with_binary_tree(perm_ball, data);
-    let builder = msa::Columnar::<i32>::new(&aligner).par_with_tree(perm_ball, data);
+    let builder = msa::Columns::new(gap).par_with_tree(perm_ball, data, &aligner);
 
     ftlog::info!("Extracting aligned sequences...");
     let msa = builder.to_flat_vec_rows().with_metadata(data.metadata())?;
