@@ -19,7 +19,7 @@ use core::ops::Neg;
 
 use std::path::PathBuf;
 
-use abd_clam::{metric::Levenshtein, msa, Cluster, Dataset};
+use abd_clam::{dataset::DatasetIO, metric::Levenshtein, msa, Cluster, Dataset, FlatVec};
 use clap::Parser;
 use distances::Number;
 use results_cakes::{data::PathManager, utils::configure_logger};
@@ -58,6 +58,10 @@ struct Args {
     /// Path to the output directory.
     #[arg(short('o'), long)]
     out_dir: Option<PathBuf>,
+
+    /// Whether to interpret input as a `FlatVec` dataset that should be written to disk as a FASTA file.
+    #[arg(short('w'), long)]
+    write_to_fasta: bool,
 }
 
 /// The cost matrix to use for the alignment.
@@ -98,6 +102,13 @@ fn main() -> Result<(), String> {
     ftlog::info!("{args:?}");
 
     let fasta_file = data::FastaFile::new(args.inp_path, args.out_dir)?;
+
+    if args.write_to_fasta {
+        let out_path = fasta_file.out_dir().join(fasta_file.name());
+        let data = FlatVec::<String, String>::read_from(&fasta_file.raw_path())?;
+        bench_utils::fasta::write(&data, &out_path)?;
+        return Ok(());
+    }
 
     let log_name = format!("msa-{}", fasta_file.name());
     // We need the `_guard` in scope to ensure proper logging.

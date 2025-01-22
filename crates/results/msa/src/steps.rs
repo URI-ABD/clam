@@ -8,7 +8,7 @@ use abd_clam::{
     dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO},
     metric::ParMetric,
     msa::{self, Aligner, Sequence},
-    Ball, Cluster, Dataset, FlatVec,
+    Ball, Cluster, FlatVec,
 };
 
 type B<U> = Ball<U>;
@@ -110,22 +110,9 @@ pub fn build_ball<'a, P: AsRef<Path>, M: ParMetric<Sequence<'a, i32>, i32>>(
 ) -> Result<B<i32>, String> {
     // Create the ball from scratch.
     ftlog::info!("Building ball.");
-    let mut depth = 0;
     let seed = Some(42);
-
-    let indices = (0..data.cardinality()).collect::<Vec<_>>();
-    let mut ball = Ball::par_new(data, metric, &indices, 0, seed)
-        .unwrap_or_else(|e| unreachable!("We ensured that indices is non-empty: {e}"));
-    let depth_delta = abd_clam::utils::max_recursion_depth();
-
-    let criteria = |c: &Ball<_>| c.depth() < 1;
-    ball.par_partition(data, metric, &criteria, seed);
-
-    while ball.leaves().into_iter().any(|c| !c.is_singleton()) {
-        depth += depth_delta;
-        let criteria = |c: &Ball<_>| c.depth() < depth;
-        ball.par_partition_further(data, metric, &criteria, seed);
-    }
+    let depth_stride = abd_clam::utils::max_recursion_depth();
+    let ball = Ball::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride);
 
     let num_leaves = ball.leaves().len();
     ftlog::info!("Built ball with {num_leaves} leaves.");
