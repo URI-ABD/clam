@@ -8,7 +8,7 @@ use abd_clam::{
     dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDatasetIO},
     metric::Levenshtein,
     pancakes::{CodecData, SquishyBall},
-    Ball, Cluster, Dataset, FlatVec,
+    Ball, Cluster, FlatVec,
 };
 use distances::Number;
 
@@ -60,22 +60,9 @@ impl Group {
         } else {
             // Create the ball from scratch.
             ftlog::info!("Building ball.");
-            let mut depth = 0;
             let seed = Some(42);
-
-            let indices = (0..uncompressed.cardinality()).collect::<Vec<_>>();
-            let mut ball = Ball::par_new(&uncompressed, &metric, &indices, 0, seed)
-                .unwrap_or_else(|e| unreachable!("We ensured that indices is non-empty: {e}"));
-            let depth_delta = abd_clam::utils::max_recursion_depth();
-
-            let criteria = |c: &B| c.depth() < 1;
-            ball.par_partition(&uncompressed, &metric, &criteria, seed);
-
-            while ball.leaves().into_iter().any(|c| !c.is_singleton()) {
-                depth += depth_delta;
-                let criteria = |c: &B| c.depth() < depth;
-                ball.par_partition_further(&uncompressed, &metric, &criteria, seed);
-            }
+            let depth_stride = abd_clam::utils::max_recursion_depth();
+            let ball = Ball::par_new_tree_iterative(&uncompressed, &metric, &|_| true, seed, depth_stride);
 
             let num_leaves = ball.leaves().len();
             ftlog::info!("Built ball with {num_leaves} leaves.");

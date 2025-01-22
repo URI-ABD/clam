@@ -2,7 +2,10 @@
 
 use std::path::Path;
 
-use abd_clam::{dataset::AssociatesMetadataMut, FlatVec};
+use abd_clam::{
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
+    FlatVec,
+};
 use rand::prelude::*;
 
 /// Reads a FASTA file from the given path.
@@ -112,4 +115,34 @@ pub fn read<P: AsRef<Path>>(
         .with_metadata(&ids)?;
 
     Ok((data, queries))
+}
+
+/// Writes a `FlatVec` to a FASTA file at the given path.
+///
+/// # Arguments
+///
+/// * `data`: The data to write.
+/// * `path`: The path to write the FASTA file to.
+///
+/// # Errors
+///
+/// * If the file cannot be written.
+/// * If any ID or sequence is empty.
+pub fn write<P: AsRef<Path>, S: AsRef<str>>(data: &FlatVec<S, String>, path: &P) -> Result<(), String> {
+    let path = path.as_ref();
+    ftlog::info!("Writing FASTA file to {path:?}.");
+
+    let mut writer = bio::io::fasta::Writer::to_file(path).map_err(|e| e.to_string())?;
+
+    for (id, seq) in data.metadata().iter().zip(data.items().iter()) {
+        writer
+            .write_record(&bio::io::fasta::Record::with_attrs(
+                id.as_ref(),
+                None,
+                seq.as_ref().as_bytes(),
+            ))
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
 }
