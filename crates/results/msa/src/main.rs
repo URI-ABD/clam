@@ -101,14 +101,19 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
     ftlog::info!("{args:?}");
 
-    let fasta_file = data::FastaFile::new(args.inp_path, args.out_dir)?;
-
+    #[allow(clippy::unwrap_used)]
     if args.write_to_fasta {
-        let out_path = fasta_file.out_dir().join(fasta_file.name());
-        let data = FlatVec::<String, String>::read_from(&fasta_file.raw_path())?;
+        let inp_name = args.inp_path.file_stem().unwrap().to_str().unwrap();
+        let out_path = args
+            .out_dir
+            .unwrap_or_else(|| args.inp_path.parent().unwrap().to_path_buf())
+            .join(format!("{inp_name}.fasta"));
+        let data = FlatVec::<String, String>::read_from(&args.inp_path)?;
         bench_utils::fasta::write(&data, &out_path)?;
         return Ok(());
     }
+
+    let fasta_file = data::FastaFile::new(args.inp_path, args.out_dir)?;
 
     let log_name = format!("msa-{}", fasta_file.name());
     // We need the `_guard` in scope to ensure proper logging.
