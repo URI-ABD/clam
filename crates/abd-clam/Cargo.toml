@@ -44,6 +44,7 @@ smartcore = { version = "0.4", features = ["serde"], optional = true }
 # For:
 #  - MSA
 stringzilla = { workspace = true, optional = true }
+bytecount = { workspace = true, optional = true }
 
 # For:
 #  - Disk I/O for most clusters and datasets
@@ -66,7 +67,7 @@ statistical = "1.0.0"
 disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore"]
 mbed = ["chaoda"]
-msa = ["dep:stringzilla"]
+msa = ["dep:stringzilla", "dep:bytecount"]
 all = ["disk-io", "chaoda", "mbed", "msa"]
 
 [[bench]]
