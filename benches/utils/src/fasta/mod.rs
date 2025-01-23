@@ -4,7 +4,7 @@ use std::path::Path;
 
 use abd_clam::{
     dataset::{AssociatesMetadata, AssociatesMetadataMut},
-    FlatVec,
+    Dataset, FlatVec,
 };
 use rand::prelude::*;
 
@@ -34,6 +34,11 @@ pub fn read<P: AsRef<Path>>(
     remove_gaps: bool,
 ) -> Result<(FlatVec<String, String>, Vec<(String, String)>), String> {
     let path = path.as_ref();
+    let name = path
+        .file_stem()
+        .ok_or("No file name found")?
+        .to_string_lossy()
+        .to_string();
     if !path.exists() {
         return Err(format!("Path {path:?} does not exist!"));
     }
@@ -50,7 +55,7 @@ pub fn read<P: AsRef<Path>>(
 
     // Create accumulator for sequences and track the min and max lengths.
     let mut seqs = Vec::new();
-    let (mut min_len, mut max_len) = (usize::MAX, 0);
+    let mut lengths = Vec::new();
 
     // Check each record for an empty ID or sequence.
     while let Some(Ok(record)) = records.next() {
@@ -63,7 +68,7 @@ pub fn read<P: AsRef<Path>>(
             record
                 .seq()
                 .iter()
-                .filter(|&c| *c != b'-')
+                .filter(|&c| *c != b'-' && *c != b'.')
                 .map(|&c| c as char)
                 .collect()
         } else {
@@ -74,19 +79,14 @@ pub fn read<P: AsRef<Path>>(
             return Err(format!("Empty sequence for record {}.", seqs.len()));
         }
 
-        if seq.len() < min_len {
-            min_len = seq.len();
-        }
-        if seq.len() > max_len {
-            max_len = seq.len();
-        }
+        lengths.push(seq.len());
 
         // Add the sequence to the accumulator.
         seqs.push((name, seq));
 
         if seqs.len() % 10_000 == 0 {
             // Log progress every 10,000 sequences.
-            ftlog::info!("Read {} sequences...", seqs.len());
+            ftlog::debug!("Read {} sequences...", seqs.len());
         }
     }
 
@@ -105,6 +105,9 @@ pub fn read<P: AsRef<Path>>(
     };
     ftlog::info!("Holding out {} queries.", queries.len());
 
+    // Compute statistics for the lengths of the sequences.
+    let (min_len, max_len, _, _, _) = len_stats(&lengths);
+
     // Unzip the IDs and sequences.
     let (ids, seqs): (Vec<_>, Vec<_>) = seqs.into_iter().unzip();
 
@@ -112,12 +115,43 @@ pub fn read<P: AsRef<Path>>(
     let data = FlatVec::new(seqs)?
         .with_dim_lower_bound(min_len)
         .with_dim_upper_bound(max_len)
-        .with_metadata(&ids)?;
+        .with_metadata(&ids)?
+        .with_name(&name);
 
     Ok((data, queries))
 }
 
-/// Writes a `FlatVec` to a FASTA file at the given path.
+/// Computes statistics for the lengths of sequences and logs them.
+///
+/// # Arguments
+///
+/// * `lengths`: The lengths of the sequences.
+///
+/// # Returns
+///
+/// * The minimum length.
+/// * The maximum length.
+/// * The median length.
+/// * The mean length.
+/// * The standard deviation of the lengths.
+#[must_use]
+pub fn len_stats(lengths: &[usize]) -> (usize, usize, usize, f32, f32) {
+    let lengths = {
+        let mut lengths = lengths.to_vec();
+        lengths.sort_unstable();
+        lengths
+    };
+    let (min_len, max_len) = lengths.iter().fold((usize::MAX, 0), |(min, max), &len| {
+        (Ord::min(min, len), Ord::max(max, len))
+    });
+    let median_len = lengths[lengths.len() / 2];
+    let mean_len: f32 = abd_clam::utils::mean(&lengths);
+    let std_len: f32 = abd_clam::utils::standard_deviation(&lengths);
+    ftlog::info!("Length stats: min = {min_len}, max = {max_len}, median = {median_len}, mean = {mean_len:.2}, std = {std_len:.2}.");
+    (min_len, max_len, median_len, mean_len, std_len)
+}
+
+/// Writes a dataset to a FASTA file at the given path.
 ///
 /// # Arguments
 ///
@@ -128,13 +162,21 @@ pub fn read<P: AsRef<Path>>(
 ///
 /// * If the file cannot be written.
 /// * If any ID or sequence is empty.
-pub fn write<P: AsRef<Path>, S: AsRef<str>>(data: &FlatVec<S, String>, path: &P) -> Result<(), String> {
+pub fn write<S, D, P>(data: &D, path: &P) -> Result<(), String>
+where
+    S: AsRef<str>,
+    D: AssociatesMetadata<S, String>,
+    P: AsRef<Path>,
+{
     let path = path.as_ref();
     ftlog::info!("Writing FASTA file to {path:?}.");
 
     let mut writer = bio::io::fasta::Writer::to_file(path).map_err(|e| e.to_string())?;
 
-    for (id, seq) in data.metadata().iter().zip(data.items().iter()) {
+    let metadata = data.metadata().iter();
+    let items = (0..data.cardinality()).map(|i| data.get(i));
+
+    for (id, seq) in metadata.zip(items) {
         writer
             .write_record(&bio::io::fasta::Record::with_attrs(
                 id.as_ref(),

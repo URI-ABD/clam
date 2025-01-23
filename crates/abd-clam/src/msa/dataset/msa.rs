@@ -179,19 +179,33 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         }
     }
 
+    /// Computes the mean percentage of gaps in the sequences of the MSA.
+    #[must_use]
+    pub fn percent_gaps(&self) -> f32 {
+        let num_gaps = self
+            .data
+            .items()
+            .iter()
+            .map(AsRef::as_ref)
+            .map(|s| bytecount::count(s, self.gap()))
+            .collect::<Vec<_>>();
+        let num_gaps: f32 = crate::utils::mean(&num_gaps);
+        num_gaps / self.data.dimensionality_hint().0.as_f32()
+    }
+
     /// Scores each pair of columns in the MSA, applying a penalty for gaps and
     /// mismatches.
     ///
     /// This should only be used with col-major MSA and will give nonsensical
     /// results with row-major MSA.
     #[must_use]
-    pub fn scoring_columns(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+    pub fn scoring_columns(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let score = self
             .data
             .items()
             .iter()
             .map(AsRef::as_ref)
-            .map(|c| sc_inner(c, gap_char, gap_penalty, mismatch_penalty))
+            .map(|c| sc_inner(c, self.gap(), gap_penalty, mismatch_penalty))
             .sum::<usize>();
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
@@ -199,8 +213,8 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// Calculates the mean and maximum `p-distance`s of all pairwise
     /// alignments in the MSA.
     #[must_use]
-    pub fn p_distance_stats(&self, gap_char: u8) -> (f32, f32) {
-        let p_distances = self.p_distances(gap_char);
+    pub fn p_distance_stats(&self) -> (f32, f32) {
+        let p_distances = self.p_distances();
         let n_pairs = p_distances.len();
         let (sum, max) = p_distances
             .into_iter()
@@ -212,8 +226,8 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// Same as `p_distance_stats`, but only estimates the score for a subset of
     /// the pairwise alignments.
     #[must_use]
-    pub fn p_distance_stats_subsample(&self, gap_char: u8) -> (f32, f32) {
-        let p_distances = self.p_distances_subsample(gap_char);
+    pub fn p_distance_stats_subsample(&self) -> (f32, f32) {
+        let p_distances = self.p_distances_subsample();
         let n_pairs = p_distances.len();
         let (sum, max) = p_distances
             .into_iter()
@@ -223,34 +237,36 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     }
 
     /// Calculates the `p-distance` of each pairwise alignment in the MSA.
-    fn p_distances(&self, gap_char: u8) -> Vec<f32> {
-        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
+    fn p_distances(&self) -> Vec<f32> {
+        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
         self.apply_pairwise(&self.indices().collect::<Vec<_>>(), scorer)
             .collect()
     }
 
     /// Same as `p_distances`, but only estimates the score for a subset of the
     /// pairwise alignments.
-    fn p_distances_subsample(&self, gap_char: u8) -> Vec<f32> {
+    fn p_distances_subsample(&self) -> Vec<f32> {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
-        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
+        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
         self.apply_pairwise(&indices, scorer).collect()
     }
 
     /// Scores the MSA using the distortion of the Levenshtein edit distance
     /// and the Hamming distance between each pair of sequences.
     #[must_use]
-    pub fn distance_distortion(&self, gap_char: u8) -> f32 {
-        let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), |s1, s2| dd_inner(s1, s2, gap_char));
+    pub fn distance_distortion(&self) -> f32 {
+        let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), |s1, s2| {
+            dd_inner(s1, s2, self.gap())
+        });
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
 
     /// Same as `distance_distortion`, but only estimates the score for a subset
     /// of the pairwise alignments.
     #[must_use]
-    pub fn distance_distortion_subsample(&self, gap_char: u8) -> f32 {
+    pub fn distance_distortion_subsample(&self) -> f32 {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH / 4, LOG2_THRESH / 4);
-        let score = self.sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, gap_char));
+        let score = self.sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, self.gap()));
         score.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }
 
@@ -267,8 +283,8 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// The sum of the penalties for all pairwise alignments divided by the
     /// number of pairwise alignments.
     #[must_use]
-    pub fn scoring_pairwise(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
-        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, gap_char, gap_penalty, mismatch_penalty);
+    pub fn scoring_pairwise(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
         let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
@@ -276,9 +292,9 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// Same as `scoring_pairwise`, but only estimates the score for a subset of
     /// the pairwise alignments.
     #[must_use]
-    pub fn scoring_pairwise_subsample(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+    pub fn scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
-        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, gap_char, gap_penalty, mismatch_penalty);
+        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
         let score = self.sum_of_pairs(&indices, scorer);
         score.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }
@@ -299,13 +315,12 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     #[must_use]
     pub fn weighted_scoring_pairwise(
         &self,
-        gap_char: u8,
         gap_open_penalty: usize,
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
         let scorer =
-            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
+            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
         let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
@@ -315,14 +330,13 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     #[must_use]
     pub fn weighted_scoring_pairwise_subsample(
         &self,
-        gap_char: u8,
         gap_open_penalty: usize,
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH / 4, LOG2_THRESH / 4);
         let scorer =
-            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
+            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
         let score = self.sum_of_pairs(&indices, scorer);
         score.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }
@@ -369,22 +383,22 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
 
     /// Parallel version of [`MSA::scoring_columns`](crate::msa::dataset::msa::MSA::scoring_columns).
     #[must_use]
-    pub fn par_scoring_columns(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+    pub fn par_scoring_columns(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let num_seqs = self.get(0).as_ref().len();
         let score = self
             .data
             .items()
             .par_iter()
             .map(AsRef::as_ref)
-            .map(|c| sc_inner(c, gap_char, gap_penalty, mismatch_penalty))
+            .map(|c| sc_inner(c, self.gap(), gap_penalty, mismatch_penalty))
             .sum::<usize>();
         score.as_f32() / utils::n_pairs(num_seqs).as_f32()
     }
 
     /// Parallel version of [`MSA::p_distance_stats`](crate::msa::dataset::msa::MSA::p_distance_stats).
     #[must_use]
-    pub fn par_p_distance_stats(&self, gap_char: u8) -> (f32, f32) {
-        let p_dists = self.par_p_distances(gap_char);
+    pub fn par_p_distance_stats(&self) -> (f32, f32) {
+        let p_dists = self.par_p_distances();
         let n_pairs = p_dists.len();
         let (sum, max) = p_dists
             .into_iter()
@@ -395,8 +409,8 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
 
     /// Parallel version of [`MSA::p_distance_stats_subsample`](crate::msa::dataset::msa::MSA::p_distance_stats_subsample).
     #[must_use]
-    pub fn par_p_distance_stats_subsample(&self, gap_char: u8) -> (f32, f32) {
-        let p_dists = self.par_p_distances_subsample(gap_char);
+    pub fn par_p_distance_stats_subsample(&self) -> (f32, f32) {
+        let p_dists = self.par_p_distances_subsample();
         let n_pairs = p_dists.len();
         let (sum, max) = p_dists
             .into_iter()
@@ -406,47 +420,49 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     }
 
     /// Parallel version of [`MSA::p_distances`](crate::msa::dataset::msa::MSA::p_distances).
-    fn par_p_distances(&self, gap_char: u8) -> Vec<f32> {
-        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
+    fn par_p_distances(&self) -> Vec<f32> {
+        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
         self.par_apply_pairwise(&self.indices().collect::<Vec<_>>(), scorer)
             .collect()
     }
 
     /// Parallel version of [`MSA::p_distances_subsample`](crate::msa::dataset::msa::MSA::p_distances_subsample).
-    fn par_p_distances_subsample(&self, gap_char: u8) -> Vec<f32> {
+    fn par_p_distances_subsample(&self) -> Vec<f32> {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
-        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, gap_char);
+        let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
         self.par_apply_pairwise(&indices, scorer).collect()
     }
 
     /// Parallel version of [`MSA::distance_distortion`](crate::msa::dataset::msa::MSA::distance_distortion).
     #[must_use]
-    pub fn par_distance_distortion(&self, gap_char: u8) -> f32 {
-        let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), |s1, s2| dd_inner(s1, s2, gap_char));
+    pub fn par_distance_distortion(&self) -> f32 {
+        let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), |s1, s2| {
+            dd_inner(s1, s2, self.gap())
+        });
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
 
     /// Parallel version of [`MSA::distance_distortion_subsample`](crate::msa::dataset::msa::MSA::distance_distortion_subsample).
     #[must_use]
-    pub fn par_distance_distortion_subsample(&self, gap_char: u8) -> f32 {
+    pub fn par_distance_distortion_subsample(&self) -> f32 {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH / 8, LOG2_THRESH / 8);
-        let score = self.par_sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, gap_char));
+        let score = self.par_sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, self.gap()));
         score.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }
 
     /// Parallel version of [`MSA::scoring_pairwise`](crate::msa::dataset::msa::MSA::scoring_pairwise).
     #[must_use]
-    pub fn par_scoring_pairwise(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
-        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, gap_char, gap_penalty, mismatch_penalty);
+    pub fn par_scoring_pairwise(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
         let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
 
     /// Parallel version of [`MSA::scoring_pairwise_subsample`](crate::msa::dataset::msa::MSA::scoring_pairwise_subsample).
     #[must_use]
-    pub fn par_scoring_pairwise_subsample(&self, gap_char: u8, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+    pub fn par_scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
-        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, gap_char, gap_penalty, mismatch_penalty);
+        let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
         let score = self.par_sum_of_pairs(&indices, scorer);
         score.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }
@@ -455,13 +471,12 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     #[must_use]
     pub fn par_weighted_scoring_pairwise(
         &self,
-        gap_char: u8,
         gap_open_penalty: usize,
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
         let scorer =
-            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
+            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
         let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
         score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
     }
@@ -470,14 +485,13 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     #[must_use]
     pub fn par_weighted_scoring_pairwise_subsample(
         &self,
-        gap_char: u8,
         gap_open_penalty: usize,
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
         let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
         let scorer =
-            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, gap_char, gap_open_penalty, gap_ext_penalty, mismatch_penalty);
+            |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
         let score = self.par_sum_of_pairs(&indices, scorer);
         score.as_f32() / utils::n_pairs(indices.len()).as_f32()
     }

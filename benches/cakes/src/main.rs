@@ -8,13 +8,12 @@
     clippy::perf,
     clippy::pedantic,
     clippy::nursery,
-    clippy::missing_docs_in_private_items,
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
     clippy::cast_lossless
 )]
-//! Benchmarks for the CAKES paper.
+#![doc = include_str!("../README.md")]
 
 use std::path::PathBuf;
 

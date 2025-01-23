@@ -8,7 +8,7 @@ use abd_clam::{
     dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO},
     metric::ParMetric,
     msa::{self, Aligner, Sequence},
-    Ball, Cluster, FlatVec,
+    Ball, Cluster, Dataset, FlatVec,
 };
 
 type B<U> = Ball<U>;
@@ -20,7 +20,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     gap_open: Option<usize>,
     perm_ball: &Pb<i32>,
     data: &FlatVec<Sequence<i32>, String>,
-    out_path: P,
+    out_path: &P,
 ) -> Result<(), String> {
     ftlog::info!("Setting up aligner...");
     let gap = b'-';
@@ -38,9 +38,8 @@ pub fn build_aligned<P: AsRef<Path>>(
     ftlog::info!("Finished aligning {} sequences.", builder.len());
     let data = msa::MSA::new(&aligner, msa)?;
 
-    let path = out_path.as_ref();
-    ftlog::info!("Writing MSA to {path:?}");
-    crate::data::write_fasta(&data, path)?;
+    ftlog::info!("Writing MSA to {:?}", out_path.as_ref());
+    bench_utils::fasta::write(&data, out_path)?;
 
     Ok(())
 }
@@ -48,15 +47,7 @@ pub fn build_aligned<P: AsRef<Path>>(
 /// Read the aligned fasta file.
 pub fn read_aligned<P: AsRef<Path>>(path: &P, aligner: &Aligner<i32>) -> Result<msa::MSA<String, i32, String>, String> {
     ftlog::info!("Reading aligned sequences from {:?}", path.as_ref());
-
-    let ([aligned_sequences, _], [width, _]) = results_cakes::data::fasta::read(path, 0, false)?;
-    let (metadata, aligned_sequences): (Vec<_>, Vec<_>) = aligned_sequences.into_iter().unzip();
-
-    let data = FlatVec::new(aligned_sequences)?
-        .with_dim_lower_bound(width)
-        .with_dim_upper_bound(width)
-        .with_metadata(&metadata)?;
-
+    let (data, _) = bench_utils::fasta::read(path, 0, false)?;
     msa::MSA::new(aligner, data)
 }
 
@@ -107,22 +98,28 @@ pub fn build_ball<'a, P: AsRef<Path>, M: ParMetric<Sequence<'a, i32>, i32>>(
     metric: &M,
     ball_path: &P,
     csv_path: &P,
+    balanced: bool,
 ) -> Result<B<i32>, String> {
     // Create the ball from scratch.
-    ftlog::info!("Building ball.");
     let seed = Some(42);
     let depth_stride = abd_clam::utils::max_recursion_depth();
-    let ball = Ball::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride);
+    let ball = if balanced {
+        ftlog::info!("Building BalancedBall on dataset with {} items.", data.cardinality());
+        BalancedBall::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride).into_ball()
+    } else {
+        ftlog::info!("Building Ball on dataset with {} items.", data.cardinality());
+        Ball::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride)
+    };
 
     let num_leaves = ball.leaves().len();
-    ftlog::info!("Built ball with {num_leaves} leaves.");
+    ftlog::info!("Built Ball with {num_leaves} leaves.");
 
     // Serialize the ball to disk.
-    ftlog::info!("Writing ball to {:?}", ball_path.as_ref());
+    ftlog::info!("Writing Ball to {:?}", ball_path.as_ref());
     ball.write_to(ball_path)?;
 
     // Write the ball to a CSV file.;
-    ftlog::info!("Writing ball to CSV at {:?}", csv_path.as_ref());
+    ftlog::info!("Writing Ball to CSV at {:?}", csv_path.as_ref());
     ball.write_to_csv(&csv_path)?;
 
     Ok(ball)
@@ -133,34 +130,6 @@ pub fn read_ball<P: AsRef<Path>>(path: &P) -> Result<B<i32>, String> {
     ftlog::info!("Reading ball from {:?}", path.as_ref());
     let ball = Ball::read_from(path)?;
     ftlog::info!("Finished reading Ball.");
-
-    Ok(ball)
-}
-
-/// Build the `Ball` with a balanced partition.
-pub fn build_balanced_ball<'a, P: AsRef<Path>, M: ParMetric<Sequence<'a, i32>, i32>>(
-    data: &FlatVec<Sequence<'a, i32>, String>,
-    metric: &M,
-    ball_path: &P,
-    csv_path: &P,
-) -> Result<B<i32>, String> {
-    // Create the ball from scratch.
-    ftlog::info!("Building Balanced ball.");
-    let seed = Some(42);
-
-    let criteria = |c: &BalancedBall<_>| c.cardinality() > 1;
-    let ball = BalancedBall::par_new_tree(data, metric, &criteria, seed).into_ball();
-
-    let num_leaves = ball.leaves().len();
-    ftlog::info!("Built BalancedBall with {num_leaves} leaves.");
-
-    // Serialize the `BalancedBall` to disk.
-    ftlog::info!("Writing BalancedBall to {:?}", ball_path.as_ref());
-    ball.write_to(ball_path)?;
-
-    // Write the `BalancedBall` to a CSV file.
-    ftlog::info!("Writing BalancedBall to CSV at {:?}", csv_path.as_ref());
-    ball.write_to_csv(&csv_path)?;
 
     Ok(ball)
 }
