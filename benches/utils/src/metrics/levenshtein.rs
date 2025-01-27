@@ -11,7 +11,7 @@ impl<I: AsRef<[u8]>, T: Number> Metric<I, T> for Levenshtein {
         T::from(stringzilla::sz::edit_distance(a.as_ref(), b.as_ref()))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "levenshtein"
     }
 

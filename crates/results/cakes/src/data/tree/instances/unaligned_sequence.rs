@@ -1,7 +1,7 @@
 //! Unaligned sequence with Levenshtein distance and Needleman-Wunsch Edits.
 
 use abd_clam::{
-    msa::Sequence,
+    musals::Sequence,
     pancakes::{Decodable, Encodable},
 };
 use distances::Number;

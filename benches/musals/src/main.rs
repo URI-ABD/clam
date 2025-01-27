@@ -17,7 +17,7 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{metric::Levenshtein, msa, Cluster, Dataset};
+use abd_clam::{metric::Levenshtein, musals, Cluster, Dataset};
 use bench_utils::configure_logger;
 use clap::Parser;
 use distances::Number;
@@ -39,8 +39,8 @@ struct Args {
     num_samples: Option<usize>,
 
     /// The cost matrix to use for the alignment.
-    #[arg(short('m'), long)]
-    cost_matrix: CostMatrix,
+    #[arg(short('m'), long, default_value = "default")]
+    matrix: CostMatrix,
 
     /// Optional cost of opening a gap, if using an affine gap penalty. If not
     /// provided, a flat gap penalty is used.
@@ -55,7 +55,8 @@ struct Args {
     #[arg(short('o'), long)]
     out_dir: Option<PathBuf>,
 
-    /// Whether to only compute the quality metrics.
+    /// Whether to only compute the quality metrics. This will assume that the
+    /// input file contains aligned sequences.
     #[arg(short('q'), long)]
     quality_only: bool,
 }
@@ -82,12 +83,12 @@ pub enum CostMatrix {
 impl CostMatrix {
     /// Get the cost matrix.
     #[must_use]
-    pub fn cost_matrix<T: Number + core::ops::Neg<Output = T>>(&self, gap_open: Option<usize>) -> msa::CostMatrix<T> {
+    pub fn cost_matrix<T: Number + core::ops::Neg<Output = T>>(&self, gap_open: Option<usize>) -> musals::CostMatrix<T> {
         match self {
-            Self::Default => msa::CostMatrix::default(),
-            Self::DefaultAffine => msa::CostMatrix::default_affine(gap_open),
-            Self::ExtendedIupac => msa::CostMatrix::extended_iupac(gap_open),
-            Self::Blosum62 => msa::CostMatrix::blosum62(gap_open),
+            Self::Default => musals::CostMatrix::default(),
+            Self::DefaultAffine => musals::CostMatrix::default_affine(gap_open),
+            Self::ExtendedIupac => musals::CostMatrix::extended_iupac(gap_open),
+            Self::Blosum62 => musals::CostMatrix::blosum62(gap_open),
         }
     }
 }
@@ -109,8 +110,8 @@ fn main() -> Result<(), String> {
     println!("Log file: {log_path:?}");
     ftlog::info!("{args:?}");
 
-    let cost_matrix = args.cost_matrix.cost_matrix::<i32>(args.gap_open);
-    let aligner = msa::Aligner::new(&cost_matrix, b'-');
+    let cost_matrix = args.matrix.cost_matrix::<i32>(args.gap_open);
+    let aligner = musals::Aligner::new(&cost_matrix, b'-');
 
     let out_dir = if let Some(out_dir) = args.out_dir {
         if !out_dir.exists() {
@@ -142,7 +143,7 @@ fn main() -> Result<(), String> {
         } else {
             data
         };
-        let str_to_seq = |s: String| msa::Sequence::new(s, Some(&aligner));
+        let str_to_seq = |s: String| musals::Sequence::new(s, Some(&aligner));
         let data = data.transform_items(str_to_seq);
         ftlog::info!(
             "Finished reading original dataset: length range = {:?}",
@@ -179,13 +180,7 @@ fn main() -> Result<(), String> {
             ftlog::info!("Permuted Ball has {} leaves.", perm_ball.leaves().len());
 
             // Build the MSA.
-            steps::build_aligned(
-                &args.cost_matrix,
-                args.gap_open,
-                &perm_ball,
-                &perm_data,
-                &msa_fasta_path,
-            )?;
+            steps::build_aligned(&args.matrix, args.gap_open, &perm_ball, &perm_data, &msa_fasta_path)?;
             let elapsed = start.elapsed().as_secs_f32();
             let msa_build_msg = format!("Finished building MSA in {elapsed:.2} seconds.");
             ftlog::info!("{msa_build_msg}");

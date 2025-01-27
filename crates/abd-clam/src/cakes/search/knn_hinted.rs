@@ -23,7 +23,7 @@ where
     M: Metric<I, T>,
     D: HintedDataset<I, T, C, M>,
 {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "KnnHinted"
     }
 

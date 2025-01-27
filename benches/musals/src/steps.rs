@@ -7,7 +7,7 @@ use abd_clam::{
     cluster::{adapter::ParBallAdapter, BalancedBall, ClusterIO, Csv, ParPartition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO},
     metric::ParMetric,
-    msa::{self, Aligner, Sequence},
+    musals::{Aligner, Columns, Sequence, MSA},
     Ball, Cluster, Dataset, FlatVec,
 };
 
@@ -25,10 +25,10 @@ pub fn build_aligned<P: AsRef<Path>>(
     ftlog::info!("Setting up aligner...");
     let gap = b'-';
     let cost_matrix = matrix.cost_matrix::<i32>(gap_open);
-    let aligner = msa::Aligner::new(&cost_matrix, gap);
+    let aligner = Aligner::new(&cost_matrix, gap);
 
     ftlog::info!("Aligning sequences...");
-    let builder = msa::Columns::new(gap).par_with_tree(perm_ball, data, &aligner);
+    let builder = Columns::new(gap).par_with_tree(perm_ball, data, &aligner);
 
     ftlog::info!("Extracting aligned sequences...");
     let msa = builder.to_flat_vec_rows().with_metadata(data.metadata())?;
@@ -36,7 +36,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     let msa = msa.transform_items(transformer);
 
     ftlog::info!("Finished aligning {} sequences.", builder.len());
-    let data = msa::MSA::new(&aligner, msa)?;
+    let data = MSA::new(&aligner, msa)?;
 
     ftlog::info!("Writing MSA to {:?}", out_path.as_ref());
     bench_utils::fasta::write(&data, out_path)?;
@@ -45,10 +45,10 @@ pub fn build_aligned<P: AsRef<Path>>(
 }
 
 /// Read the aligned fasta file.
-pub fn read_aligned<P: AsRef<Path>>(path: &P, aligner: &Aligner<i32>) -> Result<msa::MSA<String, i32, String>, String> {
+pub fn read_aligned<P: AsRef<Path>>(path: &P, aligner: &Aligner<i32>) -> Result<MSA<String, i32, String>, String> {
     ftlog::info!("Reading aligned sequences from {:?}", path.as_ref());
     let (data, _) = bench_utils::fasta::read(path, 0, false)?;
-    msa::MSA::new(aligner, data)
+    MSA::new(aligner, data)
 }
 
 /// Build the `PermutedBall` and the permuted dataset.

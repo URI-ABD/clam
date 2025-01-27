@@ -24,7 +24,7 @@ impl<I: AsRef<[f32]>> Metric<I, f32> for Cosine {
         distances::simd::cosine_f32(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cosine"
     }
 
@@ -89,7 +89,7 @@ impl<I: AsRef<[f64]>> Metric<I, f64> for Cosine {
         distances::simd::cosine_f64(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cosine"
     }
 

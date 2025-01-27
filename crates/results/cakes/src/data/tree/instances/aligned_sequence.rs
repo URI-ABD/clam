@@ -2,7 +2,7 @@
 
 use abd_clam::{
     metric::ParMetric,
-    msa::Sequence,
+    musals::Sequence,
     pancakes::{Decodable, Encodable},
     Metric,
 };
@@ -89,7 +89,7 @@ impl<I: AsRef<str>, U: UInt> Metric<I, U> for Hamming {
         distances::vectors::hamming(a.as_ref().as_ref(), b.as_ref().as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 

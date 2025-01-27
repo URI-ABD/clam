@@ -5,12 +5,11 @@ use rayon::prelude::*;
 
 use crate::{
     dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset, Permutable},
-    msa::NUM_CHARS,
     utils::{self, LOG2_THRESH, SQRT_THRESH},
     Dataset, FlatVec,
 };
 
-use super::super::Aligner;
+use super::super::{Aligner, NUM_CHARS};
 
 /// A `Dataset` containing a multiple sequence alignment (MSA).
 #[derive(Clone)]

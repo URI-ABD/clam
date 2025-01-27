@@ -11,7 +11,7 @@ use abd_clam::{
     },
     dataset::{AssociatesMetadata, AssociatesMetadataMut, Permutable},
     metric::{AbsoluteDifference, Levenshtein, ParMetric},
-    msa::{Aligner, CostMatrix, Sequence},
+    musals::{Aligner, CostMatrix, Sequence},
     pancakes::{CodecData, Decodable, Encodable, ParCompressible, SquishyBall},
     Ball, Cluster, FlatVec,
 };

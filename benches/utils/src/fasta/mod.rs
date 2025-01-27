@@ -43,7 +43,7 @@ pub fn read<P: AsRef<Path>>(
         return Err(format!("Path {path:?} does not exist!"));
     }
 
-    if !path.extension().map_or(false, |ext| ext == "fasta") {
+    if path.extension().is_none_or(|ext| ext != "fasta") {
         return Err(format!("Path {path:?} does not have the `.fasta` extension!"));
     }
 

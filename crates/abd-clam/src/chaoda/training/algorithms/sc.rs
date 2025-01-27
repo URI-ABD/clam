@@ -13,7 +13,7 @@ use super::GraphEvaluator;
 pub struct SubgraphCardinality;
 
 impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for SubgraphCardinality {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "sc"
     }
 

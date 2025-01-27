@@ -29,8 +29,8 @@ pub mod chaoda;
 #[cfg(feature = "mbed")]
 pub mod mbed;
 
-#[cfg(feature = "msa")]
-pub mod msa;
+#[cfg(feature = "musals")]
+pub mod musals;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.32.0";

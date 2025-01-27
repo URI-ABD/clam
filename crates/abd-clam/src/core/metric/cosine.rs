@@ -12,7 +12,7 @@ impl<I: AsRef<[T]>, T: Float> Metric<I, T> for Cosine {
         distances::vectors::cosine(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cosine"
     }
 

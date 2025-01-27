@@ -111,7 +111,7 @@ impl<T: Hash + Eq + Copy, U: Float> Metric<MemberSet<T>, U> for Jaccard {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 

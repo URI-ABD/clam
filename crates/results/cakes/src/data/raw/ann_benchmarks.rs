@@ -56,7 +56,7 @@ pub fn read<P: AsRef<Path>, T: H5Type>(path: &P, flattened: bool) -> Result<AnnD
         return Err(format!("Path {path:?} does not exist!"));
     }
 
-    if !path.extension().map_or(false, |ext| ext == "hdf5") {
+    if path.extension().is_none_or(|ext| ext != "hdf5") {
         return Err(format!("Path {path:?} does not have the `.hdf5` extension!"));
     }
 
