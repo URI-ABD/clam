@@ -136,3 +136,69 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
         U::ONE - (U::from(intersection) / U::from(union + not_equal))
     }
 }
+
+/// Hausdorff distance function
+/// Definition: The Hausdorff distance between two sets of points A and B in a metric space is the greatest of all the distances from a point in A to the nearest point in B.
+/// Notes:
+/// - can write inf and sup using iterators
+/// - fold, map, filter, etc, other adapters
+/// - only do it on sets of T where T is numeric: we can look at more later on if we need to
+/// - distance function should be able to take in any number of dimensions
+/// - use a helper function for distance, which will be euclidian distance
+/// - inputs will be two sets, where each item is a vector of some length
+/// Psuedocode:
+/// var h = 0
+/// for every point a_i of A,
+/// var shortest = infinity
+/// for every point b_j of B,
+///    d_ij = distance(a_i, b_j)
+///    if d_ij < shortest then
+///        shortest = d_ij
+///if shortest > h then
+///    h = shortest
+///return h
+/// # Arguments
+/// * `x`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
+/// * `y`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
+pub fn hausdorff<T: Int, U: Float>(a: &[Vec<T>], b: &[Vec<T>]) -> U {
+
+    // make sure the points in both sets match in length (dimensionality)
+    // for every point in x, check if the length of the point is the same as the length of the **corresponding** point in y
+    // if not, return an error
+    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) {
+        panic!("Dimensionalities do not match");
+    }
+
+    // initiate variable which will store final hausdorff distance value (superium)
+    let mut h = U::zero();
+
+    // superium loop: 'a'
+    for x in a.iter() {
+
+        // initiate variable to store shortest distance for infinum
+        let mut shortest = U::infinity();
+
+        // infinium loop
+        for y in b.iter() {
+            let d = euclidean(x, y);
+            if d < shortest {
+                shortest = d;
+            }
+        }
+
+        if shortest > h {
+            h = shortest;
+        }
+    }
+    // return final hausdorff value
+    h
+}
+
+// euclidian helper function
+fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
+    let mut sum = U::zero();
+    for i in 0..x.len() {
+        sum += U::from(x[i] - y[i]).powi(2);
+    }
+    sum.sqrt()
+}
