@@ -86,6 +86,27 @@ fn sets_test() {
             real_distance = 1_f32 - (intersection as f32) / ((union + union - intersection) as f32);
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
+
+        // Kai's tests for hausdorff distance: hopefully they're right!
+        // 1D test: a = {-5, 0, 1, 4}, b = {-2, 3, 7}, h = 3.0
+        let a = vec![-5, 0, 1, 4];
+        let b = vec![-2, 3, 7];
+        assert_eq!(hausdorff(&a, &b), 3);
+        
+        // 2D test: a = {(0, 2), (1, -1), (3, 5)}, b = {(-2, 4), (3, 6), (2, 3)}, h = sqrt(17)
+        let a = vec![(0, 2), (1, -1), (3, 5)];
+        let b = vec![(-2, 4), (3, 6), (2, 3)];
+        assert_eq!(hausdorff(&a, &b), 17f64.sqrt());
+
+        // 3D test: a = {(0, 1, 2), (-2, 1, 3), (1, -4, 2)}, b = {(-1, 0, 1), (3, 2, 1), (5, 3, 0)}, h = sqrt(21)
+        let a = vec![(0, 1, 2), (-2, 1, 3), (1, -4, 2)];
+        let b = vec![(-1, 0, 1), (3, 2, 1), (5, 3, 0)];
+        assert_eq!(hausdorff(&a, &b), 21f64.sqrt());
+
+        // 4D test: a = {(1, 2, 3, 4), (5, 2, 1, -3), (-2, -1, 0, 1)}, b = {(3, 4, -4, 1), (0, 2, 1, 0)}, h = sqrt(34)
+        let a = vec![(1, 2, 3, 4), (5, 2, 1, -3), (-2, -1, 0, 1)];
+        let b = vec![(3, 4, -4, 1), (0, 2, 1, 0)];
+        assert_eq!(hausdorff(&a, &b), 34f64.sqrt());
     }
 }
 
