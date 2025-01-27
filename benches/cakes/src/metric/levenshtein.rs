@@ -25,7 +25,7 @@ impl Metric<String, u32> for Levenshtein {
         stringzilla::sz::edit_distance(a, b).as_u32()
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "levenshtein"
     }
 

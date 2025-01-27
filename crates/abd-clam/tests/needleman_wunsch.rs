@@ -1,6 +1,6 @@
 //! Tests for the Needleman-Wunsch aligner in `abd-clam::msa`.
 
-use abd_clam::msa::{ops::Direction, Aligner, CostMatrix};
+use abd_clam::musals::{ops::Direction, Aligner, CostMatrix};
 
 #[test]
 fn distance() {

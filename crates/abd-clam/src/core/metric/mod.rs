@@ -14,10 +14,10 @@ pub use euclidean::Euclidean;
 pub use hypotenuse::Hypotenuse;
 pub use manhattan::Manhattan;
 
-#[cfg(feature = "msa")]
+#[cfg(feature = "musals")]
 mod levenshtein;
 
-#[cfg(feature = "msa")]
+#[cfg(feature = "musals")]
 pub use levenshtein::Levenshtein;
 
 /// The `Metric` trait is used for all distance computations in CLAM.

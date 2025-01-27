@@ -25,7 +25,7 @@ impl<I: AsRef<[Complex<f64>]>> Metric<I, f64> for DynamicTimeWarping {
         dtw_distance(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "dtw"
     }
 

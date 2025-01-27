@@ -15,7 +15,7 @@ impl<I: AsRef<[T]>, T: Number> Metric<I, T> for Manhattan {
         distances::vectors::manhattan(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "manhattan"
     }
 

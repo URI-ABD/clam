@@ -24,7 +24,7 @@ impl Metric<String, u32> for Hamming {
         distances::strings::hamming(a, b)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "hamming"
     }
 

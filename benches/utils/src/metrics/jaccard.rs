@@ -10,7 +10,7 @@ impl<I: AsRef<[usize]>> Metric<I, f32> for Jaccard {
         distances::sets::jaccard(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "jaccard"
     }
 

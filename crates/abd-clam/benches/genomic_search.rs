@@ -7,7 +7,7 @@ use abd_clam::{
     cluster::{adapter::ParBallAdapter, BalancedBall, ParPartition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut},
     metric::Levenshtein,
-    msa::{Aligner, CostMatrix, Sequence},
+    musals::{Aligner, CostMatrix, Sequence},
     pancakes::SquishyBall,
     Ball, Cluster, Dataset, FlatVec,
 };

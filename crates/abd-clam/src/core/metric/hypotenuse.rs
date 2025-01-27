@@ -15,7 +15,7 @@ impl<T: Number, U: Float> Metric<(T, T), U> for Hypotenuse {
         distances::vectors::euclidean(&a, &b)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "hypotenuse"
     }
 

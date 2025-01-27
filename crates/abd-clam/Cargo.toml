@@ -67,8 +67,8 @@ statistical = "1.0.0"
 disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore"]
 mbed = ["chaoda"]
-msa = ["dep:stringzilla", "dep:bytecount"]
-all = ["disk-io", "chaoda", "mbed", "msa"]
+musals = ["dep:stringzilla", "dep:bytecount"]
+all = ["disk-io", "chaoda", "mbed", "musals"]
 
 [[bench]]
 name = "vector_search"
@@ -77,7 +77,7 @@ harness = false
 [[bench]]
 name = "genomic_search"
 harness = false
-required-features = ["msa"]
+required-features = ["musals"]
 
 [[bench]]
 name = "ann_benchmarks"

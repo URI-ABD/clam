@@ -15,7 +15,7 @@ This crate provides the following features:
 
 - `disk-io`: Enables easy IO for several structs, primarily using `bitcode` and `serde`.
 - `chaoda`: Enables anomaly detection using the CHAODA.
-- `msa`: Enables multiple sequence alignment.
+- `musals`: Enables multiple sequence alignment.
 - `mbed`: Enables dimensionality reduction algorithms.
 - `all`: Enables all features.
 
@@ -103,7 +103,7 @@ use abd_clam::{
     cluster::{adapter::ParBallAdapter, ClusterIO, ParPartition},
     dataset::{AssociatesMetadataMut, DatasetIO},
     metric::Levenshtein,
-    msa::{Aligner, CostMatrix, Sequence},
+    musals::{Aligner, CostMatrix, Sequence},
     pancakes::{CodecData, SquishyBall},
     Ball, Cluster, Dataset, FlatVec,
 };

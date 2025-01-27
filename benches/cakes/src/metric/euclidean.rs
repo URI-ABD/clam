@@ -24,7 +24,7 @@ impl<I: AsRef<[f32]>> Metric<I, f32> for Euclidean {
         distances::simd::euclidean_f32(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 
@@ -89,7 +89,7 @@ impl<I: AsRef<[f64]>> Metric<I, f64> for Euclidean {
         distances::simd::euclidean_f64(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 

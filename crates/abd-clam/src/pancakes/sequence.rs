@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use crate::msa::{
+use crate::musals::{
     ops::{Edit, Edits},
     Sequence,
 };
