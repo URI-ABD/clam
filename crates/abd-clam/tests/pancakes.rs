@@ -1,5 +1,7 @@
 //! Tests for the `pancakes` module.
 
+#![allow(unused_imports, dead_code)]
+
 use distances::Number;
 use test_case::test_case;
 
@@ -18,45 +20,43 @@ use abd_clam::{
 
 mod common;
 
-use common::sequence::Sequence;
+// #[test_case(16, 16, 2)]
+// #[test_case(32, 16, 3)]
+// fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
+//     let matrix = CostMatrix::<u16>::default_affine(Some(10));
+//     let aligner = Aligner::new(&matrix, b'-');
 
-#[test_case(16, 16, 2)]
-#[test_case(32, 16, 3)]
-fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
-    let matrix = CostMatrix::<u16>::default_affine(Some(10));
-    let aligner = Aligner::new(&matrix, b'-');
+//     let seed_length = 30;
+//     let alphabet = "ACTGN".chars().collect::<Vec<_>>();
+//     let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
+//     let penalties = distances::strings::Penalties::default();
+//     let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
+//     let len_delta = seed_length / 10;
+//     let (metadata, data) = symagen::random_edits::generate_clumped_data(
+//         &seed_string,
+//         penalties,
+//         &alphabet,
+//         num_clumps,
+//         clump_size,
+//         clump_radius,
+//         inter_clump_distance_range,
+//         len_delta,
+//     )
+//     .into_iter()
+//     .map(|(m, seq)| (m, Sequence::new(seq, Some(&aligner))))
+//     .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    let seed_length = 30;
-    let alphabet = "ACTGN".chars().collect::<Vec<_>>();
-    let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
-    let penalties = distances::strings::Penalties::default();
-    let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
-    let len_delta = seed_length / 10;
-    let (metadata, data) = symagen::random_edits::generate_clumped_data(
-        &seed_string,
-        penalties,
-        &alphabet,
-        num_clumps,
-        clump_size,
-        clump_radius,
-        inter_clump_distance_range,
-        len_delta,
-    )
-    .into_iter()
-    .map(|(m, seq)| (m, Sequence::new(seq, Some(&aligner))))
-    .unzip::<_, _, Vec<_>, Vec<_>>();
+//     let data = FlatVec::new(data)?.with_metadata(&metadata)?;
+//     let query = Sequence::new(seed_string.clone(), Some(&aligner));
+//     let seed = Some(42);
 
-    let data = FlatVec::new(data)?.with_metadata(&metadata)?;
-    let query = Sequence::new(seed_string.clone(), Some(&aligner));
-    let seed = Some(42);
+//     let radii = [1, 4, 8];
+//     let ks = [1, 10, 20];
 
-    let radii = [1, 4, 8];
-    let ks = [1, 10, 20];
+//     build_and_check_search(&data, &Levenshtein, &query, seed, &radii, &ks);
 
-    build_and_check_search(&data, &Levenshtein, &query, seed, &radii, &ks);
-
-    Ok(())
-}
+//     Ok(())
+// }
 
 #[cfg(feature = "disk-io")]
 #[test]

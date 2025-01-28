@@ -9,6 +9,7 @@ members = [
     "pypi/distances",
     "benches/utils",
     "benches/cakes",
+    "benches/pancakes",
     "benches/musals",
 ]
 resolver = "2"
