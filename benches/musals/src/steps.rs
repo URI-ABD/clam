@@ -7,7 +7,7 @@ use abd_clam::{
     cluster::{adapter::ParBallAdapter, BalancedBall, ClusterIO, Csv, ParPartition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO},
     metric::ParMetric,
-    musals::{Aligner, Columns, Sequence, MSA},
+    musals::{Aligner, Columns, MSA},
     Ball, Cluster, Dataset, FlatVec,
 };
 
@@ -19,7 +19,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     matrix: &crate::CostMatrix,
     gap_open: Option<usize>,
     perm_ball: &Pb<i32>,
-    data: &FlatVec<Sequence<i32>, String>,
+    data: &FlatVec<String, String>,
     out_path: &P,
 ) -> Result<(), String> {
     ftlog::info!("Setting up aligner...");
@@ -53,13 +53,13 @@ pub fn read_aligned<P: AsRef<Path>>(path: &P, aligner: &Aligner<i32>) -> Result<
 
 /// Build the `PermutedBall` and the permuted dataset.
 #[allow(clippy::type_complexity)]
-pub fn build_perm_ball<'a, P: AsRef<Path>, M: ParMetric<Sequence<'a, i32>, i32>>(
+pub fn build_perm_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
     ball: B<i32>,
-    data: FlatVec<Sequence<'a, i32>, String>,
+    data: FlatVec<String, String>,
     metric: &M,
     ball_path: &P,
     data_path: &P,
-) -> Result<(Pb<i32>, FlatVec<Sequence<'a, i32>, String>), String> {
+) -> Result<(Pb<i32>, FlatVec<String, String>), String> {
     ftlog::info!("Building PermutedBall and permuted dataset.");
     let (ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
 
@@ -67,34 +67,29 @@ pub fn build_perm_ball<'a, P: AsRef<Path>, M: ParMetric<Sequence<'a, i32>, i32>>
     ball.write_to(ball_path)?;
 
     ftlog::info!("Writing PermutedData to {:?}", data_path.as_ref());
-    let transformer = |seq: Sequence<'a, i32>| seq.seq().to_string();
-    let writable_data = data.clone().transform_items(transformer);
-    writable_data.write_to(data_path)?;
+    data.write_to(data_path)?;
 
     Ok((ball, data))
 }
 
 /// Read the `PermutedBall` and the permuted dataset from disk.
 #[allow(clippy::type_complexity)]
-pub fn read_permuted_ball<'a, P: AsRef<Path>>(
+pub fn read_perm_ball<P: AsRef<Path>>(
     ball_path: &P,
     data_path: &P,
-    aligner: &'a Aligner<i32>,
-) -> Result<(Pb<i32>, FlatVec<Sequence<'a, i32>, String>), String> {
+) -> Result<(Pb<i32>, FlatVec<String, String>), String> {
     ftlog::info!("Reading PermutedBall from {:?}", ball_path.as_ref());
     let ball = Pb::read_from(ball_path)?;
 
     ftlog::info!("Reading PermutedData from {:?}", data_path.as_ref());
-    let data = FlatVec::<String, String>::read_from(data_path)?;
-    let transformer = |s: String| Sequence::new(s, Some(aligner));
-    let data = data.transform_items(transformer);
+    let data = FlatVec::read_from(data_path)?;
 
     Ok((ball, data))
 }
 
 /// Build the Ball and the dataset.
-pub fn build_ball<'a, P: AsRef<Path>, M: ParMetric<Sequence<'a, i32>, i32>>(
-    data: &FlatVec<Sequence<'a, i32>, String>,
+pub fn build_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
+    data: &FlatVec<String, String>,
     metric: &M,
     ball_path: &P,
     csv_path: &P,

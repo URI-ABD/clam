@@ -2,7 +2,7 @@
 
 mod cluster;
 mod dataset;
-mod sequence;
+// mod sequence;
 
 pub use cluster::{SquishCosts, SquishyBall};
 pub use dataset::{CodecData, Compressible, Decodable, Decompressible, Encodable, ParCompressible, ParDecompressible};
