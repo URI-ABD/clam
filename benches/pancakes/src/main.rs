@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-/// Reproducible results for the CAKES paper.
+/// Reproducible results for the PANCAKES paper.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 #[allow(clippy::struct_excessive_bools)]
@@ -40,26 +40,6 @@ struct Args {
     #[arg(short('c'), long, default_value = "false")]
     count_distance_calls: bool,
 
-    /// This parameter is used differently depending on the dataset:
-    ///
-    /// - For any vector datasets, this is the maximum power of 2 to which the
-    ///   cardinality should be augmented for scaling experiments.
-    /// - For 'omic datasets, this is the maximum power of 2 by which the
-    ///   cardinality should be divided (sub-sampled) for scaling experiments.
-    /// - For the complex-valued radio-ml dataset, this works identically as
-    ///   with the sequence datasets.
-    /// - For set datasets (kosarak, etc.), this is ignored.
-    #[arg(short('m'), long)]
-    max_power: Option<u32>,
-
-    /// The minimum power of 2 to which the cardinality of the dataset should be
-    /// augmented for scaling experiments.
-    ///
-    /// This is only used with the tabular floating-point datasets and is
-    /// ignored otherwise.
-    #[arg(short('n'), long, default_value = "0")]
-    min_power: Option<u32>,
-
     /// The seed for the random number generator.
     #[arg(short('s'), long)]
     seed: Option<u64>,
@@ -68,14 +48,6 @@ struct Args {
     #[arg(short('t'), long, default_value = "10.0")]
     max_time: f32,
 
-    /// Whether to run benchmarks with balanced trees.
-    #[arg(short('b'), long)]
-    balanced_trees: bool,
-
-    /// Whether to run benchmarks with permuted data.
-    #[arg(short('p'), long)]
-    permuted_data: bool,
-
     /// Whether to run ranged search benchmarks.
     #[arg(short('r'), long)]
     ranged_search: bool,
@@ -83,14 +55,6 @@ struct Args {
     /// Path to the output directory.
     #[arg(short('o'), long)]
     out_dir: Option<PathBuf>,
-
-    /// Stop after generating the augmented datasets.
-    #[arg(short('g'), long)]
-    generate_only: bool,
-
-    /// Whether to run linear search on the datasets to find the ground truth.
-    #[arg(short('l'), long)]
-    linear_search: bool,
 
     /// Whether to rebuild the trees.
     #[arg(short('w'), long)]

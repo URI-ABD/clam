@@ -12,8 +12,15 @@ pub struct Levenshtein(Arc<RwLock<usize>>, bool);
 
 impl Levenshtein {
     /// Creates a new `Levenshtein` distance metric.
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(0)), true)
+    #[must_use]
+    pub fn new(count: usize) -> Self {
+        Self(Arc::new(RwLock::new(count)), true)
+    }
+}
+
+impl Default for Levenshtein {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 

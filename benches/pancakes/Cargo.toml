@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bench-cakes = { path = "../cakes" }
 bench-utils = { path = "../utils" }
 clap = { workspace = true }
 ftlog = { workspace = true }

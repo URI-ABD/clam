@@ -28,6 +28,10 @@ pub struct AllPaths {
     pub permuted_data: std::path::PathBuf,
     /// The path to the permuted balanced data.
     pub permuted_balanced_data: std::path::PathBuf,
+    /// The path to the compressed data.
+    pub codec_data: std::path::PathBuf,
+    /// The path to the squishy ball.
+    pub squishy_ball: std::path::PathBuf,
 }
 
 impl AllPaths {
@@ -42,11 +46,14 @@ impl AllPaths {
             permuted_balanced_ball: out_dir.as_ref().join(format!("{data_name}.permuted_balanced_ball")),
             permuted_data: out_dir.as_ref().join(format!("{data_name}-permuted.flat_vec")),
             permuted_balanced_data: out_dir.as_ref().join(format!("{data_name}-permuted_balanced.flat_vec")),
+            codec_data: out_dir.as_ref().join(format!("{data_name}.codec")),
+            squishy_ball: out_dir.as_ref().join(format!("{data_name}.squishy_ball")),
         }
     }
 
     /// Whether all paths exist.
-    pub fn all_exist(&self, balanced: bool, permuted: bool) -> bool {
+    #[must_use]
+    pub fn all_exist(&self, balanced: bool, permuted: bool, compressed: bool) -> bool {
         let mut base = self.ball.exists() && self.data.exists();
 
         if balanced {
@@ -57,6 +64,9 @@ impl AllPaths {
             if balanced {
                 base = base && self.permuted_balanced_ball.exists() && self.permuted_balanced_data.exists();
             }
+        }
+        if compressed {
+            base = base && self.codec_data.exists() && self.squishy_ball.exists();
         }
 
         base
@@ -69,8 +79,9 @@ pub fn build_all<P, I, T, M, Me>(
     data: &FlatVec<I, Me>,
     metric: &M,
     seed: Option<u64>,
-    build_permuted: bool,
-    build_balanced: bool,
+    permuted: bool,
+    balanced: bool,
+    compressed: bool,
     depth_stride: Option<usize>,
 ) -> Result<(), String>
 where
@@ -101,7 +112,7 @@ where
     let csv_path = out_dir.as_ref().join(format!("{}-ball.csv", data.name()));
     ball.write_to_csv(&csv_path)?;
 
-    if build_permuted {
+    if permuted {
         ftlog::info!("Building Permuted Ball...");
         let (ball, data) = PermutedBall::par_from_ball_tree(ball, data.clone(), metric);
 
@@ -114,7 +125,7 @@ where
         data.write_to(&all_paths.permuted_data)?;
     }
 
-    if build_balanced {
+    if balanced {
         ftlog::info!("Building Balanced Ball...");
         metric.reset_count();
         let ball = depth_stride
@@ -130,7 +141,7 @@ where
         let csv_path = out_dir.as_ref().join(format!("{}-balanced-ball.csv", data.name()));
         ball.write_to_csv(&csv_path)?;
 
-        if build_permuted {
+        if permuted {
             ftlog::info!("Building Permuted Balanced Ball...");
             let (ball, data) = PermutedBall::par_from_ball_tree(ball, data.clone(), metric);
 
@@ -151,6 +162,11 @@ where
             data.write_to(&all_paths.permuted_balanced_data)?;
         }
     }
+
+    if compressed {
+        todo!()
+    }
+
     ftlog::info!("Built all trees for {}.", data.name());
 
     Ok(())

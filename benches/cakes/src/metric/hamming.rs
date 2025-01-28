@@ -11,8 +11,15 @@ pub struct Hamming(Arc<RwLock<usize>>, bool);
 
 impl Hamming {
     /// Creates a new `Hamming` distance metric.
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(0)), true)
+    #[must_use]
+    pub fn new(count: usize) -> Self {
+        Self(Arc::new(RwLock::new(count)), true)
+    }
+}
+
+impl Default for Hamming {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 

@@ -11,8 +11,15 @@ pub struct Cosine(Arc<RwLock<usize>>, bool);
 
 impl Cosine {
     /// Creates a new `Euclidean` distance metric.
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(0)), false)
+    #[must_use]
+    pub fn new(count: usize) -> Self {
+        Self(Arc::new(RwLock::new(count)), false)
+    }
+}
+
+impl Default for Cosine {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 

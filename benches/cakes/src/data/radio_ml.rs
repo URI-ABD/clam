@@ -7,7 +7,6 @@ use rayon::prelude::*;
 
 /// Read the radio-ml dataset and subsamples it to a given maximum power of 2,
 /// saving each subsample to a file.
-#[allow(clippy::type_complexity)]
 pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
     inp_dir: &P,
     out_dir: &P,

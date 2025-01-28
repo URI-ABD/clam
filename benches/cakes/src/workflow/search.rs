@@ -2,21 +2,23 @@
 
 use core::time::Duration;
 
-use abd_clam::{cakes::ParSearchAlgorithm, cluster::ParCluster, Dataset, FlatVec};
+use abd_clam::{
+    cakes::{ParSearchAlgorithm, ParSearchable},
+    cluster::ParCluster,
+};
 use bench_utils::reports::CakesResults;
 use distances::Number;
 
 use crate::metric::ParCountingMetric;
 
 /// Run all the search algorithms on a cluster.
-#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
-pub fn bench_all_algs<I, T, M, C, Me>(
+pub fn bench_all_algs<I, T, M, C, D>(
     report: &mut CakesResults<T>,
     metric: &M,
     queries: &[I],
     neighbors: Option<&[Vec<(usize, T)>]>,
     root: &C,
-    data: &FlatVec<I, Me>,
+    data: &D,
     is_balanced: bool,
     is_permuted: bool,
     max_time: Duration,
@@ -29,7 +31,7 @@ pub fn bench_all_algs<I, T, M, C, Me>(
     T: Number,
     M: ParCountingMetric<I, T>,
     C: ParCluster<T>,
-    Me: Send + Sync,
+    D: ParSearchable<I, T, C, M>,
 {
     if ranged_search {
         for (i, &radius) in radii.iter().enumerate() {
@@ -121,15 +123,14 @@ pub fn bench_all_algs<I, T, M, C, Me>(
 }
 
 /// Run a single search algorithm on a cluster.
-#[allow(clippy::too_many_arguments)]
-fn bench_algorithm<I, T, M, C, A, Me>(
+fn bench_algorithm<I, T, M, C, A, D>(
     report: &mut CakesResults<T>,
     metric: &M,
     queries: &[I],
     neighbors: Option<&[Vec<(usize, T)>]>,
     alg: &A,
     root: &C,
-    data: &FlatVec<I, Me>,
+    data: &D,
     is_balanced: bool,
     is_permuted: bool,
     max_time: Duration,
@@ -138,8 +139,8 @@ fn bench_algorithm<I, T, M, C, A, Me>(
     T: Number,
     M: ParCountingMetric<I, T>,
     C: ParCluster<T>,
-    A: ParSearchAlgorithm<I, T, C, M, FlatVec<I, Me>>,
-    Me: Send + Sync,
+    A: ParSearchAlgorithm<I, T, C, M, D>,
+    D: ParSearchable<I, T, C, M>,
 {
     let cluster_name = {
         let mut parts = Vec::with_capacity(3);

@@ -29,7 +29,6 @@ use rayon::prelude::*;
 ///
 /// - If there is an error reading the input dataset.
 /// - If there is an error writing the augmented datasets.
-#[allow(clippy::too_many_lines)]
 pub fn read_and_augment<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>>(
     dataset: &bench_utils::RawData,
     metric: Option<&M>,
