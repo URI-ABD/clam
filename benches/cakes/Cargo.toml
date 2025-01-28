@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.5.16", features = ["derive"] }
 bench-utils = { path = "../utils" }
+clap = { workspace = true }
 ftlog = { workspace = true }
 bitcode = { workspace = true }
 abd-clam = { workspace = true, features = ["disk-io"] }
