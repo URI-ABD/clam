@@ -7,7 +7,10 @@ use bench_utils::{reports::CakesResults, Complex};
 use distances::Number;
 use rand::prelude::*;
 
-use crate::{metric::ParCountingMetric, trees::AllPaths};
+use crate::metric::ParCountingMetric;
+
+mod search;
+mod trees;
 
 /// Run the workflow of the CAKES benchmarks on a fasta dataset.
 #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
@@ -26,9 +29,9 @@ pub fn run_radio_ml<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<Complex<
     ranged_search: bool,
     rebuild_trees: bool,
 ) -> Result<(), String> {
-    let all_paths = AllPaths::new(out_dir, data.name());
+    let all_paths = trees::AllPaths::new(out_dir, data.name());
     if rebuild_trees || !all_paths.all_exist(balanced_trees, permuted_data) {
-        super::trees::build_all(out_dir, data, metric, seed, permuted_data, balanced_trees, None)?;
+        trees::build_all(out_dir, data, metric, seed, permuted_data, balanced_trees, None)?;
     }
     run::<_, _, _, usize>(
         &all_paths,
@@ -62,9 +65,9 @@ pub fn run_fasta<P: AsRef<std::path::Path>, M: ParCountingMetric<String, u32>>(
     ranged_search: bool,
     rebuild_trees: bool,
 ) -> Result<(), String> {
-    let all_paths = AllPaths::new(out_dir, data.name());
+    let all_paths = trees::AllPaths::new(out_dir, data.name());
     if rebuild_trees || !all_paths.all_exist(balanced_trees, permuted_data) {
-        super::trees::build_all(out_dir, data, metric, seed, permuted_data, balanced_trees, Some(128))?;
+        trees::build_all(out_dir, data, metric, seed, permuted_data, balanced_trees, Some(128))?;
     }
     run::<_, _, _, String>(
         &all_paths,
@@ -87,7 +90,7 @@ pub fn run_fasta<P: AsRef<std::path::Path>, M: ParCountingMetric<String, u32>>(
     clippy::fn_params_excessive_bools,
     clippy::too_many_lines
 )]
-pub fn run_tabular<P, M>(
+pub fn run_tabular<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<f32>, f32>>(
     out_dir: &P,
     data_name: &str,
     metric: &M,
@@ -102,11 +105,7 @@ pub fn run_tabular<P, M>(
     permuted_data: bool,
     ranged_search: bool,
     rebuild_trees: bool,
-) -> Result<(), String>
-where
-    P: AsRef<std::path::Path>,
-    M: ParCountingMetric<Vec<f32>, f32>,
-{
+) -> Result<(), String> {
     let data_path = out_dir.as_ref().join(format!("{data_name}.npy"));
     let data = FlatVec::<Vec<f32>, usize>::read_npy(&data_path)?;
 
@@ -142,9 +141,9 @@ where
     };
     let neighbors = neighbors.as_deref();
 
-    let all_paths = AllPaths::new(out_dir, data.name());
+    let all_paths = trees::AllPaths::new(out_dir, data.name());
     if rebuild_trees || !all_paths.all_exist(balanced_trees, permuted_data) {
-        super::trees::build_all(out_dir, &data, metric, seed, permuted_data, balanced_trees, None)?;
+        trees::build_all(out_dir, &data, metric, seed, permuted_data, balanced_trees, None)?;
     }
     run::<_, _, _, usize>(
         &all_paths,
@@ -164,7 +163,7 @@ where
 /// Run the full workflow of the CAKES benchmarks on a dataset.
 #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
 fn run<I, T, M, Me>(
-    all_paths: &AllPaths,
+    all_paths: &trees::AllPaths,
     metric: &M,
     queries: &[I],
     neighbors: Option<&[Vec<(usize, T)>]>,
@@ -202,7 +201,7 @@ where
     );
 
     ftlog::info!("Running search algorithms on Ball...");
-    crate::search::bench_all_algs(
+    search::bench_all_algs(
         &mut report,
         metric,
         queries,
@@ -222,7 +221,7 @@ where
         let ball = PermutedBall::<T, Ball<T>>::par_read_from(&all_paths.permuted_ball)?;
         let data = FlatVec::<I, Me>::read_from(&all_paths.permuted_data)?;
         ftlog::info!("Running search algorithms on PermutedBall...");
-        crate::search::bench_all_algs(
+        search::bench_all_algs(
             &mut report,
             metric,
             queries,
@@ -242,7 +241,7 @@ where
     if balanced_trees {
         let ball = Ball::<T>::par_read_from(&all_paths.balanced_ball)?;
         ftlog::info!("Running search algorithms on BalancedBall...");
-        crate::search::bench_all_algs(
+        search::bench_all_algs(
             &mut report,
             metric,
             queries,
@@ -262,7 +261,7 @@ where
             let ball = PermutedBall::<T, Ball<T>>::par_read_from(&all_paths.permuted_balanced_ball)?;
             let data = FlatVec::<I, Me>::read_from(&all_paths.permuted_balanced_data)?;
             ftlog::info!("Running search algorithms on PermutedBalancedBall...");
-            crate::search::bench_all_algs(
+            search::bench_all_algs(
                 &mut report,
                 metric,
                 queries,

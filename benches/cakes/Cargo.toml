@@ -13,4 +13,3 @@ distances = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 stringzilla = "3.9.5"
-augurs-dtw = { version = "0.8.1", features = ["parallel"] }

@@ -21,10 +21,8 @@ use abd_clam::{dataset::DatasetIO, Dataset, FlatVec};
 use bench_utils::Complex;
 use clap::Parser;
 
-mod data_gen;
+mod data;
 mod metric;
-mod search;
-mod trees;
 mod workflow;
 
 use distances::Number;
@@ -167,9 +165,9 @@ fn main() -> Result<(), String> {
 
         let gt_metric = if args.linear_search { Some(&metric) } else { None };
         let queries = if matches!(args.dataset, bench_utils::RawData::Random) {
-            data_gen::read_or_gen_random(gt_metric, max_power, seed, &out_dir)?
+            data::tabular::read_or_gen_random(gt_metric, max_power, seed, &out_dir)?
         } else {
-            data_gen::read_tabular_and_augment(&args.dataset, gt_metric, max_power, args.seed, &inp_dir, &out_dir)?
+            data::tabular::read_and_augment(&args.dataset, gt_metric, max_power, args.seed, &inp_dir, &out_dir)?
         };
         if args.generate_only {
             return Ok(());
@@ -211,7 +209,7 @@ fn main() -> Result<(), String> {
         };
 
         let (queries, subsampled_paths) =
-            data_gen::read_fasta_and_subsample(&inp_dir, &out_dir, false, args.num_queries, max_power, seed)?;
+            data::fasta::read_and_subsample(&inp_dir, &out_dir, false, args.num_queries, max_power, seed)?;
         let queries = queries.into_iter().map(|(_, q)| q).collect::<Vec<_>>();
         if args.generate_only {
             return Ok(());
@@ -261,7 +259,7 @@ fn main() -> Result<(), String> {
 
         let snr = Some(10);
         let (queries, subsampled_paths) =
-            data_gen::read_radio_ml_and_subsample(&inp_dir, &out_dir, args.num_queries, max_power, seed, snr)?;
+            data::radio_ml::read_and_subsample(&inp_dir, &out_dir, args.num_queries, max_power, seed, snr)?;
         if args.generate_only {
             return Ok(());
         }
