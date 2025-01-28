@@ -31,7 +31,8 @@ TODO
 
 ### PANCAKES
 
-TODO
+This paper was published at IEEE BigData 2024.
+See [here](benches/pancakes/README.md) for running Rust code to reproduce the results for the PANCAKES algorithms.
 
 ## Publications
 
