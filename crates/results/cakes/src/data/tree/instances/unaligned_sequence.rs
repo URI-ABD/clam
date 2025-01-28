@@ -1,11 +1,10 @@
 //! Unaligned sequence with Levenshtein distance and Needleman-Wunsch Edits.
 
-use abd_clam::{
-    musals::Sequence,
-    pancakes::{Decodable, Encodable},
-};
+use abd_clam::pancakes::{Decodable, Encodable};
 use distances::Number;
 use serde::{Deserialize, Serialize};
+
+use crate::data::Sequence;
 
 /// A sequence from a FASTA file.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, bitcode::Encode, bitcode::Decode)]

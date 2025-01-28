@@ -11,12 +11,14 @@ use abd_clam::{
     },
     dataset::{AssociatesMetadata, AssociatesMetadataMut, Permutable},
     metric::{AbsoluteDifference, Levenshtein, ParMetric},
-    musals::{Aligner, CostMatrix, Sequence},
+    musals::{Aligner, CostMatrix},
     pancakes::{CodecData, Decodable, Encodable, ParCompressible, SquishyBall},
     Ball, Cluster, FlatVec,
 };
 
 mod common;
+
+use common::sequence::Sequence;
 
 #[test_case(16, 16, 2)]
 #[test_case(32, 16, 3)]

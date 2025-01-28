@@ -143,8 +143,6 @@ fn main() -> Result<(), String> {
         } else {
             data
         };
-        let str_to_seq = |s: String| musals::Sequence::new(s, Some(&aligner));
-        let data = data.transform_items(str_to_seq);
         ftlog::info!(
             "Finished reading original dataset: length range = {:?}",
             data.dimensionality_hint()
@@ -163,7 +161,7 @@ fn main() -> Result<(), String> {
 
             let (perm_ball, perm_data) = if msa_ball_path.exists() && msa_data_path.exists() {
                 // Read the PermutedBall and the dataset.
-                steps::read_permuted_ball(&msa_ball_path, &msa_data_path, &aligner)?
+                steps::read_perm_ball(&msa_ball_path, &msa_data_path)?
             } else {
                 let ball_path = path_manager.ball_path();
                 let ball = if ball_path.exists() {
