@@ -81,7 +81,6 @@ pub fn build_all<P, I, T, M, Me>(
     seed: Option<u64>,
     permuted: bool,
     balanced: bool,
-    compressed: bool,
     depth_stride: Option<usize>,
 ) -> Result<(), String>
 where
@@ -161,10 +160,6 @@ where
             );
             data.write_to(&all_paths.permuted_balanced_data)?;
         }
-    }
-
-    if compressed {
-        todo!()
     }
 
     ftlog::info!("Built all trees for {}.", data.name());

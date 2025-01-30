@@ -1,8 +1,8 @@
-//! Reports for Cakes results.
+//! Reports for search results.
 
 use distances::Number;
 
-/// Reports for Cakes results search.
+/// Reports for search results.
 pub struct Results<T: Number> {
     /// The dataset name.
     dataset: String,

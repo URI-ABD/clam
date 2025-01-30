@@ -5,7 +5,7 @@ use bench_utils::Complex;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-/// Read the radio-ml dataset and subsamples it to a given maximum power of 2,
+/// Read the radio-ml dataset and sub-samples it to a given maximum power of 2,
 /// saving each subsample to a file.
 pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
     inp_dir: &P,

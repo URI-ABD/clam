@@ -8,3 +8,6 @@ bench-cakes = { path = "../cakes" }
 bench-utils = { path = "../utils" }
 clap = { workspace = true }
 ftlog = { workspace = true }
+abd-clam = { workspace = true }
+distances = { workspace = true }
+bitcode = { workspace = true }
