@@ -58,11 +58,11 @@ struct Args {
 
     /// Whether to run benchmarks with balanced trees.
     #[arg(short('b'), long)]
-    balanced_trees: bool,
+    balanced: bool,
 
     /// Whether to run benchmarks with permuted data.
     #[arg(short('p'), long)]
-    permuted_data: bool,
+    permuted: bool,
 
     /// Whether to run ranged search benchmarks.
     #[arg(short('r'), long)]
@@ -175,9 +175,8 @@ fn main() -> Result<(), String> {
                 seed,
                 max_time,
                 run_linear,
-                args.balanced_trees,
-                args.permuted_data,
-                false,
+                args.balanced,
+                args.permuted,
                 args.ranged_search,
                 args.rebuild_trees,
             )?;
@@ -229,9 +228,8 @@ fn main() -> Result<(), String> {
                 seed,
                 max_time,
                 run_linear,
-                args.balanced_trees,
-                args.permuted_data,
-                false,
+                args.balanced,
+                args.permuted,
                 args.ranged_search,
                 args.rebuild_trees,
             )?;
@@ -281,12 +279,45 @@ fn main() -> Result<(), String> {
                 seed,
                 max_time,
                 run_linear,
-                args.balanced_trees,
-                args.permuted_data,
+                args.balanced,
+                args.permuted,
                 args.ranged_search,
                 args.rebuild_trees,
             )?;
         }
+    } else if args.dataset.is_set() {
+        let metric = {
+            let mut metric: Box<dyn ParCountingMetric<_, _>> = match args.dataset.metric() {
+                "jaccard" => Box::new(bench_cakes::metric::Jaccard::default()),
+                _ => return Err(format!("Unknown metric: {}", args.dataset.metric())),
+            };
+            if !args.count_distance_calls {
+                metric.disable_counting();
+            }
+            metric
+        };
+
+        let data_name = args.dataset.name();
+        let (data, queries) = bench_cakes::data::sets::read(&args.inp_dir, data_name, args.num_queries, args.seed)?;
+
+        let all_paths = bench_cakes::workflow::trees::AllPaths::new(&out_dir, data_name);
+        if args.rebuild_trees || !all_paths.all_exist(args.balanced, args.permuted, false) {
+            bench_cakes::workflow::trees::build_all(&out_dir, &data, &metric, seed, args.permuted, args.balanced, None)?;
+        }
+
+        bench_cakes::workflow::run::<_, _, _, usize>(
+            &all_paths,
+            &metric,
+            &queries,
+            None,
+            &radial_fractions,
+            &ks,
+            max_time,
+            args.linear_search,
+            args.balanced,
+            args.permuted,
+            args.ranged_search,
+        )?;
     } else {
         let msg = format!("Unsupported dataset: {}", args.dataset.name());
         ftlog::error!("{msg}");

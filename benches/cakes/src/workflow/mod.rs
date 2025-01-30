@@ -36,7 +36,7 @@ pub fn run_radio_ml<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<Complex<
 ) -> Result<(), String> {
     let all_paths = trees::AllPaths::new(out_dir, data.name());
     if rebuild_trees || !all_paths.all_exist(balanced, permuted, false) {
-        trees::build_all(out_dir, data, metric, seed, permuted, balanced, false, None)?;
+        trees::build_all(out_dir, data, metric, seed, permuted, balanced, None)?;
     }
     run::<_, _, _, usize>(
         &all_paths,
@@ -49,7 +49,6 @@ pub fn run_radio_ml<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<Complex<
         run_linear,
         balanced,
         permuted,
-        false,
         ranged_search,
     )
 }
@@ -67,13 +66,12 @@ pub fn run_fasta<P: AsRef<std::path::Path>, M: ParCountingMetric<String, u32>>(
     run_linear: bool,
     balanced: bool,
     permuted: bool,
-    compressed: bool,
     ranged_search: bool,
     rebuild_trees: bool,
 ) -> Result<(), String> {
     let all_paths = trees::AllPaths::new(out_dir, data.name());
-    if rebuild_trees || !all_paths.all_exist(balanced, permuted, compressed) {
-        trees::build_all(out_dir, data, metric, seed, permuted, balanced, compressed, Some(128))?;
+    if rebuild_trees || !all_paths.all_exist(balanced, permuted, false) {
+        trees::build_all(out_dir, data, metric, seed, permuted, balanced, Some(128))?;
     }
     run::<_, _, _, String>(
         &all_paths,
@@ -86,7 +84,6 @@ pub fn run_fasta<P: AsRef<std::path::Path>, M: ParCountingMetric<String, u32>>(
         run_linear,
         balanced,
         permuted,
-        compressed,
         ranged_search,
     )
 }
@@ -105,7 +102,6 @@ pub fn run_tabular<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<f32>, f32
     run_linear: bool,
     balanced: bool,
     permuted: bool,
-    compressed: bool,
     ranged_search: bool,
     rebuild_trees: bool,
 ) -> Result<(), String> {
@@ -145,8 +141,8 @@ pub fn run_tabular<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<f32>, f32
     let neighbors = neighbors.as_deref();
 
     let all_paths = trees::AllPaths::new(out_dir, data.name());
-    if rebuild_trees || !all_paths.all_exist(balanced, permuted, compressed) {
-        trees::build_all(out_dir, &data, metric, seed, permuted, balanced, compressed, None)?;
+    if rebuild_trees || !all_paths.all_exist(balanced, permuted, false) {
+        trees::build_all(out_dir, &data, metric, seed, permuted, balanced, None)?;
     }
     run::<_, _, _, usize>(
         &all_paths,
@@ -159,13 +155,12 @@ pub fn run_tabular<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<f32>, f32
         run_linear,
         balanced,
         permuted,
-        compressed,
         ranged_search,
     )
 }
 
 /// Run the full workflow of the CAKES benchmarks on a dataset.
-fn run<I, T, M, Me>(
+pub fn run<I, T, M, Me>(
     all_paths: &trees::AllPaths,
     metric: &M,
     queries: &[I],
@@ -176,7 +171,6 @@ fn run<I, T, M, Me>(
     run_linear: bool,
     balanced: bool,
     permuted: bool,
-    compressed: bool,
     ranged_search: bool,
 ) -> Result<(), String>
 where
@@ -281,10 +275,6 @@ where
                 ranged_search,
             );
         }
-    }
-
-    if compressed {
-        todo!()
     }
 
     report.write_to_csv(&all_paths.out_dir)

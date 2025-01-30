@@ -77,7 +77,7 @@ impl<I: Encodable + Clone> CodecData<I, usize> {
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
             permutation: (0..cardinality).collect(),
-            name: format!("CodecData({})", data.name()),
+            name: data.name().to_string(),
             center_map,
             leaf_bytes,
         }
@@ -111,7 +111,7 @@ impl<I: Encodable + Clone + Send + Sync> CodecData<I, usize> {
             dimensionality_hint,
             metadata: (0..cardinality).collect(),
             permutation: (0..cardinality).collect(),
-            name: format!("CodecData({})", data.name()),
+            name: data.name().to_string(),
             center_map,
             leaf_bytes,
         }
@@ -246,7 +246,7 @@ impl<I: Decodable, Me> Dataset<I> for CodecData<I, Me> {
     }
 
     fn with_name(mut self, name: &str) -> Self {
-        self.name = format!("CodecData({name})");
+        self.name = name.to_string();
         self
     }
 

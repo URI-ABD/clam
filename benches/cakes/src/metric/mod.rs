@@ -7,12 +7,14 @@ mod cosine;
 mod dtw;
 mod euclidean;
 mod hamming;
+mod jaccard;
 mod levenshtein;
 
 pub use cosine::Cosine;
 pub use dtw::DynamicTimeWarping;
 pub use euclidean::Euclidean;
 pub use hamming::Hamming;
+pub use jaccard::Jaccard;
 pub use levenshtein::Levenshtein;
 
 /// A metric that counts the number of distance computations.

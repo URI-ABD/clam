@@ -3,4 +3,5 @@
 
 pub mod fasta;
 pub mod radio_ml;
+pub mod sets;
 pub mod tabular;
