@@ -15,8 +15,6 @@ use crate::{
     Ball, Cluster, Dataset, Metric,
 };
 
-use super::super::{CodecData, Compressible, Decodable, Decompressible, Encodable, ParCompressible, ParDecompressible};
-
 #[cfg(feature = "disk-io")]
 use std::io::{Read, Write};
 
@@ -267,50 +265,43 @@ pub struct SquishCosts<T> {
     minimum: T,
 }
 
-impl<I: Encodable + Decodable, T: Number, D: Compressible<I>, S: Cluster<T>> Params<I, T, D, S> for SquishCosts<T> {
+impl<I, T: Number, D: Dataset<I>, S: Cluster<T>> Params<I, T, D, S> for SquishCosts<T> {
     fn child_params<M: Metric<I, T>>(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
     }
 }
 
-impl<I: Encodable + Decodable + Send + Sync, T: Number, D: ParCompressible<I>, S: ParCluster<T>> ParParams<I, T, D, S>
-    for SquishCosts<T>
-{
+impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>> ParParams<I, T, D, S> for SquishCosts<T> {
     fn par_child_params<M: ParMetric<I, T>>(&self, children: &[S], data: &D, metric: &M) -> Vec<Self> {
         self.child_params(children, data, metric)
     }
 }
 
-impl<I: Encodable + Decodable + Clone, T: Number, D: Compressible<I> + Permutable>
-    BallAdapter<I, T, D, CodecData<I, usize>, SquishCosts<T>> for SquishyBall<T, Ball<T>>
+impl<I: Clone, T: Number, D: Dataset<I> + Permutable> BallAdapter<I, T, D, D, SquishCosts<T>>
+    for SquishyBall<T, Ball<T>>
 {
-    fn from_ball_tree<M: Metric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, CodecData<I, usize>) {
+    fn from_ball_tree<M: Metric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
         let (off_ball, data) = PermutedBall::from_ball_tree(ball, data, metric);
-        let mut root =
-            <Self as Adapter<_, _, _, CodecData<I, usize>, _, _>>::adapt_tree_iterative(off_ball, None, &data, metric);
+        let mut root = <Self as Adapter<_, _, _, D, _, _>>::adapt_tree_iterative(off_ball, None, &data, metric);
         root.set_costs(&data, metric);
         root.trim(4);
-        let data = CodecData::from_compressible(&data, &root);
         (root, data)
     }
 }
 
-impl<I: Encodable + Decodable + Clone + Send + Sync, T: Number, D: ParCompressible<I> + Permutable>
-    ParBallAdapter<I, T, D, CodecData<I, usize>, SquishCosts<T>> for SquishyBall<T, Ball<T>>
+impl<I: Clone + Send + Sync, T: Number, D: ParDataset<I> + Permutable> ParBallAdapter<I, T, D, D, SquishCosts<T>>
+    for SquishyBall<T, Ball<T>>
 {
-    fn par_from_ball_tree<M: ParMetric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, CodecData<I, usize>) {
+    fn par_from_ball_tree<M: ParMetric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
         let (off_ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
-        let mut root = <Self as ParAdapter<_, _, _, CodecData<I, usize>, _, _>>::par_adapt_tree_iterative(
-            off_ball, None, &data, metric,
-        );
+        let mut root = <Self as ParAdapter<_, _, _, D, _, _>>::par_adapt_tree_iterative(off_ball, None, &data, metric);
         root.par_set_costs(&data, metric);
         root.trim(4);
-        let data = CodecData::par_from_compressible(&data, &root);
         (root, data)
     }
 }
 
-impl<I: Encodable + Decodable, T: Number, Co: Compressible<I>, Dec: Decompressible<I>, S: Cluster<T>>
+impl<I, T: Number, Co: Dataset<I>, Dec: Dataset<I>, S: Cluster<T>>
     Adapter<I, T, Co, Dec, PermutedBall<T, S>, SquishCosts<T>> for SquishyBall<T, S>
 {
     fn new_adapted<M: Metric<I, T>>(
@@ -346,13 +337,8 @@ impl<I: Encodable + Decodable, T: Number, Co: Compressible<I>, Dec: Decompressib
     }
 }
 
-impl<
-        I: Encodable + Decodable + Send + Sync,
-        T: Number,
-        Co: ParCompressible<I>,
-        Dec: ParDecompressible<I>,
-        S: ParCluster<T>,
-    > ParAdapter<I, T, Co, Dec, PermutedBall<T, S>, SquishCosts<T>> for SquishyBall<T, S>
+impl<I: Send + Sync, T: Number, Co: ParDataset<I>, Dec: ParDataset<I>, S: ParCluster<T>>
+    ParAdapter<I, T, Co, Dec, PermutedBall<T, S>, SquishCosts<T>> for SquishyBall<T, S>
 {
     fn par_new_adapted<M: ParMetric<I, T>>(
         source: PermutedBall<T, S>,

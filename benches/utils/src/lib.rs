@@ -16,6 +16,8 @@
 )]
 //! Utilities for running benchmarks in CLAM.
 
+use abd_clam::musals::Aligner;
+use distances::Number;
 use ftlog::{
     appender::{FileAppender, Period},
     LevelFilter, LoggerGuard,
@@ -100,8 +102,8 @@ pub enum RawData {
     #[clap(name = "mnist")]
     MNIST,
     /// The MovieLens-10M dataset.
-    #[clap(name = "movielens")]
-    MovieLens,
+    #[clap(name = "movielens10m")]
+    MovieLens10m,
     /// The NyTimes dataset.
     #[clap(name = "nytimes")]
     NyTimes,
@@ -134,7 +136,7 @@ impl RawData {
             Self::Kosarak => "kosarak",
             Self::LastFM => "lastfm",
             Self::MNIST => "mnist",
-            Self::MovieLens => "movielens",
+            Self::MovieLens10m => "movielens10m",
             Self::NyTimes => "nytimes",
             Self::SIFT => "sift",
             Self::Random => "random",
@@ -168,7 +170,7 @@ impl RawData {
     /// Whether the dataset is flattened.
     #[must_use]
     const fn is_flattened(&self) -> bool {
-        matches!(self, Self::Kosarak | Self::MovieLens)
+        matches!(self, Self::Kosarak | Self::MovieLens10m)
     }
 
     /// Whether the dataset is tabular.
@@ -193,13 +195,26 @@ impl RawData {
     /// Whether the dataset is of member-sets.
     #[must_use]
     pub const fn is_set(&self) -> bool {
-        matches!(self, Self::Kosarak | Self::MovieLens | Self::LastFM)
+        matches!(self, Self::Kosarak | Self::MovieLens10m | Self::LastFM)
     }
 
     /// Whether the dataset is of 'omic sequences.
     #[must_use]
     pub const fn is_sequence(&self) -> bool {
+        self.is_aligned_sequence() || self.is_unaligned_sequence()
+    }
+
+    /// Whether the dataset is of pre-aligned 'omic sequences.
+    #[must_use]
+    pub const fn is_aligned_sequence(&self) -> bool {
         matches!(self, Self::SilvaSSURef)
+    }
+
+    /// Whether the dataset is of unaligned 'omic sequences.
+    #[must_use]
+    pub const fn is_unaligned_sequence(&self) -> bool {
+        // TODO: Add dataset variants for unaligned sequences.
+        false
     }
 
     /// The name of the metric to use for the dataset.
@@ -214,9 +229,20 @@ impl RawData {
             | Self::GloVe_200
             | Self::LastFM
             | Self::NyTimes => "cosine",
-            Self::Kosarak | Self::MovieLens => "jaccard",
+            Self::Kosarak | Self::MovieLens10m => "jaccard",
             Self::SilvaSSURef => "hamming",
             Self::RadioML => "dtw",
+        }
+    }
+
+    /// The aligner to use for the dataset if it is a sequence dataset.
+    #[must_use]
+    pub fn aligner<T: Number>(&self) -> Aligner<T> {
+        if matches!(self, Self::SilvaSSURef) {
+            let matrix = abd_clam::musals::CostMatrix::default_affine(None);
+            Aligner::new(&matrix, b'-')
+        } else {
+            unimplemented!()
         }
     }
 }

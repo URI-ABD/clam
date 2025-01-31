@@ -11,3 +11,4 @@ ftlog = { workspace = true }
 abd-clam = { workspace = true }
 distances = { workspace = true }
 bitcode = { workspace = true }
+stringzilla = { workspace = true }

@@ -3,8 +3,10 @@
 
 use std::collections::HashSet;
 
-use abd_clam::pancakes::{Decodable, Encodable};
+use abd_clam::pancakes::{Decoder, Encoder, ParDecoder, ParEncoder};
 use distances::Number;
+
+use crate::metrics::Jaccard;
 
 /// A set of integers stored as a `Vec<usize>`.
 #[derive(Clone, Debug, bitcode::Encode, bitcode::Decode)]
@@ -41,14 +43,17 @@ impl AsRef<[usize]> for MembershipSet {
     }
 }
 
-impl Encodable for MembershipSet {
-    fn as_bytes(&self) -> Box<[u8]> {
-        let bytes = self.0.iter().flat_map(|&x| x.to_le_bytes()).collect::<Vec<_>>();
+impl ParEncoder<MembershipSet> for Jaccard {}
+impl ParDecoder<MembershipSet> for Jaccard {}
+
+impl Encoder<MembershipSet> for Jaccard {
+    fn to_byte_array(&self, item: &MembershipSet) -> Box<[u8]> {
+        let bytes = item.0.iter().flat_map(|&x| x.to_le_bytes()).collect::<Vec<_>>();
         bytes.into_boxed_slice()
     }
 
-    fn encode(&self, reference: &Self) -> Box<[u8]> {
-        let s = self.as_set();
+    fn encode(&self, item: &MembershipSet, reference: &MembershipSet) -> Box<[u8]> {
+        let s = item.as_set();
         let r = reference.as_set();
 
         // Find the items in `self` that are not in `reference`.
@@ -67,9 +72,9 @@ impl Encodable for MembershipSet {
     }
 }
 
-impl Decodable for MembershipSet {
-    fn from_bytes(bytes: &[u8]) -> Self {
-        Self(
+impl Decoder<MembershipSet> for Jaccard {
+    fn from_byte_array(&self, bytes: &[u8]) -> MembershipSet {
+        MembershipSet(
             bytes
                 .chunks_exact(core::mem::size_of::<usize>())
                 .map(<usize as Number>::from_le_bytes)
@@ -77,7 +82,7 @@ impl Decodable for MembershipSet {
         )
     }
 
-    fn decode(reference: &Self, bytes: &[u8]) -> Self {
+    fn decode(&self, bytes: &[u8], reference: &MembershipSet) -> MembershipSet {
         let n_sdr = <usize as Number>::from_le_bytes(&bytes[..core::mem::size_of::<usize>()]);
         let s_d_r = bytes[core::mem::size_of::<usize>()..(n_sdr + core::mem::size_of::<usize>())]
             .chunks_exact(core::mem::size_of::<usize>())
@@ -91,7 +96,7 @@ impl Decodable for MembershipSet {
         let mut set = reference.0.clone();
         set.retain(|x| !r_d_s.contains(x));
         set.extend(s_d_r);
-        Self(set)
+        MembershipSet(set)
     }
 }
 
@@ -101,18 +106,20 @@ mod tests {
 
     #[test]
     fn test_membership_set() {
+        let metric = Jaccard;
         let set = MembershipSet::from(vec![1, 2, 3, 4, 5]);
-        let bytes = set.as_bytes();
-        let decoded = MembershipSet::from_bytes(&bytes);
+        let bytes = metric.to_byte_array(&set);
+        let decoded = metric.from_byte_array(&bytes);
         assert_eq!(set, decoded);
     }
 
     #[test]
     fn test_membership_set_encode() {
+        let metric = Jaccard;
         let set = MembershipSet::from(vec![2, 3, 4, 5]);
         let reference = MembershipSet::from(vec![1, 2, 3]);
-        let bytes = set.encode(&reference);
-        let decoded = MembershipSet::decode(&reference, &bytes);
+        let bytes = metric.encode(&set, &reference);
+        let decoded = metric.decode(&bytes, &reference);
         assert_eq!(set, decoded);
     }
 }

@@ -8,13 +8,13 @@ use test_case::test_case;
 use abd_clam::{
     cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, PermutedBall, RnnClustered},
     cluster::{
-        adapter::{Adapter, BallAdapter, ParAdapter},
+        adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter},
         ParPartition, Partition,
     },
     dataset::{AssociatesMetadata, AssociatesMetadataMut, Permutable},
     metric::{AbsoluteDifference, Levenshtein, ParMetric},
     musals::{Aligner, CostMatrix},
-    pancakes::{CodecData, Decodable, Encodable, ParCompressible, SquishyBall},
+    pancakes::{CodecData, ParCompressible, ParDecoder, ParEncoder, SquishyBall},
     Ball, Cluster, FlatVec,
 };
 
@@ -72,7 +72,7 @@ fn ser_de() -> Result<(), String> {
     // The ball for the compressible dataset.
     type B = Ball<U>;
     // The decompressible dataset
-    type Dec = CodecData<I, usize>;
+    type Dec = CodecData<I, usize, I, I>;
     // The squishy ball
     type Sb = SquishyBall<U, B>;
 
@@ -82,7 +82,8 @@ fn ser_de() -> Result<(), String> {
 
     let criteria = |c: &B| c.cardinality() > 1;
     let ball = B::new_tree(&data, &metric, &criteria, Some(42));
-    let (_, co_data) = Sb::from_ball_tree(ball, data, &metric);
+    let (root, data) = Sb::from_ball_tree(ball, data, &metric);
+    let co_data = Dec::from_compressible(&data, &root, 0, 0);
     let co_data = co_data.with_metadata(&metadata)?;
 
     let serialized = bitcode::encode(&co_data).map_err(|e| e.to_string())?;
@@ -99,46 +100,42 @@ fn ser_de() -> Result<(), String> {
 }
 
 /// Build trees and check the search results.
-fn build_and_check_search<I, T, D, M>(data: &D, metric: &M, query: &I, seed: Option<u64>, radii: &[T], ks: &[usize])
-where
-    I: core::fmt::Debug + Send + Sync + Encodable + Decodable + Clone + Eq,
+fn build_and_check_search<I, T, D, M, Enc, Dec>(
+    data: &D,
+    metric: &M,
+    encoder: Enc,
+    decoder: Dec,
+    query: &I,
+    seed: Option<u64>,
+    radii: &[T],
+    ks: &[usize],
+) where
+    I: core::fmt::Debug + Send + Sync + Clone + Eq,
     T: Number,
-    D: ParCompressible<I> + Permutable + Clone,
+    D: ParCompressible<I, Enc> + Permutable + Clone,
     M: ParMetric<I, T>,
+    Enc: ParEncoder<I>,
+    Dec: ParDecoder<I>,
 {
     let criterion = |c: &Ball<T>| c.cardinality() > 1;
 
-    let (ball, data) = {
+    let (root, data) = {
         let ball = Ball::par_new_tree(data, metric, &criterion, seed);
 
-        let mut perm_data = data.clone();
-        let mut perm_ball = PermutedBall::par_adapt_tree_iterative(ball, None, &perm_data, metric);
+        let (root, data) = SquishyBall::par_from_ball_tree(ball, data.clone(), metric);
+        let data = CodecData::par_from_compressible(&data, &root, encoder, decoder);
 
-        let permutation = <PermutedBall<T, _> as Adapter<I, T, D, D, _, _>>::source(&perm_ball).indices();
-        perm_data.permute(&permutation);
-        perm_ball.clear_source_indices();
-
-        let mut squishy_ball =
-            <SquishyBall<_, _> as ParAdapter<_, _, _, CodecData<I, usize>, _, _>>::par_adapt_tree_iterative(
-                perm_ball, None, &perm_data, metric,
-            );
-
-        squishy_ball.par_set_costs(&perm_data, metric);
-        squishy_ball.trim(4);
-
-        let co_data = CodecData::par_from_compressible(&perm_data, &squishy_ball);
-
-        (squishy_ball, co_data)
+        (root, data)
     };
 
     for &radius in radii {
         let alg = RnnClustered(radius);
-        common::search::check_rnn(&ball, &data, metric, query, radius, &alg);
+        common::search::check_rnn(&root, &data, metric, query, radius, &alg);
     }
 
     for &k in ks {
-        common::search::check_knn(&ball, &data, metric, query, k, &KnnRepeatedRnn(k, T::ONE.double()));
-        common::search::check_knn(&ball, &data, metric, query, k, &KnnBreadthFirst(k));
-        common::search::check_knn(&ball, &data, metric, query, k, &KnnDepthFirst(k));
+        common::search::check_knn(&root, &data, metric, query, k, &KnnRepeatedRnn(k, T::ONE.double()));
+        common::search::check_knn(&root, &data, metric, query, k, &KnnBreadthFirst(k));
+        common::search::check_knn(&root, &data, metric, query, k, &KnnDepthFirst(k));
     }
 }

@@ -1,12 +1,10 @@
 //! Datasets for `PanCAKES`.
 
-use std::collections::HashMap;
-
 use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
-    cakes::{HintedDataset, ParHintedDataset, ParSearchable, Searchable},
+    cakes::{ParSearchable, Searchable},
     cluster::ParCluster,
     metric::ParMetric,
     Cluster, Dataset, FlatVec, Metric,
@@ -19,14 +17,14 @@ mod compression;
 mod decompression;
 
 pub use codec_data::CodecData;
-pub use compression::{Compressible, Encodable, ParCompressible};
-pub use decompression::{Decodable, Decompressible, ParDecompressible};
+pub use compression::{Compressible, Encoder, ParCompressible, ParEncoder};
+pub use decompression::{Decoder, Decompressible, ParDecoder, ParDecompressible};
 
-impl<I: Encodable, Me> Compressible<I> for FlatVec<I, Me> {}
-impl<I: Encodable + Send + Sync, Me: Send + Sync> ParCompressible<I> for FlatVec<I, Me> {}
+impl<I, Me, Enc: Encoder<I>> Compressible<I, Enc> for FlatVec<I, Me> {}
+impl<I: Send + Sync, Me: Send + Sync, Enc: ParEncoder<I>> ParCompressible<I, Enc> for FlatVec<I, Me> {}
 
-impl<I: Decodable, T: Number, C: Cluster<T>, M: Metric<I, T>, Me> Searchable<I, T, SquishyBall<T, C>, M>
-    for CodecData<I, Me>
+impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, Me, Enc: Encoder<I>, Dec: Decoder<I>>
+    Searchable<I, T, SquishyBall<T, C>, M> for CodecData<I, Me, Enc, Dec>
 {
     fn query_to_center(&self, metric: &M, query: &I, cluster: &SquishyBall<T, C>) -> T {
         metric.distance(query, self.get(cluster.arg_center()))
@@ -47,7 +45,7 @@ impl<I: Decodable, T: Number, C: Cluster<T>, M: Metric<I, T>, Me> Searchable<I, 
             })
             .map(|pos| &leaf_bytes[pos])
             .flat_map(|(o, bytes)| {
-                self.decode_leaf(bytes)
+                self.decode_leaf(bytes, self.decoder())
                     .into_iter()
                     .enumerate()
                     .map(|(i, p)| (i + *o, p))
@@ -56,8 +54,15 @@ impl<I: Decodable, T: Number, C: Cluster<T>, M: Metric<I, T>, Me> Searchable<I, 
     }
 }
 
-impl<I: Decodable + Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, Me: Send + Sync>
-    ParSearchable<I, T, SquishyBall<T, C>, M> for CodecData<I, Me>
+impl<
+        I: Send + Sync,
+        T: Number,
+        C: ParCluster<T>,
+        M: ParMetric<I, T>,
+        Me: Send + Sync,
+        Enc: ParEncoder<I>,
+        Dec: ParDecoder<I>,
+    > ParSearchable<I, T, SquishyBall<T, C>, M> for CodecData<I, Me, Enc, Dec>
 {
     fn par_query_to_center(&self, metric: &M, query: &I, cluster: &SquishyBall<T, C>) -> T {
         metric.par_distance(query, self.get(cluster.arg_center()))
@@ -83,30 +88,11 @@ impl<I: Decodable + Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>
             })
             .map(|pos| &leaf_bytes[pos])
             .flat_map(|(o, bytes)| {
-                self.decode_leaf(bytes)
+                self.decode_leaf(bytes, self.decoder())
                     .into_par_iter()
                     .enumerate()
                     .map(|(i, p)| (i + *o, p))
             })
             .map(|(i, p)| (i, metric.par_distance(query, &p)))
     }
-}
-
-#[allow(clippy::implicit_hasher)]
-impl<I: Decodable, T: Number, C: Cluster<T>, M: Metric<I, T>, Me> HintedDataset<I, T, SquishyBall<T, C>, M>
-    for CodecData<I, (Me, HashMap<usize, T>)>
-{
-    fn hints_for(&self, i: usize) -> &HashMap<usize, T> {
-        &self.metadata[i].1
-    }
-
-    fn hints_for_mut(&mut self, i: usize) -> &mut HashMap<usize, T> {
-        &mut self.metadata[i].1
-    }
-}
-
-#[allow(clippy::implicit_hasher)]
-impl<I: Decodable + Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, Me: Send + Sync>
-    ParHintedDataset<I, T, SquishyBall<T, C>, M> for CodecData<I, (Me, HashMap<usize, T>)>
-{
 }

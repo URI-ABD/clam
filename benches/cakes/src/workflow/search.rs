@@ -5,11 +5,10 @@ use core::time::Duration;
 use abd_clam::{
     cakes::{ParSearchAlgorithm, ParSearchable},
     cluster::ParCluster,
+    metric::ParMetric,
 };
 use bench_utils::reports::CakesResults;
 use distances::Number;
-
-use crate::metric::ParCountingMetric;
 
 /// Run all the search algorithms on a cluster.
 pub fn bench_all_algs<I, T, M, C, D>(
@@ -29,7 +28,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
 ) where
     I: Send + Sync,
     T: Number,
-    M: ParCountingMetric<I, T>,
+    M: ParMetric<I, T>,
     C: ParCluster<T>,
     D: ParSearchable<I, T, C, M>,
 {
@@ -137,7 +136,7 @@ fn bench_algorithm<I, T, M, C, A, D>(
 ) where
     I: Send + Sync,
     T: Number,
-    M: ParCountingMetric<I, T>,
+    M: ParMetric<I, T>,
     C: ParCluster<T>,
     A: ParSearchAlgorithm<I, T, C, M, D>,
     D: ParSearchable<I, T, C, M>,
@@ -156,13 +155,11 @@ fn bench_algorithm<I, T, M, C, A, D>(
 
     ftlog::info!("Running {} on {cluster_name} with {}...", alg.name(), data.name());
     let mut hits = Vec::with_capacity(100);
-    metric.reset_count();
     let start = std::time::Instant::now();
     while start.elapsed() < max_time {
         hits.push(alg.par_batch_search(data, metric, root, queries));
     }
     let total_time = start.elapsed().as_secs_f32();
-    let distance_count = metric.count().as_f32() / (queries.len() * hits.len()).as_f32();
 
     let n_runs = queries.len() * hits.len();
     let time = total_time / n_runs.as_f32();
@@ -205,7 +202,7 @@ fn bench_algorithm<I, T, M, C, A, D>(
             throughput,
             &output_sizes,
             &recalls,
-            distance_count,
+            0.0,
         );
     } else if let Some(k) = alg.k() {
         report.append_k_result(
@@ -216,7 +213,7 @@ fn bench_algorithm<I, T, M, C, A, D>(
             throughput,
             &output_sizes,
             &recalls,
-            distance_count,
+            0.0,
         );
     }
 }
