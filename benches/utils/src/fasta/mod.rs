@@ -19,7 +19,7 @@ use rand::prelude::*;
 /// # Returns
 ///
 /// * The training sequences in a `FlatVec`.
-/// * A `Vec` of the queries.
+/// * A `Vec` of the queries. Each query is a tuple of the ID and sequence.
 ///
 /// # Errors
 ///

@@ -3,6 +3,7 @@
 use abd_clam::{metric::ParMetric, Metric};
 
 /// The `Jaccard` distance metric.
+#[derive(Clone, bitcode::Encode, bitcode::Decode)]
 pub struct Jaccard;
 
 impl<I: AsRef<[usize]>> Metric<I, f32> for Jaccard {

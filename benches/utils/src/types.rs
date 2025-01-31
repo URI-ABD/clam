@@ -1,6 +1,6 @@
 //! Helper types for benchmarks.
 
-use abd_clam::pancakes::{Decodable, Encodable};
+use abd_clam::pancakes::{Decoder, Encoder, ParDecoder, ParEncoder};
 use distances::Number;
 
 /// A wrapper around a vector for use in benchmarks.
@@ -34,31 +34,40 @@ impl<F> AsRef<[F]> for Row<F> {
     }
 }
 
-impl<F: Number> Encodable for Row<F> {
-    fn as_bytes(&self) -> Box<[u8]> {
-        self.0
+impl<F: Number> Encoder<Self> for Row<F> {
+    fn to_byte_array(&self, item: &Self) -> Box<[u8]> {
+        item.0
             .iter()
             .flat_map(|v| v.to_le_bytes())
             .collect::<Vec<_>>()
             .into_boxed_slice()
     }
 
-    fn encode(&self, reference: &Self) -> Box<[u8]> {
-        let diffs = reference.0.iter().zip(self.0.iter()).map(|(&a, &b)| a - b).collect();
-        Self::as_bytes(&diffs)
+    fn encode(&self, item: &Self, reference: &Self) -> Box<[u8]> {
+        let diffs = reference
+            .0
+            .iter()
+            .zip(item.0.iter())
+            .map(|(&a, &b)| a - b)
+            .collect::<Self>();
+        self.to_byte_array(&diffs)
     }
 }
 
-impl<F: Number> Decodable for Row<F> {
-    fn from_bytes(bytes: &[u8]) -> Self {
+impl<F: Number> ParEncoder<Self> for Row<F> {}
+
+impl<F: Number> Decoder<Self> for Row<F> {
+    fn from_byte_array(&self, bytes: &[u8]) -> Self {
         bytes
             .chunks_exact(std::mem::size_of::<F>())
             .map(F::from_le_bytes)
             .collect()
     }
 
-    fn decode(reference: &Self, bytes: &[u8]) -> Self {
-        let diffs = Self::from_bytes(bytes);
-        reference.0.iter().zip(diffs.0.iter()).map(|(&a, &b)| a - b).collect()
+    fn decode(&self, bytes: &[u8], reference: &Self) -> Self {
+        let diffs = self.from_byte_array(bytes);
+        reference.0.iter().zip(diffs.0.iter()).map(|(&a, &b)| a + b).collect()
     }
 }
+
+impl<F: Number> ParDecoder<Self> for Row<F> {}

@@ -14,8 +14,9 @@ use crate::{
 
 use super::{
     super::SquishyBall,
-    compression::{Compressible, Encodable, ParCompressible},
-    decompression::{Decodable, Decompressible, ParDecompressible},
+    compression::{Compressible, ParCompressible},
+    decompression::{Decompressible, ParDecompressible},
+    Decoder, Encoder, ParDecoder, ParEncoder,
 };
 
 #[cfg(feature = "disk-io")]
@@ -36,13 +37,13 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
     feature = "disk-io",
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
-pub struct CodecData<I, Me> {
+pub struct CodecData<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> {
     /// The cardinality of the dataset.
     cardinality: usize,
     /// A hint for the dimensionality of the dataset.
     dimensionality_hint: (usize, Option<usize>),
     /// The metadata associated with the items.
-    pub(crate) metadata: Vec<Me>,
+    metadata: Vec<Me>,
     /// The permutation of the original dataset.
     permutation: Vec<usize>,
     /// The name of the dataset.
@@ -51,44 +52,19 @@ pub struct CodecData<I, Me> {
     center_map: HashMap<usize, I>,
     /// The byte-slices representing the leaf clusters.
     leaf_bytes: Vec<(usize, Box<[u8]>)>,
+    /// The encoder used to compress the items.
+    encoder: Enc,
+    /// The decoder used to decompress the items.
+    decoder: Dec,
 }
 
-impl<I: Encodable + Clone> CodecData<I, usize> {
+impl<I: Clone, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, usize, Enc, Dec> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn from_compressible<T: Number, D: Compressible<I>, S: Cluster<T>>(data: &D, root: &SquishyBall<T, S>) -> Self {
-        let center_map = root
-            .subtree()
-            .into_iter()
-            .map(Cluster::arg_center)
-            .map(|i| (i, data.get(i).clone()))
-            .collect();
-
-        let leaf_bytes = data
-            .encode_leaves(root)
-            .into_iter()
-            .map(|(leaf, bytes)| (leaf.offset(), bytes))
-            .collect();
-
-        let cardinality = data.cardinality();
-        let dimensionality_hint = data.dimensionality_hint();
-
-        Self {
-            cardinality,
-            dimensionality_hint,
-            metadata: (0..cardinality).collect(),
-            permutation: (0..cardinality).collect(),
-            name: data.name().to_string(),
-            center_map,
-            leaf_bytes,
-        }
-    }
-}
-
-impl<I: Encodable + Clone + Send + Sync> CodecData<I, usize> {
-    /// Parallel version of [`CodecData::from_compressible`](crate::pancakes::dataset::CodecData::from_compressible).
-    pub fn par_from_compressible<T: Number, D: ParCompressible<I>, S: ParCluster<T>>(
+    pub fn from_compressible<T: Number, S: Cluster<T>, D: Compressible<I, Enc>>(
         data: &D,
         root: &SquishyBall<T, S>,
+        encoder: Enc,
+        decoder: Dec,
     ) -> Self {
         let center_map = root
             .subtree()
@@ -98,7 +74,7 @@ impl<I: Encodable + Clone + Send + Sync> CodecData<I, usize> {
             .collect();
 
         let leaf_bytes = data
-            .par_encode_leaves(root)
+            .encode_leaves(root, &encoder)
             .into_iter()
             .map(|(leaf, bytes)| (leaf.offset(), bytes))
             .collect();
@@ -114,11 +90,63 @@ impl<I: Encodable + Clone + Send + Sync> CodecData<I, usize> {
             name: data.name().to_string(),
             center_map,
             leaf_bytes,
+            encoder,
+            decoder,
         }
     }
 }
 
-impl<I, Me> CodecData<I, Me> {
+impl<I: Clone + Send + Sync, Enc: ParEncoder<I>, Dec: ParDecoder<I>> CodecData<I, usize, Enc, Dec> {
+    /// Parallel version of [`CodecData::from_compressible`](crate::pancakes::dataset::CodecData::from_compressible).
+    pub fn par_from_compressible<T: Number, S: ParCluster<T>, D: ParCompressible<I, Enc>>(
+        data: &D,
+        root: &SquishyBall<T, S>,
+        encoder: Enc,
+        decoder: Dec,
+    ) -> Self {
+        let center_map = root
+            .subtree()
+            .into_iter()
+            .map(Cluster::arg_center)
+            .map(|i| (i, data.get(i).clone()))
+            .collect();
+
+        let leaf_bytes = data
+            .par_encode_leaves(root, &encoder)
+            .into_iter()
+            .map(|(leaf, bytes)| (leaf.offset(), bytes))
+            .collect();
+
+        let cardinality = data.cardinality();
+        let dimensionality_hint = data.dimensionality_hint();
+
+        Self {
+            cardinality,
+            dimensionality_hint,
+            metadata: (0..cardinality).collect(),
+            permutation: (0..cardinality).collect(),
+            name: data.name().to_string(),
+            center_map,
+            leaf_bytes,
+            encoder,
+            decoder,
+        }
+    }
+}
+
+impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, Me, Enc, Dec> {
+    /// Returns the encoder of the dataset.
+    #[must_use]
+    pub const fn encoder(&self) -> &Enc {
+        &self.encoder
+    }
+
+    /// Returns the decoder of the dataset.
+    #[must_use]
+    pub const fn decoder(&self) -> &Dec {
+        &self.decoder
+    }
+
     /// Changes the permutation of the dataset without changing the order of the
     /// items.
     #[must_use]
@@ -131,6 +159,8 @@ impl<I, Me> CodecData<I, Me> {
             name: self.name,
             center_map: self.center_map,
             leaf_bytes: self.leaf_bytes,
+            encoder: self.encoder,
+            decoder: self.decoder,
         }
     }
 
@@ -159,7 +189,12 @@ impl<I, Me> CodecData<I, Me> {
     }
 
     /// Transforms the centers of the dataset using the given function.
-    pub fn transform_centers<It, F: Fn(I) -> It>(self, transformer: F) -> CodecData<It, Me> {
+    pub fn transform_centers<It, F: Fn(I) -> It, E: Encoder<It>, D: Decoder<It>>(
+        self,
+        transformer: F,
+        encoder: E,
+        decoder: D,
+    ) -> CodecData<It, Me, E, D> {
         let center_map = self
             .center_map
             .into_iter()
@@ -174,11 +209,13 @@ impl<I, Me> CodecData<I, Me> {
             name: self.name,
             center_map,
             leaf_bytes: self.leaf_bytes,
+            encoder,
+            decoder,
         }
     }
 }
 
-impl<I: Decodable + Clone, Me: Clone> CodecData<I, Me> {
+impl<I: Clone, Me: Clone, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, Me, Enc, Dec> {
     /// Decompresses the dataset into a `FlatVec`.
     ///
     /// # Errors
@@ -188,7 +225,7 @@ impl<I: Decodable + Clone, Me: Clone> CodecData<I, Me> {
         let items = self
             .leaf_bytes
             .iter()
-            .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref()))
+            .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref(), &self.decoder))
             .collect::<Vec<_>>();
 
         let (min_dim, max_dim) = self.dimensionality_hint;
@@ -209,7 +246,9 @@ impl<I: Decodable + Clone, Me: Clone> CodecData<I, Me> {
     }
 }
 
-impl<I: Decodable + Clone + Send + Sync, Me: Clone + Send + Sync> CodecData<I, Me> {
+impl<I: Clone + Send + Sync, Me: Clone + Send + Sync, Enc: ParEncoder<I>, Dec: ParDecoder<I>>
+    CodecData<I, Me, Enc, Dec>
+{
     /// Parallel version of [`CodecData::to_flat_vec`](crate::pancakes::dataset::CodecData::to_flat_vec).
     ///
     /// # Errors
@@ -219,7 +258,7 @@ impl<I: Decodable + Clone + Send + Sync, Me: Clone + Send + Sync> CodecData<I, M
         let items = self
             .leaf_bytes
             .par_iter()
-            .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref()))
+            .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref(), &self.decoder))
             .collect::<Vec<_>>();
 
         let (min_dim, max_dim) = self.dimensionality_hint;
@@ -240,7 +279,7 @@ impl<I: Decodable + Clone + Send + Sync, Me: Clone + Send + Sync> CodecData<I, M
     }
 }
 
-impl<I: Decodable, Me> Dataset<I> for CodecData<I, Me> {
+impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> Dataset<I> for CodecData<I, Me, Enc, Dec> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -267,9 +306,12 @@ impl<I: Decodable, Me> Dataset<I> for CodecData<I, Me> {
     }
 }
 
-impl<I: Decodable + Send + Sync, Me: Send + Sync> ParDataset<I> for CodecData<I, Me> {}
+impl<I: Send + Sync, Me: Send + Sync, Enc: ParEncoder<I>, Dec: ParDecoder<I>> ParDataset<I>
+    for CodecData<I, Me, Enc, Dec>
+{
+}
 
-impl<I: Decodable, Me> AssociatesMetadata<I, Me> for CodecData<I, Me> {
+impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> AssociatesMetadata<I, Me> for CodecData<I, Me, Enc, Dec> {
     fn metadata(&self) -> &[Me] {
         &self.metadata
     }
@@ -279,7 +321,9 @@ impl<I: Decodable, Me> AssociatesMetadata<I, Me> for CodecData<I, Me> {
     }
 }
 
-impl<I: Decodable, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, CodecData<I, Met>> for CodecData<I, Me> {
+impl<I, Me, Met: Clone, Enc: Encoder<I>, Dec: Decoder<I>> AssociatesMetadataMut<I, Me, Met, CodecData<I, Met, Enc, Dec>>
+    for CodecData<I, Me, Enc, Dec>
+{
     fn metadata_mut(&mut self) -> &mut [Me] {
         &mut self.metadata
     }
@@ -288,7 +332,7 @@ impl<I: Decodable, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, CodecData<I
         &mut self.metadata[index]
     }
 
-    fn with_metadata(self, metadata: &[Met]) -> Result<CodecData<I, Met>, String> {
+    fn with_metadata(self, metadata: &[Met]) -> Result<CodecData<I, Met, Enc, Dec>, String> {
         if metadata.len() == self.cardinality {
             let mut metadata = metadata.to_vec();
             metadata.permute(&self.permutation);
@@ -300,6 +344,8 @@ impl<I: Decodable, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, CodecData<I
                 name: self.name,
                 center_map: self.center_map,
                 leaf_bytes: self.leaf_bytes,
+                encoder: self.encoder,
+                decoder: self.decoder,
             })
         } else {
             Err(format!(
@@ -310,7 +356,7 @@ impl<I: Decodable, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, CodecData<I
         }
     }
 
-    fn transform_metadata<F: Fn(&Me) -> Met>(self, f: F) -> CodecData<I, Met> {
+    fn transform_metadata<F: Fn(&Me) -> Met>(self, f: F) -> CodecData<I, Met, Enc, Dec> {
         let metadata = self.metadata.iter().map(f).collect();
         CodecData {
             cardinality: self.cardinality,
@@ -320,6 +366,8 @@ impl<I: Decodable, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, CodecData<I
             name: self.name,
             center_map: self.center_map,
             leaf_bytes: self.leaf_bytes,
+            encoder: self.encoder,
+            decoder: self.decoder,
         }
     }
 }
@@ -353,8 +401,12 @@ fn decompress_and_decode<T: bitcode::Decode>(bytes: &[u8]) -> Result<T, String> 
 }
 
 #[cfg(feature = "disk-io")]
-impl<I: Decodable + bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bitcode::Decode>
-    crate::dataset::DatasetIO<I> for CodecData<I, Me>
+impl<I, Me, Enc, Dec> crate::dataset::DatasetIO<I> for CodecData<I, Me, Enc, Dec>
+where
+    I: bitcode::Encode + bitcode::Decode,
+    Me: bitcode::Encode + bitcode::Decode,
+    Enc: Encoder<I> + bitcode::Encode + bitcode::Decode,
+    Dec: Decoder<I> + bitcode::Encode + bitcode::Decode,
 {
     fn write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
         let metadata_bytes = encode_and_compress(&self.metadata)?;
@@ -364,7 +416,7 @@ impl<I: Decodable + bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bit
         let center_map = self
             .center_map
             .iter()
-            .map(|(&i, p)| (i, p.as_bytes()))
+            .map(|(&i, p)| (i, self.encoder.to_byte_array(p)))
             .collect::<Vec<_>>();
         let center_map_bytes = encode_and_compress(center_map)?;
 
@@ -378,6 +430,8 @@ impl<I: Decodable + bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bit
             self.name.clone(),
             center_map_bytes,
             leaf_bytes,
+            bitcode::encode(&self.encoder).map_err(|e| e.to_string())?,
+            bitcode::encode(&self.decoder).map_err(|e| e.to_string())?,
         );
         let bytes = bitcode::encode(&members).map_err(|e| e.to_string())?;
         std::fs::write(path, &bytes).map_err(|e| e.to_string())
@@ -387,7 +441,17 @@ impl<I: Decodable + bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bit
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
 
         #[allow(clippy::type_complexity)]
-        let (cardinality, dimensionality_hint, metadata_bytes, permutation_bytes, name, center_map_bytes, leaf_bytes): (
+        let (
+            cardinality,
+            dimensionality_hint,
+            metadata_bytes,
+            permutation_bytes,
+            name,
+            center_map_bytes,
+            leaf_bytes,
+            encoder_bytes,
+            decoder_bytes,
+        ): (
             usize,
             (usize, Option<usize>),
             Vec<u8>,
@@ -395,15 +459,19 @@ impl<I: Decodable + bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bit
             String,
             Vec<u8>,
             Vec<u8>,
+            Vec<u8>,
+            Vec<u8>,
         ) = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
         let metadata: Vec<Me> = decompress_and_decode(&metadata_bytes)?;
         let permutation: Vec<usize> = decompress_and_decode(&permutation_bytes)?;
+        let encoder: Enc = bitcode::decode(&encoder_bytes).map_err(|e| e.to_string())?;
+        let decoder: Dec = bitcode::decode(&decoder_bytes).map_err(|e| e.to_string())?;
 
         let center_map: Vec<(usize, Box<[u8]>)> = decompress_and_decode(&center_map_bytes)?;
         let center_map = center_map
             .into_iter()
-            .map(|(i, bytes)| (i, I::from_bytes(&bytes)))
+            .map(|(i, bytes)| (i, decoder.from_byte_array(&bytes)))
             .collect();
 
         let leaf_bytes = decompress_and_decode(&leaf_bytes)?;
@@ -416,21 +484,25 @@ impl<I: Decodable + bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bit
             name,
             center_map,
             leaf_bytes,
+            encoder,
+            decoder,
         })
     }
 }
 
 #[cfg(feature = "disk-io")]
-impl<
-        I: Decodable + bitcode::Encode + bitcode::Decode + Send + Sync,
-        Me: bitcode::Encode + bitcode::Decode + Send + Sync,
-    > crate::dataset::ParDatasetIO<I> for CodecData<I, Me>
+impl<I, Me, Enc, Dec> crate::dataset::ParDatasetIO<I> for CodecData<I, Me, Enc, Dec>
+where
+    I: bitcode::Encode + bitcode::Decode + Send + Sync,
+    Me: bitcode::Encode + bitcode::Decode + Send + Sync,
+    Enc: ParEncoder<I> + bitcode::Encode + bitcode::Decode,
+    Dec: ParDecoder<I> + bitcode::Encode + bitcode::Decode,
 {
     fn par_write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
         let center_map = self
             .center_map
             .par_iter()
-            .map(|(&i, p)| (i, p.as_bytes()))
+            .map(|(&i, p)| (i, self.encoder.to_byte_array(p)))
             .collect::<Vec<_>>();
 
         let ((metadata_bytes, center_map_bytes), (permutation_bytes, leaf_bytes)) = rayon::join(
@@ -447,9 +519,19 @@ impl<
                 )
             },
         );
+        let (encoder_bytes, decoder_bytes) = rayon::join(
+            || bitcode::encode(&self.encoder).map_err(|e| e.to_string()),
+            || bitcode::encode(&self.decoder).map_err(|e| e.to_string()),
+        );
 
-        let (metadata_bytes, center_map_bytes, permutation_bytes, leaf_bytes) =
-            (metadata_bytes?, center_map_bytes?, permutation_bytes?, leaf_bytes?);
+        let (metadata_bytes, center_map_bytes, permutation_bytes, leaf_bytes, encoder_bytes, decoder_bytes) = (
+            metadata_bytes?,
+            center_map_bytes?,
+            permutation_bytes?,
+            leaf_bytes?,
+            encoder_bytes?,
+            decoder_bytes?,
+        );
 
         let members = (
             self.cardinality,
@@ -459,6 +541,8 @@ impl<
             self.name.clone(),
             center_map_bytes,
             leaf_bytes,
+            encoder_bytes,
+            decoder_bytes,
         );
 
         let bytes = bitcode::encode(&members).map_err(|e| e.to_string())?;
@@ -469,12 +553,24 @@ impl<
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
 
         #[allow(clippy::type_complexity)]
-        let (cardinality, dimensionality_hint, metadata_bytes, permutation_bytes, name, center_map_bytes, leaf_bytes): (
+        let (
+            cardinality,
+            dimensionality_hint,
+            metadata_bytes,
+            permutation_bytes,
+            name,
+            center_map_bytes,
+            leaf_bytes,
+            encoder_bytes,
+            decoder_bytes,
+        ): (
             usize,
             (usize, Option<usize>),
             Vec<u8>,
             Vec<u8>,
             String,
+            Vec<u8>,
+            Vec<u8>,
             Vec<u8>,
             Vec<u8>,
         ) = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
@@ -498,12 +594,26 @@ impl<
             },
         );
 
-        let (metadata, center_map_bytes, permutation, leaf_bytes) =
-            (metadata_bytes?, center_map_bytes?, permutation?, leaf_bytes?);
+        let (encoder_bytes, decoder_bytes): (Result<Vec<u8>, String>, Result<Vec<u8>, String>) = rayon::join(
+            || bitcode::decode(&encoder_bytes).map_err(|e| e.to_string()),
+            || bitcode::decode(&decoder_bytes).map_err(|e| e.to_string()),
+        );
+
+        let (metadata, center_map_bytes, permutation, leaf_bytes, encoder_bytes, decoder_bytes) = (
+            metadata_bytes?,
+            center_map_bytes?,
+            permutation?,
+            leaf_bytes?,
+            encoder_bytes?,
+            decoder_bytes?,
+        );
+
+        let encoder: Enc = bitcode::decode(&encoder_bytes).map_err(|e| e.to_string())?;
+        let decoder: Dec = bitcode::decode(&decoder_bytes).map_err(|e| e.to_string())?;
 
         let center_map = center_map_bytes
             .into_par_iter()
-            .map(|(i, bytes)| (i, I::from_bytes(&bytes)))
+            .map(|(i, bytes)| (i, decoder.from_byte_array(&bytes)))
             .collect();
 
         Ok(Self {
@@ -514,11 +624,13 @@ impl<
             name,
             center_map,
             leaf_bytes,
+            encoder,
+            decoder,
         })
     }
 }
 
-impl<I: Encodable + Decodable, Me> Decompressible<I> for CodecData<I, Me> {
+impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> Decompressible<I, Dec> for CodecData<I, Me, Enc, Dec> {
     fn centers(&self) -> &HashMap<usize, I> {
         &self.center_map
     }
@@ -528,4 +640,7 @@ impl<I: Encodable + Decodable, Me> Decompressible<I> for CodecData<I, Me> {
     }
 }
 
-impl<I: Encodable + Decodable + Send + Sync, Me: Send + Sync> ParDecompressible<I> for CodecData<I, Me> {}
+impl<I: Send + Sync, Me: Send + Sync, Enc: ParEncoder<I>, Dec: ParDecoder<I>> ParDecompressible<I, Dec>
+    for CodecData<I, Me, Enc, Dec>
+{
+}

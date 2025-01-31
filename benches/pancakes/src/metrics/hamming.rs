@@ -1,18 +1,19 @@
-//! The `Levenshtein` edit distance metric.
+//! The `Hamming` distance metric.
 
 use abd_clam::{metric::ParMetric, Metric};
-use distances::Number;
+use distances::number::UInt;
 
-/// The `Levenshtein` edit distance metric.
-pub struct Levenshtein;
+/// The `Hamming` distance metric.
+#[derive(Clone, bitcode::Encode, bitcode::Decode)]
+pub struct Hamming;
 
-impl<I: AsRef<[u8]>, T: Number> Metric<I, T> for Levenshtein {
+impl<I: AsRef<str>, T: UInt> Metric<I, T> for Hamming {
     fn distance(&self, a: &I, b: &I) -> T {
-        T::from(stringzilla::sz::edit_distance(a.as_ref(), b.as_ref()))
+        distances::strings::hamming(a.as_ref(), b.as_ref())
     }
 
     fn name(&self) -> &'static str {
-        "levenshtein"
+        "hamming"
     }
 
     fn has_identity(&self) -> bool {
@@ -32,8 +33,8 @@ impl<I: AsRef<[u8]>, T: Number> Metric<I, T> for Levenshtein {
     }
 
     fn is_expensive(&self) -> bool {
-        true
+        false
     }
 }
 
-impl<I: AsRef<[u8]> + Send + Sync, T: Number> ParMetric<I, T> for Levenshtein {}
+impl<I: AsRef<str> + Send + Sync, T: UInt> ParMetric<I, T> for Hamming {}

@@ -5,6 +5,14 @@ use rand::prelude::*;
 
 /// Reads a fasta dataset and subsamples it to a given maximum power of 2,
 /// saving each subsample to a file.
+///
+/// # Returns
+///
+/// A tuple containing:
+///
+/// - A vector of queries. Each query is a tuple of the ID and sequence.
+/// - A vector of paths to the subsampled datasets, in ascending order of
+///   cardinality.
 pub fn read_and_subsample<P: AsRef<std::path::Path>>(
     inp_dir: &P,
     out_dir: &P,

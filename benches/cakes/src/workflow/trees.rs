@@ -4,11 +4,10 @@ use abd_clam::{
     cakes::PermutedBall,
     cluster::{adapter::ParBallAdapter, BalancedBall, Csv, ParClusterIO, ParPartition},
     dataset::DatasetIO,
+    metric::ParMetric,
     Ball, Dataset, FlatVec,
 };
 use distances::Number;
-
-use crate::metric::ParCountingMetric;
 
 /// The seven output paths for a given dataset.
 pub struct AllPaths {
@@ -87,7 +86,7 @@ where
     P: AsRef<std::path::Path>,
     I: Send + Sync + Clone + bitcode::Encode + bitcode::Decode,
     T: Number + bitcode::Encode + bitcode::Decode,
-    M: ParCountingMetric<I, T>,
+    M: ParMetric<I, T>,
     Me: Send + Sync + Clone + bitcode::Encode + bitcode::Decode,
 {
     ftlog::info!("Building all trees for {}...", data.name());
@@ -99,12 +98,10 @@ where
     }
 
     ftlog::info!("Building Ball...");
-    metric.reset_count();
     let ball = depth_stride.map_or_else(
         || Ball::par_new_tree(data, metric, &|_| true, seed),
         |depth_stride| Ball::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride),
     );
-    ftlog::info!("Built Ball by calculating {} distances.", metric.count());
 
     ftlog::info!("Writing Ball to {:?}...", all_paths.ball);
     ball.par_write_to(&all_paths.ball)?;
@@ -126,14 +123,12 @@ where
 
     if balanced {
         ftlog::info!("Building Balanced Ball...");
-        metric.reset_count();
         let ball = depth_stride
             .map_or_else(
                 || BalancedBall::par_new_tree(data, metric, &|_| true, seed),
                 |depth_stride| BalancedBall::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride),
             )
             .into_ball();
-        ftlog::info!("Built Balanced Ball by calculating {} distances.", metric.count());
 
         ftlog::info!("Writing Balanced Ball to {:?}...", all_paths.balanced_ball);
         ball.par_write_to(&all_paths.balanced_ball)?;

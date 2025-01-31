@@ -3,9 +3,6 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/symagen",
-    "crates/results/cakes",
-    "crates/results/chaoda",
-    "crates/results/rite-solutions",
     "pypi/distances",
     "benches/utils",
     "benches/cakes",
@@ -22,8 +19,7 @@ symagen = { version = "0.5.0", path = "crates/symagen" }
 rayon = "1.8"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-# bitcode = { version = "0.5" }
-bitcode = { git = "https://github.com/nishaq503/bitcode.git", rev = "1c393ad97288555fc3fe41b292b2bd826486a992" }
+bitcode = { version = "0.5" }
 libm = "0.2"
 ndarray = { version = "0.16", features = ["rayon", "approx"] }
 ndarray-npy = "0.9"

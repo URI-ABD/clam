@@ -49,6 +49,11 @@ impl<T: Number> CostMatrix<T> {
     /// Create a new substitution matrix with affine gap penalties.
     ///
     /// All substitution costs are set to 1.
+    ///
+    /// # Arguments
+    ///
+    /// * `gap_open`: The factor by which it is more expensive to open a gap
+    ///   than to extend an existing gap. This defaults to 10.
     #[must_use]
     pub fn default_affine(gap_open: Option<usize>) -> Self {
         let gap_open = gap_open.map_or_else(|| T::from(10), T::from);
