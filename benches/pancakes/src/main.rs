@@ -51,6 +51,10 @@ struct Args {
     #[arg(short('d'), long)]
     dataset: bench_utils::RawData,
 
+    /// The power of 2 by which the cardinality of the full dataset is reduced.
+    #[arg(short('m'), long)]
+    max_power: Option<u32>,
+
     /// The number of queries to use for benchmarking.
     #[arg(short('q'), long)]
     num_queries: usize,
@@ -164,6 +168,7 @@ fn main() -> Result<(), String> {
                 &perm_ball,
                 &perm_data,
                 false,
+                false,
                 true,
                 max_time,
                 &ks,
@@ -177,17 +182,19 @@ fn main() -> Result<(), String> {
         let (squishy_ball, codec_data) =
             if !args.rebuild_trees && all_paths.squishy_ball.exists() && all_paths.codec_data.exists() {
                 // Load the `SquishyBall` tree and `CodecData` from disk.
-                ftlog::info!("SquishyBall and CodecData already exist, loading from disk.");
-                (
-                    SquishyBall::read_from(&all_paths.squishy_ball)?,
-                    CodecData::par_read_from(&all_paths.codec_data)?,
-                )
+                ftlog::info!("SquishyBall already exists, loading from disk.");
+                let squishy_ball = SquishyBall::read_from(&all_paths.squishy_ball)?;
+                ftlog::info!("CodecData already exists, loading from disk.");
+                let codec_data = CodecData::par_read_from(&all_paths.codec_data)?;
+                (squishy_ball, codec_data)
             } else {
                 // Create the `SquishyBall` tree and `CodecData`.
                 ftlog::info!("Building the SquishyBall tree.");
                 let (squishy_ball, data) = SquishyBall::par_from_ball_tree(ball, data, &metric);
                 let codec_data = CodecData::par_from_compressible(&data, &squishy_ball, encoder, decoder);
-                let codec_data = codec_data.with_name(&format!("{}-codec", args.dataset.name()));
+                let codec_data = codec_data
+                    .with_name(&format!("{}-codec", args.dataset.name()))
+                    .with_metadata(data.metadata())?;
 
                 // Save the squishy ball and codec data to disk.
                 squishy_ball.write_to(&all_paths.squishy_ball)?;
@@ -212,6 +219,7 @@ fn main() -> Result<(), String> {
             &squishy_ball,
             &codec_data,
             false,
+            false,
             true,
             max_time,
             &ks,
@@ -230,7 +238,7 @@ fn main() -> Result<(), String> {
             &out_dir,
             false,
             args.num_queries,
-            0,
+            args.max_power.unwrap_or(0),
             args.seed,
         )?;
 
@@ -278,6 +286,7 @@ fn main() -> Result<(), String> {
                 None,
                 &perm_ball,
                 &perm_data,
+                false,
                 false,
                 true,
                 max_time,
@@ -328,6 +337,7 @@ fn main() -> Result<(), String> {
             None,
             &squishy_ball,
             &codec_data,
+            false,
             false,
             true,
             max_time,
@@ -390,6 +400,7 @@ fn main() -> Result<(), String> {
                 &perm_ball,
                 &perm_data,
                 false,
+                false,
                 true,
                 max_time,
                 &ks,
@@ -439,6 +450,7 @@ fn main() -> Result<(), String> {
             None,
             &squishy_ball,
             &codec_data,
+            false,
             false,
             true,
             max_time,

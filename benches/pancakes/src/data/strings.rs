@@ -119,36 +119,6 @@ impl Encoder<Sequence> for Hamming {
 
 impl ParEncoder<Sequence> for Hamming {}
 
-impl Encoder<Sequence> for Box<dyn Encoder<Sequence>> {
-    fn to_byte_array(&self, item: &Sequence) -> Box<[u8]> {
-        (**self).to_byte_array(item)
-    }
-
-    fn encode(&self, item: &Sequence, reference: &Sequence) -> Box<[u8]> {
-        (**self).encode(item, reference)
-    }
-}
-
-impl Encoder<Sequence> for Box<dyn ParEncoder<Sequence>> {
-    fn to_byte_array(&self, item: &Sequence) -> Box<[u8]> {
-        (**self).to_byte_array(item)
-    }
-
-    fn encode(&self, item: &Sequence, reference: &Sequence) -> Box<[u8]> {
-        (**self).encode(item, reference)
-    }
-}
-
-impl ParEncoder<Sequence> for Box<dyn ParEncoder<Sequence>> {
-    fn par_to_byte_array(&self, item: &Sequence) -> Box<[u8]> {
-        (**self).par_to_byte_array(item)
-    }
-
-    fn par_encode(&self, item: &Sequence, reference: &Sequence) -> Box<[u8]> {
-        (**self).par_encode(item, reference)
-    }
-}
-
 impl Decoder<Sequence> for Hamming {
     fn from_byte_array(&self, bytes: &[u8]) -> Sequence {
         Sequence::from(bytes)
@@ -168,36 +138,6 @@ impl Decoder<Sequence> for Hamming {
 }
 
 impl ParDecoder<Sequence> for Hamming {}
-
-impl Decoder<Sequence> for Box<dyn Decoder<Sequence>> {
-    fn from_byte_array(&self, bytes: &[u8]) -> Sequence {
-        (**self).from_byte_array(bytes)
-    }
-
-    fn decode(&self, bytes: &[u8], reference: &Sequence) -> Sequence {
-        (**self).decode(bytes, reference)
-    }
-}
-
-impl Decoder<Sequence> for Box<dyn ParDecoder<Sequence>> {
-    fn from_byte_array(&self, bytes: &[u8]) -> Sequence {
-        (**self).from_byte_array(bytes)
-    }
-
-    fn decode(&self, bytes: &[u8], reference: &Sequence) -> Sequence {
-        (**self).decode(bytes, reference)
-    }
-}
-
-impl ParDecoder<Sequence> for Box<dyn ParDecoder<Sequence>> {
-    fn par_from_byte_array(&self, bytes: &[u8]) -> Sequence {
-        (**self).par_from_byte_array(bytes)
-    }
-
-    fn par_decode(&self, bytes: &[u8], reference: &Sequence) -> Sequence {
-        (**self).par_decode(bytes, reference)
-    }
-}
 
 impl<T: Number> Encoder<Sequence> for Aligner<T> {
     fn to_byte_array(&self, item: &Sequence) -> Box<[u8]> {

@@ -43,9 +43,6 @@ impl AsRef<[usize]> for MembershipSet {
     }
 }
 
-impl ParEncoder<MembershipSet> for Jaccard {}
-impl ParDecoder<MembershipSet> for Jaccard {}
-
 impl Encoder<MembershipSet> for Jaccard {
     fn to_byte_array(&self, item: &MembershipSet) -> Box<[u8]> {
         let bytes = item.0.iter().flat_map(|&x| x.to_le_bytes()).collect::<Vec<_>>();
@@ -71,6 +68,8 @@ impl Encoder<MembershipSet> for Jaccard {
         bytes.into_boxed_slice()
     }
 }
+
+impl ParEncoder<MembershipSet> for Jaccard {}
 
 impl Decoder<MembershipSet> for Jaccard {
     fn from_byte_array(&self, bytes: &[u8]) -> MembershipSet {
@@ -99,6 +98,8 @@ impl Decoder<MembershipSet> for Jaccard {
         MembershipSet(set)
     }
 }
+
+impl ParDecoder<MembershipSet> for Jaccard {}
 
 #[cfg(test)]
 mod tests {

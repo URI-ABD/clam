@@ -20,6 +20,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
     data: &D,
     is_balanced: bool,
     is_permuted: bool,
+    is_compressed: bool,
     max_time: Duration,
     ks: &[usize],
     radii: &[T],
@@ -45,6 +46,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
                     data,
                     is_balanced,
                     is_permuted,
+                    is_compressed,
                     max_time,
                 );
             }
@@ -59,6 +61,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
                 data,
                 is_balanced,
                 is_permuted,
+                is_compressed,
                 max_time,
             );
         }
@@ -76,6 +79,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
                 data,
                 is_balanced,
                 is_permuted,
+                is_compressed,
                 max_time,
             );
         }
@@ -90,6 +94,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
             data,
             is_balanced,
             is_permuted,
+            is_compressed,
             max_time,
         );
 
@@ -103,6 +108,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
             data,
             is_balanced,
             is_permuted,
+            is_compressed,
             max_time,
         );
 
@@ -116,6 +122,7 @@ pub fn bench_all_algs<I, T, M, C, D>(
             data,
             is_balanced,
             is_permuted,
+            is_compressed,
             max_time,
         );
     }
@@ -132,6 +139,7 @@ fn bench_algorithm<I, T, M, C, A, D>(
     data: &D,
     is_balanced: bool,
     is_permuted: bool,
+    is_compressed: bool,
     max_time: Duration,
 ) where
     I: Send + Sync,
@@ -143,7 +151,9 @@ fn bench_algorithm<I, T, M, C, A, D>(
 {
     let cluster_name = {
         let mut parts = Vec::with_capacity(3);
-        if is_permuted {
+        if is_compressed {
+            parts.push("Squishy");
+        } else if is_permuted {
             parts.push("Permuted");
         }
         if is_balanced {

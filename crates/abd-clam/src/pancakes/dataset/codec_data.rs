@@ -463,11 +463,16 @@ where
             Vec<u8>,
         ) = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
 
+        ftlog::debug!("Reading metadata...");
         let metadata: Vec<Me> = decompress_and_decode(&metadata_bytes)?;
+        ftlog::debug!("Reading permutation...");
         let permutation: Vec<usize> = decompress_and_decode(&permutation_bytes)?;
+        ftlog::debug!("Reading encoder...");
         let encoder: Enc = bitcode::decode(&encoder_bytes).map_err(|e| e.to_string())?;
+        ftlog::debug!("Reading decoder...");
         let decoder: Dec = bitcode::decode(&decoder_bytes).map_err(|e| e.to_string())?;
 
+        ftlog::debug!("Reading center map...");
         let center_map: Vec<(usize, Box<[u8]>)> = decompress_and_decode(&center_map_bytes)?;
         let center_map = center_map
             .into_iter()
@@ -594,22 +599,15 @@ where
             },
         );
 
-        let (encoder_bytes, decoder_bytes): (Result<Vec<u8>, String>, Result<Vec<u8>, String>) = rayon::join(
+        ftlog::debug!("Reading encoder and decoder...");
+        let (encoder, decoder): (Result<Enc, String>, Result<Dec, String>) = rayon::join(
             || bitcode::decode(&encoder_bytes).map_err(|e| e.to_string()),
             || bitcode::decode(&decoder_bytes).map_err(|e| e.to_string()),
         );
+        let (encoder, decoder) = (encoder?, decoder?);
 
-        let (metadata, center_map_bytes, permutation, leaf_bytes, encoder_bytes, decoder_bytes) = (
-            metadata_bytes?,
-            center_map_bytes?,
-            permutation?,
-            leaf_bytes?,
-            encoder_bytes?,
-            decoder_bytes?,
-        );
-
-        let encoder: Enc = bitcode::decode(&encoder_bytes).map_err(|e| e.to_string())?;
-        let decoder: Dec = bitcode::decode(&decoder_bytes).map_err(|e| e.to_string())?;
+        let (metadata, center_map_bytes, permutation, leaf_bytes) =
+            (metadata_bytes?, center_map_bytes?, permutation?, leaf_bytes?);
 
         let center_map = center_map_bytes
             .into_par_iter()
