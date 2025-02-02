@@ -97,7 +97,10 @@ let knn_labels: Vec<bool> = knn_results.iter().map(|&(i, _)| labels[i]).collect(
 
 We also support compression of certain datasets and trees to reduce memory usage.
 We can then perform compressed search on the compressed dataset without having to decompress the whole dataset.
-```rust
+
+TODO: Add example.
+
+<!-- ```rust
 use abd_clam::{
     cakes::{self, ParSearchAlgorithm},
     cluster::{adapter::ParBallAdapter, ClusterIO, ParPartition},
@@ -209,7 +212,7 @@ let codec_data = codec_data.transform_centers(|s| s.with_aligner(&aligner));
 
 // The compressed tree can be deserialized from disk.
 let squishy_ball: SquishyBall<u16, Ball<_>> = SquishyBall::read_from(&squishy_ball_path).unwrap();
-```
+``` -->
 
 ### Chaoda: Anomaly Detection
 

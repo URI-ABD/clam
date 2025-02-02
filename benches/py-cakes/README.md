@@ -1,6 +1,6 @@
 # Plotting results of the CAKES benchmarks
 
-This package provides a CLI for plotting the results of the CAKES benchmarks.
+This package provides a CLI for plotting the results of the CAKES benchmarks for the [CAKES paper](https://arxiv.org/abs/2309.05491).
 
 You mush first run any benchmarks you want to plot using the `bench-cakes` crate we provide at `../cakes`.
 See the associated README for more information.

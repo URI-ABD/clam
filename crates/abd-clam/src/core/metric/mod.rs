@@ -8,7 +8,13 @@
 //! We also provide blanket implementations for some pointers and smart
 //! pointers including `&`, `&mut`, `Box`, `Rc`, and `Arc`.
 
+use std::{rc::Rc, sync::Arc};
+
 use distances::Number;
+
+use crate::{
+    impl_metric_block, impl_metric_for_smart_pointers, impl_par_metric_block, impl_par_metric_for_smart_pointers,
+};
 
 mod absolute_difference;
 mod cosine;
@@ -169,68 +175,33 @@ pub trait ParMetric<I: Send + Sync, T: Number>: Metric<I, T> + Send + Sync {
     }
 }
 
-// Implementation for `&`
+// Implementation for `& dyn Metric` and `& dyn ParMetric`
 
 impl<I, T: Number> Metric<I, T> for &dyn Metric<I, T> {
-    macros::impl_metric_block!();
+    impl_metric_block!();
 }
 
 impl<I, T: Number> Metric<I, T> for &dyn ParMetric<I, T> {
-    macros::impl_metric_block!();
+    impl_metric_block!();
 }
 
 impl<I: Send + Sync, T: Number> ParMetric<I, T> for &dyn ParMetric<I, T> {
-    macros::impl_par_metric_block!();
+    impl_par_metric_block!();
 }
 
-// Implementation for `&mut`
+// Implementation for `&mut dyn Metric` and `&mut dyn ParMetric`
 
 impl<I, T: Number> Metric<I, T> for &mut dyn Metric<I, T> {
-    macros::impl_metric_block!();
+    impl_metric_block!();
 }
 
 impl<I, T: Number> Metric<I, T> for &mut dyn ParMetric<I, T> {
-    macros::impl_metric_block!();
+    impl_metric_block!();
 }
 
 impl<I: Send + Sync, T: Number> ParMetric<I, T> for &mut dyn ParMetric<I, T> {
-    macros::impl_par_metric_block!();
+    impl_par_metric_block!();
 }
 
-// Implementation for `Box`
-
-impl<I, T: Number> Metric<I, T> for Box<dyn Metric<I, T>> {
-    macros::impl_metric_block!();
-}
-
-impl<I, T: Number> Metric<I, T> for Box<dyn ParMetric<I, T>> {
-    macros::impl_metric_block!();
-}
-
-impl<I: Send + Sync, T: Number> ParMetric<I, T> for Box<dyn ParMetric<I, T>> {
-    macros::impl_par_metric_block!();
-}
-
-// Implementation for `std::rc::Rc`
-
-impl<I, T: Number> Metric<I, T> for std::rc::Rc<dyn Metric<I, T>> {
-    macros::impl_metric_block!();
-}
-
-impl<I, T: Number> Metric<I, T> for std::rc::Rc<dyn ParMetric<I, T>> {
-    macros::impl_metric_block!();
-}
-
-// Implementation for `std::sync::Arc`
-
-impl<I, T: Number> Metric<I, T> for std::sync::Arc<dyn Metric<I, T>> {
-    macros::impl_metric_block!();
-}
-
-impl<I, T: Number> Metric<I, T> for std::sync::Arc<dyn ParMetric<I, T>> {
-    macros::impl_metric_block!();
-}
-
-impl<I: Send + Sync, T: Number> ParMetric<I, T> for std::sync::Arc<dyn ParMetric<I, T>> {
-    macros::impl_par_metric_block!();
-}
+impl_metric_for_smart_pointers!(Box, Rc, Arc);
+impl_par_metric_for_smart_pointers!(Box, Arc);
