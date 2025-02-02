@@ -1,6 +1,6 @@
 # Benchmarks for CAKES Search Algorithms
 
-This is crate provides a CLI to run benchmarks for the CAKES search algorithms and reproduce the results from our paper.
+This is crate provides a CLI to run benchmarks for the CAKES search algorithms and reproduce the results from [our paper](https://arxiv.org/abs/2309.05491).
 
 ## Reproducing the Results
 

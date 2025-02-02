@@ -48,7 +48,7 @@ impl<I: AsRef<[f32]>> Metric<I, f32> for Cosine {
     }
 
     fn obeys_triangle_inequality(&self) -> bool {
-        true
+        false
     }
 
     fn is_expensive(&self) -> bool {
@@ -113,7 +113,7 @@ impl<I: AsRef<[f64]>> Metric<I, f64> for Cosine {
     }
 
     fn obeys_triangle_inequality(&self) -> bool {
-        true
+        false
     }
 
     fn is_expensive(&self) -> bool {

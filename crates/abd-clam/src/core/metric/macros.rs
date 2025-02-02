@@ -1,6 +1,7 @@
 //! Some macros for implementing `Metric` and `ParMetric` for smart pointers.
 
-/// Implements `Metric` for a smart pointer.
+/// Implementation block for `Metric`.
+#[macro_export]
 macro_rules! impl_metric_block {
     () => {
         fn distance(&self, a: &I, b: &I) -> T {
@@ -33,7 +34,8 @@ macro_rules! impl_metric_block {
     };
 }
 
-/// Implements `ParMetric` for a smart pointer.
+/// Implementation block for `ParMetric`.
+#[macro_export]
 macro_rules! impl_par_metric_block {
     () => {
         fn par_distance(&self, a: &I, b: &I) -> T {
@@ -42,5 +44,30 @@ macro_rules! impl_par_metric_block {
     };
 }
 
-pub(crate) use impl_metric_block;
-pub(crate) use impl_par_metric_block;
+/// Implements `Metric` for several smart pointers.
+#[macro_export]
+macro_rules! impl_metric_for_smart_pointers {
+    ($($pointer:tt),*) => {
+        $(
+            impl<I, T: Number> Metric<I, T> for $pointer<dyn Metric<I, T>> {
+                impl_metric_block!();
+            }
+
+            impl<I: Send + Sync, T: Number> Metric<I, T> for $pointer<dyn ParMetric<I, T>> {
+                impl_metric_block!();
+            }
+        )*
+    };
+}
+
+/// Implements `ParMetric` for several smart pointers.
+#[macro_export]
+macro_rules! impl_par_metric_for_smart_pointers {
+    ($($pointer:tt),*) => {
+        $(
+            impl<I: Send + Sync, T: Number> ParMetric<I, T> for $pointer<dyn ParMetric<I, T>> {
+                impl_par_metric_block!();
+            }
+        )*
+    };
+}
