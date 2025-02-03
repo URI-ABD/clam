@@ -160,11 +160,11 @@ impl<'a, const DIM: usize> System<'a, DIM> {
             .par_iter()
             .map(|s| {
                 let f_mag = s.f_mag();
-                let mut fv = s.a.unit_vector_to(s.b);
+                let mut fv = s.a().unit_vector_to(s.b());
                 for f_i in &mut fv {
                     *f_i *= f_mag;
                 }
-                (s.a, s.b, fv)
+                (s.a(), s.b(), fv)
             })
             .collect::<Vec<_>>();
 

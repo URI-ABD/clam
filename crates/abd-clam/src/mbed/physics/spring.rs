@@ -17,9 +17,9 @@ use super::Mass;
 /// - `DIM`: The dimensionality of the reduced space.
 pub struct Spring<'a, const DIM: usize> {
     /// The first `Mass` connected by the `Spring`.
-    pub(crate) a: &'a Mass<DIM>,
+    a: &'a Mass<DIM>,
     /// The second `Mass` connected by the `Spring`.
-    pub(crate) b: &'a Mass<DIM>,
+    b: &'a Mass<DIM>,
     /// The spring constant of the `Spring`.
     k: f32,
     /// The length of the `Spring` in the original embedding space cast to `f32`.
@@ -29,6 +29,20 @@ pub struct Spring<'a, const DIM: usize> {
     /// The magnitude force exerted by the `Spring`.
     f_mag: f32,
 }
+
+impl<const DIM: usize> core::hash::Hash for Spring<'_, DIM> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.hash_key().hash(state);
+    }
+}
+
+impl<const DIM: usize> PartialEq for Spring<'_, DIM> {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_key() == other.hash_key()
+    }
+}
+
+impl<const DIM: usize> Eq for Spring<'_, DIM> {}
 
 impl<'a, const DIM: usize> Spring<'a, DIM> {
     /// Create a new `Spring`.
@@ -53,6 +67,16 @@ impl<'a, const DIM: usize> Spring<'a, DIM> {
         (self.a.hash_key(), self.b.hash_key())
     }
 
+    /// Get the first `Mass` connected by the `Spring`.
+    pub const fn a(&self) -> &'a Mass<DIM> {
+        self.a
+    }
+
+    /// Get the second `Mass` connected by the `Spring`.
+    pub const fn b(&self) -> &'a Mass<DIM> {
+        self.b
+    }
+
     /// Get the rest length of the `Spring`.
     pub const fn l0(&self) -> f32 {
         self.l0
@@ -68,12 +92,15 @@ impl<'a, const DIM: usize> Spring<'a, DIM> {
         self.l
     }
 
-    /// Get the displacement magnitude of the `Spring`.
+    /// Get the magnitude of the displacement of the `Spring` from its rest
+    /// length.
     pub fn dx(&self) -> f32 {
         self.l0 - self.l
     }
 
     /// Get the magnitude of the force exerted by the `Spring`.
+    ///
+    /// If the force is somehow not finite, return `1.0` instead.
     pub fn f_mag(&self) -> f32 {
         if self.f_mag.is_finite() {
             self.f_mag
@@ -98,17 +125,3 @@ impl<'a, const DIM: usize> Spring<'a, DIM> {
         0.5 * self.k * self.dx().powi(2)
     }
 }
-
-impl<const DIM: usize> core::hash::Hash for Spring<'_, DIM> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.hash_key().hash(state);
-    }
-}
-
-impl<const DIM: usize> PartialEq for Spring<'_, DIM> {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash_key() == other.hash_key()
-    }
-}
-
-impl<const DIM: usize> Eq for Spring<'_, DIM> {}
