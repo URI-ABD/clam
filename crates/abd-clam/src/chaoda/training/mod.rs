@@ -35,14 +35,14 @@ pub use trainable_smc::TrainableSmc;
 /// - `I`: The type of the input data.
 /// - `U`: The type of the distance values.
 /// - `M`: The number of metrics to train with.
-pub struct ChaodaTrainer<I, T: Number, const M: usize> {
+pub struct ChaodaTrainer<'m, I, T: Number, const M: usize> {
     /// The distance metrics to train with.
-    metrics: [Box<dyn ParMetric<I, T>>; M],
+    metrics: [&'m dyn ParMetric<I, T>; M],
     /// The combinations of `MetaMLModel`s and `GraphAlgorithm`s to train with.
     combinations: [Vec<TrainableCombination>; M],
 }
 
-impl<I: Clone, T: Number, const M: usize> ChaodaTrainer<I, T, M> {
+impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I, T, M> {
     /// Create a new `ChaodaTrainer` with the given metrics and all pairs of
     /// `MetaMLModel`s and `GraphAlgorithm`s.
     ///
@@ -54,7 +54,7 @@ impl<I: Clone, T: Number, const M: usize> ChaodaTrainer<I, T, M> {
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
     pub fn new_all_pairs(
-        metrics: [Box<dyn ParMetric<I, T>>; M],
+        metrics: [&'m dyn ParMetric<I, T>; M],
         meta_ml_models: Vec<TrainableMetaMlModel>,
         graph_algorithms: Vec<GraphAlgorithm>,
     ) -> Self {
@@ -85,7 +85,7 @@ impl<I: Clone, T: Number, const M: usize> ChaodaTrainer<I, T, M> {
     /// - `combinations`: The combinations of `MetaMLModel`s and `GraphAlgorithm`s to train with.
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(metrics: [Box<dyn ParMetric<I, T>>; M], combinations: Vec<TrainableCombination>) -> Self {
+    pub fn new(metrics: [&'m dyn ParMetric<I, T>; M], combinations: Vec<TrainableCombination>) -> Self {
         let combinations = metrics
             .iter()
             .map(|_| combinations.clone())
@@ -435,7 +435,7 @@ impl<I: Clone, T: Number, const M: usize> ChaodaTrainer<I, T, M> {
     }
 }
 
-impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<I, T, M> {
+impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, M> {
     /// Parallel version of [`ChaodaTrainer::create_trees`](crate::chaoda::training::ChaodaTrainer::create_trees).
     pub fn par_create_trees<const N: usize, D: ParDataset<I>, S: ParPartition<T>, C: (Fn(&S) -> bool) + Send + Sync>(
         &self,

@@ -13,7 +13,7 @@ use super::GraphEvaluator;
 pub struct ParentCardinality;
 
 impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for ParentCardinality {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "pc"
     }
 

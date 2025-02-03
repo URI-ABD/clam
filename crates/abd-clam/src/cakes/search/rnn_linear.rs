@@ -18,7 +18,7 @@ pub struct RnnLinear<T: Number>(pub T);
 impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
     for RnnLinear<T>
 {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "RnnLinear"
     }
 

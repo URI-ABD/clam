@@ -11,8 +11,15 @@ pub struct Euclidean(Arc<RwLock<usize>>, bool);
 
 impl Euclidean {
     /// Creates a new `Euclidean` distance metric.
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(0)), true)
+    #[must_use]
+    pub fn new(count: usize) -> Self {
+        Self(Arc::new(RwLock::new(count)), true)
+    }
+}
+
+impl Default for Euclidean {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 
@@ -24,7 +31,7 @@ impl<I: AsRef<[f32]>> Metric<I, f32> for Euclidean {
         distances::simd::euclidean_f32(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 
@@ -89,7 +96,7 @@ impl<I: AsRef<[f64]>> Metric<I, f64> for Euclidean {
         distances::simd::euclidean_f64(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 

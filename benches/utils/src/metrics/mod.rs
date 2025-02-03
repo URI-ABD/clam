@@ -1,9 +1,9 @@
 //! Distance metrics for benchmarks.
 
+mod cosine;
 mod dtw;
-mod jaccard;
-mod levenshtein;
+mod euclidean;
 
+pub use cosine::Cosine;
 pub use dtw::{dtw_distance, Complex, Dtw};
-pub use jaccard::Jaccard;
-pub use levenshtein::Levenshtein;
+pub use euclidean::Euclidean;

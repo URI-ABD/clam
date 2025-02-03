@@ -12,8 +12,15 @@ pub struct DynamicTimeWarping(Arc<RwLock<usize>>, bool);
 
 impl DynamicTimeWarping {
     /// Creates a new `DynamicTimeWarping` distance metric.
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(0)), true)
+    #[must_use]
+    pub fn new(count: usize) -> Self {
+        Self(Arc::new(RwLock::new(count)), false)
+    }
+}
+
+impl Default for DynamicTimeWarping {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 
@@ -25,7 +32,7 @@ impl<I: AsRef<[Complex<f64>]>> Metric<I, f64> for DynamicTimeWarping {
         dtw_distance(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "dtw"
     }
 

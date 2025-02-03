@@ -2,12 +2,13 @@
 
 use abd_clam::{
     metric::ParMetric,
-    msa::Sequence,
     pancakes::{Decodable, Encodable},
     Metric,
 };
 use distances::{number::UInt, Number};
 use serde::{Deserialize, Serialize};
+
+use crate::data::Sequence;
 
 /// A sequence from a FASTA file.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, bitcode::Encode, bitcode::Decode)]
@@ -89,7 +90,7 @@ impl<I: AsRef<str>, U: UInt> Metric<I, U> for Hamming {
         distances::vectors::hamming(a.as_ref().as_ref(), b.as_ref().as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 

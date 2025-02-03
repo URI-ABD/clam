@@ -11,8 +11,15 @@ pub struct Cosine(Arc<RwLock<usize>>, bool);
 
 impl Cosine {
     /// Creates a new `Euclidean` distance metric.
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(0)), false)
+    #[must_use]
+    pub fn new(count: usize) -> Self {
+        Self(Arc::new(RwLock::new(count)), false)
+    }
+}
+
+impl Default for Cosine {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 
@@ -24,7 +31,7 @@ impl<I: AsRef<[f32]>> Metric<I, f32> for Cosine {
         distances::simd::cosine_f32(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cosine"
     }
 
@@ -41,7 +48,7 @@ impl<I: AsRef<[f32]>> Metric<I, f32> for Cosine {
     }
 
     fn obeys_triangle_inequality(&self) -> bool {
-        true
+        false
     }
 
     fn is_expensive(&self) -> bool {
@@ -89,7 +96,7 @@ impl<I: AsRef<[f64]>> Metric<I, f64> for Cosine {
         distances::simd::cosine_f64(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cosine"
     }
 
@@ -106,7 +113,7 @@ impl<I: AsRef<[f64]>> Metric<I, f64> for Cosine {
     }
 
     fn obeys_triangle_inequality(&self) -> bool {
-        true
+        false
     }
 
     fn is_expensive(&self) -> bool {

@@ -13,7 +13,7 @@ impl<T: Number> Metric<T, T> for AbsoluteDifference {
         a.abs_diff(*b)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "absolute-difference"
     }
 

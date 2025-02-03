@@ -12,7 +12,7 @@ use super::GraphEvaluator;
 pub struct VertexDegree;
 
 impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for VertexDegree {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "vd"
     }
 

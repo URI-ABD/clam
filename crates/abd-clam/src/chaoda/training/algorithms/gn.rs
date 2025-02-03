@@ -30,7 +30,7 @@ impl GraphNeighborhood {
 }
 
 impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for GraphNeighborhood {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "gn"
     }
 

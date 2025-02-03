@@ -12,7 +12,7 @@ impl<I: AsRef<[T]>, T: Float> Metric<I, T> for Euclidean {
         distances::vectors::euclidean(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 

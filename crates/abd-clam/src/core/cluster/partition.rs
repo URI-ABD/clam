@@ -302,27 +302,6 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
             );
         };
     }
-
-    /// Partitions the leaf `Cluster`s the tree even further using a different
-    /// criteria.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `I`: The items in the dataset.
-    /// - `D`: The dataset.
-    /// - `M`: The metric.
-    /// - `C`: The criteria function for partitioning.
-    fn partition_further<I, D: Dataset<I>, M: Metric<I, T>, C: Fn(&Self) -> bool>(
-        &mut self,
-        data: &D,
-        metric: &M,
-        criteria: &C,
-        seed: Option<u64>,
-    ) {
-        self.leaves_mut()
-            .into_iter()
-            .for_each(|child| child.partition(data, metric, criteria, seed));
-    }
 }
 
 /// `Cluster`s that use and provide parallelized methods.
@@ -518,23 +497,5 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
                 self.cardinality()
             );
         };
-    }
-
-    /// Parallelized version of [`Partition::partition_further`](crate::core::cluster::Partition::partition_further).
-    fn par_partition_further<
-        I: Send + Sync,
-        D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        C: (Fn(&Self) -> bool) + Send + Sync,
-    >(
-        &mut self,
-        data: &D,
-        metric: &M,
-        criteria: &C,
-        seed: Option<u64>,
-    ) {
-        self.leaves_mut()
-            .into_par_iter()
-            .for_each(|child| child.par_partition(data, metric, criteria, seed));
     }
 }

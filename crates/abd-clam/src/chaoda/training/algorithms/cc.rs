@@ -12,7 +12,7 @@ use super::GraphEvaluator;
 pub struct ClusterCardinality;
 
 impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for ClusterCardinality {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cc"
     }
 

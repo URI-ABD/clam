@@ -1,35 +1,11 @@
-#![deny(clippy::correctness)]
-#![warn(
-    missing_docs,
-    clippy::all,
-    clippy::suspicious,
-    clippy::style,
-    clippy::complexity,
-    clippy::perf,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::missing_docs_in_private_items,
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    clippy::cast_lossless
-)]
-//! Benchmarks for the CAKES paper.
-
 use std::path::PathBuf;
 
 use abd_clam::{dataset::DatasetIO, Dataset, FlatVec};
 use bench_utils::Complex;
 use clap::Parser;
-
-mod data_gen;
-mod metric;
-mod search;
-mod trees;
-mod workflow;
-
 use distances::Number;
-use metric::{CountingMetric, ParCountingMetric};
+
+use bench_cakes::metric::{CountingMetric, ParCountingMetric};
 
 /// Reproducible results for the CAKES paper.
 #[derive(Parser, Debug)]
@@ -82,11 +58,11 @@ struct Args {
 
     /// Whether to run benchmarks with balanced trees.
     #[arg(short('b'), long)]
-    balanced_trees: bool,
+    balanced: bool,
 
     /// Whether to run benchmarks with permuted data.
     #[arg(short('p'), long)]
-    permuted_data: bool,
+    permuted: bool,
 
     /// Whether to run ranged search benchmarks.
     #[arg(short('r'), long)]
@@ -156,8 +132,8 @@ fn main() -> Result<(), String> {
     if args.dataset.is_tabular() {
         let metric = {
             let mut metric: Box<dyn ParCountingMetric<_, _>> = match args.dataset.metric() {
-                "cosine" => Box::new(metric::Cosine::new()),
-                "euclidean" => Box::new(metric::Euclidean::new()),
+                "cosine" => Box::new(bench_cakes::metric::Cosine::default()),
+                "euclidean" => Box::new(bench_cakes::metric::Euclidean::default()),
                 _ => return Err(format!("Unknown metric: {}", args.dataset.metric())),
             };
             if !args.count_distance_calls {
@@ -168,9 +144,16 @@ fn main() -> Result<(), String> {
 
         let gt_metric = if args.linear_search { Some(&metric) } else { None };
         let queries = if matches!(args.dataset, bench_utils::RawData::Random) {
-            data_gen::read_or_gen_random(gt_metric, max_power, seed, &out_dir)?
+            bench_cakes::data::tabular::read_or_gen_random(gt_metric, max_power, seed, &out_dir)?
         } else {
-            data_gen::read_tabular_and_augment(&args.dataset, gt_metric, max_power, args.seed, &inp_dir, &out_dir)?
+            bench_cakes::data::tabular::read_and_augment(
+                &args.dataset,
+                gt_metric,
+                max_power,
+                args.seed,
+                &inp_dir,
+                &out_dir,
+            )?
         };
         if args.generate_only {
             return Ok(());
@@ -181,7 +164,7 @@ fn main() -> Result<(), String> {
             ftlog::info!("Reading {}x augmented data...", 1 << power);
             let run_linear = power < 4;
 
-            workflow::run_tabular(
+            bench_cakes::workflow::run_tabular(
                 &out_dir,
                 &data_name,
                 &metric,
@@ -192,8 +175,8 @@ fn main() -> Result<(), String> {
                 seed,
                 max_time,
                 run_linear,
-                args.balanced_trees,
-                args.permuted_data,
+                args.balanced,
+                args.permuted,
                 args.ranged_search,
                 args.rebuild_trees,
             )?;
@@ -201,8 +184,8 @@ fn main() -> Result<(), String> {
     } else if args.dataset.is_sequence() {
         let metric = {
             let mut metric: Box<dyn ParCountingMetric<String, u32>> = match args.dataset.metric() {
-                "levenshtein" => Box::new(metric::Levenshtein::new()),
-                "hamming" => Box::new(metric::Hamming::new()),
+                "levenshtein" => Box::new(bench_cakes::metric::Levenshtein::default()),
+                "hamming" => Box::new(bench_cakes::metric::Hamming::default()),
                 _ => return Err(format!("Unknown metric: {}", args.dataset.metric())),
             };
             if !args.count_distance_calls {
@@ -212,7 +195,7 @@ fn main() -> Result<(), String> {
         };
 
         let (queries, subsampled_paths) =
-            data_gen::read_fasta_and_subsample(&inp_dir, &out_dir, false, args.num_queries, max_power, seed)?;
+            bench_cakes::data::fasta::read_and_subsample(&inp_dir, &out_dir, false, args.num_queries, max_power, seed)?;
         let queries = queries.into_iter().map(|(_, q)| q).collect::<Vec<_>>();
         if args.generate_only {
             return Ok(());
@@ -235,7 +218,7 @@ fn main() -> Result<(), String> {
             let run_linear = i < 4;
 
             ftlog::info!("Running workflow for {}...", data.name());
-            workflow::run_fasta(
+            bench_cakes::workflow::run_fasta(
                 &out_dir,
                 &data,
                 &metric,
@@ -245,24 +228,26 @@ fn main() -> Result<(), String> {
                 seed,
                 max_time,
                 run_linear,
-                args.balanced_trees,
-                args.permuted_data,
+                args.balanced,
+                args.permuted,
                 args.ranged_search,
                 args.rebuild_trees,
             )?;
         }
     } else if matches!(args.dataset, bench_utils::RawData::RadioML) {
         let metric = {
-            let mut metric = metric::DynamicTimeWarping::new();
+            let mut metric = bench_cakes::metric::DynamicTimeWarping::default();
             if !args.count_distance_calls {
-                <metric::DynamicTimeWarping as CountingMetric<Vec<Complex<f64>>, f64>>::disable_counting(&mut metric);
+                <bench_cakes::metric::DynamicTimeWarping as CountingMetric<Vec<Complex<f64>>, f64>>::disable_counting(
+                    &mut metric,
+                );
             }
             metric
         };
 
         let snr = Some(10);
         let (queries, subsampled_paths) =
-            data_gen::read_radio_ml_and_subsample(&inp_dir, &out_dir, args.num_queries, max_power, seed, snr)?;
+            bench_cakes::data::radio_ml::read_and_subsample(&inp_dir, &out_dir, args.num_queries, max_power, seed, snr)?;
         if args.generate_only {
             return Ok(());
         }
@@ -284,7 +269,7 @@ fn main() -> Result<(), String> {
             let run_linear = i < 3;
 
             ftlog::info!("Running workflow for {}...", data.name());
-            workflow::run_radio_ml(
+            bench_cakes::workflow::run_radio_ml(
                 &out_dir,
                 &data,
                 &metric,
@@ -294,12 +279,45 @@ fn main() -> Result<(), String> {
                 seed,
                 max_time,
                 run_linear,
-                args.balanced_trees,
-                args.permuted_data,
+                args.balanced,
+                args.permuted,
                 args.ranged_search,
                 args.rebuild_trees,
             )?;
         }
+    } else if args.dataset.is_set() {
+        let metric = {
+            let mut metric: Box<dyn ParCountingMetric<_, _>> = match args.dataset.metric() {
+                "jaccard" => Box::new(bench_cakes::metric::Jaccard::default()),
+                _ => return Err(format!("Unknown metric: {}", args.dataset.metric())),
+            };
+            if !args.count_distance_calls {
+                metric.disable_counting();
+            }
+            metric
+        };
+
+        let data_name = args.dataset.name();
+        let (data, queries) = bench_cakes::data::sets::read(&args.inp_dir, data_name, args.num_queries, args.seed)?;
+
+        let all_paths = bench_cakes::workflow::trees::AllPaths::new(&out_dir, data_name);
+        if args.rebuild_trees || !all_paths.all_exist(args.balanced, args.permuted, false) {
+            bench_cakes::workflow::trees::build_all(&out_dir, &data, &metric, seed, args.permuted, args.balanced, None)?;
+        }
+
+        bench_cakes::workflow::run::<_, _, _, usize>(
+            &all_paths,
+            &metric,
+            &queries,
+            None,
+            &radial_fractions,
+            &ks,
+            max_time,
+            args.linear_search,
+            args.balanced,
+            args.permuted,
+            args.ranged_search,
+        )?;
     } else {
         let msg = format!("Unsupported dataset: {}", args.dataset.name());
         ftlog::error!("{msg}");
