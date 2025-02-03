@@ -36,7 +36,7 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, Me, Enc: Encoder<I>, Dec: Dec
         cluster
             .leaves()
             .into_iter()
-            .map(SquishyBall::offset)
+            .map(SquishyBall::arg_center)
             .map(|o| {
                 leaf_bytes
                     .iter()
@@ -44,12 +44,7 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, Me, Enc: Encoder<I>, Dec: Dec
                     .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {o}, {:?}", self.leaf_bytes()))
             })
             .map(|pos| &leaf_bytes[pos])
-            .flat_map(|(o, bytes)| {
-                self.decode_leaf(bytes, self.decoder())
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, p)| (i + *o, p))
-            })
+            .flat_map(|(_, bytes)| self.decode_leaf(bytes, self.decoder()))
             .map(|(i, p)| (i, metric.distance(query, &p)))
     }
 }
@@ -79,7 +74,7 @@ impl<
         cluster
             .leaves()
             .into_par_iter()
-            .map(SquishyBall::offset)
+            .map(SquishyBall::arg_center)
             .map(|o| {
                 leaf_bytes
                     .iter()
@@ -87,12 +82,7 @@ impl<
                     .unwrap_or_else(|| unreachable!("Offset not found in leaf offsets: {o}, {:?}", self.leaf_bytes()))
             })
             .map(|pos| &leaf_bytes[pos])
-            .flat_map(|(o, bytes)| {
-                self.decode_leaf(bytes, self.decoder())
-                    .into_par_iter()
-                    .enumerate()
-                    .map(|(i, p)| (i + *o, p))
-            })
+            .flat_map(|(_, bytes)| self.decode_leaf(bytes, self.decoder()))
             .map(|(i, p)| (i, metric.par_distance(query, &p)))
     }
 }

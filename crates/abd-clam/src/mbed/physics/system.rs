@@ -4,25 +4,20 @@ use std::collections::HashMap;
 
 use distances::Number;
 use rand::prelude::*;
-use rayon::prelude::*;
 
-use crate::{
-    cakes::PermutedBall,
-    chaoda::{Graph, Vertex},
-    Cluster, FlatVec,
-};
+use crate::{chaoda::Graph, core::adapters::Adapted, Cluster, FlatVec};
 
 use super::{Mass, Spring};
 
 /// A `HashMap` of `Mass`es from their hash keys.
-pub type Masses<const DIM: usize> = HashMap<(usize, usize), Mass<DIM>>;
+pub type Masses<'a, const DIM: usize, T, S> = HashMap<(usize, usize), Mass<'a, DIM, T, S>>;
 
 /// A mass-spring system for dimension reduction.
-pub struct System<'a, const DIM: usize> {
+pub struct System<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     /// The masses in the system.
-    masses: Masses<DIM>,
+    masses: Masses<'a, DIM, T, S>,
     /// The springs in the system.
-    springs: Vec<Spring<'a, DIM>>,
+    springs: Vec<Spring<'a, DIM, T, S>>,
     /// The damping factor of the system.
     beta: f32,
     /// The energy values of the system as it evolved over time.
@@ -30,15 +25,15 @@ pub struct System<'a, const DIM: usize> {
 }
 
 /// Get the hash key of a `Vertex` for use in the `System`.
-fn c_hash_key<T, C>(c: &Vertex<T, PermutedBall<T, C>>) -> (usize, usize)
+fn c_hash_key<T, C>(c: &C) -> (usize, usize)
 where
     T: Number,
     C: Cluster<T>,
 {
-    (c.source.offset(), c.cardinality())
+    (c.arg_center(), c.cardinality())
 }
 
-impl<'a, const DIM: usize> System<'a, DIM> {
+impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// Creates a new `System` of `Mass`es from a `Graph`.
     ///
     /// The user will still need to set the `Springs` of the `System`, using the
@@ -56,14 +51,11 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     /// - `D`: The dataset.
     /// - `C`: The type of the `Cluster`s in the `Graph`.
     #[must_use]
-    pub fn from_graph<T, C>(g: &Graph<T, PermutedBall<T, C>>, beta: f32) -> Self
-    where
-        T: Number,
-        C: Cluster<T>,
-    {
+    pub fn from_graph(g: &'a Graph<T, S>, beta: f32) -> Self {
         let masses = g
             .iter_clusters()
-            .map(Mass::<DIM>::from_vertex)
+            .map(Adapted::source)
+            .map(Mass::new)
             .map(|m| (m.hash_key(), m))
             .collect();
         Self {
@@ -75,11 +67,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     }
 
     /// Resets the `System`'s `Springs` to match the `Graph`.
-    pub fn reset_springs<T, C>(&'a mut self, g: &Graph<T, PermutedBall<T, C>>, k: f32)
-    where
-        T: Number,
-        C: Cluster<T>,
-    {
+    pub fn reset_springs(&'a mut self, g: &'a Graph<T, S>, k: f32) {
         self.springs = g
             .iter_edges()
             .map(|(a, b, l0)| {
@@ -116,13 +104,13 @@ impl<'a, const DIM: usize> System<'a, DIM> {
 
     /// Returns the masses in the system.
     #[must_use]
-    pub const fn masses(&self) -> &Masses<DIM> {
+    pub const fn masses(&self) -> &Masses<DIM, T, S> {
         &self.masses
     }
 
     /// Returns the springs in the system.
     #[must_use]
-    pub fn springs(&self) -> &[Spring<'a, DIM>] {
+    pub fn springs(&self) -> &[Spring<'a, DIM, T, S>] {
         &self.springs
     }
 
@@ -140,7 +128,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
 
     /// Updates the lengths and forces of the springs in the system.
     pub fn update_springs(&mut self) {
-        self.springs.par_iter_mut().for_each(Spring::update_length);
+        self.springs.iter_mut().for_each(Spring::update_length);
     }
 
     /// Updates the `System` for one time step.
@@ -157,7 +145,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     pub fn update_step(&mut self, dt: f32) {
         let forces = self
             .springs
-            .par_iter()
+            .iter()
             .map(|s| {
                 let f_mag = s.f_mag();
                 let mut fv = s.a().unit_vector_to(s.b());
@@ -177,9 +165,7 @@ impl<'a, const DIM: usize> System<'a, DIM> {
             }
         }
 
-        self.masses
-            .par_iter_mut()
-            .for_each(|(_, m)| m.apply_force(dt, self.beta));
+        self.masses.iter_mut().for_each(|(_, m)| m.apply_force(dt, self.beta));
 
         self.energies.push(self.current_energies());
 
@@ -340,13 +326,13 @@ impl<'a, const DIM: usize> System<'a, DIM> {
     /// Get the total potential energy of the `System`.
     #[must_use]
     pub fn potential_energy(&self) -> f32 {
-        self.springs.par_iter().map(Spring::potential_energy).sum()
+        self.springs.iter().map(Spring::potential_energy).sum()
     }
 
     /// Get the total kinetic energy of the `System`.
     #[must_use]
     pub fn kinetic_energy(&self) -> f32 {
-        self.masses.par_iter().map(|(_, m)| m.kinetic_energy()).sum()
+        self.masses.values().map(Mass::kinetic_energy).sum()
     }
 
     /// Get the total energy of the `System`.

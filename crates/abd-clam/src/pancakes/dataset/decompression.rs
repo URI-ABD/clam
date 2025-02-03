@@ -43,7 +43,7 @@ pub trait Decompressible<I, Dec: Decoder<I>>: Dataset<I> {
     fn leaf_bytes(&self) -> &[(usize, Box<[u8]>)];
 
     /// Decodes all the items of a leaf cluster in terms of its center.
-    fn decode_leaf(&self, bytes: &[u8], decoder: &Dec) -> Vec<I> {
+    fn decode_leaf(&self, bytes: &[u8], decoder: &Dec) -> Vec<(usize, I)> {
         let mut items = Vec::new();
 
         let mut offset = 0;
@@ -52,10 +52,10 @@ pub trait Decompressible<I, Dec: Decoder<I>>: Dataset<I> {
 
         let cardinality = crate::utils::read_number::<usize>(bytes, &mut offset);
 
-        for _ in 0..cardinality {
+        for i in 0..cardinality {
             let encoding = crate::utils::read_encoding(bytes, &mut offset);
             let item = decoder.decode(&encoding, center);
-            items.push(item);
+            items.push((offset + i, item));
         }
 
         items
@@ -65,7 +65,7 @@ pub trait Decompressible<I, Dec: Decoder<I>>: Dataset<I> {
 /// Parallel version of [`Decompressible`](crate::pancakes::dataset::decompression::Decompressible).
 pub trait ParDecompressible<I: Send + Sync, Dec: ParDecoder<I>>: Decompressible<I, Dec> + ParDataset<I> {
     /// Parallel version of [`Decompressible::decode_leaf`](crate::pancakes::dataset::decompression::Decompressible::decode_leaf).
-    fn par_decode_leaf(&self, bytes: &[u8], decoder: &Dec) -> Vec<I> {
+    fn par_decode_leaf(&self, bytes: &[u8], decoder: &Dec) -> Vec<(usize, I)> {
         self.decode_leaf(bytes, decoder)
     }
 }

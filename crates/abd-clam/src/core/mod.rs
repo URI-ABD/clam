@@ -1,5 +1,6 @@
 //! The core traits and structs for CLAM.
 
+pub mod adapters;
 pub mod cluster;
 pub mod dataset;
 pub mod metric;

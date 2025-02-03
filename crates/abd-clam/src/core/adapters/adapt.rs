@@ -1,87 +1,11 @@
-//! Traits to adapt a `Ball` into other `Cluster` types.
+//! A trait for adapting one `Cluster` type into another `Cluster` type.
 
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{dataset::ParDataset, metric::ParMetric, utils, Dataset, Metric};
+use crate::{cluster::ParCluster, dataset::ParDataset, metric::ParMetric, utils, Cluster, Dataset, Metric};
 
-use super::{Ball, Cluster, ParCluster};
-
-/// Used for adapting a `Ball` into another `Cluster`.
-///
-/// # Type Parameters:
-///
-/// - I: The items.
-/// - T: The distance values.
-/// - D: The `Dataset` that the tree was originally built on.
-/// - S: The `Cluster` that the tree was originally built on.
-///
-/// # Examples
-///
-/// See:
-///
-/// - [`Offset`](crate::cakes::Offset)
-/// - [`SquishCosts`](crate::pancakes::SquishCosts)
-pub trait Params<I, T: Number, D: Dataset<I>, S: Cluster<T>>: Default {
-    /// Given the `S` that was adapted into a `Cluster`, returns parameters
-    /// to use for adapting the children of `S`.
-    #[must_use]
-    fn child_params<M: Metric<I, T>>(&self, children: &[S], data: &D, metric: &M) -> Vec<Self>;
-}
-
-/// Parallel version of [`Params`](crate::core::cluster::adapter::Params).
-///
-/// # Examples
-///
-/// See:
-///
-/// - [`Offset`](crate::cakes::Offset)
-/// - [`SquishCosts`](crate::pancakes::SquishCosts)
-pub trait ParParams<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>>:
-    Params<I, T, D, S> + Send + Sync
-{
-    /// Parallel version of [`Params::child_params`](crate::core::cluster::adapter::Params::child_params).
-    #[must_use]
-    fn par_child_params<M: ParMetric<I, T>>(&self, children: &[S], data: &D, metric: &M) -> Vec<Self>;
-}
-
-/// A trait for adapting a `Ball` into another `Cluster`.
-///
-/// # Examples
-///
-/// See:
-///
-/// - [`PermutedBall`](crate::cakes::PermutedBall)
-/// - [`SquishyBall`](crate::pancakes::SquishyBall)
-#[allow(clippy::module_name_repetitions)]
-pub trait BallAdapter<I, T: Number, Din: Dataset<I>, Dout: Dataset<I>, P: Params<I, T, Din, Ball<T>>>:
-    Cluster<T> + Sized
-{
-    /// Adapts this `Cluster` from a `Ball` tree.
-    fn from_ball_tree<M: Metric<I, T>>(ball: Ball<T>, data: Din, metric: &M) -> (Self, Dout);
-}
-
-/// Parallel version of the [`BallAdapter`](crate::core::cluster::adapter::BallAdapter)
-/// trait.
-///
-/// # Examples
-///
-/// See:
-///
-/// - [`PermutedBall`](crate::cakes::PermutedBall)
-/// - [`SquishyBall`](crate::pancakes::SquishyBall)
-#[allow(clippy::module_name_repetitions)]
-pub trait ParBallAdapter<
-    I: Send + Sync,
-    T: Number,
-    Din: ParDataset<I>,
-    Dout: ParDataset<I>,
-    P: ParParams<I, T, Din, Ball<T>>,
->: ParCluster<T> + BallAdapter<I, T, Din, Dout, P>
-{
-    /// Parallel version of [`BallAdapter::from_ball_tree`](crate::core::cluster::adapter::BallAdapter::from_ball_tree).
-    fn par_from_ball_tree<M: ParMetric<I, T>>(ball: Ball<T>, data: Din, metric: &M) -> (Self, Dout);
-}
+use super::{Adapted, ParParams, Params};
 
 /// A trait for adapting one `Cluster` type into another `Cluster` type.
 ///
@@ -98,34 +22,24 @@ pub trait ParBallAdapter<
 /// - Din: The `Dataset` that the tree was originally built on.
 /// - Dout: The the `Dataset` that the adapted tree will use.
 /// - S: The `Cluster` that the tree was originally built on.
+/// - M: The `Metric` that the tree was originally built with.
 /// - P: The `Params` to use for adapting the tree.
-///
-/// # Examples
-///
-/// See:
-///
-/// - [`PermutedBall`](crate::cakes::PermutedBall)
-/// - [`SquishyBall`](crate::pancakes::SquishyBall)
-pub trait Adapter<I, T: Number, Din: Dataset<I>, Dout: Dataset<I>, S: Cluster<T>, P: Params<I, T, Din, S>>:
-    Cluster<T> + Sized
+pub trait Adapter<
+    I,
+    T: Number,
+    Din: Dataset<I>,
+    Dout: Dataset<I>,
+    S: Cluster<T>,
+    M: Metric<I, T>,
+    P: Params<I, T, Din, S, M>,
+>: Adapted<T, S> + Sized
 {
     /// Creates a new `Cluster` that was adapted from a `S` and a list of
     /// children.
-    fn new_adapted<M: Metric<I, T>>(source: S, children: Vec<Box<Self>>, params: P, data: &Din, metric: &M) -> Self;
+    fn new_adapted(source: S, children: Vec<Box<Self>>, params: P, data: &Din, metric: &M) -> Self;
 
     /// Performs a task after recursively traversing the tree.
     fn post_traversal(&mut self);
-
-    /// Returns the `Cluster` that was adapted into this `Cluster`. This should
-    /// not have any children.
-    fn source(&self) -> &S;
-
-    /// Returns the `Ball` mutably that was adapted into this `Cluster`. This
-    /// should not have any children.
-    fn source_mut(&mut self) -> &mut S;
-
-    /// Provides ownership of the underlying source `Cluster`.
-    fn take_source(self) -> S;
 
     /// Returns the params used to adapt the `Cluster`
     fn params(&self) -> &P;
@@ -139,7 +53,7 @@ pub trait Adapter<I, T: Number, Din: Dataset<I>, Dout: Dataset<I>, S: Cluster<T>
     ///   that `S` is a root `Cluster` and use the default parameters.
     /// - `data`: The `Dataset` that the tree was built on.
     /// - `metric`: The `Metric` to use for distance calculations.
-    fn adapt_tree<M: Metric<I, T>>(source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
+    fn adapt_tree(source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
         let params = params.unwrap_or_default();
         let mut cluster = Self::traverse(source, params, data, metric);
         cluster.post_traversal();
@@ -148,7 +62,7 @@ pub trait Adapter<I, T: Number, Din: Dataset<I>, Dout: Dataset<I>, S: Cluster<T>
 
     /// Recursively adapts a tree of `S`s into a `Cluster` without any pre- or
     /// post- traversal operations.
-    fn traverse<M: Metric<I, T>>(mut source: S, params: P, data: &Din, metric: &M) -> Self {
+    fn traverse(mut source: S, params: P, data: &Din, metric: &M) -> Self {
         let children = source.take_children().into_iter().map(|c| *c).collect::<Vec<_>>();
 
         if children.is_empty() {
@@ -168,7 +82,7 @@ pub trait Adapter<I, T: Number, Din: Dataset<I>, Dout: Dataset<I>, S: Cluster<T>
 
     /// Adapts the tree of `S`s into this `Cluster` in a such a way that we
     /// bypass the recursion limit in Rust.
-    fn adapt_tree_iterative<M: Metric<I, T>>(mut source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
+    fn adapt_tree_iterative(mut source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
         let target_depth = source.depth() + utils::max_recursion_depth();
         let trimmings = source.trim_at_depth(target_depth);
 
@@ -218,35 +132,22 @@ pub trait Adapter<I, T: Number, Din: Dataset<I>, Dout: Dataset<I>, S: Cluster<T>
     }
 }
 
-/// Parallel version of [`Adapter`](crate::core::cluster::adapter::Adapter).
-///
-/// # Examples
-///
-/// See:
-///
-/// - [`PermutedBall`](crate::cakes::PermutedBall)
-/// - [`SquishyBall`](crate::pancakes::SquishyBall)
-#[allow(clippy::module_name_repetitions)]
+/// Parallel version of [`Adapter`](Adapter).
 pub trait ParAdapter<
     I: Send + Sync,
     T: Number,
     Din: ParDataset<I>,
     Dout: ParDataset<I>,
     S: ParCluster<T>,
-    P: ParParams<I, T, Din, S>,
->: ParCluster<T> + Adapter<I, T, Din, Dout, S, P>
+    M: ParMetric<I, T>,
+    P: ParParams<I, T, Din, S, M>,
+>: ParCluster<T> + Adapter<I, T, Din, Dout, S, M, P>
 {
-    /// Parallel version of [`Adapter::new_adapted`](crate::core::cluster::adapter::Adapter::new_adapted).
-    fn par_new_adapted<M: ParMetric<I, T>>(
-        source: S,
-        children: Vec<Box<Self>>,
-        params: P,
-        data: &Din,
-        metric: &M,
-    ) -> Self;
+    /// Parallel version of [`Adapter::new_adapted`](Adapter::new_adapted).
+    fn par_new_adapted(source: S, children: Vec<Box<Self>>, params: P, data: &Din, metric: &M) -> Self;
 
-    /// Parallel version of [`Adapter::adapt_tree`](crate::core::cluster::adapter::Adapter::adapt_tree).
-    fn par_adapt_tree<M: ParMetric<I, T>>(mut source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
+    /// Parallel version of [`Adapter::adapt_tree`](Adapter::adapt_tree).
+    fn par_adapt_tree(mut source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
         let children = source.take_children().into_iter().map(|c| *c).collect::<Vec<_>>();
         let params = params.unwrap_or_default();
 
@@ -268,7 +169,7 @@ pub trait ParAdapter<
         cluster
     }
 
-    /// Parallel version of [`Adapter::recover_source_tree`](crate::core::cluster::adapter::Adapter::recover_source_tree).
+    /// Parallel version of [`Adapter::recover_source_tree`](Adapter::recover_source_tree).
     fn par_recover_source_tree(mut self) -> S {
         let indices = self.source().indices();
         let children = self
@@ -284,8 +185,8 @@ pub trait ParAdapter<
         source
     }
 
-    /// Parallel version of [`Adapter::adapt_tree_iterative`](crate::core::cluster::adapter::Adapter::adapt_tree_iterative).
-    fn par_adapt_tree_iterative<M: ParMetric<I, T>>(mut source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
+    /// Parallel version of [`Adapter::adapt_tree_iterative`](Adapter::adapt_tree_iterative).
+    fn par_adapt_tree_iterative(mut source: S, params: Option<P>, data: &Din, metric: &M) -> Self {
         let target_depth = source.depth() + utils::max_recursion_depth();
         let trimmings = source.trim_at_depth(target_depth);
 

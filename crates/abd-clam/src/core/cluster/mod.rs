@@ -3,7 +3,6 @@
 use distances::{number::Float, Number};
 use rayon::prelude::*;
 
-pub mod adapter;
 mod balanced_ball;
 mod ball;
 mod lfd;

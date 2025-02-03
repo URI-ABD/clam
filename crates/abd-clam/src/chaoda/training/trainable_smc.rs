@@ -4,11 +4,9 @@ use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
+    adapters::{Adapter, ParAdapter},
     chaoda::{inference::TrainedCombination, Graph, TrainedSmc, Vertex},
-    cluster::{
-        adapter::{Adapter, ParAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::ParDataset,
     metric::ParMetric,
     utils, Cluster, Dataset, Metric,

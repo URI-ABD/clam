@@ -1,11 +1,9 @@
 //! Tests for the `Ball` struct.
 
 use abd_clam::{
+    adapters::{BallAdapter, ParBallAdapter},
     cakes::PermutedBall,
-    cluster::{
-        adapter::{BallAdapter, ParBallAdapter},
-        BalancedBall, ParPartition, Partition,
-    },
+    cluster::{BalancedBall, ParPartition, Partition},
     metric::{AbsoluteDifference, Manhattan},
     Ball, Cluster, Dataset, FlatVec, Metric,
 };

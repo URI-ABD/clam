@@ -5,11 +5,9 @@ use ndarray::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
+    adapters::{Adapter, ParAdapter},
     chaoda::{roc_auc_score, Vertex},
-    cluster::{
-        adapter::{Adapter, ParAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::ParDataset,
     metric::ParMetric,
     Cluster, Dataset, Metric,

@@ -21,7 +21,7 @@ mod core;
 pub mod pancakes;
 pub mod utils;
 
-pub use core::{cluster, dataset, metric, Ball, Cluster, Dataset, FlatVec, Metric, SizedHeap, Tree, LFD};
+pub use core::{adapters, cluster, dataset, metric, Ball, Cluster, Dataset, FlatVec, Metric, SizedHeap, Tree, LFD};
 
 #[cfg(feature = "chaoda")]
 pub mod chaoda;

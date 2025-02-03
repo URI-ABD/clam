@@ -4,10 +4,8 @@ use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
-    cluster::{
-        adapter::{Adapter, ParAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    adapters::{Adapter, ParAdapter},
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::ParDataset,
     metric::ParMetric,
     Cluster, Dataset,

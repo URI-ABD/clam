@@ -6,11 +6,9 @@ use distances::Number;
 use test_case::test_case;
 
 use abd_clam::{
+    adapters::{Adapter, BallAdapter, ParAdapter, ParBallAdapter},
     cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, PermutedBall, RnnClustered},
-    cluster::{
-        adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter},
-        ParPartition, Partition,
-    },
+    cluster::{ParPartition, Partition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut, Permutable},
     metric::{AbsoluteDifference, Levenshtein, ParMetric},
     musals::{Aligner, CostMatrix},

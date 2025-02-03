@@ -3,7 +3,7 @@
 use distances::Number;
 use rand::prelude::*;
 
-use crate::{cakes::PermutedBall, chaoda::Vertex, Cluster};
+use crate::Cluster;
 
 /// A `Mass` in the mass-spring system for dimensionality reduction.
 ///
@@ -25,14 +25,13 @@ use crate::{cakes::PermutedBall, chaoda::Vertex, Cluster};
 /// # Type Parameters
 ///
 /// - `DIM`: The dimensionality of the reduced space.
+/// - `T`: The type of the distance values.
+/// - `S`: The type of the source `Cluster`.
 #[derive(Clone, Debug)]
-pub struct Mass<const DIM: usize> {
-    /// The index of the center of the `Cluster`.
-    arg_center: usize,
-    /// The offset of the `Cluster` that corresponds to the `Mass`.
-    offset: usize,
-    /// The cardinality of the `Cluster`.
-    cardinality: usize,
+// pub struct Mass<const DIM: usize> {
+pub struct Mass<'a, const DIM: usize, T: Number, S: Cluster<T>> {
+    /// The source cluster of the `Mass`.
+    source: &'a S,
     /// The position of the `Mass` in the reduced space.
     position: [f32; DIM],
     /// The velocity of the `Mass` in the reduced space.
@@ -41,74 +40,57 @@ pub struct Mass<const DIM: usize> {
     force: [f32; DIM],
     /// The mass of the `Mass`.
     m: f32,
+    /// Phantom data to satisfy the type checker.
+    phantom: core::marker::PhantomData<T>,
 }
 
-impl<const DIM: usize> core::hash::Hash for Mass<DIM> {
+impl<const DIM: usize, T: Number, S: Cluster<T>> core::hash::Hash for Mass<'_, DIM, T, S> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.hash_key().hash(state);
     }
 }
 
-impl<const DIM: usize> PartialEq for Mass<DIM> {
+impl<const DIM: usize, T: Number, S: Cluster<T>> PartialEq for Mass<'_, DIM, T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.hash_key() == other.hash_key()
     }
 }
 
-impl<const DIM: usize> Eq for Mass<DIM> {}
+impl<const DIM: usize, T: Number, S: Cluster<T>> Eq for Mass<'_, DIM, T, S> {}
 
-impl<const DIM: usize> Mass<DIM> {
+impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     /// Creates a new `Mass`.
     #[must_use]
-    pub fn new(arg_center: usize, offset: usize, cardinality: usize) -> Self {
+    pub fn new(source: &'a S) -> Self {
+        let m = source.cardinality().as_f32();
         Self {
-            offset,
-            arg_center,
-            cardinality,
+            source,
             position: [0.0; DIM],
             velocity: [0.0; DIM],
             force: [0.0; DIM],
-            m: cardinality.as_f32(),
+            m,
+            phantom: core::marker::PhantomData,
         }
-    }
-
-    /// Constructs a `Mass` to represent a `Cluster`.
-    ///
-    /// This assigns the `position` and `velocity` of the `Mass` to be the zero
-    /// vector, and the `mass` to be the cardinality of the `Cluster`.
-    #[must_use]
-    pub fn from_vertex<T, C>(c: &Vertex<T, PermutedBall<T, C>>) -> Self
-    where
-        T: Number,
-        C: Cluster<T>,
-    {
-        Self::new(c.arg_center(), c.source.offset(), c.cardinality())
     }
 
     /// Returns a hash-key for the `Mass`.
     ///
     /// This is a 2-tuple of the `offset` and `cardinality` of the `Mass`.
     #[must_use]
-    pub const fn hash_key(&self) -> (usize, usize) {
-        (self.offset, self.cardinality)
+    pub fn hash_key(&self) -> (usize, usize) {
+        (self.arg_center(), self.cardinality())
     }
 
     /// Returns the index of the center of the `Cluster`.
     #[must_use]
-    pub const fn arg_center(&self) -> usize {
-        self.arg_center
-    }
-
-    /// Returns the offset of the `Cluster`.
-    #[must_use]
-    pub const fn offset(&self) -> usize {
-        self.offset
+    pub fn arg_center(&self) -> usize {
+        self.source.arg_center()
     }
 
     /// Returns the cardinality of the `Cluster`.
     #[must_use]
-    pub const fn cardinality(&self) -> usize {
-        self.cardinality
+    pub fn cardinality(&self) -> usize {
+        self.source.cardinality()
     }
 
     /// Returns the mass of the `Mass`.

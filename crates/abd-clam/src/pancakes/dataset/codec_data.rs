@@ -76,7 +76,7 @@ impl<I: Clone, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, usize, Enc, Dec> {
         let leaf_bytes = data
             .encode_leaves(root, &encoder)
             .into_iter()
-            .map(|(leaf, bytes)| (leaf.offset(), bytes))
+            .map(|(leaf, bytes)| (leaf.arg_center(), bytes))
             .collect();
 
         let cardinality = data.cardinality();
@@ -114,7 +114,7 @@ impl<I: Clone + Send + Sync, Enc: ParEncoder<I>, Dec: ParDecoder<I>> CodecData<I
         let leaf_bytes = data
             .par_encode_leaves(root, &encoder)
             .into_iter()
-            .map(|(leaf, bytes)| (leaf.offset(), bytes))
+            .map(|(leaf, bytes)| (leaf.arg_center(), bytes))
             .collect();
 
         let cardinality = data.cardinality();
@@ -226,6 +226,7 @@ impl<I: Clone, Me: Clone, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, Me, Enc
             .leaf_bytes
             .iter()
             .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref(), &self.decoder))
+            .map(|(_, i)| i)
             .collect::<Vec<_>>();
 
         let (min_dim, max_dim) = self.dimensionality_hint;
@@ -259,6 +260,7 @@ impl<I: Clone + Send + Sync, Me: Clone + Send + Sync, Enc: ParEncoder<I>, Dec: P
             .leaf_bytes
             .par_iter()
             .flat_map(|(_, bytes)| self.decode_leaf(bytes.as_ref(), &self.decoder))
+            .map(|(_, i)| i)
             .collect::<Vec<_>>();
 
         let (min_dim, max_dim) = self.dimensionality_hint;

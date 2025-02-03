@@ -5,11 +5,8 @@ use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
-    cakes::PermutedBall,
-    cluster::{
-        adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
-        ParCluster,
-    },
+    adapters::{Adapted, Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
+    cluster::ParCluster,
     dataset::{ParDataset, Permutable},
     metric::ParMetric,
     Ball, Cluster, Dataset, Metric,
@@ -29,9 +26,9 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 )]
 #[cfg_attr(feature = "disk-io", bitcode(recursive))]
 pub struct SquishyBall<T: Number, S: Cluster<T>> {
-    /// The `Cluster` type that the `OffsetBall` is based on.
-    source: PermutedBall<T, S>,
-    /// Parameters for the `OffsetBall`.
+    /// The `Cluster` type that the `SquishyBall` is based on.
+    source: S,
+    /// Parameters for the `SquishyBall`.
     costs: SquishCosts<T>,
     /// The children of the `Cluster`.
     children: Vec<Box<Self>>,
@@ -58,11 +55,6 @@ impl<T: Number, S: Cluster<T>> SquishyBall<T, S> {
     /// Get the recursive cost of the `SquishyBall`.
     pub const fn recursive_cost(&self) -> T {
         self.costs.recursive
-    }
-
-    /// Gets the offset of the cluster's indices in its dataset.
-    pub const fn offset(&self) -> usize {
-        self.source.offset()
     }
 
     /// Trims the tree by removing empty children of clusters whose unitary cost
@@ -93,8 +85,9 @@ impl<T: Number, S: Cluster<T>> SquishyBall<T, S> {
     fn set_unitary_cost<I, D: Dataset<I>, M: Metric<I, T>>(&mut self, data: &D, metric: &M) {
         self.costs.unitary = self
             .source
-            .iter_indices()
-            .map(|i| data.one_to_one(i, self.arg_center(), metric))
+            .indices()
+            .iter()
+            .map(|&i| data.one_to_one(i, self.arg_center(), metric))
             .sum();
     }
 
@@ -250,6 +243,20 @@ impl<T: Number, S: ParCluster<T>> ParCluster<T> for SquishyBall<T, S> {
     }
 }
 
+impl<T: Number, S: Cluster<T>> Adapted<T, S> for SquishyBall<T, S> {
+    fn source(&self) -> &S {
+        &self.source
+    }
+
+    fn source_mut(&mut self) -> &mut S {
+        &mut self.source
+    }
+
+    fn take_source(self) -> S {
+        self.source
+    }
+}
+
 /// Parameters for the `OffsetBall`.
 #[derive(Debug, Default, Copy, Clone)]
 #[cfg_attr(
@@ -265,52 +272,49 @@ pub struct SquishCosts<T> {
     minimum: T,
 }
 
-impl<I, T: Number, D: Dataset<I>, S: Cluster<T>> Params<I, T, D, S> for SquishCosts<T> {
-    fn child_params<M: Metric<I, T>>(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
+impl<I, T: Number, D: Dataset<I>, S: Cluster<T>, M: Metric<I, T>> Params<I, T, D, S, M> for SquishCosts<T> {
+    fn child_params(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
         children.iter().map(|_| Self::default()).collect()
     }
 }
 
-impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>> ParParams<I, T, D, S> for SquishCosts<T> {
-    fn par_child_params<M: ParMetric<I, T>>(&self, children: &[S], data: &D, metric: &M) -> Vec<Self> {
+impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>, M: ParMetric<I, T>> ParParams<I, T, D, S, M>
+    for SquishCosts<T>
+{
+    fn par_child_params(&self, children: &[S], data: &D, metric: &M) -> Vec<Self> {
         self.child_params(children, data, metric)
     }
 }
 
-impl<I: Clone, T: Number, D: Dataset<I> + Permutable> BallAdapter<I, T, D, D, SquishCosts<T>>
+impl<I: Clone, T: Number, D: Dataset<I> + Permutable, M: Metric<I, T>> BallAdapter<I, T, D, D, M, SquishCosts<T>>
     for SquishyBall<T, Ball<T>>
 {
-    fn from_ball_tree<M: Metric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
-        let (off_ball, data) = PermutedBall::from_ball_tree(ball, data, metric);
-        let mut root = <Self as Adapter<_, _, _, D, _, _>>::adapt_tree_iterative(off_ball, None, &data, metric);
+    fn from_ball_tree(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
+        let mut root =
+            <Self as Adapter<I, T, D, D, Ball<T>, M, SquishCosts<T>>>::adapt_tree_iterative(ball, None, &data, metric);
         root.set_costs(&data, metric);
         root.trim(4);
         (root, data)
     }
 }
 
-impl<I: Clone + Send + Sync, T: Number, D: ParDataset<I> + Permutable> ParBallAdapter<I, T, D, D, SquishCosts<T>>
-    for SquishyBall<T, Ball<T>>
+impl<I: Clone + Send + Sync, T: Number, D: ParDataset<I> + Permutable, M: ParMetric<I, T>>
+    ParBallAdapter<I, T, D, D, M, SquishCosts<T>> for SquishyBall<T, Ball<T>>
 {
-    fn par_from_ball_tree<M: ParMetric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
-        let (off_ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
-        let mut root = <Self as ParAdapter<_, _, _, D, _, _>>::par_adapt_tree_iterative(off_ball, None, &data, metric);
+    fn par_from_ball_tree(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
+        let mut root = <Self as ParAdapter<I, T, D, D, Ball<T>, M, SquishCosts<T>>>::par_adapt_tree_iterative(
+            ball, None, &data, metric,
+        );
         root.par_set_costs(&data, metric);
         root.trim(4);
         (root, data)
     }
 }
 
-impl<I, T: Number, Co: Dataset<I>, Dec: Dataset<I>, S: Cluster<T>>
-    Adapter<I, T, Co, Dec, PermutedBall<T, S>, SquishCosts<T>> for SquishyBall<T, S>
+impl<I, T: Number, Co: Dataset<I>, Dec: Dataset<I>, S: Cluster<T>, M: Metric<I, T>>
+    Adapter<I, T, Co, Dec, S, M, SquishCosts<T>> for SquishyBall<T, S>
 {
-    fn new_adapted<M: Metric<I, T>>(
-        source: PermutedBall<T, S>,
-        children: Vec<Box<Self>>,
-        params: SquishCosts<T>,
-        _: &Co,
-        _: &M,
-    ) -> Self {
+    fn new_adapted(source: S, children: Vec<Box<Self>>, params: SquishCosts<T>, _: &Co, _: &M) -> Self {
         Self {
             source,
             costs: params,
@@ -320,33 +324,15 @@ impl<I, T: Number, Co: Dataset<I>, Dec: Dataset<I>, S: Cluster<T>>
 
     fn post_traversal(&mut self) {}
 
-    fn source(&self) -> &PermutedBall<T, S> {
-        &self.source
-    }
-
-    fn source_mut(&mut self) -> &mut PermutedBall<T, S> {
-        &mut self.source
-    }
-
-    fn take_source(self) -> PermutedBall<T, S> {
-        self.source
-    }
-
     fn params(&self) -> &SquishCosts<T> {
         &self.costs
     }
 }
 
-impl<I: Send + Sync, T: Number, Co: ParDataset<I>, Dec: ParDataset<I>, S: ParCluster<T>>
-    ParAdapter<I, T, Co, Dec, PermutedBall<T, S>, SquishCosts<T>> for SquishyBall<T, S>
+impl<I: Send + Sync, T: Number, Co: ParDataset<I>, Dec: ParDataset<I>, S: ParCluster<T>, M: ParMetric<I, T>>
+    ParAdapter<I, T, Co, Dec, S, M, SquishCosts<T>> for SquishyBall<T, S>
 {
-    fn par_new_adapted<M: ParMetric<I, T>>(
-        source: PermutedBall<T, S>,
-        children: Vec<Box<Self>>,
-        params: SquishCosts<T>,
-        _: &Co,
-        _: &M,
-    ) -> Self {
+    fn par_new_adapted(source: S, children: Vec<Box<Self>>, params: SquishCosts<T>, _: &Co, _: &M) -> Self {
         Self {
             source,
             costs: params,

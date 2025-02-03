@@ -3,8 +3,9 @@
 use std::path::Path;
 
 use abd_clam::{
+    adapters::ParBallAdapter,
     cakes::PermutedBall,
-    cluster::{adapter::ParBallAdapter, BalancedBall, ClusterIO, Csv, ParPartition},
+    cluster::{BalancedBall, ClusterIO, Csv, ParPartition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO},
     metric::ParMetric,
     musals::{Aligner, Columns, MSA},

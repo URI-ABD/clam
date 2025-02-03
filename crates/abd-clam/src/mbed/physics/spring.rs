@@ -2,6 +2,8 @@
 
 use distances::Number;
 
+use crate::Cluster;
+
 use super::Mass;
 
 /// A spring  connecting two masses in the mass-spring system.
@@ -15,11 +17,11 @@ use super::Mass;
 /// # Type Parameters
 ///
 /// - `DIM`: The dimensionality of the reduced space.
-pub struct Spring<'a, const DIM: usize> {
+pub struct Spring<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     /// The first `Mass` connected by the `Spring`.
-    a: &'a Mass<DIM>,
+    a: &'a Mass<'a, DIM, T, S>,
     /// The second `Mass` connected by the `Spring`.
-    b: &'a Mass<DIM>,
+    b: &'a Mass<'a, DIM, T, S>,
     /// The spring constant of the `Spring`.
     k: f32,
     /// The length of the `Spring` in the original embedding space cast to `f32`.
@@ -30,23 +32,23 @@ pub struct Spring<'a, const DIM: usize> {
     f_mag: f32,
 }
 
-impl<const DIM: usize> core::hash::Hash for Spring<'_, DIM> {
+impl<const DIM: usize, T: Number, S: Cluster<T>> core::hash::Hash for Spring<'_, DIM, T, S> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.hash_key().hash(state);
     }
 }
 
-impl<const DIM: usize> PartialEq for Spring<'_, DIM> {
+impl<const DIM: usize, T: Number, S: Cluster<T>> PartialEq for Spring<'_, DIM, T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.hash_key() == other.hash_key()
     }
 }
 
-impl<const DIM: usize> Eq for Spring<'_, DIM> {}
+impl<const DIM: usize, T: Number, S: Cluster<T>> Eq for Spring<'_, DIM, T, S> {}
 
-impl<'a, const DIM: usize> Spring<'a, DIM> {
+impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Spring<'a, DIM, T, S> {
     /// Create a new `Spring`.
-    pub fn new<T: Number>(a: &'a Mass<DIM>, b: &'a Mass<DIM>, k: f32, l0: T) -> Self {
+    pub fn new(a: &'a Mass<DIM, T, S>, b: &'a Mass<DIM, T, S>, k: f32, l0: T) -> Self {
         let mut s = Self {
             a,
             b,
@@ -63,17 +65,17 @@ impl<'a, const DIM: usize> Spring<'a, DIM> {
     ///
     /// The hash key is a tuple of the hash keys of the two connected `Mass`es.
     /// This is used to uniquely identify the `Spring` in the `System`.
-    pub const fn hash_key(&self) -> ((usize, usize), (usize, usize)) {
+    pub fn hash_key(&self) -> ((usize, usize), (usize, usize)) {
         (self.a.hash_key(), self.b.hash_key())
     }
 
     /// Get the first `Mass` connected by the `Spring`.
-    pub const fn a(&self) -> &'a Mass<DIM> {
+    pub const fn a(&self) -> &'a Mass<DIM, T, S> {
         self.a
     }
 
     /// Get the second `Mass` connected by the `Spring`.
-    pub const fn b(&self) -> &'a Mass<DIM> {
+    pub const fn b(&self) -> &'a Mass<DIM, T, S> {
         self.b
     }
 

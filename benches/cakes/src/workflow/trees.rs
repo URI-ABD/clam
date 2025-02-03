@@ -1,8 +1,9 @@
 //! Building, saving and loading trees for benchmarking.
 
 use abd_clam::{
+    adapters::ParBallAdapter,
     cakes::PermutedBall,
-    cluster::{adapter::ParBallAdapter, BalancedBall, Csv, ParClusterIO, ParPartition},
+    cluster::{BalancedBall, Csv, ParClusterIO, ParPartition},
     dataset::DatasetIO,
     metric::ParMetric,
     Ball, Dataset, FlatVec,
