@@ -28,7 +28,6 @@ use crate::{Cluster, Dataset, Metric};
 /// - `T`: The type of the distance values.
 /// - `S`: The type of the source `Cluster`.
 #[derive(Clone, Debug)]
-// pub struct Mass<const DIM: usize> {
 pub struct Mass<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     /// The source cluster of the `Mass`.
     source: &'a S,
@@ -429,5 +428,107 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
         b.position[y] += dyb;
 
         Some((a, b, sa, sb, ab))
+    }
+}
+
+/// A private struct for serializing and deserializing a `Mass`.
+#[cfg(feature = "disk-io")]
+#[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
+pub struct MassIO {
+    /// The unique id of the source `Cluster`.
+    pub key: (usize, usize),
+    /// The position of the `Mass`.
+    position: Vec<f32>,
+    /// The velocity of the `Mass`.
+    velocity: Vec<f32>,
+    /// The force being applied to the `Mass`.
+    force: Vec<f32>,
+    /// The mass of the `Mass`.
+    m: f32,
+    /// The stress applied to the `Mass`.
+    stress: f32,
+}
+
+#[cfg(feature = "disk-io")]
+impl<const DIM: usize, T: Number, S: Cluster<T>> From<&Mass<'_, DIM, T, S>> for MassIO {
+    fn from(mass: &Mass<DIM, T, S>) -> Self {
+        Self {
+            key: mass.hash_key(),
+            position: mass.position.to_vec(),
+            velocity: mass.velocity.to_vec(),
+            force: mass.force.to_vec(),
+            m: mass.m,
+            stress: mass.stress,
+        }
+    }
+}
+
+#[cfg(feature = "disk-io")]
+impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
+    /// Creates a new `Mass` from a `MassIO`.
+    ///
+    /// # Errors
+    ///
+    /// - If the unique ID of the source `Cluster` does not match the key of the
+    ///   `MassIO`.
+    /// - If the position, velocity, or force of the `MassIO` does not have the
+    ///   expected dimensionality.
+    pub(crate) fn from_io(mass_io: &MassIO, source: &'a S) -> Result<Self, String> {
+        if source.unique_id() != mass_io.key {
+            return Err(format!(
+                "The source Cluster has a unique ID of {:?} but the MassIO has a key of {:?}.",
+                source.unique_id(),
+                mass_io.key
+            ));
+        }
+
+        if mass_io.position.len() != DIM {
+            return Err(format!(
+                "The position of the Mass has dimensionality {} but expected {DIM}.",
+                mass_io.position.len()
+            ));
+        }
+
+        let position = {
+            let mut p = [0.0; DIM];
+            p.copy_from_slice(&mass_io.position);
+            p
+        };
+
+        if mass_io.velocity.len() != DIM {
+            return Err(format!(
+                "The velocity of the Mass has dimensionality {} but expected {DIM}.",
+                mass_io.velocity.len()
+            ));
+        }
+
+        let velocity = {
+            let mut v = [0.0; DIM];
+            v.copy_from_slice(&mass_io.velocity);
+            v
+        };
+
+        if mass_io.force.len() != DIM {
+            return Err(format!(
+                "The force of the Mass has dimensionality {} but expected {DIM}.",
+                mass_io.force.len()
+            ));
+        }
+
+        let force = {
+            let mut f = [0.0; DIM];
+            f.copy_from_slice(&mass_io.force);
+            f
+        };
+
+        Ok(Self {
+            source,
+            position,
+            velocity,
+            force,
+            m: mass_io.m,
+            stress: mass_io.stress,
+            phantom: core::marker::PhantomData,
+        })
     }
 }

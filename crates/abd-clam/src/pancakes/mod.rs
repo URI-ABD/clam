@@ -2,7 +2,6 @@
 
 mod cluster;
 mod dataset;
-// mod sequence;
 
 pub use cluster::{SquishCosts, SquishyBall};
 pub use dataset::{

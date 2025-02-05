@@ -13,6 +13,11 @@ use distances::Number;
 /// # Type Parameters
 ///
 /// - `DIM`: The dimensionality of the reduced space.
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct Spring {
     /// The hash of the first `Mass` connected by the `Spring`.
     a_key: (usize, usize),

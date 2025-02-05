@@ -86,7 +86,7 @@ impl<T> FlatVec<Vec<T>, usize> {
     /// use abd_clam::{Dataset, FlatVec};
     ///
     /// let items = vec![vec![1, 2], vec![3, 4]];
-    /// let data = FlatVec::new_array(items).unwrap();
+    /// let data = FlatVec::from_nested_vec(items).unwrap();
     /// assert_eq!(data.cardinality(), 2);
     /// ```
     pub fn from_nested_vec(items: Vec<Vec<T>>) -> Result<Self, String> {
@@ -133,8 +133,8 @@ impl<T, const DIM: usize> FlatVec<[T; DIM], usize> {
     /// ```rust
     /// use abd_clam::{Dataset, FlatVec};
     ///
-    /// let items = vec![vec![1, 2], vec![3, 4]];
-    /// let data = FlatVec::new_array(items).unwrap();
+    /// let items = vec![[1, 2], [3, 4]];
+    /// let data = FlatVec::from_arrays(items).unwrap();
     /// assert_eq!(data.cardinality(), 2);
     /// ```
     pub fn from_arrays(items: Vec<[T; DIM]>) -> Result<Self, String> {

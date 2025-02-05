@@ -889,3 +889,116 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         Ok(self)
     }
 }
+
+#[cfg(feature = "disk-io")]
+impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
+    /// Encodes the `System` to a binary representation using `bitcode`.
+    ///
+    /// # Errors
+    ///
+    /// - If there is an error encoding any `Mass` or `Spring`.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::new();
+
+        // Encode the masses.
+        let masses = self.masses.values().map(super::mass::MassIO::from).collect::<Vec<_>>();
+        let masses_bytes = bitcode::encode(&masses).map_err(|e| format!("Error encoding Masses: {e}"))?;
+        bytes.extend_from_slice(&masses_bytes.len().to_le_bytes());
+        bytes.extend_from_slice(&masses_bytes);
+
+        // Encode the springs.
+        let springs_bytes = bitcode::encode(&self.springs).map_err(|e| format!("Error encoding Springs: {e}"))?;
+        bytes.extend_from_slice(&springs_bytes.len().to_le_bytes());
+        bytes.extend_from_slice(&springs_bytes);
+
+        // Encode the beta value.
+        bytes.extend_from_slice(&self.beta.to_le_bytes());
+
+        // Encode the energies.
+        let energies = self.energies.iter().map(|v| v.to_vec()).collect::<Vec<_>>();
+        let energies_bytes = bitcode::encode(&energies).map_err(|e| format!("Error encoding Energies: {e}"))?;
+        bytes.extend_from_slice(&energies_bytes.len().to_le_bytes());
+        bytes.extend_from_slice(&energies_bytes);
+
+        Ok(bytes)
+    }
+
+    /// Decodes a `System` from a binary representation using `bitcode`.
+    ///
+    /// # Errors
+    ///
+    /// - If there is an error decoding any `Mass` or `Spring`.
+    pub fn from_bytes(bytes: &[u8], root: &'a S) -> Result<Self, String>
+    where
+        T: 'a,
+    {
+        let sources = root
+            .subtree()
+            .into_iter()
+            .map(|c| (c.unique_id(), c))
+            .collect::<HashMap<_, _>>();
+
+        let mut offset = 0;
+
+        // Decode the masses.
+        let masses_bytes = crate::utils::read_encoding(bytes, &mut offset);
+        let masses = bitcode::decode::<Vec<super::mass::MassIO>>(&masses_bytes)
+            .map_err(|e| format!("Error decoding Masses: {e}"))?
+            .iter()
+            .map(|m| Mass::from_io(m, sources[&m.key]).map(|m| (m.hash_key(), m)))
+            .collect::<Result<_, _>>()?;
+
+        // Decode the springs.
+        let springs_bytes = crate::utils::read_encoding(bytes, &mut offset);
+        let springs = bitcode::decode(&springs_bytes).map_err(|e| format!("Error decoding Springs: {e}"))?;
+
+        // Decode the beta value.
+        let f32_size = core::mem::size_of::<f32>();
+        let beta = <f32 as Number>::from_le_bytes(&bytes[offset..(offset + f32_size)]);
+        offset += f32_size;
+
+        // Decode the energies.
+        let energies_bytes = crate::utils::read_encoding(bytes, &mut offset);
+        let energies = bitcode::decode::<Vec<Vec<f32>>>(&energies_bytes)
+            .map_err(|e| format!("Error decoding Energies: {e}"))?
+            .into_iter()
+            .map(|v| {
+                let mut arr = [0.0; 3];
+                arr.copy_from_slice(&v);
+                arr
+            })
+            .collect();
+
+        Ok(Self {
+            masses,
+            springs,
+            beta,
+            energies,
+        })
+    }
+
+    /// Writes the `System` to a file at the given path.
+    ///
+    /// # Errors
+    ///
+    /// - See [`System::to_bytes`](Self::to_bytes).
+    /// - If there is an error writing the bytes to the file.
+    pub fn write_to<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), String> {
+        let bytes = self.to_bytes()?;
+        std::fs::write(path, &bytes).map_err(|e| format!("Error writing System to file: {e}"))
+    }
+
+    /// Reads a `System` from a file at the given path.
+    ///
+    /// # Errors
+    ///
+    /// - If there is an error reading the bytes from the file.
+    /// - See [`System::from_bytes`](Self::from_bytes).
+    pub fn read_from<P: AsRef<std::path::Path>>(path: P, root: &'a S) -> Result<Self, String>
+    where
+        T: 'a,
+    {
+        let bytes = std::fs::read(path).map_err(|e| format!("Error reading System from file: {e}"))?;
+        Self::from_bytes(&bytes, root)
+    }
+}
