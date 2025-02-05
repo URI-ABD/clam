@@ -58,6 +58,18 @@ impl<const DIM: usize, T: Number, S: Cluster<T>> PartialEq for Mass<'_, DIM, T, 
 
 impl<const DIM: usize, T: Number, S: Cluster<T>> Eq for Mass<'_, DIM, T, S> {}
 
+impl<const DIM: usize, T: Number, S: Cluster<T>> PartialOrd for Mass<'_, DIM, T, S> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const DIM: usize, T: Number, S: Cluster<T>> Ord for Mass<'_, DIM, T, S> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.source.cmp(other.source)
+    }
+}
+
 impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     /// Creates a new `Mass`.
     #[must_use]
