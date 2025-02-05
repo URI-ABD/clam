@@ -89,7 +89,7 @@ impl<T> FlatVec<Vec<T>, usize> {
     /// let data = FlatVec::new_array(items).unwrap();
     /// assert_eq!(data.cardinality(), 2);
     /// ```
-    pub fn new_array(items: Vec<Vec<T>>) -> Result<Self, String> {
+    pub fn from_nested_vec(items: Vec<Vec<T>>) -> Result<Self, String> {
         if items.is_empty() {
             Err("The items are empty.".to_string())
         } else {
@@ -111,6 +111,45 @@ impl<T> FlatVec<Vec<T>, usize> {
                     "The items do not all have the same length. Lengths range from {min_len} to {max_len}."
                 ))
             }
+        }
+    }
+}
+
+impl<T, const DIM: usize> FlatVec<[T; DIM], usize> {
+    /// Creates a new `FlatVec` from a 2D array.
+    ///
+    /// The metadata is set to the indices of the items.
+    ///
+    /// The items are assumed to all have the same length. This length is used
+    /// as the dimensionality of the dataset.
+    ///
+    /// # Errors
+    ///
+    /// * If the items are empty.
+    /// * If the items do not all have the same length.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use abd_clam::{Dataset, FlatVec};
+    ///
+    /// let items = vec![vec![1, 2], vec![3, 4]];
+    /// let data = FlatVec::new_array(items).unwrap();
+    /// assert_eq!(data.cardinality(), 2);
+    /// ```
+    pub fn from_arrays(items: Vec<[T; DIM]>) -> Result<Self, String> {
+        if items.is_empty() {
+            Err("The items are empty.".to_string())
+        } else {
+            let permutation = (0..items.len()).collect::<Vec<_>>();
+            let metadata = permutation.clone();
+            Ok(Self {
+                items,
+                dimensionality_hint: (DIM, Some(DIM)),
+                permutation,
+                metadata,
+                name: "Unknown FlatVec".to_string(),
+            })
         }
     }
 }
@@ -397,7 +436,7 @@ impl<T: ndarray_npy::ReadableElement + Copy> FlatVec<Vec<T>, usize> {
             .map_err(|e| format!("Could not read npy file: {e}, path: {:?}", path.as_ref()))?;
         let items = arr.axis_iter(ndarray::Axis(0)).map(|row| row.to_vec()).collect();
 
-        Self::new_array(items).map(|data| data.with_name(&name))
+        Self::from_nested_vec(items).map(|data| data.with_name(&name))
     }
 }
 
@@ -423,6 +462,70 @@ impl<T: ndarray_npy::WritableElement + Copy, Me> FlatVec<Vec<T>, Me> {
         }
 
         let shape = (self.items.len(), min_dim);
+        let v = self.items.iter().flat_map(|row| row.iter().copied()).collect();
+        let arr = ndarray::Array2::<T>::from_shape_vec(shape, v)
+            .map_err(|e| format!("Could not convert items to Array2: {e}"))?;
+        ndarray_npy::write_npy(path, &arr)
+            .map_err(|e| e.to_string())
+            .map_err(|e| format!("Could not write npy file: {e}, path: {:?}", path.as_ref()))?;
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "disk-io")]
+impl<T: distances::Number + ndarray_npy::ReadableElement + Copy, const DIM: usize> FlatVec<[T; DIM], usize> {
+    /// Reads a `FlatVec` from a `.npy` file.
+    ///
+    /// The name of the dataset is set to the name of the file without the
+    /// extension.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: The path to the `.npy` file.
+    ///
+    /// # Errors
+    ///
+    /// * If the path is invalid.
+    /// * If the file cannot be read.
+    pub fn read_npy<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
+        let name = path
+            .as_ref()
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let arr: ndarray::Array2<T> = ndarray_npy::read_npy(path)
+            .map_err(|e| format!("Could not read npy file: {e}, path: {:?}", path.as_ref()))?;
+        let items = arr
+            .axis_iter(ndarray::Axis(0))
+            .map(|row| {
+                let mut arr = [T::ZERO; DIM];
+                arr.copy_from_slice(&row.to_vec());
+                arr
+            })
+            .collect();
+
+        Self::from_arrays(items).map(|data| data.with_name(&name))
+    }
+}
+
+#[cfg(feature = "disk-io")]
+impl<T: distances::Number + ndarray_npy::WritableElement + Copy, Me, const DIM: usize> FlatVec<[T; DIM], Me> {
+    /// Writes the `FlatVec` to a `.npy` file in the given directory.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: The path in which to write the dataset.
+    ///
+    /// # Errors
+    ///
+    /// * If the path is invalid.
+    /// * If the file cannot be created.
+    /// * If the items cannot be converted to an `Array2`.
+    /// * If the `Array2` cannot be written.
+    pub fn write_npy<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
+        let shape = (self.items.len(), DIM);
         let v = self.items.iter().flat_map(|row| row.iter().copied()).collect();
         let arr = ndarray::Array2::<T>::from_shape_vec(shape, v)
             .map_err(|e| format!("Could not convert items to Array2: {e}"))?;
@@ -469,7 +572,7 @@ impl<T: std::str::FromStr + Copy> FlatVec<Vec<T>, usize> {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Self::new_array(items)
+        Self::from_nested_vec(items)
     }
 }
 

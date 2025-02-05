@@ -133,6 +133,12 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
     /// Returns whether the `Cluster` is a descendant of another `Cluster`.
     fn is_descendant_of(&self, other: &Self) -> bool;
 
+    /// Within a given tree, a `Cluster` must be uniquely identified by its
+    /// `arg_center` and `cardinality`.
+    fn unique_id(&self) -> (usize, usize) {
+        (self.arg_center(), self.cardinality())
+    }
+
     /// Clears the indices stored with every cluster in the tree.
     fn clear_indices(&mut self) {
         if !self.is_leaf() {

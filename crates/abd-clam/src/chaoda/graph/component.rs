@@ -157,4 +157,9 @@ impl<'a, T: Number, S: ParCluster<T>> Component<'a, T, S> {
             population,
         }
     }
+
+    /// Iterate over the edges in the `Component`.
+    pub fn par_iter_edges(&self) -> impl ParallelIterator<Item = (&Vertex<T, S>, &Vertex<T, S>, T)> + '_ {
+        self.adjacency_list.par_iter_edges()
+    }
 }

@@ -102,16 +102,22 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
         (self.arg_center(), self.cardinality())
     }
 
-    /// Returns the index of the center of the `Cluster`.
+    /// Returns the index of the center of the source `Cluster`.
     #[must_use]
     pub fn arg_center(&self) -> usize {
         self.source.arg_center()
     }
 
-    /// Returns the cardinality of the `Cluster`.
+    /// Returns the cardinality of the source `Cluster`.
     #[must_use]
     pub fn cardinality(&self) -> usize {
         self.source.cardinality()
+    }
+
+    /// Returns the indices of the source `Cluster`.
+    #[must_use]
+    pub fn indices(&self) -> Vec<usize> {
+        self.source.indices()
     }
 
     /// Returns the mass of the `Mass`.

@@ -4,8 +4,9 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use distances::Number;
 use rand::prelude::*;
+use rayon::prelude::*;
 
-use crate::{chaoda::Graph, core::adapters::Adapted, Cluster, Dataset, FlatVec, Metric, SizedHeap};
+use crate::{chaoda::Graph, cluster::ParCluster, core::adapters::Adapted, Cluster, Dataset, FlatVec, Metric, SizedHeap};
 
 use super::{Mass, Spring};
 
@@ -22,15 +23,6 @@ pub struct System<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     beta: f32,
     /// The energy values of the system as it evolved over time.
     energies: Vec<[f32; 3]>,
-}
-
-/// Get the hash key of a `Vertex` for use in the `System`.
-fn c_hash_key<T, C>(c: &C) -> (usize, usize)
-where
-    T: Number,
-    C: Cluster<T>,
-{
-    (c.arg_center(), c.cardinality())
 }
 
 impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
@@ -59,7 +51,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         let springs = g
             .iter_edges()
             .map(|(a, b, l0)| {
-                let (a_key, b_key) = (c_hash_key(a), c_hash_key(b));
+                let (a_key, b_key) = (a.unique_id(), b.unique_id());
                 let l = masses[&a_key].current_distance_to(&masses[&b_key]);
                 Spring::new(a_key, b_key, k, l0, l)
             })
@@ -216,22 +208,16 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///   represented by the `Mass`es.
     /// - The distance function is the Euclidean distance.
     #[must_use]
-    pub fn get_reduced_embedding(&self) -> FlatVec<Vec<f32>, usize> {
-        let masses = {
-            let mut masses = self.masses.iter().collect::<Vec<_>>();
-            masses.sort_by(|&(a, _), &(b, _)| a.cmp(b));
-            masses
-        };
-
-        let positions = masses
-            .iter()
-            .flat_map(|&(&(_, c), m)| (0..c).map(move |_| m.position().to_vec()).collect::<Vec<_>>())
+    pub fn get_reduced_embedding(&self) -> FlatVec<[f32; DIM], usize> {
+        let mut positions = self
+            .masses
+            .values()
+            .flat_map(|m| m.indices().iter().map(move |&i| (i, m.position())).collect::<Vec<_>>())
             .collect::<Vec<_>>();
+        positions.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-        // let distance_fn = |x: &Vec<f32>, y: &Vec<f32>| distances::simd::euclidean_f32(x, y);
-        // let metric = Metric::new(distance_fn, false);
-
-        FlatVec::new(positions).unwrap_or_else(|e| unreachable!("Error creating FlatVec: {e}"))
+        let positions = positions.into_iter().map(|(_, &p)| p).collect::<Vec<_>>();
+        FlatVec::from_arrays(positions).unwrap_or_else(|e| unreachable!("Error creating FlatVec: {e}"))
     }
 
     /// Simulate the `System` until reaching the target stability, saving the
@@ -561,5 +547,183 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         } else {
             None
         }
+    }
+}
+
+impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
+    /// Parallel version of [`System::from_graph`](Self::from_graph).
+    #[must_use]
+    pub fn par_from_graph(g: &'a Graph<T, S>, beta: f32, k: f32) -> Self {
+        let masses = g
+            .iter_clusters()
+            .map(Adapted::source)
+            .map(Mass::new)
+            .map(|m| (m.hash_key(), m))
+            .collect::<HashMap<_, _>>();
+        let springs = g
+            .par_iter_edges()
+            .map(|(a, b, l0)| {
+                let (a_key, b_key) = (a.unique_id(), b.unique_id());
+                let l = masses[&a_key].current_distance_to(&masses[&b_key]);
+                Spring::new(a_key, b_key, k, l0, l)
+            })
+            .collect();
+        Self {
+            masses,
+            springs,
+            beta,
+            energies: Vec::new(),
+        }
+    }
+
+    /// Parallel version of [`System::init_random`](Self::init_random).
+    #[must_use]
+    pub fn par_init_random(mut self, side_length: f32, seed: Option<u64>) -> Self {
+        let (min_, max_) = (-side_length / 2.0, side_length / 2.0);
+        self.masses.par_iter_mut().for_each(|(&(c, _), m)| {
+            let mut rng = seed.map_or_else(StdRng::from_entropy, |s| StdRng::seed_from_u64(s + c.as_u64()));
+            let mut position = [0.0; DIM];
+            for p in &mut position {
+                *p = rng.gen_range(min_..max_);
+            }
+            m.set_position(position);
+        });
+
+        self
+    }
+
+    /// Parallel version of [`System::update_springs`](Self::update_springs).
+    pub fn par_update_springs(&mut self) {
+        self.springs.par_iter_mut().for_each(|s| {
+            let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
+            s.update_length(l);
+        });
+    }
+
+    /// Parallel version of [`System::update_step`](Self::update_step).
+    pub fn par_update_step(&mut self, dt: f32) {
+        let forces = self
+            .springs
+            .par_iter()
+            .map(|s| {
+                let f_mag = s.f_mag();
+                let mut fv = self.masses[&s.a_key()].unit_vector_to(&self.masses[&s.b_key()]);
+                for f_i in &mut fv {
+                    *f_i *= f_mag;
+                }
+                (s.a_key(), s.b_key(), fv)
+            })
+            .collect::<Vec<_>>();
+
+        for (a_key, b_key, f) in forces {
+            if let Some(m) = self.masses.get_mut(&a_key) {
+                m.add_force(f);
+            }
+            if let Some(m) = self.masses.get_mut(&b_key) {
+                m.sub_force(f);
+            }
+        }
+
+        self.masses
+            .par_iter_mut()
+            .for_each(|(_, m)| m.apply_force(dt, self.beta));
+
+        self.energies.push(self.current_energies());
+
+        self.par_update_springs();
+    }
+
+    /// Parallel version of [`System::evolve_to_stability`](Self::evolve_to_stability).
+    pub fn par_evolve_to_stability(&mut self, dt: f32, patience: usize, target: Option<f32>, max_steps: Option<usize>) {
+        let target = target.unwrap_or(0.995);
+        let max_steps = max_steps.unwrap_or(usize::MAX);
+
+        self.energies.push(self.current_energies());
+
+        let mut i = 0;
+        let mut stability = self.stability(patience);
+        while stability < target && i < max_steps {
+            ftlog::debug!("Step {i}, Stability: {stability:.6}");
+            self.par_update_step(dt);
+            i += 1;
+            stability = self.stability(patience);
+        }
+    }
+
+    /// Parallel version of [`System::evolve`](Self::evolve).
+    pub fn par_evolve(&mut self, dt: f32, steps: usize) {
+        self.energies.push(self.current_energies());
+
+        for i in 0..steps {
+            ftlog::debug!("Step {}/{steps}", i + 1);
+            self.par_update_step(dt);
+        }
+    }
+
+    /// Parallel version of [`System::evolve_to_stability_with_saves`](Self::evolve_to_stability_with_saves).
+    ///
+    /// # Errors
+    ///
+    /// See [`System::evolve_to_stability_with_saves`](Self::evolve_to_stability_with_saves).
+    #[cfg(feature = "disk-io")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn par_evolve_to_stability_with_saves<P: AsRef<std::path::Path>>(
+        &mut self,
+        dt: f32,
+        patience: usize,
+        target: Option<f32>,
+        max_steps: Option<usize>,
+        save_every: usize,
+        dir: P,
+        name: &str,
+    ) -> Result<(), String> {
+        let target = target.unwrap_or(0.995);
+        let max_steps = max_steps.unwrap_or(usize::MAX);
+        self.energies.push(self.current_energies());
+
+        let mut i = 0;
+        let mut stability = self.stability(patience);
+        while stability < target && i < max_steps {
+            if i % save_every == 0 {
+                ftlog::debug!("{name}: Saving step {}", i + 1);
+                let path = dir.as_ref().join(format!("{}.npy", i + 1));
+                self.get_reduced_embedding().write_npy(&path)?;
+            }
+
+            ftlog::debug!("Step {i}, Stability: {stability:.6}");
+            self.par_update_step(dt);
+            i += 1;
+            stability = self.stability(patience);
+        }
+
+        Ok(())
+    }
+
+    /// Parallel version of [`System::evolve_with_saves`](Self::evolve_with_saves).
+    ///
+    /// # Errors
+    ///
+    /// See [`System::evolve_with_saves`](Self::evolve_with_saves).
+    #[cfg(feature = "disk-io")]
+    pub fn par_evolve_with_saves<P: AsRef<std::path::Path>>(
+        &mut self,
+        dt: f32,
+        steps: usize,
+        save_every: usize,
+        dir: P,
+        name: &str,
+    ) -> Result<(), String> {
+        self.energies.push(self.current_energies());
+
+        for i in 0..steps {
+            if i % save_every == 0 {
+                ftlog::debug!("{name}: Saving step {}/{steps}", i + 1);
+                let path = dir.as_ref().join(format!("{}.npy", i + 1));
+                self.get_reduced_embedding().write_npy(&path)?;
+            }
+            self.par_update_step(dt);
+        }
+
+        Ok(())
     }
 }
