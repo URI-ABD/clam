@@ -1,6 +1,6 @@
 //! A mass-spring system for dimension reduction.
 
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use distances::Number;
 use rand::prelude::*;
@@ -37,7 +37,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// Creates a new `System` of `Mass`es from a `Graph`.
     ///
     /// The user will still need to set the `Springs` of the `System`, using the
-    /// `reset_springs` method.
+    /// `add_springs_from_graph` method.
     ///
     /// # Arguments
     ///
@@ -66,21 +66,19 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         }
     }
 
-    /// Resets the `System`'s `Springs` to match the `Graph`.
-    pub fn reset_springs(&'a mut self, g: &'a Graph<T, S>, k: f32) {
-        self.springs = g
-            .iter_edges()
-            .map(|(a, b, l0)| {
-                let a = &self.masses[&c_hash_key(a)];
-                let b = &self.masses[&c_hash_key(b)];
-                Spring::new(a, b, k, l0)
-            })
-            .collect();
+    /// Adds springs to the `System` using the edges in the given `Graph`.
+    pub fn add_springs_from_graph(&'a mut self, g: &'a Graph<T, S>, k: f32) {
+        self.springs.extend(g.iter_edges().map(|(a, b, l0)| {
+            let a = &self.masses[&c_hash_key(a)];
+            let b = &self.masses[&c_hash_key(b)];
+            Spring::new(a, b, k, l0)
+        }));
     }
 
     /// Sets random positions for all masses.
     ///
-    /// The positions will be inside a cube with side length `side_length` centered at the origin.
+    /// The positions will be inside a cube with side length `side_length`
+    /// centered at the origin.
     ///
     /// # Arguments
     ///
@@ -352,8 +350,8 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Get the stability of the `System` over the last `n` time-steps.
     ///
-    /// The stability is calculated as the mean of the `1 - (std-dev / mean_val)`
-    /// of the kinetic and potential energies.
+    /// The stability is the mean of the `1 - (std-dev / mean_val)` of the
+    /// kinetic and potential energies.
     ///
     /// # Arguments
     ///
@@ -389,5 +387,63 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
             (stability_ke + stability_pe) / 2.0
         }
+    }
+
+    /// Adds a `Mass` to the `System`.
+    ///
+    /// # Errors
+    ///
+    /// - If the `Mass` already exists in the `System`.
+    pub fn add_mass(&mut self, m: Mass<'a, DIM, T, S>) -> Result<(), String> {
+        if let Entry::Vacant(e) = self.masses.entry(m.hash_key()) {
+            e.insert(m);
+            Ok(())
+        } else {
+            Err("Mass already exists in the System".to_string())
+        }
+    }
+
+    /// Removes a `Mass` and all connecting `Spring`s from the `System` and
+    /// returns the connecting `Spring`s.
+    pub fn remove_mass(&mut self, m: &Mass<'a, DIM, T, S>) -> Vec<Spring<'a, DIM, T, S>> {
+        self.masses.remove(&m.hash_key());
+        let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m));
+        self.springs = remaining_springs;
+        connecting_springs
+    }
+
+    /// Insert a `Spring` to the `System`.
+    ///
+    /// # Errors
+    ///
+    /// - If both `Mass`es of the `Spring` are not in the `System`.
+    pub fn add_spring(&mut self, spring: Spring<'a, DIM, T, S>) -> Result<(), String> {
+        if self.masses.contains_key(&spring.a_key()) && self.masses.contains_key(&spring.b_key()) {
+            self.springs.push(spring);
+            Ok(())
+        } else {
+            Err("Both Masses of the Spring must be in the System".to_string())
+        }
+    }
+
+    /// Removes all springs that connect both `Mass`es and returns the removed
+    /// `Spring`s.
+    pub fn remove_springs_between(
+        &mut self,
+        a: &Mass<'a, DIM, T, S>,
+        b: &Mass<'a, DIM, T, S>,
+    ) -> Vec<Spring<'a, DIM, T, S>> {
+        let (connecting_springs, remaining_springs) =
+            self.springs.drain(..).partition(|s| s.connects(a) && s.connects(b));
+        self.springs = remaining_springs;
+        connecting_springs
+    }
+
+    /// Removes all springs whose spring constant is less than `k` and returns
+    /// the removed `Spring`s.
+    pub fn remove_loose_springs(&mut self, k: f32) -> Vec<Spring<'a, DIM, T, S>> {
+        let (loose_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.k() < k);
+        self.springs = remaining_springs;
+        loose_springs
     }
 }
