@@ -5,7 +5,7 @@ use std::collections::{hash_map::Entry, HashMap};
 use distances::Number;
 use rand::prelude::*;
 
-use crate::{chaoda::Graph, core::adapters::Adapted, Cluster, FlatVec};
+use crate::{chaoda::Graph, core::adapters::Adapted, Cluster, FlatVec, SizedHeap};
 
 use super::{Mass, Spring};
 
@@ -445,5 +445,14 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         let (loose_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.k() < k);
         self.springs = remaining_springs;
         loose_springs
+    }
+
+    /// Returns a `SizedHeap` of the `Mass`es in the `System` ordered by the
+    /// stress on the `Mass`es.
+    ///
+    /// The stress is the sum of the magnitudes of the forces on the `Mass`.
+    #[must_use]
+    pub fn masses_by_stress(&self) -> SizedHeap<(f32, &Mass<'a, DIM, T, S>)> {
+        self.masses.values().map(|m| (m.stress(), m)).collect()
     }
 }

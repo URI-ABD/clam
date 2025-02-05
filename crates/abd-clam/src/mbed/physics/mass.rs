@@ -40,6 +40,9 @@ pub struct Mass<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     force: [f32; DIM],
     /// The mass of the `Mass`.
     m: f32,
+    /// The stress applied to the `Mass`. This is the sum of the magnitudes of
+    /// the forces applied to the `Mass`.
+    stress: f32,
     /// Phantom data to satisfy the type checker.
     phantom: core::marker::PhantomData<T>,
 }
@@ -81,6 +84,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
             velocity: [0.0; DIM],
             force: [0.0; DIM],
             m,
+            stress: 0.0,
             phantom: core::marker::PhantomData,
         }
     }
@@ -268,6 +272,12 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
         &self.force
     }
 
+    /// Returns the stress applied to the `Mass`.
+    #[must_use]
+    pub const fn stress(&self) -> f32 {
+        self.stress
+    }
+
     /// Sets the mass of the `Mass` to 1.
     pub fn set_unit_mass(&mut self) {
         self.m = 1.0;
@@ -360,16 +370,22 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
 
     /// Adds a force to the `Mass`.
     pub fn add_force(&mut self, force: [f32; DIM]) {
+        let mut f_mag = 0.0;
         for (sf, &f) in self.force.iter_mut().zip(force.iter()) {
+            f_mag += f.square();
             *sf += f;
         }
+        self.stress += f_mag.sqrt();
     }
 
     /// Subtracts a force from the `Mass`.
     pub fn sub_force(&mut self, force: [f32; DIM]) {
+        let mut f_mag = 0.0;
         for (sf, &f) in self.force.iter_mut().zip(force.iter()) {
+            f_mag += f.square();
             *sf -= f;
         }
+        self.stress += f_mag.sqrt();
     }
 
     /// Applies the force to the `Mass` for one time step.
