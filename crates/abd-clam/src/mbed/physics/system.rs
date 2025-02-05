@@ -5,7 +5,7 @@ use std::collections::{hash_map::Entry, HashMap};
 use distances::Number;
 use rand::prelude::*;
 
-use crate::{chaoda::Graph, core::adapters::Adapted, Cluster, FlatVec, SizedHeap};
+use crate::{chaoda::Graph, core::adapters::Adapted, Cluster, Dataset, FlatVec, Metric, SizedHeap};
 
 use super::{Mass, Spring};
 
@@ -17,7 +17,7 @@ pub struct System<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     /// The masses in the system.
     masses: Masses<'a, DIM, T, S>,
     /// The springs in the system.
-    springs: Vec<Spring<'a, DIM, T, S>>,
+    springs: Vec<Spring>,
     /// The damping factor of the system.
     beta: f32,
     /// The energy values of the system as it evolved over time.
@@ -36,13 +36,11 @@ where
 impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// Creates a new `System` of `Mass`es from a `Graph`.
     ///
-    /// The user will still need to set the `Springs` of the `System`, using the
-    /// `add_springs_from_graph` method.
-    ///
     /// # Arguments
     ///
     /// - `g`: The `Graph` to create the `System` from.
     /// - `beta`: The damping factor of the `System`.
+    /// - `k`: The spring constant of the `Springs`.
     ///
     /// # Type Parameters
     ///
@@ -51,28 +49,27 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - `D`: The dataset.
     /// - `C`: The type of the `Cluster`s in the `Graph`.
     #[must_use]
-    pub fn from_graph(g: &'a Graph<T, S>, beta: f32) -> Self {
+    pub fn from_graph(g: &'a Graph<T, S>, beta: f32, k: f32) -> Self {
         let masses = g
             .iter_clusters()
             .map(Adapted::source)
             .map(Mass::new)
             .map(|m| (m.hash_key(), m))
+            .collect::<HashMap<_, _>>();
+        let springs = g
+            .iter_edges()
+            .map(|(a, b, l0)| {
+                let (a_key, b_key) = (c_hash_key(a), c_hash_key(b));
+                let l = masses[&a_key].current_distance_to(&masses[&b_key]);
+                Spring::new(a_key, b_key, k, l0, l)
+            })
             .collect();
         Self {
             masses,
-            springs: Vec::new(),
+            springs,
             beta,
             energies: Vec::new(),
         }
-    }
-
-    /// Adds springs to the `System` using the edges in the given `Graph`.
-    pub fn add_springs_from_graph(&'a mut self, g: &'a Graph<T, S>, k: f32) {
-        self.springs.extend(g.iter_edges().map(|(a, b, l0)| {
-            let a = &self.masses[&c_hash_key(a)];
-            let b = &self.masses[&c_hash_key(b)];
-            Spring::new(a, b, k, l0)
-        }));
     }
 
     /// Sets random positions for all masses.
@@ -108,7 +105,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Returns the springs in the system.
     #[must_use]
-    pub fn springs(&self) -> &[Spring<'a, DIM, T, S>] {
+    pub fn springs(&self) -> &[Spring] {
         &self.springs
     }
 
@@ -126,7 +123,10 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Updates the lengths and forces of the springs in the system.
     pub fn update_springs(&mut self) {
-        self.springs.iter_mut().for_each(Spring::update_length);
+        self.springs.iter_mut().for_each(|s| {
+            let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
+            s.update_length(l);
+        });
     }
 
     /// Updates the `System` for one time step.
@@ -146,19 +146,19 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             .iter()
             .map(|s| {
                 let f_mag = s.f_mag();
-                let mut fv = s.a().unit_vector_to(s.b());
+                let mut fv = self.masses[&s.a_key()].unit_vector_to(&self.masses[&s.b_key()]);
                 for f_i in &mut fv {
                     *f_i *= f_mag;
                 }
-                (s.a(), s.b(), fv)
+                (s.a_key(), s.b_key(), fv)
             })
             .collect::<Vec<_>>();
 
-        for (a, b, f) in forces {
-            if let Some(m) = self.masses.get_mut(&a.hash_key()) {
+        for (a_key, b_key, f) in forces {
+            if let Some(m) = self.masses.get_mut(&a_key) {
                 m.add_force(f);
             }
-            if let Some(m) = self.masses.get_mut(&b.hash_key()) {
+            if let Some(m) = self.masses.get_mut(&b_key) {
                 m.sub_force(f);
             }
         }
@@ -405,9 +405,10 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Removes a `Mass` and all connecting `Spring`s from the `System` and
     /// returns the connecting `Spring`s.
-    pub fn remove_mass(&mut self, m: &Mass<'a, DIM, T, S>) -> Vec<Spring<'a, DIM, T, S>> {
-        self.masses.remove(&m.hash_key());
-        let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m));
+    pub fn remove_mass(&mut self, m: &Mass<DIM, T, S>) -> Vec<Spring> {
+        let m_key = m.hash_key();
+        self.masses.remove(&m_key);
+        let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m_key));
         self.springs = remaining_springs;
         connecting_springs
     }
@@ -417,7 +418,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// # Errors
     ///
     /// - If both `Mass`es of the `Spring` are not in the `System`.
-    pub fn add_spring(&mut self, spring: Spring<'a, DIM, T, S>) -> Result<(), String> {
+    pub fn add_spring(&mut self, spring: Spring) -> Result<(), String> {
         if self.masses.contains_key(&spring.a_key()) && self.masses.contains_key(&spring.b_key()) {
             self.springs.push(spring);
             Ok(())
@@ -428,20 +429,18 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Removes all springs that connect both `Mass`es and returns the removed
     /// `Spring`s.
-    pub fn remove_springs_between(
-        &mut self,
-        a: &Mass<'a, DIM, T, S>,
-        b: &Mass<'a, DIM, T, S>,
-    ) -> Vec<Spring<'a, DIM, T, S>> {
-        let (connecting_springs, remaining_springs) =
-            self.springs.drain(..).partition(|s| s.connects(a) && s.connects(b));
+    pub fn remove_springs_between(&mut self, a: &Mass<DIM, T, S>, b: &Mass<DIM, T, S>) -> Vec<Spring> {
+        let (connecting_springs, remaining_springs) = self
+            .springs
+            .drain(..)
+            .partition(|s| s.connects(a.hash_key()) && s.connects(b.hash_key()));
         self.springs = remaining_springs;
         connecting_springs
     }
 
     /// Removes all springs whose spring constant is less than `k` and returns
     /// the removed `Spring`s.
-    pub fn remove_loose_springs(&mut self, k: f32) -> Vec<Spring<'a, DIM, T, S>> {
+    pub fn remove_loose_springs(&mut self, k: f32) -> Vec<Spring> {
         let (loose_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.k() < k);
         self.springs = remaining_springs;
         loose_springs
@@ -452,7 +451,115 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// The stress is the sum of the magnitudes of the forces on the `Mass`.
     #[must_use]
-    pub fn masses_by_stress(&self) -> SizedHeap<(f32, &Mass<'a, DIM, T, S>)> {
+    pub fn masses_by_stress(&self) -> SizedHeap<(f32, &Mass<DIM, T, S>)> {
         self.masses.values().map(|m| (m.stress(), m)).collect()
+    }
+
+    /// Returns the most stressed `Mass` in the `System` whose source is not a
+    /// leaf `Cluster`.
+    #[must_use]
+    pub fn most_stressed_non_leaf(&self) -> Option<&Mass<DIM, T, S>> {
+        self.masses_by_stress()
+            .items()
+            .map(|(_, m)| m)
+            .find(|m| !m.source().is_leaf())
+    }
+
+    /// Finds all springs connecting to the given `Mass` and returns them.
+    #[must_use]
+    pub fn springs_connecting_to(&self, m: &Mass<DIM, T, S>) -> Vec<&Spring> {
+        self.springs.iter().filter(|s| s.connects(m.hash_key())).collect()
+    }
+
+    /// Finds all neighboring `Mass`es of the given `Mass` and returns them with
+    /// the spring constant of the springs connecting them.
+    fn neighbors_of(&self, m: &Mass<DIM, T, S>) -> Vec<((usize, usize), f32)> {
+        self.springs_connecting_to(m)
+            .into_iter()
+            .map(|s| {
+                let other = if s.a_key() == m.hash_key() {
+                    s.b_key()
+                } else {
+                    s.a_key()
+                };
+                (other, s.k())
+            })
+            .collect()
+    }
+
+    /// Adds two `Mass`es to the `System` using the triangle between the given
+    /// `Mass` and its two child masses.
+    ///
+    /// The child masses will also inherit the springs connecting the given
+    /// parent mass to its neighbors. The inherited springs will have their
+    /// spring constant multiplied by the given factor `f`.
+    ///
+    /// After adding the new masses and springs to the system, all springs will
+    /// be updated using the [`update_springs`](Self::update_springs) method.
+    ///
+    /// # Arguments
+    ///
+    /// - `m`: The `Mass` from which to create the triangle with its children.
+    /// - `data`: The dataset.
+    /// - `metric`: The metric to use for the triangle.
+    /// - `seed`: The seed for the random number generator.
+    /// - `k`: The spring constant of the springs connecting the masses.
+    /// - `f`: The factor by which to multiply the spring constant of the
+    ///   springs inherited from the parent mass.
+    ///
+    /// # Returns
+    ///
+    /// The two new `Mass`es added to the `System`.
+    #[allow(clippy::similar_names)]
+    pub fn add_child_triangle<I, D: Dataset<I>, M: Metric<I, T>>(
+        &'a mut self,
+        m: &'a Mass<'a, DIM, T, S>,
+        data: &D,
+        metric: &M,
+        seed: Option<u64>,
+        k: f32,
+        f: f32,
+    ) -> Option<[&'a Mass<'a, DIM, T, S>; 2]> {
+        if let Some((a, b, ma, mb, ab)) = m.child_triangle(data, metric, seed) {
+            // Add the new masses to the system.
+            let (a_center, b_center) = (a.arg_center(), b.arg_center());
+            let (m_key, a_key, b_key) = (m.hash_key(), a.hash_key(), b.hash_key());
+            self.add_mass(a)
+                .unwrap_or_else(|e| unreachable!("New mass is not in the system: {e}"));
+            self.add_mass(b)
+                .unwrap_or_else(|e| unreachable!("New mass is not in the system: {e}"));
+
+            // Create three new springs connecting the three masses.
+            let ma_spring = Spring::new(a_key, m_key, k, ma, ma.as_f32());
+            let mb_spring = Spring::new(m_key, b_key, k, mb, mb.as_f32());
+            let ab_spring = Spring::new(a_key, b_key, k, ab, ab.as_f32());
+
+            // The child masses will inherit the springs from the parent mass.
+            self.neighbors_of(m)
+                .into_iter()
+                .flat_map(|(o_key, k)| {
+                    let k = k * f;
+                    let ao = data.one_to_one(a_center, o_key.1, metric);
+                    let bo = data.one_to_one(b_center, o_key.1, metric);
+                    [
+                        Spring::new(a_key, o_key, k, ao, ao.as_f32()),
+                        Spring::new(o_key, b_key, k, bo, bo.as_f32()),
+                    ]
+                })
+                // Include the new springs for the triangle between the parent
+                // and child masses.
+                .chain([ma_spring, mb_spring, ab_spring])
+                .for_each(|s| {
+                    self.add_spring(s)
+                        .unwrap_or_else(|e| unreachable!("All masses are part of the system: {e}"));
+                });
+
+            // Update the springs in the system.
+            self.update_springs();
+
+            Some([&self.masses[&a_key], &self.masses[&b_key]])
+        } else {
+            None
+        }
     }
 }

@@ -2,10 +2,6 @@
 
 use distances::Number;
 
-use crate::Cluster;
-
-use super::Mass;
-
 /// A spring  connecting two masses in the mass-spring system.
 ///
 /// The spring is defined by its:
@@ -17,11 +13,11 @@ use super::Mass;
 /// # Type Parameters
 ///
 /// - `DIM`: The dimensionality of the reduced space.
-pub struct Spring<'a, const DIM: usize, T: Number, S: Cluster<T>> {
-    /// The first `Mass` connected by the `Spring`.
-    a: &'a Mass<'a, DIM, T, S>,
-    /// The second `Mass` connected by the `Spring`.
-    b: &'a Mass<'a, DIM, T, S>,
+pub struct Spring {
+    /// The hash of the first `Mass` connected by the `Spring`.
+    a_key: (usize, usize),
+    /// The hash of the second `Mass` connected by the `Spring`.
+    b_key: (usize, usize),
     /// The spring constant of the `Spring`.
     k: f32,
     /// The length of the `Spring` in the original embedding space cast to `f32`.
@@ -32,29 +28,29 @@ pub struct Spring<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     f_mag: f32,
 }
 
-impl<const DIM: usize, T: Number, S: Cluster<T>> core::hash::Hash for Spring<'_, DIM, T, S> {
+impl core::hash::Hash for Spring {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.hash_key().hash(state);
     }
 }
 
-impl<const DIM: usize, T: Number, S: Cluster<T>> PartialEq for Spring<'_, DIM, T, S> {
+impl PartialEq for Spring {
     fn eq(&self, other: &Self) -> bool {
         self.hash_key() == other.hash_key()
     }
 }
 
-impl<const DIM: usize, T: Number, S: Cluster<T>> Eq for Spring<'_, DIM, T, S> {}
+impl Eq for Spring {}
 
-impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Spring<'a, DIM, T, S> {
+impl Spring {
     /// Create a new `Spring`.
-    pub fn new(a: &'a Mass<DIM, T, S>, b: &'a Mass<DIM, T, S>, k: f32, l0: T) -> Self {
+    pub fn new<T: Number>(a_key: (usize, usize), b_key: (usize, usize), k: f32, l0: T, l: f32) -> Self {
         let mut s = Self {
-            a,
-            b,
+            a_key,
+            b_key,
             k,
             l0: l0.as_f32(),
-            l: a.current_distance_to(b),
+            l,
             f_mag: 0.0,
         };
         s.update_force();
@@ -65,28 +61,18 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Spring<'a, DIM, T, S> {
     ///
     /// The hash key is a tuple of the hash keys of the two connected `Mass`es.
     /// This is used to uniquely identify the `Spring` in the `System`.
-    pub fn hash_key(&self) -> ((usize, usize), (usize, usize)) {
-        (self.a.hash_key(), self.b.hash_key())
-    }
-
-    /// Get the first `Mass` connected by the `Spring`.
-    pub const fn a(&self) -> &'a Mass<DIM, T, S> {
-        self.a
+    pub const fn hash_key(&self) -> ((usize, usize), (usize, usize)) {
+        (self.a_key, self.b_key)
     }
 
     /// Returns the hash key of the first `Mass` connected by the `Spring`.
-    pub fn a_key(&self) -> (usize, usize) {
-        self.a.hash_key()
+    pub const fn a_key(&self) -> (usize, usize) {
+        self.a_key
     }
 
     /// Returns the hash key of the second `Mass` connected by the `Spring`.
-    pub fn b_key(&self) -> (usize, usize) {
-        self.b.hash_key()
-    }
-
-    /// Get the second `Mass` connected by the `Spring`.
-    pub const fn b(&self) -> &'a Mass<DIM, T, S> {
-        self.b
+    pub const fn b_key(&self) -> (usize, usize) {
+        self.b_key
     }
 
     /// Get the rest length of the `Spring`.
@@ -102,8 +88,8 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Spring<'a, DIM, T, S> {
     /// Return a copy of the `Spring` with the given spring constant.
     pub const fn with_k(&self, k: f32) -> Self {
         Self {
-            a: self.a,
-            b: self.b,
+            a_key: self.a_key,
+            b_key: self.b_key,
             k,
             l0: self.l0,
             l: self.l,
@@ -117,8 +103,8 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Spring<'a, DIM, T, S> {
     }
 
     /// Return whether the `Spring` connects the given `Mass`.
-    pub fn connects(&self, m: &Mass<DIM, T, S>) -> bool {
-        self.a == m || self.b == m
+    pub fn connects(&self, m_key: (usize, usize)) -> bool {
+        self.a_key == m_key || self.b_key == m_key
     }
 
     /// Get the displacement of the `Spring` from its rest length.
@@ -143,8 +129,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Spring<'a, DIM, T, S> {
     }
 
     /// Update the length and force of the `Spring`.
-    pub fn update_length(&mut self) {
-        self.l = self.a.current_distance_to(self.b);
+    pub fn update_length(&mut self, l: f32) {
+        // self.l = self.a.current_distance_to(self.b);
+        self.l = l;
         self.update_force();
     }
 
