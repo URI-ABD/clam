@@ -144,6 +144,12 @@ pub trait Number:
             other
         }
     }
+
+    /// Returns the square of the number.
+    #[must_use]
+    fn square(self) -> Self {
+        self * self
+    }
 }
 
 impl Number for f32 {

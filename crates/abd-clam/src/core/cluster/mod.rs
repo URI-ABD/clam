@@ -253,6 +253,11 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
         }
     }
 
+    /// Returns the distance between the centers of two `Cluster`s.
+    fn distance_to<I, D: Dataset<I>, M: Metric<I, T>>(&self, other: &Self, data: &D, metric: &M) -> T {
+        data.one_to_one(self.arg_center(), other.arg_center(), metric)
+    }
+
     /// Returns whether this cluster has any overlap with a query and a radius,
     /// and the distances to the cluster extrema.
     fn overlaps_with<I, D: Dataset<I>, M: Metric<I, T>>(
@@ -293,6 +298,16 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
 pub trait ParCluster<T: Number>: Cluster<T> + Send + Sync {
     /// Parallel version of [`Cluster::indices`](crate::core::cluster::Cluster::indices).
     fn par_indices(&self) -> impl ParallelIterator<Item = usize>;
+
+    /// Returns the distance between the centers of two `Cluster`s.
+    fn par_distance_to<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &self,
+        other: &Self,
+        data: &D,
+        metric: &M,
+    ) -> T {
+        data.par_one_to_one(self.arg_center(), other.arg_center(), metric)
+    }
 
     /// Parallel version of [`Cluster::overlaps_with`](crate::core::cluster::Cluster::overlaps_with).
     fn par_overlaps_with<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(

@@ -20,6 +20,16 @@ pub fn max_recursion_depth() -> usize {
         .unwrap_or(128)
 }
 
+/// Returns whether the three given lengths form a triangle with positive area.
+pub fn is_triangle<T: Number>(a: T, b: T, c: T) -> bool {
+    a + b > c && a + c > b && b + c > a
+}
+
+/// Returns whether the three given lengths are from collinear points.
+pub fn is_colinear<T: Number>(a: T, b: T, c: T) -> bool {
+    a + b == c || a + c == b || b + c == a
+}
+
 /// Return the number of samples to take from the given population size so as to
 /// achieve linear time complexity for geometric median estimation.
 ///
