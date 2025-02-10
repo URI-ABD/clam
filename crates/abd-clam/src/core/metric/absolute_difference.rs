@@ -6,6 +6,10 @@ use super::{Metric, ParMetric};
 
 /// The `AbsoluteDifference` metric measures the absolute difference between two
 /// values. It is meant to be used with scalars.
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct AbsoluteDifference;
 
 impl<T: Number> Metric<T, T> for AbsoluteDifference {

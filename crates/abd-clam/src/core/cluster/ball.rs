@@ -363,7 +363,144 @@ impl<T: Number> super::Csv<T> for Ball<T> {
 impl<T: Number> super::ParCsv<T> for Ball<T> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode> crate::DiskIO for Ball<T> {}
+impl<T: Number> crate::DiskIO for Ball<T> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        #[allow(clippy::type_complexity)]
+        let members: (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = (
+            self.depth,
+            self.cardinality,
+            self.radius.to_le_bytes(),
+            self.lfd,
+            self.arg_center,
+            self.arg_radial,
+            self.indices.clone(),
+            self.extents
+                .iter()
+                .map(|(i, t)| (*i, t.to_le_bytes()))
+                .collect::<Vec<_>>(),
+            self.children.iter().map(|c| c.to_bytes()).collect::<Result<_, _>>()?,
+        );
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        #[allow(clippy::type_complexity)]
+        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, extents, children_bytes): (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
+
+        let radius = T::from_le_bytes(radius_bytes.as_slice());
+        let extents = extents
+            .into_iter()
+            .map(|(i, t)| (i, T::from_le_bytes(t.as_slice())))
+            .collect::<Vec<_>>();
+        let children = children_bytes
+            .into_iter()
+            .map(|b| Self::from_bytes(b.as_slice()).map(Box::new))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            depth,
+            cardinality,
+            radius,
+            lfd,
+            arg_center,
+            arg_radial,
+            indices,
+            extents,
+            children,
+        })
+    }
+}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T> {
+    fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
+        #[allow(clippy::type_complexity)]
+        let members: (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = (
+            self.depth,
+            self.cardinality,
+            self.radius.to_le_bytes(),
+            self.lfd,
+            self.arg_center,
+            self.arg_radial,
+            self.indices.clone(),
+            self.extents
+                .iter()
+                .map(|(i, t)| (*i, t.to_le_bytes()))
+                .collect::<Vec<_>>(),
+            self.children
+                .par_iter()
+                .map(|c| c.par_to_bytes())
+                .collect::<Result<_, _>>()?,
+        );
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        #[allow(clippy::type_complexity)]
+        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, extents, children_bytes): (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
+
+        let radius = T::from_le_bytes(radius_bytes.as_slice());
+        let extents = extents
+            .into_iter()
+            .map(|(i, t)| (i, T::from_le_bytes(t.as_slice())))
+            .collect::<Vec<_>>();
+        let children = children_bytes
+            .into_par_iter()
+            .map(|b| Self::par_from_bytes(b.as_slice()).map(Box::new))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            depth,
+            cardinality,
+            radius,
+            lfd,
+            arg_center,
+            arg_radial,
+            indices,
+            extents,
+            children,
+        })
+    }
+}

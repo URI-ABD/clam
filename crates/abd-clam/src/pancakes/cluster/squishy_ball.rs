@@ -397,11 +397,52 @@ impl<T: Number, S: crate::cluster::Csv<T>> crate::cluster::Csv<T> for SquishyBal
 impl<T: Number, S: crate::cluster::ParCsv<T>> crate::cluster::ParCsv<T> for SquishyBall<T, S> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskIO> crate::DiskIO for SquishyBall<T, S> {
+impl<T: Number, S: Cluster<T> + crate::DiskIO> crate::DiskIO for SquishyBall<T, S> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        let costs: (Vec<u8>, Vec<u8>, Vec<u8>) = (
+            self.costs.recursive.to_le_bytes(),
+            self.costs.unitary.to_le_bytes(),
+            self.costs.minimum.to_le_bytes(),
+        );
+        let members: (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) = (
+            self.source.to_bytes()?,
+            bitcode::encode(&costs).map_err(|e| e.to_string())?,
+            self.children
+                .iter()
+                .map(|c| c.to_bytes())
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let (source_bytes, costs_bytes, children_bytes): (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) =
+            bitcode::decode(bytes).map_err(|e| e.to_string())?;
+
+        let source = S::from_bytes(&source_bytes)?;
+        let (recursive_bytes, unitary_bytes, minimum_bytes): (Vec<u8>, Vec<u8>, Vec<u8>) =
+            bitcode::decode(&costs_bytes).map_err(|e| e.to_string())?;
+        let costs = SquishCosts {
+            recursive: T::from_le_bytes(&recursive_bytes),
+            unitary: T::from_le_bytes(&unitary_bytes),
+            minimum: T::from_le_bytes(&minimum_bytes),
+        };
+
+        let children = children_bytes
+            .into_iter()
+            .map(|b| Self::from_bytes(&b).map(Box::new))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            source,
+            costs,
+            children,
+        })
+    }
+
     fn write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
-        let bytes = bitcode::encode(self).map_err(|e| e.to_string())?;
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&bytes).map_err(|e| e.to_string())?;
+        encoder.write_all(&self.to_bytes()?).map_err(|e| e.to_string())?;
         let bytes = encoder.finish().map_err(|e| e.to_string())?;
         std::fs::write(path, bytes).map_err(|e| e.to_string())
     }
@@ -410,12 +451,65 @@ impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskI
         let mut bytes = Vec::new();
         let mut decoder = GzDecoder::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
         decoder.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-        bitcode::decode(&bytes).map_err(|e| e.to_string())
+        Self::from_bytes(&bytes)
     }
 }
 
 #[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::ParDiskIO> crate::ParDiskIO
-    for SquishyBall<T, S>
-{
+impl<T: Number, S: ParCluster<T> + crate::ParDiskIO> crate::ParDiskIO for SquishyBall<T, S> {
+    fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
+        let costs: (Vec<u8>, Vec<u8>, Vec<u8>) = (
+            self.costs.recursive.to_le_bytes(),
+            self.costs.unitary.to_le_bytes(),
+            self.costs.minimum.to_le_bytes(),
+        );
+        let members: (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) = (
+            self.source.par_to_bytes()?,
+            bitcode::encode(&costs).map_err(|e| e.to_string())?,
+            self.children
+                .par_iter()
+                .map(|c| c.par_to_bytes())
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let (source_bytes, costs_bytes, children_bytes): (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) =
+            bitcode::decode(bytes).map_err(|e| e.to_string())?;
+
+        let source = S::par_from_bytes(&source_bytes)?;
+        let (recursive_bytes, unitary_bytes, minimum_bytes): (Vec<u8>, Vec<u8>, Vec<u8>) =
+            bitcode::decode(&costs_bytes).map_err(|e| e.to_string())?;
+        let costs = SquishCosts {
+            recursive: T::from_le_bytes(&recursive_bytes),
+            unitary: T::from_le_bytes(&unitary_bytes),
+            minimum: T::from_le_bytes(&minimum_bytes),
+        };
+
+        let children = children_bytes
+            .into_par_iter()
+            .map(|b| Self::par_from_bytes(&b).map(Box::new))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            source,
+            costs,
+            children,
+        })
+    }
+
+    fn par_write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&self.par_to_bytes()?).map_err(|e| e.to_string())?;
+        let bytes = encoder.finish().map_err(|e| e.to_string())?;
+        std::fs::write(path, bytes).map_err(|e| e.to_string())
+    }
+
+    fn par_read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
+        let mut bytes = Vec::new();
+        let mut decoder = GzDecoder::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
+        decoder.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        Self::par_from_bytes(&bytes)
+    }
 }

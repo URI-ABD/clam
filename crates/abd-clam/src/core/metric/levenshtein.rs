@@ -5,6 +5,10 @@ use distances::number::Int;
 use super::{Metric, ParMetric};
 
 /// The `Levenshtein` edit distance metric.
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct Levenshtein;
 
 impl<I: AsRef<[u8]>, T: Int> Metric<I, T> for Levenshtein {

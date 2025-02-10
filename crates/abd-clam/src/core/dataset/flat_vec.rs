@@ -24,7 +24,7 @@ pub struct FlatVec<I, Me> {
     /// The permutation of the items.
     permutation: Vec<usize>,
     /// The metadata associated with the items.
-    pub(crate) metadata: Vec<Me>,
+    metadata: Vec<Me>,
     /// The name of the dataset.
     name: String,
 }
@@ -396,7 +396,15 @@ impl<I, Me> Permutable for FlatVec<I, Me> {
 }
 
 #[cfg(feature = "disk-io")]
-impl<I: bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bitcode::Decode> crate::DiskIO for FlatVec<I, Me> {}
+impl<I: bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bitcode::Decode> crate::DiskIO for FlatVec<I, Me> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        bitcode::encode(self).map_err(|e| e.to_string())
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        bitcode::decode(bytes).map_err(|e| e.to_string())
+    }
+}
 
 #[cfg(feature = "disk-io")]
 impl<I: bitcode::Encode + bitcode::Decode + Send + Sync, Me: bitcode::Encode + bitcode::Decode + Send + Sync>

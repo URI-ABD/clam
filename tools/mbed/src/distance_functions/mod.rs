@@ -1,5 +1,7 @@
 //! The distance functions that may be used on the original data.
 
+use abd_clam::metric::ParMetric;
+
 /// The distance functions that may be used on the original data.
 #[derive(clap::ValueEnum, Debug, Clone)]
 pub enum DistanceFunction {
@@ -9,4 +11,22 @@ pub enum DistanceFunction {
     /// The Cosine distance.
     #[clap(name = "cosine")]
     Cosine,
+}
+
+impl DistanceFunction {
+    /// Get the name of the distance function.
+    pub fn name(&self) -> &str {
+        match self {
+            DistanceFunction::Euclidean => "euclidean",
+            DistanceFunction::Cosine => "cosine",
+        }
+    }
+
+    /// Get the `Metric` for the distance function.
+    pub fn metric(&self) -> Box<dyn ParMetric<Vec<f32>, f32>> {
+        match self {
+            DistanceFunction::Euclidean => Box::new(abd_clam::metric::Euclidean),
+            DistanceFunction::Cosine => Box::new(abd_clam::metric::Cosine),
+        }
+    }
 }

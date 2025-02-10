@@ -2,13 +2,15 @@
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use abd_clam::{Ball, FlatVec, ParDiskIO};
+use clap::Parser;
 
 mod distance_functions;
 mod quality_measures;
+mod workflow;
 
 use distance_functions::DistanceFunction;
-use quality_measures::QualityMeasures;
+use workflow::Commands;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -18,54 +20,22 @@ struct Args {
     #[arg(short('i'), long)]
     input: PathBuf,
 
-    /// The distance function to use for the original data.
-    #[arg(short('m'), long)]
-    metric: DistanceFunction,
-
-    /// Path to the output directory. If not provided, the output will be
+    /// Path to the output directory. If not provided, the outputs will be
     /// written to the parent directory of the input file.
     #[arg(short('o'), long)]
     output: Option<PathBuf>,
 
+    /// The random seed to use.
+    #[arg(short('s'), long, default_value = "42")]
+    seed: Option<u64>,
+
+    /// The distance function to use for the original data.
+    #[arg(short('m'), long)]
+    metric: DistanceFunction,
+
     /// The subcommand to run.
     #[command(subcommand)]
     command: Commands,
-}
-
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Create a dimension reduction for the given dataset.
-    Build {
-        /// The number of dimensions to reduce to.
-        #[arg(short('d'), long, default_value = "3")]
-        dimensions: usize,
-
-        /// The name (excluding the extension) of the output file. If not
-        /// provided, the name will be generated from the input file.
-        #[arg(short('n'), long)]
-        name: Option<String>,
-
-        /// The frequency of checkpoints, i.e. how often the current state of
-        /// the dimension reduction is saved to disk.
-        #[arg(short('c'), long, default_value = "100")]
-        checkpoint_frequency: usize,
-    },
-    /// Measure the quality of a dimension reduction.
-    Measure {
-        /// Path to the original data file.
-        #[arg(short('d'), long)]
-        original_data: PathBuf,
-
-        /// The quality measures to calculate.
-        #[arg(short('q'), long, default_value = "all")]
-        quality_measures: Vec<QualityMeasures>,
-
-        /// Whether to exhaustively measure the quality on all possible
-        /// combinations of points. Warning: This may take a long time on even
-        /// moderately sized datasets.
-        #[arg(short('e'), long, default_value = "false")]
-        exhaustive: bool,
-    },
 }
 
 fn main() -> Result<(), String> {
@@ -115,6 +85,9 @@ fn main() -> Result<(), String> {
     let (_guard, log_path) = bench_utils::configure_logger(inp_name)?;
     ftlog::info!("Logging to: {log_path:?}");
 
+    ftlog::info!("Using {:?} distance function...", args.metric.name());
+    let metric = args.metric.metric();
+
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &args.command {
@@ -122,38 +95,72 @@ fn main() -> Result<(), String> {
             dimensions,
             name,
             checkpoint_frequency,
+            beta,
+            k,
+            f,
+            min_k,
+            dt,
+            patience,
+            target,
+            max_steps,
         } => {
             let name = name.as_deref().unwrap_or(inp_name);
             ftlog::info!("Reading data from {inp_path:?}...");
-            ftlog::info!("Using {:?} distance function...", args.metric);
             ftlog::info!("Reducing data to {dimensions} dimensions...");
             ftlog::info!("Saving checkpoints every {checkpoint_frequency} iterations...");
             ftlog::info!("Saving the final result to {name}.npy in {out_dir:?}...");
+
+            let data = FlatVec::<Vec<f32>, usize>::par_read_from(&inp_path)?;
+            let criteria = |_: &Ball<f32>| true;
+            let tree = workflow::build::<_, _, _, _, _, _, 3>(
+                &out_dir,
+                data,
+                metric,
+                &criteria,
+                *dimensions,
+                name,
+                *checkpoint_frequency,
+                args.seed,
+                *beta,
+                *k,
+                *f,
+                *min_k,
+                *dt,
+                *patience,
+                *target,
+                *max_steps,
+            )?;
+
+            let tree_path = out_dir.join(format!("{name}-tree.bin"));
+            tree.par_write_to(&tree_path)?;
         }
         Commands::Measure {
             original_data,
             quality_measures,
             exhaustive,
         } => {
-            let quality_measures = if quality_measures.contains(&QualityMeasures::All) {
-                vec![
-                    QualityMeasures::PairwiseDistortion,
-                    QualityMeasures::TriangleInequalityDistortion,
-                    QualityMeasures::AngleDistortion,
-                ]
-            } else {
-                quality_measures.clone()
-            };
-
             ftlog::info!("Measuring quality of dimension reduction...");
             ftlog::info!("Reading reduced data from {inp_path:?}...");
             ftlog::info!("Reading original data from {original_data:?}...");
             if *exhaustive {
                 ftlog::info!("Exhaustively measuring quality using {quality_measures:?}...");
             } else {
-                ftlog::info!("Measuring quality using {quality_measures:?}...");
+                ftlog::info!(
+                    "Measuring quality using {:?}...",
+                    quality_measures.iter().map(|m| m.name()).collect::<Vec<_>>()
+                );
             }
             ftlog::info!("Saving the results in {out_dir:?}...");
+
+            let original_data = FlatVec::<Vec<f32>, usize>::par_read_from(&original_data)?;
+            let tree = workflow::Tree::<Ball<f32>, 3>::par_read_from(&inp_path)?;
+            let reduced_data = tree.dataset();
+
+            let measures = workflow::measure(&original_data, &metric, reduced_data, quality_measures, *exhaustive);
+
+            for (qm, value) in quality_measures.iter().zip(measures) {
+                ftlog::info!("Quality {:?}: {value:.6}", qm.name());
+            }
         }
     }
 

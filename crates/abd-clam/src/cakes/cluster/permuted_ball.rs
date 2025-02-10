@@ -328,10 +328,67 @@ impl<T: Number, S: crate::cluster::Csv<T>> crate::cluster::Csv<T> for PermutedBa
 impl<T: Number, S: crate::cluster::ParCsv<T>> crate::cluster::ParCsv<T> for PermutedBall<T, S> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskIO> crate::DiskIO for PermutedBall<T, S> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskIO> crate::DiskIO for PermutedBall<T, S> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        let members: (Vec<u8>, Vec<Vec<u8>>, usize) = (
+            self.source.to_bytes()?,
+            self.children
+                .iter()
+                .map(|child| child.to_bytes())
+                .collect::<Result<Vec<_>, _>>()?,
+            self.params.offset,
+        );
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let (source_bytes, children_bytes, offset): (Vec<u8>, Vec<Vec<u8>>, usize) =
+            bitcode::decode(bytes).map_err(|e| e.to_string())?;
+        let source = S::from_bytes(&source_bytes)?;
+        let children = children_bytes
+            .into_iter()
+            .map(|bytes| Self::from_bytes(&bytes).map(Box::new))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            source,
+            children,
+            params: Offset { offset },
+            phantom: core::marker::PhantomData,
+        })
+    }
+}
 
 #[cfg(feature = "disk-io")]
 impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::ParDiskIO> crate::ParDiskIO
     for PermutedBall<T, S>
 {
+    fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
+        let members: (Vec<u8>, Vec<Vec<u8>>, usize) = (
+            self.source.par_to_bytes()?,
+            self.children
+                .par_iter()
+                .map(|child| child.par_to_bytes())
+                .collect::<Result<Vec<_>, _>>()?,
+            self.params.offset,
+        );
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let (source_bytes, children_bytes, offset): (Vec<u8>, Vec<Vec<u8>>, usize) =
+            bitcode::decode(bytes).map_err(|e| e.to_string())?;
+        let source = S::par_from_bytes(&source_bytes)?;
+        let children = children_bytes
+            .into_par_iter()
+            .map(|bytes| Self::par_from_bytes(&bytes).map(Box::new))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            source,
+            children,
+            params: Offset { offset },
+            phantom: core::marker::PhantomData,
+        })
+    }
 }

@@ -93,8 +93,37 @@ where
     T: Number + bitcode::Encode + bitcode::Decode,
     D: Dataset<I> + crate::DiskIO,
     C: Cluster<T> + crate::DiskIO,
-    M: Metric<I, T> + crate::DiskIO,
+    M: Metric<I, T> + bitcode::Encode + bitcode::Decode,
 {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        let root = self.root.to_bytes()?;
+        let data = self.dataset.to_bytes()?;
+        let metric = bitcode::encode(&self.metric).map_err(|e| e.to_string())?;
+
+        let mut bytes = Vec::with_capacity(root.len() + data.len() + metric.len() + std::mem::size_of::<usize>() * 3);
+        bytes.extend_from_slice(&root.len().to_le_bytes());
+        bytes.extend_from_slice(&root);
+        bytes.extend_from_slice(&data.len().to_le_bytes());
+        bytes.extend_from_slice(&data);
+        bytes.extend_from_slice(&metric.len().to_le_bytes());
+        bytes.extend_from_slice(&metric);
+
+        Ok(bytes)
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let mut offset = 0;
+
+        let root_bytes = crate::utils::read_encoding(bytes, &mut offset);
+        let dataset_bytes = crate::utils::read_encoding(bytes, &mut offset);
+        let metric_bytes = crate::utils::read_encoding(bytes, &mut offset);
+
+        let root = C::from_bytes(&root_bytes)?;
+        let dataset = D::from_bytes(&dataset_bytes)?;
+        let metric = bitcode::decode(&metric_bytes).map_err(|e| e.to_string())?;
+
+        Ok(Self::new(root, dataset, metric))
+    }
 }
 
 #[cfg(feature = "disk-io")]
@@ -104,6 +133,6 @@ where
     T: Number + bitcode::Encode + bitcode::Decode + Send + Sync,
     D: ParDataset<I> + crate::ParDiskIO,
     C: ParCluster<T> + crate::ParDiskIO,
-    M: ParMetric<I, T> + crate::ParDiskIO,
+    M: ParMetric<I, T> + bitcode::Encode + bitcode::Decode,
 {
 }

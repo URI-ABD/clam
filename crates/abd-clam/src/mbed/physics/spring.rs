@@ -148,7 +148,15 @@ impl Spring {
 }
 
 #[cfg(feature = "disk-io")]
-impl crate::DiskIO for Spring {}
+impl crate::DiskIO for Spring {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        bitcode::encode(self).map_err(|e| e.to_string())
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        bitcode::decode(bytes).map_err(|e| e.to_string())
+    }
+}
 
 #[cfg(feature = "disk-io")]
 impl crate::ParDiskIO for Spring {}

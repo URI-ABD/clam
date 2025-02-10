@@ -410,7 +410,7 @@ where
     Enc: Encoder<I> + bitcode::Encode + bitcode::Decode,
     Dec: Decoder<I> + bitcode::Encode + bitcode::Decode,
 {
-    fn write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
         let metadata_bytes = encode_and_compress(&self.metadata)?;
 
         let permutation_bytes = encode_and_compress(&self.permutation)?;
@@ -435,13 +435,11 @@ where
             bitcode::encode(&self.encoder).map_err(|e| e.to_string())?,
             bitcode::encode(&self.decoder).map_err(|e| e.to_string())?,
         );
-        let bytes = bitcode::encode(&members).map_err(|e| e.to_string())?;
-        std::fs::write(path, &bytes).map_err(|e| e.to_string())
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
     }
 
-    fn read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
-        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         #[allow(clippy::type_complexity)]
         let (
             cardinality,
@@ -463,7 +461,7 @@ where
             Vec<u8>,
             Vec<u8>,
             Vec<u8>,
-        ) = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
+        ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
 
         ftlog::debug!("Reading metadata...");
         let metadata: Vec<Me> = decompress_and_decode(&metadata_bytes)?;
@@ -505,7 +503,7 @@ where
     Enc: ParEncoder<I> + bitcode::Encode + bitcode::Decode,
     Dec: ParDecoder<I> + bitcode::Encode + bitcode::Decode,
 {
-    fn par_write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
+    fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
         let center_map = self
             .center_map
             .par_iter()
@@ -552,13 +550,10 @@ where
             decoder_bytes,
         );
 
-        let bytes = bitcode::encode(&members).map_err(|e| e.to_string())?;
-        std::fs::write(path, &bytes).map_err(|e| e.to_string())
+        bitcode::encode(&members).map_err(|e| e.to_string())
     }
 
-    fn par_read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
-        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-
+    fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         #[allow(clippy::type_complexity)]
         let (
             cardinality,
@@ -580,7 +575,7 @@ where
             Vec<u8>,
             Vec<u8>,
             Vec<u8>,
-        ) = bitcode::decode(&bytes).map_err(|e| e.to_string())?;
+        ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
 
         #[allow(clippy::type_complexity)]
         let ((metadata_bytes, center_map_bytes), (permutation, leaf_bytes)): (

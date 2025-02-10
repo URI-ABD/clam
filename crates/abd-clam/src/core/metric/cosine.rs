@@ -5,6 +5,10 @@ use distances::number::Float;
 use super::{Metric, ParMetric};
 
 /// The Cosine distance function.
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct Cosine;
 
 impl<I: AsRef<[T]>, T: Float> Metric<I, T> for Cosine {
