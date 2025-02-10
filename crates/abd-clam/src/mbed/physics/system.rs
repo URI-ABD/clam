@@ -17,6 +17,7 @@ use super::{Mass, Spring};
 pub type Masses<'a, const DIM: usize, T, S> = HashMap<(usize, usize), Mass<'a, DIM, T, S>>;
 
 /// A mass-spring system for dimension reduction.
+#[must_use]
 pub struct System<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     /// The masses in the system.
     masses: Masses<'a, DIM, T, S>,
@@ -38,7 +39,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - `root`: The root `Cluster` to create the `System` from.
     /// - `beta`: The damping factor of the `System`.
     /// - `name`: The name of the `System`.
-    #[must_use]
     pub fn from_root(root: &'a S, beta: f32, name: &str) -> Self {
         let m = Mass::new(root);
         let m_key = m.hash_key();
@@ -70,7 +70,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - `target`: The target stability to reach.
     /// - `max_steps`: The maximum number of time-steps to simulate per
     ///   iteration.
-    #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn evolve_to_leaves<I, D: Dataset<I>, M: Metric<I, T>>(
         mut self,
@@ -126,7 +125,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - `U`: The type of the distance values.
     /// - `D`: The dataset.
     /// - `C`: The type of the `Cluster`s in the `Graph`.
-    #[must_use]
     pub fn from_graph(g: &'a Graph<T, S>, beta: f32, k: f32, name: &str) -> Self {
         let masses = g
             .iter_clusters()
@@ -160,7 +158,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// - `side_length`: The side length of the cube.
     /// - `seed`: The seed for the random number generator.
-    #[must_use]
     pub fn init_random(mut self, side_length: f32, seed: Option<u64>) -> Self {
         let mut rng = seed.map_or_else(StdRng::from_entropy, StdRng::seed_from_u64);
 
@@ -183,7 +180,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Returns the springs in the system.
-    #[must_use]
     pub fn springs(&self) -> &[Spring] {
         &self.springs
     }
@@ -207,14 +203,12 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Changes the name of the system.
-    #[must_use]
     pub fn with_name(mut self, name: &str) -> Self {
         self.name = name.to_string();
         self
     }
 
     /// Updates the lengths and forces of the springs in the system.
-    #[must_use]
     pub fn update_springs(mut self) -> Self {
         self.springs.iter_mut().for_each(|s| {
             let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
@@ -234,7 +228,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// # Arguments
     ///
     /// - `dt`: The time step to update the system for.
-    #[must_use]
     pub fn update_step(mut self, dt: f32) -> Self {
         let forces = self
             .springs
@@ -271,7 +264,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// - `dt`: The time-step.
     /// - `patience`: The number of time-steps to consider for stability.
-    #[must_use]
     pub fn evolve_to_stability(
         mut self,
         dt: f32,
@@ -302,7 +294,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// - `dt`: The time-step.
     /// - `steps`: The number of time-steps to simulate.
-    #[must_use]
     pub fn evolve(mut self, dt: f32, steps: usize) -> Self {
         self.energies.push(self.current_energies());
 
@@ -322,7 +313,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - The metadata are the indices of the centers of the `Cluster`s
     ///   represented by the `Mass`es.
     /// - The distance function is the Euclidean distance.
-    #[must_use]
     pub fn get_reduced_embedding(&self) -> FlatVec<[f32; DIM], usize> {
         let mut positions = self
             .masses
@@ -506,7 +496,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Removes a `Mass` and all connecting `Spring`s from the `System` and
     /// returns the connecting `Spring`s.
-    #[must_use]
     pub fn remove_mass(mut self, m_key: (usize, usize)) -> (Self, Vec<Spring>) {
         self.masses.remove(&m_key);
         let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m_key));
@@ -530,7 +519,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Removes all springs that connect both `Mass`es and returns the removed
     /// `Spring`s.
-    #[must_use]
     pub fn remove_springs_between(mut self, a_key: (usize, usize), b_key: (usize, usize)) -> (Self, Vec<Spring>) {
         let (connecting_springs, remaining_springs) = self
             .springs
@@ -542,7 +530,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
     /// Removes all springs whose spring constant is less than `k` and returns
     /// the removed `Spring`s.
-    #[must_use]
     pub fn remove_loose_springs(mut self, k: f32) -> (Self, Vec<Spring>) {
         let (loose_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.k() < k);
         self.springs = remaining_springs;
@@ -674,7 +661,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
 impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     /// Parallel version of [`System::evolve_to_leaves`](Self::evolve_to_leaves).
-    #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn par_evolve_to_leaves<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
         mut self,
@@ -717,7 +703,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::from_graph`](Self::from_graph).
-    #[must_use]
     pub fn par_from_graph(g: &'a Graph<T, S>, beta: f32, k: f32, name: &str) -> Self {
         let masses = g
             .iter_clusters()
@@ -743,7 +728,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::init_random`](Self::init_random).
-    #[must_use]
     pub fn par_init_random(mut self, side_length: f32, seed: Option<u64>) -> Self {
         let (min_, max_) = (-side_length / 2.0, side_length / 2.0);
         self.masses.par_iter_mut().for_each(|(&(c, _), m)| {
@@ -759,7 +743,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::update_springs`](Self::update_springs).
-    #[must_use]
     pub fn par_update_springs(mut self) -> Self {
         self.springs.par_iter_mut().for_each(|s| {
             let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
@@ -769,7 +752,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::update_step`](Self::update_step).
-    #[must_use]
     pub fn par_update_step(mut self, dt: f32) -> Self {
         let forces = self
             .springs
@@ -803,7 +785,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::evolve_to_stability`](Self::evolve_to_stability).
-    #[must_use]
     pub fn par_evolve_to_stability(
         mut self,
         dt: f32,
@@ -829,7 +810,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::evolve`](Self::evolve).
-    #[must_use]
     pub fn par_evolve(mut self, dt: f32, steps: usize) -> Self {
         self.energies.push(self.current_energies());
 

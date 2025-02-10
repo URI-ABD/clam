@@ -28,6 +28,7 @@ use crate::{Cluster, Dataset, Metric};
 /// - `T`: The type of the distance values.
 /// - `S`: The type of the source `Cluster`.
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct Mass<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     /// The source cluster of the `Mass`.
     source: &'a S,
@@ -74,7 +75,6 @@ impl<const DIM: usize, T: Number, S: Cluster<T>> Ord for Mass<'_, DIM, T, S> {
 
 impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     /// Creates a new `Mass`.
-    #[must_use]
     pub fn new(source: &'a S) -> Self {
         let m = source.cardinality().as_f32();
         Self {
@@ -155,7 +155,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     }
 
     /// Returns a `Mass` with a mass of 1.
-    #[must_use]
     pub fn with_unit_mass(mut self) -> Self {
         self.set_unit_mass();
         self
@@ -167,7 +166,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     }
 
     /// Returns a `Mass` with the given mass.
-    #[must_use]
     pub fn with_mass(mut self, m: f32) -> Self {
         self.set_mass(m);
         self
@@ -179,7 +177,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     }
 
     /// Returns a `Mass` with the given position.
-    #[must_use]
     pub fn with_position(mut self, position: [f32; DIM]) -> Self {
         self.set_position(position);
         self
@@ -191,7 +188,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     }
 
     /// Returns a `Mass` with the given velocity.
-    #[must_use]
     pub fn with_velocity(mut self, velocity: [f32; DIM]) -> Self {
         self.set_velocity(velocity);
         self

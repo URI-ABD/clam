@@ -37,6 +37,7 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
     feature = "disk-io",
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
+#[must_use]
 pub struct CodecData<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> {
     /// The cardinality of the dataset.
     cardinality: usize,
@@ -149,7 +150,6 @@ impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, Me, Enc, Dec> {
 
     /// Changes the permutation of the dataset without changing the order of the
     /// items.
-    #[must_use]
     pub fn with_permutation(self, permutation: &[usize]) -> Self {
         Self {
             cardinality: self.cardinality,

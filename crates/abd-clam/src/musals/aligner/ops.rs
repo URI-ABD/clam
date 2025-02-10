@@ -2,6 +2,7 @@
 
 /// The direction of the edit operation in the DP table.
 #[derive(Clone, Eq, PartialEq, Debug)]
+#[must_use]
 pub enum Direction {
     /// Diagonal (Up and Left) for a match or substitution.
     Diagonal,
@@ -12,6 +13,7 @@ pub enum Direction {
 }
 
 /// The type of edit operation.
+#[must_use]
 pub enum Edit {
     /// Substitution of one character for another.
     Sub(u8),
@@ -33,6 +35,7 @@ impl core::fmt::Debug for Edit {
 
 /// The sequence of edits needed to turn one unaligned sequence into another.
 #[derive(Debug)]
+#[must_use]
 pub struct Edits(Vec<(usize, Edit)>);
 
 impl From<Vec<(usize, Edit)>> for Edits {

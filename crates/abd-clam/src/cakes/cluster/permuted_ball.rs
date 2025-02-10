@@ -23,6 +23,7 @@ use crate::{
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
 #[cfg_attr(feature = "disk-io", bitcode(recursive))]
+#[must_use]
 pub struct PermutedBall<T: Number, S: Cluster<T>> {
     /// The `Cluster` type that the `PermutedBall` is based on.
     source: S,

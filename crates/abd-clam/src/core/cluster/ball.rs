@@ -60,6 +60,7 @@ use super::{partition::ParPartition, Cluster, ParCluster, Partition, LFD};
     derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
 )]
 #[cfg_attr(feature = "disk-io", bitcode(recursive))]
+#[must_use]
 pub struct Ball<T: Number> {
     /// Parameters used for creating the `Ball`.
     depth: usize,

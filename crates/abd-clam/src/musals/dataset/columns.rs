@@ -12,6 +12,7 @@ use crate::{cakes::PermutedBall, cluster::ParCluster, dataset::ParDataset, Clust
 use super::super::Aligner;
 
 /// The columns of a partial MSA.
+#[must_use]
 pub struct Columns(Vec<Vec<u8>>, u8);
 
 impl Index<usize> for Columns {
@@ -28,13 +29,11 @@ impl Columns {
     /// # Arguments
     ///
     /// * `gap` - The character to use for the gap.
-    #[must_use]
     pub const fn new(gap: u8) -> Self {
         Self(Vec::new(), gap)
     }
 
     /// Add a binary tree of `Cluster`s to the MSA.
-    #[must_use]
     pub fn with_binary_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]>,
@@ -68,7 +67,6 @@ impl Columns {
     }
 
     /// Add a tree of `Cluster`s to the MSA.
-    #[must_use]
     pub fn with_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]>,
@@ -110,14 +108,12 @@ impl Columns {
     /// # Arguments
     ///
     /// * `sequence` - The sequence to add.
-    #[must_use]
     pub fn with_sequence<I: AsRef<[u8]>>(mut self, sequence: &I) -> Self {
         self.0 = sequence.as_ref().iter().map(|&c| vec![c]).collect();
         self
     }
 
     /// Adds sequences from a `Cluster` to the MSA.
-    #[must_use]
     pub fn with_cluster<I, T, D, C>(self, c: &C, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]>,
@@ -185,7 +181,6 @@ impl Columns {
     }
 
     /// Merge two MSAs.
-    #[must_use]
     pub fn merge<T: Number>(mut self, s_center: usize, mut other: Self, o_center: usize, aligner: &Aligner<T>) -> Self {
         ftlog::trace!(
             "Merging MSAs with cardinalities: {} and {}, and centers {s_center} and {o_center}",
@@ -264,7 +259,6 @@ impl Columns {
     }
 
     /// Extract the columns as a `FlatVec`.
-    #[must_use]
     pub fn to_flat_vec_columns(&self) -> FlatVec<Vec<u8>, usize> {
         FlatVec::new(self.0.clone())
             .unwrap_or_else(|e| unreachable!("{e}"))
@@ -274,7 +268,6 @@ impl Columns {
     }
 
     /// Extract the rows as a `FlatVec`.
-    #[must_use]
     pub fn to_flat_vec_rows(&self) -> FlatVec<Vec<u8>, usize> {
         FlatVec::new(self.extract_msa())
             .unwrap_or_else(|e| unreachable!("{e}"))
@@ -286,7 +279,6 @@ impl Columns {
 
 impl Columns {
     /// Parallel version of [`Columnar::with_binary_tree`](crate::msa::dataset::columnar::Columnar::with_binary_tree).
-    #[must_use]
     pub fn par_with_binary_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]> + Send + Sync,
@@ -322,7 +314,6 @@ impl Columns {
     }
 
     /// Parallel version of [`Columnar::with_tree`](crate::msa::dataset::columnar::Columnar::with_tree).
-    #[must_use]
     pub fn par_with_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]> + Send + Sync,
@@ -362,7 +353,6 @@ impl Columns {
     }
 
     /// Parallel version of [`Columnar::merge`](crate::msa::dataset::columnar::Columnar::merge).
-    #[must_use]
     pub fn par_merge<T: Number>(
         mut self,
         s_center: usize,

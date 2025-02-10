@@ -25,6 +25,7 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
 #[cfg_attr(feature = "disk-io", bitcode(recursive))]
+#[must_use]
 pub struct SquishyBall<T: Number, S: Cluster<T>> {
     /// The `Cluster` type that the `SquishyBall` is based on.
     source: S,

@@ -82,7 +82,6 @@ pub enum CostMatrix {
 
 impl CostMatrix {
     /// Get the cost matrix.
-    #[must_use]
     pub fn cost_matrix<T: Number + core::ops::Neg<Output = T>>(&self, gap_open: Option<usize>) -> musals::CostMatrix<T> {
         match self {
             Self::Default => musals::CostMatrix::default(),

@@ -14,6 +14,7 @@ use super::super::NUM_CHARS;
     feature = "disk-io",
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
+#[must_use]
 pub struct CostMatrix<T: Number> {
     /// The cost of substituting one character for another.
     sub_matrix: Vec<Vec<T>>,
@@ -31,7 +32,6 @@ impl<T: Number> Default for CostMatrix<T> {
 
 impl<T: Number> CostMatrix<T> {
     /// Create a new substitution matrix.
-    #[must_use]
     pub fn new(default_sub: T, gap_open: T, gap_ext: T) -> Self {
         // Initialize the substitution matrix.
         let mut sub_matrix = [[default_sub; NUM_CHARS]; NUM_CHARS];
@@ -54,14 +54,12 @@ impl<T: Number> CostMatrix<T> {
     ///
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
-    #[must_use]
     pub fn default_affine(gap_open: Option<usize>) -> Self {
         let gap_open = gap_open.map_or_else(|| T::from(10), T::from);
         Self::new(T::ONE, gap_open, T::ONE)
     }
 
     /// Add a constant to all substitution costs.
-    #[must_use]
     pub fn shift(mut self, shift: T) -> Self {
         for i in 0..NUM_CHARS {
             for j in 0..NUM_CHARS {
@@ -72,7 +70,6 @@ impl<T: Number> CostMatrix<T> {
     }
 
     /// Multiply all substitution costs by a constant.
-    #[must_use]
     pub fn scale(mut self, scale: T) -> Self {
         for i in 0..NUM_CHARS {
             for j in 0..NUM_CHARS {
@@ -89,21 +86,18 @@ impl<T: Number> CostMatrix<T> {
     /// * `a`: The old character to be substituted.
     /// * `b`: The new character to substitute with.
     /// * `cost`: The cost of the substitution.
-    #[must_use]
     pub fn with_sub_cost(mut self, a: u8, b: u8, cost: T) -> Self {
         self.sub_matrix[a as usize][b as usize] = cost;
         self
     }
 
     /// Set the cost of opening a gap.
-    #[must_use]
     pub const fn with_gap_open(mut self, cost: T) -> Self {
         self.gap_open = cost;
         self
     }
 
     /// Set the cost of extending a gap.
-    #[must_use]
     pub const fn with_gap_ext(mut self, cost: T) -> Self {
         self.gap_ext = cost;
         self
@@ -133,7 +127,6 @@ impl<T: Number> CostMatrix<T> {
 impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
     /// zero and all non-zero costs are positive.
-    #[must_use]
     pub fn normalize(self) -> Self {
         let shift = self
             .sub_matrix
@@ -279,7 +272,6 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     ///
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
-    #[must_use]
     pub fn blosum62(gap_open: Option<usize>) -> Self {
         let gap_open = gap_open.unwrap_or(10);
 

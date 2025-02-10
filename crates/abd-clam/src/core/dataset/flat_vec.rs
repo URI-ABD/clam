@@ -15,6 +15,7 @@ use super::{AssociatesMetadata, AssociatesMetadataMut, Dataset, ParDataset, Perm
     feature = "disk-io",
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
+#[must_use]
 pub struct FlatVec<I, Me> {
     /// The items in the dataset.
     items: Vec<I>,
@@ -169,7 +170,6 @@ impl<I, Me> FlatVec<I, Me> {
     /// let data = data.with_dim_lower_bound(3);
     /// assert_eq!(data.dimensionality_hint(), (3, None));
     /// ```
-    #[must_use]
     pub const fn with_dim_lower_bound(mut self, lower_bound: usize) -> Self {
         self.dimensionality_hint.0 = lower_bound;
         self
@@ -189,7 +189,6 @@ impl<I, Me> FlatVec<I, Me> {
     /// let data = data.with_dim_upper_bound(5);
     /// assert_eq!(data.dimensionality_hint(), (0, Some(5)));
     /// ```
-    #[must_use]
     pub const fn with_dim_upper_bound(mut self, upper_bound: usize) -> Self {
         self.dimensionality_hint.1 = Some(upper_bound);
         self
@@ -210,7 +209,6 @@ impl<I, Me> FlatVec<I, Me> {
     /// let data = data.with_permutation(&permutation);
     /// assert_eq!(data.permutation(), permutation);
     /// ```
-    #[must_use]
     pub fn with_permutation(mut self, permutation: &[usize]) -> Self {
         self.set_permutation(permutation);
         self
@@ -291,7 +289,6 @@ impl<I: Clone, Me: Clone> FlatVec<I, Me> {
     ///
     /// This will inherit `dimensionality_hint` from the original dataset. The
     /// permutation will be set to the identity permutation.
-    #[must_use]
     pub fn random_subsample<R: Rng>(&self, rng: &mut R, size: usize) -> Self {
         let indices = rand::seq::index::sample(rng, self.items.len(), size).into_vec();
         let items = indices.iter().map(|&i| self.items[i].clone()).collect();

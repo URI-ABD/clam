@@ -17,6 +17,7 @@ use super::super::{Aligner, NUM_CHARS};
     feature = "disk-io",
     derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
 )]
+#[must_use]
 pub struct MSA<I: AsRef<[u8]>, T: Number, Me> {
     /// The Needleman-Wunsch aligner.
     aligner: Aligner<T>,
@@ -163,7 +164,6 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// Swaps between the row/col major order of the MSA.
     ///
     /// This will convert a row-major MSA to a col-major MSA and vice versa.
-    #[must_use]
     pub fn change_major(&self) -> MSA<Vec<u8>, T, usize> {
         let rows = self.data.items().iter().map(I::as_ref).collect::<Vec<_>>();
         let cols = (0..self.width())
@@ -364,7 +364,6 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
 
 impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     /// Parallel version of [`MSA::change_major`](crate::msa::dataset::msa::MSA::change_major).
-    #[must_use]
     pub fn par_change_major(&self) -> MSA<Vec<u8>, T, usize> {
         let rows = self.data.items().par_iter().map(I::as_ref).collect::<Vec<_>>();
         let cols = (0..self.width())

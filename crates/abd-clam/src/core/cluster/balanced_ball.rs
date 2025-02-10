@@ -9,6 +9,7 @@ use super::{Ball, Cluster, ParCluster, ParPartition, Partition};
 
 /// A `BalancedBall` is a data structure that represents a balanced binary tree.
 #[derive(Clone)]
+#[must_use]
 pub struct BalancedBall<T: Number>(Ball<T>, Vec<Box<Self>>);
 
 impl<T: Number> BalancedBall<T> {

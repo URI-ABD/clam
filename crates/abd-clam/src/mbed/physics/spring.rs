@@ -18,6 +18,7 @@ use distances::Number;
     feature = "disk-io",
     derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
 )]
+#[must_use]
 pub struct Spring {
     /// The hash of the first `Mass` connected by the `Spring`.
     a_key: (usize, usize),

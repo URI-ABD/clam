@@ -11,6 +11,7 @@ use super::{
 };
 
 /// A `Tree` of `Cluster`s.
+#[must_use]
 pub struct Tree<T: Number, C: Cluster<T>> {
     /// The `Cluster`s of the `Tree` are stored in `levels` where the first
     /// `Vec` contains the `Cluster`s at the first level, the second `Vec`
