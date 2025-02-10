@@ -105,7 +105,7 @@ fn main() -> Result<(), String> {
         .to_string();
     let log_name = format!("musals-{fasta_name}");
     // We need the `_guard` in scope to ensure proper logging.
-    let (_guard, log_path) = configure_logger(&log_name)?;
+    let (_guard, log_path) = configure_logger(&log_name, ftlog::LevelFilter::Info)?;
     println!("Log file: {log_path:?}");
     ftlog::info!("{args:?}");
 

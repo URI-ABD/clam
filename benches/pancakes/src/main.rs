@@ -86,7 +86,7 @@ fn main() -> Result<(), String> {
     println!("Args: {args:?}");
 
     let log_name = format!("pancakes-{}", args.dataset.name());
-    let (_guard, log_path) = bench_utils::configure_logger(&log_name)?;
+    let (_guard, log_path) = bench_utils::configure_logger(&log_name, ftlog::LevelFilter::Info)?;
     println!("Log file: {log_path:?}");
 
     ftlog::info!("{args:?}");

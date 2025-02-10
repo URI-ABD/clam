@@ -1,11 +1,14 @@
 //! Measure the distortion of a number of pair-wise distances.
 
 use abd_clam::{dataset::ParDataset, metric::ParMetric, Dataset, FlatVec};
-use distances::{number::Addition, Number};
+use distances::Number;
 use rand::prelude::*;
 use rayon::prelude::*;
 
 /// Measure the distortion of a number of pair-wise distances.
+///
+/// This is the mean relative error of the distances between pairs of points in
+/// the original space and the reduced space.
 pub fn measure<I, M>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
@@ -45,13 +48,16 @@ where
         .into_par_iter()
         .zip(reduced_distances)
         .map(|(original, reduced)| {
-            let n = original.len().as_f32();
-            let d = original
+            let deltas = original
                 .into_iter()
                 .zip(reduced)
-                .map(|((_, _, o), (_, _, r))| o.abs_diff(r))
-                .sum::<f32>();
-            d / n
+                .map(|((_, _, o), (_, _, r))| (o, r))
+                .filter(|&(o, _)| o != 0.0)
+                .map(|(o, r)| r / o)
+                .collect::<Vec<_>>();
+            let mean_d: f32 = abd_clam::utils::mean(&deltas);
+            let var_d = abd_clam::utils::variance(&deltas, mean_d);
+            var_d.sqrt()
         })
         .sum::<f32>();
 

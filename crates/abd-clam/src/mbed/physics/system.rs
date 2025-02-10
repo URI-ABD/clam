@@ -2,7 +2,7 @@
 
 use std::collections::{hash_map::Entry, HashMap};
 
-use distances::Number;
+use distances::{number::Addition, Number};
 use rand::prelude::*;
 use rayon::prelude::*;
 
@@ -278,12 +278,20 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability < target && i < max_steps {
-            ftlog::debug!("Step {i}, Stability: {stability:.6}");
+        while stability.is_nan() || (stability < target && i < max_steps) {
+            ftlog::debug!(
+                "Reached stability: {stability:.6} after {i} steps with {} objects",
+                self.masses.len()
+            );
             self = self.update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
+
+        ftlog::debug!(
+            "Reached stability: {stability:.6} after {i} steps with {} objects",
+            self.masses.len()
+        );
 
         self
     }
@@ -359,18 +367,26 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability < target && i < max_steps {
+        while stability.is_nan() || (stability < target && i < max_steps) {
             if i % save_every == 0 {
                 ftlog::debug!("{name}: Saving step {}", i + 1);
                 let path = dir.as_ref().join(format!("{}.npy", i + 1));
                 self.get_reduced_embedding().write_npy(&path)?;
             }
 
-            ftlog::debug!("Step {i}, Stability: {stability:.6}");
+            ftlog::debug!(
+                "Reached stability: {stability:.6} after {i} steps with {} objects",
+                self.masses.len()
+            );
             self = self.update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
+
+        ftlog::debug!(
+            "Reached stability: {stability:.6} after {i} steps with {} objects",
+            self.masses.len()
+        );
 
         Ok(self)
     }
@@ -454,7 +470,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     #[must_use]
     #[allow(clippy::similar_names)]
     pub fn stability(&'a self, n: usize) -> f32 {
-        if self.energies.len() < n {
+        if self.energies.len() < n || self.masses.len() < 2 || self.springs.is_empty() {
             0.0
         } else {
             let last_n = &self.energies[(self.energies.len() - n)..];
@@ -472,8 +488,12 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
             let stability_pe = {
                 let mean = crate::utils::mean::<_, f32>(&last_pe);
-                let variance = crate::utils::variance(&last_pe, mean);
-                1.0 - (variance.sqrt() / mean)
+                if mean.abs_diff(0.0) < f32::EPSILON {
+                    1.0
+                } else {
+                    let variance = crate::utils::variance(&last_pe, mean);
+                    1.0 - (variance.sqrt() / mean)
+                }
             };
 
             (stability_ke + stability_pe) / 2.0
@@ -799,12 +819,20 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability < target && i < max_steps {
-            ftlog::debug!("Step {i}, Stability: {stability:.6}");
+        while stability.is_nan() || (stability < target && i < max_steps) {
+            ftlog::debug!(
+                "Reached stability: {stability:.6} after {i} steps with {} objects",
+                self.masses.len()
+            );
             self = self.par_update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
+
+        ftlog::debug!(
+            "Reached stability: {stability:.6} after {i} steps with {} objects",
+            self.masses.len()
+        );
 
         self
     }
@@ -844,18 +872,26 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability < target && i < max_steps {
+        while stability.is_nan() || (stability < target && i < max_steps) {
             if i % save_every == 0 {
                 ftlog::debug!("{name}: Saving step {}", i + 1);
                 let path = dir.as_ref().join(format!("{}.npy", i + 1));
                 self.get_reduced_embedding().write_npy(&path)?;
             }
 
-            ftlog::debug!("Step {i}, Stability: {stability:.6}");
+            ftlog::debug!(
+                "Reached stability: {stability:.6} after {i} steps with {} objects",
+                self.masses.len()
+            );
             self = self.par_update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
+
+        ftlog::debug!(
+            "Reached stability: {stability:.6} after {i} steps with {} objects",
+            self.masses.len()
+        );
 
         Ok(self)
     }

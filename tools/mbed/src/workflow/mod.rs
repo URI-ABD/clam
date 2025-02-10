@@ -44,7 +44,7 @@ pub enum Commands {
         f: f32,
 
         /// The minimum spring constant before removing a spring.
-        #[arg(short('K'), long, default_value = "0.00001")]
+        #[arg(short('K'), long, default_value = "0.0005")]
         min_k: Option<f32>,
 
         /// The time step for each iteration of the mass-spring system.
@@ -58,11 +58,11 @@ pub enum Commands {
 
         /// The target stability value. If the stability reaches this value, the
         /// optimization is stopped.
-        #[arg(short('T'), long)]
+        #[arg(short('T'), long, default_value = "0.98")]
         target: Option<f32>,
 
         /// The maximum number of iterations to run.
-        #[arg(short('M'), long)]
+        #[arg(short('M'), long, default_value = "1000")]
         max_steps: Option<usize>,
     },
     /// Measure the quality of a dimension reduction.

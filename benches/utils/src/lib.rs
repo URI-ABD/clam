@@ -38,7 +38,7 @@ pub use metrics::Complex;
 ///
 /// - If a logs directory could not be located/created.
 /// - If the logger could not be initialized.
-pub fn configure_logger(file_name: &str) -> Result<(LoggerGuard, std::path::PathBuf), String> {
+pub fn configure_logger(file_name: &str, level: LevelFilter) -> Result<(LoggerGuard, std::path::PathBuf), String> {
     let root_dir = std::path::PathBuf::from(".")
         .canonicalize()
         .map_err(|e| e.to_string())?;
@@ -54,7 +54,7 @@ pub fn configure_logger(file_name: &str) -> Result<(LoggerGuard, std::path::Path
 
     let guard = ftlog::Builder::new()
         // global max log level
-        .max_log_level(LevelFilter::Info)
+        .max_log_level(level)
         // define root appender, pass None would write to stderr
         .root(writer)
         // write `Debug` and higher logs in ftlog::appender to `err_path` instead of `log_path`
