@@ -399,14 +399,11 @@ impl<I, Me> Permutable for FlatVec<I, Me> {
 }
 
 #[cfg(feature = "disk-io")]
-impl<I: bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bitcode::Decode> super::DatasetIO<I>
-    for FlatVec<I, Me>
-{
-}
+impl<I: bitcode::Encode + bitcode::Decode, Me: bitcode::Encode + bitcode::Decode> crate::DiskIO for FlatVec<I, Me> {}
 
 #[cfg(feature = "disk-io")]
 impl<I: bitcode::Encode + bitcode::Decode + Send + Sync, Me: bitcode::Encode + bitcode::Decode + Send + Sync>
-    super::ParDatasetIO<I> for FlatVec<I, Me>
+    crate::ParDiskIO for FlatVec<I, Me>
 {
 }
 

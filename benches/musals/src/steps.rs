@@ -5,11 +5,11 @@ use std::path::Path;
 use abd_clam::{
     adapters::ParBallAdapter,
     cakes::PermutedBall,
-    cluster::{BalancedBall, ClusterIO, Csv, ParPartition},
-    dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO},
+    cluster::{BalancedBall, Csv, ParPartition},
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
     metric::ParMetric,
     musals::{Aligner, Columns, MSA},
-    Ball, Cluster, Dataset, FlatVec,
+    Ball, Cluster, Dataset, FlatVec, ParDiskIO,
 };
 
 type B<U> = Ball<U>;
@@ -65,10 +65,10 @@ pub fn build_perm_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
     let (ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
 
     ftlog::info!("Writing PermutedBall to {:?}", ball_path.as_ref());
-    ball.write_to(ball_path)?;
+    ball.par_write_to(ball_path)?;
 
     ftlog::info!("Writing PermutedData to {:?}", data_path.as_ref());
-    data.write_to(data_path)?;
+    data.par_write_to(data_path)?;
 
     Ok((ball, data))
 }
@@ -80,10 +80,10 @@ pub fn read_perm_ball<P: AsRef<Path>>(
     data_path: &P,
 ) -> Result<(Pb<i32>, FlatVec<String, String>), String> {
     ftlog::info!("Reading PermutedBall from {:?}", ball_path.as_ref());
-    let ball = Pb::read_from(ball_path)?;
+    let ball = Pb::par_read_from(ball_path)?;
 
     ftlog::info!("Reading PermutedData from {:?}", data_path.as_ref());
-    let data = FlatVec::read_from(data_path)?;
+    let data = FlatVec::par_read_from(data_path)?;
 
     Ok((ball, data))
 }
@@ -112,7 +112,7 @@ pub fn build_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
 
     // Serialize the ball to disk.
     ftlog::info!("Writing Ball to {:?}", ball_path.as_ref());
-    ball.write_to(ball_path)?;
+    ball.par_write_to(ball_path)?;
 
     // Write the ball to a CSV file.;
     ftlog::info!("Writing Ball to CSV at {:?}", csv_path.as_ref());
@@ -124,7 +124,7 @@ pub fn build_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
 /// Read the Ball from disk.
 pub fn read_ball<P: AsRef<Path>>(path: &P) -> Result<B<i32>, String> {
     ftlog::info!("Reading ball from {:?}", path.as_ref());
-    let ball = Ball::read_from(path)?;
+    let ball = Ball::par_read_from(path)?;
     ftlog::info!("Finished reading Ball.");
 
     Ok(ball)

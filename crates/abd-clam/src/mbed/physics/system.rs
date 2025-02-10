@@ -26,6 +26,8 @@ pub struct System<'a, const DIM: usize, T: Number, S: Cluster<T>> {
     beta: f32,
     /// The energy values of the system as it evolved over time.
     energies: Vec<[f32; 3]>,
+    /// The name of the system.
+    name: String,
 }
 
 impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
@@ -35,8 +37,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// - `root`: The root `Cluster` to create the `System` from.
     /// - `beta`: The damping factor of the `System`.
+    /// - `name`: The name of the `System`.
     #[must_use]
-    pub fn from_root(root: &'a S, beta: f32) -> Self {
+    pub fn from_root(root: &'a S, beta: f32, name: &str) -> Self {
         let m = Mass::new(root);
         let m_key = m.hash_key();
         let masses = core::iter::once((m_key, m)).collect::<HashMap<_, _>>();
@@ -45,6 +48,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             springs: Vec::new(),
             beta,
             energies: Vec::new(),
+            name: name.to_string(),
         }
     }
 
@@ -123,7 +127,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - `D`: The dataset.
     /// - `C`: The type of the `Cluster`s in the `Graph`.
     #[must_use]
-    pub fn from_graph(g: &'a Graph<T, S>, beta: f32, k: f32) -> Self {
+    pub fn from_graph(g: &'a Graph<T, S>, beta: f32, k: f32, name: &str) -> Self {
         let masses = g
             .iter_clusters()
             .map(Adapted::source)
@@ -143,6 +147,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             springs,
             beta,
             energies: Vec::new(),
+            name: name.to_string(),
         }
     }
 
@@ -193,6 +198,19 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     #[must_use]
     pub fn energies(&self) -> &[[f32; 3]] {
         &self.energies
+    }
+
+    /// Returns the name of the system.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Changes the name of the system.
+    #[must_use]
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_string();
+        self
     }
 
     /// Updates the lengths and forces of the springs in the system.
@@ -700,7 +718,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 
     /// Parallel version of [`System::from_graph`](Self::from_graph).
     #[must_use]
-    pub fn par_from_graph(g: &'a Graph<T, S>, beta: f32, k: f32) -> Self {
+    pub fn par_from_graph(g: &'a Graph<T, S>, beta: f32, k: f32, name: &str) -> Self {
         let masses = g
             .iter_clusters()
             .map(Adapted::source)
@@ -720,6 +738,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
             springs,
             beta,
             energies: Vec::new(),
+            name: name.to_string(),
         }
     }
 
@@ -891,7 +910,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 }
 
 #[cfg(feature = "disk-io")]
-impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
+impl<'a, const DIM: usize, T: Number + 'a, S: Cluster<T>> System<'a, DIM, T, S> {
     /// Encodes the `System` to a binary representation using `bitcode`.
     ///
     /// # Errors
@@ -920,6 +939,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         bytes.extend_from_slice(&energies_bytes.len().to_le_bytes());
         bytes.extend_from_slice(&energies_bytes);
 
+        // Encode the name.
+        bytes.extend_from_slice(self.name.as_bytes());
+
         Ok(bytes)
     }
 
@@ -928,10 +950,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// # Errors
     ///
     /// - If there is an error decoding any `Mass` or `Spring`.
-    pub fn from_bytes(bytes: &[u8], root: &'a S) -> Result<Self, String>
-    where
-        T: 'a,
-    {
+    pub fn from_bytes(bytes: &[u8], root: &'a S) -> Result<Self, String> {
         let sources = root
             .subtree()
             .into_iter()
@@ -969,11 +988,16 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             })
             .collect();
 
+        let name = std::str::from_utf8(&bytes[offset..])
+            .map_err(|e| format!("Error decoding Name: {e}"))?
+            .to_string();
+
         Ok(Self {
             masses,
             springs,
             beta,
             energies,
+            name,
         })
     }
 
@@ -994,10 +1018,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// - If there is an error reading the bytes from the file.
     /// - See [`System::from_bytes`](Self::from_bytes).
-    pub fn read_from<P: AsRef<std::path::Path>>(path: P, root: &'a S) -> Result<Self, String>
-    where
-        T: 'a,
-    {
+    pub fn read_from<P: AsRef<std::path::Path>>(path: P, root: &'a S) -> Result<Self, String> {
         let bytes = std::fs::read(path).map_err(|e| format!("Error reading System from file: {e}"))?;
         Self::from_bytes(&bytes, root)
     }

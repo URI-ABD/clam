@@ -1,6 +1,6 @@
 //! Deal with the Radio-ML dataset.
 
-use abd_clam::{dataset::DatasetIO, Dataset, FlatVec};
+use abd_clam::{Dataset, FlatVec, ParDiskIO};
 use bench_utils::Complex;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -56,7 +56,7 @@ pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
             .with_dim_upper_bound(dim);
 
         ftlog::info!("Writing dataset to bitcode encoding: {data_path:?}");
-        data.write_to(&data_path)?;
+        data.par_write_to(&data_path)?;
 
         for (power, path) in (1..=max_power).zip(all_paths.iter()) {
             let size = data.cardinality() / 2;
@@ -65,7 +65,7 @@ pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
                 .random_subsample(&mut rng, size)
                 .with_name(&format!("{name}-{power}"));
             ftlog::info!("Writing subsampled dataset with cardinality {size} to {path:?}...");
-            data.write_to(path)?;
+            data.par_write_to(path)?;
         }
 
         queries

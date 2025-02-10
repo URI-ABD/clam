@@ -3,10 +3,9 @@
 use abd_clam::{
     adapters::ParBallAdapter,
     cakes::PermutedBall,
-    cluster::{BalancedBall, Csv, ParClusterIO, ParPartition},
-    dataset::DatasetIO,
+    cluster::{BalancedBall, Csv, ParPartition},
     metric::ParMetric,
-    Ball, Dataset, FlatVec,
+    Ball, Dataset, FlatVec, ParDiskIO,
 };
 use distances::Number;
 
@@ -95,7 +94,7 @@ where
 
     if !all_paths.data.exists() {
         ftlog::info!("Writing data to {:?}...", all_paths.data);
-        data.write_to(&all_paths.data)?;
+        data.par_write_to(&all_paths.data)?;
     }
 
     ftlog::info!("Building Ball...");
@@ -119,7 +118,7 @@ where
         ball.write_to_csv(&csv_path)?;
 
         ftlog::info!("Writing Permuted data to {:?}...", all_paths.permuted_data);
-        data.write_to(&all_paths.permuted_data)?;
+        data.par_write_to(&all_paths.permuted_data)?;
     }
 
     if balanced {
@@ -154,7 +153,7 @@ where
                 "Writing Permuted Balanced data to {:?}...",
                 all_paths.permuted_balanced_data
             );
-            data.write_to(&all_paths.permuted_balanced_data)?;
+            data.par_write_to(&all_paths.permuted_balanced_data)?;
         }
     }
 

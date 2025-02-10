@@ -8,7 +8,7 @@
 
 use core::time::Duration;
 
-use abd_clam::{cakes::PermutedBall, cluster::ParClusterIO, dataset::DatasetIO, Ball, Cluster, Dataset, FlatVec};
+use abd_clam::{cakes::PermutedBall, Ball, Cluster, Dataset, FlatVec, ParDiskIO};
 use bench_utils::{reports::CakesResults, Complex};
 use distances::Number;
 use rand::prelude::*;
@@ -188,7 +188,7 @@ where
         .collect::<Vec<_>>();
 
     ftlog::info!("Reading data from {:?}...", all_paths.data);
-    let data = FlatVec::<I, Me>::read_from(&all_paths.data)?;
+    let data = FlatVec::<I, Me>::par_read_from(&all_paths.data)?;
 
     let (min_dim, max_dim) = data.dimensionality_hint();
     let mut report = CakesResults::new(
@@ -218,7 +218,7 @@ where
 
     if permuted {
         let ball = PermutedBall::<T, Ball<T>>::par_read_from(&all_paths.permuted_ball)?;
-        let data = FlatVec::<I, Me>::read_from(&all_paths.permuted_data)?;
+        let data = FlatVec::<I, Me>::par_read_from(&all_paths.permuted_data)?;
         ftlog::info!("Running search algorithms on PermutedBall...");
         search::bench_all_algs(
             &mut report,
@@ -260,7 +260,7 @@ where
 
         if permuted {
             let ball = PermutedBall::<T, Ball<T>>::par_read_from(&all_paths.permuted_balanced_ball)?;
-            let data = FlatVec::<I, Me>::read_from(&all_paths.permuted_balanced_data)?;
+            let data = FlatVec::<I, Me>::par_read_from(&all_paths.permuted_balanced_data)?;
             ftlog::info!("Running search algorithms on PermutedBalancedBall...");
             search::bench_all_algs(
                 &mut report,

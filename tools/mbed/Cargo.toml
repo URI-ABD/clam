@@ -1,0 +1,14 @@
+[package]
+name = "clam-mbed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { workspace = true }
+bitcode = { workspace = true }
+abd-clam = { workspace = true, features = ["all"] }
+distances = { workspace = true }
+ndarray = { workspace = true }
+ndarray-npy = { workspace = true }
+ftlog = { workspace = true }
+bench-utils = { path = "../../benches/utils" }

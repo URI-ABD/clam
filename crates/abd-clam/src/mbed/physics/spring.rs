@@ -145,3 +145,9 @@ impl Spring {
         0.5 * self.k * self.dx().powi(2)
     }
 }
+
+#[cfg(feature = "disk-io")]
+impl crate::DiskIO for Spring {}
+
+#[cfg(feature = "disk-io")]
+impl crate::ParDiskIO for Spring {}

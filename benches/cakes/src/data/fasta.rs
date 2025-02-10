@@ -1,6 +1,6 @@
 //! Dealing with FASTA files.
 
-use abd_clam::{dataset::DatasetIO, Dataset};
+use abd_clam::{Dataset, ParDiskIO};
 use rand::prelude::*;
 
 /// Reads a fasta dataset and subsamples it to a given maximum power of 2,
@@ -46,7 +46,7 @@ pub fn read_and_subsample<P: AsRef<std::path::Path>>(
         data = data.with_name(name);
 
         ftlog::info!("Writing dataset to bitcode encoding: {data_path:?}");
-        data.write_to(&data_path)?;
+        data.par_write_to(&data_path)?;
 
         let query_bytes = bitcode::encode(&queries).map_err(|e| e.to_string())?;
         std::fs::write(queries_path, query_bytes).map_err(|e| e.to_string())?;
@@ -59,7 +59,7 @@ pub fn read_and_subsample<P: AsRef<std::path::Path>>(
                 .random_subsample(&mut rng, size)
                 .with_name(&format!("{name}-{power}"));
             ftlog::info!("Writing subsampled dataset with cardinality {size} to {path:?}...");
-            data.write_to(path)?;
+            data.par_write_to(path)?;
         }
 
         queries

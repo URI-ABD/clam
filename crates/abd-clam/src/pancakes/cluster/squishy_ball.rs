@@ -396,11 +396,8 @@ impl<T: Number, S: crate::cluster::Csv<T>> crate::cluster::Csv<T> for SquishyBal
 impl<T: Number, S: crate::cluster::ParCsv<T>> crate::cluster::ParCsv<T> for SquishyBall<T, S> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number, S: crate::cluster::ClusterIO<T>> crate::cluster::ClusterIO<T> for SquishyBall<T, S> {
-    fn write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String>
-    where
-        Self: bitcode::Encode,
-    {
+impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskIO> crate::DiskIO for SquishyBall<T, S> {
+    fn write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
         let bytes = bitcode::encode(self).map_err(|e| e.to_string())?;
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&bytes).map_err(|e| e.to_string())?;
@@ -408,10 +405,7 @@ impl<T: Number, S: crate::cluster::ClusterIO<T>> crate::cluster::ClusterIO<T> fo
         std::fs::write(path, bytes).map_err(|e| e.to_string())
     }
 
-    fn read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String>
-    where
-        Self: bitcode::Decode,
-    {
+    fn read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
         let mut bytes = Vec::new();
         let mut decoder = GzDecoder::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
         decoder.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
@@ -420,4 +414,7 @@ impl<T: Number, S: crate::cluster::ClusterIO<T>> crate::cluster::ClusterIO<T> fo
 }
 
 #[cfg(feature = "disk-io")]
-impl<T: Number, S: crate::cluster::ParClusterIO<T>> crate::cluster::ParClusterIO<T> for SquishyBall<T, S> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::ParDiskIO> crate::ParDiskIO
+    for SquishyBall<T, S>
+{
+}

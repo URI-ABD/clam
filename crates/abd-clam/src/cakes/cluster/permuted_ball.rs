@@ -327,7 +327,10 @@ impl<T: Number, S: crate::cluster::Csv<T>> crate::cluster::Csv<T> for PermutedBa
 impl<T: Number, S: crate::cluster::ParCsv<T>> crate::cluster::ParCsv<T> for PermutedBall<T, S> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number, S: crate::cluster::ClusterIO<T>> crate::cluster::ClusterIO<T> for PermutedBall<T, S> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskIO> crate::DiskIO for PermutedBall<T, S> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number, S: crate::cluster::ParClusterIO<T>> crate::cluster::ParClusterIO<T> for PermutedBall<T, S> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::ParDiskIO> crate::ParDiskIO
+    for PermutedBall<T, S>
+{
+}

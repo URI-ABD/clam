@@ -20,10 +20,9 @@ use std::path::PathBuf;
 use abd_clam::{
     adapters::ParBallAdapter,
     cakes::PermutedBall,
-    cluster::ClusterIO,
-    dataset::{AssociatesMetadata, AssociatesMetadataMut, DatasetIO, ParDatasetIO},
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
     pancakes::{CodecData, SquishyBall},
-    Ball, Cluster, Dataset, FlatVec,
+    Ball, Cluster, Dataset, FlatVec, ParDiskIO,
 };
 use bench_utils::reports::CakesResults;
 use clap::Parser;
@@ -142,13 +141,13 @@ fn main() -> Result<(), String> {
 
         // Create the `Ball` tree and set up radii for ranged search.
         ftlog::info!("Reading the Ball tree.");
-        let ball = Ball::read_from(&all_paths.ball)?;
+        let ball = Ball::par_read_from(&all_paths.ball)?;
         let radii = radial_fractions.iter().map(|&f| f * ball.radius()).collect::<Vec<_>>();
 
         // Create the `PermutedBall` tree and its associated permuted data.
         ftlog::info!("Reading the PermutedBall tree.");
-        let perm_ball = PermutedBall::<f32, Ball<f32>>::read_from(&all_paths.permuted_ball)?;
-        let perm_data = FlatVec::<MembershipSet, usize>::read_from(&all_paths.permuted_data)?;
+        let perm_ball = PermutedBall::<f32, Ball<f32>>::par_read_from(&all_paths.permuted_ball)?;
+        let perm_data = FlatVec::<MembershipSet, usize>::par_read_from(&all_paths.permuted_data)?;
         let perm_data = perm_data.with_name(&format!("{}-permuted", args.dataset.name()));
 
         // Run the Search benchmarks before compression.
@@ -184,7 +183,7 @@ fn main() -> Result<(), String> {
             if !args.rebuild_trees && all_paths.squishy_ball.exists() && all_paths.codec_data.exists() {
                 // Load the `SquishyBall` tree and `CodecData` from disk.
                 ftlog::info!("SquishyBall already exists, loading from disk.");
-                let squishy_ball = SquishyBall::read_from(&all_paths.squishy_ball)?;
+                let squishy_ball = SquishyBall::par_read_from(&all_paths.squishy_ball)?;
                 ftlog::info!("CodecData already exists, loading from disk.");
                 let codec_data = CodecData::par_read_from(&all_paths.codec_data)?;
                 (squishy_ball, codec_data)
@@ -198,7 +197,7 @@ fn main() -> Result<(), String> {
                     .with_metadata(data.metadata())?;
 
                 // Save the squishy ball and codec data to disk.
-                squishy_ball.write_to(&all_paths.squishy_ball)?;
+                squishy_ball.par_write_to(&all_paths.squishy_ball)?;
                 codec_data.par_write_to(&all_paths.codec_data)?;
 
                 (squishy_ball, codec_data)
@@ -243,7 +242,7 @@ fn main() -> Result<(), String> {
             args.seed,
         )?;
 
-        let data = FlatVec::<String, String>::read_from(&data_paths[0])?;
+        let data = FlatVec::<String, String>::par_read_from(&data_paths[0])?;
         let data = data.transform_items(Sequence::from);
         let queries = queries.into_iter().map(|(_, q)| Sequence::from(q)).collect::<Vec<_>>();
 
@@ -256,7 +255,7 @@ fn main() -> Result<(), String> {
 
         // Create the `Ball` tree and set up radii for ranged search.
         ftlog::info!("Reading the Ball tree.");
-        let ball = Ball::<u32>::read_from(&all_paths.ball)?;
+        let ball = Ball::<u32>::par_read_from(&all_paths.ball)?;
         let radii = radial_fractions
             .iter()
             .map(|&f| f * ball.radius().as_f32())
@@ -265,8 +264,8 @@ fn main() -> Result<(), String> {
 
         // Create the `PermutedBall` tree and its associated permuted data.
         ftlog::info!("Reading the PermutedBall tree.");
-        let perm_ball = PermutedBall::<u32, Ball<u32>>::read_from(&all_paths.permuted_ball)?;
-        let perm_data = FlatVec::<String, String>::read_from(&all_paths.permuted_data)?;
+        let perm_ball = PermutedBall::<u32, Ball<u32>>::par_read_from(&all_paths.permuted_ball)?;
+        let perm_data = FlatVec::<String, String>::par_read_from(&all_paths.permuted_data)?;
         let perm_data = perm_data.transform_items(Sequence::from);
         let perm_data = perm_data.with_name(&format!("{}-permuted", args.dataset.name()));
 
@@ -304,7 +303,7 @@ fn main() -> Result<(), String> {
                 // Load the `SquishyBall` tree and `CodecData` from disk.
                 ftlog::info!("SquishyBall and CodecData already exist, loading from disk.");
                 (
-                    SquishyBall::read_from(&all_paths.squishy_ball)?,
+                    SquishyBall::par_read_from(&all_paths.squishy_ball)?,
                     CodecData::<Sequence, String, _, _>::par_read_from(&all_paths.codec_data)?,
                 )
             } else {
@@ -317,7 +316,7 @@ fn main() -> Result<(), String> {
                     .with_metadata(data.metadata())?;
 
                 // Save the squishy ball and codec data to disk.
-                squishy_ball.write_to(&all_paths.squishy_ball)?;
+                squishy_ball.par_write_to(&all_paths.squishy_ball)?;
                 codec_data.par_write_to(&all_paths.codec_data)?;
 
                 (squishy_ball, codec_data)
@@ -356,7 +355,7 @@ fn main() -> Result<(), String> {
         let (queries, data_paths) =
             bench_cakes::data::fasta::read_and_subsample(&args.inp_dir, &out_dir, true, args.num_queries, 0, args.seed)?;
 
-        let data = FlatVec::<String, String>::read_from(&data_paths[0])?;
+        let data = FlatVec::<String, String>::par_read_from(&data_paths[0])?;
         let data = data.transform_items(Sequence::from);
         let queries = queries.into_iter().map(|(_, q)| Sequence::from(q)).collect::<Vec<_>>();
 
@@ -369,7 +368,7 @@ fn main() -> Result<(), String> {
 
         // Create the `Ball` tree and set up radii for ranged search.
         ftlog::info!("Reading the Ball tree.");
-        let ball = Ball::<u32>::read_from(&all_paths.ball)?;
+        let ball = Ball::<u32>::par_read_from(&all_paths.ball)?;
         let radii = radial_fractions
             .iter()
             .map(|&f| f * ball.radius().as_f32())
@@ -378,8 +377,8 @@ fn main() -> Result<(), String> {
 
         // Create the `PermutedBall` tree and its associated permuted data.
         ftlog::info!("Reading the PermutedBall tree.");
-        let perm_ball = PermutedBall::<u32, Ball<u32>>::read_from(&all_paths.permuted_ball)?;
-        let perm_data = FlatVec::<String, String>::read_from(&all_paths.permuted_data)?;
+        let perm_ball = PermutedBall::<u32, Ball<u32>>::par_read_from(&all_paths.permuted_ball)?;
+        let perm_data = FlatVec::<String, String>::par_read_from(&all_paths.permuted_data)?;
         let perm_data = perm_data.transform_items(Sequence::from);
         let perm_data = perm_data.with_name(&format!("{}-permuted", args.dataset.name()));
 
@@ -417,7 +416,7 @@ fn main() -> Result<(), String> {
                 // Load the `SquishyBall` tree and `CodecData` from disk.
                 ftlog::info!("SquishyBall and CodecData already exist, loading from disk.");
                 (
-                    SquishyBall::read_from(&all_paths.squishy_ball)?,
+                    SquishyBall::par_read_from(&all_paths.squishy_ball)?,
                     CodecData::<Sequence, String, _, _>::par_read_from(&all_paths.codec_data)?,
                 )
             } else {
@@ -430,7 +429,7 @@ fn main() -> Result<(), String> {
                     .with_metadata(data.metadata())?;
 
                 // Save the squishy ball and codec data to disk.
-                squishy_ball.write_to(&all_paths.squishy_ball)?;
+                squishy_ball.par_write_to(&all_paths.squishy_ball)?;
                 codec_data.par_write_to(&all_paths.codec_data)?;
 
                 (squishy_ball, codec_data)

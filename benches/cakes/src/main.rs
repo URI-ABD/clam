@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use abd_clam::{dataset::DatasetIO, Dataset, FlatVec};
+use abd_clam::{Dataset, FlatVec, ParDiskIO};
 use bench_utils::Complex;
 use clap::Parser;
 use distances::Number;
@@ -212,7 +212,7 @@ fn main() -> Result<(), String> {
             }
 
             ftlog::info!("Reading sub-sampled data from {sample_path:?}...");
-            let data = FlatVec::<String, String>::read_from(sample_path)?;
+            let data = FlatVec::<String, String>::par_read_from(sample_path)?;
             ftlog::info!("Data from {sample_path:?} has {} sequences...", data.cardinality());
 
             let run_linear = i < 4;
@@ -263,7 +263,7 @@ fn main() -> Result<(), String> {
             }
 
             ftlog::info!("Reading sub-sampled data from {sample_path:?}...");
-            let data = FlatVec::<Vec<Complex<f64>>, usize>::read_from(sample_path)?;
+            let data = FlatVec::<Vec<Complex<f64>>, usize>::par_read_from(sample_path)?;
             ftlog::info!("Data from {sample_path:?} has {} signals...", data.cardinality());
 
             let run_linear = i < 3;

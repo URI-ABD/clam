@@ -1,13 +1,14 @@
 [workspace]
 members = [
-    "crates/abd-clam",
-    "crates/distances",
-    "crates/symagen",
-    "pypi/distances",
     "benches/utils",
     "benches/cakes",
     "benches/pancakes",
     "benches/musals",
+    "crates/abd-clam",
+    "crates/distances",
+    "crates/symagen",
+    "pypi/distances",
+    "tools/mbed",
 ]
 resolver = "2"
 

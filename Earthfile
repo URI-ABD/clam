@@ -31,7 +31,7 @@ ENV PATH="${RYE_HOME}/shims:${PATH}"
 
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
-    COPY --dir benches crates pypi .
+    COPY --dir benches crates pypi tools .
     COPY Cargo.toml .
     RUN cargo chef prepare
     SAVE ARTIFACT recipe.json
@@ -45,6 +45,7 @@ chef-cook:
     COPY --dir benches .
     COPY --dir crates .
     COPY --dir pypi .
+    COPY --dir tools .
     RUN rye sync --no-lock
 
 # This target builds the project using the cached dependencies.
@@ -75,6 +76,7 @@ fix:
     SAVE ARTIFACT benches AS LOCAL ./
     SAVE ARTIFACT crates AS LOCAL ./
     SAVE ARTIFACT pypi AS LOCAL ./
+    SAVE ARTIFACT tools AS LOCAL ./
 
 # This target runs the tests.
 test:

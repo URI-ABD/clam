@@ -16,13 +16,6 @@ pub use flat_vec::FlatVec;
 pub use permutable::Permutable;
 pub use sized_heap::SizedHeap;
 
-#[cfg(feature = "disk-io")]
-mod io;
-
-#[cfg(feature = "disk-io")]
-#[allow(clippy::module_name_repetitions)]
-pub use io::{DatasetIO, ParDatasetIO};
-
 /// A dataset is a collection of items.
 ///
 /// # Type Parameters

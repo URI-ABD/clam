@@ -362,7 +362,7 @@ impl<T: Number> super::Csv<T> for Ball<T> {
 impl<T: Number> super::ParCsv<T> for Ball<T> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number> super::ClusterIO<T> for Ball<T> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode> crate::DiskIO for Ball<T> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number> super::ParClusterIO<T> for Ball<T> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T> {}
