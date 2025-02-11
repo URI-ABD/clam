@@ -9,7 +9,7 @@ use crate::quality_measures::QualityMeasures;
 mod build;
 mod measure;
 
-pub use build::{build, Tree};
+pub use build::build;
 pub use measure::measure;
 
 #[derive(Subcommand, Debug)]
@@ -40,15 +40,15 @@ pub enum Commands {
 
         /// The factor by which spring constants are multiplied while descending
         /// the tree.
-        #[arg(short('f'), long, default_value = "0.5")]
+        #[arg(short('f'), long, default_value = "0.9")]
         f: f32,
 
         /// The minimum spring constant before removing a spring.
-        #[arg(short('K'), long, default_value = "0.0005")]
+        #[arg(short('K'), long, default_value = "0.5")]
         min_k: Option<f32>,
 
         /// The time step for each iteration of the mass-spring system.
-        #[arg(short('t'), long, default_value = "0.01")]
+        #[arg(short('t'), long, default_value = "0.001")]
         dt: f32,
 
         /// The number of iterations to wait before stopping the optimization if
@@ -58,11 +58,11 @@ pub enum Commands {
 
         /// The target stability value. If the stability reaches this value, the
         /// optimization is stopped.
-        #[arg(short('T'), long, default_value = "0.98")]
+        #[arg(short('T'), long, default_value = "0.99998")]
         target: Option<f32>,
 
         /// The maximum number of iterations to run.
-        #[arg(short('M'), long, default_value = "1000")]
+        #[arg(short('M'), long, default_value = "10000")]
         max_steps: Option<usize>,
     },
     /// Measure the quality of a dimension reduction.

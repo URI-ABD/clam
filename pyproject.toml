@@ -29,4 +29,5 @@ dev-dependencies = [
 members = [
     "pypi/distances",
     "benches/py-cakes",
+    "benches/py-mbed",
 ]

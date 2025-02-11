@@ -4,10 +4,10 @@ use abd_clam::{metric::ParMetric, Dataset, FlatVec};
 use rand::prelude::*;
 
 /// Measure the distortion of a number of triangle inequalities.
-pub fn measure<I, M>(
+pub fn measure<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
-    reduced_data: &FlatVec<[f32; 3], usize>,
+    reduced_data: &FlatVec<[f32; DIM], usize>,
     exhaustive: bool,
 ) -> f32
 where
@@ -27,10 +27,10 @@ where
 
 /// Measure the quality using a subsample of the data.
 #[allow(unused_variables)]
-fn measure_subsample<I, M>(
+fn measure_subsample<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
-    reduced_data: &FlatVec<[f32; 3], usize>,
+    reduced_data: &FlatVec<[f32; DIM], usize>,
     indices: &[usize],
 ) -> f32
 where

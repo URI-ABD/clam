@@ -32,11 +32,11 @@ impl QualityMeasures {
     }
 
     /// Measure the quality of the dimension reduction.
-    pub fn measure<I: Send + Sync, M: ParMetric<I, f32>>(
+    pub fn measure<I: Send + Sync, M: ParMetric<I, f32>, const DIM: usize>(
         &self,
         original_data: &FlatVec<I, usize>,
         metric: &M,
-        reduced_data: &FlatVec<[f32; 3], usize>,
+        reduced_data: &FlatVec<[f32; DIM], usize>,
         exhaustive: bool,
     ) -> f32 {
         match self {

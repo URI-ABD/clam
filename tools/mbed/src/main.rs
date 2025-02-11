@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{Ball, FlatVec, ParDiskIO};
+use abd_clam::{Ball, FlatVec};
 use clap::Parser;
 
 mod distance_functions;
@@ -116,10 +116,10 @@ fn main() -> Result<(), String> {
             ftlog::info!("Saving checkpoints every {checkpoint_frequency} iterations...");
             ftlog::info!("Saving the final result to {name}.npy in {out_dir:?}...");
 
-            let data = FlatVec::<Vec<f64>, usize>::read_npy(&inp_path)?
+            let data = FlatVec::<Vec<f32>, usize>::read_npy(&inp_path)?
                 .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
             let criteria = |_: &Ball<f32>| true;
-            let tree = workflow::build::<_, _, _, _, _, _, 3>(
+            let reduced_data = workflow::build::<_, _, _, _, _, _, 2>(
                 &out_dir,
                 data,
                 metric,
@@ -138,8 +138,8 @@ fn main() -> Result<(), String> {
                 *max_steps,
             )?;
 
-            let tree_path = out_dir.join(format!("{name}-tree.bin"));
-            tree.par_write_to(&tree_path)?;
+            let data_path = out_dir.join(format!("{name}-reduced.npy"));
+            reduced_data.write_npy(&data_path)?;
         }
         Commands::Measure {
             original_data,
@@ -150,12 +150,12 @@ fn main() -> Result<(), String> {
                 return Err("Original data must be in .npy format".to_string());
             }
 
-            if !inp_name.ends_with("-tree") {
-                return Err("Input file must be a tree".to_string());
+            if !inp_name.ends_with("-reduced") {
+                return Err("Input file must be a reduced dataset".to_string());
             }
 
-            if inp_path.extension().is_none_or(|ext| ext != "bin") {
-                return Err("Input file must be in .bin format".to_string());
+            if inp_path.extension().is_none_or(|ext| ext != "npy") {
+                return Err("Input file must be in .npy format".to_string());
             }
 
             ftlog::info!("Measuring quality of dimension reduction...");
@@ -171,12 +171,11 @@ fn main() -> Result<(), String> {
             }
             ftlog::info!("Saving the results in {out_dir:?}...");
 
-            let original_data = FlatVec::<Vec<f64>, usize>::read_npy(&original_data)?
+            let original_data = FlatVec::<Vec<f32>, usize>::read_npy(&original_data)?
                 .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
-            let tree = workflow::Tree::<Ball<f32>, 3>::par_read_from(&inp_path)?;
-            let reduced_data = tree.dataset();
+            let reduced_data = FlatVec::<[f32; 2], usize>::read_npy(&inp_path)?;
 
-            let measures = workflow::measure(&original_data, &metric, reduced_data, quality_measures, *exhaustive);
+            let measures = workflow::measure(&original_data, &metric, &reduced_data, quality_measures, *exhaustive);
 
             for (qm, value) in quality_measures.iter().zip(measures) {
                 ftlog::info!("Quality {:?}: {value:.6}", qm.name());

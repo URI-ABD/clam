@@ -1,0 +1,35 @@
+[project]
+name = "py-mbed"
+version = "0.1.0"
+description = "Plots of dimension reduction from CLAM-MBED"
+authors = [
+    { name = "Najib Ishaq", email = "najib_ishaq@zoho.com" }
+]
+dependencies = [
+    "typer>=0.15.1",
+    "pandas>=2.2.3",
+    "matplotlib>=3.9.4",
+    "numpy>=2.0.2",
+    "umap-learn>=0.5.7",
+]
+readme = "README.md"
+requires-python = ">= 3.9"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/py_mbed"]
+
+[tool.ruff]
+lint.extend-ignore = [
+    "G004",  # Use of f-string in logging statements
+]

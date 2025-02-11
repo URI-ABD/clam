@@ -280,8 +280,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         let mut stability = self.stability(patience);
         while stability.is_nan() || (stability < target && i < max_steps) {
             ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects",
-                self.masses.len()
+                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+                self.masses.len(),
+                self.springs.len()
             );
             self = self.update_step(dt);
             i += 1;
@@ -289,8 +290,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects",
-            self.masses.len()
+            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            self.masses.len(),
+            self.springs.len()
         );
 
         self
@@ -375,8 +377,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             }
 
             ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects",
-                self.masses.len()
+                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+                self.masses.len(),
+                self.springs.len()
             );
             self = self.update_step(dt);
             i += 1;
@@ -384,8 +387,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects",
-            self.masses.len()
+            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            self.masses.len(),
+            self.springs.len()
         );
 
         Ok(self)
@@ -821,8 +825,9 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         let mut stability = self.stability(patience);
         while stability.is_nan() || (stability < target && i < max_steps) {
             ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects",
-                self.masses.len()
+                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+                self.masses.len(),
+                self.springs.len()
             );
             self = self.par_update_step(dt);
             i += 1;
@@ -830,8 +835,9 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects",
-            self.masses.len()
+            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            self.masses.len(),
+            self.springs.len()
         );
 
         self
@@ -880,8 +886,9 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
             }
 
             ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects",
-                self.masses.len()
+                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+                self.masses.len(),
+                self.springs.len()
             );
             self = self.par_update_step(dt);
             i += 1;
@@ -889,8 +896,9 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects",
-            self.masses.len()
+            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            self.masses.len(),
+            self.springs.len()
         );
 
         Ok(self)

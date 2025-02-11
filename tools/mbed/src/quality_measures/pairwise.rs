@@ -9,10 +9,10 @@ use rayon::prelude::*;
 ///
 /// This is the mean relative error of the distances between pairs of points in
 /// the original space and the reduced space.
-pub fn measure<I, M>(
+pub fn measure<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
-    reduced_data: &FlatVec<[f32; 3], usize>,
+    reduced_data: &FlatVec<[f32; DIM], usize>,
     exhaustive: bool,
 ) -> f32
 where
@@ -31,10 +31,10 @@ where
 }
 
 /// Measure the quality using a subsample of the data.
-fn measure_subsample<I, M>(
+fn measure_subsample<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
-    reduced_data: &FlatVec<[f32; 3], usize>,
+    reduced_data: &FlatVec<[f32; DIM], usize>,
     indices: &[usize],
 ) -> f32
 where

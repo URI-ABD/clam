@@ -2,13 +2,11 @@
 
 use abd_clam::{
     cluster::ParPartition,
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
     mbed::MassSpringSystem,
-    metric::{Euclidean, ParMetric},
+    metric::ParMetric,
     Dataset, FlatVec,
 };
-
-/// The type of the tree created by the dimension reduction.
-pub type Tree<C, const DIM: usize> = abd_clam::cluster::Tree<[f32; DIM], f32, FlatVec<[f32; DIM], usize>, C, Euclidean>;
 
 /// Build the dimension reduction.
 ///
@@ -38,14 +36,14 @@ pub fn build<P, I, M, C, CC, Me, const DIM: usize>(
     patience: usize,
     target: Option<f32>,
     max_steps: Option<usize>,
-) -> Result<Tree<C, DIM>, String>
+) -> Result<FlatVec<[f32; DIM], Me>, String>
 where
     P: AsRef<std::path::Path>,
     I: Send + Sync,
     M: ParMetric<I, f32>,
     C: ParPartition<f32>,
     CC: (Fn(&C) -> bool) + Send + Sync,
-    Me: Send + Sync,
+    Me: Clone + Send + Sync,
 {
     ftlog::info!("Building the dimension reduction ...");
     ftlog::info!("Output directory: {:?}", out_dir.as_ref());
@@ -63,7 +61,5 @@ where
         .par_evolve_to_leaves(&data, &metric, seed, k, f, min_k, dt, patience, target, max_steps);
 
     ftlog::info!("Extracting the reduced embedding ...");
-    let data = system.get_reduced_embedding();
-
-    Ok(Tree::new(root, data, Euclidean))
+    system.get_reduced_embedding().with_metadata(data.metadata())
 }

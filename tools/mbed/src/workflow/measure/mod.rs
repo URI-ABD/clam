@@ -6,10 +6,10 @@ use rayon::prelude::*;
 use crate::quality_measures::QualityMeasures;
 
 /// Measure the quality of the dimension reduction.
-pub fn measure<I, M>(
+pub fn measure<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
-    reduced_data: &FlatVec<[f32; 3], usize>,
+    reduced_data: &FlatVec<[f32; DIM], usize>,
     quality_measures: &[QualityMeasures],
     exhaustive: bool,
 ) -> Vec<f32>

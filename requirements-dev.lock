@@ -9,6 +9,7 @@
 
 -e file:pypi/distances
 -e file:benches/py-cakes
+-e file:benches/py-mbed
 bump2version==1.0.1
 cfgv==3.4.0
     # via pre-commit
@@ -38,31 +39,46 @@ importlib-resources==6.4.5
     # via matplotlib
 iniconfig==2.0.0
     # via pytest
+joblib==1.4.2
+    # via pynndescent
+    # via scikit-learn
 kiwisolver==1.4.7
     # via matplotlib
+llvmlite==0.43.0
+    # via numba
+    # via pynndescent
 markdown-it-py==3.0.0
     # via rich
 matplotlib==3.9.4
     # via py-cakes
+    # via py-mbed
     # via seaborn
 mdurl==0.1.2
     # via markdown-it-py
 nodeenv==1.9.1
     # via pre-commit
+numba==0.60.0
+    # via pynndescent
+    # via umap-learn
 numpy==2.0.2
     # via abd-distances
     # via contourpy
     # via matplotlib
+    # via numba
     # via pandas
     # via py-cakes
+    # via py-mbed
+    # via scikit-learn
     # via scipy
     # via seaborn
+    # via umap-learn
 packaging==24.2
     # via matplotlib
     # via pytest
     # via pytest-sugar
 pandas==2.2.3
     # via py-cakes
+    # via py-mbed
     # via seaborn
 pillow==11.0.0
     # via matplotlib
@@ -75,6 +91,8 @@ pygments==2.18.0
     # via rich
 pyinstrument==5.0.0
     # via richbench
+pynndescent==0.5.13
+    # via umap-learn
 pyparsing==3.2.0
     # via matplotlib
 pytest==8.3.3
@@ -95,7 +113,13 @@ rich==13.9.4
     # via richbench
     # via typer
 richbench==1.0.3
+scikit-learn==1.6.1
+    # via pynndescent
+    # via umap-learn
 scipy==1.13.1
+    # via pynndescent
+    # via scikit-learn
+    # via umap-learn
 seaborn==0.13.2
 shellingham==1.5.4
     # via typer
@@ -103,17 +127,23 @@ six==1.16.0
     # via python-dateutil
 termcolor==2.5.0
     # via pytest-sugar
+threadpoolctl==3.5.0
+    # via scikit-learn
 tomli==2.2.1
     # via coverage
     # via pytest
 tqdm==4.67.1
+    # via umap-learn
 typer==0.15.1
     # via py-cakes
+    # via py-mbed
 typing-extensions==4.12.2
     # via rich
     # via typer
 tzdata==2024.2
     # via pandas
+umap-learn==0.5.7
+    # via py-mbed
 virtualenv==20.28.0
     # via pre-commit
 zipp==3.21.0
