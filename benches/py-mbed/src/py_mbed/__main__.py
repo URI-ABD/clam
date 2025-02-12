@@ -29,11 +29,28 @@ def plot_dim_red(
         readable=True,
         resolve_path=True,
     ),
-    mbed_path: pathlib.Path = typer.Option(  # noqa: B008
+    mbed_dir: pathlib.Path = typer.Option(  # noqa: B008
         ...,
-        "--mbed-path",
+        "--mbed-dir",
         "-m",
-        help="Path to the npy file containing the data reduced by CLAM-MBED.",
+        help="Directory containing the MBED data.",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+    ),
+    mbed_name: str = typer.Option(  # noqa: B008
+        ...,
+        "--mbed-name",
+        "-n",
+        help="Name of the dataset.",
+    ),
+    labels_path: pathlib.Path = typer.Option(  # noqa: B008
+        ...,
+        "--labels-path",
+        "-l",
+        help="Path to the npy file containing the labels.",
         exists=True,
         file_okay=True,
         dir_okay=False,
@@ -56,11 +73,11 @@ def plot_dim_red(
     logger.info("Plotting dimensionality reduction results...")
     logger.info("")
     logger.info(f"Original data: {original_path}")
-    logger.info(f"MBED data: {mbed_path}")
+    logger.info(f"MBED directory: {mbed_dir}")
     logger.info(f"Output directory: {out_dir}")
     logger.info("")
 
-    py_mbed.plot_dim_red(original_path, mbed_path, out_dir)
+    py_mbed.plot_dim_red(original_path, mbed_dir, mbed_name, labels_path, out_dir)
 
     logger.info("Done.")
 

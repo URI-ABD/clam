@@ -8,12 +8,14 @@ from matplotlib import pyplot as plt
 
 def plot(
     inp_path: pathlib.Path,
+    labels_path: pathlib.Path,
     ax: plt.Axes,
 ) -> None:
     """Plot dimensionality reduction results using CLAM-MBED."""
 
     # Read the data
     data = numpy.load(inp_path)
+    labels = numpy.load(labels_path)
 
     # Plot the data
     ax.scatter(
@@ -21,5 +23,8 @@ def plot(
         data[:, 1],
         s=10,
         alpha=0.5,
+        c=labels,
     )
     ax.set_title("CLAM-MBED")
+
+    ax.legend()

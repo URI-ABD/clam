@@ -58,7 +58,7 @@ pub enum Commands {
 
         /// The target stability value. If the stability reaches this value, the
         /// optimization is stopped.
-        #[arg(short('T'), long, default_value = "0.99998")]
+        #[arg(short('T'), long, default_value = "0.0001")]
         target: Option<f32>,
 
         /// The maximum number of iterations to run.

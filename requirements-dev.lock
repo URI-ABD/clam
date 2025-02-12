@@ -35,6 +35,8 @@ fonttools==4.55.0
     # via matplotlib
 identify==2.6.3
     # via pre-commit
+imageio==2.37.0
+    # via py-mbed
 importlib-resources==6.4.5
     # via matplotlib
 iniconfig==2.0.0
@@ -63,6 +65,7 @@ numba==0.60.0
 numpy==2.0.2
     # via abd-distances
     # via contourpy
+    # via imageio
     # via matplotlib
     # via numba
     # via pandas
@@ -81,6 +84,7 @@ pandas==2.2.3
     # via py-mbed
     # via seaborn
 pillow==11.0.0
+    # via imageio
     # via matplotlib
 platformdirs==4.3.6
     # via virtualenv

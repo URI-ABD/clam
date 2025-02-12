@@ -201,9 +201,9 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
     /// Returns the distance vector from this `Mass` to another `Mass`.
     #[must_use]
     pub fn distance_vector_to(&self, other: &Self) -> [f32; DIM] {
-        let mut dv = [0.0; DIM];
-        for ((d, &p), &o) in dv.iter_mut().zip(self.position.iter()).zip(other.position.iter()) {
-            *d = o - p;
+        let mut dv = other.position;
+        for (d, &p) in dv.iter_mut().zip(self.position.iter()) {
+            *d -= p;
         }
         dv
     }
@@ -277,8 +277,10 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
             *f -= (*v) * beta;
             *v += ((*f) / self.m) * dt;
             *p += (*v) * dt;
-            *f = 0.0;
         }
+
+        self.force = [0.0; DIM];
+        self.stress = 0.0;
     }
 
     /// Returns the kinetic energy of the `Mass`.

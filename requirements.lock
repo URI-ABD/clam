@@ -18,6 +18,8 @@ cycler==0.12.1
     # via matplotlib
 fonttools==4.55.3
     # via matplotlib
+imageio==2.37.0
+    # via py-mbed
 importlib-resources==6.4.5
     # via matplotlib
 joblib==1.4.2
@@ -41,6 +43,7 @@ numba==0.60.0
 numpy==2.0.2
     # via abd-distances
     # via contourpy
+    # via imageio
     # via matplotlib
     # via numba
     # via pandas
@@ -55,6 +58,7 @@ pandas==2.2.3
     # via py-cakes
     # via py-mbed
 pillow==11.0.0
+    # via imageio
     # via matplotlib
 pygments==2.18.0
     # via rich

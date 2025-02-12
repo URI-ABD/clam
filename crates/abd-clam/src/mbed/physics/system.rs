@@ -2,7 +2,7 @@
 
 use std::collections::{hash_map::Entry, HashMap};
 
-use distances::{number::Addition, Number};
+use distances::Number;
 use rand::prelude::*;
 use rayon::prelude::*;
 
@@ -71,7 +71,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// - `max_steps`: The maximum number of time-steps to simulate per
     ///   iteration.
     #[allow(clippy::too_many_arguments)]
-    pub fn evolve_to_leaves<I, D: Dataset<I>, M: Metric<I, T>>(
+    pub fn evolve_to_leaves<I, D: Dataset<I>, M: Metric<I, T>, P: AsRef<std::path::Path>>(
         mut self,
         data: &D,
         metric: &M,
@@ -83,32 +83,66 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         patience: usize,
         target: Option<f32>,
         max_steps: Option<usize>,
+        out_dir: &P,
     ) -> Self {
         let f = f.clamp(0.0, 1.0);
 
+        let mut m_keys = self
+            .most_stressed_non_leaves(100)
+            .into_iter()
+            .map(Mass::hash_key)
+            .collect::<Vec<_>>();
         if let Some(min_k) = min_k {
-            while let Some(m_key) = self.most_stressed_non_leaf().map(Mass::hash_key) {
+            while !m_keys.is_empty() {
+                self = m_keys.iter().fold(self, |system, m_key| {
+                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                });
                 self = self
-                    .add_child_triangle(m_key, data, metric, seed, k, f)
-                    .0
                     .remove_loose_springs(min_k)
                     .0
-                    .evolve_to_stability(dt, patience, target, max_steps)
-                    .remove_mass(m_key)
-                    .0;
+                    .add_random_springs(data, metric, k)
+                    .evolve_to_stability(dt, patience, target, max_steps);
+                self = m_keys.iter().fold(self, |system, &m_key| system.remove_mass(m_key).0);
+                self = self.clear_energies();
+                m_keys = self
+                    .most_stressed_non_leaves(100)
+                    .into_iter()
+                    .map(Mass::hash_key)
+                    .collect::<Vec<_>>();
+
+                let path = out_dir
+                    .as_ref()
+                    .join(format!("{}-step-{}.npy", self.name, self.masses.len()));
+                self.get_reduced_embedding()
+                    .write_npy(&path)
+                    .unwrap_or_else(|e| unreachable!("Error writing embeddings: {e}"));
             }
         } else {
-            while let Some(m_key) = self.most_stressed_non_leaf().map(Mass::hash_key) {
+            while !m_keys.is_empty() {
+                self = m_keys.iter().fold(self, |system, m_key| {
+                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                });
                 self = self
-                    .add_child_triangle(m_key, data, metric, seed, k, f)
-                    .0
-                    .evolve_to_stability(dt, patience, target, max_steps)
-                    .remove_mass(m_key)
-                    .0;
+                    .add_random_springs(data, metric, k)
+                    .evolve_to_stability(dt, patience, target, max_steps);
+                self = m_keys.iter().fold(self, |system, &m_key| system.remove_mass(m_key).0);
+                self = self.clear_energies();
+                m_keys = self
+                    .most_stressed_non_leaves(100)
+                    .into_iter()
+                    .map(Mass::hash_key)
+                    .collect::<Vec<_>>();
+
+                let path = out_dir
+                    .as_ref()
+                    .join(format!("{}-step-{}.npy", self.name, self.masses.len()));
+                self.get_reduced_embedding()
+                    .write_npy(&path)
+                    .unwrap_or_else(|e| unreachable!("Error writing embeddings: {e}"));
             }
         }
 
-        self
+        self.evolve_to_stability(dt, patience * 10, target, None)
     }
 
     /// Creates a new `System` of `Mass`es from a `Graph`.
@@ -217,6 +251,12 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         self
     }
 
+    /// Clears the energy values of the system.
+    pub fn clear_energies(mut self) -> Self {
+        self.energies.clear();
+        self
+    }
+
     /// Updates the `System` for one time step.
     ///
     /// This will:
@@ -233,12 +273,13 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             .springs
             .iter()
             .map(|s| {
+                let (a_key, b_key) = s.hash_key();
                 let f_mag = s.f_mag();
-                let mut fv = self.masses[&s.a_key()].unit_vector_to(&self.masses[&s.b_key()]);
+                let mut fv = self.masses[&a_key].unit_vector_to(&self.masses[&b_key]);
                 for f_i in &mut fv {
                     *f_i *= f_mag;
                 }
-                (s.a_key(), s.b_key(), fv)
+                (a_key, b_key, fv)
             })
             .collect::<Vec<_>>();
 
@@ -264,6 +305,8 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// - `dt`: The time-step.
     /// - `patience`: The number of time-steps to consider for stability.
+    /// - `target`: The target stability to reach.
+    /// - `max_steps`: The maximum number of time-steps to simulate.
     pub fn evolve_to_stability(
         mut self,
         dt: f32,
@@ -278,19 +321,14 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability.is_nan() || (stability < target && i < max_steps) {
-            ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
-                self.masses.len(),
-                self.springs.len()
-            );
+        while stability > target && i < max_steps {
             self = self.update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            "Reached stability: {stability:.10} after {i} steps with {} objects and {} springs",
             self.masses.len(),
             self.springs.len()
         );
@@ -432,16 +470,16 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         Ok(self)
     }
 
-    /// Get the total potential energy of the `System`.
-    #[must_use]
-    pub fn potential_energy(&self) -> f32 {
-        self.springs.iter().map(Spring::potential_energy).sum()
-    }
-
     /// Get the total kinetic energy of the `System`.
     #[must_use]
     pub fn kinetic_energy(&self) -> f32 {
         self.masses.values().map(Mass::kinetic_energy).sum()
+    }
+
+    /// Get the total potential energy of the `System`.
+    #[must_use]
+    pub fn potential_energy(&self) -> f32 {
+        self.springs.iter().map(Spring::potential_energy).sum()
     }
 
     /// Get the total energy of the `System`.
@@ -453,16 +491,16 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// Calculates the energy of the system.
     #[must_use]
     pub fn current_energies(&self) -> [f32; 3] {
-        let potential_energy = self.potential_energy();
         let kinetic_energy = self.kinetic_energy();
-        let total_energy = potential_energy + kinetic_energy;
-        [potential_energy, kinetic_energy, total_energy]
+        let potential_energy = self.potential_energy();
+        let total_energy = kinetic_energy + potential_energy;
+        [kinetic_energy, potential_energy, total_energy]
     }
 
     /// Get the stability of the `System` over the last `n` time-steps.
     ///
-    /// The stability is the mean of the `1 - (std-dev / mean_val)` of the
-    /// kinetic and potential energies.
+    /// The stability is the mean of the coefficient of variation of the kinetic
+    /// and potential energies over the last `n` time-steps.
     ///
     /// # Arguments
     ///
@@ -470,37 +508,42 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     ///
     /// # Returns
     ///
-    /// The stability of the `System` in a [0, 1] range, with 1 being stable.
+    /// The stability of the `System` in a [0, inf) range, lower values
+    /// indicating higher stability.
     #[must_use]
     #[allow(clippy::similar_names)]
     pub fn stability(&'a self, n: usize) -> f32 {
         if self.energies.len() < n || self.masses.len() < 2 || self.springs.is_empty() {
-            0.0
+            1.0
         } else {
-            let last_n = &self.energies[(self.energies.len() - n)..];
-
-            let (last_ke, last_pe) = last_n
+            let (last_ke, last_pe) = self
+                .energies
                 .iter()
+                .skip(self.energies.len() - n)
                 .map(|&[ke, pe, _]| (ke, pe))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
 
-            let stability_ke = {
+            let rel_var_ke = {
                 let mean = crate::utils::mean::<_, f32>(&last_ke);
                 let variance = crate::utils::variance(&last_ke, mean);
-                1.0 - (variance.sqrt() / mean)
-            };
-
-            let stability_pe = {
-                let mean = crate::utils::mean::<_, f32>(&last_pe);
-                if mean.abs_diff(0.0) < f32::EPSILON {
-                    1.0
+                if mean <= f32::EPSILON {
+                    variance.sqrt()
                 } else {
-                    let variance = crate::utils::variance(&last_pe, mean);
-                    1.0 - (variance.sqrt() / mean)
+                    variance.sqrt() / mean
                 }
             };
 
-            (stability_ke + stability_pe) / 2.0
+            let rel_var_pe = {
+                let mean = crate::utils::mean::<_, f32>(&last_pe);
+                let variance = crate::utils::variance(&last_pe, mean);
+                if mean <= f32::EPSILON {
+                    variance.sqrt()
+                } else {
+                    variance.sqrt() / mean
+                }
+            };
+
+            (rel_var_ke + rel_var_pe) / 2.0
         }
     }
 
@@ -524,7 +567,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         self.masses.remove(&m_key);
         let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m_key));
         self.springs = remaining_springs;
-        (self, connecting_springs)
+        (self.update_springs(), connecting_springs)
     }
 
     /// Insert a `Spring` to the `System`.
@@ -560,6 +603,28 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         (self, loose_springs)
     }
 
+    /// Add springs between up to 10% of random pairs of `Mass`es.
+    pub fn add_random_springs<I, D: Dataset<I>, M: Metric<I, T>>(mut self, data: &D, metric: &M, k: f32) -> Self {
+        let mut pairs = Vec::new();
+        let m_keys = self.masses.keys().copied().collect::<Vec<_>>();
+        for i in 0..m_keys.len() {
+            for j in (i + 1)..m_keys.len() {
+                pairs.push((m_keys[i], m_keys[j]));
+            }
+        }
+        let mut rng = StdRng::from_entropy();
+        pairs.shuffle(&mut rng);
+        pairs.truncate(pairs.len() / 100);
+
+        self.springs.extend(pairs.into_iter().map(|(a_key, b_key)| {
+            let l0 = data.one_to_one(a_key.1, b_key.1, metric);
+            let l = self.masses[&a_key].current_distance_to(&self.masses[&b_key]);
+            Spring::new(a_key, b_key, k, l0, l)
+        }));
+
+        self
+    }
+
     /// Returns a `SizedHeap` of the `Mass`es in the `System` ordered by the
     /// stress on the `Mass`es.
     ///
@@ -569,14 +634,17 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         self.masses.values().map(|m| (m.stress(), m)).collect()
     }
 
-    /// Returns the most stressed `Mass` in the `System` whose source is not a
-    /// leaf `Cluster`, None if all `Mass`es are leaf `Cluster`s.
+    /// Returns up to the `n` most stressed `Mass`es in the `System` whose
+    /// source is not a leaf.
     #[must_use]
-    pub fn most_stressed_non_leaf(&self) -> Option<&Mass<DIM, T, S>> {
+    pub fn most_stressed_non_leaves(&self, n: usize) -> Vec<&Mass<DIM, T, S>> {
+        let n_masses = Ord::max(self.masses.len() / 10, n);
         self.masses_by_stress()
             .items()
             .map(|(_, m)| m)
-            .find(|m| !m.source().is_leaf())
+            .filter(|m| !m.source().is_leaf())
+            .take(n_masses)
+            .collect()
     }
 
     /// Finds all springs connecting to the given `Mass` and returns them.
@@ -686,7 +754,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     /// Parallel version of [`System::evolve_to_leaves`](Self::evolve_to_leaves).
     #[allow(clippy::too_many_arguments)]
-    pub fn par_evolve_to_leaves<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    pub fn par_evolve_to_leaves<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, P: AsRef<std::path::Path>>(
         mut self,
         data: &D,
         metric: &M,
@@ -698,30 +766,108 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         patience: usize,
         target: Option<f32>,
         max_steps: Option<usize>,
+        out_dir: &P,
     ) -> Self {
         let f = f.clamp(0.0, 1.0);
 
+        let mut m_keys = self
+            .most_stressed_non_leaves(100)
+            .into_iter()
+            .map(Mass::hash_key)
+            .collect::<Vec<_>>();
         if let Some(min_k) = min_k {
-            while let Some(m_key) = self.most_stressed_non_leaf().map(Mass::hash_key) {
+            while !m_keys.is_empty() {
+                self = m_keys.iter().fold(self, |system, m_key| {
+                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                });
                 self = self
-                    .add_child_triangle(m_key, data, metric, seed, k, f)
-                    .0
                     .remove_loose_springs(min_k)
                     .0
-                    .par_evolve_to_stability(dt, patience, target, max_steps)
-                    .remove_mass(m_key)
-                    .0;
+                    .par_add_random_springs(data, metric, k)
+                    .par_evolve_to_stability(dt, patience, target, max_steps);
+                self = m_keys
+                    .iter()
+                    .fold(self, |system, &m_key| system.par_remove_mass(m_key).0);
+                self = self.clear_energies();
+                m_keys = self
+                    .most_stressed_non_leaves(100)
+                    .into_iter()
+                    .map(Mass::hash_key)
+                    .collect::<Vec<_>>();
+
+                let path = out_dir
+                    .as_ref()
+                    .join(format!("{}-step-{}.npy", self.name, self.masses.len()));
+                self.get_reduced_embedding()
+                    .write_npy(&path)
+                    .unwrap_or_else(|e| unreachable!("Error writing embeddings: {e}"));
             }
         } else {
-            while let Some(m_key) = self.most_stressed_non_leaf().map(Mass::hash_key) {
+            while !m_keys.is_empty() {
+                self = m_keys.iter().fold(self, |system, m_key| {
+                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                });
                 self = self
-                    .add_child_triangle(m_key, data, metric, seed, k, f)
-                    .0
-                    .par_evolve_to_stability(dt, patience, target, max_steps)
-                    .remove_mass(m_key)
-                    .0;
+                    .par_add_random_springs(data, metric, k)
+                    .par_evolve_to_stability(dt, patience, target, max_steps);
+                self = m_keys
+                    .iter()
+                    .fold(self, |system, &m_key| system.par_remove_mass(m_key).0);
+                self = self.clear_energies();
+                m_keys = self
+                    .most_stressed_non_leaves(100)
+                    .into_iter()
+                    .map(Mass::hash_key)
+                    .collect::<Vec<_>>();
+
+                let path = out_dir
+                    .as_ref()
+                    .join(format!("{}-step-{}.npy", self.name, self.masses.len()));
+                self.get_reduced_embedding()
+                    .write_npy(&path)
+                    .unwrap_or_else(|e| unreachable!("Error writing embeddings: {e}"));
             }
         }
+
+        self.par_evolve_to_stability(dt, patience * 10, target, None)
+    }
+
+    /// Parallel version of [`System::remove_mass`](Self::remove_mass).
+    pub fn par_remove_mass(mut self, m_key: (usize, usize)) -> (Self, Vec<Spring>) {
+        self.masses.remove(&m_key);
+        let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m_key));
+        self.springs = remaining_springs;
+        (self.par_update_springs(), connecting_springs)
+    }
+
+    /// Parallel version of [`System::add_random_springs`](Self::add_random_springs).
+    pub fn par_add_random_springs<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        mut self,
+        data: &D,
+        metric: &M,
+        k: f32,
+    ) -> Self {
+        let mut pairs = Vec::new();
+        let m_keys = self.masses.keys().copied().collect::<Vec<_>>();
+        for i in 0..m_keys.len() {
+            for j in (i + 1)..m_keys.len() {
+                pairs.push((m_keys[i], m_keys[j]));
+            }
+        }
+        let mut rng = StdRng::from_entropy();
+        pairs.shuffle(&mut rng);
+        pairs.truncate(pairs.len() / 100);
+
+        self.springs.extend(
+            pairs
+                .into_par_iter()
+                .map(|(a_key, b_key)| {
+                    let l0 = data.par_one_to_one(a_key.1, b_key.1, metric);
+                    let l = self.masses[&a_key].current_distance_to(&self.masses[&b_key]);
+                    Spring::new(a_key, b_key, k, l0, l)
+                })
+                .collect::<Vec<_>>(),
+        );
 
         self
     }
@@ -823,19 +969,14 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability.is_nan() || (stability < target && i < max_steps) {
-            ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
-                self.masses.len(),
-                self.springs.len()
-            );
+        while stability > target && i < max_steps {
             self = self.par_update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            "Reached stability: {stability:.10} after {i} steps with {} objects and {} springs",
             self.masses.len(),
             self.springs.len()
         );

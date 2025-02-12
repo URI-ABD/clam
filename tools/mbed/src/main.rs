@@ -13,6 +13,8 @@ use distance_functions::DistanceFunction;
 use distances::Number;
 use workflow::Commands;
 
+const DIM: usize = 2;
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -116,16 +118,16 @@ fn main() -> Result<(), String> {
             ftlog::info!("Saving checkpoints every {checkpoint_frequency} iterations...");
             ftlog::info!("Saving the final result to {name}.npy in {out_dir:?}...");
 
-            let data = FlatVec::<Vec<f32>, usize>::read_npy(&inp_path)?
+            let data = FlatVec::<Vec<f64>, usize>::read_npy(&inp_path)?
                 .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
             let criteria = |_: &Ball<f32>| true;
-            let reduced_data = workflow::build::<_, _, _, _, _, _, 2>(
+            let reduced_data = workflow::build::<_, _, _, _, _, _, DIM>(
                 &out_dir,
                 data,
                 metric,
                 &criteria,
                 *dimensions,
-                name,
+                inp_name,
                 *checkpoint_frequency,
                 args.seed,
                 *beta,
@@ -171,9 +173,9 @@ fn main() -> Result<(), String> {
             }
             ftlog::info!("Saving the results in {out_dir:?}...");
 
-            let original_data = FlatVec::<Vec<f32>, usize>::read_npy(&original_data)?
+            let original_data = FlatVec::<Vec<f64>, usize>::read_npy(&original_data)?
                 .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
-            let reduced_data = FlatVec::<[f32; 2], usize>::read_npy(&inp_path)?;
+            let reduced_data = FlatVec::<[f32; DIM], usize>::read_npy(&inp_path)?;
 
             let measures = workflow::measure(&original_data, &metric, &reduced_data, quality_measures, *exhaustive);
 
