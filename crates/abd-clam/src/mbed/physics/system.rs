@@ -1,6 +1,6 @@
 //! A mass-spring system for dimension reduction.
 
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use distances::Number;
 use rand::prelude::*;
@@ -75,7 +75,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         mut self,
         data: &D,
         metric: &M,
-        seed: Option<u64>,
         k: f32,
         f: f32,
         min_k: Option<f32>,
@@ -95,7 +94,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         if let Some(min_k) = min_k {
             while !m_keys.is_empty() {
                 self = m_keys.iter().fold(self, |system, m_key| {
-                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                    system.add_child_triangle(*m_key, data, metric, k, f).0
                 });
                 self = self
                     .remove_loose_springs(min_k)
@@ -120,7 +119,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         } else {
             while !m_keys.is_empty() {
                 self = m_keys.iter().fold(self, |system, m_key| {
-                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                    system.add_child_triangle(*m_key, data, metric, k, f).0
                 });
                 self = self
                     .add_random_springs(data, metric, k)
@@ -243,11 +242,26 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Updates the lengths and forces of the springs in the system.
-    pub fn update_springs(mut self) -> Self {
-        self.springs.iter_mut().for_each(|s| {
-            let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
-            s.update_length(l);
-        });
+    pub fn update_springs(mut self, m_keys: Option<&HashSet<(usize, usize)>>) -> Self {
+        if let Some(m_keys) = m_keys {
+            self.springs
+                .iter_mut()
+                .filter(|s| m_keys.contains(&s.a_key()) || m_keys.contains(&s.b_key()))
+                .for_each(|s| {
+                    let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
+                    s.update_length(l);
+                });
+        } else {
+            self.springs.iter_mut().for_each(|s| {
+                let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
+                s.update_length(l);
+            });
+        };
+
+        // Randomly shuffle the springs to avoid bias in the order of updates.
+        let mut rng = StdRng::from_entropy();
+        self.springs.shuffle(&mut rng);
+
         self
     }
 
@@ -272,6 +286,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         let forces = self
             .springs
             .iter()
+            .take(self.masses.len())
             .map(|s| {
                 let (a_key, b_key) = s.hash_key();
                 let f_mag = s.f_mag();
@@ -283,7 +298,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             })
             .collect::<Vec<_>>();
 
-        for (a_key, b_key, f) in forces {
+        for &(a_key, b_key, f) in &forces {
             if let Some(m) = self.masses.get_mut(&a_key) {
                 m.add_force(f);
             }
@@ -292,11 +307,16 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
             }
         }
 
-        self.masses.iter_mut().for_each(|(_, m)| m.apply_force(dt, self.beta));
+        let keys = forces.into_iter().flat_map(|(a, b, _)| [a, b]).collect::<HashSet<_>>();
+        for k in &keys {
+            if let Some(m) = self.masses.get_mut(k) {
+                m.apply_force(dt, self.beta);
+            }
+        }
 
         self.energies.push(self.current_energies());
 
-        self.update_springs()
+        self.update_springs(Some(&keys))
     }
 
     /// Simulate the `System` until it reaches a stable state.
@@ -321,14 +341,14 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability > target && i < max_steps {
+        while stability > target && i <= max_steps {
             self = self.update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.10} after {i} steps with {} objects and {} springs",
+            "Reached stability: {stability:.2e} after {i} steps with {} objects and {} springs",
             self.masses.len(),
             self.springs.len()
         );
@@ -407,25 +427,19 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability.is_nan() || (stability < target && i < max_steps) {
+        while stability > target && i <= max_steps {
             if i % save_every == 0 {
                 ftlog::debug!("{name}: Saving step {}", i + 1);
                 let path = dir.as_ref().join(format!("{}.npy", i + 1));
                 self.get_reduced_embedding().write_npy(&path)?;
             }
-
-            ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
-                self.masses.len(),
-                self.springs.len()
-            );
             self = self.update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            "Reached stability: {stability:.2e} after {i} steps with {} objects and {} springs",
             self.masses.len(),
             self.springs.len()
         );
@@ -565,9 +579,24 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// returns the connecting `Spring`s.
     pub fn remove_mass(mut self, m_key: (usize, usize)) -> (Self, Vec<Spring>) {
         self.masses.remove(&m_key);
+
         let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m_key));
         self.springs = remaining_springs;
-        (self.update_springs(), connecting_springs)
+
+        let m_keys = connecting_springs
+            .iter()
+            .map(|s| {
+                let (a, b) = s.hash_key();
+                if a == m_key {
+                    b
+                } else {
+                    a
+                }
+            })
+            .collect::<HashSet<_>>();
+        self = self.update_springs(Some(&m_keys));
+
+        (self, connecting_springs)
     }
 
     /// Insert a `Spring` to the `System`.
@@ -614,7 +643,8 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         }
         let mut rng = StdRng::from_entropy();
         pairs.shuffle(&mut rng);
-        pairs.truncate(pairs.len() / 100);
+        let len = Ord::min(self.masses.len(), 1000);
+        pairs.truncate(len);
 
         self.springs.extend(pairs.into_iter().map(|(a_key, b_key)| {
             let l0 = data.one_to_one(a_key.1, b_key.1, metric);
@@ -638,7 +668,7 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
     /// source is not a leaf.
     #[must_use]
     pub fn most_stressed_non_leaves(&self, n: usize) -> Vec<&Mass<DIM, T, S>> {
-        let n_masses = Ord::max(self.masses.len() / 10, n);
+        let n_masses = Ord::max(self.masses.len() / 2, n);
         self.masses_by_stress()
             .items()
             .map(|(_, m)| m)
@@ -694,58 +724,55 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> System<'a, DIM, T, S> {
         m_key: (usize, usize),
         data: &D,
         metric: &M,
-        seed: Option<u64>,
         k: f32,
         f: f32,
     ) -> (Self, Option<[(usize, usize); 2]>) {
-        let child_keys = if let Some((a, b, ma, mb, ab)) = self
-            .masses
-            .get(&m_key)
-            .and_then(|m| m.child_triangle(data, metric, seed))
-        {
-            // Add the new masses to the system.
-            let (a_center, b_center) = (a.arg_center(), b.arg_center());
-            let [a_key, b_key] = [a.hash_key(), b.hash_key()];
-            self = self
-                .with_mass(a)
-                .unwrap_or_else(|e| unreachable!("New mass is not in the system: {e}"))
-                .with_mass(b)
-                .unwrap_or_else(|e| unreachable!("New mass is not in the system: {e}"));
+        let child_keys =
+            if let Some((a, b, ma, mb, ab)) = self.masses.get(&m_key).and_then(|m| m.child_triangle(data, metric)) {
+                // Add the new masses to the system.
+                let (a_center, b_center) = (a.arg_center(), b.arg_center());
+                let [a_key, b_key] = [a.hash_key(), b.hash_key()];
+                self = self
+                    .with_mass(a)
+                    .unwrap_or_else(|e| unreachable!("New mass is not in the system: {e}"))
+                    .with_mass(b)
+                    .unwrap_or_else(|e| unreachable!("New mass is not in the system: {e}"));
 
-            // Create three new springs connecting the three masses.
-            let ma_spring = Spring::new(a_key, m_key, k, ma, ma.as_f32());
-            let mb_spring = Spring::new(m_key, b_key, k, mb, mb.as_f32());
-            let ab_spring = Spring::new(a_key, b_key, k, ab, ab.as_f32());
+                // Create three new springs connecting the three masses.
+                let ma_spring = Spring::new(a_key, m_key, k, ma, ma.as_f32());
+                let mb_spring = Spring::new(m_key, b_key, k, mb, mb.as_f32());
+                let ab_spring = Spring::new(a_key, b_key, k, ab, ab.as_f32());
 
-            // The child masses will inherit the springs from the parent mass.
-            self = self
-                .neighbors_of(m_key)
-                .into_iter()
-                .flat_map(|(o_key, k)| {
-                    let k = k * f;
-                    let ao = data.one_to_one(a_center, o_key.1, metric);
-                    let bo = data.one_to_one(b_center, o_key.1, metric);
-                    [
-                        Spring::new(a_key, o_key, k, ao, ao.as_f32()),
-                        Spring::new(o_key, b_key, k, bo, bo.as_f32()),
-                    ]
-                })
-                // Include the new springs for the triangle between the parent
-                // and child masses.
-                .chain([ma_spring, mb_spring, ab_spring])
-                .fold(self, |system, s| {
-                    system
-                        .with_spring(s)
-                        .unwrap_or_else(|e| unreachable!("All masses are part of the system: {e}"))
-                });
+                // The child masses will inherit the springs from the parent mass.
+                self = self
+                    .neighbors_of(m_key)
+                    .into_iter()
+                    .flat_map(|(o_key, k)| {
+                        let k = k * f;
+                        let ao = data.one_to_one(a_center, o_key.1, metric);
+                        let bo = data.one_to_one(b_center, o_key.1, metric);
+                        [
+                            Spring::new(a_key, o_key, k, ao, ao.as_f32()),
+                            Spring::new(o_key, b_key, k, bo, bo.as_f32()),
+                        ]
+                    })
+                    // Include the new springs for the triangle between the parent
+                    // and child masses.
+                    .chain([ma_spring, mb_spring, ab_spring])
+                    .fold(self, |system, s| {
+                        system
+                            .with_spring(s)
+                            .unwrap_or_else(|e| unreachable!("All masses are part of the system: {e}"))
+                    });
 
-            // Update the springs in the system.
-            self = self.update_springs();
+                // Update the springs in the system.
+                let m_keys = [a_key, b_key, m_key].into_iter().collect::<HashSet<_>>();
+                self = self.update_springs(Some(&m_keys));
 
-            Some([a_key, b_key])
-        } else {
-            None
-        };
+                Some([a_key, b_key])
+            } else {
+                None
+            };
 
         (self, child_keys)
     }
@@ -758,7 +785,6 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         mut self,
         data: &D,
         metric: &M,
-        seed: Option<u64>,
         k: f32,
         f: f32,
         min_k: Option<f32>,
@@ -778,7 +804,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         if let Some(min_k) = min_k {
             while !m_keys.is_empty() {
                 self = m_keys.iter().fold(self, |system, m_key| {
-                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                    system.add_child_triangle(*m_key, data, metric, k, f).0
                 });
                 self = self
                     .remove_loose_springs(min_k)
@@ -805,7 +831,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         } else {
             while !m_keys.is_empty() {
                 self = m_keys.iter().fold(self, |system, m_key| {
-                    system.add_child_triangle(*m_key, data, metric, seed, k, f).0
+                    system.add_child_triangle(*m_key, data, metric, k, f).0
                 });
                 self = self
                     .par_add_random_springs(data, metric, k)
@@ -835,9 +861,24 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     /// Parallel version of [`System::remove_mass`](Self::remove_mass).
     pub fn par_remove_mass(mut self, m_key: (usize, usize)) -> (Self, Vec<Spring>) {
         self.masses.remove(&m_key);
+
         let (connecting_springs, remaining_springs) = self.springs.drain(..).partition(|s| s.connects(m_key));
         self.springs = remaining_springs;
-        (self.par_update_springs(), connecting_springs)
+
+        let m_keys = connecting_springs
+            .iter()
+            .map(|s| {
+                let (a, b) = s.hash_key();
+                if a == m_key {
+                    b
+                } else {
+                    a
+                }
+            })
+            .collect::<HashSet<_>>();
+        self = self.par_update_springs(Some(&m_keys));
+
+        (self, connecting_springs)
     }
 
     /// Parallel version of [`System::add_random_springs`](Self::add_random_springs).
@@ -913,11 +954,26 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
     }
 
     /// Parallel version of [`System::update_springs`](Self::update_springs).
-    pub fn par_update_springs(mut self) -> Self {
-        self.springs.par_iter_mut().for_each(|s| {
-            let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
-            s.update_length(l);
-        });
+    pub fn par_update_springs(mut self, m_keys: Option<&HashSet<(usize, usize)>>) -> Self {
+        if let Some(m_keys) = m_keys {
+            self.springs
+                .par_iter_mut()
+                .filter(|s| m_keys.contains(&s.a_key()) || m_keys.contains(&s.b_key()))
+                .for_each(|s| {
+                    let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
+                    s.update_length(l);
+                });
+        } else {
+            self.springs.iter_mut().for_each(|s| {
+                let l = self.masses[&s.a_key()].current_distance_to(&self.masses[&s.b_key()]);
+                s.update_length(l);
+            });
+        };
+
+        // Randomly shuffle the springs to avoid bias in the order of updates.
+        let mut rng = StdRng::from_entropy();
+        self.springs.shuffle(&mut rng);
+
         self
     }
 
@@ -926,6 +982,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
         let forces = self
             .springs
             .par_iter()
+            .take(self.masses.len())
             .map(|s| {
                 let f_mag = s.f_mag();
                 let mut fv = self.masses[&s.a_key()].unit_vector_to(&self.masses[&s.b_key()]);
@@ -936,7 +993,7 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
             })
             .collect::<Vec<_>>();
 
-        for (a_key, b_key, f) in forces {
+        for &(a_key, b_key, f) in &forces {
             if let Some(m) = self.masses.get_mut(&a_key) {
                 m.add_force(f);
             }
@@ -945,13 +1002,16 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
             }
         }
 
-        self.masses
-            .par_iter_mut()
-            .for_each(|(_, m)| m.apply_force(dt, self.beta));
+        let keys = forces.into_iter().flat_map(|(a, b, _)| [a, b]).collect::<HashSet<_>>();
+        for k in &keys {
+            if let Some(m) = self.masses.get_mut(k) {
+                m.apply_force(dt, self.beta);
+            }
+        }
 
         self.energies.push(self.current_energies());
 
-        self.par_update_springs()
+        self.par_update_springs(Some(&keys))
     }
 
     /// Parallel version of [`System::evolve_to_stability`](Self::evolve_to_stability).
@@ -969,14 +1029,14 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability > target && i < max_steps {
+        while stability > target && i <= max_steps {
             self = self.par_update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.10} after {i} steps with {} objects and {} springs",
+            "Reached stability: {stability:.2e} after {i} steps with {} objects and {} springs",
             self.masses.len(),
             self.springs.len()
         );
@@ -1019,25 +1079,19 @@ impl<'a, const DIM: usize, T: Number, S: ParCluster<T>> System<'a, DIM, T, S> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability.is_nan() || (stability < target && i < max_steps) {
+        while stability > target && i <= max_steps {
             if i % save_every == 0 {
                 ftlog::debug!("{name}: Saving step {}", i + 1);
                 let path = dir.as_ref().join(format!("{}.npy", i + 1));
                 self.get_reduced_embedding().write_npy(&path)?;
             }
-
-            ftlog::debug!(
-                "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
-                self.masses.len(),
-                self.springs.len()
-            );
             self = self.par_update_step(dt);
             i += 1;
             stability = self.stability(patience);
         }
 
         ftlog::debug!(
-            "Reached stability: {stability:.6} after {i} steps with {} objects and {} springs",
+            "Reached stability: {stability:.2e} after {i} steps with {} objects and {} springs",
             self.masses.len(),
             self.springs.len()
         );

@@ -13,7 +13,7 @@ use distance_functions::DistanceFunction;
 use distances::Number;
 use workflow::Commands;
 
-const DIM: usize = 2;
+const DIM: usize = 3;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

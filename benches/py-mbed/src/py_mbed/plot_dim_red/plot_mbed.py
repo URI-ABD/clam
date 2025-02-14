@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 def plot(
     inp_path: pathlib.Path,
     labels_path: pathlib.Path,
-    ax: plt.Axes,
+    ax: list[plt.Axes],
 ) -> None:
     """Plot dimensionality reduction results using CLAM-MBED."""
 
@@ -17,14 +17,38 @@ def plot(
     data = numpy.load(inp_path)
     labels = numpy.load(labels_path)
 
-    # Plot the data
-    ax.scatter(
+    # Plot the x-y scatter plot
+    ax[0].scatter(
         data[:, 0],
         data[:, 1],
         s=10,
         alpha=0.5,
         c=labels,
     )
-    ax.set_title("CLAM-MBED")
+    ax[0].set_xlabel("X")
+    ax[0].set_ylabel("Y")
+    ax[0].set_title("CLAM-MBED X-Y")
 
-    ax.legend()
+    # Plot the x-z scatter plot
+    ax[1].scatter(
+        data[:, 0],
+        data[:, 2],
+        s=10,
+        alpha=0.5,
+        c=labels,
+    )
+    ax[1].set_xlabel("X")
+    ax[1].set_ylabel("Z")
+    ax[1].set_title("CLAM-MBED X-Z")
+
+    # Plot the y-z scatter plot
+    ax[2].scatter(
+        data[:, 1],
+        data[:, 2],
+        s=10,
+        alpha=0.5,
+        c=labels,
+    )
+    ax[2].set_xlabel("Y")
+    ax[2].set_ylabel("Z")
+    ax[2].set_title("CLAM-MBED Y-Z")

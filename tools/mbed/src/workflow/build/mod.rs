@@ -57,9 +57,8 @@ where
     let root = C::par_new_tree_iterative(&data, &metric, criteria, seed, 128);
 
     ftlog::info!("Starting the dimension reduction ...");
-    let system = MassSpringSystem::<DIM, _, _>::from_root(&root, beta, name).par_evolve_to_leaves(
-        &data, &metric, seed, k, f, min_k, dt, patience, target, max_steps, out_dir,
-    );
+    let system = MassSpringSystem::<DIM, _, _>::from_root(&root, beta, name)
+        .par_evolve_to_leaves(&data, &metric, k, f, min_k, dt, patience, target, max_steps, out_dir);
 
     ftlog::info!("Extracting the reduced embedding ...");
     system.get_reduced_embedding().with_metadata(data.metadata())

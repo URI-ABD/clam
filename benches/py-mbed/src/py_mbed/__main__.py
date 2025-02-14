@@ -18,44 +18,22 @@ app = typer.Typer()
 
 @app.command()
 def plot_dim_red(
-    original_path: pathlib.Path = typer.Option(  # noqa: B008
+    inp_dir: pathlib.Path = typer.Option(  # noqa: B008
         ...,
-        "--original-path",
+        "--inp-dir",
         "-i",
-        help="Path to the npy file containing the original data.",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        resolve_path=True,
-    ),
-    mbed_dir: pathlib.Path = typer.Option(  # noqa: B008
-        ...,
-        "--mbed-dir",
-        "-m",
-        help="Directory containing the MBED data.",
+        help="Path to the directory containing the original input files.",
         exists=True,
         file_okay=False,
         dir_okay=True,
         readable=True,
         resolve_path=True,
     ),
-    mbed_name: str = typer.Option(  # noqa: B008
+    dataset_name: str = typer.Option(  # noqa: B008
         ...,
-        "--mbed-name",
-        "-n",
+        "--dataset-name",
+        "-d",
         help="Name of the dataset.",
-    ),
-    labels_path: pathlib.Path = typer.Option(  # noqa: B008
-        ...,
-        "--labels-path",
-        "-l",
-        help="Path to the npy file containing the labels.",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        resolve_path=True,
     ),
     out_dir: pathlib.Path = typer.Option(  # noqa: B008
         ...,
@@ -72,12 +50,16 @@ def plot_dim_red(
     """Plot dimensionality reduction results."""
     logger.info("Plotting dimensionality reduction results...")
     logger.info("")
-    logger.info(f"Original data: {original_path}")
-    logger.info(f"MBED directory: {mbed_dir}")
+    logger.info(f"Input directory: {inp_dir}")
+    logger.info(f"Dataset name: {dataset_name}")
     logger.info(f"Output directory: {out_dir}")
     logger.info("")
 
-    py_mbed.plot_dim_red(original_path, mbed_dir, mbed_name, labels_path, out_dir)
+    out_dir = out_dir / dataset_name
+    if not out_dir.exists():
+        out_dir.mkdir(parents=False)
+
+    py_mbed.plot_dim_red(inp_dir, dataset_name, out_dir)
 
     logger.info("Done.")
 

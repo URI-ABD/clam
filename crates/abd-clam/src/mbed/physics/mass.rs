@@ -336,7 +336,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
         &self,
         data: &D,
         metric: &M,
-        seed: Option<u64>,
     ) -> Option<(Self, Self, T, T, T)> {
         let child_masses = self.child_masses();
         if child_masses.is_empty() {
@@ -354,15 +353,6 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
             self.source.distance_to(b.source, data, metric),
             a.source.distance_to(b.source, data, metric),
         );
-
-        // Choose two random different axes along which to form the triangle.
-        let (x, y) = {
-            let mut rng = seed.map_or_else(StdRng::from_entropy, StdRng::seed_from_u64);
-            // Sample without replacement.
-            let mut axes = (0..DIM).collect::<Vec<_>>();
-            axes.shuffle(&mut rng);
-            (axes[0], axes[1])
-        };
 
         // Since the positions are stores as `f32` arrays, we cast the distances
         // to `f32` for internal computations.
@@ -421,12 +411,56 @@ impl<'a, const DIM: usize, T: Number, S: Cluster<T>> Mass<'a, DIM, T, S> {
             (dxa, dxb, 0.0)
         };
 
-        a.position[x] += dxa;
-        b.position[x] += dxb;
-        b.position[y] += dyb;
+        // Choose random two random perpendicular unit vectors.
+        let xv = random_unit_vector::<DIM>();
+        let yv = perpendicular_unit_vector(xv);
+
+        // Move the `Mass`es along the axes.
+        for (x, d) in a.position.iter_mut().zip(xv.iter()) {
+            *x += *d * dxa;
+        }
+
+        for (x, d) in b.position.iter_mut().zip(xv.iter()) {
+            *x += *d * dxb;
+        }
+        for (y, d) in b.position.iter_mut().zip(yv.iter()) {
+            *y += *d * dyb;
+        }
 
         Some((a, b, sa, sb, ab))
     }
+}
+
+/// Returns a unit vector in a random direction.
+fn random_unit_vector<const DIM: usize>() -> [f32; DIM] {
+    let mut uv = [1.0; DIM];
+    let mut rng = rand::thread_rng();
+    for d in &mut uv {
+        *d = rng.gen_range(-1.0..1.0);
+    }
+
+    let origin = [0.0; DIM];
+    let mag = distances::simd::euclidean_f32(&uv, &origin);
+    for d in &mut uv {
+        *d /= mag;
+    }
+
+    uv
+}
+
+/// Finds a perpendicular unit vector to the given vector.
+fn perpendicular_unit_vector<const DIM: usize>(v: [f32; DIM]) -> [f32; DIM] {
+    let mut uv = [0.0; DIM];
+    uv[0] = -v[1];
+    uv[1] = v[0];
+
+    let dot = v.iter().zip(uv.iter()).map(|(a, b)| a * b).sum::<f32>();
+    assert!(
+        dot.abs() < f32::EPSILON,
+        "The dot product of the vectors is not zero. Got {dot}."
+    );
+
+    uv
 }
 
 /// A private struct for serializing and deserializing a `Mass`.
