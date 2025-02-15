@@ -2,6 +2,8 @@
 
 use rand::Rng;
 
+use rayon::prelude::*;
+
 use super::{AssociatesMetadata, AssociatesMetadataMut, Dataset, ParDataset, Permutable};
 
 /// A `FlatVec` is a `Dataset` that in which the items are stored in a vector.
@@ -281,6 +283,82 @@ impl<I, Me> FlatVec<I, Me> {
             metadata: self.metadata,
             name: self.name,
         }
+    }
+
+    /// Transforms the items in the dataset using their indices.
+    pub fn transform_items_enumerated<It, F: Fn((usize, I)) -> It>(self, transformer: F) -> FlatVec<It, Me> {
+        let items = self.items.into_iter().enumerate().map(transformer).collect();
+        FlatVec {
+            items,
+            dimensionality_hint: self.dimensionality_hint,
+            permutation: self.permutation,
+            metadata: self.metadata,
+            name: self.name,
+        }
+    }
+
+    /// Transforms the items in the dataset in place.
+    pub fn transform_items_in_place<F: Fn(&mut I) -> I>(&mut self, transformer: F) {
+        for item in &mut self.items {
+            *item = transformer(item);
+        }
+    }
+
+    /// Transforms the items in the dataset in place using their indices.
+    pub fn transform_items_enumerated_in_place<F: Fn(usize, &mut I) -> I>(&mut self, transformer: F) {
+        for (i, item) in self.items.iter_mut().enumerate() {
+            *item = transformer(i, item);
+        }
+    }
+}
+
+impl<I: Send + Sync, Me> FlatVec<I, Me> {
+    /// Parallel version of [`FlatVec::transform_items`](Self::transform_items).
+    pub fn par_transform_items<It: Send + Sync, F: (Fn(I) -> It) + Send + Sync>(
+        self,
+        transformer: F,
+    ) -> FlatVec<It, Me> {
+        let items = self.items.into_par_iter().map(transformer).collect();
+        FlatVec {
+            items,
+            dimensionality_hint: self.dimensionality_hint,
+            permutation: self.permutation,
+            metadata: self.metadata,
+            name: self.name,
+        }
+    }
+
+    /// Parallel version of [`FlatVec::transform_items_enumerated`](Self::transform_items_enumerated).
+    pub fn par_transform_items_enumerated<It: Send + Sync, F: (Fn(usize, I) -> It) + Send + Sync>(
+        self,
+        transformer: F,
+    ) -> FlatVec<It, Me> {
+        let items = self
+            .items
+            .into_par_iter()
+            .enumerate()
+            .map(|(i, p)| transformer(i, p))
+            .collect();
+        FlatVec {
+            items,
+            dimensionality_hint: self.dimensionality_hint,
+            permutation: self.permutation,
+            metadata: self.metadata,
+            name: self.name,
+        }
+    }
+
+    /// Parallel version of [`FlatVec::transform_items_in_place`](Self::transform_items_in_place).
+    pub fn par_transform_items_in_place<F: (Fn(&mut I)) + Send + Sync>(&mut self, transformer: F) {
+        self.items.par_iter_mut().for_each(transformer);
+    }
+
+    /// Parallel version of [`FlatVec::transform_items_enumerated_in_place`](Self::transform_items_enumerated_in_place).
+    pub fn par_transform_items_enumerated_in_place<F: (Fn(usize, &mut I)) + Send + Sync>(&mut self, transformer: F) {
+        self.items
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, item)| transformer(i, item));
     }
 }
 
@@ -602,5 +680,19 @@ impl<T: std::string::ToString + Copy, M> FlatVec<Vec<T>, M> {
                 .map_err(|e| format!("Could not write record to csv: {e}"))?;
         }
         Ok(())
+    }
+}
+
+impl<I, Me> core::ops::Index<usize> for FlatVec<I, Me> {
+    type Output = I;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.items[index]
+    }
+}
+
+impl<I, Me> core::ops::IndexMut<usize> for FlatVec<I, Me> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.items[index]
     }
 }

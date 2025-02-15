@@ -100,7 +100,9 @@ impl<T: Number> core::fmt::Debug for Ball<T> {
 
 impl<T: Number> PartialEq for Ball<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.depth == other.depth && self.cardinality == other.cardinality && self.indices == other.indices
+        // Two `Clusters` in the same tree are uniquely identified by their
+        // cardinality and the index of any one of their items.
+        self.unique_id() == other.unique_id()
     }
 }
 
@@ -124,7 +126,7 @@ impl<T: Number> Ord for Ball<T> {
 impl<T: Number> Hash for Ball<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // We hash the `indices` field
-        self.indices.hash(state);
+        self.unique_id().hash(state);
     }
 }
 

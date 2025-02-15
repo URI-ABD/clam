@@ -144,6 +144,17 @@ pub fn variance<T: Number, F: Float>(values: &[T], mean: F) -> F {
         / F::from(values.len())
 }
 
+/// Return the coefficient of variation of the given slice of values.
+pub fn coefficient_of_variation<T: Number, F: Float>(values: &[T]) -> F {
+    let mean: F = mean(values);
+    let variance = variance(values, mean);
+    if mean <= F::EPSILON {
+        variance.sqrt()
+    } else {
+        variance.sqrt() / mean
+    }
+}
+
 /// Apply Gaussian normalization to the given values.
 #[allow(dead_code)]
 pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
