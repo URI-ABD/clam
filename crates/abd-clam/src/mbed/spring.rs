@@ -4,7 +4,7 @@ use distances::Number;
 
 use crate::Cluster;
 
-use super::{System, Vector};
+use super::{MassSpringSystem, Vector};
 
 /// A spring connecting two `Cluster`s in a mass-spring system.
 #[derive(Debug, PartialEq)]
@@ -90,7 +90,7 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     }
 
     /// Get the unit vector of the spring.
-    pub fn unit_vector<const DIM: usize, Me>(&self, system: &System<DIM, Me, T, C>) -> Vector<DIM> {
+    pub fn unit_vector<const DIM: usize, Me>(&self, system: &MassSpringSystem<DIM, Me, T, C>) -> Vector<DIM> {
         let [a, b] = self.clusters;
         system[a.arg_center()][0].unit_vector_to(&system[b.arg_center()][0])
     }

@@ -3,6 +3,7 @@
 import pathlib
 import re
 import concurrent.futures
+import shutil
 
 import imageio
 import numpy
@@ -22,15 +23,22 @@ def plot(
     """Create a GIF of the dimensionality reduction process."""
     labels = numpy.load(labels_path)
 
-    # The pattern for the files is `<dataset_name>-step-<step_number>.npy`.
-    pattern = re.compile(dataset_name + "-step-" + r"[0-9]+.npy")
-    logger.info(f"Looking for files with pattern '{pattern}' in '{out_dir}'...")
-    mbed_steps = [f for f in out_dir.glob("*.npy") if pattern.match(f.name)]
+    stack_path = out_dir / f"{dataset_name}-mbed-stack.npy"
+    mbed_stack: numpy.ndarray
+    if stack_path.exists():
+        mbed_stack = numpy.load(stack_path)
+    else:
+        # The pattern for the files is `<dataset_name>-step-<step_number>.npy`.
+        pattern = re.compile(dataset_name + "-step-" + r"[0-9]+.npy")
+        logger.info(f"Looking for files with pattern '{pattern}' in '{out_dir}'...")
+        mbed_steps = [f for f in out_dir.glob("*.npy") if pattern.match(f.name)]
+        mbed_steps.sort(key=lambda f: int(f.stem.split("-")[-1]))
+        mbed_stack = numpy.stack([numpy.load(f) for f in mbed_steps])
+        numpy.save(stack_path, mbed_stack)
+        for f in mbed_steps:
+            f.unlink()
+    n_steps = mbed_stack.shape[0]
 
-    # Sort the files by the step number.
-    mbed_steps.sort(key=lambda f: int(f.stem.split("-")[-1]))
-
-    mbed_stack: numpy.ndarray = numpy.stack([numpy.load(f) for f in mbed_steps])
     x_vals = mbed_stack[:, :, 0].flatten()
     y_vals = mbed_stack[:, :, 1].flatten()
     z_vals = mbed_stack[:, :, 2].flatten()
@@ -38,11 +46,16 @@ def plot(
     y_lims = y_vals.min(), y_vals.max()
     z_lims = z_vals.min(), z_vals.max()
 
-    # Create the GIF.
+    # Create the frames for the GIF.
+    frames_dir = out_dir / "frames"
+    if frames_dir.exists():
+        shutil.rmtree(frames_dir)
+    frames_dir.mkdir()
+
     results = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        for i in range(len(mbed_steps)):
-            frame_path = out_dir / f"{dataset_name}-frame-{i}.png"
+        for i in range(n_steps):
+            frame_path = frames_dir / f"{dataset_name}-frame-{i}.png"
             results.append(
                 executor.submit(
                     _plot_frame,
@@ -69,7 +82,7 @@ def plot(
     gif_path = out_dir / f"{dataset_name}-reduction.gif"
     imageio.mimsave(gif_path, frames, fps=5)
 
-    return mbed_steps[-1]
+    return out_dir / f"{dataset_name}-reduced.npy"
 
 
 def _plot_frame(
@@ -84,10 +97,11 @@ def _plot_frame(
     """Plot a frame of the dimensionality reduction process."""
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 
+    sizes = 1 + 10 * labels
     ax[0].scatter(
         arr[:, 0],
         arr[:, 1],
-        s=1,
+        s=sizes,
         alpha=0.5,
         c=labels,
     )
@@ -99,7 +113,7 @@ def _plot_frame(
     ax[1].scatter(
         arr[:, 0],
         arr[:, 2],
-        s=1,
+        s=sizes,
         alpha=0.5,
         c=labels,
     )
@@ -111,7 +125,7 @@ def _plot_frame(
     ax[2].scatter(
         arr[:, 1],
         arr[:, 2],
-        s=1,
+        s=sizes,
         alpha=0.5,
         c=labels,
     )
