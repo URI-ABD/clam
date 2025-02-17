@@ -31,21 +31,25 @@ pub enum Commands {
         checkpoint_frequency: usize,
 
         /// The damping factor for the mass-spring system.
-        #[arg(short('b'), long, default_value = "0.1")]
-        beta: f32,
+        #[arg(short('b'), long)]
+        beta: Option<f32>,
 
         /// The spring constant for the mass-spring system.
         #[arg(short('k'), long, default_value = "1.0")]
         k: f32,
 
-        /// The factor by which spring constants are multiplied while descending
-        /// the tree.
-        #[arg(short('f'), long, default_value = "0.9")]
-        f: f32,
+        /// The factor by which to decrease the spring constant at each
+        /// iteration.
+        #[arg(short('K'), long)]
+        dk: Option<f32>,
 
-        /// The minimum spring constant before removing a spring.
-        #[arg(short('K'), long, default_value = "0.5")]
-        min_k: Option<f32>,
+        /// The fraction of springs to replace at each iteration.
+        #[arg(short('f'), long)]
+        f: Option<f32>,
+
+        /// The retention depth for the springs in the mass-spring system.
+        #[arg(short('R'), long)]
+        retention_depth: Option<usize>,
 
         /// The time step for each iteration of the mass-spring system.
         #[arg(short('t'), long, default_value = "0.001")]
@@ -53,12 +57,12 @@ pub enum Commands {
 
         /// The number of iterations to wait before stopping the optimization if
         /// the stability does not increase.
-        #[arg(short('p'), long, default_value = "10")]
+        #[arg(short('p'), long, default_value = "100")]
         patience: usize,
 
         /// The target stability value. If the stability reaches this value, the
         /// optimization is stopped.
-        #[arg(short('T'), long, default_value = "0.0001")]
+        #[arg(short('T'), long, default_value = "0.001")]
         target: Option<f32>,
 
         /// The maximum number of iterations to run.

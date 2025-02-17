@@ -26,7 +26,8 @@ def plot(
     original_path = inp_dir / f"{dataset_name}.npy"
     labels_path = inp_dir / f"{dataset_name}_labels.npy"
     umap_path = out_dir / f"{dataset_name}-umap.npy"
-    mbed_path = out_dir / f"{dataset_name}-reduced.npy"
+
+    mbed_path = gif_mbed.plot(out_dir, dataset_name, labels_path)
 
     if not umap_path.exists():
         logger.info("Performing UMAP dimensionality reduction...")
@@ -58,7 +59,6 @@ def plot(
     ax: plt.Axes
     fig, ax = plt.subplots(2, 3, figsize=(20, 15))
 
-    mbed_path = out_dir / f"{dataset_name}-reduced.npy"
     plot_umap.plot(umap_path, labels_path, ax[0])
     if mbed_path.exists():
         plot_mbed.plot(mbed_path, labels_path, ax[1])
@@ -66,8 +66,6 @@ def plot(
     plt.tight_layout()
     plt.savefig(out_dir / "dim_red_results.png", dpi=200)
     plt.close()
-
-    gif_mbed.plot(out_dir, dataset_name)
 
 
 __all__ = ["plot"]

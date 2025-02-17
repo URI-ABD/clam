@@ -298,17 +298,16 @@ impl<I, Me> FlatVec<I, Me> {
     }
 
     /// Transforms the items in the dataset in place.
-    pub fn transform_items_in_place<F: Fn(&mut I) -> I>(&mut self, transformer: F) {
-        for item in &mut self.items {
-            *item = transformer(item);
-        }
+    pub fn transform_items_in_place<F: Fn(&mut I)>(&mut self, transformer: F) {
+        self.items.iter_mut().for_each(transformer);
     }
 
     /// Transforms the items in the dataset in place using their indices.
-    pub fn transform_items_enumerated_in_place<F: Fn(usize, &mut I) -> I>(&mut self, transformer: F) {
-        for (i, item) in self.items.iter_mut().enumerate() {
-            *item = transformer(i, item);
-        }
+    pub fn transform_items_enumerated_in_place<F: Fn(usize, &mut I)>(&mut self, transformer: F) {
+        self.items
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, item)| transformer(i, item));
     }
 }
 

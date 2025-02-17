@@ -1,10 +1,10 @@
 //! Dimension Reduction with CLAM.
 
 mod dataset;
-mod physics;
+// mod physics;
 
-pub use dataset::System as MassSpringDataset;
-pub use physics::System as MassSpringSystem;
+pub use dataset::System as MassSpringSystem;
+// pub use physics::System as MassSpringSystem;
 
 // TODO: Add ability to replace a cluster with its children in the mass-spring system.
 // This would involve adding the child masses to the system as a triangle with the parent mass, letting the system

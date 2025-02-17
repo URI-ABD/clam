@@ -1,6 +1,7 @@
 """Create a GIF of the dimensionality reduction process."""
 
 import pathlib
+import re
 
 import imageio
 import numpy
@@ -14,13 +15,18 @@ logger = utils.configure_logger(__name__, "INFO")
 def plot(
     out_dir: pathlib.Path,
     dataset_name: str,
-):
+    labels_path: pathlib.Path,
+) -> pathlib.Path:
     """Create a GIF of the dimensionality reduction process."""
-    # The pattern for the files is `<dataset_name>-step-<step_number>.npy`.
-    mbed_steps = list(out_dir.glob(f"{dataset_name}-step-*.npy"))
+    labels = numpy.load(labels_path)
 
-    # Sort the files by the time when they were created.
-    mbed_steps.sort(key=lambda f: f.stat().st_ctime)
+    # The pattern for the files is `<dataset_name>-step-<step_number>.npy`.
+    pattern = re.compile(dataset_name + "-step-" + r"[0-9]+.npy")
+    logger.info(f"Looking for files with pattern '{pattern}' in '{out_dir}'...")
+    mbed_steps = [f for f in out_dir.glob("*.npy") if pattern.match(f.name)]
+
+    # Sort the files by the step number.
+    mbed_steps.sort(key=lambda f: int(f.stem.split("-")[-1]))
 
     mbed_stack: numpy.ndarray = numpy.stack([numpy.load(f) for f in mbed_steps])
     x_vals = mbed_stack[:, :, 0].flatten()
@@ -38,6 +44,7 @@ def plot(
         # Save a temporary frame.
         _plot_frame(
             arr=mbed_stack[i],
+            labels=labels,
             min_x=min_x,
             max_x=max_x,
             min_y=min_y,
@@ -55,10 +62,13 @@ def plot(
     gif_path = out_dir / f"{dataset_name}-reduction.gif"
     imageio.mimsave(gif_path, frames, fps=5)
 
+    return mbed_steps[-1]
+
 
 def _plot_frame(
     *,
     arr: numpy.ndarray,
+    labels: numpy.ndarray,
     min_x: float,
     max_x: float,
     min_y: float,
@@ -75,6 +85,7 @@ def _plot_frame(
         arr[:, 1],
         s=1,
         alpha=0.5,
+        c=labels,
     )
     ax[0].set_xlim(min_x, max_x)
     ax[0].set_ylim(min_y, max_y)
@@ -86,6 +97,7 @@ def _plot_frame(
         arr[:, 2],
         s=1,
         alpha=0.5,
+        c=labels,
     )
     ax[1].set_xlim(min_x, max_x)
     ax[1].set_ylim(min_z, max_z)
@@ -97,6 +109,7 @@ def _plot_frame(
         arr[:, 2],
         s=1,
         alpha=0.5,
+        c=labels,
     )
     ax[2].set_xlim(min_y, max_y)
     ax[2].set_ylim(min_z, max_z)

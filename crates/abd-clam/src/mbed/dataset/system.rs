@@ -4,9 +4,12 @@
 use std::collections::{HashMap, HashSet};
 
 use distances::{number::Multiplication, Number};
+use rayon::prelude::*;
 
 use crate::{
-    dataset::{AssociatesMetadata, AssociatesMetadataMut},
+    cluster::ParCluster,
+    dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset},
+    metric::ParMetric,
     Cluster, Dataset, FlatVec, Metric,
 };
 
@@ -79,6 +82,13 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
     /// This is a `FlatVec` of `DIM`-dimensional points.
     pub fn extract_positions(&self) -> FlatVec<[f32; DIM], Me> {
         self.data.clone().transform_items(|[p, _]| *p)
+    }
+}
+
+impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: Cluster<T>> System<'_, DIM, Me, T, C> {
+    /// Parallel version of [`extract_positions`](Self::extract_positions).
+    pub fn par_extract_positions(&self) -> FlatVec<[f32; DIM], Me> {
+        self.data.clone().par_transform_items(|[p, _]| *p)
     }
 }
 
@@ -274,14 +284,18 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             for s in stressed_springs {
                 let ([a, b], k, _, _) = s.deconstruct();
                 let k = k * dk;
-                parents.entry(a).or_insert_with(Vec::new).push((b, k));
-                parents.entry(b).or_insert_with(Vec::new).push((a, k));
+                if !a.is_leaf() {
+                    parents.entry(a).or_insert_with(Vec::new).push((b, k));
+                }
+                if !b.is_leaf() {
+                    parents.entry(b).or_insert_with(Vec::new).push((a, k));
+                }
             }
 
             // Create a triangle for each parent cluster to be replaced.
             let triangles = parents
-                .keys()
-                .map(|&c| {
+                .iter()
+                .map(|(&c, _)| {
                     let [a, b] = {
                         let children = c.children();
                         [children[0], children[1]]
@@ -299,6 +313,13 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                     // parent cluster.
                     let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
 
+                    (c, (a, b, ac, bc, ab, dxa, dxb, dyb))
+                })
+                .collect::<HashMap<_, _>>();
+
+            let triangles = triangles
+                .into_iter()
+                .map(|(c, (a, b, ac, bc, ab, dxa, dxb, dyb))| {
                     // Compute new positions for the child clusters.
                     let x = Vector::random_unit(rng);
                     let pa = self[a.arg_center()][0] + x * dxa;
@@ -314,13 +335,6 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                         self[i][0] = pb;
                     }
 
-                    (c, (a, b, ac, bc, ab))
-                })
-                .collect::<HashMap<_, _>>();
-
-            let triangles = triangles
-                .into_iter()
-                .map(|(c, (a, b, ac, bc, ab))| {
                     let ac = Spring::new([a, c], k, ac, self.distance_between(a.arg_center(), c.arg_center()));
                     let bc = Spring::new([b, c], k, bc, self.distance_between(b.arg_center(), c.arg_center()));
                     let ab = Spring::new([a, b], k, ab, self.distance_between(a.arg_center(), b.arg_center()));
@@ -338,20 +352,32 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                 })
                 .collect::<HashMap<_, _>>();
 
-            // Add new springs between the pairs of child clusters of different
+            // Create springs between the pairs of child clusters of different
             // parent clusters.
-            for (&c, &[ca, cb]) in &triangles {
-                for &(d, k) in &parents[&c] {
-                    // Ensure that the springs are only added once.
-                    if c.arg_center() < d.arg_center() {
-                        let [da, db] = triangles[&d];
-                        self.add_spring([ca, da], k, data.one_to_one(ca.arg_center(), da.arg_center(), metric));
-                        self.add_spring([ca, db], k, data.one_to_one(ca.arg_center(), db.arg_center(), metric));
-                        self.add_spring([cb, da], k, data.one_to_one(cb.arg_center(), da.arg_center(), metric));
-                        self.add_spring([cb, db], k, data.one_to_one(cb.arg_center(), db.arg_center(), metric));
-                    }
-                }
-            }
+            let (new_springs, new_leaf_springs): (Vec<_>, Vec<_>) = triangles
+                .iter()
+                .flat_map(|(&c, &[ca, cb])| {
+                    parents[&c]
+                        .iter()
+                        .filter(|&&(d, _)| !d.is_leaf() && c.arg_center() < d.arg_center())
+                        .flat_map(|&(d, k)| {
+                            let [da, db] = triangles[&d];
+                            [
+                                self.new_spring([ca, da], k, data.one_to_one(ca.arg_center(), da.arg_center(), metric)),
+                                self.new_spring([ca, db], k, data.one_to_one(ca.arg_center(), db.arg_center(), metric)),
+                                self.new_spring([cb, da], k, data.one_to_one(cb.arg_center(), da.arg_center(), metric)),
+                                self.new_spring([cb, db], k, data.one_to_one(cb.arg_center(), db.arg_center(), metric)),
+                            ]
+                        })
+                })
+                .partition(|s| {
+                    let [a, b] = s.clusters();
+                    a.is_leaf() && b.is_leaf()
+                });
+
+            // Add the new springs to the system.
+            self.springs.extend(new_springs);
+            self.leaf_springs.extend(new_leaf_springs);
 
             // Simulate the system until it reaches stability.
             self.simulate_to_stability(dt, patience, target, max_steps);
@@ -370,18 +396,22 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             self.leaf_springs.len()
         );
 
-        todo!()
+        Ok(())
     }
 
     /// Adds a new spring between the given clusters.
     pub fn add_spring(&mut self, [a, b]: [&'a C; 2], k: f32, l0: T) {
-        let l = self.distance_between(a.arg_center(), b.arg_center());
-        let spring = Spring::new([a, b], k, l0, l);
+        let spring = self.new_spring([a, b], k, l0);
         if a.is_leaf() && b.is_leaf() {
             self.leaf_springs.push(spring);
         } else {
             self.springs.push(spring);
         }
+    }
+
+    /// Creates a new spring between the given clusters.
+    pub fn new_spring(&self, [a, b]: [&'a C; 2], k: f32, l0: T) -> Spring<'a, T, C> {
+        Spring::new([a, b], k, l0, self.distance_between(a.arg_center(), b.arg_center()))
     }
 
     /// Remove springs and leaf-springs whose spring constant is below the given
@@ -512,16 +542,6 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             })
             .collect::<Vec<_>>();
 
-        // // Accumulate the force acting on each mass.
-        // let forces = {
-        //     let mut accumulated_forces = std::collections::HashMap::new();
-        //     for (c, f) in forces {
-        //         *accumulated_forces.entry(c).or_insert(Vector::zero()) += f;
-        //     }
-
-        //     accumulated_forces
-        // };
-
         // Calculate the change in velocity for each point.
         let dvs = {
             let mut dvs = vec![Vector::zero(); self.data.cardinality()];
@@ -543,7 +563,6 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         self.data.transform_items_enumerated_in_place(|i, [mut x, mut v]| {
             v += dvs[i];
             x += v * dt;
-            [x, v]
         });
 
         // Update the springs in the system.
@@ -580,6 +599,426 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             "Reached instability of {instability:.2e} after {i} steps with {} springs.",
             self.springs.len()
         );
+    }
+}
+
+impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<'a, DIM, Me, T, C> {
+    /// Parallel version of [`kinetic_energy`](Self::kinetic_energy).
+    #[must_use]
+    pub fn par_kinetic_energy(&self) -> f32 {
+        self.data
+            .items()
+            .par_iter()
+            .map(|[_, v]| v.magnitude().square())
+            .sum::<f32>()
+            .half()
+    }
+
+    /// Parallel version of [`potential_energy`](Self::potential_energy).
+    #[must_use]
+    pub fn par_potential_energy(&self) -> f32 {
+        self.springs
+            .par_iter()
+            .chain(self.leaf_springs.par_iter())
+            .map(Spring::potential_energy)
+            .sum()
+    }
+
+    /// Parallel version of [`update_energy_history`](Self::update_energy_history).
+    fn par_update_energy_history(&mut self) {
+        let ke = self.par_kinetic_energy();
+        let pe = self.par_potential_energy();
+        self.energy_history.push((ke, pe));
+    }
+
+    /// Parallel version of [`reset_energy_history`](Self::reset_energy_history).
+    fn par_reset_energy_history(&mut self) {
+        self.energy_history.clear();
+        self.par_update_energy_history();
+    }
+
+    /// Parallel version of [`initialize_with_root`](Self::initialize_with_root).
+    ///
+    /// # Errors
+    ///
+    /// - See [`initialize_with_root`](Self::initialize_with_root).
+    pub fn par_initialize_with_root<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, R: rand::Rng>(
+        &mut self,
+        k: f32,
+        root: &'a C,
+        data: &D,
+        metric: &M,
+        rng: &mut R,
+    ) -> Result<(), String> {
+        let children = root.children();
+        if children.len() < 2 {
+            let msg = "Root cluster must have at least two children.";
+            ftlog::error!("{msg}");
+            return Err(msg.to_string());
+        }
+
+        // For each child, choose a random position inside a hypercube centered
+        // at the origin with side length equal to the diameter of the root.
+        let radius = root.radius().as_f32();
+        for &c in &children {
+            let p = Vector::random(rng, -radius, radius);
+            let v = Vector::random(rng, -radius, radius);
+            for i in c.indices() {
+                self[i] = [p, v];
+            }
+        }
+
+        // For each pair of children, create a spring between them.
+        (self.leaf_springs, self.springs) = children
+            .par_iter()
+            .flat_map(|&a| {
+                children
+                    .par_iter()
+                    .filter_map(|&b| {
+                        let (i, j) = (a.arg_center(), b.arg_center());
+                        if i < j {
+                            let l0 = data.one_to_one(i, j, metric);
+                            let l = self.distance_between(i, j);
+                            Some(Spring::new([a, b], k, l0, l))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .partition(|s| {
+                let [a, b] = s.clusters();
+                a.is_leaf() && b.is_leaf()
+            });
+
+        self.par_reset_energy_history();
+
+        Ok(())
+    }
+
+    /// Parallel version of [`update_springs`](Self::update_springs).
+    fn par_update_springs(&mut self) {
+        let new_lengths = self
+            .springs
+            .par_iter()
+            .map(|s| {
+                let [a, b] = s.clusters();
+                self.distance_between(a.arg_center(), b.arg_center())
+            })
+            .collect::<Vec<_>>();
+        self.springs
+            .par_iter_mut()
+            .zip(new_lengths)
+            .for_each(|(s, l)| s.update_length(l));
+    }
+
+    /// Parallel version of [`update_step`](Self::update_step).
+    pub fn par_update_step(&mut self, dt: f32) {
+        // Calculate the force exerted by each spring.
+        let forces = self
+            .springs
+            .par_iter()
+            .chain(self.leaf_springs.par_iter())
+            .flat_map(|s| {
+                let [a, b] = s.clusters();
+                let f = s.unit_vector(self) * s.f_mag();
+                [(a, f), (b, -f)]
+            })
+            .collect::<Vec<_>>();
+
+        // Calculate the change in velocity for each point.
+        let dvs = {
+            let mut dvs = vec![Vector::zero(); self.data.cardinality()];
+
+            for (c, f) in forces {
+                let m = c.cardinality().as_f32();
+                let a = f / m;
+                let dv = a * dt;
+                for i in c.indices() {
+                    // The addition here accounts for the accumulated forces.
+                    dvs[i] += dv;
+                }
+            }
+
+            dvs
+        };
+
+        // Apply the changes to the positions and velocities of the points.
+        self.data.par_transform_items_enumerated_in_place(|i, [mut x, mut v]| {
+            v += dvs[i];
+            x += v * dt;
+        });
+
+        // Update the springs in the system.
+        self.par_update_springs();
+
+        // Update the energy history of the system.
+        self.par_update_energy_history();
+    }
+
+    /// Parallel version of [`simulate_to_stability`](Self::simulate_to_stability).
+    pub fn par_simulate_to_stability(
+        &mut self,
+        dt: f32,
+        patience: usize,
+        target: Option<f32>,
+        max_steps: Option<usize>,
+    ) {
+        let target = target.unwrap_or(1e-5);
+        let max_steps = max_steps.unwrap_or(usize::MAX);
+
+        let mut i = 0;
+        let mut instability = self.instability(patience);
+        while i < patience || (instability > target && i < max_steps) {
+            i += 1;
+            self.update_step(dt);
+            instability = self.instability(patience);
+        }
+
+        ftlog::info!(
+            "Reached instability of {instability:.2e} after {i} steps with {} springs and {} leaf springs.",
+            self.springs.len(),
+            self.leaf_springs.len()
+        );
+    }
+
+    /// Parallel version of [`simulate_to_leaves`](Self::simulate_to_leaves).
+    ///
+    /// # Errors
+    ///
+    /// - See [`simulate_to_leaves`](Self::simulate_to_leaves).
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        clippy::similar_names,
+        clippy::many_single_char_names
+    )]
+    pub fn par_simulate_to_leaves<
+        I: Send + Sync,
+        D: ParDataset<I>,
+        M: ParMetric<I, T>,
+        R: rand::Rng,
+        P: AsRef<std::path::Path>,
+    >(
+        &mut self,
+        k: f32,
+        data: &D,
+        metric: &M,
+        rng: &mut R,
+        dt: f32,
+        patience: usize,
+        target: Option<f32>,
+        max_steps: Option<usize>,
+        dk: Option<f32>,
+        retention_depth: Option<usize>,
+        f: Option<f32>,
+        out_dir: &P,
+    ) -> Result<(), String>
+    where
+        Me: Clone,
+    {
+        let dk = if let Some(dk) = dk {
+            if dk > 0.0 && dk < 1.0 {
+                dk
+            } else {
+                let msg = format!("`dk` must be in the range (0, 1). Got {dk:.2e} instead.");
+                ftlog::error!("{msg}");
+                return Err(msg);
+            }
+        } else {
+            0.5
+        };
+
+        let min_k = k * dk.powi(retention_depth.unwrap_or(3).as_i32());
+
+        let f = if let Some(f) = f {
+            if f > 0.0 && f < 1.0 {
+                f
+            } else {
+                let msg = format!("`f` must be in the range (0, 1). Got {f:.2e} instead.");
+                ftlog::error!("{msg}");
+                return Err(msg);
+            }
+        } else {
+            0.1
+        };
+
+        let mut i = 0;
+        while !self.springs.is_empty() {
+            i += 1;
+
+            // Remove springs that are too weak and sort the remaining springs
+            // by their displacement ratio.
+            self.remove_weak_springs(min_k);
+            self.sort_springs_by_displacement();
+
+            // Get the clusters connected to the most displaced springs.
+            let at = ((1.0 - f) * self.springs.len().as_f32()).floor().as_usize();
+            let stressed_springs = self.springs.split_off(at);
+            ftlog::info!(
+                "Step {i}, Removed {} springs leaving {}.",
+                stressed_springs.len(),
+                self.springs.len()
+            );
+
+            let stressed_parents = stressed_springs
+                .par_iter()
+                .flat_map(Spring::clusters)
+                .filter(|&c| !c.is_leaf())
+                .collect::<HashSet<_>>();
+            ftlog::info!("Step {i}, Found {} stressed parent clusters.", stressed_parents.len());
+
+            // Return the stressed springs to the system.
+            self.springs.extend(stressed_springs.iter().copied());
+
+            // Remove all springs connected to stressed parents.
+            let (connected, disconnected): (Vec<_>, _) = self.springs.par_drain(..).partition(|s| {
+                let [a, b] = s.clusters();
+                stressed_parents.contains(&a) || stressed_parents.contains(&b)
+            });
+            self.springs = disconnected;
+            ftlog::info!(
+                "Step {i}, Removed {} stressed springs leaving {}",
+                connected.len(),
+                self.springs.len()
+            );
+
+            // Collect all stressed clusters and their connecting springs.
+            let mut parents = HashMap::new();
+            for s in connected {
+                let ([a, b], k, _, _) = s.deconstruct();
+                let k = k * dk;
+                if !a.is_leaf() {
+                    parents.entry(a).or_insert_with(Vec::new).push((b, k));
+                }
+                if !b.is_leaf() {
+                    parents.entry(b).or_insert_with(Vec::new).push((a, k));
+                }
+            }
+            ftlog::info!("Step {i}, Found {} stressed clusters.", parents.len());
+
+            // Create a triangle for each parent cluster to be replaced.
+            let triangles = parents
+                .par_iter()
+                .map(|(&c, _)| {
+                    let [a, b] = {
+                        let children = c.children();
+                        [children[0], children[1]]
+                    };
+
+                    // Compute the true distances between the child clusters and
+                    // the parent cluster.
+                    let (ac, bc, ab) = (
+                        data.par_one_to_one(a.arg_center(), c.arg_center(), metric),
+                        data.par_one_to_one(b.arg_center(), c.arg_center(), metric),
+                        data.par_one_to_one(a.arg_center(), b.arg_center(), metric),
+                    );
+
+                    // Compute the displacements of the child clusters from the
+                    // parent cluster.
+                    let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
+
+                    (c, (a, b, ac, bc, ab, dxa, dxb, dyb))
+                })
+                .collect::<HashMap<_, _>>();
+
+            let triangles = triangles
+                .into_iter()
+                .map(|(c, (a, b, ac, bc, ab, dxa, dxb, dyb))| {
+                    // Compute new positions for the child clusters.
+                    let x = Vector::random_unit(rng);
+                    let pa = self[a.arg_center()][0] + x * dxa;
+
+                    let y = x.perpendicular(rng);
+                    let pb = self[b.arg_center()][0] + x * dxb + y * dyb;
+
+                    // Set the new positions of points in the child clusters.
+                    for i in a.indices() {
+                        self[i][0] = pa;
+                    }
+                    for i in b.indices() {
+                        self[i][0] = pb;
+                    }
+
+                    self.add_spring([a, c], k, ac);
+                    self.add_spring([b, c], k, bc);
+
+                    let ab = self.new_spring([a, b], k, ab);
+                    if a.is_leaf() && b.is_leaf() {
+                        self.leaf_springs.push(ab);
+                    } else {
+                        self.springs.push(ab);
+                    }
+
+                    (c, [a, b])
+                })
+                .collect::<HashMap<_, _>>();
+
+            // Create springs between the pairs of child clusters of different
+            // parent clusters.
+            let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = triangles
+                .par_iter()
+                .flat_map(|(&c, &[ca, cb])| {
+                    parents[&c]
+                        .par_iter()
+                        .filter(|&&(d, _)| !d.is_leaf() && c.arg_center() < d.arg_center())
+                        .flat_map(|&(d, k)| {
+                            let [da, db] = triangles[&d];
+                            [
+                                self.new_spring([ca, da], k, data.one_to_one(ca.arg_center(), da.arg_center(), metric)),
+                                self.new_spring([ca, db], k, data.one_to_one(ca.arg_center(), db.arg_center(), metric)),
+                                self.new_spring([cb, da], k, data.one_to_one(cb.arg_center(), da.arg_center(), metric)),
+                                self.new_spring([cb, db], k, data.one_to_one(cb.arg_center(), db.arg_center(), metric)),
+                            ]
+                        })
+                })
+                .partition(|s| {
+                    let [a, b] = s.clusters();
+                    a.is_leaf() && b.is_leaf()
+                });
+            ftlog::info!(
+                "Step {i}, Created {} new leaf springs and {} new springs.",
+                new_leaf_springs.len(),
+                new_springs.len()
+            );
+
+            // Add the new springs to the system.
+            self.springs.extend(new_springs);
+            self.leaf_springs.extend(new_leaf_springs);
+
+            // Simulate the system until it reaches stability.
+            self.par_simulate_to_stability(dt, patience, target, max_steps);
+
+            // Remove any springs that connect to the parent clusters.
+            self.springs.retain(|s| {
+                let [a, b] = s.clusters();
+                !(parents.contains_key(&a) || parents.contains_key(&b)) || s.k() >= min_k
+            });
+            self.leaf_springs.retain(|s| {
+                let [a, b] = s.clusters();
+                !(parents.contains_key(&a) || parents.contains_key(&b)) || s.k() >= min_k
+            });
+
+            // Save the current state of the system.
+            let path = out_dir.as_ref().join(format!("{}-step-{i}.npy", data.name()));
+            self.par_extract_positions().write_npy(&path)?;
+        }
+
+        // Simulate the system for longer to ensure that it has reached a stable
+        // state with leaf clusters.
+        let patience = patience * 10;
+        let target = target.map(|t| t * 0.1);
+        let max_steps = max_steps.map(|m| m * 10);
+        self.par_simulate_to_stability(dt, patience, target, max_steps);
+
+        ftlog::info!(
+            "Reached instability of {:.2e} with {} leaf springs after {i} steps.",
+            self.instability(patience),
+            self.leaf_springs.len()
+        );
+
+        Ok(())
     }
 }
 

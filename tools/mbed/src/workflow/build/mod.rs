@@ -1,12 +1,6 @@
 //! Build the dimension reduction.
 
-use abd_clam::{
-    cluster::ParPartition,
-    dataset::{AssociatesMetadata, AssociatesMetadataMut},
-    mbed::MassSpringSystem,
-    metric::ParMetric,
-    Dataset, FlatVec,
-};
+use abd_clam::{cluster::ParPartition, mbed::MassSpringSystem, metric::ParMetric, Dataset, FlatVec};
 
 /// Build the dimension reduction.
 ///
@@ -28,10 +22,11 @@ pub fn build<P, I, M, C, CC, Me, const DIM: usize>(
     name: &str,
     checkpoint_frequency: usize,
     seed: Option<u64>,
-    beta: f32,
+    beta: Option<f32>,
     k: f32,
-    f: f32,
-    min_k: Option<f32>,
+    dk: Option<f32>,
+    retention_depth: Option<usize>,
+    f: Option<f32>,
     dt: f32,
     patience: usize,
     target: Option<f32>,
@@ -53,13 +48,29 @@ where
     ftlog::info!("Name: {name}");
     ftlog::info!("Checkpoint frequency: {checkpoint_frequency}");
 
+    let mut rng = rand::thread_rng();
+
     ftlog::info!("Creating the tree ...");
     let root = C::par_new_tree_iterative(&data, &metric, criteria, seed, 128);
 
     ftlog::info!("Starting the dimension reduction ...");
-    let system = MassSpringSystem::<DIM, _, _>::from_root(&root, beta, name)
-        .par_evolve_to_leaves(&data, &metric, k, f, min_k, dt, patience, target, max_steps, out_dir);
+    let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data, beta)?;
+    system.par_initialize_with_root(k, &root, &data, &metric, &mut rng)?;
+    system.par_simulate_to_leaves(
+        k,
+        &data,
+        &metric,
+        &mut rng,
+        dt,
+        patience,
+        target,
+        max_steps,
+        dk,
+        retention_depth,
+        f,
+        out_dir,
+    )?;
 
     ftlog::info!("Extracting the reduced embedding ...");
-    system.get_reduced_embedding().with_metadata(data.metadata())
+    Ok(system.par_extract_positions())
 }
