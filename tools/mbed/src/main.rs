@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{Ball, FlatVec};
+use abd_clam::{cluster::BalancedBall, Ball, FlatVec};
 use clap::Parser;
 
 mod distance_functions;
@@ -104,7 +104,7 @@ fn main() -> Result<(), String> {
     };
 
     let file_name = format!("mbed-{}", args.dataset_name);
-    let (_guard, log_path) = bench_utils::configure_logger(&file_name, ftlog::LevelFilter::Debug)?;
+    let (_guard, log_path) = bench_utils::configure_logger(&file_name, ftlog::LevelFilter::Info)?;
     ftlog::info!("Logging to: {log_path:?}");
 
     ftlog::info!("Using {:?} distance function...", args.metric.name());
@@ -116,6 +116,7 @@ fn main() -> Result<(), String> {
         Commands::Build {
             dimensions,
             checkpoint_frequency,
+            balanced,
             beta,
             k,
             dk,
@@ -135,67 +136,66 @@ fn main() -> Result<(), String> {
 
             let data = FlatVec::<Vec<f64>, usize>::read_npy(&inp_path)?
                 .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
-            let criteria = |_: &Ball<f32>| true;
-            let reduced_data = workflow::build::<_, _, _, _, _, _, DIM>(
-                &out_dir,
-                data,
-                metric,
-                &criteria,
-                *dimensions,
-                name,
-                *checkpoint_frequency,
-                args.seed,
-                *beta,
-                *k,
-                *dk,
-                *retention_depth,
-                *f,
-                *dt,
-                *patience,
-                *target,
-                *max_steps,
-            )?;
+            let reduced_data = if *balanced {
+                let criteria = |_: &BalancedBall<f32>| true;
+                workflow::build::<_, _, _, _, _, _, DIM>(
+                    &out_dir,
+                    data,
+                    metric,
+                    &criteria,
+                    *dimensions,
+                    name,
+                    *checkpoint_frequency,
+                    args.seed,
+                    *beta,
+                    *k,
+                    *dk,
+                    *retention_depth,
+                    *f,
+                    *dt,
+                    *patience,
+                    *target,
+                    *max_steps,
+                )?
+            } else {
+                let criteria = |_: &Ball<f32>| true;
+                workflow::build::<_, _, _, _, _, _, DIM>(
+                    &out_dir,
+                    data,
+                    metric,
+                    &criteria,
+                    *dimensions,
+                    name,
+                    *checkpoint_frequency,
+                    args.seed,
+                    *beta,
+                    *k,
+                    *dk,
+                    *retention_depth,
+                    *f,
+                    *dt,
+                    *patience,
+                    *target,
+                    *max_steps,
+                )?
+            };
 
             let data_path = out_dir.join(format!("{name}-reduced.npy"));
             reduced_data.write_npy(&data_path)?;
         }
         Commands::Measure {
-            original_data,
             quality_measures,
             exhaustive,
         } => {
-            if original_data.extension().is_none_or(|ext| ext != "npy") {
-                return Err("Original data must be in .npy format".to_string());
+            let original_data = inp_dir.join(format!("{}.npy", args.dataset_name));
+            if !original_data.exists() {
+                return Err(format!("{original_data:?} does not exist"));
             }
 
-            let inp_path = {
-                // The names for the reduced data are "{dataset_name}-step-{step}.npy"
-                // where the `step` is the iteration number. The last step is the final
-                // result.
-                let pattern = format!("{}-step-*.npy", args.dataset_name);
-                let mut steps = inp_dir
-                    .read_dir()
-                    .map_err(|e| format!("Failed to read {inp_dir:?}: {e}"))?
-                    .filter_map(|entry| {
-                        entry
-                            .ok()
-                            .and_then(|entry| entry.file_name().into_string().ok())
-                            .filter(|name| name == &pattern)
-                    })
-                    .map(|name| {
-                        let i = name.find("step-").unwrap() + "step-".len();
-                        let j = name.find(".npy").unwrap();
-                        let step_str = &name[i..j];
-                        let step = step_str
-                            .parse::<u64>()
-                            .map_err(|e| format!("Failed to parse step number: {e}"))?;
-                        Ok((step, name))
-                    })
-                    .collect::<Result<Vec<_>, String>>()?;
-                steps.sort_by_key(|(step, _)| *step);
-                let (_, last_step) = steps.pop().ok_or("No steps found")?;
-                inp_dir.join(last_step)
-            };
+            let inp_path = out_dir.join(format!("{}-reduced.npy", args.dataset_name));
+            if !inp_path.exists() {
+                return Err(format!("{inp_path:?} does not exist"));
+            }
 
             ftlog::info!("Measuring quality of dimension reduction...");
             ftlog::info!("Reading reduced data from {inp_path:?}...");

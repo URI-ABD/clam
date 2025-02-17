@@ -1,7 +1,5 @@
 //! The workflow for dimensionality reduction using `clam-mbed`.
 
-use std::path::PathBuf;
-
 use clap::Subcommand;
 
 use crate::quality_measures::QualityMeasures;
@@ -25,8 +23,12 @@ pub enum Commands {
         #[arg(short('c'), long, default_value = "100")]
         checkpoint_frequency: usize,
 
-        /// The damping factor for the mass-spring system.
+        /// Whether to use the balanced ball clustering algorithm.
         #[arg(short('b'), long)]
+        balanced: bool,
+
+        /// The damping factor for the mass-spring system.
+        #[arg(short('B'), long)]
         beta: Option<f32>,
 
         /// The spring constant for the mass-spring system.
@@ -47,7 +49,7 @@ pub enum Commands {
         retention_depth: Option<usize>,
 
         /// The time step for each iteration of the mass-spring system.
-        #[arg(short('t'), long, default_value = "0.001")]
+        #[arg(short('t'), long, default_value = "0.01")]
         dt: f32,
 
         /// The number of iterations to wait before stopping the optimization if
@@ -66,10 +68,6 @@ pub enum Commands {
     },
     /// Measure the quality of a dimension reduction.
     Measure {
-        /// Path to the original data file.
-        #[arg(short('d'), long)]
-        original_data: PathBuf,
-
         /// The quality measures to calculate.
         // #[arg(short('q'), long, default_value = "pairwise,triangle-inequality,angle")]
         #[arg(short('q'), long, default_value = "pairwise")]

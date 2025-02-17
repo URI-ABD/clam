@@ -198,7 +198,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     ///   default value is `0.5`. This value must be in the range `(0, 1)`.
     /// - `retention_depth`: The number of times after a cluster is replaced by
     ///   its children that the corresponding springs are retained. If `None`,
-    ///   the default value is `3`. Increasing this value will exponentially
+    ///   the default value is `5`. Increasing this value will exponentially
     ///   increase the number of springs in the system.
     /// - `f`: The fraction of the most displaced springs to replace by child
     ///   clusters. at each step. If `None`, the default value is `0.1`. This
@@ -241,7 +241,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             0.5
         };
 
-        let min_k = k * dk.powi(retention_depth.unwrap_or(3).as_i32());
+        let min_k = k * dk.powi(retention_depth.unwrap_or(5).as_i32());
 
         let f = if let Some(f) = f {
             if f > 0.0 && f < 1.0 {
@@ -775,7 +775,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             instability = self.instability(patience);
         }
 
-        ftlog::info!(
+        ftlog::debug!(
             "Reached instability of {instability:.2e} after {i} steps with {} springs and {} leaf springs.",
             self.springs.len(),
             self.leaf_springs.len()
@@ -830,7 +830,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             0.5
         };
 
-        let min_k = k * dk.powi(retention_depth.unwrap_or(3).as_i32());
+        let min_k = k * dk.powi(retention_depth.unwrap_or(5).as_i32());
 
         let f = if let Some(f) = f {
             if f > 0.0 && f < 1.0 {
@@ -892,10 +892,6 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             }
             ftlog::debug!("Step {i}, Found {} stressed clusters.", parents.len());
 
-            // Choose a pair of random directions for the child clusters.
-            let x = Vector::<DIM>::random_unit(rng);
-            let y = x.perpendicular(rng);
-
             // Create a triangle for each parent cluster to be replaced.
             let triangles = parents
                 .par_iter()
@@ -917,17 +913,21 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                     // parent cluster.
                     let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
 
-                    // Compute the changes in positions for the child clusters.
-                    let pa = self[a.arg_center()][0] + x * dxa;
-                    let pb = self[b.arg_center()][0] + x * dxb + y * dyb;
-
-                    (c, (a, b, ac, bc, ab, pa, pb))
+                    (c, (a, b, ac, bc, ab, dxa, dxb, dyb))
                 })
                 .collect::<HashMap<_, _>>();
 
             let triangles = triangles
                 .into_iter()
-                .map(|(c, (a, b, ac, bc, ab, pa, pb))| {
+                .map(|(c, (a, b, ac, bc, ab, dxa, dxb, dyb))| {
+                    // Choose a pair of random directions for the child clusters.
+                    let x = Vector::<DIM>::random_unit(rng);
+                    let y = x.perpendicular(rng);
+
+                    // Compute the changes in positions for the child clusters.
+                    let pa = self[a.arg_center()][0] + x * dxa;
+                    let pb = self[b.arg_center()][0] + x * dxb + y * dyb;
+
                     // Set the new positions of points in the child clusters.
                     for i in a.indices() {
                         self[i][0] = pa;
