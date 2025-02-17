@@ -57,6 +57,12 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
         self.k
     }
 
+    /// Change the spring constant of the spring.
+    pub const fn with_k(mut self, k: f32) -> Self {
+        self.k = k;
+        self
+    }
+
     /// Get the ratio of the current length to the natural length of the spring.
     pub fn ratio(&self) -> f32 {
         self.l / self.l0.as_f32()

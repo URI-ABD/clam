@@ -21,12 +21,16 @@ const DIM: usize = 3;
 struct Args {
     /// Path to the input file.
     #[arg(short('i'), long)]
-    input: PathBuf,
+    inp_dir: PathBuf,
+
+    /// The name of the dataset.
+    #[arg(short('n'), long)]
+    dataset_name: String,
 
     /// Path to the output directory. If not provided, the outputs will be
     /// written to the parent directory of the input file.
     #[arg(short('o'), long)]
-    output: Option<PathBuf>,
+    out_dir: Option<PathBuf>,
 
     /// The random seed to use.
     #[arg(short('s'), long, default_value = "42")]
@@ -45,30 +49,43 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
     println!("Args: {args:?}");
 
-    let (inp_path, inp_name) = {
-        let inp_path = args.input.clone();
+    let inp_dir = {
+        let inp_dir = args.inp_dir.clone();
 
-        if !inp_path.exists() {
-            return Err(format!("{inp_path:?} does not exist"));
+        if !inp_dir.exists() {
+            return Err(format!("{inp_dir:?} does not exist"));
         }
 
-        if !inp_path.is_file() {
-            return Err(format!("{inp_path:?} is not a file"));
+        if !inp_dir.is_dir() {
+            return Err(format!("{inp_dir:?} is not a file"));
         }
 
-        let inp_name = args
-            .input
-            .file_stem()
-            .ok_or("Input file must have a name")?
-            .to_str()
-            .ok_or("Input file name must be valid UTF-8")?;
-
-        (inp_path, inp_name)
+        inp_dir
     };
 
-    let out_dir = match args.output {
+    let out_dir = match args.out_dir {
         Some(out_dir) => {
-            if !out_dir.exists() {
+            let out_dir = out_dir.join(&args.dataset_name);
+
+            if out_dir.exists() {
+                let pattern = format!("{}-step-*.npy", args.dataset_name);
+                // delete all files in the output directory that match the pattern
+                let files = out_dir
+                    .read_dir()
+                    .map_err(|e| format!("Failed to read {out_dir:?}: {e}"))?
+                    .filter_map(|entry| {
+                        entry
+                            .ok()
+                            .and_then(|entry| entry.file_name().into_string().ok())
+                            .filter(|name| name == &pattern)
+                    })
+                    .collect::<Vec<_>>();
+                for file in files {
+                    let path = out_dir.join(file);
+                    ftlog::info!("Deleting {path:?}...");
+                    std::fs::remove_file(&path).map_err(|e| format!("Failed to delete {path:?}: {e}"))?;
+                }
+            } else {
                 ftlog::info!("Creating output directory {out_dir:?}...");
                 std::fs::create_dir(&out_dir).map_err(|e| format!("Failed to create {out_dir:?}: {e}"))?;
             }
@@ -79,13 +96,14 @@ fn main() -> Result<(), String> {
 
             out_dir
         }
-        None => inp_path
+        None => inp_dir
             .parent()
-            .ok_or("Input file must have a parent directory")?
-            .to_path_buf(),
+            .ok_or("Input directory must have a parent directory")?
+            .to_path_buf()
+            .join(&args.dataset_name),
     };
 
-    let file_name = format!("mbed-{inp_name}");
+    let file_name = format!("mbed-{}", args.dataset_name);
     let (_guard, log_path) = bench_utils::configure_logger(&file_name, ftlog::LevelFilter::Debug)?;
     ftlog::info!("Logging to: {log_path:?}");
 
@@ -97,7 +115,6 @@ fn main() -> Result<(), String> {
     match &args.command {
         Commands::Build {
             dimensions,
-            name,
             checkpoint_frequency,
             beta,
             k,
@@ -109,11 +126,8 @@ fn main() -> Result<(), String> {
             target,
             max_steps,
         } => {
-            if inp_path.extension().is_none_or(|ext| ext != "npy") {
-                return Err("Input file must be in .npy format".to_string());
-            }
-
-            let name = name.as_deref().unwrap_or(inp_name);
+            let name = args.dataset_name.as_str();
+            let inp_path = inp_dir.join(format!("{name}.npy"));
             ftlog::info!("Reading data from {inp_path:?}...");
             ftlog::info!("Reducing data to {dimensions} dimensions...");
             ftlog::info!("Saving checkpoints every {checkpoint_frequency} iterations...");
@@ -128,7 +142,7 @@ fn main() -> Result<(), String> {
                 metric,
                 &criteria,
                 *dimensions,
-                inp_name,
+                name,
                 *checkpoint_frequency,
                 args.seed,
                 *beta,
@@ -154,13 +168,34 @@ fn main() -> Result<(), String> {
                 return Err("Original data must be in .npy format".to_string());
             }
 
-            if !inp_name.ends_with("-reduced") {
-                return Err("Input file must be a reduced dataset".to_string());
-            }
-
-            if inp_path.extension().is_none_or(|ext| ext != "npy") {
-                return Err("Input file must be in .npy format".to_string());
-            }
+            let inp_path = {
+                // The names for the reduced data are "{dataset_name}-step-{step}.npy"
+                // where the `step` is the iteration number. The last step is the final
+                // result.
+                let pattern = format!("{}-step-*.npy", args.dataset_name);
+                let mut steps = inp_dir
+                    .read_dir()
+                    .map_err(|e| format!("Failed to read {inp_dir:?}: {e}"))?
+                    .filter_map(|entry| {
+                        entry
+                            .ok()
+                            .and_then(|entry| entry.file_name().into_string().ok())
+                            .filter(|name| name == &pattern)
+                    })
+                    .map(|name| {
+                        let i = name.find("step-").unwrap() + "step-".len();
+                        let j = name.find(".npy").unwrap();
+                        let step_str = &name[i..j];
+                        let step = step_str
+                            .parse::<u64>()
+                            .map_err(|e| format!("Failed to parse step number: {e}"))?;
+                        Ok((step, name))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                steps.sort_by_key(|(step, _)| *step);
+                let (_, last_step) = steps.pop().ok_or("No steps found")?;
+                inp_dir.join(last_step)
+            };
 
             ftlog::info!("Measuring quality of dimension reduction...");
             ftlog::info!("Reading reduced data from {inp_path:?}...");

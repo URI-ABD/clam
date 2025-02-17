@@ -20,11 +20,6 @@ pub enum Commands {
         #[arg(short('d'), long, default_value = "3")]
         dimensions: usize,
 
-        /// The name (excluding the extension) of the output file. If not
-        /// provided, the name will be generated from the input file.
-        #[arg(short('n'), long)]
-        name: Option<String>,
-
         /// The frequency of checkpoints, i.e. how often the current state of
         /// the dimension reduction is saved to disk.
         #[arg(short('c'), long, default_value = "100")]

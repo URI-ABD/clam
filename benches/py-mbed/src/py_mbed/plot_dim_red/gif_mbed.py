@@ -2,10 +2,12 @@
 
 import pathlib
 import re
+import concurrent.futures
 
 import imageio
 import numpy
 from matplotlib import pyplot as plt
+import tqdm
 
 from py_mbed import utils
 
@@ -32,31 +34,36 @@ def plot(
     x_vals = mbed_stack[:, :, 0].flatten()
     y_vals = mbed_stack[:, :, 1].flatten()
     z_vals = mbed_stack[:, :, 2].flatten()
-    min_x, max_x = x_vals.min(), x_vals.max()
-    min_y, max_y = y_vals.min(), y_vals.max()
-    min_z, max_z = z_vals.min(), z_vals.max()
+    x_lims = x_vals.min(), x_vals.max()
+    y_lims = y_vals.min(), y_vals.max()
+    z_lims = z_vals.min(), z_vals.max()
 
     # Create the GIF.
-    frame_path = out_dir / f"{dataset_name}-frame-temp.png"
+    results = []
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for i in range(len(mbed_steps)):
+            frame_path = out_dir / f"{dataset_name}-frame-{i}.png"
+            results.append(
+                executor.submit(
+                    _plot_frame,
+                    arr=mbed_stack[i],
+                    labels=labels,
+                    x_lims=x_lims,
+                    y_lims=y_lims,
+                    z_lims=z_lims,
+                    out_path=frame_path,
+                )
+            )
+
     frames = []
-    for i in range(len(mbed_steps)):
-        logger.info(f"Creating frame {i + 1}/{len(mbed_steps)}...")
-        # Save a temporary frame.
-        _plot_frame(
-            arr=mbed_stack[i],
-            labels=labels,
-            min_x=min_x,
-            max_x=max_x,
-            min_y=min_y,
-            max_y=max_y,
-            min_z=min_z,
-            max_z=max_z,
-            out_path=frame_path,
-        )
-        # Read the temporary frame and append it to the GIF.
-        frames.append(imageio.imread(frame_path))
-        # Clean up the temporary frame.
-        frame_path.unlink()
+    for result in tqdm.tqdm(concurrent.futures.as_completed(results), total=len(results)):
+        path: pathlib.Path = result.result()
+        i = int(path.stem.split("-")[-1])
+        frames.append((i, imageio.imread(path)))
+        path.unlink()
+
+    frames.sort(key=lambda x: x[0])
+    frames = [f for _, f in frames]
 
     logger.info("Creating GIF...")
     gif_path = out_dir / f"{dataset_name}-reduction.gif"
@@ -69,14 +76,11 @@ def _plot_frame(
     *,
     arr: numpy.ndarray,
     labels: numpy.ndarray,
-    min_x: float,
-    max_x: float,
-    min_y: float,
-    max_y: float,
-    min_z: float,
-    max_z: float,
+    x_lims: tuple[float, float],
+    y_lims: tuple[float, float],
+    z_lims: tuple[float, float],
     out_path: pathlib.Path,
-):
+) -> pathlib.Path:
     """Plot a frame of the dimensionality reduction process."""
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 
@@ -87,8 +91,8 @@ def _plot_frame(
         alpha=0.5,
         c=labels,
     )
-    ax[0].set_xlim(min_x, max_x)
-    ax[0].set_ylim(min_y, max_y)
+    ax[0].set_xlim(*x_lims)
+    ax[0].set_ylim(*y_lims)
     ax[0].set_xlabel("X")
     ax[0].set_ylabel("Y")
 
@@ -99,8 +103,8 @@ def _plot_frame(
         alpha=0.5,
         c=labels,
     )
-    ax[1].set_xlim(min_x, max_x)
-    ax[1].set_ylim(min_z, max_z)
+    ax[1].set_xlim(*x_lims)
+    ax[1].set_ylim(*z_lims)
     ax[1].set_xlabel("X")
     ax[1].set_ylabel("Z")
 
@@ -111,11 +115,13 @@ def _plot_frame(
         alpha=0.5,
         c=labels,
     )
-    ax[2].set_xlim(min_y, max_y)
-    ax[2].set_ylim(min_z, max_z)
+    ax[2].set_xlim(*y_lims)
+    ax[2].set_ylim(*z_lims)
     ax[2].set_xlabel("Y")
     ax[2].set_ylabel("Z")
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=100)
     plt.close()
+
+    return out_path

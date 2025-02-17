@@ -12,6 +12,8 @@ use abd_clam::{cluster::ParPartition, mbed::MassSpringSystem, metric::ParMetric,
 /// - `M`: The type of the metric.
 /// - `C`: The type of the root `Cluster`.
 /// - `CC`: The type of the criteria function.
+/// - `Me`: The type of the metadata.
+/// - `DIM`: The number of dimensions.
 #[allow(clippy::too_many_arguments)]
 pub fn build<P, I, M, C, CC, Me, const DIM: usize>(
     out_dir: &P,

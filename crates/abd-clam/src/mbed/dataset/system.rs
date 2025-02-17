@@ -421,10 +421,10 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         self.leaf_springs.retain(|s| s.k() >= min_k);
     }
 
-    /// Sort the springs by their displacement ratio in ascending order.
+    /// Sort the springs by their displacement ratio in descending order.
     fn sort_springs_by_displacement(&mut self) {
         let mut ratios_springs = self.springs.drain(..).map(|s| (s.ratio(), s)).collect::<Vec<_>>();
-        ratios_springs.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+        ratios_springs.sort_by(|(a, _), (b, _)| b.total_cmp(a));
         self.springs = ratios_springs.into_iter().map(|(_, s)| s).collect();
     }
 
@@ -844,6 +844,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             0.1
         };
 
+        let mut stressed_centers = vec![false; self.data.cardinality()];
         let mut i = 0;
         while !self.springs.is_empty() {
             i += 1;
@@ -854,32 +855,25 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             self.sort_springs_by_displacement();
 
             // Get the clusters connected to the most displaced springs.
-            let at = ((1.0 - f) * self.springs.len().as_f32()).floor().as_usize();
-            let stressed_springs = self.springs.split_off(at);
-            ftlog::info!(
-                "Step {i}, Removed {} springs leaving {}.",
-                stressed_springs.len(),
+            let at = (f * self.springs.len().as_f32()).ceil().as_usize();
+            ftlog::debug!(
+                "Step {i}, Stopping at {at} stressed springs out of {}.",
                 self.springs.len()
             );
-
-            let stressed_parents = stressed_springs
-                .par_iter()
+            self.springs
+                .iter()
+                .take(at)
                 .flat_map(Spring::clusters)
-                .filter(|&c| !c.is_leaf())
-                .collect::<HashSet<_>>();
-            ftlog::info!("Step {i}, Found {} stressed parent clusters.", stressed_parents.len());
-
-            // Return the stressed springs to the system.
-            self.springs.extend(stressed_springs.iter().copied());
+                .for_each(|c| stressed_centers[c.arg_center()] = true);
 
             // Remove all springs connected to stressed parents.
             let (connected, disconnected): (Vec<_>, _) = self.springs.par_drain(..).partition(|s| {
                 let [a, b] = s.clusters();
-                stressed_parents.contains(&a) || stressed_parents.contains(&b)
+                stressed_centers[a.arg_center()] || stressed_centers[b.arg_center()]
             });
             self.springs = disconnected;
-            ftlog::info!(
-                "Step {i}, Removed {} stressed springs leaving {}",
+            ftlog::debug!(
+                "Step {i}, Removed {} springs connected to stressed centers leaving {} springs.",
                 connected.len(),
                 self.springs.len()
             );
@@ -896,7 +890,11 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                     parents.entry(b).or_insert_with(Vec::new).push((a, k));
                 }
             }
-            ftlog::info!("Step {i}, Found {} stressed clusters.", parents.len());
+            ftlog::debug!("Step {i}, Found {} stressed clusters.", parents.len());
+
+            // Choose a pair of random directions for the child clusters.
+            let x = Vector::<DIM>::random_unit(rng);
+            let y = x.perpendicular(rng);
 
             // Create a triangle for each parent cluster to be replaced.
             let triangles = parents
@@ -919,20 +917,17 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                     // parent cluster.
                     let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
 
-                    (c, (a, b, ac, bc, ab, dxa, dxb, dyb))
+                    // Compute the changes in positions for the child clusters.
+                    let pa = self[a.arg_center()][0] + x * dxa;
+                    let pb = self[b.arg_center()][0] + x * dxb + y * dyb;
+
+                    (c, (a, b, ac, bc, ab, pa, pb))
                 })
                 .collect::<HashMap<_, _>>();
 
             let triangles = triangles
                 .into_iter()
-                .map(|(c, (a, b, ac, bc, ab, dxa, dxb, dyb))| {
-                    // Compute new positions for the child clusters.
-                    let x = Vector::random_unit(rng);
-                    let pa = self[a.arg_center()][0] + x * dxa;
-
-                    let y = x.perpendicular(rng);
-                    let pb = self[b.arg_center()][0] + x * dxb + y * dyb;
-
+                .map(|(c, (a, b, ac, bc, ab, pa, pb))| {
                     // Set the new positions of points in the child clusters.
                     for i in a.indices() {
                         self[i][0] = pa;
@@ -962,6 +957,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                 .flat_map(|(&c, &[ca, cb])| {
                     parents[&c]
                         .par_iter()
+                        // Ensure that springs are only created once.
                         .filter(|&&(d, _)| !d.is_leaf() && c.arg_center() < d.arg_center())
                         .flat_map(|&(d, k)| {
                             let [da, db] = triangles[&d];
@@ -977,7 +973,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                     let [a, b] = s.clusters();
                     a.is_leaf() && b.is_leaf()
                 });
-            ftlog::info!(
+            ftlog::debug!(
                 "Step {i}, Created {} new leaf springs and {} new springs.",
                 new_leaf_springs.len(),
                 new_springs.len()
@@ -993,12 +989,21 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             // Remove any springs that connect to the parent clusters.
             self.springs.retain(|s| {
                 let [a, b] = s.clusters();
-                !(parents.contains_key(&a) || parents.contains_key(&b)) || s.k() >= min_k
+                !(parents.contains_key(&a) || parents.contains_key(&b))
             });
             self.leaf_springs.retain(|s| {
                 let [a, b] = s.clusters();
-                !(parents.contains_key(&a) || parents.contains_key(&b)) || s.k() >= min_k
+                !(parents.contains_key(&a) || parents.contains_key(&b))
             });
+
+            self.leaf_springs = self.leaf_springs.par_iter_mut().map(|s| s.with_k(s.k() * dk)).collect();
+            stressed_centers = vec![false; self.data.cardinality()];
+
+            ftlog::info!(
+                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                self.springs.len(),
+                self.leaf_springs.len()
+            );
 
             // Save the current state of the system.
             let path = out_dir.as_ref().join(format!("{}-step-{i}.npy", data.name()));
