@@ -440,11 +440,18 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         }
 
         while !self.leaf_springs.is_empty() {
+            i += 1;
             self.simulate_to_stability(dt, patience, target, max_steps);
             self.leaf_springs.iter_mut().for_each(|s| {
                 *s = s.with_k(s.k() * dk);
             });
             self.remove_weak_springs(min_k);
+
+            ftlog::info!(
+                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                self.springs.len(),
+                self.leaf_springs.len()
+            );
         }
 
         ftlog::info!(
@@ -1111,11 +1118,18 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         }
 
         while !self.leaf_springs.is_empty() {
+            i += 1;
             self.par_simulate_to_stability(dt, patience, target, max_steps);
             self.leaf_springs.par_iter_mut().for_each(|s| {
                 *s = s.with_k(s.k() * dk);
             });
             self.remove_weak_springs(min_k);
+
+            ftlog::info!(
+                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                self.springs.len(),
+                self.leaf_springs.len()
+            );
         }
 
         ftlog::info!(
