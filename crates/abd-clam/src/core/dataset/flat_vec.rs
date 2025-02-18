@@ -553,7 +553,7 @@ impl<T: ndarray_npy::WritableElement + Copy, Me> FlatVec<Vec<T>, Me> {
 }
 
 #[cfg(feature = "disk-io")]
-impl<T: distances::Number + ndarray_npy::ReadableElement + Copy, const DIM: usize> FlatVec<[T; DIM], usize> {
+impl<T: Copy + distances::Number + ndarray_npy::ReadableElement, const DIM: usize> FlatVec<[T; DIM], usize> {
     /// Reads a `FlatVec` from a `.npy` file.
     ///
     /// The name of the dataset is set to the name of the file without the
@@ -587,10 +587,30 @@ impl<T: distances::Number + ndarray_npy::ReadableElement + Copy, const DIM: usiz
 
         Self::from_arrays(items).map(|data| data.with_name(&name))
     }
+
+    /// Converts a `ndarray::Array2` to a `FlatVec` of `[T; DIM]`.
+    pub fn from_array2(arr: &ndarray::Array2<T>) -> Self {
+        let cardinality = arr.len_of(ndarray::Axis(0));
+        let items = arr
+            .axis_iter(ndarray::Axis(0))
+            .map(|row| {
+                let mut arr = [T::ZERO; DIM];
+                arr.copy_from_slice(&row.to_vec());
+                arr
+            })
+            .collect();
+        Self {
+            items,
+            dimensionality_hint: (DIM, Some(DIM)),
+            permutation: (0..cardinality).collect(),
+            metadata: (0..cardinality).collect(),
+            name: "Unknown FlatVec".to_string(),
+        }
+    }
 }
 
 #[cfg(feature = "disk-io")]
-impl<T: distances::Number + ndarray_npy::WritableElement + Copy, Me, const DIM: usize> FlatVec<[T; DIM], Me> {
+impl<T: Copy + distances::Number + ndarray_npy::WritableElement, Me, const DIM: usize> FlatVec<[T; DIM], Me> {
     /// Writes the `FlatVec` to a `.npy` file in the given directory.
     ///
     /// # Parameters
@@ -613,6 +633,16 @@ impl<T: distances::Number + ndarray_npy::WritableElement + Copy, Me, const DIM: 
             .map_err(|e| format!("Could not write npy file: {e}, path: {:?}", path.as_ref()))?;
 
         Ok(())
+    }
+
+    /// Converts a `FlatVec` of `[T; DIM]` to a `ndarray::Array2`.
+    #[must_use]
+    pub fn to_array2(&self) -> ndarray::Array2<T> {
+        let shape = (self.items.len(), DIM);
+        let v = self.items.iter().flat_map(|row| row.iter().copied()).collect();
+        ndarray::Array2::<T>::from_shape_vec(shape, v).unwrap_or_else(|_| {
+            unreachable!("The type system is awesome. This should never happen.");
+        })
     }
 }
 

@@ -15,7 +15,13 @@ def plot(
 
     # Read the data
     data = numpy.load(inp_path)
-    labels = numpy.load(labels_path)
+    if labels_path.exists():
+        labels = numpy.load(labels_path)
+    else:
+        labels = numpy.zeros(data.shape[0], dtype=bool)
+
+    # colors will be blue for 0 and red for 1
+    colors = ["red" if label else "blue" for label in labels]
 
     # Plot the x-y scatter plot
     ax[0].scatter(
@@ -23,7 +29,7 @@ def plot(
         data[:, 1],
         s=10,
         alpha=0.5,
-        c=labels,
+        c=colors,
     )
     ax[0].set_xlabel("X")
     ax[0].set_ylabel("Y")
@@ -35,7 +41,7 @@ def plot(
         data[:, 2],
         s=10,
         alpha=0.5,
-        c=labels,
+        c=colors,
     )
     ax[1].set_xlabel("X")
     ax[1].set_ylabel("Z")
@@ -47,7 +53,7 @@ def plot(
         data[:, 2],
         s=10,
         alpha=0.5,
-        c=labels,
+        c=colors,
     )
     ax[2].set_xlabel("Y")
     ax[2].set_ylabel("Z")

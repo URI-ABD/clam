@@ -134,8 +134,7 @@ fn main() -> Result<(), String> {
             ftlog::info!("Saving checkpoints every {checkpoint_frequency} iterations...");
             ftlog::info!("Saving the final result to {name}.npy in {out_dir:?}...");
 
-            let data = FlatVec::<Vec<f64>, usize>::read_npy(&inp_path)?
-                .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
+            let data = read_npy(&inp_path)?;
             let reduced_data = if *balanced {
                 let criteria = |_: &BalancedBall<f32>| true;
                 workflow::build::<_, _, _, _, _, _, DIM>(
@@ -210,17 +209,33 @@ fn main() -> Result<(), String> {
             }
             ftlog::info!("Saving the results in {out_dir:?}...");
 
-            let original_data = FlatVec::<Vec<f64>, usize>::read_npy(&original_data)?
-                .transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>());
+            let original_data = read_npy(&original_data)?;
             let reduced_data = FlatVec::<[f32; DIM], usize>::read_npy(&inp_path)?;
 
             let measures = workflow::measure(&original_data, &metric, &reduced_data, quality_measures, *exhaustive);
 
             for (qm, value) in quality_measures.iter().zip(measures) {
-                ftlog::info!("Quality {:?}: {value:.6}", qm.name());
+                let msg = format!("Quality {:?}: {value:.6}", qm.name());
+                ftlog::info!("{msg}");
+                println!("{msg}");
             }
         }
     }
 
     Ok(())
+}
+
+/// Reads a numpy file and returns the data as a `FlatVec` of `f32`.
+fn read_npy<P: AsRef<std::path::Path>>(path: &P) -> Result<FlatVec<Vec<f32>, usize>, String> {
+    let data = FlatVec::<Vec<f32>, usize>::read_npy(path);
+    if data.is_ok() {
+        return data;
+    }
+
+    let data = FlatVec::<Vec<f64>, usize>::read_npy(path);
+    if data.is_ok() {
+        return data.map(|data| data.transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>()));
+    }
+
+    Err(format!("Failed to read {:?}", path.as_ref()))
 }

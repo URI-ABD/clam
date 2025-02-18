@@ -1,7 +1,6 @@
 """Create a GIF of the dimensionality reduction process."""
 
 import pathlib
-import re
 import concurrent.futures
 import shutil
 
@@ -21,22 +20,14 @@ def plot(
     labels_path: pathlib.Path,
 ) -> pathlib.Path:
     """Create a GIF of the dimensionality reduction process."""
-    labels = numpy.load(labels_path)
 
-    stack_path = out_dir / f"{dataset_name}-mbed-stack.npy"
+    stack_path = out_dir / f"{dataset_name}-stack.npy"
     mbed_stack: numpy.ndarray
     if stack_path.exists():
         mbed_stack = numpy.load(stack_path)
     else:
-        # The pattern for the files is `<dataset_name>-step-<step_number>.npy`.
-        pattern = re.compile(dataset_name + "-step-" + r"[0-9]+.npy")
-        logger.info(f"Looking for files with pattern '{pattern}' in '{out_dir}'...")
-        mbed_steps = [f for f in out_dir.glob("*.npy") if pattern.match(f.name)]
-        mbed_steps.sort(key=lambda f: int(f.stem.split("-")[-1]))
-        mbed_stack = numpy.stack([numpy.load(f) for f in mbed_steps])
-        numpy.save(stack_path, mbed_stack)
-        for f in mbed_steps:
-            f.unlink()
+        raise FileNotFoundError(f"Could not find the stack file at {stack_path}")
+
     n_steps = mbed_stack.shape[0]
 
     x_vals = mbed_stack[:, :, 0].flatten()
@@ -46,6 +37,11 @@ def plot(
     y_lims = y_vals.min(), y_vals.max()
     z_lims = z_vals.min(), z_vals.max()
 
+    if labels_path.exists():
+        labels = numpy.load(labels_path)
+    else:
+        labels = numpy.zeros(mbed_stack.shape[1], dtype=bool)
+
     # Create the frames for the GIF.
     frames_dir = out_dir / "frames"
     if frames_dir.exists():
@@ -54,7 +50,7 @@ def plot(
 
     results = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        for i in range(n_steps):
+        for i in tqdm.tqdm(range(n_steps), total=n_steps, desc="Creating frames"):
             frame_path = frames_dir / f"{dataset_name}-frame-{i}.png"
             results.append(
                 executor.submit(
@@ -69,7 +65,7 @@ def plot(
             )
 
     frames = []
-    for result in tqdm.tqdm(concurrent.futures.as_completed(results), total=len(results)):
+    for result in tqdm.tqdm(concurrent.futures.as_completed(results), total=len(results), desc="Collecting frames"):
         path: pathlib.Path = result.result()
         i = int(path.stem.split("-")[-1])
         frames.append((i, imageio.imread(path)))
@@ -97,38 +93,39 @@ def _plot_frame(
     """Plot a frame of the dimensionality reduction process."""
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 
+    # colors will be blue for 0 and red for 1
+    colors = ["red" if label else "blue" for label in labels]
     sizes = 1 + 10 * labels
     ax[0].scatter(
         arr[:, 0],
         arr[:, 1],
-        s=sizes,
         alpha=0.5,
-        c=labels,
+        s=sizes,
+        c=colors,
     )
+    ax[1].scatter(
+        arr[:, 0],
+        arr[:, 2],
+        alpha=0.5,
+        s=sizes,
+        c=colors,
+    )
+    ax[2].scatter(
+        arr[:, 1],
+        arr[:, 2],
+        alpha=0.5,
+        s=sizes,
+        c=colors,
+    )
+
     ax[0].set_xlim(*x_lims)
     ax[0].set_ylim(*y_lims)
     ax[0].set_xlabel("X")
     ax[0].set_ylabel("Y")
-
-    ax[1].scatter(
-        arr[:, 0],
-        arr[:, 2],
-        s=sizes,
-        alpha=0.5,
-        c=labels,
-    )
     ax[1].set_xlim(*x_lims)
     ax[1].set_ylim(*z_lims)
     ax[1].set_xlabel("X")
     ax[1].set_ylabel("Z")
-
-    ax[2].scatter(
-        arr[:, 1],
-        arr[:, 2],
-        s=sizes,
-        alpha=0.5,
-        c=labels,
-    )
     ax[2].set_xlim(*y_lims)
     ax[2].set_ylim(*z_lims)
     ax[2].set_xlabel("Y")

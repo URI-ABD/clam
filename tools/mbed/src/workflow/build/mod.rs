@@ -58,7 +58,7 @@ where
     ftlog::info!("Starting the dimension reduction ...");
     let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data, beta)?;
     system.par_initialize_with_root(k, &root, &data, &metric, &mut rng)?;
-    system.par_simulate_to_leaves(
+    let steps = system.par_simulate_to_leaves(
         k,
         &data,
         &metric,
@@ -70,8 +70,14 @@ where
         dk,
         retention_depth,
         f,
-        out_dir,
     )?;
+
+    // Stack the steps into a single array.
+    let arrays = steps.into_iter().map(|step| step.to_array2()).collect::<Vec<_>>();
+    let arrays = arrays.iter().map(|a| a.view()).collect::<Vec<_>>();
+    let stack = ndarray::stack(ndarray::Axis(0), &arrays).map_err(|e| e.to_string())?;
+    let stack_path = out_dir.as_ref().join(format!("{name}-stack.npy"));
+    ndarray_npy::write_npy(&stack_path, &stack).map_err(|e| e.to_string())?;
 
     ftlog::info!("Extracting the reduced embedding ...");
     Ok(system.par_extract_positions())

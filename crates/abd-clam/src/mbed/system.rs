@@ -794,13 +794,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         clippy::similar_names,
         clippy::many_single_char_names
     )]
-    pub fn par_simulate_to_leaves<
-        I: Send + Sync,
-        D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        R: rand::Rng,
-        P: AsRef<std::path::Path>,
-    >(
+    pub fn par_simulate_to_leaves<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, R: rand::Rng>(
         &mut self,
         k: f32,
         data: &D,
@@ -813,8 +807,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         dk: Option<f32>,
         retention_depth: Option<usize>,
         f: Option<f32>,
-        out_dir: &P,
-    ) -> Result<(), String>
+    ) -> Result<Vec<FlatVec<[f32; DIM], Me>>, String>
     where
         Me: Clone,
     {
@@ -846,6 +839,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
 
         let mut stressed_centers = vec![false; self.data.cardinality()];
         let mut i = 0;
+        let mut steps = Vec::new();
         while !self.springs.is_empty() {
             i += 1;
 
@@ -1006,8 +1000,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             );
 
             // Save the current state of the system.
-            let path = out_dir.as_ref().join(format!("{}-step-{i}.npy", data.name()));
-            self.par_extract_positions().write_npy(&path)?;
+            steps.push(self.par_extract_positions());
         }
 
         // Simulate the system for longer to ensure that it has reached a stable
@@ -1023,7 +1016,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             self.leaf_springs.len()
         );
 
-        Ok(())
+        Ok(steps)
     }
 }
 

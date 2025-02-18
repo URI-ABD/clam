@@ -15,7 +15,13 @@ def plot(
 
     # Load the data
     embedding = numpy.load(inp_path)
-    labels = numpy.load(labels_path)
+    if labels_path.exists():
+        labels = numpy.load(labels_path)
+    else:
+        labels = numpy.zeros(embedding.shape[0], dtype=bool)
+
+    # colors will be blue for 0 and red for 1
+    colors = ["red" if label else "blue" for label in labels]
 
     # Plot the UMAP results
     ax[0].scatter(
@@ -23,7 +29,7 @@ def plot(
         embedding[:, 1],
         s=1,
         alpha=0.5,
-        c=labels,
+        c=colors,
     )
     ax[0].set_xlabel("X")
     ax[0].set_ylabel("Y")
@@ -34,7 +40,7 @@ def plot(
         embedding[:, 2],
         s=1,
         alpha=0.5,
-        c=labels,
+        c=colors,
     )
     ax[1].set_xlabel("X")
     ax[1].set_ylabel("Z")
@@ -45,7 +51,7 @@ def plot(
         embedding[:, 2],
         s=1,
         alpha=0.5,
-        c=labels,
+        c=colors,
     )
     ax[2].set_xlabel("Y")
     ax[2].set_ylabel("Z")
