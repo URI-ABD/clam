@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use distances::{number::Multiplication, Number};
+use rand::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
@@ -35,6 +36,8 @@ pub struct System<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> {
     /// The kinetic energy and potential energy of the system throughout the
     /// simulation.
     energy_history: Vec<(f32, f32)>,
+    /// Leaves encountered during the simulation.
+    leaves: Vec<&'a C>,
 }
 
 impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, T, C> {
@@ -55,6 +58,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
         let springs = Vec::new();
         let leaf_springs = Vec::new();
         let energy_history = vec![(0.0, 0.0)];
+        let leaves = Vec::new();
 
         if let Some(beta) = beta {
             Self {
@@ -63,6 +67,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
                 leaf_springs,
                 beta,
                 energy_history,
+                leaves,
             }
             .with_beta(beta)
         } else {
@@ -73,6 +78,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
                 leaf_springs,
                 beta,
                 energy_history,
+                leaves,
             })
         }
     }
@@ -150,6 +156,11 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             let v = Vector::random(rng, -radius, radius);
             for i in c.indices() {
                 self[i] = [p, v];
+            }
+
+            // If the child is a leaf, add it to the list of leaves.
+            if c.is_leaf() {
+                self.leaves.push(c);
             }
         }
 
@@ -244,7 +255,8 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             0.5
         };
 
-        let min_k = k * dk.powi(retention_depth.unwrap_or(5).as_i32());
+        let retention_depth = retention_depth.unwrap_or(5);
+        let min_k = k * dk.powi(retention_depth.as_i32());
 
         let f = if let Some(f) = f {
             if f > 0.0 && f < 1.0 {
@@ -354,6 +366,13 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                         self.springs.push(ab);
                     }
 
+                    if a.is_leaf() {
+                        self.leaves.push(a);
+                    }
+                    if b.is_leaf() {
+                        self.leaves.push(b);
+                    }
+
                     (c, [a, b])
                 })
                 .collect::<HashMap<_, _>>();
@@ -404,7 +423,10 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                 !(parents.contains_key(&a) || parents.contains_key(&b))
             });
 
-            self.leaf_springs = self.leaf_springs.iter_mut().map(|s| s.with_k(s.k() * dk)).collect();
+            self.leaf_springs.iter_mut().for_each(|s| {
+                *s = s.with_k(s.k() * dk);
+            });
+            self.add_random_leaf_springs(k, data, metric, retention_depth, rng);
             stressed_centers = vec![false; self.data.cardinality()];
 
             ftlog::info!(
@@ -431,6 +453,34 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         );
 
         Ok(steps)
+    }
+
+    /// Adds springs among random pairs of leaf clusters.
+    fn add_random_leaf_springs<I, D: Dataset<I>, M: Metric<I, T>, R: rand::Rng>(
+        &mut self,
+        k: f32,
+        data: &D,
+        metric: &M,
+        retention_depth: usize,
+        rng: &mut R,
+    ) {
+        for _ in 0..retention_depth {
+            self.leaves.shuffle(rng);
+            let mut new_springs = self
+                .leaves
+                .iter()
+                .zip(self.leaves.iter().rev())
+                .filter_map(|(&a, &b)| {
+                    if a.arg_center() < b.arg_center() {
+                        let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
+                        Some(self.new_spring([a, b], k, l0))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            self.leaf_springs.append(&mut new_springs);
+        }
     }
 
     /// Adds a new spring between the given clusters.
@@ -866,7 +916,8 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             0.5
         };
 
-        let min_k = k * dk.powi(retention_depth.unwrap_or(5).as_i32());
+        let retention_depth = retention_depth.unwrap_or(5);
+        let min_k = k * dk.powi(retention_depth.as_i32());
 
         let f = if let Some(f) = f {
             if f > 0.0 && f < 1.0 {
@@ -983,6 +1034,13 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                         self.springs.push(ab);
                     }
 
+                    if a.is_leaf() {
+                        self.leaves.push(a);
+                    }
+                    if b.is_leaf() {
+                        self.leaves.push(b);
+                    }
+
                     (c, [a, b])
                 })
                 .collect::<HashMap<_, _>>();
@@ -1033,7 +1091,13 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                 !(parents.contains_key(&a) || parents.contains_key(&b))
             });
 
-            self.leaf_springs = self.leaf_springs.par_iter_mut().map(|s| s.with_k(s.k() * dk)).collect();
+            // Decrease the spring constants of the leaf springs.
+            self.leaf_springs.par_iter_mut().for_each(|s| {
+                *s = s.with_k(s.k() * dk);
+            });
+            // Add new random leaf springs.
+            self.par_add_random_leaf_springs(k, data, metric, retention_depth, rng);
+            // Reset the stressed centers.
             stressed_centers = vec![false; self.data.cardinality()];
 
             ftlog::info!(
@@ -1060,6 +1124,34 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         );
 
         Ok(steps)
+    }
+
+    /// Adds springs among random pairs of leaf clusters.
+    fn par_add_random_leaf_springs<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, R: rand::Rng>(
+        &mut self,
+        k: f32,
+        data: &D,
+        metric: &M,
+        retention_depth: usize,
+        rng: &mut R,
+    ) {
+        for _ in 0..retention_depth {
+            self.leaves.shuffle(rng);
+            let mut new_springs = self
+                .leaves
+                .par_iter()
+                .zip(self.leaves.par_iter().rev())
+                .filter_map(|(&a, &b)| {
+                    if a.arg_center() < b.arg_center() {
+                        let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
+                        Some(self.new_spring([a, b], k, l0))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            self.leaf_springs.append(&mut new_springs);
+        }
     }
 }
 

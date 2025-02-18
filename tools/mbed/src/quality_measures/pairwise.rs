@@ -55,9 +55,7 @@ where
                 .filter(|&(o, _)| o != 0.0)
                 .map(|(o, r)| r / o)
                 .collect::<Vec<_>>();
-            let mean_d: f32 = abd_clam::utils::mean(&deltas);
-            let var_d = abd_clam::utils::variance(&deltas, mean_d);
-            var_d.sqrt()
+            abd_clam::utils::coefficient_of_variation::<_, f32>(&deltas)
         })
         .sum::<f32>();
 
