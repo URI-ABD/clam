@@ -57,8 +57,8 @@ where
 
     ftlog::info!("Starting the dimension reduction ...");
     let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data, beta)?;
-    system.par_initialize_with_root(k, &root, &data, &metric, &mut rng)?;
-    let steps = system.par_simulate_to_leaves(
+    system.initialize_with_root(k, &root, &data, &metric, &mut rng)?;
+    let steps = system.simulate_to_leaves(
         k,
         &data,
         &metric,

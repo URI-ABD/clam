@@ -56,7 +56,7 @@ debug = true
 opt-level = 3
 # strip = true
 # lto = true
-codegen-units = 1
+# codegen-units = 1
 
 [profile.bench]
 opt-level = 3

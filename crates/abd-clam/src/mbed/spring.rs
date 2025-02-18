@@ -17,8 +17,12 @@ pub struct Spring<'a, T: Number, C: Cluster<T>> {
     k: f32,
     /// The actual length of the spring.
     l: f32,
+    /// The displacement of the spring from its natural length.
+    dx: f32,
     /// The magnitude of the force exerted by the spring.
     f_mag: f32,
+    /// The potential energy stored in the spring.
+    pe: f32,
 }
 
 impl<T: Number, C: Cluster<T>> Clone for Spring<'_, T, C> {
@@ -33,12 +37,16 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     /// Create a new `Spring` between two `Cluster`s.
     pub fn new(clusters: [&'a C; 2], k: f32, l0: T, l: f32) -> Self {
         let f_mag = k * (l0.as_f32() - l);
+        let dx = l0.as_f32() - l;
+        let pe = 0.5 * k * dx.square();
         Self {
             clusters,
             l0,
             k,
             l,
+            dx,
             f_mag,
+            pe,
         }
     }
 
@@ -73,20 +81,12 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
         self.f_mag
     }
 
-    /// Get the displacement of the spring from its natural length.
-    fn dx(&self) -> f32 {
-        self.l0.as_f32() - self.l
-    }
-
-    /// Update the force exerted by the spring.
-    pub fn update_force(&mut self) {
-        self.f_mag = self.k * self.dx();
-    }
-
-    /// Update the length and force of the spring.
+    /// Update the length of the spring, and recalculate subsequent properties.
     pub fn update_length(&mut self, l: f32) {
+        self.dx += self.l - l;
         self.l = l;
-        self.update_force();
+        self.f_mag = self.k * self.dx;
+        self.pe = 0.5 * self.k * self.dx.square();
     }
 
     /// Get the unit vector of the spring.
@@ -96,7 +96,7 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     }
 
     /// Get the potential energy stored in the spring.
-    pub fn potential_energy(&self) -> f32 {
-        0.5 * self.k * self.dx().powi(2)
+    pub const fn potential_energy(&self) -> f32 {
+        self.pe
     }
 }

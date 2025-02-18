@@ -1,7 +1,7 @@
 //! A wrapper around the `FlatVec` struct that will be used for the mass-spring
 //! system.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use distances::{number::Multiplication, Number};
 use rayon::prelude::*;
@@ -228,7 +228,10 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         dk: Option<f32>,
         retention_depth: Option<usize>,
         f: Option<f32>,
-    ) -> Result<(), String> {
+    ) -> Result<Vec<FlatVec<[f32; DIM], Me>>, String>
+    where
+        Me: Clone,
+    {
         let dk = if let Some(dk) = dk {
             if dk > 0.0 && dk < 1.0 {
                 dk
@@ -255,33 +258,44 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             0.1
         };
 
+        let mut stressed_centers = vec![false; self.data.cardinality()];
+        let mut i = 0;
+        let mut steps = Vec::new();
         while !self.springs.is_empty() {
+            i += 1;
+
             // Remove springs that are too weak and sort the remaining springs
             // by their displacement ratio.
             self.remove_weak_springs(min_k);
             self.sort_springs_by_displacement();
 
             // Get the clusters connected to the most displaced springs.
-            let at = ((1.0 - f) * self.springs.len().as_f32()).floor().as_usize();
-            let stressed_springs = self.springs.split_off(at);
-            let stressed_clusters = stressed_springs
+            let at = (f * self.springs.len().as_f32()).ceil().as_usize();
+            ftlog::debug!(
+                "Step {i}, Stopping at {at} stressed springs out of {}.",
+                self.springs.len()
+            );
+            self.springs
                 .iter()
+                .take(at)
                 .flat_map(Spring::clusters)
-                .collect::<HashSet<_>>();
+                .for_each(|c| stressed_centers[c.arg_center()] = true);
 
-            // Return the stressed springs to the system.
-            self.springs.extend(stressed_springs.iter().copied());
-
-            // Remove all springs connected to stressed clusters.
-            let (stressed_springs, disconnected) = self.springs.drain(..).partition(|s| {
+            // Remove all springs connected to stressed parents.
+            let (connected, disconnected): (Vec<_>, _) = self.springs.drain(..).partition(|s| {
                 let [a, b] = s.clusters();
-                stressed_clusters.contains(&a) || stressed_clusters.contains(&b)
+                stressed_centers[a.arg_center()] || stressed_centers[b.arg_center()]
             });
             self.springs = disconnected;
+            ftlog::debug!(
+                "Step {i}, Removed {} springs connected to stressed centers leaving {} springs.",
+                connected.len(),
+                self.springs.len()
+            );
 
             // Collect all stressed clusters and their connecting springs.
             let mut parents = HashMap::new();
-            for s in stressed_springs {
+            for s in connected {
                 let ([a, b], k, _, _) = s.deconstruct();
                 let k = k * dk;
                 if !a.is_leaf() {
@@ -291,6 +305,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                     parents.entry(b).or_insert_with(Vec::new).push((a, k));
                 }
             }
+            ftlog::debug!("Step {i}, Found {} stressed clusters.", parents.len());
 
             // Create a triangle for each parent cluster to be replaced.
             let triangles = parents
@@ -313,18 +328,12 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                     // parent cluster.
                     let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
 
-                    (c, (a, b, ac, bc, ab, dxa, dxb, dyb))
-                })
-                .collect::<HashMap<_, _>>();
-
-            let triangles = triangles
-                .into_iter()
-                .map(|(c, (a, b, ac, bc, ab, dxa, dxb, dyb))| {
-                    // Compute new positions for the child clusters.
-                    let x = Vector::random_unit(rng);
-                    let pa = self[a.arg_center()][0] + x * dxa;
-
+                    // Choose a pair of random directions for the child clusters.
+                    let x = Vector::<DIM>::random_unit(rng);
                     let y = x.perpendicular(rng);
+
+                    // Compute the changes in positions for the child clusters.
+                    let pa = self[a.arg_center()][0] + x * dxa;
                     let pb = self[b.arg_center()][0] + x * dxb + y * dyb;
 
                     // Set the new positions of points in the child clusters.
@@ -335,13 +344,10 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                         self[i][0] = pb;
                     }
 
-                    let ac = Spring::new([a, c], k, ac, self.distance_between(a.arg_center(), c.arg_center()));
-                    let bc = Spring::new([b, c], k, bc, self.distance_between(b.arg_center(), c.arg_center()));
-                    let ab = Spring::new([a, b], k, ab, self.distance_between(a.arg_center(), b.arg_center()));
+                    self.add_spring([a, c], k, ac);
+                    self.add_spring([b, c], k, bc);
 
-                    self.springs.push(ac);
-                    self.springs.push(bc);
-
+                    let ab = self.new_spring([a, b], k, ab);
                     if a.is_leaf() && b.is_leaf() {
                         self.leaf_springs.push(ab);
                     } else {
@@ -354,11 +360,12 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
             // Create springs between the pairs of child clusters of different
             // parent clusters.
-            let (new_springs, new_leaf_springs): (Vec<_>, Vec<_>) = triangles
+            let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = triangles
                 .iter()
                 .flat_map(|(&c, &[ca, cb])| {
                     parents[&c]
                         .iter()
+                        // Ensure that springs are only created once.
                         .filter(|&&(d, _)| !d.is_leaf() && c.arg_center() < d.arg_center())
                         .flat_map(|&(d, k)| {
                             let [da, db] = triangles[&d];
@@ -374,6 +381,11 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                     let [a, b] = s.clusters();
                     a.is_leaf() && b.is_leaf()
                 });
+            ftlog::debug!(
+                "Step {i}, Created {} new leaf springs and {} new springs.",
+                new_leaf_springs.len(),
+                new_springs.len()
+            );
 
             // Add the new springs to the system.
             self.springs.extend(new_springs);
@@ -381,6 +393,28 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
             // Simulate the system until it reaches stability.
             self.simulate_to_stability(dt, patience, target, max_steps);
+
+            // Remove any springs that connect to the parent clusters.
+            self.springs.retain(|s| {
+                let [a, b] = s.clusters();
+                !(parents.contains_key(&a) || parents.contains_key(&b))
+            });
+            self.leaf_springs.retain(|s| {
+                let [a, b] = s.clusters();
+                !(parents.contains_key(&a) || parents.contains_key(&b))
+            });
+
+            self.leaf_springs = self.leaf_springs.iter_mut().map(|s| s.with_k(s.k() * dk)).collect();
+            stressed_centers = vec![false; self.data.cardinality()];
+
+            ftlog::info!(
+                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                self.springs.len(),
+                self.leaf_springs.len()
+            );
+
+            // Save the current state of the system.
+            steps.push(self.extract_positions());
         }
 
         // Simulate the system for longer to ensure that it has reached a stable
@@ -391,12 +425,12 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         self.simulate_to_stability(dt, patience, target, max_steps);
 
         ftlog::info!(
-            "Reached instability of {:.2e} with {} leaf springs.",
+            "Reached instability of {:.2e} with {} leaf springs after {i} steps.",
             self.instability(patience),
             self.leaf_springs.len()
         );
 
-        Ok(())
+        Ok(steps)
     }
 
     /// Adds a new spring between the given clusters.
@@ -431,10 +465,11 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     /// Get the total kinetic energy of the system.
     #[must_use]
     pub fn kinetic_energy(&self) -> f32 {
-        self.data
-            .items()
+        self.springs
             .iter()
-            .map(|[_, v]| v.magnitude().square())
+            .chain(self.leaf_springs.iter())
+            .flat_map(Spring::clusters)
+            .map(|c| self.data[c.arg_center()][1].magnitude().square() * c.cardinality().as_f32())
             .sum::<f32>()
             .half()
     }
@@ -451,6 +486,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
     /// Update the energies of the system, storing the current kinetic and
     /// potential energies as the last element of the `energies` vector.
+    #[inline(never)]
     fn update_energy_history(&mut self) {
         let ke = self.kinetic_energy();
         let pe = self.potential_energy();
@@ -504,10 +540,12 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
     /// Updates the `Spring`s in the system to reflect the current positions of
     /// the masses.
+    #[inline(never)]
     fn update_springs(&mut self) {
         let new_lengths = self
             .springs
             .iter()
+            .chain(self.leaf_springs.iter())
             .map(|s| {
                 let [a, b] = s.clusters();
                 self.distance_between(a.arg_center(), b.arg_center())
@@ -515,6 +553,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             .collect::<Vec<_>>();
         self.springs
             .iter_mut()
+            .chain(self.leaf_springs.iter_mut())
             .zip(new_lengths)
             .for_each(|(s, l)| s.update_length(l));
     }
@@ -529,6 +568,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     /// of the masses.
     ///
     /// Finally, we update the energy history of the system.
+    #[inline(never)]
     pub fn update_step(&mut self, dt: f32) {
         // Calculate the force exerted by each spring.
         let forces = self
@@ -548,7 +588,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
             for (c, f) in forces {
                 let m = c.cardinality().as_f32();
-                let a = f / m;
+                let a = (f * self.beta) / m;
                 let dv = a * dt;
                 for i in c.indices() {
                     // The addition here accounts for the accumulated forces.
@@ -606,10 +646,11 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
     /// Parallel version of [`kinetic_energy`](Self::kinetic_energy).
     #[must_use]
     pub fn par_kinetic_energy(&self) -> f32 {
-        self.data
-            .items()
+        self.springs
             .par_iter()
-            .map(|[_, v]| v.magnitude().square())
+            .chain(self.leaf_springs.par_iter())
+            .flat_map(Spring::clusters)
+            .map(|c| self.data[c.arg_center()][1].magnitude().square() * c.cardinality().as_f32())
             .sum::<f32>()
             .half()
     }
@@ -701,6 +742,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         let new_lengths = self
             .springs
             .par_iter()
+            .chain(self.leaf_springs.par_iter())
             .map(|s| {
                 let [a, b] = s.clusters();
                 self.distance_between(a.arg_center(), b.arg_center())
@@ -708,6 +750,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             .collect::<Vec<_>>();
         self.springs
             .par_iter_mut()
+            .chain(self.leaf_springs.par_iter_mut())
             .zip(new_lengths)
             .for_each(|(s, l)| s.update_length(l));
     }
@@ -732,7 +775,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
 
             for (c, f) in forces {
                 let m = c.cardinality().as_f32();
-                let a = f / m;
+                let a = (f * self.beta) / m;
                 let dv = a * dt;
                 for i in c.indices() {
                     // The addition here accounts for the accumulated forces.
@@ -771,7 +814,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         let mut instability = self.instability(patience);
         while i < patience || (instability > target && i < max_steps) {
             i += 1;
-            self.update_step(dt);
+            self.par_update_step(dt);
             instability = self.instability(patience);
         }
 
