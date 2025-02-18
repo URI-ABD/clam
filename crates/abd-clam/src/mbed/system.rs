@@ -426,7 +426,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             self.leaf_springs.iter_mut().for_each(|s| {
                 *s = s.with_k(s.k() * dk);
             });
-            self.add_random_leaf_springs(k, data, metric, retention_depth, rng);
+            self.add_random_leaf_springs(k, data, metric, rng);
             stressed_centers = vec![false; self.data.cardinality()];
 
             ftlog::info!(
@@ -439,17 +439,18 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             steps.push(self.extract_positions());
         }
 
-        // Simulate the system for longer to ensure that it has reached a stable
-        // state with leaf clusters.
-        let patience = patience * 10;
-        let target = target.map(|t| t * 0.1);
-        let max_steps = max_steps.map(|m| m * 10);
-        self.simulate_to_stability(dt, patience, target, max_steps);
+        while !self.leaf_springs.is_empty() {
+            self.simulate_to_stability(dt, patience, target, max_steps);
+            self.leaf_springs.iter_mut().for_each(|s| {
+                *s = s.with_k(s.k() * dk);
+            });
+            self.remove_weak_springs(min_k);
+        }
 
         ftlog::info!(
-            "Reached instability of {:.2e} with {} leaf springs after {i} steps.",
+            "Reached instability of {:.2e} with {} leaf clusters after {i} steps.",
             self.instability(patience),
-            self.leaf_springs.len()
+            self.leaves.len()
         );
 
         Ok(steps)
@@ -461,26 +462,23 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         k: f32,
         data: &D,
         metric: &M,
-        retention_depth: usize,
         rng: &mut R,
     ) {
-        for _ in 0..retention_depth {
-            self.leaves.shuffle(rng);
-            let mut new_springs = self
-                .leaves
-                .iter()
-                .zip(self.leaves.iter().rev())
-                .filter_map(|(&a, &b)| {
-                    if a.arg_center() < b.arg_center() {
-                        let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
-                        Some(self.new_spring([a, b], k, l0))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            self.leaf_springs.append(&mut new_springs);
-        }
+        self.leaves.shuffle(rng);
+        let mut new_springs = self
+            .leaves
+            .iter()
+            .zip(self.leaves.iter().rev())
+            .filter_map(|(&a, &b)| {
+                if a.arg_center() < b.arg_center() {
+                    let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
+                    Some(self.new_spring([a, b], k, l0))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        self.leaf_springs.append(&mut new_springs);
     }
 
     /// Adds a new spring between the given clusters.
@@ -507,9 +505,8 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
     /// Sort the springs by their displacement ratio in descending order.
     fn sort_springs_by_displacement(&mut self) {
-        let mut ratios_springs = self.springs.drain(..).map(|s| (s.ratio(), s)).collect::<Vec<_>>();
-        ratios_springs.sort_by(|(a, _), (b, _)| b.total_cmp(a));
-        self.springs = ratios_springs.into_iter().map(|(_, s)| s).collect();
+        self.springs.sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
+        self.leaf_springs.sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
     }
 
     /// Get the total kinetic energy of the system.
@@ -536,7 +533,6 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
     /// Update the energies of the system, storing the current kinetic and
     /// potential energies as the last element of the `energies` vector.
-    #[inline(never)]
     fn update_energy_history(&mut self) {
         let ke = self.kinetic_energy();
         let pe = self.potential_energy();
@@ -590,7 +586,6 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
     /// Updates the `Spring`s in the system to reflect the current positions of
     /// the masses.
-    #[inline(never)]
     fn update_springs(&mut self) {
         let new_lengths = self
             .springs
@@ -618,7 +613,6 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     /// of the masses.
     ///
     /// Finally, we update the energy history of the system.
-    #[inline(never)]
     pub fn update_step(&mut self, dt: f32) {
         // Calculate the force exerted by each spring.
         let forces = self
@@ -805,6 +799,12 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             .for_each(|(s, l)| s.update_length(l));
     }
 
+    /// Sort the springs by their displacement ratio in descending order.
+    fn par_sort_springs_by_displacement(&mut self) {
+        self.springs.par_sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
+        self.leaf_springs.par_sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
+    }
+
     /// Parallel version of [`update_step`](Self::update_step).
     pub fn par_update_step(&mut self, dt: f32) {
         // Calculate the force exerted by each spring.
@@ -940,7 +940,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             // Remove springs that are too weak and sort the remaining springs
             // by their displacement ratio.
             self.remove_weak_springs(min_k);
-            self.sort_springs_by_displacement();
+            self.par_sort_springs_by_displacement();
 
             // Get the clusters connected to the most displaced springs.
             let at = (f * self.springs.len().as_f32()).ceil().as_usize();
@@ -1096,7 +1096,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                 *s = s.with_k(s.k() * dk);
             });
             // Add new random leaf springs.
-            self.par_add_random_leaf_springs(k, data, metric, retention_depth, rng);
+            self.par_add_random_leaf_springs(k, data, metric, rng);
             // Reset the stressed centers.
             stressed_centers = vec![false; self.data.cardinality()];
 
@@ -1110,17 +1110,18 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             steps.push(self.par_extract_positions());
         }
 
-        // Simulate the system for longer to ensure that it has reached a stable
-        // state with leaf clusters.
-        let patience = patience * 10;
-        let target = target.map(|t| t * 0.1);
-        let max_steps = max_steps.map(|m| m * 10);
-        self.par_simulate_to_stability(dt, patience, target, max_steps);
+        while !self.leaf_springs.is_empty() {
+            self.par_simulate_to_stability(dt, patience, target, max_steps);
+            self.leaf_springs.par_iter_mut().for_each(|s| {
+                *s = s.with_k(s.k() * dk);
+            });
+            self.remove_weak_springs(min_k);
+        }
 
         ftlog::info!(
-            "Reached instability of {:.2e} with {} leaf springs after {i} steps.",
+            "Reached instability of {:.2e} with {} leaf clusters after {i} steps.",
             self.instability(patience),
-            self.leaf_springs.len()
+            self.leaves.len()
         );
 
         Ok(steps)
@@ -1132,26 +1133,23 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         k: f32,
         data: &D,
         metric: &M,
-        retention_depth: usize,
         rng: &mut R,
     ) {
-        for _ in 0..retention_depth {
-            self.leaves.shuffle(rng);
-            let mut new_springs = self
-                .leaves
-                .par_iter()
-                .zip(self.leaves.par_iter().rev())
-                .filter_map(|(&a, &b)| {
-                    if a.arg_center() < b.arg_center() {
-                        let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
-                        Some(self.new_spring([a, b], k, l0))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            self.leaf_springs.append(&mut new_springs);
-        }
+        self.leaves.shuffle(rng);
+        let mut new_springs = self
+            .leaves
+            .par_iter()
+            .zip(self.leaves.par_iter().rev())
+            .filter_map(|(&a, &b)| {
+                if a.arg_center() < b.arg_center() {
+                    let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
+                    Some(self.new_spring([a, b], k, l0))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        self.leaf_springs.append(&mut new_springs);
     }
 }
 

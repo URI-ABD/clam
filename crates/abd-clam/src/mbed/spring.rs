@@ -19,6 +19,8 @@ pub struct Spring<'a, T: Number, C: Cluster<T>> {
     l: f32,
     /// The displacement of the spring from its natural length.
     dx: f32,
+    /// The displacement ratio of the spring from its natural length.
+    ratio: f32,
     /// The magnitude of the force exerted by the spring.
     f_mag: f32,
     /// The potential energy stored in the spring.
@@ -36,8 +38,9 @@ impl<T: Number, C: Cluster<T>> Copy for Spring<'_, T, C> {}
 impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     /// Create a new `Spring` between two `Cluster`s.
     pub fn new(clusters: [&'a C; 2], k: f32, l0: T, l: f32) -> Self {
-        let f_mag = k * (l0.as_f32() - l);
         let dx = l0.as_f32() - l;
+        let ratio = l / l0.as_f32();
+        let f_mag = k * dx;
         let pe = 0.5 * k * dx.square();
         Self {
             clusters,
@@ -45,6 +48,7 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
             k,
             l,
             dx,
+            ratio,
             f_mag,
             pe,
         }
@@ -72,8 +76,8 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     }
 
     /// Get the ratio of the current length to the natural length of the spring.
-    pub fn ratio(&self) -> f32 {
-        self.l / self.l0.as_f32()
+    pub const fn ratio(&self) -> f32 {
+        self.ratio
     }
 
     /// Get the magnitude of the force exerted by the spring.
@@ -85,6 +89,7 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     pub fn update_length(&mut self, l: f32) {
         self.dx += self.l - l;
         self.l = l;
+        self.ratio = l / self.l0.as_f32();
         self.f_mag = self.k * self.dx;
         self.pe = 0.5 * self.k * self.dx.square();
     }
