@@ -1,6 +1,8 @@
 //! Build the dimension reduction.
 
-use abd_clam::{cluster::ParPartition, mbed::MassSpringSystem, metric::ParMetric, Dataset, FlatVec};
+use abd_clam::{
+    cluster::ParPartition, dataset::AssociatesMetadata, mbed::MassSpringSystem, metric::ParMetric, Dataset, FlatVec,
+};
 
 /// Build the dimension reduction.
 ///
@@ -42,7 +44,7 @@ where
     CC: (Fn(&C) -> bool) + Send + Sync,
     Me: Clone + Send + Sync,
 {
-    ftlog::info!("Building the dimension reduction ...");
+    ftlog::info!("Building the dimension reduction...");
     ftlog::info!("Output directory: {:?}", out_dir.as_ref());
     ftlog::info!("Dataset: {:?}", data.name());
     ftlog::info!("Metric: {:?}", metric.name());
@@ -52,25 +54,25 @@ where
 
     let mut rng = rand::thread_rng();
 
-    ftlog::info!("Creating the tree ...");
+    ftlog::info!("Creating the tree...");
     let root = C::par_new_tree_iterative(&data, &metric, criteria, seed, 128);
 
-    ftlog::info!("Starting the dimension reduction ...");
-    let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data, beta)?;
-    system.par_initialize_with_root(k, &root, &data, &metric, &mut rng)?;
-    let steps = system.par_simulate_to_leaves(
-        k,
-        &data,
-        &metric,
-        &mut rng,
-        dt,
-        patience,
-        target,
-        max_steps,
-        dk,
-        retention_depth,
-        f,
-    )?;
+    ftlog::info!("Setting up the simulation...");
+    let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data)?
+        .with_metadata(data.metadata())?
+        .with_beta(beta.unwrap_or(0.99))?
+        .with_k(k)?
+        .with_dk(dk.unwrap_or(0.5))?
+        .with_dt(dt)?
+        .with_f(f.unwrap_or(0.5))?
+        .with_retention_depth(retention_depth.unwrap_or(4))
+        .with_patience(patience)
+        .with_max_steps(max_steps.unwrap_or(10_000))
+        .with_target(target.unwrap_or(1e-3))?;
+
+    ftlog::info!("Starting the simulation...");
+    system.par_initialize_with_root(&root, &data, &metric, &mut rng);
+    let steps = system.par_simulate_to_leaves(&data, &metric, &mut rng);
 
     // Stack the steps into a single array.
     let arrays = steps.into_iter().map(|step| step.to_array2()).collect::<Vec<_>>();
@@ -79,6 +81,6 @@ where
     let stack_path = out_dir.as_ref().join(format!("{name}-stack.npy"));
     ndarray_npy::write_npy(&stack_path, &stack).map_err(|e| e.to_string())?;
 
-    ftlog::info!("Extracting the reduced embedding ...");
+    ftlog::info!("Extracting the reduced embedding...");
     Ok(system.par_extract_positions())
 }
