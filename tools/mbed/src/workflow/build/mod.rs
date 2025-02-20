@@ -24,15 +24,15 @@ pub fn build<P, I, M, C, CC, Me, const DIM: usize>(
     criteria: &CC,
     name: &str,
     seed: Option<u64>,
-    beta: Option<f32>,
+    beta: f32,
     k: f32,
-    dk: Option<f32>,
-    retention_depth: Option<usize>,
-    f: Option<f32>,
+    dk: f32,
+    retention_depth: usize,
+    f: f32,
     dt: f32,
     patience: usize,
-    target: Option<f32>,
-    max_steps: Option<usize>,
+    target: f32,
+    max_steps: usize,
 ) -> Result<FlatVec<[f32; DIM], Me>, String>
 where
     P: AsRef<std::path::Path>,
@@ -57,15 +57,15 @@ where
     ftlog::info!("Setting up the simulation...");
     let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data)?
         .with_metadata(data.metadata())?
-        .with_beta(beta.unwrap_or(0.99))?
+        .with_beta(beta)?
         .with_k(k)?
-        .with_dk(dk.unwrap_or(0.5))?
+        .with_dk(dk)?
         .with_dt(dt)?
-        .with_f(f.unwrap_or(0.5))?
-        .with_retention_depth(retention_depth.unwrap_or(4))
+        .with_f(f)?
+        .with_retention_depth(retention_depth)
         .with_patience(patience)
-        .with_max_steps(max_steps.unwrap_or(10_000))
-        .with_target(target.unwrap_or(1e-3))?;
+        .with_max_steps(max_steps)
+        .with_target(target)?;
 
     ftlog::info!("Starting the simulation...");
     system.par_initialize_with_root(&root, &data, &metric, &mut rng);

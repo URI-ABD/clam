@@ -27,8 +27,8 @@ pub enum Commands {
         balanced: bool,
 
         /// The damping factor for the mass-spring system.
-        #[arg(short('B'), long)]
-        beta: Option<f32>,
+        #[arg(short('B'), long, default_value = "0.99")]
+        beta: f32,
 
         /// The spring constant for the mass-spring system.
         #[arg(short('k'), long, default_value = "1.0")]
@@ -36,16 +36,16 @@ pub enum Commands {
 
         /// The factor by which to decrease the spring constant at each
         /// iteration.
-        #[arg(short('K'), long)]
-        dk: Option<f32>,
+        #[arg(short('K'), long, default_value = "0.5")]
+        dk: f32,
 
         /// The fraction of springs to replace at each iteration.
-        #[arg(short('f'), long)]
-        f: Option<f32>,
+        #[arg(short('f'), long, default_value = "0.5")]
+        f: f32,
 
         /// The retention depth for the springs in the mass-spring system.
-        #[arg(short('R'), long)]
-        retention_depth: Option<usize>,
+        #[arg(short('R'), long, default_value = "4")]
+        retention_depth: usize,
 
         /// The time step for each iteration of the mass-spring system.
         #[arg(short('t'), long, default_value = "0.01")]
@@ -59,11 +59,11 @@ pub enum Commands {
         /// The target stability value. If the stability reaches this value, the
         /// optimization is stopped.
         #[arg(short('T'), long, default_value = "0.001")]
-        target: Option<f32>,
+        target: f32,
 
         /// The maximum number of iterations to run.
         #[arg(short('M'), long, default_value = "10000")]
-        max_steps: Option<usize>,
+        max_steps: usize,
     },
     /// Measure the quality of a dimension reduction.
     Measure {
