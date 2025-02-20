@@ -22,9 +22,7 @@ pub fn build<P, I, M, C, CC, Me, const DIM: usize>(
     data: FlatVec<I, Me>,
     metric: M,
     criteria: &CC,
-    dimensions: usize,
     name: &str,
-    checkpoint_frequency: usize,
     seed: Option<u64>,
     beta: Option<f32>,
     k: f32,
@@ -48,9 +46,8 @@ where
     ftlog::info!("Output directory: {:?}", out_dir.as_ref());
     ftlog::info!("Dataset: {:?}", data.name());
     ftlog::info!("Metric: {:?}", metric.name());
-    ftlog::info!("Dimensions: {dimensions}");
+    ftlog::info!("Dimensions: {DIM}");
     ftlog::info!("Name: {name}");
-    ftlog::info!("Checkpoint frequency: {checkpoint_frequency}");
 
     let mut rng = rand::thread_rng();
 

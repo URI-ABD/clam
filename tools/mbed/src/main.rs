@@ -114,8 +114,8 @@ fn main() -> Result<(), String> {
     // matches just as you would the top level cmd
     match &args.command {
         Commands::Build {
-            dimensions,
-            checkpoint_frequency,
+            // dimensions,
+            // checkpoint_frequency,
             balanced,
             beta,
             k,
@@ -130,8 +130,7 @@ fn main() -> Result<(), String> {
             let name = args.dataset_name.as_str();
             let inp_path = inp_dir.join(format!("{name}.npy"));
             ftlog::info!("Reading data from {inp_path:?}...");
-            ftlog::info!("Reducing data to {dimensions} dimensions...");
-            ftlog::info!("Saving checkpoints every {checkpoint_frequency} iterations...");
+            ftlog::info!("Reducing data to {DIM} dimensions...");
             ftlog::info!("Saving the final result to {name}.npy in {out_dir:?}...");
 
             let data = read_npy(&inp_path)?;
@@ -142,9 +141,7 @@ fn main() -> Result<(), String> {
                     data,
                     metric,
                     &criteria,
-                    *dimensions,
                     name,
-                    *checkpoint_frequency,
                     args.seed,
                     *beta,
                     *k,
@@ -163,9 +160,7 @@ fn main() -> Result<(), String> {
                     data,
                     metric,
                     &criteria,
-                    *dimensions,
                     name,
-                    *checkpoint_frequency,
                     args.seed,
                     *beta,
                     *k,

@@ -14,15 +14,14 @@ pub use measure::measure;
 pub enum Commands {
     /// Create a dimension reduction for the given dataset.
     Build {
-        /// The number of dimensions to reduce to.
-        #[arg(short('d'), long, default_value = "3")]
-        dimensions: usize,
+        // /// The number of dimensions to reduce to.
+        // #[arg(short('d'), long, default_value = "3")]
+        // dimensions: usize,
 
-        /// The frequency of checkpoints, i.e. how often the current state of
-        /// the dimension reduction is saved to disk.
-        #[arg(short('c'), long, default_value = "100")]
-        checkpoint_frequency: usize,
-
+        // /// The frequency of checkpoints, i.e. how often the current state of
+        // /// the dimension reduction is saved to disk.
+        // #[arg(short('c'), long, default_value = "100")]
+        // checkpoint_frequency: usize,
         /// Whether to use the balanced ball clustering algorithm.
         #[arg(short('b'), long)]
         balanced: bool,
