@@ -297,7 +297,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
             self.leaf_springs.extend(new_leaf_springs);
 
             // Simulate the system until it reaches stability.
-            self.simulate_to_stability();
+            let instability = self.simulate_to_stability();
 
             // Remove any springs that connect to the parent clusters.
             self.springs.retain(|s| {
@@ -316,7 +316,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
             stressed_centers = vec![false; self.data.cardinality()];
 
             ftlog::info!(
-                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                "Step {i}, Finishing with {} springs and {} leaf springs with {instability:.2e} instability.",
                 self.springs.len(),
                 self.leaf_springs.len()
             );
@@ -325,19 +325,25 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
             steps.push(self.extract_positions());
         }
 
-        while !self.leaf_springs.is_empty() {
+        let mut instability = self.instability();
+        #[allow(clippy::while_float)]
+        while instability > self.target {
             i += 1;
-            self.simulate_to_stability();
+            instability = self.simulate_to_stability();
             self.leaf_springs.iter_mut().for_each(|s| {
                 *s = s.with_k(s.k() * self.dk);
             });
             self.remove_weak_springs(min_k);
+            self.add_random_leaf_springs(data, metric, rng);
 
             ftlog::info!(
-                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                "Step {i}, Finishing with {} springs and {} leaf springs with {instability:.2e} instability.",
                 self.springs.len(),
                 self.leaf_springs.len()
             );
+
+            // Save the current state of the system.
+            steps.push(self.extract_positions());
         }
 
         ftlog::info!(
@@ -516,7 +522,7 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
             self.leaf_springs.extend(new_leaf_springs);
 
             // Simulate the system until it reaches stability.
-            self.par_simulate_to_stability();
+            let instability = self.par_simulate_to_stability();
 
             // Remove any springs that connect to the parent clusters.
             self.springs.retain(|s| {
@@ -538,7 +544,7 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
             stressed_centers = vec![false; self.data.cardinality()];
 
             ftlog::info!(
-                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                "Step {i}, Finishing with {} springs and {} leaf springs with {instability:.2e} instability.",
                 self.springs.len(),
                 self.leaf_springs.len()
             );
@@ -547,19 +553,25 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
             steps.push(self.par_extract_positions());
         }
 
-        while !self.leaf_springs.is_empty() {
+        let mut instability = self.instability();
+        #[allow(clippy::while_float)]
+        while instability > self.target {
             i += 1;
-            self.par_simulate_to_stability();
+            instability = self.par_simulate_to_stability();
             self.leaf_springs.par_iter_mut().for_each(|s| {
                 *s = s.with_k(s.k() * self.dk);
             });
             self.remove_weak_springs(min_k);
+            self.par_add_random_leaf_springs(data, metric, rng);
 
             ftlog::info!(
-                "Step {i}, Finishing with {} springs and {} leaf springs.",
+                "Step {i}, Finishing with {} springs and {} leaf springs with {instability:.2e} instability.",
                 self.springs.len(),
                 self.leaf_springs.len()
             );
+
+            // Save the current state of the system.
+            steps.push(self.par_extract_positions());
         }
 
         ftlog::info!(
@@ -796,7 +808,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         let radius = root.radius().as_f32();
         for &c in &children {
             let p = Vector::random(rng, -radius, radius);
-            let v = Vector::random(rng, -radius, radius);
+            let v = Vector::random(rng, -1.0, 1.0);
             for i in c.indices() {
                 self[i] = [p, v];
             }
@@ -924,8 +936,8 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
     /// Get the instability of the `System` over the last `patience` time-steps.
     ///
-    /// The instability is the mean of the coefficient of variation of the
-    /// kinetic and potential energies over the last `patience` time-steps.
+    /// The instability is the sum of the mean kinetic energy of all masses and
+    /// the coefficient of variation of the potential energy of all springs.
     ///
     /// # Returns
     ///
@@ -943,10 +955,11 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                 .copied()
                 .unzip();
 
-            let var_kinetic: f32 = crate::utils::coefficient_of_variation(&ke_values);
+            // let var_kinetic: f32 = crate::utils::coefficient_of_variation(&ke_values);
+            let mean_kinetic: f32 = crate::utils::mean(&ke_values);
             let var_potential: f32 = crate::utils::coefficient_of_variation(&pe_values);
 
-            (var_kinetic + var_potential).half()
+            mean_kinetic + var_potential
         }
     }
 
@@ -999,25 +1012,25 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             .collect::<Vec<_>>();
 
         // Calculate the change in velocity for each point.
-        let dvs = {
-            let mut dvs = vec![Vector::zero(); self.data.cardinality()];
-
+        let accelerations = {
+            let mut accelerations = (0..self.data.cardinality())
+                .map(|i| self[i][1] * self.beta)
+                .collect::<Vec<_>>();
             for (c, f) in forces {
                 let m = c.cardinality().as_f32();
-                let a = (f * self.beta) / m;
-                let dv = a * self.dt;
+                let a = f / m;
                 for i in c.indices() {
                     // The addition here accounts for the accumulated forces.
-                    dvs[i] += dv;
+                    accelerations[i] += a;
                 }
             }
 
-            dvs
+            accelerations
         };
 
         // Apply the changes to the positions and velocities of the points.
         self.data.transform_items_enumerated_in_place(|i, [mut x, mut v]| {
-            v += dvs[i];
+            v += accelerations[i] * self.dt;
             x += v * self.dt;
         });
 
@@ -1029,7 +1042,8 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     }
 
     /// Simulate the system until it reaches a stable state.
-    pub fn simulate_to_stability(&mut self) {
+    #[must_use]
+    pub fn simulate_to_stability(&mut self) -> f32 {
         let mut i = 0;
         let mut instability = self.instability();
         while i < self.patience || (instability > self.target && i < self.max_steps) {
@@ -1042,6 +1056,8 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             "Reached instability of {instability:.2e} after {i} steps with {} springs.",
             self.springs.len()
         );
+
+        instability
     }
 }
 
@@ -1101,7 +1117,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
         let radius = root.radius().as_f32();
         for &c in &children {
             let p = Vector::random(rng, -radius, radius);
-            let v = Vector::random(rng, -radius, radius);
+            let v = Vector::random(rng, -1.0, 1.0);
             for i in c.indices() {
                 self[i] = [p, v];
             }
@@ -1172,25 +1188,25 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             .collect::<Vec<_>>();
 
         // Calculate the change in velocity for each point.
-        let dvs = {
-            let mut dvs = vec![Vector::zero(); self.data.cardinality()];
-
+        let accelerations = {
+            let mut accelerations = (0..self.data.cardinality())
+                .map(|i| self[i][1] * self.beta)
+                .collect::<Vec<_>>();
             for (c, f) in forces {
                 let m = c.cardinality().as_f32();
-                let a = (f * self.beta) / m;
-                let dv = a * self.dt;
+                let a = f / m;
                 for i in c.indices() {
                     // The addition here accounts for the accumulated forces.
-                    dvs[i] += dv;
+                    accelerations[i] += a;
                 }
             }
 
-            dvs
+            accelerations
         };
 
         // Apply the changes to the positions and velocities of the points.
         self.data.par_transform_items_enumerated_in_place(|i, [mut x, mut v]| {
-            v += dvs[i];
+            v += accelerations[i] * self.dt;
             x += v * self.dt;
         });
 
@@ -1202,7 +1218,8 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
     }
 
     /// Parallel version of [`simulate_to_stability`](Self::simulate_to_stability).
-    pub fn par_simulate_to_stability(&mut self) {
+    #[must_use]
+    pub fn par_simulate_to_stability(&mut self) -> f32 {
         let mut i = 0;
         let mut instability = self.instability();
         while i < self.patience || (instability > self.target && i < self.max_steps) {
@@ -1216,6 +1233,8 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             self.springs.len(),
             self.leaf_springs.len()
         );
+
+        instability
     }
 
     /// Adds springs among random pairs of leaf clusters.
