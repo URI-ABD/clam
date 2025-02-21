@@ -1,7 +1,11 @@
 //! Build the dimension reduction.
 
 use abd_clam::{
-    cluster::ParPartition, dataset::AssociatesMetadata, mbed::MassSpringSystem, metric::ParMetric, Dataset, FlatVec,
+    cluster::{BalancedBall, ParPartition},
+    dataset::AssociatesMetadata,
+    mbed::MassSpringSystem,
+    metric::ParMetric,
+    Ball, Dataset, FlatVec, ParDiskIO,
 };
 
 /// Build the dimension reduction.
@@ -12,17 +16,14 @@ use abd_clam::{
 /// - `I`: The type of the items in the dataset.
 /// - `D`: The type of the dataset.
 /// - `M`: The type of the metric.
-/// - `C`: The type of the root `Cluster`.
-/// - `CC`: The type of the criteria function.
 /// - `Me`: The type of the metadata.
 /// - `DIM`: The number of dimensions.
 #[allow(clippy::too_many_arguments)]
-pub fn build<P, I, M, C, CC, Me, const DIM: usize>(
+pub fn build<P, I, M, Me, const DIM: usize>(
     out_dir: &P,
-    data: FlatVec<I, Me>,
+    data: &FlatVec<I, Me>,
     metric: M,
-    criteria: &CC,
-    name: &str,
+    balanced: bool,
     seed: Option<u64>,
     beta: f32,
     k: f32,
@@ -38,8 +39,6 @@ where
     P: AsRef<std::path::Path>,
     I: Send + Sync,
     M: ParMetric<I, f32>,
-    C: ParPartition<f32>,
-    CC: (Fn(&C) -> bool) + Send + Sync,
     Me: Clone + Send + Sync,
 {
     ftlog::info!("Building the dimension reduction...");
@@ -47,15 +46,27 @@ where
     ftlog::info!("Dataset: {:?}", data.name());
     ftlog::info!("Metric: {:?}", metric.name());
     ftlog::info!("Dimensions: {DIM}");
-    ftlog::info!("Name: {name}");
 
     let mut rng = rand::thread_rng();
 
     ftlog::info!("Creating the tree...");
-    let root = C::par_new_tree_iterative(&data, &metric, criteria, seed, 128);
+    let tree_path = out_dir.as_ref().join(format!("{}-tree.bin", data.name()));
+    let root = if tree_path.exists() {
+        Ball::<f32>::par_read_from(&tree_path)?
+    } else {
+        let root = if balanced {
+            let criteria = |_: &BalancedBall<f32>| true;
+            BalancedBall::par_new_tree_iterative(data, &metric, &criteria, seed, 128).into_ball()
+        } else {
+            let criteria = |_: &Ball<f32>| true;
+            Ball::par_new_tree_iterative(data, &metric, &criteria, seed, 128)
+        };
+        root.par_write_to(&tree_path)?;
+        root
+    };
 
     ftlog::info!("Setting up the simulation...");
-    let mut system = MassSpringSystem::<DIM, _, f32, C>::new(&data)?
+    let mut system = MassSpringSystem::<DIM, _, f32, _>::new(data)?
         .with_metadata(data.metadata())?
         .with_beta(beta)?
         .with_k(k)?
@@ -68,14 +79,14 @@ where
         .with_target(target)?;
 
     ftlog::info!("Starting the simulation...");
-    system.par_initialize_with_root(&root, &data, &metric, &mut rng);
-    let steps = system.par_simulate_to_leaves(&data, &metric, &mut rng);
+    system.par_initialize_with_root(&root, data, &metric, &mut rng);
+    let steps = system.par_simulate_to_leaves(data, &metric, &mut rng);
 
     // Stack the steps into a single array.
     let arrays = steps.into_iter().map(|step| step.to_array2()).collect::<Vec<_>>();
     let arrays = arrays.iter().map(|a| a.view()).collect::<Vec<_>>();
     let stack = ndarray::stack(ndarray::Axis(0), &arrays).map_err(|e| e.to_string())?;
-    let stack_path = out_dir.as_ref().join(format!("{name}-stack.npy"));
+    let stack_path = out_dir.as_ref().join(format!("{}-stack.npy", data.name()));
     ndarray_npy::write_npy(&stack_path, &stack).map_err(|e| e.to_string())?;
 
     ftlog::info!("Extracting the reduced embedding...");

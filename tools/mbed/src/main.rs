@@ -2,15 +2,15 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{cluster::BalancedBall, Ball, FlatVec};
+use abd_clam::{Dataset, FlatVec};
 use clap::Parser;
 
+mod dataset;
 mod distance_functions;
 mod quality_measures;
 mod workflow;
 
 use distance_functions::DistanceFunction;
-use distances::Number;
 use workflow::Commands;
 
 const DIM: usize = 3;
@@ -63,12 +63,31 @@ fn main() -> Result<(), String> {
         inp_dir
     };
 
+    // let original_data = inp_dir.join(format!("{}.npy", args.dataset_name));
+    // if !original_data.exists() {
+    //     return Err(format!("{original_data:?} does not exist"));
+    // }
+
+    let name = {
+        let parts = args.dataset_name.split('.').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            return Err(format!("Invalid file name: {}", args.dataset_name));
+        }
+        let n = parts.len() - 1;
+
+        if !["npy", "hdf5"].contains(&parts[n]) {
+            return Err(format!("Unsupported file extension: {}", parts[n]));
+        }
+
+        parts[..n].join(".")
+    };
+
     let out_dir = match args.out_dir {
         Some(out_dir) => {
-            let out_dir = out_dir.join(&args.dataset_name);
+            let out_dir = out_dir.join(&name);
 
             if out_dir.exists() {
-                let pattern = format!("{}-step-*.npy", args.dataset_name);
+                let pattern = format!("{name}-*.npy");
                 // delete all files in the output directory that match the pattern
                 let files = out_dir
                     .read_dir()
@@ -100,10 +119,10 @@ fn main() -> Result<(), String> {
             .parent()
             .ok_or("Input directory must have a parent directory")?
             .to_path_buf()
-            .join(&args.dataset_name),
+            .join(&name),
     };
 
-    let file_name = format!("mbed-{}", args.dataset_name);
+    let file_name = format!("mbed-{name}");
     let (_guard, log_path) = bench_utils::configure_logger(&file_name, ftlog::LevelFilter::Info)?;
     ftlog::info!("Logging to: {log_path:?}");
 
@@ -127,85 +146,52 @@ fn main() -> Result<(), String> {
             target,
             max_steps,
         } => {
-            let name = args.dataset_name.as_str();
-            let inp_path = inp_dir.join(format!("{name}.npy"));
-            ftlog::info!("Reading data from {inp_path:?}...");
             ftlog::info!("Reducing data to {DIM} dimensions...");
-            ftlog::info!("Saving the final result to {name}.npy in {out_dir:?}...");
+            ftlog::info!("Saving the final result in {out_dir:?}...");
 
-            let data = read_npy(&inp_path)?;
-            let reduced_data = if *balanced {
-                let criteria = |_: &BalancedBall<f32>| true;
-                workflow::build::<_, _, _, _, _, _, DIM>(
-                    &out_dir,
-                    data,
-                    metric,
-                    &criteria,
-                    name,
-                    args.seed,
-                    *beta,
-                    *k,
-                    *dk,
-                    *retention_depth,
-                    *f,
-                    *dt,
-                    *patience,
-                    *target,
-                    *max_steps,
-                )?
-            } else {
-                let criteria = |_: &Ball<f32>| true;
-                workflow::build::<_, _, _, _, _, _, DIM>(
-                    &out_dir,
-                    data,
-                    metric,
-                    &criteria,
-                    name,
-                    args.seed,
-                    *beta,
-                    *k,
-                    *dk,
-                    *retention_depth,
-                    *f,
-                    *dt,
-                    *patience,
-                    *target,
-                    *max_steps,
-                )?
-            };
+            let data = dataset::read(&inp_dir, &args.dataset_name)?;
 
-            let data_path = out_dir.join(format!("{name}-reduced.npy"));
-            reduced_data.write_npy(&data_path)?;
+            let reduced_data = workflow::build::<_, _, _, _, DIM>(
+                &out_dir,
+                &data,
+                metric,
+                *balanced,
+                args.seed,
+                *beta,
+                *k,
+                *dk,
+                *retention_depth,
+                *f,
+                *dt,
+                *patience,
+                *target,
+                *max_steps,
+            )?;
+
+            let reduced_path = out_dir.join(format!("{}-reduced.npy", data.name()));
+            reduced_data.write_npy(&reduced_path)?;
         }
         Commands::Measure {
             quality_measures,
             exhaustive,
         } => {
-            let original_data = inp_dir.join(format!("{}.npy", args.dataset_name));
-            if !original_data.exists() {
-                return Err(format!("{original_data:?} does not exist"));
-            }
-
-            let inp_path = out_dir.join(format!("{}-reduced.npy", args.dataset_name));
-            if !inp_path.exists() {
-                return Err(format!("{inp_path:?} does not exist"));
-            }
-
             ftlog::info!("Measuring quality of dimension reduction...");
-            ftlog::info!("Reading reduced data from {inp_path:?}...");
-            ftlog::info!("Reading original data from {original_data:?}...");
             if *exhaustive {
                 ftlog::info!("Exhaustively measuring quality using {quality_measures:?}...");
             } else {
-                ftlog::info!(
-                    "Measuring quality using {:?}...",
-                    quality_measures.iter().map(|m| m.name()).collect::<Vec<_>>()
-                );
+                ftlog::info!("Measuring quality using {quality_measures:?}...");
             }
-            ftlog::info!("Saving the results in {out_dir:?}...");
 
-            let original_data = read_npy(&original_data)?;
-            let reduced_data = FlatVec::<[f32; DIM], usize>::read_npy(&inp_path)?;
+            ftlog::info!("Reading original data from {inp_dir:?}...");
+            let original_data = dataset::read(&inp_dir, &args.dataset_name)?;
+
+            let reduced_path = out_dir.join(format!("{}-reduced.npy", original_data.name()));
+            if !reduced_path.exists() {
+                return Err(format!("{reduced_path:?} does not exist"));
+            }
+
+            ftlog::info!("Reading reduced data from {reduced_path:?}...");
+            let reduced_data = FlatVec::<[f32; DIM], usize>::read_npy(&reduced_path)?;
 
             let measures = workflow::measure(&original_data, &metric, &reduced_data, quality_measures, *exhaustive);
 
@@ -218,19 +204,4 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
-}
-
-/// Reads a numpy file and returns the data as a `FlatVec` of `f32`.
-fn read_npy<P: AsRef<std::path::Path>>(path: &P) -> Result<FlatVec<Vec<f32>, usize>, String> {
-    let data = FlatVec::<Vec<f32>, usize>::read_npy(path);
-    if data.is_ok() {
-        return data;
-    }
-
-    let data = FlatVec::<Vec<f64>, usize>::read_npy(path);
-    if data.is_ok() {
-        return data.map(|data| data.transform_items(|v| v.iter().map(|x| x.as_f32()).collect::<Vec<_>>()));
-    }
-
-    Err(format!("Failed to read {:?}", path.as_ref()))
 }

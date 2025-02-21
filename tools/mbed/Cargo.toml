@@ -14,3 +14,4 @@ ftlog = { workspace = true }
 bench-utils = { path = "../../benches/utils" }
 rayon = { workspace = true }
 rand = { workspace = true }
+hdf5 = { workspace = true }
