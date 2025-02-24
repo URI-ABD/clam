@@ -41,9 +41,9 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     /// Create a new `Spring` between two `Cluster`s.
     pub fn new(clusters: [&'a C; 2], l0: T, l: f32, num_loosened: usize, dk: f32) -> Self {
         let k = l0.as_f32();
-        let dx = k - l;
-        let ratio = l / k;
-        let f_mag = k * dx;
+        let dx = l - l0.as_f32();
+        let ratio = dx.abs() / l0.as_f32();
+        let f_mag = -k * dx;
         let pe = 0.5 * k * dx.square();
         let k = k * dk.powi(num_loosened.as_i32());
         Self {
@@ -74,11 +74,16 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
         self.k
     }
 
+    /// Get the displacement of the spring from its natural length.
+    pub const fn dx(&self) -> f32 {
+        self.dx
+    }
+
     /// Loosen the spring by a factor of `factor`.
     pub fn loosen(&mut self, factor: f32) {
         self.num_loosened += 1;
         self.k *= factor;
-        self.f_mag = self.k * self.dx;
+        self.f_mag = -self.k * self.dx;
         self.pe = 0.5 * self.k * self.dx.square();
     }
 
@@ -86,12 +91,6 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     pub const fn is_intact(&self, threshold: usize) -> bool {
         self.num_loosened < threshold
     }
-
-    // /// Change the spring constant of the spring.
-    // pub const fn with_k(mut self, k: f32) -> Self {
-    //     self.k = k;
-    //     self
-    // }
 
     /// Get the ratio of the current length to the natural length of the spring.
     pub const fn ratio(&self) -> f32 {
@@ -105,10 +104,10 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
 
     /// Update the length of the spring, and recalculate subsequent properties.
     pub fn update_length(&mut self, l: f32) {
-        self.dx += self.l - l;
+        self.dx += l - self.l;
         self.l = l;
-        self.ratio = l / self.l0.as_f32();
-        self.f_mag = self.k * self.dx;
+        self.ratio = self.dx.abs() / self.l0.as_f32();
+        self.f_mag = -self.k * self.dx;
         self.pe = 0.5 * self.k * self.dx.square();
     }
 

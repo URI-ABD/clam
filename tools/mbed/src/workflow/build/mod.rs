@@ -66,7 +66,7 @@ where
     };
 
     ftlog::info!("Setting up the simulation...");
-    let mut system = MassSpringSystem::<DIM, _, f32, _>::new(data)?
+    let mut system = MassSpringSystem::<DIM, _, f32, _>::new(data.cardinality())?
         .with_metadata(data.metadata())?
         .with_beta(beta)?
         .with_k(k)?

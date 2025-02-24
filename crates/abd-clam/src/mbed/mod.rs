@@ -4,9 +4,9 @@ mod spring;
 mod system;
 mod vector;
 
-use spring::Spring;
+pub use spring::Spring;
 pub use system::System as MassSpringSystem;
-use vector::Vector;
+pub use vector::Vector;
 
 // TODO: Add methods for allowing only "local" evolution of the mass-spring system.
 // This would require that we update only those masses which are within a small number spring connections of some target

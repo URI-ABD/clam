@@ -5,10 +5,16 @@ use rand::prelude::*;
 
 /// A vector that can represent the position, velocity, or force in a mass-
 /// spring system.
+#[must_use]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector<const DIM: usize>([f32; DIM]);
 
 impl<const DIM: usize> Vector<DIM> {
+    /// Create a new `Vector` with the given elements.
+    pub const fn new(elements: [f32; DIM]) -> Self {
+        Self(elements)
+    }
+
     /// Create a new `Vector` with all elements set to `0.0`.
     pub const fn zero() -> Self {
         Self([0.0; DIM])
@@ -54,11 +60,13 @@ impl<const DIM: usize> Vector<DIM> {
     }
 
     /// Get the magnitude of the `Vector`.
+    #[must_use]
     pub fn magnitude(&self) -> f32 {
         self.iter().map(|&x| x * x).sum::<f32>().sqrt()
     }
 
     /// Get the euclidean distance between two `Vector`s.
+    #[must_use]
     pub fn distance_to(&self, other: &Self) -> f32 {
         distances::simd::euclidean_f32(self.as_slice(), other.as_slice())
     }
@@ -80,8 +88,21 @@ impl<const DIM: usize> Vector<DIM> {
     }
 
     /// Get the dot product of two `Vector`s.
+    #[must_use]
     pub fn dot(&self, other: &Self) -> f32 {
         self.iter().zip(other.iter()).map(|(&a, &b)| a * b).sum()
+    }
+}
+
+impl<const DIM: usize> AsRef<[f32; DIM]> for Vector<DIM> {
+    fn as_ref(&self) -> &[f32; DIM] {
+        &self.0
+    }
+}
+
+impl<const DIM: usize> AsRef<[f32]> for Vector<DIM> {
+    fn as_ref(&self) -> &[f32] {
+        self.0.as_slice()
     }
 }
 

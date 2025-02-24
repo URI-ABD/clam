@@ -64,15 +64,11 @@ pub struct System<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> {
 impl<const DIM: usize, T: Number, C: Cluster<T>> System<'_, DIM, usize, T, C> {
     /// Create a new `System` with the given `Cluster` tree.
     ///
-    /// # Arguments
-    ///
-    /// - `data`: The original dataset.
-    ///
     /// # Errors
     ///
     /// - If the data is empty.
-    pub fn new<I, D: Dataset<I>>(data: &D) -> Result<Self, String> {
-        let items = vec![[Vector::zero(); 2]; data.cardinality()];
+    pub fn new(cardinality: usize) -> Result<Self, String> {
+        let items = vec![[Vector::zero(); 2]; cardinality];
         let data = FlatVec::new(items)?;
         let springs = Vec::new();
         let leaf_springs = Vec::new();
@@ -123,6 +119,30 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             max_steps: self.max_steps,
             target: self.target,
         })
+    }
+
+    /// Sets the initial positions and velocities of the points in the system.
+    ///
+    /// # Errors
+    ///
+    /// - If the number of items in the dataset does not match the number of
+    ///   items in the system.
+    pub fn with_initial_state(mut self, state: &[[Vector<DIM>; 2]]) -> Result<Self, String> {
+        if state.len() != self.data.cardinality() {
+            let msg = format!(
+                "Number of items in the dataset ({}) does not match the number of items in the system ({}).",
+                state.len(),
+                self.data.cardinality()
+            );
+            ftlog::error!("{msg}");
+            return Err(msg);
+        }
+
+        for (i, pv) in state.iter().copied().enumerate() {
+            self.data[i] = pv;
+        }
+
+        Ok(self)
     }
 }
 
