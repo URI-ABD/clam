@@ -25,6 +25,8 @@ pub struct Spring<'a, T: Number, C: Cluster<T>> {
     f_mag: f32,
     /// The potential energy stored in the spring.
     pe: f32,
+    /// The number of times the spring has been loosened.
+    num_loosened: usize,
 }
 
 impl<T: Number, C: Cluster<T>> Clone for Spring<'_, T, C> {
@@ -37,11 +39,13 @@ impl<T: Number, C: Cluster<T>> Copy for Spring<'_, T, C> {}
 
 impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     /// Create a new `Spring` between two `Cluster`s.
-    pub fn new(clusters: [&'a C; 2], k: f32, l0: T, l: f32) -> Self {
-        let dx = l0.as_f32() - l;
-        let ratio = l / l0.as_f32();
+    pub fn new(clusters: [&'a C; 2], l0: T, l: f32, num_loosened: usize, dk: f32) -> Self {
+        let k = l0.as_f32();
+        let dx = k - l;
+        let ratio = l / k;
         let f_mag = k * dx;
         let pe = 0.5 * k * dx.square();
+        let k = k * dk.powi(num_loosened.as_i32());
         Self {
             clusters,
             l0,
@@ -51,12 +55,13 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
             ratio,
             f_mag,
             pe,
+            num_loosened,
         }
     }
 
     /// Deconstruct the `Spring` into its components.
-    pub const fn deconstruct(self) -> ([&'a C; 2], f32, T, f32) {
-        (self.clusters, self.k, self.l0, self.l)
+    pub const fn deconstruct(self) -> ([&'a C; 2], f32, T, f32, usize) {
+        (self.clusters, self.k, self.l0, self.l, self.num_loosened)
     }
 
     /// Get the two `Cluster`s connected by the spring.
@@ -69,11 +74,24 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
         self.k
     }
 
-    /// Change the spring constant of the spring.
-    pub const fn with_k(mut self, k: f32) -> Self {
-        self.k = k;
-        self
+    /// Loosen the spring by a factor of `factor`.
+    pub fn loosen(&mut self, factor: f32) {
+        self.num_loosened += 1;
+        self.k *= factor;
+        self.f_mag = self.k * self.dx;
+        self.pe = 0.5 * self.k * self.dx.square();
     }
+
+    /// Return whether the spring has been yet to be loosened too many times.
+    pub const fn is_intact(&self, threshold: usize) -> bool {
+        self.num_loosened < threshold
+    }
+
+    // /// Change the spring constant of the spring.
+    // pub const fn with_k(mut self, k: f32) -> Self {
+    //     self.k = k;
+    //     self
+    // }
 
     /// Get the ratio of the current length to the natural length of the spring.
     pub const fn ratio(&self) -> f32 {

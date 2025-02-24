@@ -154,8 +154,6 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
         metric: &M,
         rng: &mut R,
     ) -> Vec<FlatVec<[f32; DIM], Me>> {
-        let min_k = self.k * self.dk.powi(self.retention_depth.as_i32());
-
         let mut stressed_centers = vec![false; self.data.cardinality()];
         let mut i = 0;
         let mut steps = Vec::new();
@@ -164,7 +162,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
 
             // Remove springs that are too weak and sort the remaining springs
             // by their displacement ratio.
-            self.remove_weak_springs(min_k);
+            self.remove_weak_springs();
             self.sort_springs_by_displacement();
 
             // Get the clusters connected to the most displaced springs.
@@ -194,13 +192,13 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
             // Collect all stressed clusters and their connecting springs.
             let mut parents = HashMap::new();
             for s in connected {
-                let ([a, b], k, _, _) = s.deconstruct();
-                let k = k * self.dk;
+                let ([a, b], _, _, _, num_loosened) = s.deconstruct();
+                let num_loosened = num_loosened + 1;
                 if !a.is_leaf() {
-                    parents.entry(a).or_insert_with(Vec::new).push((b, k));
+                    parents.entry(a).or_insert_with(Vec::new).push((b, num_loosened));
                 }
                 if !b.is_leaf() {
-                    parents.entry(b).or_insert_with(Vec::new).push((a, k));
+                    parents.entry(b).or_insert_with(Vec::new).push((a, num_loosened));
                 }
             }
             ftlog::debug!("Step {i}, Found {} stressed clusters.", parents.len());
@@ -242,10 +240,10 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
                         self[i][0] = pb;
                     }
 
-                    self.add_spring([a, c], ac);
-                    self.add_spring([b, c], bc);
+                    self.add_spring([a, c], ac, 0);
+                    self.add_spring([b, c], bc, 0);
 
-                    let ab = self.new_spring([a, b], self.k, ab);
+                    let ab = self.new_spring([a, b], ab, 0);
                     if a.is_leaf() && b.is_leaf() {
                         self.leaf_springs.push(ab);
                     } else {
@@ -272,13 +270,29 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
                         .iter()
                         // Ensure that springs are only created once.
                         .filter(|&&(d, _)| !d.is_leaf() && c.arg_center() < d.arg_center())
-                        .flat_map(|&(d, k)| {
+                        .flat_map(|&(d, num_loosened)| {
                             let [da, db] = triangles[&d];
                             [
-                                self.new_spring([ca, da], k, data.one_to_one(ca.arg_center(), da.arg_center(), metric)),
-                                self.new_spring([ca, db], k, data.one_to_one(ca.arg_center(), db.arg_center(), metric)),
-                                self.new_spring([cb, da], k, data.one_to_one(cb.arg_center(), da.arg_center(), metric)),
-                                self.new_spring([cb, db], k, data.one_to_one(cb.arg_center(), db.arg_center(), metric)),
+                                self.new_spring(
+                                    [ca, da],
+                                    data.one_to_one(ca.arg_center(), da.arg_center(), metric),
+                                    num_loosened,
+                                ),
+                                self.new_spring(
+                                    [ca, db],
+                                    data.one_to_one(ca.arg_center(), db.arg_center(), metric),
+                                    num_loosened,
+                                ),
+                                self.new_spring(
+                                    [cb, da],
+                                    data.one_to_one(cb.arg_center(), da.arg_center(), metric),
+                                    num_loosened,
+                                ),
+                                self.new_spring(
+                                    [cb, db],
+                                    data.one_to_one(cb.arg_center(), db.arg_center(), metric),
+                                    num_loosened,
+                                ),
                             ]
                         })
                 })
@@ -310,7 +324,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
             });
 
             self.leaf_springs.iter_mut().for_each(|s| {
-                *s = s.with_k(s.k() * self.dk);
+                s.loosen(self.dk);
             });
             self.add_random_leaf_springs(data, metric, rng);
             stressed_centers = vec![false; self.data.cardinality()];
@@ -326,14 +340,16 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
         }
 
         let mut instability = self.instability();
+        let mut j = 0;
         #[allow(clippy::while_float)]
-        while instability > self.target {
+        while instability > self.target && j < 10 {
+            j += 1;
             i += 1;
             instability = self.simulate_to_stability();
             self.leaf_springs.iter_mut().for_each(|s| {
-                *s = s.with_k(s.k() * self.dk);
+                s.loosen(self.dk);
             });
-            self.remove_weak_springs(min_k);
+            self.remove_weak_springs();
             self.add_random_leaf_springs(data, metric, rng);
 
             ftlog::info!(
@@ -372,8 +388,6 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
         metric: &M,
         rng: &mut R,
     ) -> Vec<FlatVec<[f32; DIM], Me>> {
-        let min_k = self.k * self.dk.powi(self.retention_depth.as_i32());
-
         let mut stressed_centers = vec![false; self.data.cardinality()];
         let mut i = 0;
         let mut steps = Vec::new();
@@ -382,7 +396,7 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
 
             // Remove springs that are too weak and sort the remaining springs
             // by their displacement ratio.
-            self.remove_weak_springs(min_k);
+            self.remove_weak_springs();
             self.par_sort_springs_by_displacement();
 
             // Get the clusters connected to the most displaced springs.
@@ -412,13 +426,13 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
             // Collect all stressed clusters and their connecting springs.
             let mut parents = HashMap::new();
             for s in connected {
-                let ([a, b], k, _, _) = s.deconstruct();
-                let k = k * self.dk;
+                let ([a, b], _, _, _, num_loosened) = s.deconstruct();
+                let num_loosened = num_loosened + 1;
                 if !a.is_leaf() {
-                    parents.entry(a).or_insert_with(Vec::new).push((b, k));
+                    parents.entry(a).or_insert_with(Vec::new).push((b, num_loosened));
                 }
                 if !b.is_leaf() {
-                    parents.entry(b).or_insert_with(Vec::new).push((a, k));
+                    parents.entry(b).or_insert_with(Vec::new).push((a, num_loosened));
                 }
             }
             ftlog::debug!("Step {i}, Found {} stressed clusters.", parents.len());
@@ -467,10 +481,10 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
                         self[i][0] = pb;
                     }
 
-                    self.add_spring([a, c], ac);
-                    self.add_spring([b, c], bc);
+                    self.add_spring([a, c], ac, 0);
+                    self.add_spring([b, c], bc, 0);
 
-                    let ab = self.new_spring([a, b], self.k, ab);
+                    let ab = self.new_spring([a, b], ab, 0);
                     if a.is_leaf() && b.is_leaf() {
                         self.leaf_springs.push(ab);
                     } else {
@@ -497,13 +511,29 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
                         .par_iter()
                         // Ensure that springs are only created once.
                         .filter(|&&(d, _)| !d.is_leaf() && c.arg_center() < d.arg_center())
-                        .flat_map(|&(d, k)| {
+                        .flat_map(|&(d, num_loosened)| {
                             let [da, db] = triangles[&d];
                             [
-                                self.new_spring([ca, da], k, data.one_to_one(ca.arg_center(), da.arg_center(), metric)),
-                                self.new_spring([ca, db], k, data.one_to_one(ca.arg_center(), db.arg_center(), metric)),
-                                self.new_spring([cb, da], k, data.one_to_one(cb.arg_center(), da.arg_center(), metric)),
-                                self.new_spring([cb, db], k, data.one_to_one(cb.arg_center(), db.arg_center(), metric)),
+                                self.new_spring(
+                                    [ca, da],
+                                    data.one_to_one(ca.arg_center(), da.arg_center(), metric),
+                                    num_loosened,
+                                ),
+                                self.new_spring(
+                                    [ca, db],
+                                    data.one_to_one(ca.arg_center(), db.arg_center(), metric),
+                                    num_loosened,
+                                ),
+                                self.new_spring(
+                                    [cb, da],
+                                    data.one_to_one(cb.arg_center(), da.arg_center(), metric),
+                                    num_loosened,
+                                ),
+                                self.new_spring(
+                                    [cb, db],
+                                    data.one_to_one(cb.arg_center(), db.arg_center(), metric),
+                                    num_loosened,
+                                ),
                             ]
                         })
                 })
@@ -536,7 +566,7 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
 
             // Decrease the spring constants of the leaf springs.
             self.leaf_springs.par_iter_mut().for_each(|s| {
-                *s = s.with_k(s.k() * self.dk);
+                s.loosen(self.dk);
             });
             // Add new random leaf springs.
             self.par_add_random_leaf_springs(data, metric, rng);
@@ -554,14 +584,16 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
         }
 
         let mut instability = self.instability();
+        let mut j = 0;
         #[allow(clippy::while_float)]
-        while instability > self.target {
+        while instability > self.target && j < 10 {
+            j += 1;
             i += 1;
             instability = self.par_simulate_to_stability();
             self.leaf_springs.par_iter_mut().for_each(|s| {
-                *s = s.with_k(s.k() * self.dk);
+                s.loosen(self.dk);
             });
-            self.remove_weak_springs(min_k);
+            self.remove_weak_springs();
             self.par_add_random_leaf_springs(data, metric, rng);
 
             ftlog::info!(
@@ -830,7 +862,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                         if i < j {
                             let l0 = data.one_to_one(i, j, metric);
                             let l = self.distance_between(i, j);
-                            Some(Spring::new([a, b], self.k, l0, l))
+                            Some(Spring::new([a, b], l0, l, 0, self.dk))
                         } else {
                             None
                         }
@@ -860,7 +892,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
             .filter_map(|(&a, &b)| {
                 if a.arg_center() < b.arg_center() {
                     let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
-                    Some(self.new_spring([a, b], self.k, l0))
+                    Some(self.new_spring([a, b], l0, 0))
                 } else {
                     None
                 }
@@ -870,8 +902,8 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     }
 
     /// Adds a new spring between the given clusters.
-    pub fn add_spring(&mut self, [a, b]: [&'a C; 2], l0: T) {
-        let spring = self.new_spring([a, b], self.k, l0);
+    pub fn add_spring(&mut self, [a, b]: [&'a C; 2], l0: T, num_loosened: usize) {
+        let spring = self.new_spring([a, b], l0, num_loosened);
         if a.is_leaf() && b.is_leaf() {
             self.leaf_springs.push(spring);
         } else {
@@ -880,15 +912,16 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     }
 
     /// Creates a new spring between the given clusters.
-    pub fn new_spring(&self, [a, b]: [&'a C; 2], k: f32, l0: T) -> Spring<'a, T, C> {
-        Spring::new([a, b], k, l0, self.distance_between(a.arg_center(), b.arg_center()))
+    pub fn new_spring(&self, [a, b]: [&'a C; 2], l0: T, num_loosened: usize) -> Spring<'a, T, C> {
+        let l = self.distance_between(a.arg_center(), b.arg_center());
+        Spring::new([a, b], l0, l, num_loosened, self.dk)
     }
 
     /// Remove springs and leaf-springs whose spring constant is below the given
     /// threshold.
-    fn remove_weak_springs(&mut self, min_k: f32) {
-        self.springs.retain(|s| s.k() >= min_k);
-        self.leaf_springs.retain(|s| s.k() >= min_k);
+    fn remove_weak_springs(&mut self) {
+        self.springs.retain(|s| s.is_intact(self.retention_depth));
+        self.leaf_springs.retain(|s| s.is_intact(self.retention_depth));
     }
 
     /// Sort the springs by their displacement ratio in descending order.
@@ -1134,7 +1167,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
                         if i < j {
                             let l0 = data.one_to_one(i, j, metric);
                             let l = self.distance_between(i, j);
-                            Some(Spring::new([a, b], self.k, l0, l))
+                            Some(Spring::new([a, b], l0, l, 0, self.dk))
                         } else {
                             None
                         }
@@ -1252,7 +1285,7 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
             .filter_map(|(&a, &b)| {
                 if a.arg_center() < b.arg_center() {
                     let l0 = data.one_to_one(a.arg_center(), b.arg_center(), metric);
-                    Some(self.new_spring([a, b], self.k, l0))
+                    Some(self.new_spring([a, b], l0, 0))
                 } else {
                     None
                 }
