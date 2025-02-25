@@ -146,22 +146,14 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// - distance function should be able to take in any number of dimensions
 /// - use a helper function for distance, which will be euclidian distance
 /// - inputs will be two sets, where each item is a vector of some length
-/// Psuedocode:
-/// var h = 0
-/// for every point a_i of A,
-/// var shortest = infinity
-/// for every point b_j of B,
-///    d_ij = distance(a_i, b_j)
-///    if d_ij < shortest then
-///        shortest = d_ij
-///if shortest > h then
-///    h = shortest
-///return h
 /// # Arguments
 /// * `x`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
 /// * `y`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
-pub fn hausdorff<T: Int, U: Float>(a: &[Vec<T>], b: &[Vec<T>]) -> U {
-
+pub fn hausdorff<T: Int, U: Float, F, C>(a: &[Vec<T>], b: &[Vec<T>], distance_fn: F, compare_fn: C) -> U
+where
+    F: Fn(&[T], &[T]) -> U,
+    C: Fn(U, U) -> bool,
+{
     // make sure the points in both sets match in length (dimensionality)
     // for every point in x, check if the length of the point is the same as the length of the **corresponding** point in y
     // if not, return an error
@@ -175,26 +167,27 @@ pub fn hausdorff<T: Int, U: Float>(a: &[Vec<T>], b: &[Vec<T>]) -> U {
     // superium loop: 'a'
     for x in a.iter() {
 
-        // initiate variable to store shortest distance for infinum
-        let mut shortest = U::infinity();
+        // start with the first element of set b as the shortest distance
+        let mut shortest = b[0]; // is this done right?
 
         // infinium loop
         for y in b.iter() {
-            let d = euclidean(x, y);
-            if d < shortest {
+            let d = distance_fn(x, y);
+            if compare_fn(d, shortest) {
                 shortest = d;
             }
         }
 
-        if shortest > h {
+        if compare_fn(shortest, h) {
             h = shortest;
         }
     }
+
     // return final hausdorff value
     h
 }
 
-// euclidian helper function
+// euclidian helper function (one of many distance functions that could be passed to a meta-distance function like hausdorff)
 fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let mut sum = U::zero();
     for i in 0..x.len() {
