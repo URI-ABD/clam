@@ -149,28 +149,27 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// # Arguments
 /// * `x`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
 /// * `y`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
-pub fn hausdorff<T: Int, U: Float, F, C>(a: &[Vec<T>], b: &[Vec<T>], distance_fn: F, compare_fn: C) -> U
+pub fn hausdorff<T, U, F, C>(a: &[Vec<T>], b: &[Vec<T>], distance_fn: F, compare_fn: C) -> U
 where
-    F: Fn(&[T], &[T]) -> U,
-    C: Fn(U, U) -> bool,
+    T: Clone,
+    F: Fn(&[T], &[T]) -> T,
+    C: Fn(T, T) -> bool,
 {
     // make sure the points in both sets match in length (dimensionality)
-    // for every point in x, check if the length of the point is the same as the length of the **corresponding** point in y
-    // if not, return an error
     if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) {
         panic!("Dimensionalities do not match");
     }
 
-    // initiate variable which will store final hausdorff distance value (superium)
+    // initiate variable which will store final hausdorff distance value (supremum)
     let mut h = U::zero();
 
-    // superium loop: 'a'
+    // supremum loop: 'a'
     for x in a.iter() {
 
         // start with the first element of set b as the shortest distance
-        let mut shortest = b[0]; // is this done right?
+        let mut shortest = distance_fn(x, &b[0]);
 
-        // infinium loop
+        // infimum loop
         for y in b.iter() {
             let d = distance_fn(x, y);
             if compare_fn(d, shortest) {
@@ -188,6 +187,7 @@ where
 }
 
 // euclidian helper function (one of many distance functions that could be passed to a meta-distance function like hausdorff)
+// should we delete this function?
 fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let mut sum = U::zero();
     for i in 0..x.len() {
