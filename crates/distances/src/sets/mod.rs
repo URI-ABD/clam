@@ -149,19 +149,20 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// # Arguments
 /// * `x`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
 /// * `y`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
-pub fn hausdorff<T, U, F, C>(a: &[Vec<T>], b: &[Vec<T>], distance_fn: F, compare_fn: C) -> U
+pub fn hausdorff<T, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F) -> T
 where
     T: Clone,
+    C: Fn(&[T], &[T]) -> bool,
     F: Fn(&[T], &[T]) -> T,
-    C: Fn(T, T) -> bool,
 {
     // make sure the points in both sets match in length (dimensionality)
-    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) {
+    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) { 
         panic!("Dimensionalities do not match");
     }
 
     // initiate variable which will store final hausdorff distance value (supremum)
-    let mut h = U::zero();
+    // let it be the first element of set a
+    let mut h = distance_fn(&a[0], &b[0]); // is there a more efficient way to do this?
 
     // supremum loop: 'a'
     for x in a.iter() {
