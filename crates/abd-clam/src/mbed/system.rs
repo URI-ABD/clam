@@ -1,7 +1,7 @@
 //! A wrapper around the `FlatVec` struct that will be used for the mass-spring
 //! system.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use distances::{number::Multiplication, Number};
 use rand::prelude::*;
@@ -1008,11 +1008,11 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
                 .copied()
                 .unzip();
 
-            // let var_kinetic: f32 = crate::utils::coefficient_of_variation(&ke_values);
-            let mean_kinetic: f32 = crate::utils::mean(&ke_values);
+            let var_kinetic: f32 = crate::utils::coefficient_of_variation(&ke_values);
+            // let mean_kinetic: f32 = crate::utils::mean(&ke_values);
             let var_potential: f32 = crate::utils::coefficient_of_variation(&pe_values);
 
-            mean_kinetic + var_potential
+            var_kinetic + var_potential
         }
     }
 
@@ -1066,19 +1066,30 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
 
         // Calculate the change in velocity for each point.
         let accelerations = {
-            let mut accelerations = (0..self.data.cardinality())
-                .map(|i| self[i][1] * self.beta)
+            let mut clusters = HashSet::new();
+
+            // Initialize the forces acting on each mass with the damping force.
+            let mut acc_forces = (0..self.data.cardinality())
+                .map(|i| -self[i][1] * (1.0 - self.beta))
                 .collect::<Vec<_>>();
+
+            // Accumulate the forces acting on each mass from the springs.
             for (c, f) in forces {
-                let m = c.cardinality().as_f32();
-                let a = f / m;
                 for i in c.indices() {
-                    // The addition here accounts for the accumulated forces.
-                    accelerations[i] += a;
+                    acc_forces[i] += f;
+                }
+                clusters.insert(c);
+            }
+
+            // Calculate the acceleration acting on each mass.
+            for c in clusters {
+                let m = c.cardinality().as_f32();
+                for i in c.indices() {
+                    acc_forces[i] /= m;
                 }
             }
 
-            accelerations
+            acc_forces
         };
 
         // Apply the changes to the positions and velocities of the points.
@@ -1242,19 +1253,30 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
 
         // Calculate the change in velocity for each point.
         let accelerations = {
-            let mut accelerations = (0..self.data.cardinality())
-                .map(|i| self[i][1] * self.beta)
+            let mut clusters = HashSet::new();
+
+            // Initialize the forces acting on each mass with the damping force.
+            let mut acc_forces = (0..self.data.cardinality())
+                .map(|i| -self[i][1] * (1.0 - self.beta))
                 .collect::<Vec<_>>();
+
+            // Accumulate the forces acting on each mass from the springs.
             for (c, f) in forces {
-                let m = c.cardinality().as_f32();
-                let a = f / m;
                 for i in c.indices() {
-                    // The addition here accounts for the accumulated forces.
-                    accelerations[i] += a;
+                    acc_forces[i] += f;
+                }
+                clusters.insert(c);
+            }
+
+            // Calculate the acceleration acting on each mass.
+            for c in clusters {
+                let m = c.cardinality().as_f32();
+                for i in c.indices() {
+                    acc_forces[i] /= m;
                 }
             }
 
-            accelerations
+            acc_forces
         };
 
         // Apply the changes to the positions and velocities of the points.
