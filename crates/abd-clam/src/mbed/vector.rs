@@ -77,9 +77,17 @@ impl<const DIM: usize> Vector<DIM> {
         v / v.magnitude()
     }
 
-    /// Normalize the `Vector`.
+    /// Normalize the `Vector`. If the magnitude is `0.0`, the `Vector` will be
+    /// set to `[1.0, 0.0, ..., 0.0]`.
     pub fn normalized(&self) -> Self {
-        *self / self.magnitude()
+        let m = self.magnitude();
+        if m == 0.0 {
+            let mut v = *self;
+            v[0] = 1.0;
+            v
+        } else {
+            *self / m
+        }
     }
 
     /// Normalize the `Vector`.
@@ -91,6 +99,18 @@ impl<const DIM: usize> Vector<DIM> {
     #[must_use]
     pub fn dot(&self, other: &Self) -> f32 {
         self.iter().zip(other.iter()).map(|(&a, &b)| a * b).sum()
+    }
+}
+
+impl<const DIM: usize> From<Vector<DIM>> for [f32; DIM] {
+    fn from(val: Vector<DIM>) -> [f32; DIM] {
+        val.0
+    }
+}
+
+impl<const DIM: usize> From<&Vector<DIM>> for [f32; DIM] {
+    fn from(val: &Vector<DIM>) -> [f32; DIM] {
+        val.0
     }
 }
 

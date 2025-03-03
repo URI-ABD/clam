@@ -1,9 +1,11 @@
 //! Dimension Reduction with CLAM.
 
+mod mss;
 mod spring;
 mod system;
 mod vector;
 
+pub use mss::System as MSS;
 pub use spring::Spring;
 pub use system::System as MassSpringSystem;
 pub use vector::Vector;

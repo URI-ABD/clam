@@ -53,6 +53,10 @@ bitcode = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 csv = { workspace = true , optional = true }
 
+# For:
+#  - The mass-spring-system in the dimension reduction
+generational-arena = { version = "0.2.9", features = ["serde"], optional = true }
+
 [dev-dependencies]
 symagen = { workspace = true }
 bitcode = { workspace = true }
@@ -64,6 +68,6 @@ statistical = "1.0.0"
 [features]
 disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore"]
-mbed = ["chaoda"]
+mbed = ["chaoda", "dep:generational-arena"]
 musals = ["dep:stringzilla", "dep:bytecount"]
 all = ["disk-io", "chaoda", "mbed", "musals"]
