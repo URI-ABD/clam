@@ -31,6 +31,10 @@ pub struct Spring<const DIM: usize> {
     pe: f32,
     /// The force exerted by the spring directed from `a` to `b`.
     f: Vector<DIM>,
+    /// The number of times the spring has been loosened.
+    times_loosened: usize,
+    /// Whether the spring connects two leaf masses.
+    connects_leaves: bool,
 }
 
 impl<const DIM: usize> Spring<DIM> {
@@ -43,8 +47,18 @@ impl<const DIM: usize> Spring<DIM> {
     /// - `masses`: The `Arena` of `Mass`es in the mass-spring system.
     /// - `k`: The spring constant of the spring.
     /// - `l0`: The natural length of the spring.
+    /// - `times_loosened`: The number of times the spring has been loosened.
+    /// - `is_leaf_spring`: Whether the spring connects two leaf masses.
     #[allow(clippy::many_single_char_names)]
-    pub fn new<T: Number, C: Cluster<T>>(a: Index, b: Index, masses: &Arena<Mass<T, C, DIM>>, k: f32, l0: f32) -> Self {
+    pub fn new<T: Number, C: Cluster<T>>(
+        a: Index,
+        b: Index,
+        masses: &Arena<Mass<T, C, DIM>>,
+        k: f32,
+        l0: f32,
+        times_loosened: usize,
+        connects_leaves: bool,
+    ) -> Self {
         let [ax, bx] = [&masses[a].x(), &masses[b].x()];
 
         let l = ax.distance_to(bx);
@@ -66,7 +80,38 @@ impl<const DIM: usize> Spring<DIM> {
             ratio,
             pe,
             f,
+            times_loosened,
+            connects_leaves,
         }
+    }
+
+    /// Loosens the spring by a multiplicative `factor`.
+    pub fn loosen(&mut self, factor: f32) {
+        self.ratio *= factor;
+        self.pe *= factor;
+        self.f *= factor;
+        self.k *= factor;
+        self.times_loosened += 1;
+    }
+
+    /// Returns the number of times the spring has been loosened.
+    pub const fn times_loosened(&self) -> usize {
+        self.times_loosened
+    }
+
+    /// Returns the spring constant of the spring.
+    pub const fn k(&self) -> f32 {
+        self.k
+    }
+
+    /// Returns whether the spring is too loose based on the given `threshold`.
+    pub const fn is_too_loose(&self, threshold: usize) -> bool {
+        self.times_loosened >= threshold
+    }
+
+    /// Returns whether the spring connects two leaf masses.
+    pub const fn is_leaf_spring(&self) -> bool {
+        self.connects_leaves
     }
 
     /// Recalculates the properties of the spring.
@@ -97,5 +142,22 @@ impl<const DIM: usize> Spring<DIM> {
     /// Returns the potential energy stored in the spring.
     pub const fn pe(&self) -> f32 {
         self.pe
+    }
+
+    /// Returns whether the spring connects the `Mass` with the given `Index`.
+    pub fn connects(&self, i: Index) -> bool {
+        i == self.a || i == self.b
+    }
+
+    /// Returns the neighbor of the `Mass` connected to the given `Index` if it
+    /// is connected by the spring, otherwise returns `None`.
+    pub fn neighbor_of(&self, i: Index) -> Option<Index> {
+        if i == self.a {
+            Some(self.b)
+        } else if i == self.b {
+            Some(self.a)
+        } else {
+            None
+        }
     }
 }
