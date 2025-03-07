@@ -151,7 +151,7 @@ fn main() -> Result<(), String> {
 
             let data = dataset::read(&inp_dir, &args.dataset_name)?;
 
-            let reduced_data = workflow::build::<_, _, _, _, DIM>(
+            let reduced_data = workflow::build::<_, _, _, _, f32, DIM>(
                 &out_dir,
                 &data,
                 metric,

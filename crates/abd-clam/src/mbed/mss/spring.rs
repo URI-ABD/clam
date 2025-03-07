@@ -1,5 +1,6 @@
 //! A `Spring` connecting two `Mass`es in a mass-spring system.
 
+use distances::number::Float;
 use distances::Number;
 use generational_arena::{Arena, Index};
 
@@ -10,34 +11,34 @@ use super::Mass;
 use super::super::Vector;
 
 /// A spring connecting two `Mass`es in a mass-spring system.
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 #[must_use]
-pub struct Spring<const DIM: usize> {
+pub struct Spring<F: Float, const DIM: usize> {
     /// The first `Mass` connected by the spring.
     a: Index,
     /// The second `Mass` connected by the spring.
     b: Index,
     /// The spring constant of the spring.
-    k: f32,
+    k: F,
     /// The natural length of the spring.
-    l0: f32,
+    l0: F,
     /// The actual length of the spring.
-    l: f32,
+    l: F,
     /// The displacement of the spring from its natural length.
-    dx: f32,
+    dx: F,
     /// The displacement ratio of the spring from its natural length.
-    ratio: f32,
+    ratio: F,
     /// The potential energy stored in the spring.
-    pe: f32,
+    pe: F,
     /// The force exerted by the spring directed from `a` to `b`.
-    f: Vector<DIM>,
+    f: Vector<F, DIM>,
     /// The number of times the spring has been loosened.
     times_loosened: usize,
     /// Whether the spring connects two leaf masses.
     connects_leaves: bool,
 }
 
-impl<const DIM: usize> core::fmt::Debug for Spring<DIM> {
+impl<F: Float, const DIM: usize> core::fmt::Debug for Spring<F, DIM> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Spring")
             .field("a", &self.a)
@@ -55,7 +56,7 @@ impl<const DIM: usize> core::fmt::Debug for Spring<DIM> {
     }
 }
 
-impl<const DIM: usize> Spring<DIM> {
+impl<F: Float, const DIM: usize> Spring<F, DIM> {
     /// Create a new `Spring` between two `Mass`es.
     ///
     /// # Arguments
@@ -71,9 +72,9 @@ impl<const DIM: usize> Spring<DIM> {
     pub fn new<T: Number, C: Cluster<T>>(
         a: Index,
         b: Index,
-        masses: &Arena<Mass<T, C, DIM>>,
-        k: f32,
-        l0: f32,
+        masses: &Arena<Mass<T, C, F, DIM>>,
+        k: F,
+        l0: F,
         times_loosened: usize,
         connects_leaves: bool,
     ) -> Self {
@@ -82,7 +83,7 @@ impl<const DIM: usize> Spring<DIM> {
         let l = ax.distance_to(bx);
         let dx = l - l0;
         let ratio = dx.abs() / l0;
-        let pe = 0.5 * k * dx.square();
+        let pe = (k * dx.square()).half();
 
         let f_mag = -k * dx;
         let uv = ax.unit_vector_to(bx);
@@ -105,12 +106,12 @@ impl<const DIM: usize> Spring<DIM> {
 
     /// Returns whether the `arg_center` of `a` is less than the `arg_center` of
     /// `b`.
-    pub fn is_ordered<T: Number, C: Cluster<T>>(&self, masses: &Arena<Mass<T, C, DIM>>) -> bool {
+    pub fn is_ordered<T: Number, C: Cluster<T>>(&self, masses: &Arena<Mass<T, C, F, DIM>>) -> bool {
         masses[self.a].arg_center() < masses[self.b].arg_center()
     }
 
     /// Loosens the spring by a multiplicative `factor`.
-    pub fn loosen(&mut self, factor: f32) {
+    pub fn loosen(&mut self, factor: F) {
         self.ratio *= factor;
         self.pe *= factor;
         self.f *= factor;
@@ -124,7 +125,7 @@ impl<const DIM: usize> Spring<DIM> {
     }
 
     /// Returns the spring constant of the spring.
-    pub const fn k(&self) -> f32 {
+    pub const fn k(&self) -> F {
         self.k
     }
 
@@ -139,13 +140,13 @@ impl<const DIM: usize> Spring<DIM> {
     }
 
     /// Recalculates the properties of the spring.
-    pub fn recalculate<T: Number, C: Cluster<T>>(&mut self, masses: &Arena<Mass<T, C, DIM>>) {
+    pub fn recalculate<T: Number, C: Cluster<T>>(&mut self, masses: &Arena<Mass<T, C, F, DIM>>) {
         let [ax, bx] = [&masses[self.a].x(), &masses[self.b].x()];
 
         self.l = ax.distance_to(bx);
         self.dx = self.l - self.l0;
         self.ratio = self.dx.abs() / self.l0;
-        self.pe = 0.5 * self.k * self.dx.square();
+        self.pe = (self.k * self.dx.square()).half();
 
         let f_mag = -self.k * self.dx;
         let uv = ax.unit_vector_to(bx);
@@ -159,12 +160,12 @@ impl<const DIM: usize> Spring<DIM> {
 
     /// Returns the force exerted by the spring. The force is directed from `a`
     /// to `b`.
-    pub const fn f(&self) -> &Vector<DIM> {
+    pub const fn f(&self) -> &Vector<F, DIM> {
         &self.f
     }
 
     /// Returns the potential energy stored in the spring.
-    pub const fn pe(&self) -> f32 {
+    pub const fn pe(&self) -> F {
         self.pe
     }
 

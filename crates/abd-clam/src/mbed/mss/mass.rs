@@ -2,35 +2,35 @@
 
 use core::marker::PhantomData;
 
-use distances::{number::Multiplication, Number};
+use distances::{number::Float, Number};
 
 use crate::{Cluster, Dataset, Metric};
 
 use super::super::Vector;
 
 /// A `Mass` represents the location of a `Cluster` in the dimension reduction.
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 #[must_use]
-pub struct Mass<'a, T: Number, C: Cluster<T>, const DIM: usize> {
+pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     /// The index of the center of the cluster that this `Mass` represents.
     c: &'a C,
     /// The mass, usually equal to the cardinality, of the cluster.
-    m: f32,
+    m: F,
     /// The position of the `Mass`.
-    x: Vector<DIM>,
+    x: Vector<F, DIM>,
     /// The velocity of the `Mass`.
-    v: Vector<DIM>,
+    v: Vector<F, DIM>,
     /// The force acting on the `Mass`.
-    f: Vector<DIM>,
+    f: Vector<F, DIM>,
     /// The sum of the magnitudes of all forces acting on the `Mass`.
-    f_mag: f32,
+    f_mag: F,
     /// The kinetic energy of the `Mass`.
-    ke: f32,
+    ke: F,
     /// Satisfying the compiler.
     phantom: PhantomData<T>,
 }
 
-impl<T: Number, C: Cluster<T>, const DIM: usize> core::fmt::Debug for Mass<'_, T, C, DIM> {
+impl<T: Number, C: Cluster<T>, F: Float, const DIM: usize> core::fmt::Debug for Mass<'_, T, C, F, DIM> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Mass")
             .field("c", &self.arg_center())
@@ -44,7 +44,7 @@ impl<T: Number, C: Cluster<T>, const DIM: usize> core::fmt::Debug for Mass<'_, T
     }
 }
 
-impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
+impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F, DIM> {
     /// Create a new `Mass` representing a `Cluster`.
     ///
     /// # Arguments
@@ -53,8 +53,8 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
     /// - `x`: The initial position of the `Mass`.
     /// - `v`: The initial velocity of the `Mass`.
     #[allow(clippy::many_single_char_names)]
-    pub fn new(c: &'a C, x: Vector<DIM>, v: Vector<DIM>) -> Self {
-        let m = c.cardinality().as_f32();
+    pub fn new(c: &'a C, x: Vector<F, DIM>, v: Vector<F, DIM>) -> Self {
+        let m = F::from(c.cardinality());
         let f = Vector::zero();
         let ke = m.half() * v.magnitude().square();
 
@@ -64,7 +64,7 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
             x,
             v,
             f,
-            f_mag: 0.0,
+            f_mag: F::ZERO,
             ke,
             phantom: PhantomData,
         }
@@ -87,36 +87,36 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
     }
 
     /// Returns the position of the `Mass`.
-    pub const fn x(&self) -> &Vector<DIM> {
+    pub const fn x(&self) -> &Vector<F, DIM> {
         &self.x
     }
 
     /// Returns the kinetic energy of the `Mass`.
-    pub const fn ke(&self) -> f32 {
+    pub const fn ke(&self) -> F {
         self.ke
     }
 
     /// Returns the sum of the magnitudes of all forces acting on the `Mass`.
-    pub const fn f_mag(&self) -> f32 {
+    pub const fn f_mag(&self) -> F {
         self.f_mag
     }
 
     /// Adds to the force acting on the `Mass`.
-    pub fn add_f(&mut self, f: &Vector<DIM>) {
+    pub fn add_f(&mut self, f: &Vector<F, DIM>) {
         self.f += *f;
         self.f_mag += f.magnitude();
     }
 
     /// Applies the force acting on the `Mass`, moving it, and resetting the
     /// force acting on it.
-    pub fn apply_f(&mut self, dt: f32, drag: f32) {
+    pub fn apply_f(&mut self, dt: F, drag: F) {
         let a = (self.f - self.v * drag) / self.m;
         self.v += a * dt;
         self.x += self.v * dt;
 
         self.ke = self.m.half() * self.v.magnitude().square();
         self.f = Vector::zero();
-        self.f_mag = 0.0;
+        self.f_mag = F::ZERO;
     }
 
     /// Returns two new `Mass`es representing the children of the `Cluster` that
@@ -141,9 +141,9 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
         &self,
         data: &D,
         metric: &M,
-        x: Vector<DIM>,
-        y: Vector<DIM>,
-        scale: f32,
+        x: Vector<F, DIM>,
+        y: Vector<F, DIM>,
+        scale: F,
     ) -> [Self; 2] {
         let children = self.c.children();
         if children.len() != 2 {
@@ -170,10 +170,11 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
 /// Compute the displacements of the child masses from the parent mass. We
 /// assume that `c` is the parent mass and `a` and `b` are the children.
 #[allow(clippy::similar_names)]
-fn triangle_displacements<T: Number>(ac: T, bc: T, ab: T, scale: f32) -> (f32, f32, f32) {
-    // Since the positions are stored as `f32` arrays, we cast the distances
-    // to `f32` for internal computations.
-    let (fac, fbc, fab) = (ac.as_f32() * scale, bc.as_f32() * scale, ab.as_f32() * scale);
+fn triangle_displacements<T: Number, F: Float>(ac: T, bc: T, ab: T, scale: F) -> (F, F, F) {
+    // Since the positions are stored as `F` arrays, we cast the distances
+    // to `F` for internal computations.
+    // let (fac, fbc, fab) = (ac.as_f32() * scale, bc.as_f32() * scale, ab.as_f32() * scale);
+    let (fac, fbc, fab) = (F::from(ac) * scale, F::from(bc) * scale, F::from(ab) * scale);
 
     // Compute the deltas by which to move the child masses.
 
@@ -186,7 +187,7 @@ fn triangle_displacements<T: Number>(ac: T, bc: T, ab: T, scale: f32) -> (f32, f
 
         // Use the law of cosines to compute the length of the projection of
         // `cb` onto the x axis.
-        let dxb = (fab.square() - fac.square() - fbc.square()) / (2.0 * fac);
+        let dxb = (fab.square() - fac.square() - fbc.square()) / (F::ONE.double() * fac);
 
         // Use the Pythagorean theorem to compute the length of the
         // projection of `cb` onto the y axis.
@@ -233,6 +234,6 @@ fn triangle_displacements<T: Number>(ac: T, bc: T, ab: T, scale: f32) -> (f32, f
             }
         };
 
-        (dxa, dxb, 0.0)
+        (dxa, dxb, F::ZERO)
     }
 }

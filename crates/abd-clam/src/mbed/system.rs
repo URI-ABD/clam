@@ -27,7 +27,7 @@ use super::{Spring, Vector};
 pub struct System<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> {
     /// Each item in the system is a pair of vectors representing the position
     /// and velocity of the point representing the item in the original dataset.
-    data: FlatVec<[Vector<DIM>; 2], Me>,
+    data: FlatVec<[Vector<f32, DIM>; 2], Me>,
     /// The `Spring`s that connect clusters which have child clusters.
     springs: Vec<Spring<'a, T, C>>,
     /// The `Spring`s that connect leaf clusters.
@@ -127,7 +127,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     ///
     /// - If the number of items in the dataset does not match the number of
     ///   items in the system.
-    pub fn with_initial_state(mut self, state: &[[Vector<DIM>; 2]]) -> Result<Self, String> {
+    pub fn with_initial_state(mut self, state: &[[Vector<f32, DIM>; 2]]) -> Result<Self, String> {
         if state.len() != self.data.cardinality() {
             let msg = format!(
                 "Number of items in the dataset ({}) does not match the number of items in the system ({}).",
@@ -245,7 +245,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
                     let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
 
                     // Choose a pair of random directions for the child clusters.
-                    let x = Vector::<DIM>::random_unit(rng);
+                    let x = Vector::<f32, DIM>::random_unit(rng);
                     let y = x.perpendicular(rng);
 
                     // Compute the changes in positions for the child clusters.
@@ -486,7 +486,7 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
                 .into_iter()
                 .map(|(c, (a, b, ac, bc, ab, dxa, dxb, dyb))| {
                     // Choose a pair of random directions for the child clusters.
-                    let x = Vector::<DIM>::random_unit(rng);
+                    let x = Vector::<f32, DIM>::random_unit(rng);
                     let y = x.perpendicular(rng);
 
                     // Compute the changes in positions for the child clusters.
@@ -1400,7 +1400,7 @@ fn triangle_displacements<T: Number>(ac: T, bc: T, ab: T) -> (f32, f32, f32) {
 }
 
 impl<const DIM: usize, Me, T: Number, C: Cluster<T>> core::ops::Index<usize> for System<'_, DIM, Me, T, C> {
-    type Output = [Vector<DIM>; 2];
+    type Output = [Vector<f32, DIM>; 2];
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.data[index]

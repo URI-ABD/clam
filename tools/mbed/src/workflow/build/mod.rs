@@ -7,6 +7,7 @@ use abd_clam::{
     metric::ParMetric,
     Ball, Dataset, FlatVec, ParDiskIO,
 };
+use distances::number::Float;
 
 /// Build the dimension reduction.
 ///
@@ -17,29 +18,31 @@ use abd_clam::{
 /// - `D`: The type of the dataset.
 /// - `M`: The type of the metric.
 /// - `Me`: The type of the metadata.
+/// - `F`: The type of the floating-point numbers in the reduction.
 /// - `DIM`: The number of dimensions.
 #[allow(clippy::too_many_arguments)]
-pub fn build<P, I, M, Me, const DIM: usize>(
+pub fn build<P, I, M, Me, F, const DIM: usize>(
     out_dir: &P,
     data: &FlatVec<I, Me>,
     metric: M,
     balanced: bool,
     seed: Option<u64>,
-    beta: f32,
-    k: f32,
-    dk: f32,
+    beta: F,
+    k: F,
+    dk: F,
     retention_depth: usize,
-    f: f32,
-    dt: f32,
+    f: F,
+    dt: F,
     patience: usize,
-    target: f32,
+    target: F,
     max_steps: usize,
-) -> Result<FlatVec<[f32; DIM], Me>, String>
+) -> Result<FlatVec<[F; DIM], Me>, String>
 where
     P: AsRef<std::path::Path>,
     I: Send + Sync,
     M: ParMetric<I, f32>,
     Me: Clone + Send + Sync,
+    F: Float,
 {
     ftlog::info!("Building the dimension reduction...");
     ftlog::info!("Output directory: {:?}", out_dir.as_ref());
@@ -92,13 +95,13 @@ where
     // ftlog::info!("Extracting the reduced embedding...");
     // Ok(system.par_extract_positions())
 
-    let drag = 1.0 - beta;
+    let drag = F::ONE - beta;
     let ke_threshold = target;
-    let box_len = 10.0;
+    let box_len = F::from(10.0);
     let loosening_factor = dk;
     let replace_fraction = f;
     let loosening_threshold = retention_depth;
-    let mut system = MSS::<f32, Ball<_>, DIM>::new(
+    let mut system = MSS::<f32, Ball<_>, _, DIM>::new(
         drag,
         k,
         dt,
@@ -113,6 +116,6 @@ where
     .init_with_root(&mut rng, data, &metric, &root);
     let [ke, pe] = system.simulate_to_leaves(&mut rng, data, &metric);
 
-    ftlog::info!("Final KE: {ke:.2e}, PE: {pe:.2e}");
+    ftlog::info!("Final KE: {:.2e}, PE: {:.2e}", ke.as_f64(), pe.as_f64());
     system.extract_positions()?.with_metadata(data.metadata())
 }

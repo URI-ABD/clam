@@ -1,53 +1,55 @@
 //! A vector that can represent the position, velocity, or force in a mass-
 //! spring system.
 
+use distances::number::Float;
 use rand::prelude::*;
 
 /// A vector that can represent the position, velocity, or force in a mass-
 /// spring system.
 #[must_use]
-#[derive(Clone, Copy, PartialEq)]
-pub struct Vector<const DIM: usize>([f32; DIM]);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Vector<F: Float, const DIM: usize>([F; DIM]);
 
-impl<const DIM: usize> core::fmt::Debug for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::fmt::Debug for Vector<F, DIM> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_list().entries(self.0.iter()).finish()
     }
 }
 
-impl<const DIM: usize> Vector<DIM> {
+impl<F: Float, const DIM: usize> Vector<F, DIM> {
     /// Create a new `Vector` with the given elements.
-    pub const fn new(elements: [f32; DIM]) -> Self {
+    pub const fn new(elements: [F; DIM]) -> Self {
         Self(elements)
     }
 
     /// Create a new `Vector` with all elements set to `0.0`.
     pub const fn zero() -> Self {
-        Self([0.0; DIM])
+        Self([F::ZERO; DIM])
     }
 
     /// Create a new `Vector` with all elements set to `1.0`.
     pub const fn one() -> Self {
-        Self([1.0; DIM])
+        Self([F::ONE; DIM])
     }
 
     /// Create a new `Vector` with all elements set to `v`.
-    pub const fn fill(v: f32) -> Self {
+    pub const fn fill(v: F) -> Self {
         Self([v; DIM])
     }
 
     /// Create a new random `Vector` with elements in the range `[min, max)`.
-    pub fn random<R: rand::Rng>(rng: &mut R, min: f32, max: f32) -> Self {
-        let mut result = Self::zero();
-        for x in result.iter_mut() {
+    pub fn random<R: rand::Rng>(rng: &mut R, min: F, max: F) -> Self {
+        let mut r_f64s = Vector::<f64, DIM>::zero();
+        let (min, max) = (min.as_f64(), max.as_f64());
+        for x in r_f64s.iter_mut() {
             *x = rng.gen_range(min..max);
         }
-        result
+        Self(r_f64s.map(F::from))
     }
 
     /// Create a new random unit `Vector`.
     pub fn random_unit<R: rand::Rng>(rng: &mut R) -> Self {
-        Self::random(rng, -1.0, 1.0).normalized()
+        Self::random(rng, -F::ONE, F::ONE).normalized()
     }
 
     /// Get a new unit `Vector` that is perpendicular to this `Vector`.
@@ -67,14 +69,14 @@ impl<const DIM: usize> Vector<DIM> {
 
     /// Get the magnitude of the `Vector`.
     #[must_use]
-    pub fn magnitude(&self) -> f32 {
-        self.iter().map(|&x| x * x).sum::<f32>().sqrt()
+    pub fn magnitude(&self) -> F {
+        self.distance_to(&Self::zero())
     }
 
     /// Get the euclidean distance between two `Vector`s.
     #[must_use]
-    pub fn distance_to(&self, other: &Self) -> f32 {
-        distances::simd::euclidean_f32(self.as_slice(), other.as_slice())
+    pub fn distance_to(&self, other: &Self) -> F {
+        distances::vectors::euclidean(self.as_slice(), other.as_slice())
     }
 
     /// Get the unit vector between two `Vector`s.
@@ -84,9 +86,9 @@ impl<const DIM: usize> Vector<DIM> {
     pub fn unit_vector_to(&self, other: &Self) -> Self {
         let v = other - self;
         let v_mag = v.magnitude();
-        if v_mag == 0.0 {
+        if v_mag == F::ZERO {
             let mut v = Self::zero();
-            v[0] = 1.0;
+            v[0] = F::ONE;
             v
         } else {
             v / v_mag
@@ -97,9 +99,9 @@ impl<const DIM: usize> Vector<DIM> {
     /// set to `[1.0, 0.0, ..., 0.0]`.
     pub fn normalized(&self) -> Self {
         let m = self.magnitude();
-        if m == 0.0 {
+        if m == F::ZERO {
             let mut v = *self;
-            v[0] = 1.0;
+            v[0] = F::ONE;
             v
         } else {
             *self / m
@@ -113,55 +115,55 @@ impl<const DIM: usize> Vector<DIM> {
 
     /// Get the dot product of two `Vector`s.
     #[must_use]
-    pub fn dot(&self, other: &Self) -> f32 {
+    pub fn dot(&self, other: &Self) -> F {
         self.iter().zip(other.iter()).map(|(&a, &b)| a * b).sum()
     }
 }
 
-impl<const DIM: usize> From<Vector<DIM>> for [f32; DIM] {
-    fn from(val: Vector<DIM>) -> [f32; DIM] {
+impl<F: Float, const DIM: usize> From<Vector<F, DIM>> for [F; DIM] {
+    fn from(val: Vector<F, DIM>) -> [F; DIM] {
         val.0
     }
 }
 
-impl<const DIM: usize> From<&Vector<DIM>> for [f32; DIM] {
-    fn from(val: &Vector<DIM>) -> [f32; DIM] {
+impl<F: Float, const DIM: usize> From<&Vector<F, DIM>> for [F; DIM] {
+    fn from(val: &Vector<F, DIM>) -> [F; DIM] {
         val.0
     }
 }
 
-impl<const DIM: usize> AsRef<[f32; DIM]> for Vector<DIM> {
-    fn as_ref(&self) -> &[f32; DIM] {
+impl<F: Float, const DIM: usize> AsRef<[F; DIM]> for Vector<F, DIM> {
+    fn as_ref(&self) -> &[F; DIM] {
         &self.0
     }
 }
 
-impl<const DIM: usize> AsRef<[f32]> for Vector<DIM> {
-    fn as_ref(&self) -> &[f32] {
+impl<F: Float, const DIM: usize> AsRef<[F]> for Vector<F, DIM> {
+    fn as_ref(&self) -> &[F] {
         self.0.as_slice()
     }
 }
 
-impl<const DIM: usize> core::ops::Deref for Vector<DIM> {
-    type Target = [f32; DIM];
+impl<F: Float, const DIM: usize> core::ops::Deref for Vector<F, DIM> {
+    type Target = [F; DIM];
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<const DIM: usize> core::ops::DerefMut for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::DerefMut for Vector<F, DIM> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
 // Implementations of `+` and `+=` on `Vector`s.
-impl<const DIM: usize> core::ops::Add<Self> for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::Add<Self> for Vector<F, DIM> {
     type Output = Self;
 
     fn add(self, other: Self) -> Self::Output {
-        let mut result = [0.0; DIM];
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] + other[i];
         }
@@ -169,11 +171,11 @@ impl<const DIM: usize> core::ops::Add<Self> for Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::Add<Self> for &Vector<DIM> {
-    type Output = Vector<DIM>;
+impl<F: Float, const DIM: usize> core::ops::Add<Self> for &Vector<F, DIM> {
+    type Output = Vector<F, DIM>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        let mut result = [0.0; DIM];
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] + rhs[i];
         }
@@ -181,7 +183,7 @@ impl<const DIM: usize> core::ops::Add<Self> for &Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::AddAssign<Self> for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::AddAssign<Self> for Vector<F, DIM> {
     fn add_assign(&mut self, other: Self) {
         for i in 0..DIM {
             self[i] += other[i];
@@ -189,7 +191,7 @@ impl<const DIM: usize> core::ops::AddAssign<Self> for Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::AddAssign<Self> for &mut Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::AddAssign<Self> for &mut Vector<F, DIM> {
     fn add_assign(&mut self, other: Self) {
         for i in 0..DIM {
             self[i] += other[i];
@@ -198,11 +200,11 @@ impl<const DIM: usize> core::ops::AddAssign<Self> for &mut Vector<DIM> {
 }
 
 // Implementations of `-` and `-=` on `Vector`s.
-impl<const DIM: usize> core::ops::Sub<Self> for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::Sub<Self> for Vector<F, DIM> {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self::Output {
-        let mut result = [0.0; DIM];
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] - other[i];
         }
@@ -210,11 +212,11 @@ impl<const DIM: usize> core::ops::Sub<Self> for Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::Sub<Self> for &Vector<DIM> {
-    type Output = Vector<DIM>;
+impl<F: Float, const DIM: usize> core::ops::Sub<Self> for &Vector<F, DIM> {
+    type Output = Vector<F, DIM>;
 
     fn sub(self, other: Self) -> Self::Output {
-        let mut result = [0.0; DIM];
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] - other[i];
         }
@@ -222,7 +224,7 @@ impl<const DIM: usize> core::ops::Sub<Self> for &Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::SubAssign<Self> for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::SubAssign<Self> for Vector<F, DIM> {
     fn sub_assign(&mut self, other: Self) {
         for i in 0..DIM {
             self[i] -= other[i];
@@ -230,11 +232,11 @@ impl<const DIM: usize> core::ops::SubAssign<Self> for Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::Neg for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::Neg for Vector<F, DIM> {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        let mut result = [0.0; DIM];
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = -self[i];
         }
@@ -243,11 +245,11 @@ impl<const DIM: usize> core::ops::Neg for Vector<DIM> {
 }
 
 // Implementations of `*` and `*=` on `Vector`s.
-impl<const DIM: usize> core::ops::Mul<f32> for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::Mul<F> for Vector<F, DIM> {
     type Output = Self;
 
-    fn mul(self, scalar: f32) -> Self::Output {
-        let mut result = [0.0; DIM];
+    fn mul(self, scalar: F) -> Self::Output {
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] * scalar;
         }
@@ -255,11 +257,11 @@ impl<const DIM: usize> core::ops::Mul<f32> for Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::Mul<f32> for &Vector<DIM> {
-    type Output = Vector<DIM>;
+impl<F: Float, const DIM: usize> core::ops::Mul<F> for &Vector<F, DIM> {
+    type Output = Vector<F, DIM>;
 
-    fn mul(self, scalar: f32) -> Self::Output {
-        let mut result = [0.0; DIM];
+    fn mul(self, scalar: F) -> Self::Output {
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] * scalar;
         }
@@ -267,16 +269,16 @@ impl<const DIM: usize> core::ops::Mul<f32> for &Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::MulAssign<f32> for Vector<DIM> {
-    fn mul_assign(&mut self, scalar: f32) {
+impl<F: Float, const DIM: usize> core::ops::MulAssign<F> for Vector<F, DIM> {
+    fn mul_assign(&mut self, scalar: F) {
         for i in 0..DIM {
             self[i] *= scalar;
         }
     }
 }
 
-impl<const DIM: usize> core::ops::MulAssign<f32> for &mut Vector<DIM> {
-    fn mul_assign(&mut self, scalar: f32) {
+impl<F: Float, const DIM: usize> core::ops::MulAssign<F> for &mut Vector<F, DIM> {
+    fn mul_assign(&mut self, scalar: F) {
         for i in 0..DIM {
             self[i] *= scalar;
         }
@@ -284,11 +286,11 @@ impl<const DIM: usize> core::ops::MulAssign<f32> for &mut Vector<DIM> {
 }
 
 // Implementations of `/` and `/=` on `Vector`s.
-impl<const DIM: usize> core::ops::Div<f32> for Vector<DIM> {
+impl<F: Float, const DIM: usize> core::ops::Div<F> for Vector<F, DIM> {
     type Output = Self;
 
-    fn div(self, scalar: f32) -> Self::Output {
-        let mut result = [0.0; DIM];
+    fn div(self, scalar: F) -> Self::Output {
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] / scalar;
         }
@@ -296,11 +298,11 @@ impl<const DIM: usize> core::ops::Div<f32> for Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::Div<f32> for &Vector<DIM> {
-    type Output = Vector<DIM>;
+impl<F: Float, const DIM: usize> core::ops::Div<F> for &Vector<F, DIM> {
+    type Output = Vector<F, DIM>;
 
-    fn div(self, scalar: f32) -> Self::Output {
-        let mut result = [0.0; DIM];
+    fn div(self, scalar: F) -> Self::Output {
+        let mut result = [F::ZERO; DIM];
         for i in 0..DIM {
             result[i] = self[i] / scalar;
         }
@@ -308,16 +310,16 @@ impl<const DIM: usize> core::ops::Div<f32> for &Vector<DIM> {
     }
 }
 
-impl<const DIM: usize> core::ops::DivAssign<f32> for Vector<DIM> {
-    fn div_assign(&mut self, scalar: f32) {
+impl<F: Float, const DIM: usize> core::ops::DivAssign<F> for Vector<F, DIM> {
+    fn div_assign(&mut self, scalar: F) {
         for i in 0..DIM {
             self[i] /= scalar;
         }
     }
 }
 
-impl<const DIM: usize> core::ops::DivAssign<f32> for &mut Vector<DIM> {
-    fn div_assign(&mut self, scalar: f32) {
+impl<F: Float, const DIM: usize> core::ops::DivAssign<F> for &mut Vector<F, DIM> {
+    fn div_assign(&mut self, scalar: F) {
         for i in 0..DIM {
             self[i] /= scalar;
         }
