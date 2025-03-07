@@ -6,8 +6,14 @@ use rand::prelude::*;
 /// A vector that can represent the position, velocity, or force in a mass-
 /// spring system.
 #[must_use]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Vector<const DIM: usize>([f32; DIM]);
+
+impl<const DIM: usize> core::fmt::Debug for Vector<DIM> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_list().entries(self.0.iter()).finish()
+    }
+}
 
 impl<const DIM: usize> Vector<DIM> {
     /// Create a new `Vector` with the given elements.
@@ -72,9 +78,19 @@ impl<const DIM: usize> Vector<DIM> {
     }
 
     /// Get the unit vector between two `Vector`s.
+    ///
+    /// If the two `Vector`s are the same, the result will be `[1.0, 0.0, ...,
+    /// 0.0]`.
     pub fn unit_vector_to(&self, other: &Self) -> Self {
         let v = other - self;
-        v / v.magnitude()
+        let v_mag = v.magnitude();
+        if v_mag == 0.0 {
+            let mut v = Self::zero();
+            v[0] = 1.0;
+            v
+        } else {
+            v / v_mag
+        }
     }
 
     /// Normalize the `Vector`. If the magnitude is `0.0`, the `Vector` will be

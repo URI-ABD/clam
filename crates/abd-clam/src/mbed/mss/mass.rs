@@ -9,7 +9,7 @@ use crate::{Cluster, Dataset, Metric};
 use super::super::Vector;
 
 /// A `Mass` represents the location of a `Cluster` in the dimension reduction.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 #[must_use]
 pub struct Mass<'a, T: Number, C: Cluster<T>, const DIM: usize> {
     /// The index of the center of the cluster that this `Mass` represents.
@@ -28,6 +28,20 @@ pub struct Mass<'a, T: Number, C: Cluster<T>, const DIM: usize> {
     ke: f32,
     /// Satisfying the compiler.
     phantom: PhantomData<T>,
+}
+
+impl<T: Number, C: Cluster<T>, const DIM: usize> core::fmt::Debug for Mass<'_, T, C, DIM> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Mass")
+            .field("c", &self.arg_center())
+            .field("m", &self.m)
+            .field("x", &self.x)
+            .field("v", &self.v)
+            .field("f", &self.f)
+            .field("f_mag", &self.f_mag)
+            .field("ke", &self.ke)
+            .finish()
+    }
 }
 
 impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
@@ -87,29 +101,6 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
         self.f_mag
     }
 
-    // /// Returns the velocity of the `Mass`.
-    // pub const fn v(&self) -> &Vector<DIM> {
-    //     &self.v
-    // }
-
-    // /// Returns the force acting on the `Mass`.
-    // pub const fn f(&self) -> &Vector<DIM> {
-    //     &self.f
-    // }
-
-    // /// Changes the position of the `Mass`.
-    // pub const fn with_x(mut self, x: &Vector<DIM>) -> Self {
-    //     self.x = *x;
-    //     self
-    // }
-
-    // /// Changes the velocity of the `Mass`.
-    // pub fn with_v(mut self, v: &Vector<DIM>) -> Self {
-    //     self.v = *v;
-    //     self.ke = self.m.half() * v.magnitude().square();
-    //     self
-    // }
-
     /// Adds to the force acting on the `Mass`.
     pub fn add_f(&mut self, f: &Vector<DIM>) {
         self.f += *f;
@@ -152,6 +143,7 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
         metric: &M,
         x: Vector<DIM>,
         y: Vector<DIM>,
+        scale: f32,
     ) -> [Self; 2] {
         let children = self.c.children();
         if children.len() != 2 {
@@ -167,7 +159,7 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
             data.one_to_one(a.arg_center(), b.arg_center(), metric),
         );
 
-        let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab);
+        let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab, scale);
         let ax = self.x + x * dxa;
         let bx = self.x + x * dxb + y * dyb;
 
@@ -178,10 +170,10 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> Mass<'a, T, C, DIM> {
 /// Compute the displacements of the child masses from the parent mass. We
 /// assume that `c` is the parent mass and `a` and `b` are the children.
 #[allow(clippy::similar_names)]
-fn triangle_displacements<T: Number>(ac: T, bc: T, ab: T) -> (f32, f32, f32) {
+fn triangle_displacements<T: Number>(ac: T, bc: T, ab: T, scale: f32) -> (f32, f32, f32) {
     // Since the positions are stored as `f32` arrays, we cast the distances
     // to `f32` for internal computations.
-    let (fac, fbc, fab) = (ac.as_f32(), bc.as_f32(), ab.as_f32());
+    let (fac, fbc, fab) = (ac.as_f32() * scale, bc.as_f32() * scale, ab.as_f32() * scale);
 
     // Compute the deltas by which to move the child masses.
 

@@ -195,8 +195,14 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
 
             // Add the children of the root `Cluster` as `Mass`es.
             for &c in &children {
-                let x = Vector::random_unit(rng) * self.box_len;
-                let v = Vector::random_unit(rng);
+                let r = rng.gen_range(0.0..1.0);
+                let len = r * self.box_len;
+                let x = Vector::random(rng, -len, len);
+
+                let r = rng.gen_range(0.0..1.0);
+                let len = r * self.box_len;
+                let v = Vector::random(rng, -len, len);
+
                 indices.push(self.add_mass(Mass::new(c, x, v)));
             }
 
@@ -226,13 +232,27 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
         data: &D,
         metric: &M,
     ) -> [f32; 2] {
+        let mut step = 0;
+        let [mut ke, mut pe] = self.update_energy_history();
+
         // Repeat until only leaf masses are left.
         while !self.springs.is_empty() {
+            step += 1;
+            ftlog::info!(
+                "Starting major update {step} with {} masses, {} leaves, {} springs and {} leaf springs...",
+                self.masses.len(),
+                self.leaves_encountered.len(),
+                self.springs.len(),
+                self.leaf_springs.len()
+            );
+            self.log_system();
+
             // Remove the weak springs.
             let _ = self.remove_weak_springs();
 
             // Find the most stressed masses to be replaced.
             let stressed_masses = self.most_stressed_parent_masses();
+            ftlog::debug!("Stressed masses: {stressed_masses:?}");
 
             // For each stressed mass, generate a pair of random unit vectors
             // along which its child clusters will be moved.
@@ -253,15 +273,18 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
                 .zip(xy_pairs)
                 .map(|(i, [x, y])| {
                     let m = &self.masses[i];
-                    (i, m.child_triangle(data, metric, x, y))
+                    (i, m.child_triangle(data, metric, x, y, self.scale))
                 })
                 .collect::<Vec<_>>();
+            ftlog::debug!("Triangles: {triangles:?}");
 
             // Add the new masses to the system.
             let triangles = triangles
                 .into_iter()
                 .map(|(i, [a, b])| (i, [self.add_mass(a), self.add_mass(b)]))
                 .collect::<HashMap<_, _>>();
+            let masses = self.masses.iter().collect::<Vec<_>>();
+            ftlog::debug!("New Masses: {masses:?}");
 
             // Add springs for the sides of the triangles.
             let (new_leaf_springs, new_springs): (Vec<_>, _) = triangles
@@ -273,6 +296,8 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
                     [ca, cb, ab]
                 })
                 .partition(Spring::is_leaf_spring);
+            ftlog::debug!("New springs: {new_springs:?}");
+            ftlog::debug!("New leaf springs: {new_leaf_springs:?}");
             self.springs.extend(new_springs);
             self.leaf_springs.extend(new_leaf_springs);
 
@@ -283,7 +308,7 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
                 .flat_map(|(c, [a, b])| {
                     self.springs_of(*c)
                         .into_iter()
-                        .filter(|(d, _)| self.masses[*a].arg_center() < self.masses[*d].arg_center())
+                        .filter(|(d, _)| self.masses[*c].arg_center() < self.masses[*d].arg_center())
                         .flat_map(|(d, cd)| {
                             // The spring between c and d will be loosened as it
                             // is inherited by the children of c.
@@ -317,9 +342,10 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
                 self.masses.remove(*c);
                 self.springs.retain(|s| !s.connects(*c));
             }
+            self.springs.retain(|s| s.is_ordered(&self.masses));
 
             // Simulate the system to equilibrium.
-            self.simulate_to_equilibrium();
+            [ke, pe] = self.simulate_to_equilibrium();
 
             // Loosen all leaf springs.
             self.leaf_springs
@@ -328,20 +354,31 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
 
             // Add leaf springs among a random subset of the leaf masses.
             self.add_random_leaf_springs(rng, data, metric);
+
+            ftlog::info!("Major update {step} complete.");
+            self.log_system();
+            if step > 2 {
+                unimplemented!();
+            }
         }
 
-        self.ke_pe()
+        [ke, pe]
     }
 
     /// Simulate the system to equilibrium and return the kinetic and potential
     /// energy of the system after the simulation.
     pub fn simulate_to_equilibrium(&mut self) -> [f32; 2] {
-        let mut steps = 0;
-        while steps < self.max_steps && !self.is_in_equilibrium() {
-            self.update_step();
-            steps += 1;
+        let mut step = 0;
+        let [mut ke, mut pe] = [f32::MAX, f32::MAX];
+
+        while step < self.max_steps && !self.is_in_equilibrium() {
+            step += 1;
+            ftlog::trace!("Starting minor update {step}...");
+            [ke, pe] = self.update_step();
+            ftlog::trace!("Minor update {step} complete. KE: {ke:.2e}, PE: {pe:.2e}");
         }
-        self.ke_pe()
+
+        [ke, pe]
     }
 
     /// Extract the positions of the `Mass`es in the system as a `FlatVec`.
@@ -364,6 +401,37 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
 
 // The private interface of the `System` struct.
 impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
+    /// Log the system.
+    pub fn log_system(&self) {
+        self.log_masses();
+        self.log_springs();
+        self.log_leaf_springs();
+    }
+
+    /// Log the masses in the system.
+    fn log_masses(&self) {
+        if !self.masses.is_empty() {
+            ftlog::debug!("Masses: ");
+            self.masses.iter().for_each(|(i, m)| ftlog::debug!("{i:?}: {m:?}"));
+        }
+    }
+
+    /// Log the springs in the system.
+    fn log_springs(&self) {
+        if !self.springs.is_empty() {
+            ftlog::debug!("Springs: ");
+            self.springs.iter().for_each(|s| ftlog::debug!("{s:?}"));
+        }
+    }
+
+    /// Log the leaf springs in the system.
+    fn log_leaf_springs(&self) {
+        if !self.leaf_springs.is_empty() {
+            ftlog::debug!("Leaf springs: ");
+            self.leaf_springs.iter().for_each(|s| ftlog::debug!("{s:?}"));
+        }
+    }
+
     /// Add a `Cluster` to the system as a `Mass`.
     fn add_mass(&mut self, m: Mass<'a, T, C, DIM>) -> Index {
         if m.is_leaf() {
@@ -451,14 +519,14 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
     /// Update the energy history of the system.
     fn update_energy_history(&mut self) -> [f32; 2] {
         let ke = self.masses.iter().map(|(_, m)| m.ke()).sum();
-        let pe = self.springs.iter().map(Spring::pe).sum();
+        let pe = self
+            .springs
+            .iter()
+            .chain(self.leaf_springs.iter())
+            .map(Spring::pe)
+            .sum();
         self.energy_history.push([ke, pe]);
         [ke, pe]
-    }
-
-    /// Return the energy stored in the system.
-    fn ke_pe(&self) -> [f32; 2] {
-        self.energy_history.last().copied().unwrap_or([f32::MAX, f32::MAX])
     }
 
     /// Remove the weak springs from the system.
@@ -492,10 +560,13 @@ impl<'a, T: Number, C: Cluster<T>, const DIM: usize> System<'a, T, C, DIM> {
 
     /// Returns the neighbors of the `Mass` by its index in the arena.
     fn springs_of(&self, i: Index) -> Vec<(Index, &Spring<DIM>)> {
-        self.springs
+        let v = self
+            .springs
             .iter()
             .filter_map(|s| s.neighbor_of(i).map(|j| (j, s)))
-            .collect()
+            .collect::<Vec<_>>();
+        ftlog::trace!("Springs of {i:?}: {v:?}");
+        v
     }
 
     /// Adds leaf springs among a random subset of the leaf masses.

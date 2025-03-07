@@ -10,7 +10,7 @@ use super::Mass;
 use super::super::Vector;
 
 /// A spring connecting two `Mass`es in a mass-spring system.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 #[must_use]
 pub struct Spring<const DIM: usize> {
     /// The first `Mass` connected by the spring.
@@ -35,6 +35,24 @@ pub struct Spring<const DIM: usize> {
     times_loosened: usize,
     /// Whether the spring connects two leaf masses.
     connects_leaves: bool,
+}
+
+impl<const DIM: usize> core::fmt::Debug for Spring<DIM> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Spring")
+            .field("a", &self.a)
+            .field("b", &self.b)
+            .field("k", &self.k)
+            .field("l0", &self.l0)
+            .field("l", &self.l)
+            .field("dx", &self.dx)
+            .field("ratio", &self.ratio)
+            .field("pe", &self.pe)
+            .field("f", &self.f)
+            .field("times_loosened", &self.times_loosened)
+            .field("connects_leaves", &self.connects_leaves)
+            .finish()
+    }
 }
 
 impl<const DIM: usize> Spring<DIM> {
@@ -83,6 +101,12 @@ impl<const DIM: usize> Spring<DIM> {
             times_loosened,
             connects_leaves,
         }
+    }
+
+    /// Returns whether the `arg_center` of `a` is less than the `arg_center` of
+    /// `b`.
+    pub fn is_ordered<T: Number, C: Cluster<T>>(&self, masses: &Arena<Mass<T, C, DIM>>) -> bool {
+        masses[self.a].arg_center() < masses[self.b].arg_center()
     }
 
     /// Loosens the spring by a multiplicative `factor`.

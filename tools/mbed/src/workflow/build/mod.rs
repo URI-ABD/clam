@@ -2,8 +2,8 @@
 
 use abd_clam::{
     cluster::{BalancedBall, ParPartition},
-    dataset::AssociatesMetadata,
-    mbed::MassSpringSystem,
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
+    mbed::MSS,
     metric::ParMetric,
     Ball, Dataset, FlatVec, ParDiskIO,
 };
@@ -65,30 +65,54 @@ where
         root
     };
 
-    ftlog::info!("Setting up the simulation...");
-    let mut system = MassSpringSystem::<DIM, _, f32, _>::new(data.cardinality())?
-        .with_metadata(data.metadata())?
-        .with_beta(beta)?
-        .with_k(k)?
-        .with_dk(dk)?
-        .with_dt(dt)?
-        .with_f(f)?
-        .with_retention_depth(retention_depth)
-        .with_patience(patience)
-        .with_max_steps(max_steps)
-        .with_target(target)?;
+    // ftlog::info!("Setting up the simulation...");
+    // let mut system = MassSpringSystem::<DIM, _, f32, _>::new(data.cardinality())?
+    //     .with_metadata(data.metadata())?
+    //     .with_beta(beta)?
+    //     .with_k(k)?
+    //     .with_dk(dk)?
+    //     .with_dt(dt)?
+    //     .with_f(f)?
+    //     .with_retention_depth(retention_depth)
+    //     .with_patience(patience)
+    //     .with_max_steps(max_steps)
+    //     .with_target(target)?;
 
-    ftlog::info!("Starting the simulation...");
-    system.par_initialize_with_root(&root, data, &metric, &mut rng);
-    let steps = system.par_simulate_to_leaves(data, &metric, &mut rng);
+    // ftlog::info!("Starting the simulation...");
+    // system.par_initialize_with_root(&root, data, &metric, &mut rng);
+    // let steps = system.par_simulate_to_leaves(data, &metric, &mut rng);
 
-    // Stack the steps into a single array.
-    let arrays = steps.into_iter().map(|step| step.to_array2()).collect::<Vec<_>>();
-    let arrays = arrays.iter().map(|a| a.view()).collect::<Vec<_>>();
-    let stack = ndarray::stack(ndarray::Axis(0), &arrays).map_err(|e| e.to_string())?;
-    let stack_path = out_dir.as_ref().join(format!("{}-stack.npy", data.name()));
-    ndarray_npy::write_npy(&stack_path, &stack).map_err(|e| e.to_string())?;
+    // // Stack the steps into a single array.
+    // let arrays = steps.into_iter().map(|step| step.to_array2()).collect::<Vec<_>>();
+    // let arrays = arrays.iter().map(|a| a.view()).collect::<Vec<_>>();
+    // let stack = ndarray::stack(ndarray::Axis(0), &arrays).map_err(|e| e.to_string())?;
+    // let stack_path = out_dir.as_ref().join(format!("{}-stack.npy", data.name()));
+    // ndarray_npy::write_npy(&stack_path, &stack).map_err(|e| e.to_string())?;
 
-    ftlog::info!("Extracting the reduced embedding...");
-    Ok(system.par_extract_positions())
+    // ftlog::info!("Extracting the reduced embedding...");
+    // Ok(system.par_extract_positions())
+
+    let drag = 1.0 - beta;
+    let ke_threshold = target;
+    let box_len = 10.0;
+    let loosening_factor = dk;
+    let replace_fraction = f;
+    let loosening_threshold = retention_depth;
+    let mut system = MSS::<f32, Ball<_>, DIM>::new(
+        drag,
+        k,
+        dt,
+        patience,
+        ke_threshold,
+        max_steps,
+        box_len,
+        loosening_factor,
+        replace_fraction,
+        loosening_threshold,
+    )?
+    .init_with_root(&mut rng, data, &metric, &root);
+    let [ke, pe] = system.simulate_to_leaves(&mut rng, data, &metric);
+
+    ftlog::info!("Final KE: {ke:.2e}, PE: {pe:.2e}");
+    system.extract_positions()?.with_metadata(data.metadata())
 }
