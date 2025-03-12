@@ -143,7 +143,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         metric: &M,
         x: Vector<F, DIM>,
         y: Vector<F, DIM>,
-        scale: F,
+        // scale: F,
     ) -> [Self; 2] {
         let children = self.c.children();
         if children.len() != 2 {
@@ -152,29 +152,58 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
             panic!("{msg}");
         }
         let (a, b) = (children[0], children[1]);
+        let ab = data.one_to_one(a.arg_center(), b.arg_center(), metric);
 
-        let (ac, bc, ab) = (
-            data.one_to_one(a.arg_center(), self.arg_center(), metric),
-            data.one_to_one(b.arg_center(), self.arg_center(), metric),
-            data.one_to_one(a.arg_center(), b.arg_center(), metric),
-        );
+        if a.arg_center() == self.arg_center() {
+            let bc = data.one_to_one(b.arg_center(), self.arg_center(), metric);
+            // let bx = self.x + x * F::from(bc) * scale;
+            let bx = self.x + x * F::from(bc);
+            [Self::new(a, self.x, self.v), Self::new(b, bx, self.v)]
+        } else if b.arg_center() == self.arg_center() {
+            let ac = data.one_to_one(a.arg_center(), self.arg_center(), metric);
+            // let ax = self.x + x * F::from(ac) * scale;
+            let ax = self.x + x * F::from(ac);
+            [Self::new(a, ax, self.v), Self::new(b, self.x, self.v)]
+        } else {
+            let (ac, bc) = (
+                data.one_to_one(a.arg_center(), self.arg_center(), metric),
+                data.one_to_one(b.arg_center(), self.arg_center(), metric),
+            );
 
-        let (dxa, dxb, dyb) = triangle_displacements(ac, bc, ab, scale);
-        let ax = self.x + x * dxa;
-        let bx = self.x + x * dxb + y * dyb;
+            let (dxa, dxb, dyb) = triangle_displacements::<_, F>(ac, bc, ab);
+            ftlog::debug!(
+                "Triangle: ({:.2e}, {:.2e}, {:.2e}), displacements: ({:.2e}, {:.2e}, {:.2e}), scale: {:.2e}",
+                ac.as_f64(),
+                bc.as_f64(),
+                ab.as_f64(),
+                dxa.as_f64(),
+                dxb.as_f64(),
+                dyb.as_f64(),
+                // scale.as_f64()
+                1.0
+            );
+            let ax = self.x + x * dxa;
+            let bx = self.x + x * dxb + y * dyb;
 
-        [Self::new(a, ax, self.v), Self::new(b, bx, self.v)]
+            [Self::new(a, ax, self.v), Self::new(b, bx, self.v)]
+        }
     }
 }
 
 /// Compute the displacements of the child masses from the parent mass. We
 /// assume that `c` is the parent mass and `a` and `b` are the children.
 #[allow(clippy::similar_names)]
-fn triangle_displacements<T: Number, F: Float>(ac: T, bc: T, ab: T, scale: F) -> (F, F, F) {
+fn triangle_displacements<T: Number, F: Float>(
+    ac: T,
+    bc: T,
+    ab: T,
+    // scale: F,
+) -> (F, F, F) {
     // Since the positions are stored as `F` arrays, we cast the distances
     // to `F` for internal computations.
     // let (fac, fbc, fab) = (ac.as_f32() * scale, bc.as_f32() * scale, ab.as_f32() * scale);
-    let (fac, fbc, fab) = (F::from(ac) * scale, F::from(bc) * scale, F::from(ab) * scale);
+    // let (fac, fbc, fab) = (F::from(ac) * scale, F::from(bc) * scale, F::from(ab) * scale);
+    let (fac, fbc, fab) = (F::from(ac), F::from(bc), F::from(ab));
 
     // Compute the deltas by which to move the child masses.
 

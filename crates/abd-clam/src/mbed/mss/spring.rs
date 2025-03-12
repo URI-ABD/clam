@@ -110,6 +110,12 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
         masses[self.a].arg_center() < masses[self.b].arg_center()
     }
 
+    /// Returns whether the `arg_center` of `a` is same as the `arg_center` of
+    /// `b`.
+    pub fn is_circular<T: Number, C: Cluster<T>>(&self, masses: &Arena<Mass<T, C, F, DIM>>) -> bool {
+        masses[self.a].arg_center() == masses[self.b].arg_center()
+    }
+
     /// Loosens the spring by a multiplicative `factor`.
     pub fn loosen(&mut self, factor: F) {
         self.ratio *= factor;

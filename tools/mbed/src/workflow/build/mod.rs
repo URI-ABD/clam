@@ -36,7 +36,7 @@ pub fn build<P, I, M, Me, F, const DIM: usize>(
     patience: usize,
     target: F,
     max_steps: usize,
-) -> Result<FlatVec<[F; DIM], Me>, String>
+) -> Result<FlatVec<[f64; DIM], Me>, String>
 where
     P: AsRef<std::path::Path>,
     I: Send + Sync,
@@ -97,25 +97,26 @@ where
 
     let drag = F::ONE - beta;
     let ke_threshold = target;
-    let box_len = F::from(10.0);
+    // let box_len = F::from(10.0);
     let loosening_factor = dk;
     let replace_fraction = f;
     let loosening_threshold = retention_depth;
-    let mut system = MSS::<f32, Ball<_>, _, DIM>::new(
-        drag,
-        k,
-        dt,
+    let mut system = MSS::<f32, Ball<_>, f64, DIM>::new(
+        drag.as_f64(),
+        k.as_f64(),
+        dt.as_f64(),
         patience,
-        ke_threshold,
+        ke_threshold.as_f64(),
         max_steps,
-        box_len,
-        loosening_factor,
-        replace_fraction,
+        // box_len,
+        loosening_factor.as_f64(),
+        replace_fraction.as_f64(),
         loosening_threshold,
     )?
     .init_with_root(&mut rng, data, &metric, &root);
     let [ke, pe] = system.simulate_to_leaves(&mut rng, data, &metric);
 
-    ftlog::info!("Final KE: {:.2e}, PE: {:.2e}", ke.as_f64(), pe.as_f64());
+    // ftlog::info!("Final KE: {:.2e}, PE: {:.2e}", ke.as_f64(), pe.as_f64());
+    ftlog::info!("Final KE: {:.2e}, PE: {:.2e}", ke, pe);
     system.extract_positions()?.with_metadata(data.metadata())
 }
