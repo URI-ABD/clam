@@ -9,6 +9,7 @@ members = [
     "crates/symagen",
     "pypi/distances",
     "tools/mbed",
+    "visualizations/mbed",
 ]
 resolver = "2"
 
@@ -40,6 +41,8 @@ ftlog = { version = "0.2" }
 hdf5 = { package = "hdf5-metno", version = "0.9.0" }
 # For some MSA schenanigans.
 bytecount = "0.6.8"
+# For the mass-spring system in the dimension reduction.
+generational-arena = { version = "0.2.9", features = ["serde"] }
 
 # For Python Wrappers
 numpy = "0.23"

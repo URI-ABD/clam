@@ -55,7 +55,7 @@ csv = { workspace = true , optional = true }
 
 # For:
 #  - The mass-spring-system in the dimension reduction
-generational-arena = { version = "0.2.9", features = ["serde"], optional = true }
+generational-arena = { workspace = true, optional = true }
 
 [dev-dependencies]
 symagen = { workspace = true }

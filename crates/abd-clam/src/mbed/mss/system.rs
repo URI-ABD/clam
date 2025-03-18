@@ -343,9 +343,12 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
             self.simulate_to_equilibrium();
 
             // Remove the parent masses and all springs connected to them.
-            for c in triangles.keys() {
-                self.masses.remove(*c);
-                self.springs.retain(|s| !s.connects(*c));
+            for &c in triangles.keys() {
+                ftlog::debug!("Removing parent mass {c:?}: {:?}...", self.masses[c]);
+                self.springs.retain(|s| !s.connects(c));
+                ftlog::debug!("Remaining springs:");
+                self.log_springs();
+                self.masses.remove(c);
             }
             ftlog::debug!("Removing parent masses...");
             self.log_system();
@@ -373,7 +376,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
                 pe.as_f64()
             );
             self.log_system();
-            if step > 5 {
+            if step > 100 {
                 unimplemented!();
             }
         }
@@ -384,6 +387,13 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
     /// Simulate the system to equilibrium and return the kinetic and potential
     /// energy of the system after the simulation.
     pub fn simulate_to_equilibrium(&mut self) -> [F; 2] {
+        ftlog::info!(
+            "Simulating to equilibrium with {} masses, {} leaves, {} springs and {} leaf springs...",
+            self.masses.len(),
+            self.leaves_encountered.len(),
+            self.springs.len(),
+            self.leaf_springs.len()
+        );
         let mut step = 0;
         let [mut ke, mut pe] = [F::MAX, F::MAX];
 
@@ -391,7 +401,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
             step += 1;
             ftlog::trace!("Starting minor update {step}...");
             [ke, pe] = self.update_step();
-            ftlog::debug!(
+            ftlog::trace!(
                 "Minor update {step} complete. KE: {:.2e}, PE: {:.2e}",
                 ke.as_f64(),
                 pe.as_f64()
@@ -509,10 +519,20 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
     fn update_step(&mut self) -> [F; 2] {
         for s in self.springs.iter().chain(&self.leaf_springs) {
             let [a, b] = s.mass_indices();
-            let &f = s.f();
-            self.masses[a].add_f(&f);
-            self.masses[b].add_f(&-f);
+
+            for i in [a, b] {
+                if let Some(i) = self.masses.get(i) {
+                    ftlog::trace!("Updating mass {i:?}...");
+                } else {
+                    ftlog::error!("Mass {i:?} not found when updating spring {s:?}.");
+                    continue;
+                }
+            }
+
+            self.masses[a].add_f(s.f());
+            self.masses[b].sub_f(s.f());
         }
+
         self.masses.iter_mut().for_each(|(_, m)| m.apply_f(self.dt, self.drag));
         self.update_springs();
         self.update_energy_history()
@@ -527,11 +547,19 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
     }
 
     /// Update the energy history of the system.
+    #[allow(clippy::similar_names)]
     fn update_energy_history(&mut self) -> [F; 2] {
-        let ke = self.masses.iter().map(|(_, m)| m.ke()).sum();
-        let pe = self.springs.iter().chain(&self.leaf_springs).map(Spring::pe).sum();
-        self.energy_history.push([ke, pe]);
-        [ke, pe]
+        let kes = self.masses.iter().map(|(_, m)| m.ke()).collect::<Vec<_>>();
+        let mean_ke = crate::utils::mean(&kes);
+        let pes = self
+            .springs
+            .iter()
+            .chain(&self.leaf_springs)
+            .map(Spring::pe)
+            .collect::<Vec<_>>();
+        let mean_pe = crate::utils::mean(&pes);
+        self.energy_history.push([mean_ke, mean_pe]);
+        [mean_ke, mean_pe]
     }
 
     /// Remove the weak springs from the system.
@@ -601,11 +629,12 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
         };
 
         if !pairs.is_empty() {
-            let new_springs = pairs
+            let (new_leaf_springs, new_springs): (Vec<_>, _) = pairs
                 .into_iter()
                 .map(|(a, b)| self.new_spring(data, metric, a, b, self.k, 0))
-                .collect::<Vec<_>>();
-            self.leaf_springs.extend(new_springs);
+                .partition(Spring::is_leaf_spring);
+            self.springs.extend(new_springs);
+            self.leaf_springs.extend(new_leaf_springs);
         }
     }
 }

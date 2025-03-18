@@ -1,0 +1,15 @@
+[package]
+name = "plot-mbed"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { workspace = true }
+abd-clam = { workspace = true, features = ["all"] }
+distances = { workspace = true }
+ftlog = { workspace = true }
+bench-utils = { path = "../../benches/utils" }
+rayon = { workspace = true }
+rand = { workspace = true }
+generational-arena = { workspace = true }
+plotters = "0.3.7"

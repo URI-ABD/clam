@@ -1,7 +1,6 @@
 //! A `Spring` connecting two `Mass`es in a mass-spring system.
 
-use distances::number::Float;
-use distances::Number;
+use distances::{number::Float, Number};
 use generational_arena::{Arena, Index};
 
 use crate::Cluster;
@@ -81,13 +80,10 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
         let [ax, bx] = [&masses[a].x(), &masses[b].x()];
 
         let l = ax.distance_to(bx);
-        let dx = l - l0;
+        let dx = l0 - l;
         let ratio = dx.abs() / l0;
         let pe = (k * dx.square()).half();
-
-        let f_mag = -k * dx;
-        let uv = ax.unit_vector_to(bx);
-        let f = uv * f_mag;
+        let f = ax.unit_vector_to(bx) * k * -dx;
 
         Self {
             a,
@@ -150,7 +146,7 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
         let [ax, bx] = [&masses[self.a].x(), &masses[self.b].x()];
 
         self.l = ax.distance_to(bx);
-        self.dx = self.l - self.l0;
+        self.dx = self.l0 - self.l;
         self.ratio = self.dx.abs() / self.l0;
         self.pe = (self.k * self.dx.square()).half();
 
@@ -173,6 +169,16 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
     /// Returns the potential energy stored in the spring.
     pub const fn pe(&self) -> F {
         self.pe
+    }
+
+    /// Returns the displacement of the spring from its natural length.
+    pub const fn dx(&self) -> F {
+        self.dx
+    }
+
+    /// Returns the displacement ratio of the spring from its natural length.
+    pub const fn ratio(&self) -> F {
+        self.ratio
     }
 
     /// Returns whether the spring connects the `Mass` with the given `Index`.

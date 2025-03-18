@@ -8,6 +8,9 @@ use crate::{Cluster, Dataset, Metric};
 
 use super::super::Vector;
 
+// TODO: Ensure that masses are never placed such that the extension of any spring is greater than its natural length.
+// Otherwise, change the system so that the spring force is linear when the spring is extended but is non-linear with an asymptote to infinity when compressed to zero length.
+
 /// A `Mass` represents the location of a `Cluster` in the dimension reduction.
 #[derive(PartialEq, Eq, Clone)]
 #[must_use]
@@ -91,6 +94,11 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         &self.x
     }
 
+    /// Returns the velocity of the `Mass`.
+    pub const fn v(&self) -> &Vector<F, DIM> {
+        &self.v
+    }
+
     /// Returns the kinetic energy of the `Mass`.
     pub const fn ke(&self) -> F {
         self.ke
@@ -102,8 +110,14 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     }
 
     /// Adds to the force acting on the `Mass`.
-    pub fn add_f(&mut self, f: &Vector<F, DIM>) {
-        self.f += *f;
+    pub fn add_f(&mut self, &f: &Vector<F, DIM>) {
+        self.f += f;
+        self.f_mag += f.magnitude();
+    }
+
+    /// Subtracts from the force acting on the `Mass`.
+    pub fn sub_f(&mut self, &f: &Vector<F, DIM>) {
+        self.f -= f;
         self.f_mag += f.magnitude();
     }
 
@@ -111,8 +125,15 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// force acting on it.
     pub fn apply_f(&mut self, dt: F, drag: F) {
         let a = (self.f - self.v * drag) / self.m;
+        // println!("a: {:?}", a);
+        // let dv = a * dt;
+        // println!("dv: {:?}", dv);
         self.v += a * dt;
+        // println!("v: {:?}", self.v);
+        // let dx = self.v * dt;
+        // println!("dx: {:?}", dx);
         self.x += self.v * dt;
+        // println!("x: {:?}", self.x);
 
         self.ke = self.m.half() * self.v.magnitude().square();
         self.f = Vector::zero();

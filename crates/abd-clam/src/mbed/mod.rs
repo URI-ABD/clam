@@ -1,6 +1,6 @@
 //! Dimension Reduction with CLAM.
 
-mod mss;
+pub mod mss;
 mod spring;
 mod system;
 mod vector;
