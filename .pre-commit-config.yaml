@@ -53,11 +53,11 @@ repos:
 
   - repo: local
     hooks:
-      # - id: cargo-fmt
-      #   name: cargo fmt
-      #   entry: cargo fmt --all -- --check
-      #   language: rust
-      #   types: [rust]
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: rust
+        types: [rust]
       - id: cargo-clippy
         name: cargo clippy
         entry: cargo clippy --all -- -D warnings
