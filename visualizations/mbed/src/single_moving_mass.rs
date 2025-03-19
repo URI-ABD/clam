@@ -9,17 +9,20 @@ use abd_clam::{
     },
     metric::Manhattan,
 };
-use distances::{Number, number::Float};
+use distances::{
+    Number,
+    number::{Addition, Float},
+};
 use generational_arena::{Arena, Index};
 
-pub fn one_moving_mass<F: Float>(drag: F, dt: F, n: usize) -> [Vec<F>; 5] {
+pub fn one_moving_mass<F: Float>(drag: F, dt: F, l: F, n: usize) -> [Vec<F>; 6] {
     let data = create_data::<F, 10>();
     let metric = Manhattan;
     let [a, b] = create_cluster_pair(&data, &metric);
 
     let k = F::ONE;
     let l0 = a.distance_to(&b, &data, &metric);
-    let l = l0 * F::from(1.5);
+    let l = l0 * l;
     let dx = l0 - l;
 
     let (mut masses, [i, j]) = create_arena::<_, _, _, 2>(&a, &b, l);
@@ -31,7 +34,7 @@ pub fn one_moving_mass<F: Float>(drag: F, dt: F, n: usize) -> [Vec<F>; 5] {
     assert_eq!(s.ratio(), dx.abs() / l0);
     assert_eq!(s.pe(), k * dx.square().half());
 
-    let (x1s, x2s, kes, pes) = (0..n)
+    let (x1s, x2s, kes, pes, fs) = (0..n)
         .map(|_| {
             masses[i].add_f(s.f());
             masses[j].sub_f(s.f());
@@ -41,16 +44,17 @@ pub fn one_moving_mass<F: Float>(drag: F, dt: F, n: usize) -> [Vec<F>; 5] {
 
             let ke = masses[i].ke() + masses[j].ke();
             let pe = s.pe();
+            let f = s.f().magnitude() * Addition::neg(s.dx().signum());
 
             s.recalculate(&masses);
 
-            (masses[i].x()[0], masses[j].x()[0], ke, pe)
+            (masses[i].x()[0], masses[j].x()[0], ke, pe, f)
         })
         .collect();
 
     let ts = (0..n).map(|t| F::from(t) * dt).collect();
 
-    [ts, x1s, x2s, kes, pes]
+    [ts, x1s, x2s, kes, pes, fs]
 }
 
 /// Creates a `FlatVec` with two `[F; DIM]`s.

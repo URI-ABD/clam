@@ -24,6 +24,10 @@ struct Args {
     #[arg(short('b'), long, default_value = "0.02")]
     drag: f64,
 
+    /// The initial length of the spring.
+    #[arg(short('l'), long, default_value = "1.5")]
+    l: f64,
+
     /// The total number of time steps.
     #[arg(short('n'), long, default_value = "2000")]
     n: usize,
@@ -51,20 +55,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let out_file = out_dir.join("mass-spring.png");
 
-    let [ts, x1s, x2s, kes, pes] = single_moving_mass::one_moving_mass(args.drag, args.dt, args.n);
+    let [ts, x1s, x2s, kes, pes, fs] = single_moving_mass::one_moving_mass(args.drag, args.dt, args.l, args.n);
 
     let multiplier = 100;
 
-    let root_area = BitMapBackend::new(&out_file, (16 * multiplier, 10 * multiplier)).into_drawing_area();
+    let root_area = BitMapBackend::new(&out_file, (15 * multiplier, 10 * multiplier)).into_drawing_area();
     root_area.fill(&WHITE)?;
 
     let root_area = root_area.titled("Moving Masses", ("sans-serif", 60))?;
-    let drawing_areas = root_area.split_evenly((2, 1));
+    let drawing_areas = root_area.split_evenly((3, 1));
 
-    if drawing_areas.len() != 2 {
+    if drawing_areas.len() != 3 {
         return Err("Expected two drawing areas".into());
     }
-    let (upper, lower) = (&drawing_areas[0], &drawing_areas[1]);
+    let (upper, middle, lower) = (&drawing_areas[0], &drawing_areas[1], &drawing_areas[2]);
 
     let (x_min, x_max) = ts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &x| {
         (min.min(x), max.max(x))
@@ -107,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             (max.max(e), min.min(e))
         });
 
-    let mut cc = ChartBuilder::on(lower)
+    let mut cc = ChartBuilder::on(middle)
         .margin(5)
         .set_all_label_area_size(50)
         .caption("Energies", ("sans-serif", 40))
@@ -128,6 +132,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     cc.draw_series(LineSeries::new(ts.iter().zip(pes.iter()).map(|(&x, &y)| (x, y)), &BLUE))?
         .label("Potential Energy")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
+
+    cc.configure_series_labels().border_style(BLACK).draw()?;
+
+    let xs = x1s
+        .iter()
+        .zip(x2s.iter())
+        .map(|(&x1, &x2)| (x1 - x2).abs())
+        .collect::<Vec<_>>();
+    let (x_min, x_max) = xs.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &x| {
+        (min.min(x), max.max(x))
+    });
+    let (f_min, f_max) = fs.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &f| {
+        (min.min(f), max.max(f))
+    });
+
+    let mut cc = ChartBuilder::on(lower)
+        .margin(5)
+        .set_all_label_area_size(50)
+        .caption("Force", ("sans-serif", 40))
+        .build_cartesian_2d(x_min..x_max, f_min..f_max)?;
+
+    cc.configure_mesh()
+        .x_labels(20)
+        .y_labels(10)
+        .disable_mesh()
+        .x_label_formatter(&|v| format!("{:.1}", v))
+        .y_label_formatter(&|v| format!("{:.1}", v))
+        .draw()?;
+
+    cc.draw_series(
+        xs.iter()
+            .zip(fs.iter())
+            .map(|(&x, &y)| Circle::new((x, y), 1, GREEN.filled())),
+    )?
+    .label("Force")
+    .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], GREEN));
 
     cc.configure_series_labels().border_style(BLACK).draw()?;
 

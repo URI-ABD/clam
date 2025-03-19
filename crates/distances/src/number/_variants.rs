@@ -84,6 +84,16 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// The value of π.
     const PI: Self;
 
+    /// Returns the reciprocal of `self`.
+    #[must_use]
+    fn recip(self) -> Self {
+        Self::ONE / self
+    }
+
+    /// Returns the sign of `self`.
+    #[must_use]
+    fn signum(self) -> Self;
+
     /// Returns the square root of a `Float`.
     #[must_use]
     fn sqrt(self) -> Self;
@@ -132,6 +142,10 @@ impl Float for f32 {
 
     const PI: Self = core::f32::consts::PI;
 
+    fn signum(self) -> Self {
+        self.signum()
+    }
+
     fn sqrt(self) -> Self {
         Self::sqrt(self)
     }
@@ -167,6 +181,10 @@ impl Float for f64 {
     const E: Self = core::f64::consts::E;
 
     const PI: Self = core::f64::consts::PI;
+
+    fn signum(self) -> Self {
+        self.signum()
+    }
 
     fn sqrt(self) -> Self {
         Self::sqrt(self)

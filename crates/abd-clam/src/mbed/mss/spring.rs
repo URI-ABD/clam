@@ -77,27 +77,24 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
         times_loosened: usize,
         connects_leaves: bool,
     ) -> Self {
-        let [ax, bx] = [&masses[a].x(), &masses[b].x()];
+        // let [ax, bx] = [masses[a].x(), masses[b].x()];
 
-        let l = ax.distance_to(bx);
-        let dx = l0 - l;
-        let ratio = dx.abs() / l0;
-        let pe = (k * dx.square()).half();
-        let f = ax.unit_vector_to(bx) * k * -dx;
-
-        Self {
+        let mut s = Self {
             a,
             b,
             k,
             l0,
-            l,
-            dx,
-            ratio,
-            pe,
-            f,
+            l: F::ZERO,
+            dx: F::ZERO,
+            ratio: F::ZERO,
+            pe: F::ZERO,
+            f: Vector::zero(),
             times_loosened,
             connects_leaves,
-        }
+        };
+        s.recalculate(masses);
+
+        s
     }
 
     /// Returns whether the `arg_center` of `a` is less than the `arg_center` of
@@ -143,14 +140,14 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
 
     /// Recalculates the properties of the spring.
     pub fn recalculate<T: Number, C: Cluster<T>>(&mut self, masses: &Arena<Mass<T, C, F, DIM>>) {
-        let [ax, bx] = [&masses[self.a].x(), &masses[self.b].x()];
+        let [ax, bx] = [masses[self.a].x(), masses[self.b].x()];
 
         self.l = ax.distance_to(bx);
         self.dx = self.l0 - self.l;
         self.ratio = self.dx.abs() / self.l0;
         self.pe = (self.k * self.dx.square()).half();
 
-        let f_mag = -self.k * self.dx;
+        let f_mag = f_mag(self.k, self.l0, self.l);
         let uv = ax.unit_vector_to(bx);
         self.f = uv * f_mag;
     }
@@ -197,4 +194,9 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
             None
         }
     }
+}
+
+/// Returns the magnitude of the force exerted by the spring.
+fn f_mag<F: Float>(k: F, l0: F, l: F) -> F {
+    k * (l0.recip().square() - l.recip().square() + l - l0)
 }
