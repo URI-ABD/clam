@@ -11,5 +11,5 @@ ftlog = { workspace = true }
 bench-utils = { path = "../../benches/utils" }
 rayon = { workspace = true }
 rand = { workspace = true }
-generational-arena = { workspace = true }
+slotmap = { workspace = true }
 plotters = "0.3.7"

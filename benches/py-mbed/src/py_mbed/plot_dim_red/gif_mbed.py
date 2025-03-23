@@ -22,11 +22,14 @@ def plot(
     """Create a GIF of the dimensionality reduction process."""
 
     stack_path = out_dir / f"{dataset_name}-stack.npy"
+    reduced_path = out_dir / f"{dataset_name}-reduced.npy"
+
     mbed_stack: numpy.ndarray
     if stack_path.exists():
         mbed_stack = numpy.load(stack_path)
     else:
-        raise FileNotFoundError(f"Could not find the stack file at {stack_path}")
+        logger.warning(f"Could not find the stack file at {stack_path}")
+        return reduced_path
 
     n_steps = mbed_stack.shape[0]
 
@@ -65,7 +68,11 @@ def plot(
             )
 
     frames = []
-    for result in tqdm.tqdm(concurrent.futures.as_completed(results), total=len(results), desc="Collecting frames"):
+    for result in tqdm.tqdm(
+        concurrent.futures.as_completed(results),
+        total=len(results),
+        desc="Collecting frames",
+    ):
         path: pathlib.Path = result.result()
         i = int(path.stem.split("-")[-1])
         frames.append((i, imageio.imread(path)))
@@ -78,7 +85,7 @@ def plot(
     gif_path = out_dir / f"{dataset_name}-reduction.gif"
     imageio.mimsave(gif_path, frames, fps=5)
 
-    return out_dir / f"{dataset_name}-reduced.npy"
+    return reduced_path
 
 
 def _plot_frame(

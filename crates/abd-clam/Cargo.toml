@@ -55,7 +55,7 @@ csv = { workspace = true , optional = true }
 
 # For:
 #  - The mass-spring-system in the dimension reduction
-generational-arena = { workspace = true, optional = true }
+slotmap = { workspace = true, optional = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
@@ -68,6 +68,6 @@ statistical = "1.0.0"
 [features]
 disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore"]
-mbed = ["chaoda", "dep:generational-arena"]
+mbed = ["chaoda", "dep:slotmap"]
 musals = ["dep:stringzilla", "dep:bytecount"]
 all = ["disk-io", "chaoda", "mbed", "musals"]

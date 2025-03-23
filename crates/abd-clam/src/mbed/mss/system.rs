@@ -3,10 +3,14 @@
 use std::collections::HashMap;
 
 use distances::{number::Float, Number};
-use generational_arena::{Arena, Index};
 use rand::prelude::*;
+use rayon::prelude::*;
+use slotmap::{DefaultKey, HopSlotMap};
 
-use crate::{mbed::Vector, Cluster, Dataset, FlatVec, Metric, SizedHeap};
+use crate::{
+    cluster::ParCluster, dataset::ParDataset, mbed::Vector, metric::ParMetric, Cluster, Dataset, FlatVec, Metric,
+    SizedHeap,
+};
 
 use super::{Mass, Spring};
 
@@ -35,13 +39,13 @@ pub struct System<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     /// The number of times a spring can be loosened before it is removed.
     loosening_threshold: usize,
     /// The `Mass`es in the system, in a generational arena.
-    masses: Arena<Mass<'a, T, C, F, DIM>>,
+    masses: HopSlotMap<DefaultKey, Mass<'a, T, C, F, DIM>>,
     /// The `Spring`s in the system which connect at least one non-leaf `Mass`.
     springs: Vec<Spring<F, DIM>>,
     /// The `Spring`s in the system which connect at only leaf `Mass`es.
     leaf_springs: Vec<Spring<F, DIM>>,
     /// The leaf `Cluster`s encountered during the evolution of the system.
-    leaves_encountered: Vec<Index>,
+    leaves_encountered: Vec<DefaultKey>,
     // /// Half of the the side length of the hypercube in which the positions of
     // /// the `Mass`es are initialized. The hypercube is centered at the origin.
     // box_len: F,
@@ -153,7 +157,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
             loosening_factor,
             replace_fraction,
             loosening_threshold,
-            masses: Arena::new(),
+            masses: HopSlotMap::new(),
             springs: Vec::new(),
             leaf_springs: Vec::new(),
             leaves_encountered: Vec::new(),
@@ -179,7 +183,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
         metric: &M,
         root: &'a C,
     ) -> Self {
-        self.masses = Arena::with_capacity(data.cardinality());
+        self.masses = HopSlotMap::new();
         self.springs.clear();
         self.leaf_springs.clear();
         self.leaves_encountered.clear();
@@ -286,61 +290,50 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
             self.log_masses();
 
             // Add springs for the sides of the triangles.
-            let (new_leaf_springs, new_springs): (Vec<_>, _) = triangles
-                .iter()
-                .flat_map(|(&c, &[a, b])| {
-                    let ca = self.new_spring(data, metric, c, a, self.k, 0);
-                    let cb = self.new_spring(data, metric, c, b, self.k, 0);
-                    let ab = self.new_spring(data, metric, a, b, self.k, 0);
-                    [ca, cb, ab]
-                })
-                .filter(|s| !s.is_circular(&self.masses))
-                .partition(Spring::is_leaf_spring);
-            self.springs.extend(new_springs);
-            self.leaf_springs.extend(new_leaf_springs);
-            ftlog::debug!("Adding springs for triangles...");
-            self.log_springs();
-            self.log_leaf_springs();
+            let new_springs = triangles.iter().flat_map(|(&c, &[a, b])| {
+                let ca = self.new_spring(data, metric, c, a, self.k, 0);
+                let cb = self.new_spring(data, metric, c, b, self.k, 0);
+                let ab = self.new_spring(data, metric, a, b, self.k, 0);
+                [ca, cb, ab]
+            });
 
             // The children inherit springs from the parent, loosening the
             // springs in the process.
-            let (new_leaf_springs, new_springs): (Vec<_>, _) = triangles
-                .iter()
-                .flat_map(|(c, [a, b])| {
-                    self.springs_of(*c)
-                        .into_iter()
-                        .filter(|(d, _)| self.masses[*c].arg_center() < self.masses[*d].arg_center())
-                        .flat_map(|(d, cd)| {
-                            // The spring between c and d will be loosened as it
-                            // is inherited by the children of c.
-                            let times_loosened = cd.times_loosened() + 1;
-                            let k = cd.k() * self.loosening_factor;
+            let inherited_springs = triangles.iter().flat_map(|(c, [a, b])| {
+                self.springs_of(*c)
+                    .into_iter()
+                    .filter(|(d, _)| self.masses[*c].arg_center() < self.masses[*d].arg_center())
+                    .flat_map(|(d, cd)| {
+                        // The spring between c and d will be loosened as it
+                        // is inherited by the children of c.
+                        let times_loosened = cd.times_loosened() + 1;
+                        let k = cd.k() * self.loosening_factor;
 
-                            if let Some([e, f]) = triangles.get(&d) {
-                                // d is being replaced, so we will add four new springs.
-                                let ae = self.new_spring(data, metric, *a, *e, k, times_loosened);
-                                let af = self.new_spring(data, metric, *a, *f, k, times_loosened);
-                                let be = self.new_spring(data, metric, *b, *e, k, times_loosened);
-                                let bf = self.new_spring(data, metric, *b, *f, k, times_loosened);
-                                vec![ae, af, be, bf]
-                            } else {
-                                // d is not being replaced, so we will add two new springs.
-                                let da = self.new_spring(data, metric, d, *a, k, times_loosened);
-                                let db = self.new_spring(data, metric, d, *b, k, times_loosened);
-                                vec![da, db]
-                            }
-                        })
-                })
-                .filter(|s| !s.is_circular(&self.masses))
+                        if let Some([e, f]) = triangles.get(&d) {
+                            // d is being replaced, so we will add four new springs.
+                            let ae = self.new_spring(data, metric, *a, *e, k, times_loosened);
+                            let af = self.new_spring(data, metric, *a, *f, k, times_loosened);
+                            let be = self.new_spring(data, metric, *b, *e, k, times_loosened);
+                            let bf = self.new_spring(data, metric, *b, *f, k, times_loosened);
+                            vec![ae, af, be, bf]
+                        } else {
+                            // d is not being replaced, so we will add two new springs.
+                            let da = self.new_spring(data, metric, d, *a, k, times_loosened);
+                            let db = self.new_spring(data, metric, d, *b, k, times_loosened);
+                            vec![da, db]
+                        }
+                    })
+            });
+
+            let (new_leaf_springs, new_springs): (Vec<_>, _) = new_springs
+                .chain(inherited_springs)
+                .filter(|s| !s.is_circular(&self.masses) && s.is_ordered(&self.masses))
                 .partition(Spring::is_leaf_spring);
             self.springs.extend(new_springs);
             self.leaf_springs.extend(new_leaf_springs);
-            ftlog::debug!("Inheriting springs...");
+            ftlog::debug!("Adding new springs and Inheriting from parents...");
             self.log_springs();
             self.log_leaf_springs();
-
-            // Simulate the system to equilibrium.
-            self.simulate_to_equilibrium();
 
             // Remove the parent masses and all springs connected to them.
             for &c in triangles.keys() {
@@ -352,10 +345,6 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
             }
             ftlog::debug!("Removing parent masses...");
             self.log_system();
-
-            self.springs.retain(|s| s.is_ordered(&self.masses));
-            ftlog::info!("Removing unordered springs...");
-            self.log_springs();
 
             // Simulate the system to equilibrium.
             [ke, pe] = self.simulate_to_equilibrium();
@@ -376,9 +365,6 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
                 pe.as_f64()
             );
             self.log_system();
-            if step > 100 {
-                unimplemented!();
-            }
         }
 
         [ke, pe]
@@ -429,6 +415,176 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
     }
 }
 
+impl<T: Number, C: ParCluster<T>, F: Float, const DIM: usize> System<'_, T, C, F, DIM> {
+    /// Parallel version of the [`simulate_to_leaves`](Self::simulate_to_leaves) method.
+    #[allow(clippy::too_many_lines)]
+    pub fn par_simulate_to_leaves<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, R: rand::Rng>(
+        &mut self,
+        rng: &mut R,
+        data: &D,
+        metric: &M,
+    ) -> [F; 2] {
+        let mut step = 0;
+        let [mut ke, mut pe] = self.par_update_energy_history();
+
+        // Repeat until only leaf masses are left.
+        while !self.springs.is_empty() {
+            step += 1;
+            ftlog::info!(
+                "Starting major update {step} with {} masses, {} leaves, {} springs and {} leaf springs...",
+                self.masses.len(),
+                self.leaves_encountered.len(),
+                self.springs.len(),
+                self.leaf_springs.len()
+            );
+            self.log_system();
+
+            // Remove the weak springs.
+            let _ = self.par_remove_weak_springs();
+
+            // Find the most stressed masses to be replaced.
+            let stressed_masses = self.most_stressed_parent_masses();
+
+            // For each stressed mass, generate a pair of random unit vectors
+            // along which its child clusters will be moved.
+            let xy_pairs = stressed_masses
+                .iter()
+                .map(|_| {
+                    let x = Vector::<F, DIM>::random_unit(rng);
+                    let y = x.perpendicular(rng);
+                    [x, y]
+                })
+                .collect::<Vec<_>>();
+
+            // For each such mass, make a triangle of springs with its two
+            // children at the other vertices.
+            #[allow(clippy::needless_collect)]
+            let triangles = stressed_masses
+                .into_par_iter()
+                .zip(xy_pairs.into_par_iter())
+                .map(|(i, [x, y])| {
+                    let m = &self.masses[i];
+                    // (i, m.child_triangle(data, metric, x, y, self.scale))
+                    (i, m.child_triangle(data, metric, x, y))
+                })
+                .collect::<Vec<_>>();
+
+            // Add the new masses to the system.
+            let triangles = triangles
+                .into_iter()
+                .map(|(i, [a, b])| (i, [self.add_mass(a), self.add_mass(b)]))
+                .collect::<HashMap<_, _>>();
+            ftlog::debug!("Adding new masses...");
+            self.log_masses();
+
+            // Add springs for the sides of the triangles.
+            let new_springs = triangles.par_iter().flat_map(|(&c, &[a, b])| {
+                let ca = self.par_new_spring(data, metric, c, a, self.k, 0);
+                let cb = self.par_new_spring(data, metric, c, b, self.k, 0);
+                let ab = self.par_new_spring(data, metric, a, b, self.k, 0);
+                [ca, cb, ab]
+            });
+
+            // The children inherit springs from the parent, loosening the
+            // springs in the process.
+            let inherited_springs = triangles.par_iter().flat_map(|(c, [a, b])| {
+                self.springs_of(*c)
+                    .into_par_iter()
+                    .filter(|(d, _)| self.masses[*c].arg_center() < self.masses[*d].arg_center())
+                    .flat_map(|(d, cd)| {
+                        // The spring between c and d will be loosened as it
+                        // is inherited by the children of c.
+                        let times_loosened = cd.times_loosened() + 1;
+                        let k = cd.k() * self.loosening_factor;
+
+                        if let Some([e, f]) = triangles.get(&d) {
+                            // d is being replaced, so we will add four new springs.
+                            let ae = self.par_new_spring(data, metric, *a, *e, k, times_loosened);
+                            let af = self.par_new_spring(data, metric, *a, *f, k, times_loosened);
+                            let be = self.par_new_spring(data, metric, *b, *e, k, times_loosened);
+                            let bf = self.par_new_spring(data, metric, *b, *f, k, times_loosened);
+                            vec![ae, af, be, bf]
+                        } else {
+                            // d is not being replaced, so we will add two new springs.
+                            let da = self.par_new_spring(data, metric, d, *a, k, times_loosened);
+                            let db = self.par_new_spring(data, metric, d, *b, k, times_loosened);
+                            vec![da, db]
+                        }
+                    })
+            });
+
+            let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = new_springs
+                .chain(inherited_springs)
+                .filter(|s| !s.is_circular(&self.masses) && s.is_ordered(&self.masses))
+                .partition(Spring::is_leaf_spring);
+            self.springs.extend(new_springs);
+            self.leaf_springs.extend(new_leaf_springs);
+            ftlog::debug!("Adding new springs and Inheriting from parents...");
+            self.log_springs();
+            self.log_leaf_springs();
+
+            // Remove the parent masses and all springs connected to them.
+            for &c in triangles.keys() {
+                ftlog::debug!("Removing parent mass {c:?}: {:?}...", self.masses[c]);
+                self.springs.retain(|s| !s.connects(c));
+                ftlog::debug!("Remaining springs:");
+                self.log_springs();
+                self.masses.remove(c);
+            }
+            ftlog::debug!("Removing parent masses...");
+            self.log_system();
+
+            // Simulate the system to equilibrium.
+            [ke, pe] = self.par_simulate_to_equilibrium();
+
+            // Loosen all leaf springs.
+            self.leaf_springs
+                .par_iter_mut()
+                .for_each(|s| s.loosen(self.loosening_factor));
+
+            // Add leaf springs among a random subset of the leaf masses.
+            self.par_add_random_springs(rng, data, metric);
+            ftlog::info!("Adding random leaf springs...");
+            self.log_leaf_springs();
+
+            ftlog::info!(
+                "Major update {step} complete. KE: {:.2e}, PE: {:.2e}",
+                ke.as_f64(),
+                pe.as_f64()
+            );
+            self.log_system();
+        }
+
+        [ke, pe]
+    }
+
+    /// Parallel version of the [`simulate_to_equilibrium`](Self::simulate_to_equilibrium) method.
+    pub fn par_simulate_to_equilibrium(&mut self) -> [F; 2] {
+        ftlog::info!(
+            "Simulating to equilibrium in parallel with {} masses, {} leaves, {} springs and {} leaf springs...",
+            self.masses.len(),
+            self.leaves_encountered.len(),
+            self.springs.len(),
+            self.leaf_springs.len()
+        );
+        let mut step = 0;
+        let [mut ke, mut pe] = [F::MAX, F::MAX];
+
+        while step < self.max_steps && !self.is_in_equilibrium() {
+            step += 1;
+            ftlog::trace!("Starting minor update {step}...");
+            [ke, pe] = self.par_update_step();
+            ftlog::trace!(
+                "Minor update {step} complete. KE: {:.2e}, PE: {:.2e}",
+                ke.as_f64(),
+                pe.as_f64()
+            );
+        }
+
+        [ke, pe]
+    }
+}
+
 // The private interface of the `System` struct.
 impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, F, DIM> {
     /// Log the system.
@@ -463,7 +619,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
     }
 
     /// Add a `Cluster` to the system as a `Mass`.
-    fn add_mass(&mut self, m: Mass<'a, T, C, F, DIM>) -> Index {
+    fn add_mass(&mut self, m: Mass<'a, T, C, F, DIM>) -> DefaultKey {
         if m.is_leaf() {
             let m = self.masses.insert(m);
             self.leaves_encountered.push(m);
@@ -488,8 +644,8 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
         &self,
         data: &D,
         metric: &M,
-        a: Index,
-        b: Index,
+        a: DefaultKey,
+        b: DefaultKey,
         k: F,
         times_loosened: usize,
     ) -> Spring<F, DIM> {
@@ -581,7 +737,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
 
     /// Return the indices of the `Mass`es sorted by the sum of the magnitudes
     /// of the forces acting on them from the springs.
-    fn most_stressed_parent_masses(&self) -> Vec<Index> {
+    fn most_stressed_parent_masses(&self) -> Vec<DefaultKey> {
         let heap = self
             .masses
             .iter()
@@ -592,7 +748,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
     }
 
     /// Returns the neighbors of the `Mass` by its index in the arena.
-    fn springs_of(&self, i: Index) -> Vec<(Index, &Spring<F, DIM>)> {
+    fn springs_of(&self, i: DefaultKey) -> Vec<(DefaultKey, &Spring<F, DIM>)> {
         let v = self
             .springs
             .iter()
@@ -617,13 +773,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
                 .flat_map(|(i, (a, _))| self.masses.iter().skip(i + 1).map(move |(b, _)| (a, b)))
                 .collect::<Vec<_>>();
             pairs.shuffle(rng);
-
-            // let n_pairs = ((F::ONE - self.replace_fraction) * F::from(self.masses.len()))
-            //     .square()
-            //     .as_f64()
-            //     .ceil()
-            //     .as_usize();
-            // pairs.truncate(n_pairs);
+            pairs.truncate(self.masses.len());
 
             pairs
         };
@@ -636,5 +786,124 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
             self.springs.extend(new_springs);
             self.leaf_springs.extend(new_leaf_springs);
         }
+    }
+}
+
+impl<T: Number, C: ParCluster<T>, F: Float, const DIM: usize> System<'_, T, C, F, DIM> {
+    /// Parallel version of the [`update_step`](Self::update_step) method.
+    fn par_update_step(&mut self) -> [F; 2] {
+        for s in self.springs.iter().chain(&self.leaf_springs) {
+            let [a, b] = s.mass_indices();
+
+            for i in [a, b] {
+                if let Some(i) = self.masses.get(i) {
+                    ftlog::trace!("Updating mass {i:?}...");
+                } else {
+                    ftlog::error!("Mass {i:?} not found when updating spring {s:?}.");
+                    continue;
+                }
+            }
+
+            self.masses[a].add_f(s.f());
+            self.masses[b].sub_f(s.f());
+        }
+
+        // TODO: Find a replacement for the `slotmap` crate that allows for
+        // parallel iteration and mutation of the values in the map.
+        self.masses.iter_mut().for_each(|(_, m)| m.apply_f(self.dt, self.drag));
+        self.par_update_springs();
+        self.par_update_energy_history()
+    }
+
+    /// Parallel version of the [`update_springs`](Self::update_springs) method.
+    fn par_update_springs(&mut self) {
+        self.springs
+            .par_iter_mut()
+            .chain(self.leaf_springs.par_iter_mut())
+            .for_each(|s| s.recalculate(&self.masses));
+    }
+
+    /// Parallel version of the [`update_energy_history`](Self::update_energy_history) method.
+    #[allow(clippy::similar_names)]
+    fn par_update_energy_history(&mut self) -> [F; 2] {
+        let kes = self.masses.iter().map(|(_, m)| m.ke()).collect::<Vec<_>>();
+        let mean_ke = crate::utils::mean(&kes);
+        let pes = self
+            .springs
+            .par_iter()
+            .chain(self.leaf_springs.par_iter())
+            .map(Spring::pe)
+            .collect::<Vec<_>>();
+        let mean_pe = crate::utils::mean(&pes);
+        self.energy_history.push([mean_ke, mean_pe]);
+        [mean_ke, mean_pe]
+    }
+
+    /// Parallel version of the [`remove_weak_springs`](Self::remove_weak_springs) method.
+    fn par_remove_weak_springs(&mut self) -> [Vec<Spring<F, DIM>>; 2] {
+        let loose_springs;
+        (loose_springs, self.springs) = self
+            .springs
+            .par_drain(..)
+            .partition(|s| s.is_too_loose(self.loosening_threshold));
+
+        let loose_leaf_springs;
+        (loose_leaf_springs, self.leaf_springs) = self
+            .leaf_springs
+            .par_drain(..)
+            .partition(|s| s.is_too_loose(self.loosening_threshold));
+
+        [loose_springs, loose_leaf_springs]
+    }
+
+    /// Parallel version of the [`add_random_springs`](Self::add_random_springs) method.
+    fn par_add_random_springs<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, R: rand::Rng>(
+        &mut self,
+        rng: &mut R,
+        data: &D,
+        metric: &M,
+    ) {
+        let pairs = {
+            let mut pairs = self
+                .masses
+                .iter()
+                .enumerate()
+                .flat_map(|(i, (a, _))| self.masses.iter().skip(i + 1).map(move |(b, _)| (a, b)))
+                .collect::<Vec<_>>();
+            pairs.shuffle(rng);
+            pairs.truncate(self.masses.len());
+
+            pairs
+        };
+
+        if !pairs.is_empty() {
+            let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = pairs
+                .into_par_iter()
+                .map(|(a, b)| self.par_new_spring(data, metric, a, b, self.k, 0))
+                .partition(Spring::is_leaf_spring);
+            self.springs.extend(new_springs);
+            self.leaf_springs.extend(new_leaf_springs);
+        }
+    }
+
+    /// Parallel version of the [`new_spring`](Self::new_spring) method.
+    #[allow(clippy::many_single_char_names)]
+    fn par_new_spring<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &self,
+        data: &D,
+        metric: &M,
+        a: DefaultKey,
+        b: DefaultKey,
+        k: F,
+        times_loosened: usize,
+    ) -> Spring<F, DIM> {
+        let (i, j) = (&self.masses[a], &self.masses[b]);
+        let connects_leaves = i.is_leaf() && j.is_leaf();
+
+        let (i, j) = (i.arg_center(), j.arg_center());
+        // let l0 = F::from(data.one_to_one(i, j, metric)) * self.scale;
+        let l0 = F::from(data.par_one_to_one(i, j, metric));
+
+        Spring::new(a, b, &self.masses, k, l0, times_loosened, connects_leaves)
     }
 }

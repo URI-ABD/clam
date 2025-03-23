@@ -144,12 +144,6 @@ pub trait Number:
             other
         }
     }
-
-    /// Returns the square of the number.
-    #[must_use]
-    fn square(self) -> Self {
-        self * self
-    }
 }
 
 impl Number for f32 {
@@ -212,7 +206,7 @@ impl Number for f32 {
     }
 
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
-        rng.gen()
+        rng.r#gen()
     }
 
     fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
@@ -280,7 +274,7 @@ impl Number for f64 {
     }
 
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
-        rng.gen()
+        rng.r#gen()
     }
 
     fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {

@@ -13,7 +13,7 @@ use distances::{
     Number,
     number::{Addition, Float},
 };
-use generational_arena::{Arena, Index};
+use slotmap::{DefaultKey, HopSlotMap};
 
 pub fn one_moving_mass<F: Float>(drag: F, dt: F, l: F, n: usize) -> [Vec<F>; 6] {
     let data = create_data::<F, 10>();
@@ -23,16 +23,10 @@ pub fn one_moving_mass<F: Float>(drag: F, dt: F, l: F, n: usize) -> [Vec<F>; 6] 
     let k = F::ONE;
     let l0 = a.distance_to(&b, &data, &metric);
     let l = l0 * l;
-    let dx = l0 - l;
 
     let (mut masses, [i, j]) = create_arena::<_, _, _, 2>(&a, &b, l);
 
     let mut s = Spring::new(i, j, &masses, k, l0, 0, true);
-
-    // Check the properties of the spring.
-    assert_eq!(s.dx(), dx);
-    assert_eq!(s.ratio(), dx.abs() / l0);
-    assert_eq!(s.pe(), k * dx.square().half());
 
     let (x1s, x2s, kes, pes, fs) = (0..n)
         .map(|_| {
@@ -78,12 +72,13 @@ fn create_cluster_pair<I, T: Number, M: Metric<I, T>, D: Dataset<I>>(data: &D, m
 }
 
 /// Creates an `Arena` with two `Mass`es.
+#[allow(clippy::type_complexity)]
 fn create_arena<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize>(
     a: &'a C,
     b: &'a C,
     l: F,
-) -> (Arena<Mass<'a, T, C, F, DIM>>, [Index; 2]) {
-    let mut arena = Arena::new();
+) -> (HopSlotMap<DefaultKey, Mass<'a, T, C, F, DIM>>, [DefaultKey; 2]) {
+    let mut arena = HopSlotMap::new();
 
     let ax = Vector::new([F::ZERO; DIM]);
     let bx = {

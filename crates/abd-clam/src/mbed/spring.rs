@@ -1,6 +1,6 @@
 //! A `Spring` between two `Cluster`s in a mass-spring system.
 
-use distances::Number;
+use distances::{number::Multiplication, Number};
 
 use crate::Cluster;
 

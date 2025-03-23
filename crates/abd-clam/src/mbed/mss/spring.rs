@@ -1,7 +1,7 @@
 //! A `Spring` connecting two `Mass`es in a mass-spring system.
 
 use distances::{number::Float, Number};
-use generational_arena::{Arena, Index};
+use slotmap::{DefaultKey, HopSlotMap};
 
 use crate::Cluster;
 
@@ -14,9 +14,9 @@ use super::super::Vector;
 #[must_use]
 pub struct Spring<F: Float, const DIM: usize> {
     /// The first `Mass` connected by the spring.
-    a: Index,
+    a: DefaultKey,
     /// The second `Mass` connected by the spring.
-    b: Index,
+    b: DefaultKey,
     /// The spring constant of the spring.
     k: F,
     /// The natural length of the spring.
@@ -35,6 +35,8 @@ pub struct Spring<F: Float, const DIM: usize> {
     times_loosened: usize,
     /// Whether the spring connects two leaf masses.
     connects_leaves: bool,
+    /// The order of the force function.
+    n: i32,
 }
 
 impl<F: Float, const DIM: usize> core::fmt::Debug for Spring<F, DIM> {
@@ -51,6 +53,7 @@ impl<F: Float, const DIM: usize> core::fmt::Debug for Spring<F, DIM> {
             .field("f", &self.f)
             .field("times_loosened", &self.times_loosened)
             .field("connects_leaves", &self.connects_leaves)
+            .field("order", &self.n)
             .finish()
     }
 }
@@ -69,9 +72,9 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
     /// - `is_leaf_spring`: Whether the spring connects two leaf masses.
     #[allow(clippy::many_single_char_names)]
     pub fn new<T: Number, C: Cluster<T>>(
-        a: Index,
-        b: Index,
-        masses: &Arena<Mass<T, C, F, DIM>>,
+        a: DefaultKey,
+        b: DefaultKey,
+        masses: &HopSlotMap<DefaultKey, Mass<T, C, F, DIM>>,
         k: F,
         l0: F,
         times_loosened: usize,
@@ -91,6 +94,7 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
             f: Vector::zero(),
             times_loosened,
             connects_leaves,
+            n: 2,
         };
         s.recalculate(masses);
 
@@ -99,13 +103,13 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
 
     /// Returns whether the `arg_center` of `a` is less than the `arg_center` of
     /// `b`.
-    pub fn is_ordered<T: Number, C: Cluster<T>>(&self, masses: &Arena<Mass<T, C, F, DIM>>) -> bool {
+    pub fn is_ordered<T: Number, C: Cluster<T>>(&self, masses: &HopSlotMap<DefaultKey, Mass<T, C, F, DIM>>) -> bool {
         masses[self.a].arg_center() < masses[self.b].arg_center()
     }
 
     /// Returns whether the `arg_center` of `a` is same as the `arg_center` of
     /// `b`.
-    pub fn is_circular<T: Number, C: Cluster<T>>(&self, masses: &Arena<Mass<T, C, F, DIM>>) -> bool {
+    pub fn is_circular<T: Number, C: Cluster<T>>(&self, masses: &HopSlotMap<DefaultKey, Mass<T, C, F, DIM>>) -> bool {
         masses[self.a].arg_center() == masses[self.b].arg_center()
     }
 
@@ -139,21 +143,21 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
     }
 
     /// Recalculates the properties of the spring.
-    pub fn recalculate<T: Number, C: Cluster<T>>(&mut self, masses: &Arena<Mass<T, C, F, DIM>>) {
+    pub fn recalculate<T: Number, C: Cluster<T>>(&mut self, masses: &HopSlotMap<DefaultKey, Mass<T, C, F, DIM>>) {
         let [ax, bx] = [masses[self.a].x(), masses[self.b].x()];
 
         self.l = ax.distance_to(bx);
         self.dx = self.l0 - self.l;
         self.ratio = self.dx.abs() / self.l0;
-        self.pe = (self.k * self.dx.square()).half();
+        self.pe = pe(self.k, self.l0, self.l, self.n);
 
-        let f_mag = f_mag(self.k, self.l0, self.l);
+        let f_mag = f_mag(self.k, self.l0, self.l, self.n);
         let uv = ax.unit_vector_to(bx);
         self.f = uv * f_mag;
     }
 
     /// Returns the `Index`es of the `Mass`es connected by the spring.
-    pub const fn mass_indices(&self) -> [Index; 2] {
+    pub const fn mass_indices(&self) -> [DefaultKey; 2] {
         [self.a, self.b]
     }
 
@@ -179,13 +183,13 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
     }
 
     /// Returns whether the spring connects the `Mass` with the given `Index`.
-    pub fn connects(&self, i: Index) -> bool {
+    pub fn connects(&self, i: DefaultKey) -> bool {
         i == self.a || i == self.b
     }
 
     /// Returns the neighbor of the `Mass` connected to the given `Index` if it
     /// is connected by the spring, otherwise returns `None`.
-    pub fn neighbor_of(&self, i: Index) -> Option<Index> {
+    pub fn neighbor_of(&self, i: DefaultKey) -> Option<DefaultKey> {
         if i == self.a {
             Some(self.b)
         } else if i == self.b {
@@ -197,6 +201,14 @@ impl<F: Float, const DIM: usize> Spring<F, DIM> {
 }
 
 /// Returns the magnitude of the force exerted by the spring.
-fn f_mag<F: Float>(k: F, l0: F, l: F) -> F {
-    k * (l0.recip().square() - l.recip().square() + l - l0)
+fn f_mag<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
+    k * (l.sqrt() - l.recip().powi(n) - l0.sqrt() + l0.recip().powi(n))
+}
+
+/// Returns the potential energy stored in the spring.
+fn pe<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
+    let pe = |x: F| {
+        x * l0.recip().powi(n) - x * l0.sqrt() + x.powi(1 - n) / F::from(n - 1) + x.sqrt().cube().double() / F::from(3)
+    };
+    k * (pe(l) - pe(l0))
 }

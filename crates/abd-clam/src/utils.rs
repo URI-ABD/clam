@@ -130,7 +130,11 @@ pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
 
 /// Return the mean value of the given slice of values.
 pub fn mean<T: Number, F: Float>(values: &[T]) -> F {
-    F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
+    if values.is_empty() {
+        F::ZERO
+    } else {
+        F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
+    }
 }
 
 /// Return the variance of the given slice of values.
