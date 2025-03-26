@@ -183,7 +183,7 @@ impl<const DIM: usize, Me: Clone, T: Number, C: Cluster<T>> System<'_, DIM, Me, 
             // Remove springs that are too weak and sort the remaining springs
             // by their displacement ratio.
             self.remove_weak_springs();
-            self.sort_springs_by_displacement();
+            self.sort_springs_by_pe();
 
             // Get the clusters connected to the most displaced springs.
             let at = (self.f * self.springs.len().as_f32()).ceil().as_usize();
@@ -417,7 +417,7 @@ impl<const DIM: usize, Me: Clone + Send + Sync, T: Number, C: ParCluster<T>> Sys
             // Remove springs that are too weak and sort the remaining springs
             // by their displacement ratio.
             self.remove_weak_springs();
-            self.par_sort_springs_by_displacement();
+            self.par_sort_springs_by_pe();
 
             // Get the clusters connected to the most displaced springs.
             let at = (self.f * self.springs.len().as_f32()).ceil().as_usize();
@@ -747,7 +747,7 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     ///
     /// - If `f` is not in the range `(0, 1)`.
     pub fn with_f(mut self, f: f32) -> Result<Self, String> {
-        if f <= 0.0 || f >= 1.0 {
+        if f <= 0.0 || f > 1.0 {
             let msg = format!("`f` must be in the range (0, 1). Got {f:.2e} instead.");
             ftlog::error!("{msg}");
             Err(msg)
@@ -945,9 +945,11 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
     }
 
     /// Sort the springs by their displacement ratio in descending order.
-    fn sort_springs_by_displacement(&mut self) {
-        self.springs.sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
-        self.leaf_springs.sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
+    fn sort_springs_by_pe(&mut self) {
+        self.springs
+            .sort_by(|a, b| b.potential_energy().total_cmp(&a.potential_energy()));
+        self.leaf_springs
+            .sort_by(|a, b| b.potential_energy().total_cmp(&a.potential_energy()));
     }
 
     /// Get the total kinetic energy of the system.
@@ -1001,18 +1003,13 @@ impl<'a, const DIM: usize, Me, T: Number, C: Cluster<T>> System<'a, DIM, Me, T, 
         if self.energy_history.len() < self.patience {
             1.0
         } else {
-            let (ke_values, pe_values): (Vec<_>, Vec<_>) = self
+            let ke_values = self
                 .energy_history
                 .iter()
                 .skip(self.energy_history.len() - self.patience)
-                .copied()
-                .unzip();
-
-            let var_kinetic: f32 = crate::utils::coefficient_of_variation(&ke_values);
-            // let mean_kinetic: f32 = crate::utils::mean(&ke_values);
-            let var_potential: f32 = crate::utils::coefficient_of_variation(&pe_values);
-
-            var_kinetic + var_potential
+                .map(|&(ke, _)| ke)
+                .collect::<Vec<_>>();
+            crate::utils::mean(&ke_values)
         }
     }
 
@@ -1232,9 +1229,11 @@ impl<'a, const DIM: usize, Me: Send + Sync, T: Number, C: ParCluster<T>> System<
     }
 
     /// Sort the springs by their displacement ratio in descending order.
-    fn par_sort_springs_by_displacement(&mut self) {
-        self.springs.par_sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
-        self.leaf_springs.par_sort_by(|a, b| b.ratio().total_cmp(&a.ratio()));
+    fn par_sort_springs_by_pe(&mut self) {
+        self.springs
+            .par_sort_by(|a, b| b.potential_energy().total_cmp(&a.potential_energy()));
+        self.leaf_springs
+            .par_sort_by(|a, b| b.potential_energy().total_cmp(&a.potential_energy()));
     }
 
     /// Parallel version of [`update_step`](Self::update_step).

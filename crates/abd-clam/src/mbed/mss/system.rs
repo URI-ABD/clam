@@ -383,7 +383,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
         let mut step = 0;
         let [mut ke, mut pe] = [F::MAX, F::MAX];
 
-        while step < self.max_steps && !self.is_in_equilibrium() {
+        while step < self.patience || (step < self.max_steps && !self.is_in_equilibrium()) {
             step += 1;
             ftlog::trace!("Starting minor update {step}...");
             [ke, pe] = self.update_step();
@@ -570,7 +570,7 @@ impl<T: Number, C: ParCluster<T>, F: Float, const DIM: usize> System<'_, T, C, F
         let mut step = 0;
         let [mut ke, mut pe] = [F::MAX, F::MAX];
 
-        while step < self.max_steps && !self.is_in_equilibrium() {
+        while step < self.patience || (step < self.max_steps && !self.is_in_equilibrium()) {
             step += 1;
             ftlog::trace!("Starting minor update {step}...");
             [ke, pe] = self.par_update_step();
@@ -765,27 +765,21 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> System<'a, T, C, 
         data: &D,
         metric: &M,
     ) {
-        let pairs = {
-            let mut pairs = self
-                .masses
-                .iter()
-                .enumerate()
-                .flat_map(|(i, (a, _))| self.masses.iter().skip(i + 1).map(move |(b, _)| (a, b)))
-                .collect::<Vec<_>>();
-            pairs.shuffle(rng);
-            pairs.truncate(self.masses.len());
+        let indices = self.masses.keys().collect::<Vec<_>>();
+        let mut shuffled_indices = indices.clone();
+        shuffled_indices.shuffle(rng);
 
-            pairs
-        };
-
-        if !pairs.is_empty() {
-            let (new_leaf_springs, new_springs): (Vec<_>, _) = pairs
-                .into_iter()
-                .map(|(a, b)| self.new_spring(data, metric, a, b, self.k, 0))
-                .partition(Spring::is_leaf_spring);
-            self.springs.extend(new_springs);
-            self.leaf_springs.extend(new_leaf_springs);
-        }
+        let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = indices
+            .into_iter()
+            .zip(shuffled_indices)
+            .filter_map(|(a, b)| match a.cmp(&b) {
+                core::cmp::Ordering::Less => Some(self.new_spring(data, metric, a, b, self.k, 0)),
+                core::cmp::Ordering::Greater => Some(self.new_spring(data, metric, b, a, self.k, 0)),
+                core::cmp::Ordering::Equal => None,
+            })
+            .partition(Spring::is_leaf_spring);
+        self.springs.extend(new_springs);
+        self.leaf_springs.extend(new_leaf_springs);
     }
 }
 
@@ -863,27 +857,21 @@ impl<T: Number, C: ParCluster<T>, F: Float, const DIM: usize> System<'_, T, C, F
         data: &D,
         metric: &M,
     ) {
-        let pairs = {
-            let mut pairs = self
-                .masses
-                .iter()
-                .enumerate()
-                .flat_map(|(i, (a, _))| self.masses.iter().skip(i + 1).map(move |(b, _)| (a, b)))
-                .collect::<Vec<_>>();
-            pairs.shuffle(rng);
-            pairs.truncate(self.masses.len());
+        let indices = self.masses.keys().collect::<Vec<_>>();
+        let mut shuffled_indices = indices.clone();
+        shuffled_indices.shuffle(rng);
 
-            pairs
-        };
-
-        if !pairs.is_empty() {
-            let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = pairs
-                .into_par_iter()
-                .map(|(a, b)| self.par_new_spring(data, metric, a, b, self.k, 0))
-                .partition(Spring::is_leaf_spring);
-            self.springs.extend(new_springs);
-            self.leaf_springs.extend(new_leaf_springs);
-        }
+        let (new_leaf_springs, new_springs): (Vec<_>, Vec<_>) = indices
+            .into_par_iter()
+            .zip(shuffled_indices.into_par_iter())
+            .filter_map(|(a, b)| match a.cmp(&b) {
+                core::cmp::Ordering::Less => Some(self.par_new_spring(data, metric, a, b, self.k, 0)),
+                core::cmp::Ordering::Greater => Some(self.par_new_spring(data, metric, b, a, self.k, 0)),
+                core::cmp::Ordering::Equal => None,
+            })
+            .partition(Spring::is_leaf_spring);
+        self.springs.extend(new_springs);
+        self.leaf_springs.extend(new_leaf_springs);
     }
 
     /// Parallel version of the [`new_spring`](Self::new_spring) method.

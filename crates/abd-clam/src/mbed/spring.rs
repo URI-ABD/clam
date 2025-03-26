@@ -1,6 +1,9 @@
 //! A `Spring` between two `Cluster`s in a mass-spring system.
 
-use distances::{number::Multiplication, Number};
+use distances::{
+    number::{Float, Multiplication},
+    Number,
+};
 
 use crate::Cluster;
 
@@ -19,8 +22,6 @@ pub struct Spring<'a, T: Number, C: Cluster<T>> {
     l: f32,
     /// The displacement of the spring from its natural length.
     dx: f32,
-    /// The displacement ratio of the spring from its natural length.
-    ratio: f32,
     /// The magnitude of the force exerted by the spring.
     f_mag: f32,
     /// The potential energy stored in the spring.
@@ -42,17 +43,15 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     pub fn new(clusters: [&'a C; 2], l0: T, l: f32, num_loosened: usize, dk: f32) -> Self {
         let k = l0.as_f32();
         let dx = l - l0.as_f32();
-        let ratio = dx.abs() / l0.as_f32();
-        let f_mag = -k * dx;
-        let pe = 0.5 * k * dx.square();
         let k = k * dk.powi(num_loosened.as_i32());
+        let f_mag = f_mag(k, l0.as_f32(), l, 2);
+        let pe = pe(k, l0.as_f32(), l, 2);
         Self {
             clusters,
             l0,
             k,
             l,
             dx,
-            ratio,
             f_mag,
             pe,
             num_loosened,
@@ -92,11 +91,6 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
         self.num_loosened < threshold
     }
 
-    /// Get the ratio of the current length to the natural length of the spring.
-    pub const fn ratio(&self) -> f32 {
-        self.ratio
-    }
-
     /// Get the magnitude of the force exerted by the spring.
     pub const fn f_mag(&self) -> f32 {
         self.f_mag
@@ -106,9 +100,8 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     pub fn update_length(&mut self, l: f32) {
         self.dx += l - self.l;
         self.l = l;
-        self.ratio = self.dx.abs() / self.l0.as_f32();
-        self.f_mag = -self.k * self.dx;
-        self.pe = 0.5 * self.k * self.dx.square();
+        self.f_mag = f_mag(self.k, self.l0.as_f32(), self.l, 2);
+        self.pe = pe(self.k, self.l0.as_f32(), self.l, 2);
     }
 
     /// Get the unit vector of the spring.
@@ -120,5 +113,24 @@ impl<'a, T: Number, C: Cluster<T>> Spring<'a, T, C> {
     /// Get the potential energy stored in the spring.
     pub const fn potential_energy(&self) -> f32 {
         self.pe
+    }
+}
+
+/// Returns the magnitude of the force exerted by the spring.
+fn f_mag<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
+    k * (l.sqrt() - l.recip().powi(n) - l0.sqrt() + l0.recip().powi(n))
+}
+
+/// Returns the potential energy stored in the spring.
+fn pe<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
+    if l0 <= F::EPSILON || l.abs_diff(l0) <= F::EPSILON {
+        F::ZERO
+    } else {
+        let pe = |x: F| {
+            x * l0.recip().powi(n) - x * l0.sqrt()
+                + x.powi(1 - n) / F::from(n - 1)
+                + x.sqrt().cube().double() / F::from(3)
+        };
+        k * (pe(l) - pe(l0))
     }
 }

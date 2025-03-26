@@ -59,7 +59,13 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     pub fn new(c: &'a C, x: Vector<F, DIM>, v: Vector<F, DIM>) -> Self {
         let m = F::from(c.cardinality());
         let f = Vector::zero();
-        let ke = m.half() * v.magnitude().square();
+
+        let v_mag = v.magnitude();
+        let ke = if v_mag <= F::EPSILON {
+            F::ZERO
+        } else {
+            m.half() * v_mag.square()
+        };
 
         Self {
             c,

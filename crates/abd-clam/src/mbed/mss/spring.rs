@@ -207,8 +207,14 @@ fn f_mag<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
 
 /// Returns the potential energy stored in the spring.
 fn pe<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
-    let pe = |x: F| {
-        x * l0.recip().powi(n) - x * l0.sqrt() + x.powi(1 - n) / F::from(n - 1) + x.sqrt().cube().double() / F::from(3)
-    };
-    k * (pe(l) - pe(l0))
+    if l0 <= F::EPSILON || l.abs_diff(l0) <= F::EPSILON {
+        F::ZERO
+    } else {
+        let pe = |x: F| {
+            x * l0.recip().powi(n) - x * l0.sqrt()
+                + x.powi(1 - n) / F::from(n - 1)
+                + x.sqrt().cube().double() / F::from(3)
+        };
+        k * (pe(l) - pe(l0))
+    }
 }

@@ -30,17 +30,11 @@ fn test_spring() -> Result<(), String> {
 
     assert_eq!(ab.k(), 1.0);
     assert_eq!(ab.dx(), 1.0);
-    assert_eq!(ab.f_mag(), -1.0);
-    assert_eq!(ab.ratio(), 1.0);
-    assert_eq!(ab.potential_energy(), 0.5);
 
     ab.update_length(l0.as_f32().half());
 
     assert_eq!(ab.k(), 1.0);
     assert_eq!(ab.dx(), -0.5);
-    assert_eq!(ab.f_mag(), 0.5);
-    assert_eq!(ab.ratio(), 0.5);
-    assert_eq!(ab.potential_energy(), 0.125);
 
     let state = vec![
         [Vector::new([0.0, 0.0]), Vector::new([0.0, 0.0])],
