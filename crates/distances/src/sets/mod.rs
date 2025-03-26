@@ -139,16 +139,11 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 
 /// Hausdorff distance function
 /// Definition: The Hausdorff distance between two sets of points A and B in a metric space is the greatest of all the distances from a point in A to the nearest point in B.
-/// Notes:
-/// - can write inf and sup using iterators
-/// - fold, map, filter, etc, other adapters
-/// - only do it on sets of T where T is numeric: we can look at more later on if we need to
-/// - distance function should be able to take in any number of dimensions
-/// - use a helper function for distance, which will be euclidian distance
-/// - inputs will be two sets, where each item is a vector of some length
 /// # Arguments
-/// * `x`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
-/// * `y`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
+/// * `a`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers
+/// * `b`: A set represented as a slice of `Vec<T>`, e.g a type generic over vectors of integers
+/// * `compare_fn`: A function that compares two distances and returns a boolean if the first argument is "larger"
+/// * `distance_fn`: A function that calculates the distance between two points
 pub fn hausdorff<T, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F) -> T
 where
     T: Clone,
