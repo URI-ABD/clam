@@ -2,5 +2,4 @@
 
 mod physics;
 
-pub use physics::Mass;
-pub use physics::Vector;
+pub use physics::{Complex, Mass, Spring, Vector};

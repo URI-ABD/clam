@@ -5,7 +5,7 @@
 
 use distances::{number::Float, Number};
 
-use crate::Cluster;
+use crate::{Cluster, Dataset, Metric};
 
 use super::Vector;
 
@@ -19,6 +19,8 @@ pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     velocity: Vector<F, DIM>,
     /// The force currently acting on the `Mass`.
     force: Vector<F, DIM>,
+    /// Accumulator for the total magnitude of the forces experienced by the `Mass`.
+    total_force_magnitude: F,
     /// Phantom data to store the type `T`.
     phantom: std::marker::PhantomData<T>,
 }
@@ -36,9 +38,60 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
             cluster,
             position,
             velocity,
-            force: Vector::zero(), // Initialize force to the zero vector.
+            force: Vector::zero(),          // Initialize force to the zero vector.
+            total_force_magnitude: F::ZERO, // Initialize total force magnitude to zero.
             phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Calculates the distance between  the centers of the associated
+    /// `Cluster`s.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: The other `Mass` to calculate the distance to.
+    /// - `data`: The dataset containing the items.
+    /// - `metric`: The metric to use for distance calculation.
+    ///
+    /// # Returns
+    ///
+    /// The distance between the two `Mass`es as a floating-point value.
+    pub fn distance_between_clusters<I, D, M>(&self, other: &Self, data: &D, metric: &M) -> F
+    where
+        D: Dataset<I>,
+        M: Metric<I, T>,
+    {
+        let a = self.cluster.arg_center();
+        let b = other.cluster.arg_center();
+
+        F::from(data.one_to_one(a, b, metric))
+    }
+
+    /// Calculates the euclidean distance between current positions of the
+    /// `Mass`es.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: The other `Mass` to calculate the distance to.
+    ///
+    /// # Returns
+    ///
+    /// The distance between the two `Mass`es as a floating-point value.
+    pub fn distance_to(&self, other: &Self) -> F {
+        (self.position - other.position).magnitude()
+    }
+
+    /// Calculates the unit vector pointing from this `Mass` to another `Mass`.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: The other `Mass` to calculate the unit vector to.
+    ///
+    /// # Returns
+    ///
+    /// A `Vector` representing the unit vector pointing to the other `Mass`.
+    pub fn unit_vector_to(&self, other: &Self) -> Vector<F, DIM> {
+        self.position.unit_vector_to(&other.position)
     }
 
     /// Returns a reference to the associated `Cluster`.
@@ -66,14 +119,21 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         F::from(self.cluster.cardinality())
     }
 
-    /// Adds a given vector to the force acting on the `Mass`.
+    /// Adds a given vector to the force acting on the `Mass` and updates the total force magnitude.
     pub fn add_force(&mut self, f: &Vector<F, DIM>) {
         self.force += *f;
+        self.total_force_magnitude += f.magnitude();
     }
 
-    /// Subtracts a given vector from the force acting on the `Mass`.
+    /// Subtracts a given vector from the force acting on the `Mass` and updates the total force magnitude.
     pub fn sub_force(&mut self, f: &Vector<F, DIM>) {
         self.force -= *f;
+        self.total_force_magnitude += f.magnitude();
+    }
+
+    /// Returns the total magnitude of the forces experienced by the `Mass`.
+    pub const fn total_force_magnitude(&self) -> F {
+        self.total_force_magnitude
     }
 
     /// Moves the `Mass` under the force it experiences.
@@ -97,6 +157,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
 
         // Reset the force to the zero vector.
         self.force = Vector::zero();
+        self.total_force_magnitude = F::ZERO;
     }
 
     /// Calculates the kinetic energy of the `Mass`.
