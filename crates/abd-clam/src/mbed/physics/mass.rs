@@ -94,6 +94,9 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
 
         // Update position based on velocity.
         self.position += self.velocity * dt;
+
+        // Reset the force to the zero vector.
+        self.force = Vector::zero();
     }
 
     /// Calculates the kinetic energy of the `Mass`.
