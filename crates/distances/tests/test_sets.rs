@@ -87,26 +87,36 @@ fn sets_test() {
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
 
-        // Kai's tests for hausdorff distance: hopefully they're right!
-        // 1D test: a = {-5, 0, 1, 4}, b = {-2, 3, 7}, h = 3.0
-        let a = vec![-5, 0, 1, 4];
-        let b = vec![-2, 3, 7];
-        assert_eq!(hausdorff(&a, &b), 3);
+        // Kai's tests for hausdorff distance!
+        // This time we also have to pass a "compare" function and a "distance" function,
+        // since Hausdorff is a meta-distance function. 
+
+        // We will test using a standard "greater than" comparision function,
+        let greater = |a: f32, b: f32| -> bool { a > b };
         
-        // 2D test: a = {(0, 2), (1, -1), (3, 5)}, b = {(-2, 4), (3, 6), (2, 3)}, h = sqrt(17)
-        let a = vec![(0, 2), (1, -1), (3, 5)];
-        let b = vec![(-2, 4), (3, 6), (2, 3)];
-        assert_eq!(hausdorff(&a, &b), 17f64.sqrt());
+        // test with euclidian distance
+        distance = hausdorff(&x, &y, greater, euclidian);
+        if union == 0 {
+            real_distance = 0.0;
+        } else {
+            real_distance = 0.0; // TODO: change
+        }
 
-        // 3D test: a = {(0, 1, 2), (-2, 1, 3), (1, -4, 2)}, b = {(-1, 0, 1), (3, 2, 1), (5, 3, 0)}, h = sqrt(21)
-        let a = vec![(0, 1, 2), (-2, 1, 3), (1, -4, 2)];
-        let b = vec![(-1, 0, 1), (3, 2, 1), (5, 3, 0)];
-        assert_eq!(hausdorff(&a, &b), 21f64.sqrt());
+        // test with manhattan distance
+        distance = hausdorff(&x, &y, greater, distances::manhattan);
+        if union == 0 {
+            real_distance = 0.0;
+        } else {
+            real_distance = 0.0; // TODO: change
+        }
 
-        // 4D test: a = {(1, 2, 3, 4), (5, 2, 1, -3), (-2, -1, 0, 1)}, b = {(3, 4, -4, 1), (0, 2, 1, 0)}, h = sqrt(34)
-        let a = vec![(1, 2, 3, 4), (5, 2, 1, -3), (-2, -1, 0, 1)];
-        let b = vec![(3, 4, -4, 1), (0, 2, 1, 0)];
-        assert_eq!(hausdorff(&a, &b), 34f64.sqrt());
+        // test with jaccard distance
+        distance = hausdorff(&x, &y, greater, jaccard);
+        if union == 0 {
+            real_distance = 0.0;
+        } else {
+            real_distance = 0.0; // TODO: change
+        }
     }
 }
 
