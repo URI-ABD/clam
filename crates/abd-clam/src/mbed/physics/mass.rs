@@ -50,8 +50,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         }
     }
 
-    /// Calculates the distance between  the centers of the associated
-    /// `Cluster`s.
+    /// Calculates the distance in the original dataset.
     ///
     /// # Arguments
     ///
@@ -62,7 +61,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// # Returns
     ///
     /// The distance between the two `Mass`es as a floating-point value.
-    pub fn distance_between_clusters<I, D, M>(&self, other: &Self, data: &D, metric: &M) -> F
+    pub fn original_distance<I, D, M>(&self, other: &Self, data: &D, metric: &M) -> F
     where
         D: Dataset<I>,
         M: Metric<I, T>,
@@ -73,8 +72,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         F::from(data.one_to_one(a, b, metric))
     }
 
-    /// Calculates the euclidean distance between current positions of the
-    /// `Mass`es.
+    /// Calculates the euclidean distance in the embedding space.
     ///
     /// # Arguments
     ///
@@ -83,7 +81,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// # Returns
     ///
     /// The distance between the two `Mass`es as a floating-point value.
-    pub fn distance_to(&self, other: &Self) -> F {
+    pub fn embedded_distance(&self, other: &Self) -> F {
         (self.position - other.position).magnitude()
     }
 
@@ -100,19 +98,14 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         self.position.unit_vector_to(&other.position)
     }
 
-    /// Returns a reference to the associated `Cluster`.
-    pub const fn cluster(&self) -> &C {
-        self.cluster
+    /// Returns whether the `Mass` represents a leaf cluster.
+    pub fn is_leaf(&self) -> bool {
+        self.cluster.is_leaf()
     }
 
-    /// Returns a reference to the position of the `Mass`.
-    pub const fn position(&self) -> &Vector<F, DIM> {
-        &self.position
-    }
-
-    /// Returns a reference to the velocity of the `Mass`.
-    pub const fn velocity(&self) -> &Vector<F, DIM> {
-        &self.velocity
+    /// Returns the radius of the cluster represented by the `Mass`.
+    pub fn radius(&self) -> F {
+        F::from(self.cluster.radius())
     }
 
     /// Returns the mass of the `Mass`, which is equal to the cardinality of the cluster.
@@ -138,11 +131,6 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     #[allow(clippy::unwrap_used)]
     pub fn sub_force(&self, f: &Vector<F, DIM>) {
         self.forces.write().unwrap().push(-*f);
-    }
-
-    /// Returns the total force acting on the `Mass` by accumulating all forces.
-    pub const fn total_force(&self) -> &Vector<F, DIM> {
-        &self.total_force
     }
 
     /// Returns the total magnitude of the forces experienced by the `Mass`.

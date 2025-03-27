@@ -15,6 +15,9 @@ slotmap::new_key_type! { pub struct MassKey; }
 /// Type alias for the `HopSlotMap` used to store masses.
 pub type MassMap<'a, T, C, F, const DIM: usize> = HopSlotMap<MassKey, Mass<'a, T, C, F, DIM>>;
 
+/// A type alias for a checkpoint in the simulation.
+type Checkpoint<F, const DIM: usize> = (F, F, usize, FlatVec<[F; DIM], usize>);
+
 /// Represents a collection of masses and springs.
 pub struct Complex<'a, T, C, F, const DIM: usize>
 where
@@ -102,10 +105,10 @@ where
     ///
     /// # Returns
     ///
-    /// A tuple containing:
-    /// - The final kinetic energy of the system.
-    /// - The final potential energy of the system.
-    /// - The total number of steps taken during the simulation.
+    /// A vector of checkpoints. Each checkpoint is collected after a major update
+    /// and relaxation step, and contains the kinetic and potential energies of the
+    /// system, the number of steps taken during relaxation, and the positions of
+    /// the items in the system.
     #[allow(clippy::too_many_arguments)]
     pub fn simulate_to_leaves<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(
         &mut self,
@@ -117,24 +120,25 @@ where
         dt: F,
         n: usize,
         f: F,
-    ) -> (F, F, usize) {
-        let (mut ke, mut pe, mut steps) = (F::ZERO, F::ZERO, 0);
+    ) -> Vec<Checkpoint<F, DIM>> {
+        let mut checkpoints = Vec::new();
 
-        while self.masses.values().any(|m| !m.cluster().is_leaf()) {
+        while self.masses.values().any(|m| !m.is_leaf()) {
             // Perform a major update.
             self.major_update(rng, dt, f, data, metric);
-            steps += 1;
 
             // Prune springs that connect masses whose clusters are too far apart.
             self.prune_springs();
 
             // Allow the system to relax to equilibrium.
-            let s: usize;
-            (ke, pe, s) = self.relax_to_equilibrium(max_steps, tolerance, dt, n);
-            steps += s;
+            let (ke, pe, steps) = self.relax_to_equilibrium(max_steps, tolerance, dt, n);
+
+            // Record a checkpoint.
+            let positions = self.extract_embedding();
+            checkpoints.push((ke, pe, steps, positions));
         }
 
-        (ke, pe, steps)
+        checkpoints
     }
 
     /// Remove springs that connect masses whose clusters are too far apart.
@@ -144,20 +148,13 @@ where
     /// square root of 2. This check ensures that the neither the two clusters
     /// nor any of their descendants will have overlapping volumes in the original
     /// dataset.
-    ///
-    /// # Returns
-    ///
-    /// - A vector of removed springs.
-    pub fn prune_springs(&mut self) -> Vec<Spring<F>> {
-        let removed_springs;
-        (removed_springs, self.springs) = self.springs.drain(..).partition(|s| {
-            let distance = s.rest_length();
+    pub fn prune_springs(&mut self) {
+        self.springs.retain(|s| {
             let [a, b] = s.mass_keys();
             let [a, b] = [&self.masses[a], &self.masses[b]];
-            let max_distance = F::from(a.cluster().radius() + b.cluster().radius()) * F::SQRT_2;
-            distance > max_distance
+            let threshold = a.radius() + b.radius() * F::SQRT_2;
+            s.rest_length() <= threshold
         });
-        removed_springs
     }
 
     /// Records the kinetic and potential energies at the current time step.
@@ -166,16 +163,6 @@ where
         let potential_energy = self.total_potential_energy();
         self.energy_history.push((kinetic_energy, potential_energy));
         (kinetic_energy, potential_energy)
-    }
-
-    /// Returns a reference to the masses.
-    pub const fn masses(&self) -> &MassMap<'a, T, C, F, DIM> {
-        &self.masses
-    }
-
-    /// Returns a reference to the springs.
-    pub const fn springs(&self) -> &Vec<Spring<F>> {
-        &self.springs
     }
 
     /// Creates a new spring connecting two masses.
@@ -190,7 +177,7 @@ where
     /// # Returns
     ///
     /// The new `Spring` connecting the two masses.
-    pub fn add_spring<I, D: Dataset<I>, M: Metric<I, T>>(
+    fn add_spring<I, D: Dataset<I>, M: Metric<I, T>>(
         &mut self,
         a_key: MassKey,
         b_key: MassKey,
@@ -253,21 +240,6 @@ where
         }
     }
 
-    /// Erases the energy history and keeps only the history for the previous `n` steps.
-    ///
-    /// # Arguments
-    ///
-    /// - `n`: The number of previous steps to retain.
-    pub fn retain_energy_history(&mut self, n: usize) {
-        if n == 0 {
-            self.energy_history.clear();
-            self.record_energy();
-        } else if self.energy_history.len() > n {
-            let start = self.energy_history.len() - n;
-            self.energy_history = self.energy_history[start..].to_vec();
-        }
-    }
-
     /// Let the system relax to equilibrium, or until the maximum number of steps is reached.
     ///
     /// # Arguments
@@ -323,7 +295,7 @@ where
     /// # Returns
     ///
     /// The kinetic and potential energies of the system after the update.
-    fn minor_update(&mut self, dt: F) -> (F, F) {
+    pub fn minor_update(&mut self, dt: F) -> (F, F) {
         // Step 1: Recalculate the forces exerted by springs.
         self.springs.iter_mut().for_each(|spring| {
             spring.recalculate(&self.masses);
@@ -366,7 +338,7 @@ where
             .masses
             .iter()
             .filter_map(|(k, m)| {
-                if m.cluster().is_leaf() {
+                if m.is_leaf() {
                     None
                 } else {
                     Some((k, m.total_force_magnitudes()))
@@ -418,7 +390,7 @@ where
     }
 
     /// Extracts the positions of the items in the `Complex`.
-    pub fn extract_embedding(&self) -> FlatVec<Vector<F, DIM>, usize> {
+    pub fn extract_embedding(&self) -> FlatVec<[F; DIM], usize> {
         let mut positions = self
             .masses
             .values()
@@ -426,7 +398,7 @@ where
             .collect::<Vec<_>>();
         // sort by index
         positions.sort_by_key(|(i, _)| *i);
-        let positions = positions.into_iter().map(|(_, pos)| pos).collect();
+        let positions = positions.into_iter().map(|(_, pos)| pos.into()).collect();
         FlatVec::new(positions).unwrap_or_else(|_| unreachable!("We know that the system contains at least one mass."))
     }
 }

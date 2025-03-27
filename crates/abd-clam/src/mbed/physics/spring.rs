@@ -19,7 +19,7 @@ pub struct Spring<F: Float> {
     /// Keys of the two masses connected by the spring.
     keys: [MassKey; 2],
     /// The spring constant (stiffness).
-    spring_constant: F,
+    stiffness: F,
     /// The rest length of the spring.
     rest_length: F,
     /// The current length of the spring.
@@ -44,7 +44,7 @@ impl<F: Float> Spring<F> {
     pub fn new<I, T, D, C, M, const DIM: usize>(
         keys: [MassKey; 2],
         masses: &MassMap<'_, T, C, F, DIM>,
-        spring_constant: F,
+        stiffness: F,
         data: &D,
         metric: &M,
         scale: F,
@@ -57,11 +57,11 @@ impl<F: Float> Spring<F> {
     {
         let [a, b] = keys;
         let [a, b] = [&masses[a], &masses[b]];
-        let rest_length = a.distance_between_clusters(b, data, metric) / scale;
+        let rest_length = a.original_distance(b, data, metric) / scale;
 
         let mut spring = Self {
             keys,
-            spring_constant,
+            stiffness,
             rest_length,
             current_length: F::ZERO,
             force: F::ZERO,
@@ -79,19 +79,9 @@ impl<F: Float> Spring<F> {
         self.keys
     }
 
-    /// Returns the spring constant.
-    pub const fn spring_constant(&self) -> F {
-        self.spring_constant
-    }
-
     /// Returns the rest length of the spring.
     pub const fn rest_length(&self) -> F {
         self.rest_length
-    }
-
-    /// Returns the current length of the spring.
-    pub const fn current_length(&self) -> F {
-        self.current_length
     }
 
     /// Returns the potential energy stored in the spring.
@@ -137,9 +127,9 @@ impl<F: Float> Spring<F> {
         let a = &masses[a_key];
         let b = &masses[b_key];
 
-        self.current_length = a.distance_to(b);
-        self.force = f_mag(self.spring_constant, self.rest_length, self.current_length, 2);
-        self.potential_energy = pe(self.spring_constant, self.rest_length, self.current_length, 2);
+        self.current_length = a.embedded_distance(b);
+        self.force = f_mag(self.stiffness, self.rest_length, self.current_length, 2);
+        self.potential_energy = pe(self.stiffness, self.rest_length, self.current_length, 2);
     }
 
     /// Inherits the spring from the given parent to its children.
@@ -155,7 +145,7 @@ impl<F: Float> Spring<F> {
         let [p, a, b] = keys;
         let o = if p == self.keys[0] { self.keys[1] } else { self.keys[0] };
 
-        let spring_constant = self.spring_constant * loosening_factor;
+        let spring_constant = self.stiffness * loosening_factor;
         let ao = Self::new([a, o], masses, spring_constant, data, metric, scale);
         let bo = Self::new([b, o], masses, spring_constant, data, metric, scale);
 
