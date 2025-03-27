@@ -3,7 +3,10 @@
 //! `Mass`es move under forces exerted by `Spring`s and eventually come to rest,
 //! representing a dimension of the dataset.
 
+use std::sync::{Arc, RwLock};
+
 use distances::{number::Float, Number};
+use rand::Rng;
 
 use crate::{Cluster, Dataset, Metric};
 
@@ -17,10 +20,12 @@ pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     position: Vector<F, DIM>,
     /// The velocity of the `Mass` in the system.
     velocity: Vector<F, DIM>,
-    /// The force currently acting on the `Mass`.
-    force: Vector<F, DIM>,
+    /// The forces currently acting on the `Mass`.
+    forces: Arc<RwLock<Vec<Vector<F, DIM>>>>,
+    /// The total force Vector acting on the `Mass`.
+    total_force: Vector<F, DIM>,
     /// Accumulator for the total magnitude of the forces experienced by the `Mass`.
-    total_force_magnitude: F,
+    total_force_magnitudes: F,
     /// Phantom data to store the type `T`.
     phantom: std::marker::PhantomData<T>,
 }
@@ -33,13 +38,14 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// - `cluster`: A reference to the associated `Cluster`.
     /// - `position`: The initial position of the `Mass`.
     /// - `velocity`: The initial velocity of the `Mass`.
-    pub const fn new(cluster: &'a C, position: Vector<F, DIM>, velocity: Vector<F, DIM>) -> Self {
+    pub fn new(cluster: &'a C, position: Vector<F, DIM>, velocity: Vector<F, DIM>) -> Self {
         Self {
             cluster,
             position,
             velocity,
-            force: Vector::zero(),          // Initialize force to the zero vector.
-            total_force_magnitude: F::ZERO, // Initialize total force magnitude to zero.
+            forces: Arc::new(RwLock::new(Vec::new())),
+            total_force: Vector::zero(),
+            total_force_magnitudes: F::ZERO,
             phantom: std::marker::PhantomData,
         }
     }
@@ -109,31 +115,39 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         &self.velocity
     }
 
-    /// Returns a reference to the force acting on the `Mass`.
-    pub const fn force(&self) -> &Vector<F, DIM> {
-        &self.force
-    }
-
     /// Returns the mass of the `Mass`, which is equal to the cardinality of the cluster.
     pub fn mass(&self) -> F {
         F::from(self.cluster.cardinality())
     }
 
-    /// Adds a given vector to the force acting on the `Mass` and updates the total force magnitude.
-    pub fn add_force(&mut self, f: &Vector<F, DIM>) {
-        self.force += *f;
-        self.total_force_magnitude += f.magnitude();
+    /// Adds a given vector to the force acting on the `Mass`.
+    ///
+    /// # Panics
+    ///
+    /// - If the `forces` lock is poisoned.
+    #[allow(clippy::unwrap_used)]
+    pub fn add_force(&self, f: &Vector<F, DIM>) {
+        self.forces.write().unwrap().push(*f);
     }
 
-    /// Subtracts a given vector from the force acting on the `Mass` and updates the total force magnitude.
-    pub fn sub_force(&mut self, f: &Vector<F, DIM>) {
-        self.force -= *f;
-        self.total_force_magnitude += f.magnitude();
+    /// Subtracts a given vector from the force acting on the `Mass`.
+    ///
+    /// # Panics
+    ///
+    /// - If the `forces` lock is poisoned.
+    #[allow(clippy::unwrap_used)]
+    pub fn sub_force(&self, f: &Vector<F, DIM>) {
+        self.forces.write().unwrap().push(-*f);
+    }
+
+    /// Returns the total force acting on the `Mass` by accumulating all forces.
+    pub const fn total_force(&self) -> &Vector<F, DIM> {
+        &self.total_force
     }
 
     /// Returns the total magnitude of the forces experienced by the `Mass`.
-    pub const fn total_force_magnitude(&self) -> F {
-        self.total_force_magnitude
+    pub const fn total_force_magnitudes(&self) -> F {
+        self.total_force_magnitudes
     }
 
     /// Moves the `Mass` under the force it experiences.
@@ -142,22 +156,33 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     ///
     /// - `drag`: The drag coefficient to reduce velocity.
     /// - `dt`: The size of the time step for the movement.
+    ///
+    /// # Panics
+    ///
+    /// - If the `forces` lock is poisoned.
+    #[allow(clippy::unwrap_used)]
     pub fn move_mass(&mut self, drag: F, dt: F) {
-        // Calculate drag force.
+        // Accumulate all forces acting on the mass.
+        (self.total_force_magnitudes, self.total_force) = self
+            .forces
+            .write()
+            .unwrap()
+            .drain(..)
+            .fold((F::ZERO, Vector::zero()), |(mag, force), f| {
+                (mag + f.magnitude(), force + f)
+            });
+
+        // Calculate friction from drag.
         let friction = -self.velocity * drag;
 
         // Calculate acceleration based on force and mass.
-        let acceleration = (self.force + friction) / self.mass();
+        let acceleration = (self.total_force + friction) / self.mass();
 
-        // Update velocity based on acceleration and drag force.
+        // Update velocity based on acceleration.
         self.velocity += acceleration * dt;
 
         // Update position based on velocity.
         self.position += self.velocity * dt;
-
-        // Reset the force to the zero vector.
-        self.force = Vector::zero();
-        self.total_force_magnitude = F::ZERO;
     }
 
     /// Calculates the kinetic energy of the `Mass`.
@@ -168,5 +193,70 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     pub fn kinetic_energy(&self) -> F {
         let speed_squared = self.velocity.dot(&self.velocity);
         self.mass() * speed_squared.half()
+    }
+
+    /// Returns the indices and positions of the items in the `Cluster`.
+    pub fn itemized_positions(&self) -> Vec<(usize, Vector<F, DIM>)> {
+        let mut positions = self
+            .cluster
+            .indices()
+            .iter()
+            .map(|&i| (i, self.position))
+            .collect::<Vec<_>>();
+        // sort the positions by index
+        positions.sort_by_key(|(i, _)| *i);
+        positions
+    }
+
+    /// Explodes the `Mass`, creating new masses for the children of the cluster it represents.
+    ///
+    /// The caller must ensure that the `Mass` does not represent a leaf cluster.
+    ///
+    /// # Arguments
+    ///
+    /// - `rng`: A reference to the random number generator.
+    /// - `drag`: The drag coefficient to reduce velocity.
+    /// - `dt`: The size of the time step for the movement.
+    ///
+    /// # Returns
+    ///
+    /// A vector of new `Mass`es representing the children of the cluster.
+    ///
+    /// # Panics
+    ///
+    /// - If the `Mass` represents a leaf cluster.
+    #[allow(clippy::panic, dead_code)]
+    pub(crate) fn explode<R: Rng>(&self, rng: &mut R, drag: F, dt: F) -> [Self; 2] {
+        assert!(!self.cluster.is_leaf(), "Cannot explode a leaf cluster.");
+
+        // There should be exactly two children.
+        let [a, b] = {
+            let children = self.cluster.children();
+            [children[0], children[1]]
+        };
+        let [ma, mb] = [F::from(a.cardinality()), F::from(b.cardinality())];
+
+        let v_mag = self.velocity.magnitude();
+        let va = if v_mag > F::EPSILON {
+            // The first child will have a new velocity in a random direction and
+            // its magnitude will be proportional to its mass.
+            Vector::random_unit(rng) * (v_mag * ma / self.mass())
+        } else {
+            // The mass is at rest, so the first child will have a random velocity.
+            Vector::random_unit(rng)
+        };
+
+        // Use conservation of momentum to calculate the velocity of the second child.
+        let vb = (self.velocity * self.mass() - va * ma) / mb;
+
+        // Create the new masses.
+        let mut a = Mass::new(a, self.position, va);
+        let mut b = Mass::new(b, self.position, vb);
+
+        // Move the masses due to the explosion.
+        a.move_mass(drag, dt);
+        b.move_mass(drag, dt);
+
+        [a, b]
     }
 }

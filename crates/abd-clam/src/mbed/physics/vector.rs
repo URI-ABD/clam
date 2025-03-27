@@ -3,6 +3,7 @@
 
 use distances::number::Float;
 use rand::prelude::*;
+use std::iter::Sum;
 
 /// A vector that can represent the position, velocity, or force in a mass-
 /// spring system.
@@ -323,5 +324,11 @@ impl<F: Float, const DIM: usize> core::ops::DivAssign<F> for &mut Vector<F, DIM>
         for i in 0..DIM {
             self[i] /= scalar;
         }
+    }
+}
+
+impl<F: Float, const DIM: usize> Sum for Vector<F, DIM> {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |acc, v| acc + v)
     }
 }
