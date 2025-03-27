@@ -133,6 +133,14 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     fn tan(self) -> Self {
         self.sin() / self.cos()
     }
+
+    /// Returns the floor of `self`.
+    #[must_use]
+    fn floor(self) -> Self;
+
+    /// Returns the ceiling of `self`.
+    #[must_use]
+    fn ceil(self) -> Self;
 }
 
 impl Float for f32 {
@@ -173,6 +181,14 @@ impl Float for f32 {
     fn cos(self) -> Self {
         Self::cos(self)
     }
+
+    fn floor(self) -> Self {
+        Self::floor(self)
+    }
+
+    fn ceil(self) -> Self {
+        Self::ceil(self)
+    }
 }
 
 impl Float for f64 {
@@ -212,5 +228,13 @@ impl Float for f64 {
 
     fn cos(self) -> Self {
         Self::cos(self)
+    }
+
+    fn floor(self) -> Self {
+        Self::floor(self)
+    }
+
+    fn ceil(self) -> Self {
+        Self::ceil(self)
     }
 }

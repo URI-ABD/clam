@@ -225,7 +225,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// # Panics
     ///
     /// - If the `Mass` represents a leaf cluster.
-    #[allow(clippy::panic, dead_code)]
+    #[allow(clippy::panic)]
     pub(crate) fn explode<R: Rng>(&self, rng: &mut R, drag: F, dt: F) -> [Self; 2] {
         assert!(!self.cluster.is_leaf(), "Cannot explode a leaf cluster.");
 

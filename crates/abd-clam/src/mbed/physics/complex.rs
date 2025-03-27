@@ -2,6 +2,7 @@
 //! lower-dimensional embedding of the original dataset.
 
 use distances::{number::Float, Number};
+use rand::Rng;
 use slotmap::HopSlotMap;
 
 use crate::{Cluster, Dataset, FlatVec, Metric};
@@ -31,6 +32,10 @@ where
     drag_coefficient: F,
     /// The scale factor for the rest length of the springs.
     scale: F,
+    /// The spring constant to use for new springs.
+    spring_constant: F,
+    /// The loosening factor for springs, with a value between zero and one.
+    loosening_factor: F,
 }
 
 impl<'a, T, C, F, const DIM: usize> Complex<'a, T, C, F, DIM>
@@ -49,7 +54,9 @@ where
     /// - `drag_coefficient`: The drag coefficient for the system.
     /// - `scale`: The complex will try to keep masses inside a hyper-cube of
     ///   side length equals to twice this `scale`.
-    pub fn new(root: &'a C, drag_coefficient: F, scale: F) -> Self {
+    /// - `spring_constant`: The spring constant to use for new springs.
+    /// - `loosening_factor`: The loosening factor for inheriting springs, with a value between zero and one.
+    pub fn new(root: &'a C, drag_coefficient: F, scale: F, spring_constant: F, loosening_factor: F) -> Self {
         let mut masses = MassMap::with_key();
         masses.insert(Mass::new(
             root,
@@ -64,12 +71,93 @@ where
             energy_history: Vec::new(),
             drag_coefficient,
             scale,
+            spring_constant,
+            loosening_factor,
         };
 
         // Record the initial energy history.
         complex.record_energy();
 
         complex
+    }
+
+    /// Simulates the system until all masses represent leaf clusters.
+    ///
+    /// This method performs a series of major updates and relaxation steps to
+    /// evolve the system. During each major update, the most stressed masses
+    /// are exploded into their child clusters, and springs are recalculated
+    /// accordingly. After each major update, the system is allowed to relax
+    /// to equilibrium.
+    ///
+    /// # Arguments
+    ///
+    /// - `rng`: A mutable reference to a random number generator.
+    /// - `data`: A reference to the dataset containing the items.
+    /// - `metric`: The metric to use for distance calculation.
+    /// - `max_steps`: The maximum number of steps to take during relaxation.
+    /// - `tolerance`: The tolerance for the change in kinetic energy during relaxation.
+    /// - `dt`: The size of the time step for the simulation.
+    /// - `n`: The number of previous steps to consider for the tolerance.
+    /// - `f`: The fraction of the most stressed masses to explode during each major update.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - The final kinetic energy of the system.
+    /// - The final potential energy of the system.
+    /// - The total number of steps taken during the simulation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn simulate_to_leaves<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(
+        &mut self,
+        rng: &mut R,
+        data: &D,
+        metric: &M,
+        max_steps: usize,
+        tolerance: F,
+        dt: F,
+        n: usize,
+        f: F,
+    ) -> (F, F, usize) {
+        let (mut ke, mut pe, mut steps) = (F::ZERO, F::ZERO, 0);
+
+        while self.masses.values().any(|m| !m.cluster().is_leaf()) {
+            // Perform a major update.
+            self.major_update(rng, dt, f, data, metric);
+            steps += 1;
+
+            // Prune springs that connect masses whose clusters are too far apart.
+            self.prune_springs();
+
+            // Allow the system to relax to equilibrium.
+            let s: usize;
+            (ke, pe, s) = self.relax_to_equilibrium(max_steps, tolerance, dt, n);
+            steps += s;
+        }
+
+        (ke, pe, steps)
+    }
+
+    /// Remove springs that connect masses whose clusters are too far apart.
+    ///
+    /// Two masses are considered too far apart if the distance between their
+    /// clusters is greater than the sum of the radii of the clusters times the
+    /// square root of 2. This check ensures that the neither the two clusters
+    /// nor any of their descendants will have overlapping volumes in the original
+    /// dataset.
+    ///
+    /// # Returns
+    ///
+    /// - A vector of removed springs.
+    pub fn prune_springs(&mut self) -> Vec<Spring<F>> {
+        let removed_springs;
+        (removed_springs, self.springs) = self.springs.drain(..).partition(|s| {
+            let distance = s.rest_length();
+            let [a, b] = s.mass_keys();
+            let [a, b] = [&self.masses[a], &self.masses[b]];
+            let max_distance = F::from(a.cluster().radius() + b.cluster().radius()) * F::SQRT_2;
+            distance > max_distance
+        });
+        removed_springs
     }
 
     /// Records the kinetic and potential energies at the current time step.
@@ -96,20 +184,31 @@ where
     ///
     /// - `a_key`: The key of the first mass.
     /// - `b_key`: The key of the second mass.
-    /// - `spring_constant`: The spring constant.
+    /// - `data`: The dataset containing the items.
+    /// - `metric`: The metric to use for distance calculation.
     ///
     /// # Returns
     ///
     /// The new `Spring` connecting the two masses.
-    pub fn new_spring<I, D: Dataset<I>, M: Metric<I, T>>(
-        &self,
+    pub fn add_spring<I, D: Dataset<I>, M: Metric<I, T>>(
+        &mut self,
         a_key: MassKey,
         b_key: MassKey,
-        spring_constant: F,
         data: &D,
         metric: &M,
-    ) -> Spring<F> {
-        Spring::new([a_key, b_key], &self.masses, spring_constant, data, metric, self.scale)
+    ) -> &Spring<F> {
+        let s = Spring::new(
+            [a_key, b_key],
+            &self.masses,
+            self.spring_constant,
+            data,
+            metric,
+            self.scale,
+        );
+        self.springs.push(s);
+        self.springs
+            .last()
+            .unwrap_or_else(|| unreachable!("We know that the spring was just added."))
     }
 
     /// Calculates the total kinetic energy of all masses in the `Complex`.
@@ -169,7 +268,7 @@ where
         }
     }
 
-    /// Let the system evolve to equilibrium, or until the maximum number of steps is reached.
+    /// Let the system relax to equilibrium, or until the maximum number of steps is reached.
     ///
     /// # Arguments
     ///
@@ -181,7 +280,7 @@ where
     /// # Returns
     ///
     /// The kinetic and potential energies of the system after the update, and the number of steps taken.
-    pub fn evolve_to_equilibrium(&mut self, max_steps: usize, tolerance: F, dt: F, n: usize) -> (F, F, usize) {
+    pub fn relax_to_equilibrium(&mut self, max_steps: usize, tolerance: F, dt: F, n: usize) -> (F, F, usize) {
         let mut steps = 0;
 
         while steps < n || (steps < max_steps && !self.has_reached_equilibrium(tolerance, n)) {
@@ -215,7 +314,7 @@ where
         std_dev_ke < tolerance
     }
 
-    /// Updates the `Complex` for one time step.
+    /// Performs a minor update, moving the masses for one time step.
     ///
     /// # Arguments
     ///
@@ -241,6 +340,80 @@ where
         });
 
         // Step 3: Update the energy history of the system.
+        self.record_energy()
+    }
+
+    /// Performs a major update, exploding the most stressed masses and recalculating the springs.
+    ///
+    /// # Arguments
+    ///
+    /// - `dt`: The size of the time step.
+    /// - `f`: The fraction of the most stressed masses to explode.
+    ///
+    /// # Returns
+    ///
+    /// The kinetic and potential energies of the system after the update.
+    pub fn major_update<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(
+        &mut self,
+        rng: &mut R,
+        dt: F,
+        f: F,
+        data: &D,
+        metric: &M,
+    ) -> (F, F) {
+        // Sort the non-leaf masses by the total force exerted on them.
+        let mut masses = self
+            .masses
+            .iter()
+            .filter_map(|(k, m)| {
+                if m.cluster().is_leaf() {
+                    None
+                } else {
+                    Some((k, m.total_force_magnitudes()))
+                }
+            })
+            .collect::<Vec<_>>();
+        masses.sort_by(|(_, a), (_, b)| b.total_cmp(a));
+
+        // Remove the most stressed masses from the system.
+        let n = (f * F::from(masses.len())).ceil().as_usize();
+        let stressed_masses = masses
+            .into_iter()
+            .take(n)
+            .map(|(k, _)| {
+                (
+                    k,
+                    self.masses
+                        .remove(k)
+                        .unwrap_or_else(|| unreachable!("We know that the mass exists.")),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // Explode the most stressed masses.
+        let children = stressed_masses.into_iter().map(|(k, m)| {
+            let [a, b] = m.explode(rng, self.drag_coefficient, dt);
+            (k, a, b)
+        });
+
+        // Insert the children back into the system.
+        #[allow(clippy::needless_collect)]
+        let triplet_keys = children
+            .map(|(m, a, b)| (m, self.masses.insert(a), self.masses.insert(b)))
+            .collect::<Vec<_>>();
+
+        // Transfer springs from the exploded masses to their children and add springs between the siblings.
+        for (m, a, b) in triplet_keys {
+            let m_springs;
+            (m_springs, self.springs) = self.springs.drain(..).partition(|s| s.mass_keys().contains(&m));
+            let new_springs = m_springs
+                .into_iter()
+                .flat_map(|s| s.inherit([m, a, b], &self.masses, data, metric, self.scale, self.loosening_factor));
+            self.springs.extend(new_springs);
+            self.add_spring(a, b, data, metric);
+        }
+
+        // Record the energy history of the system.
         self.record_energy()
     }
 

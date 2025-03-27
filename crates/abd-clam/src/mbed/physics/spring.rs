@@ -141,6 +141,26 @@ impl<F: Float> Spring<F> {
         self.force = f_mag(self.spring_constant, self.rest_length, self.current_length, 2);
         self.potential_energy = pe(self.spring_constant, self.rest_length, self.current_length, 2);
     }
+
+    /// Inherits the spring from the given parent to its children.
+    pub(crate) fn inherit<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Metric<I, T>, const DIM: usize>(
+        self,
+        keys: [MassKey; 3],
+        masses: &MassMap<'_, T, C, F, DIM>,
+        data: &D,
+        metric: &M,
+        scale: F,
+        loosening_factor: F,
+    ) -> [Self; 2] {
+        let [p, a, b] = keys;
+        let o = if p == self.keys[0] { self.keys[1] } else { self.keys[0] };
+
+        let spring_constant = self.spring_constant * loosening_factor;
+        let ao = Self::new([a, o], masses, spring_constant, data, metric, scale);
+        let bo = Self::new([b, o], masses, spring_constant, data, metric, scale);
+
+        [ao, bo]
+    }
 }
 
 /// Returns the magnitude of the force exerted by the spring.
