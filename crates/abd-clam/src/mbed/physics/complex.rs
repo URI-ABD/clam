@@ -3,9 +3,10 @@
 
 use distances::{number::Float, Number};
 use rand::Rng;
+use rayon::prelude::*;
 use slotmap::HopSlotMap;
 
-use crate::{Cluster, Dataset, FlatVec, Metric};
+use crate::{cluster::ParCluster, dataset::ParDataset, metric::ParMetric, Cluster, Dataset, FlatVec, Metric};
 
 use super::{mass::Mass, spring::Spring, Vector};
 
@@ -119,19 +120,21 @@ where
         tolerance: F,
         dt: F,
         n: usize,
-        f: F,
     ) -> Vec<Checkpoint<F, DIM>> {
         let mut checkpoints = Vec::new();
 
         while self.masses.values().any(|m| !m.is_leaf()) {
             // Perform a major update.
-            self.major_update(rng, dt, f, data, metric);
+            self.major_update(rng, dt, data, metric);
 
             // Prune springs that connect masses whose clusters are too far apart.
             self.prune_springs();
 
             // Allow the system to relax to equilibrium.
             let (ke, pe, steps) = self.relax_to_equilibrium(max_steps, tolerance, dt, n);
+
+            // Stop all masses that are not connected to any springs.
+            self.stop_isolated_masses();
 
             // Record a checkpoint.
             let positions = self.extract_embedding();
@@ -329,53 +332,33 @@ where
         &mut self,
         rng: &mut R,
         dt: F,
-        f: F,
         data: &D,
         metric: &M,
     ) -> (F, F) {
-        // Sort the non-leaf masses by the total force exerted on them.
-        let mut masses = self
+        // Explode the non-leaf masses
+        #[allow(clippy::needless_collect)]
+        let children = self
             .masses
             .iter()
             .filter_map(|(k, m)| {
                 if m.is_leaf() {
                     None
                 } else {
-                    Some((k, m.total_force_magnitudes()))
+                    let [a, b] = m.explode(rng, self.drag_coefficient, dt);
+                    Some((k, a, b))
                 }
             })
             .collect::<Vec<_>>();
-        masses.sort_by(|(_, a), (_, b)| b.total_cmp(a));
-
-        // Remove the most stressed masses from the system.
-        let n = (f * F::from(masses.len())).ceil().as_usize();
-        let stressed_masses = masses
-            .into_iter()
-            .take(n)
-            .map(|(k, _)| {
-                (
-                    k,
-                    self.masses
-                        .remove(k)
-                        .unwrap_or_else(|| unreachable!("We know that the mass exists.")),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        // Explode the most stressed masses.
-        let children = stressed_masses.into_iter().map(|(k, m)| {
-            let [a, b] = m.explode(rng, self.drag_coefficient, dt);
-            (k, a, b)
-        });
 
         // Insert the children back into the system.
         #[allow(clippy::needless_collect)]
         let triplet_keys = children
+            .into_iter()
             .map(|(m, a, b)| (m, self.masses.insert(a), self.masses.insert(b)))
             .collect::<Vec<_>>();
 
         // Transfer springs from the exploded masses to their children and add springs between the siblings.
-        for (m, a, b) in triplet_keys {
+        for &(m, a, b) in &triplet_keys {
             let m_springs;
             (m_springs, self.springs) = self.springs.drain(..).partition(|s| s.mass_keys().contains(&m));
             let new_springs = m_springs
@@ -383,6 +366,11 @@ where
                 .flat_map(|s| s.inherit([m, a, b], &self.masses, data, metric, self.scale, self.loosening_factor));
             self.springs.extend(new_springs);
             self.add_spring(a, b, data, metric);
+        }
+
+        // Remove the stressed masses from the system.
+        for (m, _, _) in triplet_keys {
+            self.masses.remove(m);
         }
 
         // Record the energy history of the system.
@@ -400,5 +388,99 @@ where
         positions.sort_by_key(|(i, _)| *i);
         let positions = positions.into_iter().map(|(_, pos)| pos.into()).collect();
         FlatVec::new(positions).unwrap_or_else(|_| unreachable!("We know that the system contains at least one mass."))
+    }
+
+    /// Stop all masses that are not connected to any springs.
+    pub fn stop_isolated_masses(&mut self) {
+        self.masses.iter_mut().for_each(|(k, m)| {
+            if !self.springs.iter().any(|s| s.mass_keys().contains(&k)) {
+                m.set_velocity(Vector::zero());
+            }
+        });
+    }
+}
+
+impl<T, C, F, const DIM: usize> Complex<'_, T, C, F, DIM>
+where
+    T: Number,
+    C: ParCluster<T>,
+    F: Float,
+{
+    /// Parallel version of the [`simulate_to_leaves`](Self::simulate_to_leaves) method.
+    #[allow(clippy::too_many_arguments)]
+    pub fn par_simulate_to_leaves<R: Rng, I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &mut self,
+        rng: &mut R,
+        data: &D,
+        metric: &M,
+        max_steps: usize,
+        tolerance: F,
+        dt: F,
+        n: usize,
+    ) -> Vec<Checkpoint<F, DIM>> {
+        let mut checkpoints = Vec::new();
+
+        while self.masses.values().any(|m| !m.is_leaf()) {
+            // Perform a major update.
+            self.major_update(rng, dt, data, metric);
+
+            // Prune springs that connect masses whose clusters are too far apart.
+            self.prune_springs();
+
+            // Allow the system to relax to equilibrium.
+            let (ke, pe, steps) = self.par_relax_to_equilibrium(max_steps, tolerance, dt, n);
+
+            // Stop all masses that are not connected to any springs.
+            self.stop_isolated_masses();
+
+            // Record a checkpoint.
+            let positions = self.extract_embedding();
+            checkpoints.push((ke, pe, steps, positions));
+
+            ftlog::info!(
+                "Checkpoint recorded: {} steps, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                checkpoints.len(),
+                ke.as_f32(),
+                pe.as_f32(),
+                self.masses.len(),
+                self.springs.len()
+            );
+        }
+
+        checkpoints
+    }
+
+    /// Parallel version of the [`relax_to_equilibrium`](Self::relax_to_equilibrium) method.
+    pub fn par_relax_to_equilibrium(&mut self, max_steps: usize, tolerance: F, dt: F, n: usize) -> (F, F, usize) {
+        let mut steps = 0;
+
+        while steps < n || (steps < max_steps && !self.has_reached_equilibrium(tolerance, n)) {
+            self.par_minor_update(dt);
+            steps += 1;
+        }
+
+        let (ke, pe) = self.last_energy();
+        (ke, pe, steps)
+    }
+
+    /// Parallel version of the [`minor_update`](Self::minor_update) method.
+    pub fn par_minor_update(&mut self, dt: F) -> (F, F) {
+        // Step 1: Recalculate the forces exerted by springs.
+        self.springs.par_iter_mut().for_each(|spring| {
+            spring.recalculate(&self.masses);
+            let force_vector = spring.force_vector(&self.masses);
+
+            let [a_key, b_key] = spring.mass_keys();
+            self.masses[a_key].add_force(&force_vector);
+            self.masses[b_key].sub_force(&force_vector);
+        });
+
+        // Step 2: Move the masses for one time step.
+        self.masses.values_mut().for_each(|mass| {
+            mass.move_mass(self.drag_coefficient, dt);
+        });
+
+        // Step 3: Update the energy history of the system.
+        self.record_energy()
     }
 }

@@ -33,9 +33,17 @@ def plot(
 
     n_steps = mbed_stack.shape[0]
 
+    # Flatten the arrays to 1D to eventually get the axis limits
     x_vals = mbed_stack[:, :, 0].flatten()
     y_vals = mbed_stack[:, :, 1].flatten()
     z_vals = mbed_stack[:, :, 2].flatten()
+
+    # Remove nan values from the arrays
+    x_vals = x_vals[~numpy.isnan(x_vals)]
+    y_vals = y_vals[~numpy.isnan(y_vals)]
+    z_vals = z_vals[~numpy.isnan(z_vals)]
+
+    # Get the axis limits
     x_lims = x_vals.min(), x_vals.max()
     y_lims = y_vals.min(), y_vals.max()
     z_lims = z_vals.min(), z_vals.max()

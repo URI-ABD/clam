@@ -14,42 +14,26 @@ pub use measure::measure;
 pub enum Commands {
     /// Create a dimension reduction for the given dataset.
     Build {
-        // /// The number of dimensions to reduce to.
-        // #[arg(short('d'), long, default_value = "3")]
-        // dimensions: usize,
-
-        // /// The frequency of checkpoints, i.e. how often the current state of
-        // /// the dimension reduction is saved to disk.
-        // #[arg(short('c'), long, default_value = "100")]
-        // checkpoint_frequency: usize,
         /// Whether to use the balanced ball clustering algorithm.
         #[arg(short('b'), long)]
         balanced: bool,
 
         /// The damping factor for the mass-spring system.
         #[arg(short('B'), long, default_value = "0.99")]
-        beta: f32,
+        beta: f64,
 
         /// The spring constant for the mass-spring system.
         #[arg(short('k'), long, default_value = "1.0")]
-        k: f32,
+        k: f64,
 
         /// The factor by which to decrease the spring constant at each
         /// iteration.
         #[arg(short('K'), long, default_value = "0.5")]
-        dk: f32,
-
-        /// The fraction of springs to replace at each iteration.
-        #[arg(short('f'), long, default_value = "0.5")]
-        f: f32,
-
-        /// The retention depth for the springs in the mass-spring system.
-        #[arg(short('R'), long, default_value = "4")]
-        retention_depth: usize,
+        dk: f64,
 
         /// The time step for each iteration of the mass-spring system.
         #[arg(short('t'), long, default_value = "0.01")]
-        dt: f32,
+        dt: f64,
 
         /// The number of iterations to wait before stopping the optimization if
         /// the stability does not increase.
@@ -59,7 +43,7 @@ pub enum Commands {
         /// The target stability value. If the stability reaches this value, the
         /// optimization is stopped.
         #[arg(short('T'), long, default_value = "0.001")]
-        target: f32,
+        target: f64,
 
         /// The maximum number of iterations to run.
         #[arg(short('M'), long, default_value = "10000")]

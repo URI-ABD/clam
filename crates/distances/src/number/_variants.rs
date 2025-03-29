@@ -141,6 +141,10 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the ceiling of `self`.
     #[must_use]
     fn ceil(self) -> Self;
+
+    /// Returns whether the `Float` is NaN.
+    #[must_use]
+    fn is_nan(self) -> bool;
 }
 
 impl Float for f32 {
@@ -189,6 +193,10 @@ impl Float for f32 {
     fn ceil(self) -> Self {
         Self::ceil(self)
     }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
 }
 
 impl Float for f64 {
@@ -236,5 +244,9 @@ impl Float for f64 {
 
     fn ceil(self) -> Self {
         Self::ceil(self)
+    }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
     }
 }

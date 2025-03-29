@@ -24,8 +24,6 @@ pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     forces: Arc<RwLock<Vec<Vector<F, DIM>>>>,
     /// The total force Vector acting on the `Mass`.
     total_force: Vector<F, DIM>,
-    /// Accumulator for the total magnitude of the forces experienced by the `Mass`.
-    total_force_magnitudes: F,
     /// Phantom data to store the type `T`.
     phantom: std::marker::PhantomData<T>,
 }
@@ -45,9 +43,13 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
             velocity,
             forces: Arc::new(RwLock::new(Vec::new())),
             total_force: Vector::zero(),
-            total_force_magnitudes: F::ZERO,
             phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Sets a velocity for the `Mass`.
+    pub const fn set_velocity(&mut self, velocity: Vector<F, DIM>) {
+        self.velocity = velocity;
     }
 
     /// Calculates the distance in the original dataset.
@@ -133,11 +135,6 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         self.forces.write().unwrap().push(-*f);
     }
 
-    /// Returns the total magnitude of the forces experienced by the `Mass`.
-    pub const fn total_force_magnitudes(&self) -> F {
-        self.total_force_magnitudes
-    }
-
     /// Moves the `Mass` under the force it experiences.
     ///
     /// # Arguments
@@ -151,14 +148,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     #[allow(clippy::unwrap_used)]
     pub fn move_mass(&mut self, drag: F, dt: F) {
         // Accumulate all forces acting on the mass.
-        (self.total_force_magnitudes, self.total_force) = self
-            .forces
-            .write()
-            .unwrap()
-            .drain(..)
-            .fold((F::ZERO, Vector::zero()), |(mag, force), f| {
-                (mag + f.magnitude(), force + f)
-            });
+        self.total_force = self.forces.write().unwrap().drain(..).sum();
 
         // Calculate friction from drag.
         let friction = -self.velocity * drag;

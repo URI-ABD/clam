@@ -133,14 +133,10 @@ fn main() -> Result<(), String> {
     // matches just as you would the top level cmd
     match &args.command {
         Commands::Build {
-            // dimensions,
-            // checkpoint_frequency,
             balanced,
             beta,
             k,
             dk,
-            f,
-            retention_depth,
             dt,
             patience,
             target,
@@ -151,21 +147,8 @@ fn main() -> Result<(), String> {
 
             let data = dataset::read(&inp_dir, &args.dataset_name)?;
 
-            let reduced_data = workflow::build::<_, _, _, _, f32, DIM>(
-                &out_dir,
-                &data,
-                metric,
-                *balanced,
-                args.seed,
-                *beta,
-                *k,
-                *dk,
-                *retention_depth,
-                *f,
-                *dt,
-                *patience,
-                *target,
-                *max_steps,
+            let reduced_data = workflow::build::<_, _, _, _, f64, DIM>(
+                &out_dir, &data, metric, *balanced, args.seed, *beta, *k, *dk, *dt, *patience, *target, *max_steps,
             )?;
 
             let reduced_path = out_dir.join(format!("{}-reduced.npy", data.name()));
