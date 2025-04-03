@@ -68,6 +68,39 @@ pub fn choose_samples<T: Clone>(indices: &[T], sqrt_thresh: usize, log2_thresh: 
     indices
 }
 
+/// Create a random derangement of the given size.
+///
+/// A "Derangement" is a permutation of the elements of a set, such that no
+/// element appears in its original position. We use the "Early Refusal"
+/// algorithm as described in [this paper](https://labdisia.disia.unifi.it/merlini/papers/Derangements.pdf).
+///
+/// # Arguments
+///
+/// * `rng` - The random number generator.
+/// * `n` - The size of the derangement.
+///
+/// # Returns
+///
+/// A vector containing the derangement.
+pub fn random_derangement<R: Rng>(rng: &mut R, n: usize) -> Vec<usize> {
+    loop {
+        let mut derangement = (0..n).collect::<Vec<_>>();
+        derangement.shuffle(rng);
+        let mut c = 0;
+        for i in (1..n).rev() {
+            c = i;
+            let j = rng.gen_range(0..i);
+            if derangement[j] == i {
+                break;
+            }
+            derangement.swap(i, j);
+        }
+        if c == n - 1 && derangement[0] != 0 {
+            return derangement;
+        }
+    }
+}
+
 /// Returns the number of distinct pairs that can be formed from `n` elements
 /// without repetition.
 #[must_use]

@@ -144,6 +144,27 @@ where
         checkpoints
     }
 
+    /// For each mass in the system, add a spring to a randomly chosen different
+    /// mass.
+    ///
+    /// # Arguments
+    ///
+    /// - `rng`: A mutable reference to a random number generator.
+    /// - `data`: A reference to the dataset containing the items.
+    /// - `metric`: The metric to use for distance calculation.
+    pub fn add_random_springs<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(&mut self, rng: &mut R, data: &D, metric: &M) {
+        let keys = self.masses.keys().collect::<Vec<_>>();
+        let derangement = crate::utils::random_derangement(rng, keys.len());
+
+        derangement
+            .into_iter()
+            .map(|i| &keys[i])
+            .zip(keys.iter())
+            .for_each(|(&a_key, &b_key)| {
+                self.add_spring(a_key, b_key, data, metric);
+            });
+    }
+
     /// Remove springs that connect masses whose clusters are too far apart.
     ///
     /// Two masses are considered too far apart if the distance between their
@@ -368,9 +389,10 @@ where
             self.add_spring(a, b, data, metric);
         }
 
-        // Remove the stressed masses from the system.
+        // Remove the stressed masses and all connected springs from the system.
         for (m, _, _) in triplet_keys {
             self.masses.remove(m);
+            // self.springs.retain(|s| !s.mass_keys().contains(&m));
         }
 
         // Record the energy history of the system.
