@@ -53,7 +53,7 @@ pub enum Commands {
     Measure {
         /// The quality measures to calculate.
         // #[arg(short('q'), long, default_value = "pairwise,triangle-inequality,angle")]
-        #[arg(short('q'), long, default_value = "pairwise")]
+        #[arg(short('q'), long, default_value = "fnn")]
         quality_measures: Vec<QualityMeasures>,
 
         /// Whether to exhaustively measure the quality on all possible

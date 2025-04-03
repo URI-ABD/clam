@@ -10,17 +10,18 @@ pub fn measure<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
     reduced_data: &FlatVec<[f32; DIM], usize>,
+    umap_data: &FlatVec<[f32; DIM], usize>,
     quality_measures: &[QualityMeasures],
     exhaustive: bool,
-) -> Vec<f32>
+) -> Vec<(f32, f32)>
 where
-    I: Send + Sync,
+    I: Send + Sync + Clone,
     M: ParMetric<I, f32>,
 {
     ftlog::info!("Measuring quality of dimension reduction...");
 
     quality_measures
         .par_iter()
-        .map(|m| m.measure(original_data, metric, reduced_data, exhaustive))
+        .map(|m| m.measure(original_data, metric, reduced_data, umap_data, exhaustive))
         .collect()
 }

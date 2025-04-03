@@ -8,8 +8,9 @@ pub fn measure<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
     reduced_data: &FlatVec<[f32; DIM], usize>,
+    umap_data: &FlatVec<[f32; DIM], usize>,
     exhaustive: bool,
-) -> f32
+) -> (f32, f32)
 where
     I: Send + Sync,
     M: ParMetric<I, f32>,
@@ -22,7 +23,7 @@ where
         indices.truncate(1000);
         indices
     };
-    measure_subsample(original_data, metric, reduced_data, &indices)
+    measure_subsample(original_data, metric, reduced_data, umap_data, &indices)
 }
 
 /// Measure the quality using a subsample of the data.
@@ -31,8 +32,9 @@ fn measure_subsample<I, M, const DIM: usize>(
     original_data: &FlatVec<I, usize>,
     metric: &M,
     reduced_data: &FlatVec<[f32; DIM], usize>,
+    umap_data: &FlatVec<[f32; DIM], usize>,
     indices: &[usize],
-) -> f32
+) -> (f32, f32)
 where
     I: Send + Sync,
     M: ParMetric<I, f32>,

@@ -170,16 +170,30 @@ fn main() -> Result<(), String> {
 
             let reduced_path = out_dir.join(format!("{}-reduced.npy", original_data.name()));
             if !reduced_path.exists() {
-                return Err(format!("{reduced_path:?} does not exist"));
+                return Err(format!("Reduced data not found: {reduced_path:?}"));
+            }
+
+            let umap_path = out_dir.join(format!("{}-umap.npy", original_data.name()));
+            if !umap_path.exists() {
+                return Err(format!("UMAP data not found: {umap_path:?}"));
             }
 
             ftlog::info!("Reading reduced data from {reduced_path:?}...");
             let reduced_data = FlatVec::<[f32; DIM], usize>::read_npy(&reduced_path)?;
+            ftlog::info!("Reading UMAP data from {umap_path:?}...");
+            let umap_data = FlatVec::<[f32; DIM], usize>::read_npy(&umap_path)?;
 
-            let measures = workflow::measure(&original_data, &metric, &reduced_data, quality_measures, *exhaustive);
+            let measures = workflow::measure(
+                &original_data,
+                &metric,
+                &reduced_data,
+                &umap_data,
+                quality_measures,
+                *exhaustive,
+            );
 
-            for (qm, value) in quality_measures.iter().zip(measures) {
-                let msg = format!("Quality {:?}: {value:.6}", qm.name());
+            for (qm, (mbed_value, umap_value)) in quality_measures.iter().zip(measures) {
+                let msg = format!("Measure {:?}, CLAM: {mbed_value:.6}, UMAP: {umap_value:.6}", qm.name());
                 ftlog::info!("{msg}");
                 println!("{msg}");
             }
