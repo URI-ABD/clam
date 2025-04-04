@@ -119,6 +119,18 @@ impl<F: Float, const DIM: usize> Vector<F, DIM> {
     pub fn dot(&self, other: &Self) -> F {
         self.iter().zip(other.iter()).map(|(&a, &b)| a * b).sum()
     }
+
+    /// Return the `Vector` has any NANs.
+    #[must_use]
+    pub fn has_nan(&self) -> bool {
+        self.iter().any(|&x| x.is_nan())
+    }
+
+    /// Return the `Vector` has any INFs.
+    #[must_use]
+    pub fn has_inf(&self) -> bool {
+        self.iter().any(|&x| !x.is_finite())
+    }
 }
 
 impl<F: Float, const DIM: usize> From<Vector<F, DIM>> for [F; DIM] {

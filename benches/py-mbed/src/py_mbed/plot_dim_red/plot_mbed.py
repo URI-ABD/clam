@@ -20,6 +20,11 @@ def plot(
     else:
         labels = numpy.zeros(data.shape[0], dtype=bool)
 
+    # If the data has no z-axis, add a dummy z-axis with all values set to 0
+    if data.shape[1] == 2:
+        zeros = numpy.zeros((data.shape[0], 1))
+        data = numpy.concatenate((data, zeros), axis=1)
+
     # colors will be blue for 0 and red for 1
     colors = ["red" if label else "blue" for label in labels]
 

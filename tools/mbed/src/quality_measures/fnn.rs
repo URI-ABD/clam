@@ -33,12 +33,12 @@ where
 
     let umap_root = Ball::par_new_tree_iterative(umap_data, &reduced_metric, &criteria, Some(seed), depth_stride);
 
-    let k = 10;
+    let k = 100;
     let indices = {
         let mut indices = original_data.indices().collect::<Vec<_>>();
         let mut rng = StdRng::seed_from_u64(seed);
         indices.shuffle(&mut rng);
-        indices.truncate(100);
+        indices.truncate(1000);
         indices
     };
     let original_queries = indices.iter().map(|&i| original_data[i].clone()).collect::<Vec<_>>();

@@ -17,7 +17,7 @@ slotmap::new_key_type! { pub struct MassKey; }
 pub type MassMap<'a, T, C, F, const DIM: usize> = HopSlotMap<MassKey, Mass<'a, T, C, F, DIM>>;
 
 /// A type alias for a checkpoint in the simulation.
-type Checkpoint<F, const DIM: usize> = (F, F, usize, FlatVec<[F; DIM], usize>);
+type Checkpoint<F, const DIM: usize> = FlatVec<[F; DIM], usize>;
 
 /// Represents a collection of masses and springs.
 pub struct Complex<'a, T, C, F, const DIM: usize>
@@ -34,8 +34,6 @@ where
     energy_history: Vec<(F, F)>,
     /// The drag coefficient for the system.
     drag_coefficient: F,
-    /// The scale factor for the rest length of the springs.
-    scale: F,
     /// The spring constant to use for new springs.
     spring_constant: F,
     /// The loosening factor for springs, with a value between zero and one.
@@ -56,25 +54,21 @@ where
     ///
     /// - `root_cluster`: A reference to the root `Cluster`.
     /// - `drag_coefficient`: The drag coefficient for the system.
-    /// - `scale`: The complex will try to keep masses inside a hyper-cube of
-    ///   side length equals to twice this `scale`.
     /// - `spring_constant`: The spring constant to use for new springs.
     /// - `loosening_factor`: The loosening factor for inheriting springs, with a value between zero and one.
-    pub fn new(root: &'a C, drag_coefficient: F, scale: F, spring_constant: F, loosening_factor: F) -> Self {
+    pub fn new(root: &'a C, drag_coefficient: F, spring_constant: F, loosening_factor: F) -> Self {
         let mut masses = MassMap::with_key();
         masses.insert(Mass::new(
             root,
             Vector::zero(), // Position at the origin.
             Vector::zero(), // Zero velocity.
         ));
-        let scale = scale / F::from(root.radius());
 
         let mut complex = Self {
             masses,
             springs: Vec::new(),
             energy_history: Vec::new(),
             drag_coefficient,
-            scale,
             spring_constant,
             loosening_factor,
         };
@@ -127,18 +121,47 @@ where
             // Perform a major update.
             self.major_update(rng, dt, data, metric);
 
-            // Prune springs that connect masses whose clusters are too far apart.
-            self.prune_springs();
-
             // Allow the system to relax to equilibrium.
             let (ke, pe, steps) = self.relax_to_equilibrium(max_steps, tolerance, dt, n);
+
+            // Prune springs that connect masses whose clusters are too far apart.
+            self.prune_springs();
 
             // Stop all masses that are not connected to any springs.
             self.stop_isolated_masses();
 
+            // Center the system at the origin.
+            self.center_at_origin();
+
             // Record a checkpoint.
-            let positions = self.extract_embedding();
-            checkpoints.push((ke, pe, steps, positions));
+            checkpoints.push(self.extract_embedding());
+
+            ftlog::info!(
+                "Checkpoint {} recorded: steps: {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                checkpoints.len(),
+                ke.as_f32(),
+                pe.as_f32(),
+                self.masses.len(),
+                self.springs.len()
+            );
+        }
+
+        while !self.springs.is_empty() {
+            self.loosen_springs();
+            let (ke, pe, steps) = self.relax_to_equilibrium(max_steps, tolerance, dt, n);
+            self.center_at_origin();
+            checkpoints.push(self.extract_embedding());
+            ftlog::info!(
+                "Checkpoint {} recorded: steps {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                checkpoints.len(),
+                ke.as_f32(),
+                pe.as_f32(),
+                self.masses.len(),
+                self.springs.len()
+            );
+            self.prune_springs();
+
+            self.stop_isolated_masses();
         }
 
         checkpoints
@@ -173,18 +196,22 @@ where
     /// nor any of their descendants will have overlapping volumes in the original
     /// dataset.
     pub fn prune_springs(&mut self) {
+        let min_stiffness = self.spring_constant * self.loosening_factor.powi(7);
         self.springs.retain(|s| {
-            let [a, b] = s.mass_keys();
-            let [a, b] = [&self.masses[a], &self.masses[b]];
-            let threshold = a.radius() + b.radius() * F::SQRT_2;
-            s.rest_length() <= threshold
+            // s.stiffness() >= min_stiffness
+            s.stiffness() >= min_stiffness && {
+                let [a, b] = s.mass_keys();
+                let [a, b] = [&self.masses[a], &self.masses[b]];
+                let threshold = a.radius() + b.radius();
+                s.rest_length() <= threshold * F::SQRT_2
+            }
         });
     }
 
     /// Records the kinetic and potential energies at the current time step.
     fn record_energy(&mut self) -> (F, F) {
-        let kinetic_energy = self.total_kinetic_energy();
-        let potential_energy = self.total_potential_energy();
+        let kinetic_energy = self.mean_kinetic_energy();
+        let potential_energy = self.mean_potential_energy();
         self.energy_history.push((kinetic_energy, potential_energy));
         (kinetic_energy, potential_energy)
     }
@@ -208,14 +235,8 @@ where
         data: &D,
         metric: &M,
     ) -> &Spring<F> {
-        let s = Spring::new(
-            [a_key, b_key],
-            &self.masses,
-            self.spring_constant,
-            data,
-            metric,
-            self.scale,
-        );
+        let s = Spring::new([a_key, b_key], &self.masses, self.spring_constant, data, metric);
+        ftlog::debug!("Adding spring {s:?}");
         self.springs.push(s);
         self.springs
             .last()
@@ -231,6 +252,11 @@ where
         self.masses.values().map(Mass::kinetic_energy).sum()
     }
 
+    /// Calculates the mean kinetic energy of all masses in the `Complex`.
+    fn mean_kinetic_energy(&self) -> F {
+        self.total_kinetic_energy() / F::from(self.masses.len())
+    }
+
     /// Calculates the total potential energy stored in all springs in the `Complex`.
     ///
     /// # Returns
@@ -238,6 +264,11 @@ where
     /// The total potential energy as a floating-point value.
     fn total_potential_energy(&self) -> F {
         self.springs.iter().map(Spring::potential_energy).sum()
+    }
+
+    /// Calculates the mean potential energy of all springs in the `Complex`.
+    fn mean_potential_energy(&self) -> F {
+        self.total_potential_energy() / F::from(self.springs.len())
     }
 
     /// Calculates the mean and standard deviation of the kinetic energy over the previous `n` steps.
@@ -293,6 +324,11 @@ where
         self.energy_history
             .last()
             .map_or((F::ZERO, F::ZERO), |&(ke, pe)| (ke, pe))
+    }
+
+    /// Returns the energy history of the system.
+    pub fn energy_history(&self) -> &[(F, F)] {
+        &self.energy_history
     }
 
     /// Checks whether the system has reached equilibrium.
@@ -380,11 +416,18 @@ where
 
         // Transfer springs from the exploded masses to their children and add springs between the siblings.
         for &(m, a, b) in &triplet_keys {
-            let m_springs;
-            (m_springs, self.springs) = self.springs.drain(..).partition(|s| s.mass_keys().contains(&m));
-            let new_springs = m_springs
-                .into_iter()
-                .flat_map(|s| s.inherit([m, a, b], &self.masses, data, metric, self.scale, self.loosening_factor));
+            let new_springs = self
+                .springs
+                .iter()
+                .filter_map(|s| {
+                    if s.mass_keys().contains(&m) {
+                        Some(s.inherit([m, a, b], &self.masses, data, metric, self.loosening_factor))
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect::<Vec<_>>();
             self.springs.extend(new_springs);
             self.add_spring(a, b, data, metric);
         }
@@ -392,7 +435,10 @@ where
         // Remove the stressed masses and all connected springs from the system.
         for (m, _, _) in triplet_keys {
             self.masses.remove(m);
-            // self.springs.retain(|s| !s.mass_keys().contains(&m));
+            let n_springs = self.springs.len();
+            self.springs.retain(|s| !s.mass_keys().contains(&m));
+            let n_removed = n_springs - self.springs.len();
+            ftlog::debug!("Removed {n_removed} springs connected to mass {m:?}");
         }
 
         // Record the energy history of the system.
@@ -420,6 +466,27 @@ where
             }
         });
     }
+
+    /// Loosen all springs in the system.
+    pub fn loosen_springs(&mut self) {
+        self.springs.iter_mut().for_each(|s| s.loosen(self.loosening_factor));
+    }
+
+    /// Computes the location of the center of mass of the system.
+    pub fn center_of_mass(&self) -> Vector<F, DIM> {
+        let (pos, mass) = self.masses.values().fold((Vector::zero(), F::ZERO), |(pos, mass), m| {
+            let m_pos = m.position();
+            let m_mass = m.mass();
+            (pos + m_pos * m_mass, mass + m_mass)
+        });
+        pos / mass
+    }
+
+    /// Moves all masses in the system so that the center of mass is at the origin.
+    pub fn center_at_origin(&mut self) {
+        let shift = -self.center_of_mass();
+        self.masses.values_mut().for_each(|m| m.shift_position(shift));
+    }
 }
 
 impl<T, C, F, const DIM: usize> Complex<'_, T, C, F, DIM>
@@ -446,27 +513,47 @@ where
             // Perform a major update.
             self.major_update(rng, dt, data, metric);
 
-            // Prune springs that connect masses whose clusters are too far apart.
-            self.prune_springs();
-
             // Allow the system to relax to equilibrium.
             let (ke, pe, steps) = self.par_relax_to_equilibrium(max_steps, tolerance, dt, n);
+
+            // Prune springs that connect masses whose clusters are too far apart.
+            self.prune_springs();
 
             // Stop all masses that are not connected to any springs.
             self.stop_isolated_masses();
 
+            // Center the system at the origin.
+            self.center_at_origin();
+
             // Record a checkpoint.
-            let positions = self.extract_embedding();
-            checkpoints.push((ke, pe, steps, positions));
+            checkpoints.push(self.extract_embedding());
 
             ftlog::info!(
-                "Checkpoint recorded: {} steps, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                "Checkpoint {} recorded: steps: {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
                 checkpoints.len(),
                 ke.as_f32(),
                 pe.as_f32(),
                 self.masses.len(),
                 self.springs.len()
             );
+        }
+
+        while !self.springs.is_empty() {
+            self.par_loosen_springs();
+            let (ke, pe, steps) = self.par_relax_to_equilibrium(max_steps, tolerance, dt, n);
+            self.center_at_origin();
+            checkpoints.push(self.extract_embedding());
+            ftlog::info!(
+                "Checkpoint {} recorded: steps {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                checkpoints.len(),
+                ke.as_f32(),
+                pe.as_f32(),
+                self.masses.len(),
+                self.springs.len()
+            );
+            self.prune_springs();
+
+            self.stop_isolated_masses();
         }
 
         checkpoints
@@ -504,5 +591,12 @@ where
 
         // Step 3: Update the energy history of the system.
         self.record_energy()
+    }
+
+    /// Parallel version of the [`loosen_springs`](Self::loosen_springs) method.
+    pub fn par_loosen_springs(&mut self) {
+        self.springs
+            .par_iter_mut()
+            .for_each(|s| s.loosen(self.loosening_factor));
     }
 }

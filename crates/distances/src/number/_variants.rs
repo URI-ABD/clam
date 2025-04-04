@@ -120,6 +120,10 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     #[must_use]
     fn log2(self) -> Self;
 
+    /// Returns the natural logarithm of `self`.
+    #[must_use]
+    fn ln(self) -> Self;
+
     /// Returns the sine of `self`.
     #[must_use]
     fn sin(self) -> Self;
@@ -145,6 +149,10 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns whether the `Float` is NaN.
     #[must_use]
     fn is_nan(self) -> bool;
+
+    /// Returns whether the `Float` is finite.
+    #[must_use]
+    fn is_finite(self) -> bool;
 }
 
 impl Float for f32 {
@@ -178,6 +186,10 @@ impl Float for f32 {
         Self::log2(self)
     }
 
+    fn ln(self) -> Self {
+        Self::ln(self)
+    }
+
     fn sin(self) -> Self {
         Self::sin(self)
     }
@@ -196,6 +208,10 @@ impl Float for f32 {
 
     fn is_nan(self) -> bool {
         self.is_nan()
+    }
+
+    fn is_finite(self) -> bool {
+        self.is_finite()
     }
 }
 
@@ -230,6 +246,10 @@ impl Float for f64 {
         Self::log2(self)
     }
 
+    fn ln(self) -> Self {
+        Self::ln(self)
+    }
+
     fn sin(self) -> Self {
         Self::sin(self)
     }
@@ -248,5 +268,9 @@ impl Float for f64 {
 
     fn is_nan(self) -> bool {
         self.is_nan()
+    }
+
+    fn is_finite(self) -> bool {
+        self.is_finite()
     }
 }

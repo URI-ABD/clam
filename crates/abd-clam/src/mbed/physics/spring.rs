@@ -15,6 +15,7 @@ use super::{
 };
 
 /// A `Spring` connects two masses and maintains their relative distance.
+#[derive(Debug, Clone, Copy)]
 pub struct Spring<F: Float> {
     /// Keys of the two masses connected by the spring.
     keys: [MassKey; 2],
@@ -47,7 +48,6 @@ impl<F: Float> Spring<F> {
         stiffness: F,
         data: &D,
         metric: &M,
-        scale: F,
     ) -> Self
     where
         T: Number,
@@ -57,7 +57,7 @@ impl<F: Float> Spring<F> {
     {
         let [a, b] = keys;
         let [a, b] = [&masses[a], &masses[b]];
-        let rest_length = a.original_distance(b, data, metric) / scale;
+        let rest_length = a.original_distance(b, data, metric);
 
         let mut spring = Self {
             keys,
@@ -87,6 +87,16 @@ impl<F: Float> Spring<F> {
     /// Returns the potential energy stored in the spring.
     pub const fn potential_energy(&self) -> F {
         self.potential_energy
+    }
+
+    /// Returns the stiffness of the spring.
+    pub const fn stiffness(&self) -> F {
+        self.stiffness
+    }
+
+    /// Loosens the spring by a given factor.
+    pub fn loosen(&mut self, factor: F) {
+        self.stiffness *= factor;
     }
 
     /// Calculates the force exerted by the spring as a vector pointing from the
@@ -128,26 +138,40 @@ impl<F: Float> Spring<F> {
         let b = &masses[b_key];
 
         self.current_length = a.embedded_distance(b);
+        debug_assert!(
+            !self.current_length.is_nan(),
+            "Masses {a:?} and {b:?} have NaN distance"
+        );
         self.force = f_mag(self.stiffness, self.rest_length, self.current_length, 2);
         self.potential_energy = pe(self.stiffness, self.rest_length, self.current_length, 2);
+
+        debug_assert!(!self.force.is_nan(), "Spring {self:?} has NaN force");
+        debug_assert!(self.force.is_finite(), "Spring {self:?} has infinite force");
+        debug_assert!(
+            !self.potential_energy.is_nan(),
+            "Spring {self:?} has NaN potential energy"
+        );
+        debug_assert!(
+            self.potential_energy.is_finite(),
+            "Spring {self:?} has infinite potential energy"
+        );
     }
 
     /// Inherits the spring from the given parent to its children.
     pub(crate) fn inherit<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Metric<I, T>, const DIM: usize>(
-        self,
+        &self,
         keys: [MassKey; 3],
         masses: &MassMap<'_, T, C, F, DIM>,
         data: &D,
         metric: &M,
-        scale: F,
         loosening_factor: F,
     ) -> [Self; 2] {
         let [p, a, b] = keys;
         let o = if p == self.keys[0] { self.keys[1] } else { self.keys[0] };
 
         let spring_constant = self.stiffness * loosening_factor;
-        let ao = Self::new([a, o], masses, spring_constant, data, metric, scale);
-        let bo = Self::new([b, o], masses, spring_constant, data, metric, scale);
+        let ao = Self::new([a, o], masses, spring_constant, data, metric);
+        let bo = Self::new([b, o], masses, spring_constant, data, metric);
 
         [ao, bo]
     }
@@ -168,21 +192,23 @@ impl<F: Float> Spring<F> {
 /// - `l0`: The rest length of the spring.
 /// - `l`: The current length of the spring.
 /// - `n`: The power of the reciprocal term.
-fn f_mag<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
-    k * (l.sqrt() - l.recip().powi(n) - l0.sqrt() + l0.recip().powi(n))
+fn f_mag<F: Float>(k: F, l0: F, l: F, _: i32) -> F {
+    k * (l / l0).ln()
+    // k * (l.sqrt() - l.recip().powi(n) - l0.sqrt() + l0.recip().powi(n))
 }
 
 /// Returns the potential energy stored in the spring.
 ///
 /// The potential energy equation is the integral of the force equation.
-fn pe<F: Float>(k: F, l0: F, l: F, n: i32) -> F {
+fn pe<F: Float>(k: F, l0: F, l: F, _: i32) -> F {
     if l0 <= F::EPSILON || l.abs_diff(l0) <= F::EPSILON {
         F::ZERO
     } else {
         let pe = |x: F| {
-            x * l0.recip().powi(n) - x * l0.sqrt()
-                + x.powi(1 - n) / F::from(n - 1)
-                + x.sqrt().cube().double() / F::from(3)
+            x * ((x / l0).ln() - F::ONE)
+            // x * l0.recip().powi(n) - x * l0.sqrt()
+            //     + x.powi(1 - n) / F::from(n - 1)
+            //     + x.sqrt().cube().double() / F::from(3)
         };
         k * (pe(l) - pe(l0))
     }

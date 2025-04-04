@@ -84,18 +84,17 @@ pub fn choose_samples<T: Clone>(indices: &[T], sqrt_thresh: usize, log2_thresh: 
 /// A vector containing the derangement.
 pub fn random_derangement<R: Rng>(rng: &mut R, n: usize) -> Vec<usize> {
     loop {
+        let mut try_again = false;
         let mut derangement = (0..n).collect::<Vec<_>>();
         derangement.shuffle(rng);
-        let mut c = 0;
-        for i in (1..n).rev() {
-            c = i;
-            let j = rng.gen_range(0..i);
-            if derangement[j] == i {
+        for (i, &d) in derangement.iter().enumerate() {
+            if d == i {
+                // If the element is in its original position, shuffle again.
+                try_again = true;
                 break;
             }
-            derangement.swap(i, j);
         }
-        if c == n - 1 && derangement[0] != 0 {
+        if !try_again {
             return derangement;
         }
     }

@@ -13,6 +13,7 @@ use crate::{Cluster, Dataset, Metric};
 use super::Vector;
 
 /// Represents a `Mass` in the system.
+#[derive(Clone)]
 pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     /// Reference to the associated `Cluster`.
     cluster: &'a C,
@@ -26,6 +27,16 @@ pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     total_force: Vector<F, DIM>,
     /// Phantom data to store the type `T`.
     phantom: std::marker::PhantomData<T>,
+}
+
+impl<T: Number, C: Cluster<T>, F: Float, const DIM: usize> std::fmt::Debug for Mass<'_, T, C, F, DIM> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mass")
+            .field("position", &self.position)
+            .field("velocity", &self.velocity)
+            .field("total_force", &self.total_force)
+            .finish()
+    }
 }
 
 impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F, DIM> {
@@ -45,6 +56,16 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
             total_force: Vector::zero(),
             phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Returns the position of the `Mass`.
+    pub const fn position(&self) -> Vector<F, DIM> {
+        self.position
+    }
+
+    /// Shifts the position of the `Mass` by a given vector.
+    pub fn shift_position(&mut self, shift: Vector<F, DIM>) {
+        self.position += shift;
     }
 
     /// Sets a velocity for the `Mass`.
@@ -71,7 +92,11 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         let a = self.cluster.arg_center();
         let b = other.cluster.arg_center();
 
-        F::from(data.one_to_one(a, b, metric))
+        (F::from(data.one_to_one(a, b, metric)) + F::ONE.double() + F::EPSILON)
+            .ln()
+            .ln()
+            .abs()
+        // F::from(data.one_to_one(a, b, metric))
     }
 
     /// Calculates the euclidean distance in the embedding space.
@@ -159,8 +184,14 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         // Update velocity based on acceleration.
         self.velocity += acceleration * dt;
 
+        debug_assert!(!self.velocity.has_nan(), "{self:?} has NaN velocity");
+        debug_assert!(!self.velocity.has_inf(), "{self:?} has Inf velocity");
+
         // Update position based on velocity.
         self.position += self.velocity * dt;
+
+        debug_assert!(!self.position.has_nan(), "{self:?} has NaN position");
+        debug_assert!(!self.position.has_inf(), "{self:?} has Inf position");
     }
 
     /// Calculates the kinetic energy of the `Mass`.
@@ -205,7 +236,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// - If the `Mass` represents a leaf cluster.
     #[allow(clippy::panic)]
     pub(crate) fn explode<R: Rng>(&self, rng: &mut R, drag: F, dt: F) -> [Self; 2] {
-        assert!(!self.cluster.is_leaf(), "Cannot explode a leaf cluster.");
+        debug_assert!(!self.cluster.is_leaf(), "Cannot explode a leaf cluster.");
 
         // There should be exactly two children.
         let [a, b] = {
@@ -230,6 +261,11 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
         // Create the new masses.
         let mut a = Mass::new(a, self.position, va);
         let mut b = Mass::new(b, self.position, vb);
+
+        debug_assert!(!va.has_nan(), "Child {a:?} of {self:?} has NaN velocity");
+        debug_assert!(!va.has_inf(), "Child {a:?} of {self:?} has Inf velocity");
+        debug_assert!(!vb.has_nan(), "Child {b:?} of {self:?} has NaN velocity");
+        debug_assert!(!vb.has_inf(), "Child {b:?} of {self:?} has Inf velocity");
 
         // Move the masses due to the explosion.
         a.move_mass(drag, dt);

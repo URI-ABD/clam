@@ -27,7 +27,7 @@ def plot(
     ax[0].scatter(
         embedding[:, 0],
         embedding[:, 1],
-        s=1,
+        s=10,
         alpha=0.5,
         c=colors,
     )
@@ -38,7 +38,7 @@ def plot(
     ax[1].scatter(
         embedding[:, 0],
         embedding[:, 2],
-        s=1,
+        s=10,
         alpha=0.5,
         c=colors,
     )
@@ -49,7 +49,7 @@ def plot(
     ax[2].scatter(
         embedding[:, 1],
         embedding[:, 2],
-        s=1,
+        s=10,
         alpha=0.5,
         c=colors,
     )

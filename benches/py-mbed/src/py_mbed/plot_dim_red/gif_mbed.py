@@ -31,6 +31,11 @@ def plot(
         logger.warning(f"Could not find the stack file at {stack_path}")
         return reduced_path
 
+    # If the stack has no z-axis, add a dummy z-axis with all values set to 0
+    if mbed_stack.shape[2] == 2:
+        zeros = numpy.zeros((mbed_stack.shape[0], mbed_stack.shape[1], 1))
+        mbed_stack = numpy.concatenate((mbed_stack, zeros), axis=2)
+
     n_steps = mbed_stack.shape[0]
 
     # Flatten the arrays to 1D to eventually get the axis limits
