@@ -26,7 +26,7 @@ pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec
                 dimensionality,
                 1.0 - dimensional_error,
                 1.0 + dimensional_error,
-                &mut rand::thread_rng(),
+                &mut rand::rng(),
             );
             perturbations
                 .into_iter()

@@ -43,7 +43,7 @@ impl<F: Float, const DIM: usize> Vector<F, DIM> {
         let mut r_f64s = Vector::<f64, DIM>::zero();
         let (min, max) = (min.as_f64(), max.as_f64());
         for x in r_f64s.iter_mut() {
-            *x = rng.gen_range(min..max);
+            *x = rng.random_range(min..max);
         }
         Self(r_f64s.map(F::from))
     }

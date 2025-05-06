@@ -97,7 +97,7 @@ pub fn read<P: AsRef<Path>>(
 
     // Shuffle the sequences and split off the queries.
     let queries = if holdout > 0 {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         seqs.shuffle(&mut rng);
         seqs.split_off(seqs.len() - holdout)
     } else {

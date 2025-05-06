@@ -63,7 +63,7 @@ pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usiz
 pub fn choose_samples<T: Clone>(indices: &[T], sqrt_thresh: usize, log2_thresh: usize) -> Vec<T> {
     let mut indices = indices.to_vec();
     let n = crate::utils::num_samples(indices.len(), sqrt_thresh, log2_thresh);
-    indices.shuffle(&mut rand::thread_rng());
+    indices.shuffle(&mut rand::rng());
     indices.truncate(n);
     indices
 }

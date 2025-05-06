@@ -19,7 +19,7 @@ where
         (0..original_data.cardinality()).collect::<Vec<_>>()
     } else {
         let mut indices = (0..original_data.cardinality()).collect::<Vec<_>>();
-        indices.shuffle(&mut rand::thread_rng());
+        indices.shuffle(&mut rand::rng());
         indices.truncate(1000);
         indices
     };

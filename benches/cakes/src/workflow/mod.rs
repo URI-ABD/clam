@@ -125,14 +125,14 @@ pub fn run_tabular<P: AsRef<std::path::Path>, M: ParCountingMetric<Vec<f32>, f32
 
         let mut queries = queries.iter().cloned().zip(neighbors).collect::<Vec<_>>();
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         queries.shuffle(&mut rng);
         let _ = queries.split_off(num_queries);
 
         let (queries, neighbors): (Vec<_>, Vec<_>) = queries.into_iter().unzip();
         (queries, Some(neighbors))
     } else {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut queries = queries.to_vec();
         queries.shuffle(&mut rng);
         let _ = queries.split_off(num_queries);

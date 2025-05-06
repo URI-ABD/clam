@@ -48,7 +48,7 @@ where
     ftlog::info!("Metric: {:?}", metric.name());
     ftlog::info!("Dimensions: {DIM}");
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     ftlog::info!("Creating the tree...");
     let tree_path = out_dir.as_ref().join(format!("{}-tree.bin", data.name()));

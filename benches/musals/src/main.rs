@@ -129,7 +129,7 @@ fn main() -> Result<(), String> {
     } else {
         let data = if let Some(num_samples) = args.num_samples {
             ftlog::info!("Sub-sampling dataset to {num_samples} samples.");
-            let data = data.random_subsample(&mut rand::thread_rng(), num_samples);
+            let data = data.random_subsample(&mut rand::rng(), num_samples);
             let seq_lens = data.items().iter().map(String::len).collect::<Vec<_>>();
             let (min_len, max_len, _, _, _) = bench_utils::fasta::len_stats(&seq_lens);
             let name = format!("{}-{num_samples}", data.name());
