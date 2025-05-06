@@ -9,7 +9,6 @@ members = [
     "crates/symagen",
     "pypi/distances",
     "tools/mbed",
-    # "visualizations/mbed",
 ]
 resolver = "2"
 

@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 clap = { workspace = true }
-bitcode = { workspace = true }
 abd-clam = { workspace = true, features = ["all"] }
 distances = { workspace = true }
 ndarray = { workspace = true }

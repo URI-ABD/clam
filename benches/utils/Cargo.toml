@@ -13,7 +13,6 @@ distances = { workspace = true }
 abd-clam = { workspace = true, features = ["all"] }
 bitcode = { workspace = true }
 csv = { workspace = true }
-stringzilla = { workspace = true }
 bio = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }

@@ -10,4 +10,3 @@ ftlog = { workspace = true }
 abd-clam = { workspace = true, features = ["disk-io"] }
 distances = { workspace = true }
 rand = { workspace = true }
-rayon = { workspace = true }
