@@ -8,7 +8,7 @@ members = [
     "crates/distances",
     "crates/symagen",
     "pypi/distances",
-    "tools/mbed",
+    "clts/mbed",
 ]
 resolver = "2"
 

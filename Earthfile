@@ -31,7 +31,7 @@ ENV PATH="/root/.local/bin/:$PATH"
 
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
-    COPY --dir benches crates pypi tools .
+    COPY --dir benches clts crates pypi .
     COPY Cargo.toml .
     RUN cargo chef prepare
     SAVE ARTIFACT recipe.json
@@ -43,9 +43,9 @@ chef-cook:
     COPY Cargo.toml pyproject.toml ruff.toml rustfmt.toml .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
     COPY --dir benches .
+    COPY --dir clts .
     COPY --dir crates .
     COPY --dir pypi .
-    COPY --dir tools .
     RUN uv sync --all-extras --all-packages --upgrade
 
 # This target builds the project using the cached dependencies.
@@ -74,9 +74,9 @@ fix:
     RUN cargo clippy --fix --allow-no-vcs
     RUN uv run ruff check --fix
     SAVE ARTIFACT benches AS LOCAL ./
+    SAVE ARTIFACT clts AS LOCAL ./
     SAVE ARTIFACT crates AS LOCAL ./
     SAVE ARTIFACT pypi AS LOCAL ./
-    SAVE ARTIFACT tools AS LOCAL ./
 
 # This target runs the tests.
 test:
