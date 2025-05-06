@@ -163,7 +163,7 @@ where
     } else {
         data.query_to_all(metric, query, leaf)
             .for_each(|(i, d)| hits.push((d, i)));
-    };
+    }
 }
 
 /// Parallel version of [`leaf_into_hits`](crate::cakes::search::knn_depth_first::leaf_into_hits).
@@ -190,5 +190,5 @@ fn par_leaf_into_hits<I, T, C, M, D>(
             .collect::<Vec<_>>()
             .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
-    };
+    }
 }

@@ -84,8 +84,8 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - `data`: The dataset containing the items.
     /// - `metric`: The metric to use for distance calculations.
     /// - `criteria`: The function to use for determining when a `Cluster`
-    ///    should be partitioned. A `Cluster` will only be partitioned if it is
-    ///    not a singleton and this function returns `true`.
+    ///   should be partitioned. A `Cluster` will only be partitioned if it is
+    ///   not a singleton and this function returns `true`.
     /// - `seed`: An optional seed for random number generation.
     ///
     /// # Returns
@@ -300,7 +300,7 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
                 self.depth(),
                 self.cardinality()
             );
-        };
+        }
     }
 }
 
@@ -496,6 +496,6 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
                 self.depth(),
                 self.cardinality()
             );
-        };
+        }
     }
 }

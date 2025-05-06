@@ -46,7 +46,7 @@ impl TrainableSmc {
     /// Get the combinations of `MetaMLModel`s and `GraphAlgorithm`s to train
     /// with.
     #[must_use]
-    pub fn combinations(&self) -> &[TrainableCombination] {
+    pub const fn combinations(&self) -> &Vec<TrainableCombination> {
         &self.0
     }
 

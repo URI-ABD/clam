@@ -327,7 +327,7 @@ where
     }
 
     /// Returns the energy history of the system.
-    pub fn energy_history(&self) -> &[(F, F)] {
+    pub const fn energy_history(&self) -> &Vec<(F, F)> {
         &self.energy_history
     }
 

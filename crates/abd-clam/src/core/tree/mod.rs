@@ -110,7 +110,7 @@ impl<T: Number, C: Cluster<T>> Tree<T, C> {
     }
 
     /// Returns the levels of the `Tree`.
-    pub fn levels(&self) -> &[Vec<(C, usize, usize)>] {
+    pub const fn levels(&self) -> &Vec<Vec<(C, usize, usize)>> {
         &self.levels
     }
 

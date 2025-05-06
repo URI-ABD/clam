@@ -20,13 +20,13 @@ impl PathManager {
 
     /// The name of the dataset.
     #[must_use]
-    pub fn name(&self) -> &str {
+    pub const fn name(&self) -> &String {
         &self.name
     }
 
     /// The directory where the dataset is stored.
     #[must_use]
-    pub fn out_dir(&self) -> &Path {
+    pub const fn out_dir(&self) -> &PathBuf {
         &self.out_dir
     }
 

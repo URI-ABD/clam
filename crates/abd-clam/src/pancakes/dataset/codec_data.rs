@@ -166,7 +166,7 @@ impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, Me, Enc, Dec> {
 
     /// Returns the permutation of the original dataset.
     #[must_use]
-    pub fn permutation(&self) -> &[usize] {
+    pub const fn permutation(&self) -> &Vec<usize> {
         &self.permutation
     }
 
@@ -184,7 +184,7 @@ impl<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, Me, Enc, Dec> {
     /// This is an array of tuples of the offset of the leaf cluster and the
     /// compressed bytes of the items in the leaf cluster.
     #[must_use]
-    pub fn leaf_bytes(&self) -> &[(usize, Box<[u8]>)] {
+    pub const fn leaf_bytes(&self) -> &Vec<(usize, Box<[u8]>)> {
         &self.leaf_bytes
     }
 

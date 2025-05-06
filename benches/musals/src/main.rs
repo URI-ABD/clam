@@ -128,7 +128,7 @@ fn main() -> Result<(), String> {
         steps::read_aligned(&args.inp_path, &aligner)?
     } else {
         let data = if let Some(num_samples) = args.num_samples {
-            ftlog::info!("Sub-sampling dataset to {} samples.", num_samples);
+            ftlog::info!("Sub-sampling dataset to {num_samples} samples.");
             let data = data.random_subsample(&mut rand::thread_rng(), num_samples);
             let seq_lens = data.items().iter().map(String::len).collect::<Vec<_>>();
             let (min_len, max_len, _, _, _) = bench_utils::fasta::len_stats(&seq_lens);
@@ -182,7 +182,7 @@ fn main() -> Result<(), String> {
             let msa_build_msg = format!("Finished building MSA in {elapsed:.2} seconds.");
             ftlog::info!("{msa_build_msg}");
             println!("{msa_build_msg}");
-        };
+        }
 
         // Read the aligned sequences and load the data.
         ftlog::info!("Reading aligned sequences from: {msa_fasta_path:?}");

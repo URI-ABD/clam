@@ -6,10 +6,10 @@ CACHE ./target/
 WORKDIR /usr/local/src/pypi/$DIR
 
 test:
-    RUN rye test
+    RUN uv run pytest
 
 bench:
-    RUN rye run richbench benches --markdown
+    RUN uv run richbench benches --markdown
 
 bash:
     RUN --interactive bash

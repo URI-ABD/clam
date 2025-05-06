@@ -65,7 +65,7 @@ def make_plot(  # noqa: PLR0913
     y_units: str = "µs",
     y_comp: list[float] | None = None,
     x_label: str = "Dimension",
-    y_comp_label: str = "SciPy",
+    y_comp_label: str | None = "SciPy",
 ) -> None:
     """Create and save a plot."""
     seaborn.set_theme(style="whitegrid", rc={"figure.figsize": (8, 5)})
@@ -83,8 +83,8 @@ def make_plot(  # noqa: PLR0913
     plot.set_title(f"{fn_name} ({dt_name})")
 
     # Set a tight layout to remove the whitespace around the plot
-    plot.figure.tight_layout()
+    plot.figure.tight_layout()  # type: ignore[union-attr]
 
     # Save with 300 DPI
-    plot.figure.savefig(IMAGES_DIR / f"{fn_name}_{dt_name}.png", dpi=200)
+    plot.figure.savefig(IMAGES_DIR / f"{fn_name}_{dt_name}.png", dpi=200)  # type: ignore[union-attr]
     plot.figure.clf()

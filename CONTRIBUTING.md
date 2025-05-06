@@ -6,6 +6,29 @@ For major changes, please open an issue to discuss what you would like to change
 As of writing this document, the project is still in a pre-1.0 state.
 This means that the API is not yet stable and breaking changes may occur frequently.
 
+## Getting Started
+
+1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
+2. Clone the repo from your fork.
+   1. `git clone ...`
+3. Test that things work.
+   1. `cargo test --release`
+   2. `earthly +test`
+4. Install pre-commit hooks
+   1. `pre-commit install`
+   2. `pre-commit run --all-files`
+5. Make a new branch.
+   1. Make sure to branch from the head of the `master` branch.
+   2. Have a plan and scope in mind for your changes.
+   3. You may not have merge commits in your branch because we wish to keep a linear history on the `master` branch. Use `git rebase` to keep your branch up-to-date with the `master` branch.
+6. Make your changes.
+   1. Remember to add tests and documentation.
+7. Commit and push your changes.
+8. Open a pull request.
+9. Bump the version.
+   1. We use [`bump2version`](https://github.com/c4urself/bump2version) to manage versioning and to keep the version numbers in sync.
+   2. You should ask someone to review your changes before bumping the version. You should also ask which `part` to bump.
+
 ## Prerequisites
 
 ### Mandatory
@@ -109,26 +132,3 @@ The following tools are optional, but recommended.
   - Example commands:
     - `python -m pytest`
     - `python -m pip install -r requirements.txt`
-
-## Getting Started
-
-1. Fork the repository to your own GitHub account. You should make changes in your own fork and contribute back to the base repository (under URI-ABD) via pull requests.
-2. Clone the repo from your fork.
-   1. `git clone ...`
-3. Test that things work.
-   1. `cargo test --release`
-   2. `earthly +test`
-4. Install pre-commit hooks
-   1. `pre-commit install`
-   2. `pre-commit run --all-files`
-5. Make a new branch.
-   1. Make sure to branch from the head of the `master` branch.
-   2. Have a plan and scope in mind for your changes.
-   3. You may not have merge commits in your branch because we wish to keep a linear history on the `master` branch. Use `git rebase` to keep your branch up-to-date with the `master` branch.
-6. Make your changes.
-   1. Remember to add tests and documentation.
-7. Commit and push your changes.
-8. Open a pull request.
-9. Bump the version.
-   1. We use [`bump2version`](https://github.com/c4urself/bump2version) to manage versioning and to keep the version numbers in sync.
-   2. You should ask someone to review your changes before bumping the version. You should also ask which `part` to bump.

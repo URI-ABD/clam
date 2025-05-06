@@ -25,9 +25,9 @@ RUN apt-get update
 RUN apt-get install build-essential
 RUN apt-get install -y libhdf5-dev
 
-ENV RYE_HOME="/opt/rye"
-RUN curl -sSf https://rye.astral.sh/get | RYE_INSTALL_OPTION="--yes" bash
-ENV PATH="${RYE_HOME}/shims:${PATH}"
+# Install uv and add it to the path.
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin/:$PATH"
 
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
@@ -40,39 +40,39 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml rustfmt.toml .
+    COPY Cargo.toml pyproject.toml ruff.toml rustfmt.toml .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
     COPY --dir benches .
     COPY --dir crates .
     COPY --dir pypi .
     COPY --dir tools .
-    RUN rye sync --no-lock
+    RUN uv sync --all-extras --all-packages --upgrade
 
 # This target builds the project using the cached dependencies.
 build:
     FROM +chef-cook
     RUN cargo build --release
-    RUN rye build --all --out target/release/pypi
+    RUN uv build --all --out-dir target/release/pypi
     SAVE ARTIFACT target/release AS LOCAL ./target/
 
 # This target formats the project.
 fmt:
     FROM +chef-cook
-    RUN cargo fmt --all -- --check && rye fmt --all --check
+    RUN cargo fmt --all -- --check && uv run ruff check
 
 # This target lints the project.
 lint:
     FROM +chef-cook
     RUN cargo clippy --all-targets --all-features
-    RUN rye lint --all
+    RUN uv run ruff check
 
 # Apply any automated fixes.
 fix:
     FROM +chef-cook
     RUN cargo fmt --all --all-features
-    RUN rye fmt --all
+    RUN uv run ruff format
     RUN cargo clippy --fix --allow-no-vcs
-    RUN rye lint --fix
+    RUN uv run ruff check --fix
     SAVE ARTIFACT benches AS LOCAL ./
     SAVE ARTIFACT crates AS LOCAL ./
     SAVE ARTIFACT pypi AS LOCAL ./
@@ -82,8 +82,7 @@ fix:
 test:
     FROM +chef-cook
     RUN cargo test -r -p abd-clam --all-features -p distances -p symagen
-    # TODO: switch to --all, blocked on https://github.com/astral-sh/rye/issues/853
-    RUN rye test --package abd-distances
+    RUN uv run pytest
 
 # This target runs the tests on aarch64, it can be expanded to run tests on additional platforms, but it is SLOW.
 cross-test:

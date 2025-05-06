@@ -155,7 +155,7 @@ impl Columns {
 
     /// Get the columns of the MSA.
     #[must_use]
-    pub fn columns(&self) -> &[Vec<u8>] {
+    pub const fn columns(&self) -> &Vec<Vec<u8>> {
         &self.0
     }
 

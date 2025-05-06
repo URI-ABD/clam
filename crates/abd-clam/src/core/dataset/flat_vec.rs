@@ -228,7 +228,7 @@ impl<I, Me> FlatVec<I, Me> {
     /// assert_eq!(data.items(), &[1, 2, 3]);
     /// ```
     #[must_use]
-    pub fn items(&self) -> &[I] {
+    pub const fn items(&self) -> &Vec<I> {
         &self.items
     }
 
