@@ -10,7 +10,7 @@ use super::{CountingMetric, ParCountingMetric};
 pub struct Jaccard(Arc<RwLock<usize>>, bool);
 
 impl Jaccard {
-    /// Creates a new `Euclidean` distance metric.
+    /// Creates a new `Jaccard` distance metric.
     #[must_use]
     pub fn new(count: usize) -> Self {
         Self(Arc::new(RwLock::new(count)), false)
@@ -32,7 +32,7 @@ impl<I: AsRef<[usize]>> Metric<I, f32> for Jaccard {
     }
 
     fn name(&self) -> &'static str {
-        "cosine"
+        "jaccard"
     }
 
     fn has_identity(&self) -> bool {
