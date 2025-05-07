@@ -87,36 +87,6 @@ fn sets_test() {
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
 
-        // Kai's tests for hausdorff distance!
-        // This time we also have to pass a "compare" function and a "distance" function,
-        // since Hausdorff is a meta-distance function. 
-
-        // We will test using a standard "greater than" comparision function,
-        let greater = |a: f32, b: f32| -> bool { a > b };
-        
-        // test with euclidian distance
-        distance = hausdorff(&x, &y, greater, euclidian);
-        if union == 0 {
-            real_distance = 0.0;
-        } else {
-            real_distance = 0.0; // TODO: change
-        }
-
-        // test with manhattan distance
-        distance = hausdorff(&x, &y, greater, distances::manhattan);
-        if union == 0 {
-            real_distance = 0.0;
-        } else {
-            real_distance = 0.0; // TODO: change
-        }
-
-        // test with jaccard distance
-        distance = hausdorff(&x, &y, greater, jaccard);
-        if union == 0 {
-            real_distance = 0.0;
-        } else {
-            real_distance = 0.0; // TODO: change
-        }
     }
 }
 
@@ -148,4 +118,117 @@ fn bounds_test() {
     assert!((distance - 1.0).abs() < f32::EPSILON);
     distance = kulsinski(&y, &y);
     assert!((distance - 1.0).abs() < f32::EPSILON);
+}
+
+
+/// Kai's tests for hausdorff distance
+#[test]
+fn hausdorff_test() {
+
+    // TODO: property-based testing - equality, symmetry, triangle inequality
+
+    // random sets I made up for testing
+    let x: Vec<Vec<u16>> = vec![vec![1, 2], vec![2, 3], vec![3, 4], vec![5, 4], vec![5, 1]];
+    let y: Vec<Vec<u16>> = vec![vec![5, 2], vec![3, 2], vec![2, 4], vec![7, 3], vec![8, 9]];
+    let z: Vec<Vec<u16>> = vec![vec![2, 1], vec![6, 3], vec![1, 4], vec![3, 3], vec![5, 1]]; // for triange inequality
+
+    // euclidean testing
+    let distance_xx: f32 = distances::sets::hausdorff(&x, &x, compare, euclidean);
+    assert!(distance_xx < f32::EPSILON); // identity test
+    let distance_yy: f32 = distances::sets::hausdorff(&y, &y, compare, euclidean);
+    assert!(distance_yy < f32::EPSILON); // identity test
+    let distance_xy: f32 = distances::sets::hausdorff(&x, &y, compare, euclidean);
+    assert!(distance_xy - 1.0 < f32::EPSILON); // another test
+    let distance_yx: f32 = distances::sets::hausdorff(&y, &x, compare, euclidean);
+    // ensure two distances are equal for symmetry
+    assert!(distance_xy - distance_yx < f32::EPSILON);
+
+    // triangle inequality test for euclidian
+    let distance_xz: f32 = distances::sets::hausdorff(&x, &z, compare, euclidean);
+    let distance_yz: f32 = distances::sets::hausdorff(&y, &z, compare, euclidean);
+    // of the three sides xy, xz, and yz, the longest side should be less than or equal to the sum of the other two sides
+    // first, find the longest side
+    let longest_side = distance_xy.max(distance_xz).max(distance_yz);
+    // now, find the sum of the other two sides
+    let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
+    // finally, check that the longest side is less than or equal to the sum of the other two sides
+    assert!(longest_side <= sum_of_others);
+
+
+    // manhattan testing
+    let distance_xx: f32 = distances::sets::hausdorff(&x, &x, compare, manhattan);
+    assert!(distance_xx < f32::EPSILON); // identity test
+    let distance_yy: f32 = distances::sets::hausdorff(&y, &y, compare, manhattan);
+    assert!(distance_yy < f32::EPSILON); // identity test
+    let distance_xy: f32 = distances::sets::hausdorff(&x, &y, compare, manhattan);
+    assert!(distance_xy - 1.0 < f32::EPSILON); // another test
+    let distance_yx: f32 = distances::sets::hausdorff(&y, &x, compare, manhattan);
+    // ensure two distances are equal for symmetry
+    assert!(distance_xy - distance_yx < f32::EPSILON);
+
+    // triangle inequality test for manhattan
+    let distance_xz: f32 = distances::sets::hausdorff(&x, &z, compare, manhattan);
+    let distance_yz: f32 = distances::sets::hausdorff(&y, &z, compare, manhattan);
+    // of the three sides xy, xz, and yz, the longest side should be less than or equal to the sum of the other two sides
+    // first, find the longest side
+    let longest_side = distance_xy.max(distance_xz).max(distance_yz);
+    // now, find the sum of the other two sides
+    let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
+    // finally, check that the longest side is less than or equal to the sum of the other two sides
+    assert!(longest_side <= sum_of_others);
+
+
+    // jaccard testing
+    let distance_xx: f32 = distances::sets::hausdorff(&x, &x, compare, jaccard);
+    assert!(distance_xx < f32::EPSILON); // identity test
+    let distance_yy: f32 = distances::sets::hausdorff(&y, &y, compare, jaccard);
+    assert!(distance_yy < f32::EPSILON); // identity test
+    let distance_xy: f32 = distances::sets::hausdorff(&x, &y, compare, jaccard);
+    assert!(distance_xy - 1.0 < f32::EPSILON); // another test
+    let distance_yx: f32 = distances::sets::hausdorff(&y, &x, compare, jaccard);
+    // ensure two distances are equal for symmetry
+    assert!(distance_xy - distance_yx < f32::EPSILON);
+
+
+    // triangle inequality test for jaccard
+    let distance_xz: f32 = distances::sets::hausdorff(&x, &z, compare, jaccard);
+    let distance_yz: f32 = distances::sets::hausdorff(&y, &z, compare, jaccard);
+
+    // print the 3 distances for debugging
+    println!("distance_xy: {}", distance_xy);
+    println!("distance_xz: {}", distance_xz);
+    println!("distance_yz: {}", distance_yz);
+
+    // of the three sides xy, xz, and yz, the longest side should be less than or equal to the sum of the other two sides
+    // first, find the longest side
+    let longest_side = distance_xy.max(distance_xz).max(distance_yz);
+    // now, find the sum of the other two sides
+    let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
+    // finally, check that the longest side is less than or equal to the sum of the other two sides
+    assert!(longest_side <= sum_of_others);
+}
+
+// Kai's functions for hausdorff distance testing - if you'd like me to make them lambdas or something, let me know
+
+// compare function for hausdorff distance
+fn compare(a: f32, b: f32) -> bool {
+    a < b
+}
+
+// euclidean distance function between two points
+fn euclidean(a: &[u16], b: &[u16]) -> f32 {
+    let mut sum: f32 = 0.0;
+    for i in 0..a.len() {
+        sum += (a[i] as f32 - b[i] as f32).powi(2);
+    }
+    sum.sqrt()
+}
+
+// manhattan distance function between two points
+fn manhattan(a: &[u16], b: &[u16]) -> f32 {
+    let mut sum: f32 = 0.0;
+    for i in 0..a.len() {
+        sum += (a[i] as f32 - b[i] as f32).abs();
+    }
+    sum
 }

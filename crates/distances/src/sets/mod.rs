@@ -144,11 +144,12 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// * `b`: A set represented as a slice of `Vec<T>`, e.g a type generic over vectors of integers
 /// * `compare_fn`: A function that compares two distances and returns a boolean if the first argument is "larger"
 /// * `distance_fn`: A function that calculates the distance between two points
-pub fn hausdorff<T, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F) -> T
+pub fn hausdorff<T, U, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F) -> U
 where
-    T: Clone,
-    C: Fn(&[T], &[T]) -> bool,
-    F: Fn(&[T], &[T]) -> T,
+    T: Clone + std::marker::Copy, // type of elements in the sets
+    U: Clone + std::marker::Copy, // type of distance
+    C: Fn(U, U) -> bool,          // function to compare two distances
+    F: Fn(&[T], &[T]) -> U,       // function to calculate distance between two points
 {
     // make sure the points in both sets match in length (dimensionality)
     if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) { 
@@ -159,13 +160,13 @@ where
     // let it be the first element of set a
     let mut h = distance_fn(&a[0], &b[0]); // is there a more efficient way to do this?
 
-    // supremum loop: 'a'
+    // supremum loop: iterate through all elements of set a
     for x in a.iter() {
 
         // start with the first element of set b as the shortest distance
         let mut shortest = distance_fn(x, &b[0]);
 
-        // infimum loop
+        // infimum loop: iterate through all elements of set b
         for y in b.iter() {
             let d = distance_fn(x, y);
             if compare_fn(d, shortest) {
@@ -173,7 +174,7 @@ where
             }
         }
 
-        if compare_fn(shortest, h) {
+        if compare_fn(shortest, h.clone()) {
             h = shortest;
         }
     }
@@ -184,10 +185,10 @@ where
 
 // euclidian helper function (one of many distance functions that could be passed to a meta-distance function like hausdorff)
 // should we delete this function?
-fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
+/*fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let mut sum = U::zero();
     for i in 0..x.len() {
         sum += U::from(x[i] - y[i]).powi(2);
     }
     sum.sqrt()
-}
+}*/
