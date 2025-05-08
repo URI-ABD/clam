@@ -144,51 +144,72 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 /// * `b`: A set represented as a slice of `Vec<T>`, e.g a type generic over vectors of integers
 /// * `compare_fn`: A function that compares two distances and returns a boolean if the first argument is "larger"
 /// * `distance_fn`: A function that calculates the distance between two points
-pub fn hausdorff<T, U, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F) -> U
+/// * `lowest_dist_val`: The lowest distance value to be used in the function (I'm not sure if this was necessary, but it's a feature now)
+/// NOTE: this will fail if one of the sets is empty
+pub fn hausdorff<T, U, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F, lowest_dist_val: U) -> U
 where
     T: Clone + std::marker::Copy, // type of elements in the sets
     U: Clone + std::marker::Copy, // type of distance
     C: Fn(U, U) -> bool,          // function to compare two distances
     F: Fn(&[T], &[T]) -> U,       // function to calculate distance between two points
 {
+
+    // note: using x and y is kind of not a good idea for variable names: I'll replace them if I think of something better
+
     // make sure the points in both sets match in length (dimensionality)
     if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) { 
         panic!("Dimensionalities do not match");
     }
 
     // initiate variable which will store final hausdorff distance value (supremum)
-    // let it be the first element of set a
-    let mut h = distance_fn(&a[0], &b[0]); // is there a more efficient way to do this?
+    let mut h: U = lowest_dist_val.clone();
 
     // supremum loop: iterate through all elements of set a
     for x in a.iter() {
 
         // start with the first element of set b as the shortest distance
-        let mut shortest = distance_fn(x, &b[0]);
+        let mut shortest: U = distance_fn(x, &b[0]);
 
         // infimum loop: iterate through all elements of set b
         for y in b.iter() {
-            let d = distance_fn(x, y);
+            let d: U = distance_fn(x, y);
             if compare_fn(d, shortest) {
                 shortest = d;
             }
         }
 
-        if compare_fn(shortest, h.clone()) {
+        if compare_fn(h, shortest) { // note: i swapped the order of h and shortest
             h = shortest;
         }
     }
 
-    // return final hausdorff value
-    h
-}
+    // do the same for set b
+    let prev_h = h.clone(); // store the value of h before we start the next loop
+    h = lowest_dist_val.clone(); // reset h to the lowest distance value
 
-// euclidian helper function (one of many distance functions that could be passed to a meta-distance function like hausdorff)
-// should we delete this function?
-/*fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
-    let mut sum = U::zero();
-    for i in 0..x.len() {
-        sum += U::from(x[i] - y[i]).powi(2);
+    // supremum loop: iterate through all elements of set b
+    for y in b.iter() {
+
+        // start with the first element of set a as the shortest distance
+        let mut shortest: U = distance_fn(y, &a[0]);
+
+        // infimum loop: iterate through all elements of set a
+        for x in a.iter() {
+            let d: U = distance_fn(y, x);
+            if compare_fn(d, shortest) {
+                shortest = d;
+            }
+        }
+
+        if compare_fn(h, shortest) {
+            h = shortest;
+        }
     }
-    sum.sqrt()
-}*/
+
+    // return final hausdorff value between prev_h and h
+    if compare_fn(h, prev_h) {
+        prev_h
+    } else {
+        h
+    }
+}
