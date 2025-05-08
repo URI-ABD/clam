@@ -86,7 +86,6 @@ fn sets_test() {
             real_distance = 1_f32 - (intersection as f32) / ((union + union - intersection) as f32);
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
-
     }
 }
 
@@ -120,11 +119,9 @@ fn bounds_test() {
     assert!((distance - 1.0).abs() < f32::EPSILON);
 }
 
-
 /// Kai's tests for hausdorff distance
 #[test]
 fn hausdorff_test() {
-
     // TODO: property-based testing - equality, symmetry, triangle inequality
 
     // random sets I made up for testing
@@ -150,7 +147,6 @@ fn hausdorff_test() {
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
     assert!(longest_side <= sum_of_others);
 
-
     // manhattan testing
     let distance_xx: f32 = distances::sets::hausdorff(&x, &x, less_than, manhattan, lowest_dist);
     assert!(distance_xx < f32::EPSILON); // identity test
@@ -166,7 +162,6 @@ fn hausdorff_test() {
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
     assert!(longest_side <= sum_of_others);
-
 
     // jaccard testing
     let distance_xx: f32 = distances::sets::hausdorff(&x, &x, less_than, jaccard, lowest_dist);

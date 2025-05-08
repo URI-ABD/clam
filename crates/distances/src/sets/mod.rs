@@ -153,11 +153,10 @@ where
     C: Fn(U, U) -> bool,          // function to compare two distances
     F: Fn(&[T], &[T]) -> U,       // function to calculate distance between two points
 {
-
     // note: using x and y is kind of not a good idea for variable names: I'll replace them if I think of something better
 
     // make sure the points in both sets match in length (dimensionality)
-    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) { 
+    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) {
         panic!("Dimensionalities do not match");
     }
 
@@ -166,7 +165,6 @@ where
 
     // supremum loop: iterate through all elements of set a
     for x in a.iter() {
-
         // start with the first element of set b as the shortest distance
         let mut shortest: U = distance_fn(x, &b[0]);
 
@@ -178,7 +176,8 @@ where
             }
         }
 
-        if compare_fn(h, shortest) { // note: i swapped the order of h and shortest
+        if compare_fn(h, shortest) {
+            // note: i swapped the order of h and shortest
             h = shortest;
         }
     }
@@ -189,7 +188,6 @@ where
 
     // supremum loop: iterate through all elements of set b
     for y in b.iter() {
-
         // start with the first element of set a as the shortest distance
         let mut shortest: U = distance_fn(y, &a[0]);
 
