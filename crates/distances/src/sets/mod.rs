@@ -139,66 +139,56 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
 
 /// Hausdorff distance function
 /// Definition: The Hausdorff distance between two sets of points A and B in a metric space is the greatest of all the distances from a point in A to the nearest point in B.
-/// Notes:
-/// - can write inf and sup using iterators
-/// - fold, map, filter, etc, other adapters
-/// - only do it on sets of T where T is numeric: we can look at more later on if we need to
-/// - distance function should be able to take in any number of dimensions
-/// - use a helper function for distance, which will be euclidian distance
-/// - inputs will be two sets, where each item is a vector of some length
-/// Psuedocode:
-/// var h = 0
-/// for every point a_i of A,
-/// var shortest = infinity
-/// for every point b_j of B,
-///    d_ij = distance(a_i, b_j)
-///    if d_ij < shortest then
-///        shortest = d_ij
-///if shortest > h then
-///    h = shortest
-///return h
 /// # Arguments
-/// * `x`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
-/// * `y`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers.
-pub fn hausdorff<T: Int, U: Float>(a: &[Vec<T>], b: &[Vec<T>]) -> U {
-
+/// * `a`: A set represented as a slice of `Vec<T>`, e.g. a type generic over vectors of integers
+/// * `b`: A set represented as a slice of `Vec<T>`, e.g a type generic over vectors of integers
+/// * `compare_fn`: A function that compares two distances and returns a boolean if the first argument is "larger"
+/// * `distance_fn`: A function that calculates the distance between two points
+pub fn hausdorff<T, U, C, F>(a: &[Vec<T>], b: &[Vec<T>], compare_fn: C, distance_fn: F) -> U
+where
+    T: Clone + std::marker::Copy, // type of elements in the sets
+    U: Clone + std::marker::Copy, // type of distance
+    C: Fn(U, U) -> bool,          // function to compare two distances
+    F: Fn(&[T], &[T]) -> U,       // function to calculate distance between two points
+{
     // make sure the points in both sets match in length (dimensionality)
-    // for every point in x, check if the length of the point is the same as the length of the **corresponding** point in y
-    // if not, return an error
-    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) {
+    if a.iter().any(|x| b.iter().any(|y| x.len() != y.len())) { 
         panic!("Dimensionalities do not match");
     }
 
-    // initiate variable which will store final hausdorff distance value (superium)
-    let mut h = U::zero();
+    // initiate variable which will store final hausdorff distance value (supremum)
+    // let it be the first element of set a
+    let mut h = distance_fn(&a[0], &b[0]); // is there a more efficient way to do this?
 
-    // superium loop: 'a'
+    // supremum loop: iterate through all elements of set a
     for x in a.iter() {
 
-        // initiate variable to store shortest distance for infinum
-        let mut shortest = U::infinity();
+        // start with the first element of set b as the shortest distance
+        let mut shortest = distance_fn(x, &b[0]);
 
-        // infinium loop
+        // infimum loop: iterate through all elements of set b
         for y in b.iter() {
-            let d = euclidean(x, y);
-            if d < shortest {
+            let d = distance_fn(x, y);
+            if compare_fn(d, shortest) {
                 shortest = d;
             }
         }
 
-        if shortest > h {
+        if compare_fn(shortest, h.clone()) {
             h = shortest;
         }
     }
+
     // return final hausdorff value
     h
 }
 
-// euclidian helper function
-fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
+// euclidian helper function (one of many distance functions that could be passed to a meta-distance function like hausdorff)
+// should we delete this function?
+/*fn euclidean<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     let mut sum = U::zero();
     for i in 0..x.len() {
         sum += U::from(x[i] - y[i]).powi(2);
     }
     sum.sqrt()
-}
+}*/
