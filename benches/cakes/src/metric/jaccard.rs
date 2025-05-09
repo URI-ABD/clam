@@ -1,4 +1,4 @@
-//! The Cosine distance function.
+//! The Jaccard distance function.
 
 use std::sync::{Arc, RwLock};
 
@@ -6,7 +6,7 @@ use abd_clam::{metric::ParMetric, Metric};
 
 use super::{CountingMetric, ParCountingMetric};
 
-/// The Cosine distance function.
+/// The Jaccard distance function.
 pub struct Jaccard(Arc<RwLock<usize>>, bool);
 
 impl Jaccard {

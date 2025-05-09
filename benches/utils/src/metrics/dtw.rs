@@ -37,20 +37,27 @@ impl<F: Float> Complex<F> {
 /// Calculate Dynamic Time Warping distance between two sequences
 #[allow(clippy::module_name_repetitions)]
 pub fn dtw_distance<F: Float>(a: &[Complex<F>], b: &[Complex<F>]) -> F {
-    // Initialize the DP matrix
-    let mut data = vec![vec![F::MAX; b.len() + 1]; a.len() + 1];
-    data[0][0] = F::ZERO;
+    // Initialize the DP matrix as a flattened vector
+    let mut data = vec![F::MAX; (a.len() + 1) * (b.len() + 1)];
+    data[0] = F::ZERO;
+
+    // Helper function to access the flattened vector
+    let index = |ai: usize, bi: usize| -> usize { ai * (b.len() + 1) + bi };
 
     // Calculate cost matrix
-    for ai in 1..=(a.len() + 1) {
-        for bi in 1..=(b.len() + 1) {
+    for ai in 1..=a.len() {
+        for bi in 1..=b.len() {
             let cost = a[ai - 1].abs_diff(&b[bi - 1]);
-            data[ai][bi] = cost + F::min(F::min(data[ai - 1][bi], data[ai][bi - 1]), data[ai - 1][bi - 1]);
+            data[index(ai, bi)] = cost
+                + F::min(
+                    F::min(data[index(ai - 1, bi)], data[index(ai, bi - 1)]),
+                    data[index(ai - 1, bi - 1)],
+                );
         }
     }
 
     // Return final cost
-    data[a.len()][b.len()]
+    data[index(a.len(), b.len())]
 }
 
 /// The `Dynamic Time Warping` distance metric.
