@@ -1,6 +1,9 @@
-use distances::sets::dice;
-use distances::sets::jaccard;
-use distances::sets::kulsinski;
+use distances::{
+    number::Addition,
+    sets::{dice, hausdorff, jaccard, kulsinski},
+    vectors::{euclidean, manhattan},
+    Number,
+};
 
 #[test]
 #[allow(clippy::float_equality_without_abs)]
@@ -119,86 +122,83 @@ fn bounds_test() {
     assert!((distance - 1.0).abs() < f32::EPSILON);
 }
 
-/// Kai's tests for hausdorff distance
 #[test]
 fn hausdorff_test() {
-    // TODO: property-based testing - equality, symmetry, triangle inequality
-
-    // random sets I made up for testing
+    // random sets for testing
     let x: Vec<Vec<u16>> = vec![vec![0, 2], vec![1, 1], vec![3, 5]];
     let y: Vec<Vec<u16>> = vec![vec![2, 4], vec![3, 6], vec![2, 3]];
     let z: Vec<Vec<u16>> = vec![vec![2, 1], vec![6, 3], vec![1, 4], vec![3, 3], vec![5, 1]]; // for triangle inequality
 
-    let lowest_dist = 0.0;
-
     // euclidean testing
-    let distance_xx: f32 = distances::sets::hausdorff(&x, &x, less_than, euclidean, lowest_dist);
-    assert!(distance_xx < f32::EPSILON); // identity test
-    let distance_yy: f32 = distances::sets::hausdorff(&y, &y, less_than, euclidean, lowest_dist);
-    assert!(distance_yy < f32::EPSILON); // identity test
-    let distance_xy: f32 = distances::sets::hausdorff(&x, &y, less_than, euclidean, lowest_dist);
-    let distance_yx: f32 = distances::sets::hausdorff(&y, &x, less_than, euclidean, lowest_dist);
-    assert!(distance_xy - distance_yx < f32::EPSILON); // symmetry test
+    let euc_ground_dist = |a: &Vec<u16>, b: &Vec<u16>| euclidean::<_, f32>(a, b);
+    let distance_xx = hausdorff(&x, &x, euc_ground_dist);
+    assert!(
+        distance_xx < f32::EPSILON,
+        "Expected `distance_xx` to be less than `f32::EPSILON`, but got {distance_xx:.2e}"
+    ); // identity test
+    let distance_yy = hausdorff(&y, &y, euc_ground_dist);
+    assert!(
+        distance_yy < f32::EPSILON,
+        "Expected `distance_yy` to be less than `f32::EPSILON`, but got {distance_yy:.2e}"
+    ); // identity test
+    let distance_xy = hausdorff(&x, &y, euc_ground_dist);
+    let distance_yx = hausdorff(&y, &x, euc_ground_dist);
+    let diff = distance_xy.abs_diff(distance_yx);
+    assert!(diff < f32::EPSILON, "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"); // symmetry test
 
     // triangle inequality test for euclidean
-    let distance_xz: f32 = distances::sets::hausdorff(&x, &z, less_than, euclidean, lowest_dist);
-    let distance_yz: f32 = distances::sets::hausdorff(&y, &z, less_than, euclidean, lowest_dist);
+    let distance_xz = hausdorff(&x, &z, euc_ground_dist);
+    let distance_yz = hausdorff(&y, &z, euc_ground_dist);
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
-    assert!(longest_side <= sum_of_others);
+    assert!(longest_side <= sum_of_others, "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"); // triangle inequality test
 
     // manhattan testing
-    let distance_xx: f32 = distances::sets::hausdorff(&x, &x, less_than, manhattan, lowest_dist);
-    assert!(distance_xx < f32::EPSILON); // identity test
-    let distance_yy: f32 = distances::sets::hausdorff(&y, &y, less_than, manhattan, lowest_dist);
-    assert!(distance_yy < f32::EPSILON); // identity test
-    let distance_xy: f32 = distances::sets::hausdorff(&x, &y, less_than, manhattan, lowest_dist);
-    let distance_yx: f32 = distances::sets::hausdorff(&y, &x, less_than, manhattan, lowest_dist);
-    assert!(distance_xy - distance_yx < f32::EPSILON); // symmetry test
+    let man_ground_dist = |a: &Vec<u16>, b: &Vec<u16>| manhattan(a, b).as_f32();
+    let distance_xx = hausdorff(&x, &x, man_ground_dist);
+    assert!(
+        distance_xx < f32::EPSILON,
+        "Expected `distance_xx` to be less than `f32::EPSILON`, but got {distance_xx:.2e}"
+    ); // identity test
+    let distance_yy = hausdorff(&y, &y, man_ground_dist);
+    assert!(
+        distance_yy < f32::EPSILON,
+        "Expected `distance_yy` to be less than `f32::EPSILON`, but got {distance_yy:.2e}"
+    ); // identity test
+    let distance_xy = hausdorff(&x, &y, man_ground_dist);
+    let distance_yx = hausdorff(&y, &x, man_ground_dist);
+    let diff = distance_xy.abs_diff(distance_yx);
+    assert!(diff < f32::EPSILON, "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"); // symmetry test
 
     // triangle inequality test for manhattan
-    let distance_xz: f32 = distances::sets::hausdorff(&x, &z, less_than, manhattan, lowest_dist);
-    let distance_yz: f32 = distances::sets::hausdorff(&y, &z, less_than, manhattan, lowest_dist);
+    let distance_xz = hausdorff(&x, &z, man_ground_dist);
+    let distance_yz = hausdorff(&y, &z, man_ground_dist);
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
-    assert!(longest_side <= sum_of_others);
+    assert!(longest_side <= sum_of_others, "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"); // triangle inequality test
 
     // jaccard testing
-    let distance_xx: f32 = distances::sets::hausdorff(&x, &x, less_than, jaccard, lowest_dist);
-    assert!(distance_xx < f32::EPSILON); // identity test
-    let distance_yy: f32 = distances::sets::hausdorff(&y, &y, less_than, jaccard, lowest_dist);
-    assert!(distance_yy < f32::EPSILON); // identity test
-    let distance_xy: f32 = distances::sets::hausdorff(&x, &y, less_than, jaccard, lowest_dist);
-    let distance_yx: f32 = distances::sets::hausdorff(&y, &x, less_than, jaccard, lowest_dist);
-    assert!(distance_xy - distance_yx < f32::EPSILON); // symmetry test
+    let jac_ground_dist = |a: &Vec<u16>, b: &Vec<u16>| jaccard::<_, f32>(a, b);
+    let distance_xx = hausdorff(&x, &x, jac_ground_dist);
+    assert!(
+        distance_xx < f32::EPSILON,
+        "Expected `distance_xx` to be less than `f32::EPSILON`, but got {distance_xx:.2e}"
+    ); // identity test
+    let distance_yy = hausdorff(&y, &y, jac_ground_dist);
+    assert!(
+        distance_yy < f32::EPSILON,
+        "Expected `distance_yy` to be less than `f32::EPSILON`, but got {distance_yy:.2e}"
+    ); // identity test
+    let distance_xy = hausdorff(&x, &y, jac_ground_dist);
+    let distance_yx = hausdorff(&y, &x, jac_ground_dist);
+    let diff = distance_xy.abs_diff(distance_yx);
+    assert!(diff < f32::EPSILON, "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"); // symmetry test
 
     // triangle inequality test for jaccard
-    let distance_xz: f32 = distances::sets::hausdorff(&x, &z, less_than, jaccard, lowest_dist);
-    let distance_yz: f32 = distances::sets::hausdorff(&y, &z, less_than, jaccard, lowest_dist);
+    let distance_xz = hausdorff(&x, &z, jac_ground_dist);
+    let distance_yz = hausdorff(&y, &z, jac_ground_dist);
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
-    assert!(longest_side <= sum_of_others);
-}
-
-// compare function for hausdorff distance
-fn less_than(a: f32, b: f32) -> bool {
-    a < b
-}
-
-// euclidean distance function between two points
-fn euclidean(a: &[u16], b: &[u16]) -> f32 {
-    let mut sum: f32 = 0.0;
-    for i in 0..a.len() {
-        sum += (a[i] as f32 - b[i] as f32).powi(2);
-    }
-    sum.sqrt()
-}
-
-// manhattan distance function between two points
-fn manhattan(a: &[u16], b: &[u16]) -> f32 {
-    let mut sum: f32 = 0.0;
-    for i in 0..a.len() {
-        sum += (a[i] as f32 - b[i] as f32).abs();
-    }
-    sum
+    assert!(longest_side <= sum_of_others, "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}");
+    // triangle inequality test
 }
