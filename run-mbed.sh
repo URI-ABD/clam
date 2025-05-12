@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-DATASET=$1
-BALANCED=$2
-T=$3
-t=$4
-B=$5
-M=$6
+DATASET=$1  # The dataset name (e.g., "cardio")
+BALANCED=$2 # "true" or "false"
+T=$3        # Target stability value
+t=$4        # Time step
+B=$5        # Damping constant
+M=$6        # Maximum number of steps
 
 if [ -z "$DATASET" ] || [ -z "$T" ] || [ -z "$t" ] || [ -z "$B" ] || [ -z "$M" ]; then
   echo "Usage: $0 <dataset> <balanced> <T> <t> <B> <M>"
@@ -23,8 +23,20 @@ if [ -f "$TREE_FILE" ]; then
   rm "$TREE_FILE"
 fi
 
-cargo run -rp clam-mbed -- -i ../data/chaoda-data/datasets -o ../data/chaoda-data/mbed-results -n ${DATASET}.npy -m euclidean build ${BALANCED_FLAG} -T ${T} -t ${t} -B ${B} -M ${M}
+cargo run -rp clam-mbed -- \
+  -i ../data/chaoda-data/datasets \
+  -o ../data/chaoda-data/mbed-results \
+  -n ${DATASET}.npy \
+  -m euclidean build ${BALANCED_FLAG} \
+  -T ${T} -t ${t} -B ${B} -M ${M}
 
-python -m py_mbed -i ../data/chaoda-data/datasets -o ../data/chaoda-data/mbed-results -d ${DATASET}
+uv run python -m py_mbed \
+  -i ../data/chaoda-data/datasets \
+  -o ../data/chaoda-data/mbed-results \
+  -d ${DATASET}
 
-cargo run -rp clam-mbed -- -i ../data/chaoda-data/datasets -o ../data/chaoda-data/mbed-results -n ${DATASET}.npy -m euclidean measure
+cargo run -rp clam-mbed -- \
+  -i ../data/chaoda-data/datasets \
+  -o ../data/chaoda-data/mbed-results \
+  -n ${DATASET}.npy \
+  -m euclidean measure
