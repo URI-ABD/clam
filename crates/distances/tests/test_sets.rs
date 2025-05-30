@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use distances::{
     number::Addition,
     sets::{dice, hausdorff, jaccard, kulsinski},
@@ -124,10 +126,19 @@ fn bounds_test() {
 
 #[test]
 fn hausdorff_test() {
-    // random sets for testing
-    let x: Vec<Vec<u16>> = vec![vec![0, 2], vec![1, 1], vec![3, 5]];
-    let y: Vec<Vec<u16>> = vec![vec![2, 4], vec![3, 6], vec![2, 3]];
-    let z: Vec<Vec<u16>> = vec![vec![2, 1], vec![6, 3], vec![1, 4], vec![3, 3], vec![5, 1]]; // for triangle inequality
+
+    // Helper function to generate a vector of random points with given count and dimension
+    fn gen_points(count: usize, dim: usize) -> Vec<Vec<u16>> {
+        let mut rng = rand::thread_rng();
+        (0..count)
+            .map(|_| (0..dim).map(|_| rng.gen_range(0..100)).collect())
+            .collect()
+    }
+
+    // Generate random sets of points for Hausdorff distance testing
+    let x: Vec<Vec<u16>> = gen_points(5, 2); // 5 points, 2D
+    let y: Vec<Vec<u16>> = gen_points(5, 3); // 5 points, 3D
+    let z: Vec<Vec<u16>> = gen_points(5, 4); // 5 points, 4D
 
     // euclidean testing
     let euc_ground_dist = |a: &Vec<u16>, b: &Vec<u16>| euclidean::<_, f32>(a, b);
