@@ -82,6 +82,13 @@ pub struct Ball<T: Number> {
     children: Vec<Box<Self>>,
 }
 
+impl<T: Number> Ball<T> {
+    /// Returns the index of the item that is the furthest from the center.
+    pub const fn arg_radial(&self) -> usize {
+        self.arg_radial
+    }
+}
+
 impl<T: Number> core::fmt::Debug for Ball<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Ball")
