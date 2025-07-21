@@ -40,14 +40,14 @@ pub fn read<P: AsRef<Path>>(
         .to_string_lossy()
         .to_string();
     if !path.exists() {
-        return Err(format!("Path {path:?} does not exist!"));
+        return Err(format!("Path {} does not exist!", path.display()));
     }
 
     if path.extension().is_none_or(|ext| ext != "fasta") {
-        return Err(format!("Path {path:?} does not have the `.fasta` extension!"));
+        return Err(format!("Path {} does not have the `.fasta` extension!", path.display()));
     }
 
-    ftlog::info!("Reading FASTA file from {path:?}.");
+    ftlog::info!("Reading FASTA file from {}.", path.display());
 
     let mut records = bio::io::fasta::Reader::from_file(path)
         .map_err(|e| e.to_string())?
@@ -169,7 +169,7 @@ where
     P: AsRef<Path>,
 {
     let path = path.as_ref();
-    ftlog::info!("Writing FASTA file to {path:?}.");
+    ftlog::info!("Writing FASTA file to {}.", path.display());
 
     let mut writer = bio::io::fasta::Writer::to_file(path).map_err(|e| e.to_string())?;
 

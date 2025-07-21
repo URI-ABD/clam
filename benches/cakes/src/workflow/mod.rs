@@ -179,7 +179,7 @@ where
     M: ParCountingMetric<I, T>,
     Me: Send + Sync + Clone + bitcode::Encode + bitcode::Decode,
 {
-    ftlog::info!("Reading Ball from {:?}...", all_paths.ball);
+    ftlog::info!("Reading Ball from {}...", all_paths.ball.display());
     let ball = Ball::<T>::par_read_from(&all_paths.ball)?;
     let radii = radial_fractions
         .iter()
@@ -187,7 +187,7 @@ where
         .map(T::from)
         .collect::<Vec<_>>();
 
-    ftlog::info!("Reading data from {:?}...", all_paths.data);
+    ftlog::info!("Reading data from {}...", all_paths.data.display());
     let data = FlatVec::<I, Me>::par_read_from(&all_paths.data)?;
 
     let (min_dim, max_dim) = data.dimensionality_hint();

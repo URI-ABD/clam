@@ -43,7 +43,7 @@ pub fn read<P: AsRef<std::path::Path>, T: hdf5::H5Type + Clone>(
     let path = path.as_ref();
 
     let file = hdf5::File::open(path).map_err(|e| e.to_string())?;
-    ftlog::info!("Opened file: {path:?}");
+    ftlog::info!("Opened file: {}", path.display());
 
     ftlog::info!("Reading raw train and test datasets...");
     let train_raw = file.dataset("train").map_err(|e| e.to_string())?;

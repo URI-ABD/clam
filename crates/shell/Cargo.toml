@@ -1,0 +1,13 @@
+[package]
+name = "shell"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+abd-clam = { workspace = true, features = ["all"] }
+distances = { workspace = true }
+clap.workspace = true
+bitcode = { workspace = true, features = ["serde"] }
+ndarray.workspace = true
+ndarray-npy.workspace = true
+serde = { version = "1.0", features = ["derive"] }

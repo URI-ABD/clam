@@ -93,7 +93,7 @@ where
     let all_paths = AllPaths::new(out_dir, data.name());
 
     if !all_paths.data.exists() {
-        ftlog::info!("Writing data to {:?}...", all_paths.data);
+        ftlog::info!("Writing data to {}...", all_paths.data.display());
         data.par_write_to(&all_paths.data)?;
     }
 
@@ -103,7 +103,7 @@ where
         |depth_stride| Ball::par_new_tree_iterative(data, metric, &|_| true, seed, depth_stride),
     );
 
-    ftlog::info!("Writing Ball to {:?}...", all_paths.ball);
+    ftlog::info!("Writing Ball to {}...", all_paths.ball.display());
     ball.par_write_to(&all_paths.ball)?;
     let csv_path = out_dir.as_ref().join(format!("{}-ball.csv", data.name()));
     ball.write_to_csv(&csv_path)?;
@@ -112,12 +112,12 @@ where
         ftlog::info!("Building Permuted Ball...");
         let (ball, data) = PermutedBall::par_from_ball_tree(ball, data.clone(), metric);
 
-        ftlog::info!("Writing Permuted Ball to {:?}...", all_paths.permuted_ball);
+        ftlog::info!("Writing Permuted Ball to {}...", all_paths.permuted_ball.display());
         ball.par_write_to(&all_paths.permuted_ball)?;
         let csv_path = out_dir.as_ref().join(format!("{}-permuted-ball.csv", data.name()));
         ball.write_to_csv(&csv_path)?;
 
-        ftlog::info!("Writing Permuted data to {:?}...", all_paths.permuted_data);
+        ftlog::info!("Writing Permuted data to {}...", all_paths.permuted_data.display());
         data.par_write_to(&all_paths.permuted_data)?;
     }
 
@@ -130,7 +130,7 @@ where
             )
             .into_ball();
 
-        ftlog::info!("Writing Balanced Ball to {:?}...", all_paths.balanced_ball);
+        ftlog::info!("Writing Balanced Ball to {}...", all_paths.balanced_ball.display());
         ball.par_write_to(&all_paths.balanced_ball)?;
         let csv_path = out_dir.as_ref().join(format!("{}-balanced-ball.csv", data.name()));
         ball.write_to_csv(&csv_path)?;
@@ -140,8 +140,8 @@ where
             let (ball, data) = PermutedBall::par_from_ball_tree(ball, data.clone(), metric);
 
             ftlog::info!(
-                "Writing Permuted Balanced Ball to {:?}...",
-                all_paths.permuted_balanced_ball
+                "Writing Permuted Balanced Ball to {}...",
+                all_paths.permuted_balanced_ball.display()
             );
             ball.par_write_to(&all_paths.permuted_balanced_ball)?;
             let csv_path = out_dir
@@ -150,8 +150,8 @@ where
             ball.write_to_csv(&csv_path)?;
 
             ftlog::info!(
-                "Writing Permuted Balanced data to {:?}...",
-                all_paths.permuted_balanced_data
+                "Writing Permuted Balanced data to {}...",
+                all_paths.permuted_balanced_data.display()
             );
             data.par_write_to(&all_paths.permuted_balanced_data)?;
         }

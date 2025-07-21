@@ -147,7 +147,7 @@ impl RawData {
         if path.exists() {
             ann_benchmarks::read(&path, self.is_flattened())
         } else {
-            Err(format!("Dataset {} not found: {path:?}", self.name()))
+            Err(format!("Dataset {} not found: {}", self.name(), path.display()))
         }
     }
 

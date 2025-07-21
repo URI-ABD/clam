@@ -26,11 +26,14 @@ pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
     all_paths.push(queries_path.clone());
 
     let queries = if all_paths.iter().all(|p| p.exists()) {
-        ftlog::info!("Subsampled datasets already exist. Reading queries from {queries_path:?}...");
+        ftlog::info!(
+            "Subsampled datasets already exist. Reading queries from {}...",
+            queries_path.display()
+        );
         let bytes = std::fs::read(queries_path).map_err(|e| e.to_string())?;
         bitcode::decode(&bytes).map_err(|e| e.to_string())?
     } else {
-        ftlog::info!("Reading radio-ml dataset from {:?}...", inp_dir.as_ref());
+        ftlog::info!("Reading radio-ml dataset from {}...", inp_dir.as_ref().display());
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed.unwrap_or(42));
         let modulation_modes = bench_utils::radio_ml::ModulationMode::all();
         let (signals, queries) = {
@@ -45,7 +48,7 @@ pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
         };
         ftlog::info!("Read {} signals and {} queries.", signals.len(), queries.len());
 
-        ftlog::info!("Writing queries to {queries_path:?}...");
+        ftlog::info!("Writing queries to {}...", queries_path.display());
         let query_bytes = bitcode::encode(&queries).map_err(|e| e.to_string())?;
         std::fs::write(queries_path, query_bytes).map_err(|e| e.to_string())?;
 
@@ -55,16 +58,19 @@ pub fn read_and_subsample<P: AsRef<std::path::Path> + Send + Sync>(
             .with_dim_lower_bound(dim)
             .with_dim_upper_bound(dim);
 
-        ftlog::info!("Writing dataset to bitcode encoding: {data_path:?}");
+        ftlog::info!("Writing dataset to bitcode encoding: {}", data_path.display());
         data.par_write_to(&data_path)?;
 
         for (power, path) in (1..=max_power).zip(all_paths.iter()) {
             let size = data.cardinality() / 2;
-            ftlog::info!("Subsampling dataset with cardinality {size} to {path:?}...");
+            ftlog::info!("Subsampling dataset with cardinality {size} to {}...", path.display());
             data = data
                 .random_subsample(&mut rng, size)
                 .with_name(&format!("{name}-{power}"));
-            ftlog::info!("Writing subsampled dataset with cardinality {size} to {path:?}...");
+            ftlog::info!(
+                "Writing subsampled dataset with cardinality {size} to {}...",
+                path.display()
+            );
             data.par_write_to(path)?;
         }
 

@@ -12,7 +12,7 @@ pub fn read<P: AsRef<std::path::Path>>(
 ) -> Result<(FlatVec<Vec<usize>, usize>, Vec<Vec<usize>>), String> {
     let inp_path = inp_dir.as_ref().join(format!("{data_name}.hdf5"));
     if !inp_path.exists() {
-        return Err(format!("File not found: {inp_path:?}"));
+        return Err(format!("File not found: {}", inp_path.display()));
     }
 
     let data: bench_utils::ann_benchmarks::AnnDataset<usize> = bench_utils::ann_benchmarks::read(&inp_path, true)?;

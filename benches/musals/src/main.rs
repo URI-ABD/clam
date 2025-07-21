@@ -91,7 +91,7 @@ fn main() -> Result<(), String> {
     let log_name = format!("musals-{fasta_name}");
     // We need the `_guard` in scope to ensure proper logging.
     let (_guard, log_path) = configure_logger(&log_name, ftlog::LevelFilter::Info)?;
-    println!("Log file: {log_path:?}");
+    println!("Log file: {}", log_path.display());
     ftlog::info!("{args:?}");
 
     let cost_matrix = args.matrix.cost_matrix::<i32>(args.gap_open);
@@ -105,8 +105,8 @@ fn main() -> Result<(), String> {
     } else {
         args.inp_path.parent().ok_or("No parent directory found")?.to_path_buf()
     };
-    ftlog::info!("Input file: {:?}", args.inp_path);
-    ftlog::info!("Output directory: {out_dir:?}");
+    ftlog::info!("Input file: {}", args.inp_path.display());
+    ftlog::info!("Output directory: {}", out_dir.display());
 
     let (data, _) = bench_utils::fasta::read(&args.inp_path, 0, true)?;
     let msa_data = if args.quality_only {
@@ -170,7 +170,7 @@ fn main() -> Result<(), String> {
         }
 
         // Read the aligned sequences and load the data.
-        ftlog::info!("Reading aligned sequences from: {msa_fasta_path:?}");
+        ftlog::info!("Reading aligned sequences from: {}", msa_fasta_path.display());
         steps::read_aligned(&msa_fasta_path, &aligner)?
     };
 

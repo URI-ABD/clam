@@ -43,11 +43,11 @@ pub fn read_mod<P: AsRef<std::path::Path>>(
 ) -> Result<Vec<Vec<Complex<f64>>>, String> {
     let h5_path = mode.h5_path(inp_dir);
     if !h5_path.exists() {
-        return Err(format!("File {h5_path:?} does not exist!"));
+        return Err(format!("File {} does not exist!", h5_path.display()));
     }
 
     let file = hdf5::File::open(&h5_path).map_err(|e| format!("Error opening file: {e}"))?;
-    ftlog::debug!("Opened file {h5_path:?}: {file:?}");
+    ftlog::debug!("Opened file {}: {file:?}", h5_path.display());
 
     let data_raw = file.dataset("X").map_err(|e| format!("Error opening dataset: {e}"))?;
     ftlog::debug!("Opened dataset X: {data_raw:?}");

@@ -33,19 +33,22 @@ pub fn read_and_subsample<P: AsRef<std::path::Path>>(
     all_paths.push(queries_path.clone());
 
     let queries = if all_paths.iter().all(|p| p.exists()) {
-        ftlog::info!("Subsampled datasets already exist. Reading queries from {queries_path:?}...");
+        ftlog::info!(
+            "Subsampled datasets already exist. Reading queries from {}...",
+            queries_path.display()
+        );
         let bytes = std::fs::read(queries_path).map_err(|e| e.to_string())?;
         bitcode::decode(&bytes).map_err(|e| e.to_string())?
     } else {
         if !fasta_path.exists() {
-            return Err(format!("Dataset {name} not found: {fasta_path:?}"));
+            return Err(format!("Dataset {name} not found: {}", fasta_path.display()));
         }
 
-        ftlog::info!("Reading fasta dataset from fasta file: {fasta_path:?}");
+        ftlog::info!("Reading fasta dataset from fasta file: {}", fasta_path.display());
         let (mut data, queries) = bench_utils::fasta::read(&fasta_path, n_queries, remove_gaps)?;
         data = data.with_name(name);
 
-        ftlog::info!("Writing dataset to bitcode encoding: {data_path:?}");
+        ftlog::info!("Writing dataset to bitcode encoding: {}", data_path.display());
         data.par_write_to(&data_path)?;
 
         let query_bytes = bitcode::encode(&queries).map_err(|e| e.to_string())?;
@@ -54,11 +57,14 @@ pub fn read_and_subsample<P: AsRef<std::path::Path>>(
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed.unwrap_or(42));
         for (power, path) in (1..=max_power).zip(all_paths.iter()) {
             let size = data.cardinality() / 2;
-            ftlog::info!("Subsampling dataset with cardinality {size} to {path:?}...");
+            ftlog::info!("Subsampling dataset with cardinality {size} to {}...", path.display());
             data = data
                 .random_subsample(&mut rng, size)
                 .with_name(&format!("{name}-{power}"));
-            ftlog::info!("Writing subsampled dataset with cardinality {size} to {path:?}...");
+            ftlog::info!(
+                "Writing subsampled dataset with cardinality {size} to {}...",
+                path.display()
+            );
             data.par_write_to(path)?;
         }
 

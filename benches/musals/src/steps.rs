@@ -42,7 +42,7 @@ pub fn build_aligned<P: AsRef<Path>>(
     ftlog::info!("Finished aligning {} sequences.", builder.len());
     let data = MSA::new(&aligner, msa)?;
 
-    ftlog::info!("Writing MSA to {:?}", out_path.as_ref());
+    ftlog::info!("Writing MSA to {}", out_path.as_ref().display());
     bench_utils::fasta::write(&data, out_path)?;
 
     Ok(())
@@ -50,7 +50,7 @@ pub fn build_aligned<P: AsRef<Path>>(
 
 /// Read the aligned fasta file.
 pub fn read_aligned<P: AsRef<Path>>(path: &P, aligner: &Aligner<i32>) -> Result<MSA<String, i32, String>, String> {
-    ftlog::info!("Reading aligned sequences from {:?}", path.as_ref());
+    ftlog::info!("Reading aligned sequences from {}", path.as_ref().display());
     let (data, _) = bench_utils::fasta::read(path, 0, false)?;
     MSA::new(aligner, data)
 }
@@ -67,10 +67,10 @@ pub fn build_perm_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
     ftlog::info!("Building PermutedBall and permuted dataset.");
     let (ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
 
-    ftlog::info!("Writing PermutedBall to {:?}", ball_path.as_ref());
+    ftlog::info!("Writing PermutedBall to {}", ball_path.as_ref().display());
     ball.par_write_to(ball_path)?;
 
-    ftlog::info!("Writing PermutedData to {:?}", data_path.as_ref());
+    ftlog::info!("Writing PermutedData to {}", data_path.as_ref().display());
     data.par_write_to(data_path)?;
 
     Ok((ball, data))
@@ -82,10 +82,10 @@ pub fn read_perm_ball<P: AsRef<Path>>(
     ball_path: &P,
     data_path: &P,
 ) -> Result<(Pb<i32>, FlatVec<String, String>), String> {
-    ftlog::info!("Reading PermutedBall from {:?}", ball_path.as_ref());
+    ftlog::info!("Reading PermutedBall from {}", ball_path.as_ref().display());
     let ball = Pb::par_read_from(ball_path)?;
 
-    ftlog::info!("Reading PermutedData from {:?}", data_path.as_ref());
+    ftlog::info!("Reading PermutedData from {}", data_path.as_ref().display());
     let data = FlatVec::par_read_from(data_path)?;
 
     Ok((ball, data))
@@ -114,11 +114,11 @@ pub fn build_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
     ftlog::info!("Built Ball with {num_leaves} leaves.");
 
     // Serialize the ball to disk.
-    ftlog::info!("Writing Ball to {:?}", ball_path.as_ref());
+    ftlog::info!("Writing Ball to {}", ball_path.as_ref().display());
     ball.par_write_to(ball_path)?;
 
-    // Write the ball to a CSV file.;
-    ftlog::info!("Writing Ball to CSV at {:?}", csv_path.as_ref());
+    // Write the ball to a CSV file.
+    ftlog::info!("Writing Ball to CSV at {}", csv_path.as_ref().display());
     ball.write_to_csv(&csv_path)?;
 
     Ok(ball)
@@ -126,7 +126,7 @@ pub fn build_ball<P: AsRef<Path>, M: ParMetric<String, i32>>(
 
 /// Read the Ball from disk.
 pub fn read_ball<P: AsRef<Path>>(path: &P) -> Result<B<i32>, String> {
-    ftlog::info!("Reading ball from {:?}", path.as_ref());
+    ftlog::info!("Reading ball from {}", path.as_ref().display());
     let ball = Ball::par_read_from(path)?;
     ftlog::info!("Finished reading Ball.");
 

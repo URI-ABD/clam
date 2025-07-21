@@ -41,11 +41,14 @@ pub fn read_and_augment<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>>(
         gen_all_paths(dataset, max_power, out_dir);
 
     if all_paths.iter().all(|p| p.exists()) {
-        ftlog::info!("Augmented datasets already exist. Reading queries from {queries_path:?}...");
+        ftlog::info!(
+            "Augmented datasets already exist. Reading queries from {}...",
+            queries_path.display()
+        );
         return FlatVec::<Vec<f32>, usize>::read_npy(&queries_path).map(FlatVec::take_items);
     }
 
-    ftlog::info!("Reading data from {:?}...", inp_dir.as_ref());
+    ftlog::info!("Reading data from {}...", inp_dir.as_ref().display());
     let data = dataset.read_vector::<_, f32>(&inp_dir)?;
     let (train, queries, neighbors) = (data.train, data.queries, data.neighbors);
     let (neighbors, distances): (Vec<_>, Vec<_>) = neighbors
@@ -72,18 +75,18 @@ pub fn read_and_augment<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>>(
         .with_dim_lower_bound(min_dim)
         .with_dim_upper_bound(max_dim);
 
-    ftlog::info!("Writing original data as npy array to {data_orig_path:?}...");
+    ftlog::info!("Writing original data as npy array to {}...", data_orig_path.display());
     data.write_npy(&data_orig_path)?;
 
     let query_data = FlatVec::new(queries)?
         .with_name(&format!("{}-queries", dataset.name()))
         .with_dim_lower_bound(min_dim)
         .with_dim_upper_bound(max_dim);
-    ftlog::info!("Writing queries as npy array to {queries_path:?}...");
+    ftlog::info!("Writing queries as npy array to {}...", queries_path.display());
     query_data.write_npy(&queries_path)?;
     let queries = query_data.take_items();
 
-    ftlog::info!("Writing neighbors to {neighbors_path:?}...");
+    ftlog::info!("Writing neighbors to {}...", neighbors_path.display());
     neighbors.write_npy(&neighbors_path)?;
     distances.write_npy(&distances_path)?;
 
@@ -114,7 +117,7 @@ pub fn read_and_augment<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>>(
         let size = base_cardinality * (1 << power);
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed.unwrap_or(42));
         data = data.random_subsample(&mut rng, size).with_name(&name);
-        ftlog::info!("Writing {}x augmented data to {data_path:?}...", 1 << power);
+        ftlog::info!("Writing {}x augmented data to {}...", 1 << power, data_path.display());
         data.write_npy(&data_path)?;
 
         if let Some(metric) = metric {
@@ -129,7 +132,11 @@ pub fn read_and_augment<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>>(
                     hits
                 })
                 .collect::<Vec<_>>();
-            ftlog::info!("Writing true neighbors to {neighbors_path:?} and distances to {distances_path:?}...");
+            ftlog::info!(
+                "Writing true neighbors to {} and distances to {}...",
+                neighbors_path.display(),
+                distances_path.display()
+            );
             let (neighbors, distances): (Vec<_>, Vec<_>) = true_hits
                 .into_iter()
                 .map(|mut nds| {
@@ -181,7 +188,10 @@ pub fn read_or_gen_random<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>
     let ([_, queries_path, _, _], all_paths) = gen_all_paths(&dataset, max_power, out_dir);
 
     if all_paths.iter().all(|p| p.exists()) {
-        ftlog::info!("Random datasets already exist. Reading queries from {queries_path:?}...");
+        ftlog::info!(
+            "Random datasets already exist. Reading queries from {}...",
+            queries_path.display()
+        );
         return FlatVec::<Vec<f32>, usize>::read_npy(&queries_path).map(FlatVec::take_items);
     }
     let k = 100;
@@ -195,7 +205,7 @@ pub fn read_or_gen_random<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>
         .with_dim_lower_bound(dimensionality)
         .with_dim_upper_bound(dimensionality);
     let queries_path = out_dir.as_ref().join(format!("{}-queries.npy", dataset.name()));
-    ftlog::info!("Writing queries as npy array to {queries_path:?}...");
+    ftlog::info!("Writing queries as npy array to {}...", queries_path.display());
     queries.write_npy(&queries_path)?;
     let queries = queries.take_items();
 
@@ -211,7 +221,7 @@ pub fn read_or_gen_random<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>
         let size = base_cardinality * (1 << power);
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed.unwrap_or(42));
         data = data.random_subsample(&mut rng, size).with_name(&name);
-        ftlog::info!("Writing {}x random data to {data_path:?}...", 1 << power);
+        ftlog::info!("Writing {}x random data to {}...", 1 << power, data_path.display());
         data.write_npy(&data_path)?;
 
         if let Some(metric) = metric {
@@ -226,7 +236,11 @@ pub fn read_or_gen_random<P: AsRef<std::path::Path>, M: ParMetric<Vec<f32>, f32>
                     hits
                 })
                 .collect::<Vec<_>>();
-            ftlog::info!("Writing true neighbors to {neighbors_path:?} and distances to {distances_path:?}...");
+            ftlog::info!(
+                "Writing true neighbors to {} and distances to {}...",
+                neighbors_path.display(),
+                distances_path.display()
+            );
             let (neighbors, distances): (Vec<_>, Vec<_>) = true_hits
                 .into_iter()
                 .map(|mut nds| {

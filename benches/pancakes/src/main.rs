@@ -72,34 +72,34 @@ fn main() -> Result<(), String> {
 
     let log_name = format!("pancakes-{}", args.dataset.name());
     let (_guard, log_path) = bench_utils::configure_logger(&log_name, ftlog::LevelFilter::Info)?;
-    println!("Log file: {log_path:?}");
+    println!("Log file: {}", log_path.display());
 
     ftlog::info!("{args:?}");
 
     // Check the input and output directories.
     let inp_dir = args.inp_dir.canonicalize().map_err(|e| e.to_string())?;
     if !inp_dir.exists() {
-        return Err(format!("{inp_dir:?} does not exist."));
+        return Err(format!("{} does not exist.", inp_dir.display()));
     }
     if !inp_dir.is_dir() {
-        return Err(format!("{inp_dir:?} is not a directory."));
+        return Err(format!("{} is not a directory.", inp_dir.display()));
     }
-    ftlog::info!("Input directory: {inp_dir:?}");
+    ftlog::info!("Input directory: {}", inp_dir.display());
 
     let out_dir = if let Some(out_dir) = args.out_dir {
         if !out_dir.exists() {
-            ftlog::info!("Creating output directory: {out_dir:?}");
+            ftlog::info!("Creating output directory: {}", out_dir.display());
             std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
         }
         if !out_dir.is_dir() {
-            return Err(format!("{out_dir:?} is not a directory."));
+            return Err(format!("{} is not a directory.", out_dir.display()));
         }
         out_dir
     } else {
         ftlog::info!("No output directory specified, using the parent of the input directory.");
         inp_dir.parent().ok_or("No parent directory.")?.to_path_buf()
     };
-    ftlog::info!("Output directory: {out_dir:?}");
+    ftlog::info!("Output directory: {}", out_dir.display());
 
     let data_name = args.dataset.name();
     let radial_fractions = [0.1_f32, 0.25];

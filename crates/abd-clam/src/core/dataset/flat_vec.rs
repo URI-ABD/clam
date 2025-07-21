@@ -512,7 +512,7 @@ impl<T: ndarray_npy::ReadableElement + Copy> FlatVec<Vec<T>, usize> {
             .unwrap_or("")
             .to_string();
         let arr: ndarray::Array2<T> = ndarray_npy::read_npy(path)
-            .map_err(|e| format!("Could not read npy file: {e}, path: {:?}", path.as_ref()))?;
+            .map_err(|e| format!("Could not read npy file: {e}, path: {}", path.as_ref().display()))?;
         let items = arr.axis_iter(ndarray::Axis(0)).map(|row| row.to_vec()).collect();
 
         Self::from_nested_vec(items).map(|data| data.with_name(&name))
@@ -546,7 +546,7 @@ impl<T: ndarray_npy::WritableElement + Copy, Me> FlatVec<Vec<T>, Me> {
             .map_err(|e| format!("Could not convert items to Array2: {e}"))?;
         ndarray_npy::write_npy(path, &arr)
             .map_err(|e| e.to_string())
-            .map_err(|e| format!("Could not write npy file: {e}, path: {:?}", path.as_ref()))?;
+            .map_err(|e| format!("Could not write npy file: {e}, path: {}", path.as_ref().display()))?;
 
         Ok(())
     }
@@ -575,7 +575,7 @@ impl<T: Copy + distances::Number + ndarray_npy::ReadableElement, const DIM: usiz
             .unwrap_or("")
             .to_string();
         let arr: ndarray::Array2<T> = ndarray_npy::read_npy(path)
-            .map_err(|e| format!("Could not read npy file: {e}, path: {:?}", path.as_ref()))?;
+            .map_err(|e| format!("Could not read npy file: {e}, path: {}", path.as_ref().display()))?;
         let items = arr
             .axis_iter(ndarray::Axis(0))
             .map(|row| {
@@ -630,7 +630,7 @@ impl<T: Copy + distances::Number + ndarray_npy::WritableElement, Me, const DIM: 
             .map_err(|e| format!("Could not convert items to Array2: {e}"))?;
         ndarray_npy::write_npy(path, &arr)
             .map_err(|e| e.to_string())
-            .map_err(|e| format!("Could not write npy file: {e}, path: {:?}", path.as_ref()))?;
+            .map_err(|e| format!("Could not write npy file: {e}, path: {}", path.as_ref().display()))?;
 
         Ok(())
     }
@@ -663,9 +663,12 @@ impl<T: std::str::FromStr + Copy> FlatVec<Vec<T>, usize> {
     /// * If the types in the file are not parsable as `T`.
     /// * If the items cannot be converted to a `Vec`.
     pub fn read_csv<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
-        let mut reader = csv::ReaderBuilder::new()
-            .from_path(path)
-            .map_err(|e| format!("Could not start reading csv file: {e}, path: {:?}", path.as_ref()))?;
+        let mut reader = csv::ReaderBuilder::new().from_path(path).map_err(|e| {
+            format!(
+                "Could not start reading csv file: {e}, path: {}",
+                path.as_ref().display()
+            )
+        })?;
         let items = reader
             .records()
             .map(|record| {
@@ -702,7 +705,7 @@ impl<T: std::string::ToString + Copy, M> FlatVec<Vec<T>, M> {
         let mut writer = csv::WriterBuilder::new()
             .delimiter(delimiter)
             .from_path(path)
-            .map_err(|e| format!("Could not start csv file: {e}, path: {:?}", path.as_ref()))?;
+            .map_err(|e| format!("Could not start csv file: {e}, path: {}", path.as_ref().display()))?;
         for item in &self.items {
             writer
                 .write_record(item.iter().map(T::to_string))
