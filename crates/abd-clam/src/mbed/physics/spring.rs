@@ -193,7 +193,8 @@ impl<F: Float> Spring<F> {
 /// - `l`: The current length of the spring.
 /// - `n`: The power of the reciprocal term.
 fn f_mag<F: Float>(k: F, l0: F, l: F, _: i32) -> F {
-    k * (l / l0).ln()
+    k * l.abs_diff(l0)
+    // k * (l / l0).ln()
     // k * (l.sqrt() - l.recip().powi(n) - l0.sqrt() + l0.recip().powi(n))
 }
 
@@ -204,12 +205,13 @@ fn pe<F: Float>(k: F, l0: F, l: F, _: i32) -> F {
     if l0 <= F::EPSILON || l.abs_diff(l0) <= F::EPSILON {
         F::ZERO
     } else {
-        let pe = |x: F| {
-            x * ((x / l0).ln() - F::ONE)
-            // x * l0.recip().powi(n) - x * l0.sqrt()
-            //     + x.powi(1 - n) / F::from(n - 1)
-            //     + x.sqrt().cube().double() / F::from(3)
-        };
-        k * (pe(l) - pe(l0))
+        // let pe = |x: F| {
+        //     x * ((x / l0).ln() - F::ONE)
+        //     // x * l0.recip().powi(n) - x * l0.sqrt()
+        //     //     + x.powi(1 - n) / F::from(n - 1)
+        //     //     + x.sqrt().cube().double() / F::from(3)
+        // };
+        // k * (pe(l) - pe(l0))
+        k * l.abs_diff(l0).powi(2).half()
     }
 }

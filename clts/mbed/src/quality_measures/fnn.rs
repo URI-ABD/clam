@@ -33,7 +33,7 @@ where
 
     let umap_root = Ball::par_new_tree_iterative(umap_data, &reduced_metric, &criteria, Some(seed), depth_stride);
 
-    let k = 100;
+    let k = 10;
     let indices = {
         let mut indices = original_data.indices().collect::<Vec<_>>();
         let mut rng = StdRng::seed_from_u64(seed);
@@ -60,14 +60,14 @@ where
         .zip(reduced_neighbors.iter())
         .map(|(original, reduced)| recall(original, reduced))
         .collect::<Vec<_>>();
-    let mbed_recall = abd_clam::utils::mean(&mbed_recalls);
+    let mbed_recall = 1.0 - abd_clam::utils::mean::<_, f32>(&mbed_recalls);
 
     let umap_recalls = original_neighbors
         .iter()
         .zip(umap_neighbors.iter())
         .map(|(original, umap)| recall(original, umap))
         .collect::<Vec<_>>();
-    let umap_recall = abd_clam::utils::mean(&umap_recalls);
+    let umap_recall = 1.0 - abd_clam::utils::mean::<_, f32>(&umap_recalls);
 
     (mbed_recall, umap_recall)
 }
