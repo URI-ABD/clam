@@ -26,7 +26,7 @@ impl ShellTree {
         balanced: bool,
         permuted: bool,
     ) -> Result<(ShellTree, ShellFlatVec), String> {
-        // TODO: Implement a macro to handle the match arms more elegantly.
+        // TODO Najib: Implement a macro to handle the match arms more elegantly.
         match inp_data {
             ShellFlatVec::String(data) => match metric {
                 ShellMetric::Levenshtein(metric) => {
@@ -81,7 +81,7 @@ impl ShellTree {
                 }
             },
             _ => {
-                todo!("Implement remaining match arms")
+                todo!("Najib: Implement remaining match arms via macro");
             }
         }
     }

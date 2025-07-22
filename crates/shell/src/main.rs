@@ -46,7 +46,7 @@ fn main() -> Result<(), String> {
                 permuted,
             )?,
             commands::cakes::CakesAction::Search { .. } => {
-                unimplemented!("Search functionality is not yet implemented");
+                todo!("Tom")
             }
         },
         Commands::Musals { .. } => todo!("Emily"),

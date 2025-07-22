@@ -1,10 +1,11 @@
 //! Data formats supported in the CLI.
 
+mod fasta;
+mod npy;
+
 use std::path::Path;
 
 use abd_clam::FlatVec;
-
-mod npy;
 
 /// Data formats supported in the CLI.
 pub enum Format {
@@ -36,7 +37,9 @@ impl<P: AsRef<Path>> From<P> for Format {
 
 #[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
 pub enum ShellFlatVec {
-    String(FlatVec<String, usize>),
+    /// FlatVec for strings from FASTA files.
+    String(FlatVec<String, String>),
+    /// FlatVec for various numeric types from NPY files.
     F32(FlatVec<Vec<f32>, usize>),
     F64(FlatVec<Vec<f64>, usize>),
     I8(FlatVec<Vec<i8>, usize>),
@@ -57,7 +60,7 @@ impl ShellFlatVec {
 
     /// Reads a FASTA file and returns a ShellFlatVec.
     pub fn read_fasta<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        todo!("Implement FASTA reading logic. {}", path.as_ref().display())
+        fasta::read(path)
     }
 
     /// Saves the ShellFlatVec to the specified path using bincode.

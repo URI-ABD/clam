@@ -11,3 +11,4 @@ bitcode = { workspace = true, features = ["serde"] }
 ndarray.workspace = true
 ndarray-npy.workspace = true
 serde = { version = "1.0", features = ["derive"] }
+bio.workspace = true
