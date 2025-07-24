@@ -3,6 +3,7 @@
 use distances::Number;
 
 /// Reports for search results.
+#[allow(clippy::struct_field_names)]
 pub struct Results<T: Number> {
     /// The dataset name.
     dataset: String,

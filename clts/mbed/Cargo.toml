@@ -3,6 +3,9 @@ name = "clam-mbed"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 clap = { workspace = true }
 abd-clam = { workspace = true, features = ["all"] }

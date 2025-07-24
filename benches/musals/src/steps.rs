@@ -12,7 +12,10 @@ use abd_clam::{
     Ball, Cluster, Dataset, FlatVec, ParDiskIO,
 };
 
+/// Type alias for `Ball`
 type B<U> = Ball<U>;
+
+/// Type alias for `PermutedBall`
 type Pb<U> = PermutedBall<U, B<U>>;
 
 /// Build the aligned datasets.

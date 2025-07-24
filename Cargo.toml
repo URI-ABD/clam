@@ -12,6 +12,28 @@ members = [
 ]
 resolver = "2"
 
+# TODO: Najib: Rework the `lints` section after [this issue](https://github.com/rust-lang/cargo/issues/12918) is resolved.
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = 0 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -2 }
+correctness = { level = "deny", priority = -3 }
+suspicious = { level = "warn", priority = -4 }
+style = { level = "warn", priority = -5 }
+complexity = { level = "warn", priority = -6 }
+perf = { level = "warn", priority = -7 }
+unwrap_used = { level = "warn", priority = -8 }
+expect_used = { level = "warn", priority = -9 }
+panic = { level = "warn", priority = -10 }
+cast_lossless = { level = "warn", priority = -11 }
+missing_docs_in_private_items = { level = "warn", priority = -12 }
+unnecessary_debug_formatting = { level = "allow", priority = 1 }  # TODO Najib: Remove this after the CLI PR is merged.
+
 [workspace.dependencies]
 abd-clam = { version = "0.32.0", path = "crates/abd-clam" }
 distances = { version = "1.8.0", path = "crates/distances" }

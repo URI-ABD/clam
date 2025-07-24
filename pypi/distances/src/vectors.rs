@@ -214,6 +214,7 @@ fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
 }
 
 /// Compute the pairwise distances between two collections of vectors.
+#[allow(clippy::too_many_lines)]
 #[pyfunction]
 #[pyo3(signature = (a, b, metric, p=None))]
 fn cdist<'py>(

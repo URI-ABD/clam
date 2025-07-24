@@ -1,3 +1,8 @@
+#![allow(missing_docs)]
+
+use distances::sets::dice;
+use distances::sets::jaccard;
+use distances::sets::kulsinski;
 use rand::Rng;
 
 use distances::{

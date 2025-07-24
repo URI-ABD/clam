@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 def plot(
     inp_path: pathlib.Path,
     labels_path: pathlib.Path,
-    ax: list[plt.Axes],
+    ax: list[plt.Axes],  # type: ignore
 ) -> None:
     """Plot dimensionality reduction results using CLAM-MBED."""
 

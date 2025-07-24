@@ -6,7 +6,7 @@ use distances::Number;
 macro_rules! read_ty {
     ($inp_dir:expr, $name:expr, $($ty:ty),*) => {
         $(
-            let data = _read::<_, $ty>($inp_dir, $name);
+            let data = read_helper::<_, $ty>($inp_dir, $name);
             if data.is_ok() {
                 return data;
             }
@@ -23,7 +23,7 @@ pub fn read<P: AsRef<std::path::Path>>(inp_dir: &P, name: &str) -> Result<FlatVe
 }
 
 /// Reads a dataset in `hdf5` format from the `ann-benchmarks` suite.
-fn _read<P: AsRef<std::path::Path>, T: Number + hdf5::H5Type + Clone>(
+fn read_helper<P: AsRef<std::path::Path>, T: Number + hdf5::H5Type + Clone>(
     inp_dir: &P,
     name: &str,
 ) -> Result<FlatVec<Vec<f32>, usize>, String> {

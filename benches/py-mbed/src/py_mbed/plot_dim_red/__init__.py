@@ -51,17 +51,17 @@ def plot(
 
         logger.info("Saving UMAP results...")
         # Save the UMAP results
-        numpy.save(umap_path, embedding)
+        numpy.save(umap_path, embedding)  # type: ignore
 
     logger.info("Reduced data already exists. Creating plots...")
 
-    fig: plt.Figure
-    ax: plt.Axes
+    fig: plt.Figure  # type: ignore
+    ax: plt.Axes  # type: ignore
     fig, ax = plt.subplots(2, 3, figsize=(20, 15))
 
-    plot_umap.plot(umap_path, labels_path, ax[0])
+    plot_umap.plot(umap_path, labels_path, ax[0])  # type: ignore
     if mbed_path.exists():
-        plot_mbed.plot(mbed_path, labels_path, ax[1])
+        plot_mbed.plot(mbed_path, labels_path, ax[1])  # type: ignore
 
     plt.tight_layout()
     plt.savefig(out_dir / "dim_red_results.png", dpi=200)

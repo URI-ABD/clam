@@ -73,7 +73,7 @@ where
 }
 
 /// Keep only the indices of the neighbors and convert the inner Vector to a
-/// HashSet.
+/// `HashSet`.
 fn keep_indices<F>(values: Vec<Vec<(usize, F)>>) -> Vec<HashSet<usize>> {
     values
         .into_iter()

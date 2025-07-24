@@ -8,6 +8,7 @@ use abd_clam::{
     Ball, Dataset, FlatVec, ParDiskIO,
 };
 use distances::number::Float;
+use ndarray::prelude::*;
 
 /// Build the dimension reduction.
 ///
@@ -24,7 +25,7 @@ use distances::number::Float;
 pub fn build<P, I, M, Me, F, const DIM: usize>(
     out_dir: &P,
     data: &FlatVec<I, Me>,
-    metric: M,
+    metric: &M,
     balanced: bool,
     seed: Option<u64>,
     beta: F,
@@ -57,10 +58,10 @@ where
     } else {
         let root = if balanced {
             let criteria = |_: &BalancedBall<f32>| true;
-            BalancedBall::par_new_tree_iterative(data, &metric, &criteria, seed, 128).into_ball()
+            BalancedBall::par_new_tree_iterative(data, metric, &criteria, seed, 128).into_ball()
         } else {
             let criteria = |_: &Ball<f32>| true;
-            Ball::par_new_tree_iterative(data, &metric, &criteria, seed, 128)
+            Ball::par_new_tree_iterative(data, metric, &criteria, seed, 128)
         };
         root.par_write_to(&tree_path)?;
         root
@@ -75,7 +76,7 @@ where
     ftlog::info!("Running the simulation...");
     let tolerance = target;
     let n = patience;
-    let checkpoints = system.par_simulate_to_leaves(&mut rng, data, &metric, max_steps, tolerance, dt, n);
+    let checkpoints = system.par_simulate_to_leaves(&mut rng, data, metric, max_steps, tolerance, dt, n);
 
     ftlog::info!("Writing the energy history...");
     let energy_history = system
@@ -102,10 +103,13 @@ where
             })
         })
         .collect::<Vec<_>>();
-    let final_step = steps.last().unwrap().clone();
+    let final_step = steps
+        .last()
+        .unwrap_or_else(|| unreachable!("We have performed at least one step."))
+        .clone();
 
     let arrays = steps.into_iter().map(|step| step.to_array2()).collect::<Vec<_>>();
-    let arrays = arrays.iter().map(|a| a.view()).collect::<Vec<_>>();
+    let arrays = arrays.iter().map(ArrayBase::view).collect::<Vec<_>>();
     let stack = ndarray::stack(ndarray::Axis(0), &arrays).map_err(|e| e.to_string())?;
     let stack_path = out_dir.as_ref().join(format!("{}-stack.npy", data.name()));
     ndarray_npy::write_npy(&stack_path, &stack).map_err(|e| e.to_string())?;

@@ -348,12 +348,12 @@ impl<I: Send + Sync, Me> FlatVec<I, Me> {
     }
 
     /// Parallel version of [`FlatVec::transform_items_in_place`](Self::transform_items_in_place).
-    pub fn par_transform_items_in_place<F: (Fn(&mut I)) + Send + Sync>(&mut self, transformer: F) {
+    pub fn par_transform_items_in_place<F: Fn(&mut I) + Send + Sync>(&mut self, transformer: F) {
         self.items.par_iter_mut().for_each(transformer);
     }
 
     /// Parallel version of [`FlatVec::transform_items_enumerated_in_place`](Self::transform_items_enumerated_in_place).
-    pub fn par_transform_items_enumerated_in_place<F: (Fn(usize, &mut I)) + Send + Sync>(&mut self, transformer: F) {
+    pub fn par_transform_items_enumerated_in_place<F: Fn(usize, &mut I) + Send + Sync>(&mut self, transformer: F) {
         self.items
             .par_iter_mut()
             .enumerate()

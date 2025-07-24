@@ -9,6 +9,7 @@ ignore = [
   "ICN001",  # {name} should be imported as {asname}  # I like my numpy imports
   "COM812",
   "ISC001",
+  "PGH003",  # Use specific rule codes when ignoring type issues
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 

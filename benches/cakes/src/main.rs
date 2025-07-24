@@ -1,3 +1,5 @@
+//! CLI for the benchmarks
+
 use std::path::PathBuf;
 
 use abd_clam::{Dataset, FlatVec, ParDiskIO};

@@ -3,6 +3,9 @@ name = "bench-pancakes"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 bench-cakes = { path = "../cakes" }
 bench-utils = { path = "../utils" }

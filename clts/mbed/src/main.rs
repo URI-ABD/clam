@@ -1,5 +1,11 @@
 //! CLI for CLAM-MBED, the dimension reduction tool.
 
+#![allow(
+    clippy::too_many_lines,
+    clippy::missing_docs_in_private_items,
+    clippy::unnecessary_debug_formatting
+)]
+
 use std::path::PathBuf;
 
 use abd_clam::{Dataset, FlatVec};
@@ -148,7 +154,7 @@ fn main() -> Result<(), String> {
             let data = dataset::read(&inp_dir, &args.dataset_name)?;
 
             let reduced_data = workflow::build::<_, _, _, _, f64, DIM>(
-                &out_dir, &data, metric, *balanced, args.seed, *beta, *k, *dk, *dt, *patience, *target, *max_steps,
+                &out_dir, &data, &metric, *balanced, args.seed, *beta, *k, *dk, *dt, *patience, *target, *max_steps,
             )?;
 
             let reduced_path = out_dir.join(format!("{}-reduced.npy", data.name()));

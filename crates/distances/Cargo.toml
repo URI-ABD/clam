@@ -16,6 +16,9 @@ readme = "README.md"
 # and update the release github action.
 publish = true
 
+[lints]
+workspace = true
+
 [dependencies]
 rand = { workspace = true }
 serde = { workspace = true }

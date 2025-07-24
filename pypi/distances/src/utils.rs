@@ -19,9 +19,9 @@ pub enum Scalar {
 impl<'a> FromPyObject<'a> for Scalar {
     fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
         if let Ok(a) = ob.extract::<f32>() {
-            Ok(Scalar::F32(a))
+            Ok(Self::F32(a))
         } else if let Ok(a) = ob.extract::<f64>() {
-            Ok(Scalar::F64(a))
+            Ok(Self::F64(a))
         } else {
             Err(PyTypeError::new_err("Invalid type"))
         }
@@ -37,8 +37,8 @@ impl<'py> IntoPyObject<'py> for Scalar {
 
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         match self {
-            Scalar::F32(a) => a.into_pyobject(py),
-            Scalar::F64(a) => a.into_pyobject(py),
+            Self::F32(a) => a.into_pyobject(py),
+            Self::F64(a) => a.into_pyobject(py),
         }
     }
 }
@@ -169,7 +169,7 @@ pub fn parse_metric<T: Number>(metric: &str) -> PyResult<fn(&[T], &[T]) -> f64> 
         "sqeuclidean" => Ok(vectors::euclidean_sq),
         "manhattan" | "cityblock" => Ok(_manhattan),
         "cosine" => Ok(vectors::cosine),
-        _ => Err(PyValueError::new_err(format!("Unknown metric: {}", metric))),
+        _ => Err(PyValueError::new_err(format!("Unknown metric: {metric}"))),
     }
 }
 

@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 
 /// A helper for managing the names of files on disk.
 pub struct PathManager {
+    /// The name of the dataset.
     name: String,
+    /// The directory where the dataset is stored.
     out_dir: PathBuf,
 }
 

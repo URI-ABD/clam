@@ -18,6 +18,7 @@ pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
 
 macro_rules! build_fn {
     ($name:tt, $name_f32:tt, $name_f64:tt) => {
+        #[allow(clippy::too_many_lines)]
         #[pyfunction]
         fn $name(a: Vector1, b: Vector1) -> PyResult<Scalar> {
             match (&a, &b) {

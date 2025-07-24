@@ -1,4 +1,4 @@
-// //! Tests for the `mbed` module.
+//! Tests for the `mbed` module.
 
 // use abd_clam::{
 //     cluster::Partition,

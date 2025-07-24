@@ -258,8 +258,8 @@ def plot_throughput(
     logger.info(f"  Plotting Throughput {title}")
 
     # Create a figure and axis
-    fig: plt.Figure
-    ax: plt.Axes
+    fig: plt.Figure  # type: ignore
+    ax: plt.Axes  # type: ignore
     m = 0.8
     fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
@@ -269,7 +269,7 @@ def plot_throughput(
         g.sort_values("cardinality", inplace=True)
         # Plot the "cardinality" column on the x-axis against the "throughput"
         # column on the y-axis
-        marker, color = ALG_MARKERS_COLORS[alg]
+        marker, color = ALG_MARKERS_COLORS[alg]  # type: ignore
         ax.plot(
             g["cardinality"],
             g["throughput"],
@@ -341,7 +341,7 @@ def plot_throughput(
 
     # Shrink y-axis by 20%
     box = ax.get_position()
-    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
+    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])  # type: ignore
 
     # Put a legend above the plot
     ax.legend(
@@ -375,8 +375,8 @@ def plot_distance_counts(
     logger.info(f"  Plotting Distance Counts {title}")
 
     # Create a figure and axis
-    fig: plt.Figure
-    ax: plt.Axes
+    fig: plt.Figure  # type: ignore
+    ax: plt.Axes  # type: ignore
     m = 0.8
     fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
@@ -386,7 +386,7 @@ def plot_distance_counts(
         g.sort_values("cardinality", inplace=True)
         # Plot the "cardinality" column on the x-axis against the
         # "mean_distance_computations" column on the y-axis
-        marker, color = CLUSTER_MARKERS_COLORS[cluster]
+        marker, color = CLUSTER_MARKERS_COLORS[cluster]  # type: ignore
         ax.plot(
             g["cardinality"],
             g["mean_distance_computations"],
@@ -409,7 +409,7 @@ def plot_distance_counts(
 
     # Shrink y-axis by 20%
     box = ax.get_position()
-    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
+    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])  # type: ignore
 
     # Put a legend above the plot
     ax.legend(
@@ -439,7 +439,7 @@ def plot_distance_counts(
         g.sort_values("cardinality", inplace=True)
         # Plot the "cardinality" column on the x-axis against the
         # "mean_distance_computations" column on the y-axis
-        marker, color = CLUSTER_MARKERS_COLORS[cluster]
+        marker, color = CLUSTER_MARKERS_COLORS[cluster]  # type: ignore
         ax.plot(
             g["cardinality"],
             g["throughput"],
@@ -462,7 +462,7 @@ def plot_distance_counts(
 
     # Shrink y-axis by 20%
     box = ax.get_position()
-    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
+    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])  # type: ignore
 
     # Put a legend above the plot
     ax.legend(
@@ -543,7 +543,7 @@ def plot_prop_percentiles(
 
     # Group by the "depth" column
     for depth, group in inp_df.groupby("depth"):
-        if depth > 100:
+        if depth > 100:  # type: ignore
             continue
 
         prop_values = []
@@ -555,14 +555,14 @@ def plot_prop_percentiles(
         # Calculate the percentile values
         percentile_values = list(map(float, numpy.percentile(prop_values, percentiles)))
         # Add them to the dataframe
-        prop_df.loc[depth] = percentile_values
+        prop_df.loc[depth] = percentile_values  # type: ignore
 
     logger.info(f"  Created {prop} dataframe with {prop_df.shape[0]} rows")
     logger.info(f"  {prop_df.head(10)}")
 
     # Create a figure and axis
-    fig: plt.Figure
-    ax: plt.Axes
+    fig: plt.Figure  # type: ignore
+    ax: plt.Axes  # type: ignore
     m = 0.8
     fig, ax = plt.subplots(figsize=(6 * m, 6 * m))
 
@@ -604,7 +604,7 @@ def plot_prop_percentiles(
         ax.set_yticks(y_ticks)
         # Add a horizontal line at each y-tick
         for y in y_ticks:
-            ax.axhline(y, color="gray", linestyle="solid", linewidth=0.1)
+            ax.axhline(y, color="gray", linestyle="solid", linewidth=0.1)  # type: ignore
     elif prop == "radius":
         if "silva" in dataset or "radio" in dataset:
             # Set the y-axis to a logarithmic scale
@@ -630,7 +630,7 @@ def plot_prop_percentiles(
 
     # Shrink y-axis by 20%
     box = ax.get_position()
-    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])
+    ax.set_position([box.x0, box.y0, box.width, box.height * 0.8])  # type: ignore
 
     # Put a legend above the plot
     handles, labels = plt.gca().get_legend_handles_labels()

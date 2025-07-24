@@ -2,9 +2,7 @@
 
 use distances::Number;
 
-use crate::{dataset::ParDataset, metric::ParMetric, Dataset, Metric};
-
-use super::{Cluster, ParCluster};
+use super::{Cluster, Dataset, Metric, ParCluster, ParDataset, ParMetric};
 
 /// A helpful struct to store a root `Cluster`, a `Dataset`, and a `Metric`.
 #[derive(Clone)]

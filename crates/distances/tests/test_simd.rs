@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use symagen::random_data;
 use test_case::test_case;
 

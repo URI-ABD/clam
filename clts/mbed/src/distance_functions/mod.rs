@@ -15,18 +15,18 @@ pub enum DistanceFunction {
 
 impl DistanceFunction {
     /// Get the name of the distance function.
-    pub fn name(&self) -> &str {
+    pub const fn name(&self) -> &str {
         match self {
-            DistanceFunction::Euclidean => "euclidean",
-            DistanceFunction::Cosine => "cosine",
+            Self::Euclidean => "euclidean",
+            Self::Cosine => "cosine",
         }
     }
 
     /// Get the `Metric` for the distance function.
     pub fn metric(&self) -> Box<dyn ParMetric<Vec<f32>, f32>> {
         match self {
-            DistanceFunction::Euclidean => Box::new(abd_clam::metric::Euclidean),
-            DistanceFunction::Cosine => Box::new(abd_clam::metric::Cosine),
+            Self::Euclidean => Box::new(abd_clam::metric::Euclidean),
+            Self::Cosine => Box::new(abd_clam::metric::Cosine),
         }
     }
 }
