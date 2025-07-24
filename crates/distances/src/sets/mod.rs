@@ -3,7 +3,10 @@
 // use alloc::collections::btree_set::BTreeSet;  // no-std
 use std::collections::BTreeSet;
 
-use crate::number::{Float, Int};
+use crate::{
+    number::{Float, Int},
+    Number,
+};
 
 /// Jaccard distance.
 ///
@@ -135,4 +138,51 @@ pub fn kulsinski<T: Int, U: Float>(x: &[T], y: &[T]) -> U {
     } else {
         U::ONE - (U::from(intersection) / U::from(union + not_equal))
     }
+}
+
+/// Hausdorff distance between two collections.
+///
+/// This is the minimum of the one-way Hausdorff distances from `a` to `b` and from `b` to `a`.
+///
+/// See [here](https://en.wikipedia.org/wiki/Hausdorff_distance) for more information.
+///
+/// # Arguments
+///
+/// * `a`: A collection of items.
+/// * `b`: A collection of items.
+/// * `ground_dist`: A function that calculates the distance between two items.
+pub fn hausdorff<T, U: Number>(a: &[T], b: &[T], ground_dist: fn(&T, &T) -> U) -> U {
+    // check if either set is empty
+    if a.is_empty() || b.is_empty() {
+        return U::ZERO;
+    }
+
+    // Calculate the Hausdorff distance in both directions
+    let ab = hausdorff_one_way(a, b, ground_dist);
+    let ba = hausdorff_one_way(b, a, ground_dist);
+
+    // return the minimum of the two distances
+    ab.min(ba)
+}
+
+/// Hausdorff distance from `a` to `b`.
+///
+/// This is the maximum distance from any point in `a` to its nearest point in `b`.
+pub fn hausdorff_one_way<T, U: Number>(a: &[T], b: &[T], ground_dist: fn(&T, &T) -> U) -> U {
+    // initiate variable which will store final hausdorff distance value (supremum)
+    let mut supremum = U::ZERO;
+
+    // supremum loop: iterate through all elements of `a`
+    for x in a {
+        // Get the minimum ground-distance from `x` to all elements of `b`
+        let shortest = b
+            .iter()
+            .map(|y| ground_dist(x, y))
+            .fold(U::ZERO, |acc, current| current.min(acc));
+
+        // Update the supremum if needed
+        supremum = supremum.max(shortest);
+    }
+
+    supremum
 }
