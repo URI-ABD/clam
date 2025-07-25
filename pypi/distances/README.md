@@ -80,6 +80,21 @@ print(dist)
 
 ## Benchmarks
 
+To reproduce benchmarks, clone the repo and run the following:
+
+```shell
+cargo build --release --workspace
+uv sync --all-packages
+uv run richbench --markdown pypi/distances/benches
+```
+
+To reproduce the plots,
+
+```shell
+cd pypi/distances
+python -m plots
+```
+
 ### SIMD-Accelerated Vector Distance Benchmarks
 
 These benchmarks were run on an Intel Core i7-11700KF CPU @ 4.900GHz, using **a single thread**.
