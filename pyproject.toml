@@ -7,7 +7,7 @@ authors = [
     { name = "Tom Howard", email = "info@tomhoward.codes" },
 ]
 dependencies = [
-    "numpy>=2.2.5",
+    "numpy>=2.2",
 ]
 readme = "README.md"
 requires-python = ">= 3.13"

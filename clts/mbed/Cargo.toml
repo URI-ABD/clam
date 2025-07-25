@@ -10,10 +10,10 @@ workspace = true
 clap = { workspace = true }
 abd-clam = { workspace = true, features = ["all"] }
 distances = { workspace = true }
+symagen = { workspace = true }
 ndarray = { workspace = true }
 ndarray-npy = { workspace = true }
 ftlog = { workspace = true }
-bench-utils = { path = "../../benches/utils" }
 rayon = { workspace = true }
 rand = { workspace = true }
 hdf5 = { workspace = true }

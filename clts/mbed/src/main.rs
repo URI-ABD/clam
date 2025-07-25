@@ -129,7 +129,7 @@ fn main() -> Result<(), String> {
     };
 
     let file_name = format!("mbed-{name}");
-    let (_guard, log_path) = bench_utils::configure_logger(&file_name, ftlog::LevelFilter::Info)?;
+    let (_guard, log_path) = abd_clam::utils::configure_logger(&file_name, ftlog::LevelFilter::Info)?;
     ftlog::info!("Logging to: {log_path:?}");
 
     ftlog::info!("Using {:?} distance function...", args.metric.name());

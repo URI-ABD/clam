@@ -3,6 +3,10 @@
 use core::cmp::Ordering;
 
 use distances::{number::Float, Number};
+use ftlog::{
+    appender::{FileAppender, Period},
+    LevelFilter, LoggerGuard,
+};
 use rand::prelude::*;
 
 /// The square root threshold for sub-sampling.
@@ -440,4 +444,38 @@ pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
     let encoding = bytes[*offset..*offset + len].to_vec();
     *offset += len;
     encoding.into_boxed_slice()
+}
+
+/// Configures the logger.
+///
+/// # Errors
+///
+/// - If a logs directory could not be located/created.
+/// - If the logger could not be initialized.
+pub fn configure_logger(file_name: &str, level: LevelFilter) -> Result<(LoggerGuard, std::path::PathBuf), String> {
+    let root_dir = std::path::PathBuf::from(".")
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let logs_dir = root_dir.join("logs");
+    if !logs_dir.exists() {
+        std::fs::create_dir(&logs_dir).map_err(|e| e.to_string())?;
+    }
+    let log_path = logs_dir.join(format!("{file_name}.log"));
+
+    let writer = FileAppender::builder().path(&log_path).rotate(Period::Day).build();
+
+    let err_path = log_path.with_extension("err.log");
+
+    let guard = ftlog::Builder::new()
+        // global max log level
+        .max_log_level(level)
+        // define root appender, pass None would write to stderr
+        .root(writer)
+        // write `Debug` and higher logs in ftlog::appender to `err_path` instead of `log_path`
+        .filter("ftlog::appender", "ftlog-appender", LevelFilter::Debug)
+        .appender("ftlog-appender", FileAppender::new(err_path))
+        .try_init()
+        .map_err(|e| e.to_string())?;
+
+    Ok((guard, log_path))
 }
