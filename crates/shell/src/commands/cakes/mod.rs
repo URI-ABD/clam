@@ -12,21 +12,10 @@ pub use build::build_new_tree;
 #[derive(Subcommand, Debug)]
 pub enum CakesAction {
     Build {
-        /// The path to the input dataset file.
-        #[arg(short('i'), long)]
-        inp_path: PathBuf,
-
-        /// The path to the output dataset file.
+        /// The path to the output directory. We will construct the output paths
+        /// from this directory as we need them.
         #[arg(short('o'), long)]
-        out_path: PathBuf,
-
-        /// The path to the tree file.
-        #[arg(short('t'), long)]
-        tree_path: PathBuf,
-
-        /// The name of the metric to use.
-        #[arg(short('m'), long, default_value = "euclidean")]
-        metric: crate::metrics::Metric,
+        out_dir: PathBuf,
 
         /// Whether to build a balanced tree.
         #[arg(short('b'), long, default_value_t = false)]
@@ -37,16 +26,8 @@ pub enum CakesAction {
         permuted: bool,
     },
     Search {
-        /// The path to the dataset file.
-        #[arg(short('i'), long)]
-        inp_path: PathBuf,
-
-        /// The path to the tree file.
-        #[arg(short('t'), long)]
-        tree_path: PathBuf,
-
-        /// The name of the metric to use.
-        #[arg(short('m'), long, default_value = "euclidean")]
-        metric: crate::metrics::Metric,
+        /// The path to `out_dir` as used in the `build` command.
+        #[arg(short('o'), long)]
+        out_dir: PathBuf,
     },
 }

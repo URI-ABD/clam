@@ -1,21 +1,23 @@
-//! The workflow for dimensionality reduction using `clam-mbed`.
+//! Subcommands for `Mbed`
+
+mod build;
+mod evaluate;
+
+use std::path::PathBuf;
 
 use clap::Subcommand;
 
-use crate::quality_measures::QualityMeasures;
-
-mod build;
-mod measure;
-
-pub use build::build;
-pub use measure::measure;
+pub use build::build_new_embedding;
 
 #[derive(Subcommand, Debug)]
-pub enum Commands {
-    /// Create a dimension reduction for the given dataset.
+pub enum MbedAction {
     Build {
-        /// Whether to use the balanced ball clustering algorithm.
-        #[arg(short('b'), long)]
+        /// The path to the output directory.
+        #[arg(short('o'), long)]
+        out_dir: PathBuf,
+
+        /// Whether to build a balanced tree.
+        #[arg(short('b'), long, default_value_t = false)]
         balanced: bool,
 
         /// The damping factor for the mass-spring system.
@@ -23,7 +25,7 @@ pub enum Commands {
         beta: f64,
 
         /// The spring constant for the mass-spring system.
-        #[arg(short('k'), long, default_value = "1.0")]
+        #[arg(short('k'), long, default_value = "-.01")]
         k: f64,
 
         /// The factor by which to decrease the spring constant at each
@@ -49,17 +51,19 @@ pub enum Commands {
         #[arg(short('M'), long, default_value = "10000")]
         max_steps: usize,
     },
-    /// Measure the quality of a dimension reduction.
-    Measure {
-        /// The quality measures to calculate.
-        // #[arg(short('q'), long, default_value = "pairwise,triangle-inequality,angle")]
-        #[arg(short('q'), long, default_value = "fnn")]
-        quality_measures: Vec<QualityMeasures>,
+    Evaluate {
+        /// The path to `out_dir` used in the `build` command.
+        #[arg(short('o'), long)]
+        out_dir: PathBuf,
+
+        /// The name of the quality measure to use.
+        #[arg(short('m'), long, default_value = "fnn")]
+        measure: evaluate::QualityMeasure,
 
         /// Whether to exhaustively measure the quality on all possible
         /// combinations of points. Warning: This may take a long time on even
         /// moderately sized datasets.
-        #[arg(short('e'), long, default_value = "false")]
+        #[arg(short('e'), long, default_value_t = false)]
         exhaustive: bool,
     },
 }

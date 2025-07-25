@@ -1,28 +1,88 @@
 //! Build the dimension reduction.
 
 use abd_clam::{
+    Ball, Dataset, FlatVec, ParDiskIO,
     cluster::{BalancedBall, ParPartition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut},
     mbed::Complex,
     metric::ParMetric,
-    Ball, Dataset, FlatVec, ParDiskIO,
 };
-use distances::number::Float;
+use distances::{Number, number::Float};
 use ndarray::prelude::*;
+
+use crate::{data::ShellFlatVec, metrics::ShellMetric};
 
 /// Build the dimension reduction.
 ///
 /// # Type Parameters
 ///
 /// - `P`: The type of the path to the output directory.
-/// - `I`: The type of the items in the dataset.
-/// - `D`: The type of the dataset.
-/// - `M`: The type of the metric.
-/// - `Me`: The type of the metadata.
 /// - `F`: The type of the floating-point numbers in the reduction.
 /// - `DIM`: The number of dimensions.
 #[allow(clippy::too_many_arguments)]
-pub fn build<P, I, M, Me, F, const DIM: usize>(
+pub fn build_new_embedding<P, F, const DIM: usize>(
+    out_dir: &P,
+    data: &ShellFlatVec,
+    metric: &ShellMetric,
+    balanced: bool,
+    seed: Option<u64>,
+    beta: F,
+    k: F,
+    dk: F,
+    dt: F,
+    patience: usize,
+    target: F,
+    max_steps: usize,
+) -> Result<FlatVec<[f32; DIM], usize>, String>
+where
+    P: AsRef<std::path::Path>,
+    F: Float,
+{
+    ftlog::info!("Building the dimension reduction...");
+    ftlog::info!("Output directory: {:?}", out_dir.as_ref());
+    ftlog::info!("Dimensions: {DIM}");
+
+    match metric {
+        ShellMetric::Levenshtein(metric) => match data {
+            ShellFlatVec::String(data) => build_generic::<_, _, u32, _, _, _, DIM>(
+                out_dir, data, metric, balanced, seed, beta, k, dk, dt, patience, target, max_steps,
+            ),
+            _ => Err("The Levenshtein metric can only be used with string data.".to_string()),
+        },
+        ShellMetric::Euclidean(metric) => match data {
+            ShellFlatVec::String(_) => Err("The Euclidean metric cannot be used with string data.".to_string()),
+            ShellFlatVec::F32(data) => build_generic::<_, _, f32, _, _, _, DIM>(
+                out_dir, data, metric, balanced, seed, beta, k, dk, dt, patience, target, max_steps,
+            ),
+            _ => {
+                todo!("Implement remaining match arms")
+            }
+        },
+        ShellMetric::Cosine(metric) => match data {
+            ShellFlatVec::String(_) => Err("The Cosine metric cannot be used with string data.".to_string()),
+            ShellFlatVec::F32(data) => build_generic::<_, _, f32, _, _, _, DIM>(
+                out_dir, data, metric, balanced, seed, beta, k, dk, dt, patience, target, max_steps,
+            ),
+            _ => {
+                todo!("Implement remaining match arms")
+            }
+        },
+    }
+}
+
+/// Generic helper for building the dimension reduction.
+///
+/// # Type Parameters
+///
+/// - `P`: The type of the path to the output directory.
+/// - `I`: The type of the items in the dataset.
+/// - `T`: The type of the distance values.
+/// - `M`: The type of the distance metric.
+/// - `Me`: The type of the metadata with the dataset.
+/// - `F`: The type of the floating-point numbers in the reduction.
+/// - `DIM`: The number of dimensions.
+#[allow(clippy::too_many_arguments)]
+fn build_generic<P, I, T, M, Me, F, const DIM: usize>(
     out_dir: &P,
     data: &FlatVec<I, Me>,
     metric: &M,
@@ -39,29 +99,22 @@ pub fn build<P, I, M, Me, F, const DIM: usize>(
 where
     P: AsRef<std::path::Path>,
     I: Send + Sync,
-    M: ParMetric<I, f32>,
+    T: Number + bitcode::Encode + bitcode::Decode,
+    M: ParMetric<I, T>,
     Me: Clone + Send + Sync,
     F: Float,
 {
-    ftlog::info!("Building the dimension reduction...");
-    ftlog::info!("Output directory: {:?}", out_dir.as_ref());
-    ftlog::info!("Dataset: {:?}", data.name());
-    ftlog::info!("Metric: {:?}", metric.name());
-    ftlog::info!("Dimensions: {DIM}");
-
     let mut rng = rand::rng();
 
     ftlog::info!("Creating the tree...");
     let tree_path = out_dir.as_ref().join(format!("{}-tree.bin", data.name()));
     let root = if tree_path.exists() {
-        Ball::<f32>::par_read_from(&tree_path)?
+        Ball::<T>::par_read_from(&tree_path)?
     } else {
         let root = if balanced {
-            let criteria = |_: &BalancedBall<f32>| true;
-            BalancedBall::par_new_tree_iterative(data, metric, &criteria, seed, 128).into_ball()
+            BalancedBall::par_new_tree_iterative(data, metric, &|_| true, seed, 128).into_ball()
         } else {
-            let criteria = |_: &Ball<f32>| true;
-            Ball::par_new_tree_iterative(data, metric, &criteria, seed, 128)
+            Ball::par_new_tree_iterative(data, metric, &|_| true, seed, 128)
         };
         root.par_write_to(&tree_path)?;
         root

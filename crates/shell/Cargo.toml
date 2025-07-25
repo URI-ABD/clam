@@ -12,3 +12,6 @@ ndarray.workspace = true
 ndarray-npy.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 bio.workspace = true
+rand.workspace = true
+rayon.workspace = true
+ftlog.workspace = true

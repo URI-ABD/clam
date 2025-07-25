@@ -2,21 +2,23 @@
 
 use std::path::Path;
 
-use crate::{data, metrics::ShellMetric, trees::ShellTree};
+use crate::{data::ShellFlatVec, metrics::ShellMetric, trees::ShellTree};
 
 pub fn build_new_tree<P: AsRef<Path>>(
-    inp_path: P,
-    out_path: P,
-    tree_path: P,
+    inp_data: ShellFlatVec,
     metric: ShellMetric,
     seed: Option<u64>,
     balanced: bool,
     permuted: bool,
+    out_dir: P,
 ) -> Result<(), String> {
-    let (ball, data) = ShellTree::new(data::Format::read(inp_path)?, &metric, seed, balanced, permuted)?;
+    let (ball, data) = ShellTree::new(inp_data, &metric, seed, balanced, permuted)?;
 
+    let tree_path = out_dir.as_ref().join("tree.bin");
     ball.write_to(tree_path)?;
-    data.write_to(out_path)?;
+
+    let data_path = out_dir.as_ref().join("data.bin");
+    data.write_to(data_path)?;
 
     Ok(())
 }

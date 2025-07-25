@@ -38,7 +38,7 @@ impl<P: AsRef<Path>> From<P> for Format {
 #[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
 pub enum ShellFlatVec {
     /// FlatVec for strings from FASTA files.
-    String(FlatVec<String, String>),
+    String(FlatVec<String, usize>),
     /// FlatVec for various numeric types from NPY files.
     F32(FlatVec<Vec<f32>, usize>),
     F64(FlatVec<Vec<f64>, usize>),

@@ -5,7 +5,6 @@ members = [
     "crates/symagen",
     "crates/shell",
     "pypi/distances",
-    "clts/mbed",
 ]
 resolver = "2"
 

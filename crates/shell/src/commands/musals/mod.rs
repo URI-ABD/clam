@@ -11,24 +11,16 @@ use clap::Subcommand;
 pub enum MusalsAction {
     /// Build an MSA and save it to a new file.
     Build {
-        /// The path to the input dataset file.
-        #[arg(short('i'), long)]
-        inp_path: PathBuf,
-
-        /// The path to the output dataset file.
+        /// The path to the output directory.
         #[arg(short('o'), long)]
-        out_path: PathBuf,
+        out_dir: PathBuf,
         // TODO Emily: Add or change options as needed
     },
     /// Evaluate the quality of an MSA.
     Evaluate {
-        /// The path to the input dataset file.
-        #[arg(short('i'), long)]
-        inp_path: PathBuf,
-
-        /// The path to the output dataset file.
+        /// The path to `out_dir` as specified in the `build` command.
         #[arg(short('o'), long)]
-        out_path: PathBuf,
+        out_dir: PathBuf,
         // TODO Emily: Add or change options as needed
     },
 }
