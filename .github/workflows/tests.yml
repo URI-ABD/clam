@@ -17,8 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  fmt:
-    name: Formatting
+  lints:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,8 +29,7 @@ jobs:
           rustup update --no-self-update
       - uses: pre-commit/action@v3.0.1
 
-  test:
-    name: Run all tests
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
