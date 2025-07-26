@@ -104,6 +104,18 @@ pub trait Multiplication:
     /// Returns `self` raised to the power of `exp`.
     #[must_use]
     fn powi(self, exp: i32) -> Self;
+
+    /// Returns the square of the number.
+    #[must_use]
+    fn square(self) -> Self {
+        self * self
+    }
+
+    /// Returns the cube of the number.
+    #[must_use]
+    fn cube(self) -> Self {
+        self.square() * self
+    }
 }
 
 /// Macro to implement `Multiplication` for all floating-point types.

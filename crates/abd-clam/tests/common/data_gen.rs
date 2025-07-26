@@ -6,7 +6,7 @@ use rand::prelude::*;
 
 pub fn gen_tiny_data() -> FlatVec<Vec<i32>, usize> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
-    FlatVec::new_array(items).unwrap_or_else(|e| unreachable!("{e}"))
+    FlatVec::from_nested_vec(items).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 pub fn gen_pathological_line() -> FlatVec<f64, usize> {

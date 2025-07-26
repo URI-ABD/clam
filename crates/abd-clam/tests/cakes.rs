@@ -6,11 +6,9 @@ use distances::Number;
 use test_case::test_case;
 
 use abd_clam::{
+    adapters::{BallAdapter, ParBallAdapter},
     cakes::{self, HintedDataset, ParHintedDataset, PermutedBall},
-    cluster::{
-        adapter::{BallAdapter, ParBallAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::{AssociatesMetadataMut, Permutable},
     metric::{AbsoluteDifference, Euclidean, Hypotenuse, Levenshtein, Manhattan, ParMetric},
     Ball, Cluster, Dataset, FlatVec,

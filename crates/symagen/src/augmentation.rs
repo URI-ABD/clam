@@ -13,7 +13,7 @@ use crate::random_data;
 /// * `data`: the existing dataset
 /// * `multiplier`: the number of new points to make per existing point
 /// * `error`: the maximum euclidean distance from the original point that the
-///            new points can be
+///   new points can be
 #[must_use]
 pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec<f32>> {
     let dimensionality = data[0].len();
@@ -26,7 +26,7 @@ pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec
                 dimensionality,
                 1.0 - dimensional_error,
                 1.0 + dimensional_error,
-                &mut rand::thread_rng(),
+                &mut rand::rng(),
             );
             perturbations
                 .into_iter()

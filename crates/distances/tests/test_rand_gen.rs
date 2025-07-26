@@ -9,7 +9,7 @@ use test_case::test_case;
 #[test_case(100)]
 #[test_case(1000)]
 fn test_rand_gen(len: usize) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     test_vec::<f32, _>(len, &mut rng);
     test_vec::<f64, _>(len, &mut rng);
     test_vec::<i8, _>(len, &mut rng);

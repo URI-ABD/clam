@@ -5,7 +5,12 @@ use std::collections::HashMap;
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, metric::ParMetric, Cluster, Dataset, FlatVec, Metric};
+use crate::{
+    cluster::ParCluster,
+    dataset::{AssociatesMetadata, AssociatesMetadataMut},
+    metric::ParMetric,
+    Cluster, Dataset, FlatVec, Metric,
+};
 
 mod hinted;
 mod searchable;
@@ -48,20 +53,20 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, Me: Send +
 }
 
 #[allow(clippy::implicit_hasher)]
-impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, Me> HintedDataset<I, T, C, M>
+impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, Me: Clone> HintedDataset<I, T, C, M>
     for FlatVec<I, (Me, HashMap<usize, T>)>
 {
     fn hints_for(&self, i: usize) -> &HashMap<usize, T> {
-        &self.metadata[i].1
+        &self.metadata_at(i).1
     }
 
     fn hints_for_mut(&mut self, i: usize) -> &mut HashMap<usize, T> {
-        &mut self.metadata[i].1
+        &mut <Self as AssociatesMetadataMut<I, (Me, HashMap<usize, T>), Me, FlatVec<I, Me>>>::metadata_at_mut(self, i).1
     }
 }
 
 #[allow(clippy::implicit_hasher)]
-impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, Me: Send + Sync> ParHintedDataset<I, T, C, M>
-    for FlatVec<I, (Me, HashMap<usize, T>)>
+impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, Me: Clone + Send + Sync>
+    ParHintedDataset<I, T, C, M> for FlatVec<I, (Me, HashMap<usize, T>)>
 {
 }

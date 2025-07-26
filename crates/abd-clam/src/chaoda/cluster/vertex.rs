@@ -5,11 +5,9 @@ use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
+    adapters::{Adapted, Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
     chaoda::NUM_RATIOS,
-    cluster::{
-        adapter::{Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
-        ParCluster,
-    },
+    cluster::ParCluster,
     dataset::ParDataset,
     metric::ParMetric,
     Ball, Cluster, Dataset, Metric,
@@ -182,6 +180,20 @@ impl<T: Number, S: ParCluster<T>> ParCluster<T> for Vertex<T, S> {
     }
 }
 
+impl<T: Number, S: Cluster<T>> Adapted<T, S> for Vertex<T, S> {
+    fn source(&self) -> &S {
+        &self.source
+    }
+
+    fn source_mut(&mut self) -> &mut S {
+        &mut self.source
+    }
+
+    fn take_source(self) -> S {
+        self.source
+    }
+}
+
 /// The anomaly detection properties of the `Vertex`, their exponential moving
 /// averages, and the accumulated child-parent cardinality ratio.
 #[allow(clippy::struct_field_names)]
@@ -209,14 +221,16 @@ impl Default for Ratios {
     }
 }
 
-impl<I, T: Number, D: Dataset<I>, S: Cluster<T>> Params<I, T, D, S> for Ratios {
-    fn child_params<M: Metric<I, T>>(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
+impl<I, T: Number, D: Dataset<I>, S: Cluster<T>, M: Metric<I, T>> Params<I, T, D, S, M> for Ratios {
+    fn child_params(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
         children.iter().map(|child| child_params(self, child)).collect()
     }
 }
 
-impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>> ParParams<I, T, D, S> for Ratios {
-    fn par_child_params<M: ParMetric<I, T>>(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
+impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>, M: ParMetric<I, T>> ParParams<I, T, D, S, M>
+    for Ratios
+{
+    fn par_child_params(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
         children.par_iter().map(|child| child_params(self, child)).collect()
     }
 }
@@ -245,24 +259,26 @@ fn child_params<T: Number, C: Cluster<T>>(parent: &Ratios, child: &C) -> Ratios 
     }
 }
 
-impl<I, T: Number, D: Dataset<I>> BallAdapter<I, T, D, D, Ratios> for Vertex<T, Ball<T>> {
+impl<I, T: Number, D: Dataset<I>, M: Metric<I, T>> BallAdapter<I, T, D, D, M, Ratios> for Vertex<T, Ball<T>> {
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
-    fn from_ball_tree<M: Metric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
+    fn from_ball_tree(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
         let root = Self::adapt_tree(ball, None, &data, metric);
         (root, data)
     }
 }
 
-impl<I: Send + Sync, T: Number, D: ParDataset<I>> ParBallAdapter<I, T, D, D, Ratios> for Vertex<T, Ball<T>> {
+impl<I: Send + Sync, T: Number, D: ParDataset<I>, M: ParMetric<I, T>> ParBallAdapter<I, T, D, D, M, Ratios>
+    for Vertex<T, Ball<T>>
+{
     /// Creates a new `OffsetBall` tree from a `Ball` tree.
-    fn par_from_ball_tree<M: ParMetric<I, T>>(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
+    fn par_from_ball_tree(ball: Ball<T>, data: D, metric: &M) -> (Self, D) {
         let root = Self::par_adapt_tree(ball, None, &data, metric);
         (root, data)
     }
 }
 
-impl<I, T: Number, D: Dataset<I>, S: Cluster<T>> Adapter<I, T, D, D, S, Ratios> for Vertex<T, S> {
-    fn new_adapted<M: Metric<I, T>>(source: S, children: Vec<Box<Self>>, params: Ratios, _: &D, _: &M) -> Self {
+impl<I, T: Number, D: Dataset<I>, S: Cluster<T>, M: Metric<I, T>> Adapter<I, T, D, D, S, M, Ratios> for Vertex<T, S> {
+    fn new_adapted(source: S, children: Vec<Box<Self>>, params: Ratios, _: &D, _: &M) -> Self {
         Self {
             source,
             params,
@@ -273,31 +289,15 @@ impl<I, T: Number, D: Dataset<I>, S: Cluster<T>> Adapter<I, T, D, D, S, Ratios> 
 
     fn post_traversal(&mut self) {}
 
-    fn source(&self) -> &S {
-        &self.source
-    }
-
-    fn source_mut(&mut self) -> &mut S {
-        &mut self.source
-    }
-
-    fn take_source(self) -> S {
-        self.source
-    }
-
     fn params(&self) -> &Ratios {
         &self.params
     }
 }
 
-impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>> ParAdapter<I, T, D, D, S, Ratios> for Vertex<T, S> {
-    fn par_new_adapted<M: ParMetric<I, T>>(
-        source: S,
-        children: Vec<Box<Self>>,
-        params: Ratios,
-        data: &D,
-        metric: &M,
-    ) -> Self {
+impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>, M: ParMetric<I, T>>
+    ParAdapter<I, T, D, D, S, M, Ratios> for Vertex<T, S>
+{
+    fn par_new_adapted(source: S, children: Vec<Box<Self>>, params: Ratios, data: &D, metric: &M) -> Self {
         Self::new_adapted(source, children, params, data, metric)
     }
 }

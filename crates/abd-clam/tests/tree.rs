@@ -1,6 +1,6 @@
 //! Tests for the `Tree` struct.
 
-use abd_clam::{cluster::Partition, metric::Euclidean, Ball, Cluster, Tree};
+use abd_clam::{cluster::Partition, metric::Euclidean, tree::Tree, Ball, Cluster};
 use test_case::test_case;
 
 mod common;

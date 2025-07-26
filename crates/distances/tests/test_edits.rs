@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use distances::strings::{
     aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x2y_helper, x_to_y_alignment, Edit,
 };

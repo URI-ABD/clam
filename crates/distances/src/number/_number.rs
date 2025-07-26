@@ -206,7 +206,7 @@ impl Number for f32 {
     }
 
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
-        rng.gen()
+        rng.random()
     }
 
     fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
@@ -274,7 +274,7 @@ impl Number for f64 {
     }
 
     fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
-        rng.gen()
+        rng.random()
     }
 
     fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
@@ -342,7 +342,7 @@ macro_rules! impl_number_iint {
                 }
 
                 fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
-                    rng.gen()
+                    rng.random()
                 }
 
                 fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
@@ -353,7 +353,7 @@ macro_rules! impl_number_iint {
     }
 }
 
-impl_number_iint!(i8, i16, i32, i64, i128, isize);
+impl_number_iint!(i8, i16, i32, i64, i128);
 
 /// A macro to implement the `Number` trait for primitive types.
 macro_rules! impl_number_uint {
@@ -417,7 +417,7 @@ macro_rules! impl_number_uint {
                 }
 
                 fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
-                    rng.gen()
+                    rng.random()
                 }
 
                 fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
@@ -428,4 +428,144 @@ macro_rules! impl_number_uint {
     }
 }
 
-impl_number_uint!(u8, u16, u32, u64, u128, usize);
+impl_number_uint!(u8, u16, u32, u64, u128);
+
+impl Number for usize {
+    const MAX: Self = Self::MAX;
+    const MIN: Self = Self::MIN;
+    const EPSILON: Self = 1;
+    const NUM_BYTES: Self = core::mem::size_of::<Self>();
+
+    fn from<T: Number>(n: T) -> Self {
+        n.as_usize()
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn as_f32(self) -> f32 {
+        self as f32
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn as_f64(self) -> f64 {
+        self as f64
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_u64(self) -> u64 {
+        self as u64
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    fn as_i64(self) -> i64 {
+        self as i64
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; core::mem::size_of::<Self>()];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_le_bytes(ty_bytes)
+    }
+
+    fn to_le_bytes(self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+
+    fn from_be_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; core::mem::size_of::<Self>()];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_be_bytes(ty_bytes)
+    }
+
+    fn to_be_bytes(self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+        rng.random::<u64>() as Self
+    }
+
+    fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.cmp(other)
+    }
+}
+
+impl Number for isize {
+    const MAX: Self = Self::MAX;
+    const MIN: Self = Self::MIN;
+    const EPSILON: Self = 1;
+    const NUM_BYTES: usize = core::mem::size_of::<Self>();
+
+    fn from<T: Number>(n: T) -> Self {
+        n.as_isize()
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn as_f32(self) -> f32 {
+        self as f32
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn as_f64(self) -> f64 {
+        self as f64
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn as_u64(self) -> u64 {
+        self as u64
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_i64(self) -> i64 {
+        self as i64
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn as_u32(self) -> u32 {
+        self as u32
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; core::mem::size_of::<Self>()];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_le_bytes(ty_bytes)
+    }
+
+    fn to_le_bytes(self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+
+    fn from_be_bytes(bytes: &[u8]) -> Self {
+        let mut ty_bytes = [0_u8; core::mem::size_of::<Self>()];
+        ty_bytes.copy_from_slice(bytes);
+        Self::from_be_bytes(ty_bytes)
+    }
+
+    fn to_be_bytes(self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn next_random<R: rand::Rng>(rng: &mut R) -> Self {
+        rng.random::<i64>() as Self
+    }
+
+    fn total_cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.cmp(other)
+    }
+}

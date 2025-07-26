@@ -17,12 +17,12 @@ pdist = vectors.pdist
 __all__ = [
     "braycurtis",
     "canberra",
+    "cdist",
     "chebyshev",
+    "cosine",
     "euclidean",
-    "sqeuclidean",
     "manhattan",
     "minkowski",
-    "cosine",
-    "cdist",
     "pdist",
+    "sqeuclidean",
 ]

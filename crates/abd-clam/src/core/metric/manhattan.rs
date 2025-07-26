@@ -8,6 +8,10 @@ use super::{Metric, ParMetric};
 ///
 /// This is a distance metric that measures the distance between two points in a
 /// grid based on the sum of the absolute differences of their coordinates.
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct Manhattan;
 
 impl<I: AsRef<[T]>, T: Number> Metric<I, T> for Manhattan {
@@ -15,7 +19,7 @@ impl<I: AsRef<[T]>, T: Number> Metric<I, T> for Manhattan {
         distances::vectors::manhattan(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "manhattan"
     }
 

@@ -77,9 +77,9 @@ pub fn random_string(cardinality: usize, min_len: usize, max_len: usize, alphabe
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     (0..cardinality)
         .map(|_| {
-            let len = rng.gen_range(min_len..=max_len);
+            let len = rng.random_range(min_len..=max_len);
             (0..len)
-                .map(|_| alphabet[rng.gen_range(0..alphabet.len())])
+                .map(|_| alphabet[rng.random_range(0..alphabet.len())])
                 .collect::<String>()
         })
         .collect()

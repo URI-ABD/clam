@@ -60,7 +60,7 @@ def make_plots() -> None:  # noqa: C901
                 start = time.perf_counter()
                 for a in data:
                     for b in data:
-                        _ = comp_func(a, b)
+                        _ = comp_func(a, b)  # type: ignore[misc]
                 end_comp = float(time.perf_counter() - start) * 1000
                 if "hamming" in name.lower():
                     end_comp *= 1000

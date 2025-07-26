@@ -1,11 +1,9 @@
 //! Tests for the `Ball` struct.
 
 use abd_clam::{
+    adapters::{BallAdapter, ParBallAdapter},
     cakes::PermutedBall,
-    cluster::{
-        adapter::{BallAdapter, ParBallAdapter},
-        BalancedBall, ParPartition, Partition,
-    },
+    cluster::{BalancedBall, ParPartition, Partition},
     metric::{AbsoluteDifference, Manhattan},
     Ball, Cluster, Dataset, FlatVec, Metric,
 };
@@ -65,90 +63,16 @@ fn tree() {
 }
 
 #[test]
-fn partition_further() {
-    let data = common::data_gen::gen_tiny_data();
-    let metric = Manhattan;
-
-    let seed = Some(42);
-    let criteria_one = |c: &Ball<_>| c.depth() < 1;
-    let criteria_two = |c: &Ball<_>| c.depth() < 2;
-
-    let mut root = Ball::new_tree(&data, &metric, &criteria_one, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 1);
-    }
-    root.partition_further(&data, &metric, &criteria_two, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 2);
-    }
-
-    let mut root = Ball::par_new_tree(&data, &metric, &criteria_one, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 1);
-    }
-    root.par_partition_further(&data, &metric, &criteria_two, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 2);
-    }
-
-    let criteria_one = |c: &BalancedBall<_>| c.depth() < 1;
-    let criteria_two = |c: &BalancedBall<_>| c.depth() < 2;
-
-    let mut root = BalancedBall::new_tree(&data, &metric, &criteria_one, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 1);
-    }
-    root.partition_further(&data, &metric, &criteria_two, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 2);
-    }
-
-    let mut root = BalancedBall::par_new_tree(&data, &metric, &criteria_one, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 1);
-    }
-    root.par_partition_further(&data, &metric, &criteria_two, seed);
-    for leaf in root.leaves() {
-        assert_eq!(leaf.depth(), 2);
-    }
-}
-
-#[test]
 fn tree_iterative() {
     let data = common::data_gen::gen_pathological_line();
     let metric = AbsoluteDifference;
 
     let seed = Some(42);
-    let criteria = |c: &Ball<_>| c.cardinality() > 1;
-
-    let indices = (0..data.cardinality()).collect::<Vec<_>>();
-    let mut root = Ball::new(&data, &metric, &indices, 0, seed).unwrap();
-
-    let depth_delta = abd_clam::utils::max_recursion_depth();
-    let mut intermediate_depth = depth_delta;
-    let intermediate_criteria = |c: &Ball<_>| c.depth() < intermediate_depth && criteria(c);
-    root.partition(&data, &metric, &intermediate_criteria, seed);
-
-    while root.leaves().into_iter().any(|l| !l.is_singleton()) {
-        intermediate_depth += depth_delta;
-        let intermediate_criteria = |c: &Ball<_>| c.depth() < intermediate_depth && criteria(c);
-        root.partition_further(&data, &metric, &intermediate_criteria, seed);
-    }
-
+    let depth_stride = abd_clam::utils::max_recursion_depth();
+    let root = Ball::new_tree_iterative(&data, &metric, &|_| true, seed, depth_stride);
     assert!(!root.is_leaf());
 
-    let criteria = |c: &BalancedBall<_>| c.cardinality() > 1;
-    let mut root = BalancedBall::new(&data, &metric, &indices, 0, seed).unwrap();
-    intermediate_depth = depth_delta;
-    let intermediate_criteria = |c: &BalancedBall<_>| c.depth() < intermediate_depth && criteria(c);
-    root.partition(&data, &metric, &intermediate_criteria, seed);
-
-    while root.leaves().into_iter().any(|l| !l.is_singleton()) {
-        intermediate_depth += depth_delta;
-        let intermediate_criteria = |c: &BalancedBall<_>| c.depth() < intermediate_depth && criteria(c);
-        root.partition_further(&data, &metric, &intermediate_criteria, seed);
-    }
-
+    let root = BalancedBall::new_tree_iterative(&data, &metric, &|_| true, seed, depth_stride);
     assert!(!root.is_leaf());
 }
 

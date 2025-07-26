@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(missing_docs, dead_code)]
 
 use criterion::{measurement, *};
 

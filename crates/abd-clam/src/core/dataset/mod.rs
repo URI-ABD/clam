@@ -16,13 +16,6 @@ pub use flat_vec::FlatVec;
 pub use permutable::Permutable;
 pub use sized_heap::SizedHeap;
 
-#[cfg(feature = "disk-io")]
-mod io;
-
-#[cfg(feature = "disk-io")]
-#[allow(clippy::module_name_repetitions)]
-pub use io::{DatasetIO, ParDatasetIO};
-
 /// A dataset is a collection of items.
 ///
 /// # Type Parameters
@@ -171,7 +164,7 @@ pub trait Dataset<I> {
         seed: Option<u64>,
         metric: &M,
     ) -> Vec<usize> {
-        let mut rng = seed.map_or_else(StdRng::from_entropy, StdRng::seed_from_u64);
+        let mut rng = seed.map_or_else(StdRng::from_os_rng, StdRng::seed_from_u64);
 
         if metric.has_identity() {
             let mut choices = Vec::with_capacity(choose);

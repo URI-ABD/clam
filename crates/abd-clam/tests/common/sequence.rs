@@ -1,1 +1,0 @@
-//! Encodable and decodable sequences.

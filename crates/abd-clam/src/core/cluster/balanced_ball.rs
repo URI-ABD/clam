@@ -9,6 +9,7 @@ use super::{Ball, Cluster, ParCluster, ParPartition, Partition};
 
 /// A `BalancedBall` is a data structure that represents a balanced binary tree.
 #[derive(Clone)]
+#[must_use]
 pub struct BalancedBall<T: Number>(Ball<T>, Vec<Box<Self>>);
 
 impl<T: Number> BalancedBall<T> {
@@ -368,3 +369,39 @@ impl<T: Number> ParPartition<T> for BalancedBall<T> {
             .unzip()
     }
 }
+
+#[cfg(feature = "disk-io")]
+impl<T: Number> crate::DiskIO for BalancedBall<T> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::new();
+        let ball_bytes = self.0.to_bytes()?;
+        bytes.extend_from_slice(&ball_bytes.len().to_le_bytes());
+        bytes.extend_from_slice(&ball_bytes);
+
+        for c in &self.1 {
+            let child_bytes = c.to_bytes()?;
+            bytes.extend_from_slice(&child_bytes.len().to_le_bytes());
+            bytes.extend_from_slice(&child_bytes);
+        }
+
+        Ok(bytes)
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let mut offset = 0;
+        let ball_bytes = crate::utils::read_encoding(bytes, &mut offset);
+        let ball = Ball::from_bytes(&ball_bytes)?;
+
+        let mut children = Vec::new();
+        while offset < bytes.len() {
+            let child_bytes = crate::utils::read_encoding(bytes, &mut offset);
+            let child = Self::from_bytes(&child_bytes)?;
+            children.push(Box::new(child));
+        }
+
+        Ok(Self(ball, children))
+    }
+}
+
+#[cfg(feature = "disk-io")]
+impl<T: Number> crate::ParDiskIO for BalancedBall<T> {}

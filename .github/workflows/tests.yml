@@ -17,25 +17,34 @@ permissions:
   contents: read
 
 jobs:
-  fmt:
-    name: Formatting
+  lints:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: earthly/actions-setup@v1
+      - uses: actions/setup-python@v5
         with:
-          version: v0.8.4
-      - name: Fmt
-        run: earthly +fmt
+          python-version: '3.13'
+      - name: Install Rust toolchain
+        run: |
+          rustup update --no-self-update
+      - uses: pre-commit/action@v3.0.1
 
-  test:
-    needs: fmt
-    name: Testing
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: earthly/actions-setup@v1
+      - name: Install Python
+        uses: actions/setup-python@v5
         with:
-          version: v0.8.4
-      - name: Test
-        run: earthly +test
+          python-version: '3.13'
+      - name: Install Rust toolchain
+        run: |
+          rustup update --no-self-update
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Rust tests
+        run: cargo test --release --workspace --all-features
+      - name: Python tests
+        run: |
+          uv sync --all-packages
+          uv run pytest

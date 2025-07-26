@@ -13,7 +13,7 @@ fn creation() -> Result<(), String> {
     assert_eq!(dataset.cardinality(), 3);
     assert_eq!(dataset.dimensionality_hint(), (0, None));
 
-    let dataset = FlatVec::new_array(items)?;
+    let dataset = FlatVec::from_nested_vec(items)?;
     assert_eq!(dataset.cardinality(), 3);
     assert_eq!(dataset.dimensionality_hint(), (2, Some(2)));
 
@@ -25,7 +25,7 @@ fn ser_de() -> Result<(), String> {
     type Fv = FlatVec<Vec<i32>, usize>;
 
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
-    let dataset: Fv = FlatVec::new_array(items)?;
+    let dataset: Fv = FlatVec::from_nested_vec(items)?;
 
     let serialized: Vec<u8> = bitcode::encode(&dataset).map_err(|e| e.to_string())?;
     let deserialized: Fv = bitcode::decode(&serialized).map_err(|e| e.to_string())?;
@@ -94,7 +94,7 @@ fn permutations() -> Result<(), String> {
         vec![9, 10],
         vec![11, 12],
     ];
-    let data = FlatVec::new_array(items.clone())?;
+    let data = FlatVec::from_nested_vec(items.clone())?;
     let mut swap_tracker = SwapTracker { data, count: 0 };
 
     swap_tracker.swap_two(0, 2);
@@ -111,7 +111,7 @@ fn permutations() -> Result<(), String> {
         assert_eq!(swap_tracker.get(i), &items[j]);
     }
 
-    let data = FlatVec::new_array(items.clone())?;
+    let data = FlatVec::from_nested_vec(items.clone())?;
     let mut data = SwapTracker { data, count: 0 };
     let permutation = vec![2, 1, 0, 5, 4, 3];
     data.permute(&permutation);
@@ -128,7 +128,7 @@ fn permutations() -> Result<(), String> {
 #[test]
 fn npy_io() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
-    let dataset = FlatVec::new_array(items)?;
+    let dataset = FlatVec::from_nested_vec(items)?;
 
     let tmp_dir = tempdir::TempDir::new("testing").map_err(|e| e.to_string())?;
     let path = tmp_dir.path().join("test.npy");

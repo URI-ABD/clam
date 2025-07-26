@@ -184,4 +184,11 @@ impl<'a, T: Number, C: ParCluster<T>> AdjacencyList<'a, T, C> {
 
         components
     }
+
+    /// Iterate over the edges in the `AdjacencyList`.
+    pub fn par_iter_edges(&self) -> impl ParallelIterator<Item = (&C, &C, T)> + '_ {
+        self.0
+            .par_iter()
+            .flat_map(|(&u, neighbors)| neighbors.par_iter().map(move |(&v, d)| (u, v, *d)))
+    }
 }

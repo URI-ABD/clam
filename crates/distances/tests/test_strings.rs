@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 #[test]
 fn test_levenshtein() {
     for d in 2..=4 {

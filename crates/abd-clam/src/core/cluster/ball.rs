@@ -60,6 +60,7 @@ use super::{partition::ParPartition, Cluster, ParCluster, Partition, LFD};
     derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
 )]
 #[cfg_attr(feature = "disk-io", bitcode(recursive))]
+#[must_use]
 pub struct Ball<T: Number> {
     /// Parameters used for creating the `Ball`.
     depth: usize,
@@ -81,6 +82,13 @@ pub struct Ball<T: Number> {
     children: Vec<Box<Self>>,
 }
 
+impl<T: Number> Ball<T> {
+    /// Returns the index of the item that is the furthest from the center.
+    pub const fn arg_radial(&self) -> usize {
+        self.arg_radial
+    }
+}
+
 impl<T: Number> core::fmt::Debug for Ball<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Ball")
@@ -99,7 +107,9 @@ impl<T: Number> core::fmt::Debug for Ball<T> {
 
 impl<T: Number> PartialEq for Ball<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.depth == other.depth && self.cardinality == other.cardinality && self.indices == other.indices
+        // Two `Clusters` in the same tree are uniquely identified by their
+        // cardinality and the index of any one of their items.
+        self.unique_id() == other.unique_id()
     }
 }
 
@@ -123,7 +133,7 @@ impl<T: Number> Ord for Ball<T> {
 impl<T: Number> Hash for Ball<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // We hash the `indices` field
-        self.indices.hash(state);
+        self.unique_id().hash(state);
     }
 }
 
@@ -362,7 +372,144 @@ impl<T: Number> super::Csv<T> for Ball<T> {
 impl<T: Number> super::ParCsv<T> for Ball<T> {}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number> super::ClusterIO<T> for Ball<T> {}
+impl<T: Number> crate::DiskIO for Ball<T> {
+    fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        #[allow(clippy::type_complexity)]
+        let members: (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = (
+            self.depth,
+            self.cardinality,
+            self.radius.to_le_bytes(),
+            self.lfd,
+            self.arg_center,
+            self.arg_radial,
+            self.indices.clone(),
+            self.extents
+                .iter()
+                .map(|(i, t)| (*i, t.to_le_bytes()))
+                .collect::<Vec<_>>(),
+            self.children.iter().map(|c| c.to_bytes()).collect::<Result<_, _>>()?,
+        );
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        #[allow(clippy::type_complexity)]
+        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, extents, children_bytes): (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
+
+        let radius = T::from_le_bytes(radius_bytes.as_slice());
+        let extents = extents
+            .into_iter()
+            .map(|(i, t)| (i, T::from_le_bytes(t.as_slice())))
+            .collect::<Vec<_>>();
+        let children = children_bytes
+            .into_iter()
+            .map(|b| Self::from_bytes(b.as_slice()).map(Box::new))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            depth,
+            cardinality,
+            radius,
+            lfd,
+            arg_center,
+            arg_radial,
+            indices,
+            extents,
+            children,
+        })
+    }
+}
 
 #[cfg(feature = "disk-io")]
-impl<T: Number> super::ParClusterIO<T> for Ball<T> {}
+impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T> {
+    fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
+        #[allow(clippy::type_complexity)]
+        let members: (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = (
+            self.depth,
+            self.cardinality,
+            self.radius.to_le_bytes(),
+            self.lfd,
+            self.arg_center,
+            self.arg_radial,
+            self.indices.clone(),
+            self.extents
+                .iter()
+                .map(|(i, t)| (*i, t.to_le_bytes()))
+                .collect::<Vec<_>>(),
+            self.children
+                .par_iter()
+                .map(|c| c.par_to_bytes())
+                .collect::<Result<_, _>>()?,
+        );
+
+        bitcode::encode(&members).map_err(|e| e.to_string())
+    }
+
+    fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        #[allow(clippy::type_complexity)]
+        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, extents, children_bytes): (
+            usize,
+            usize,
+            Vec<u8>,
+            f32,
+            usize,
+            usize,
+            Vec<usize>,
+            Vec<(usize, Vec<u8>)>,
+            Vec<Vec<u8>>,
+        ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
+
+        let radius = T::from_le_bytes(radius_bytes.as_slice());
+        let extents = extents
+            .into_iter()
+            .map(|(i, t)| (i, T::from_le_bytes(t.as_slice())))
+            .collect::<Vec<_>>();
+        let children = children_bytes
+            .into_par_iter()
+            .map(|b| Self::par_from_bytes(b.as_slice()).map(Box::new))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            depth,
+            cardinality,
+            radius,
+            lfd,
+            arg_center,
+            arg_radial,
+            indices,
+            extents,
+            children,
+        })
+    }
+}

@@ -154,7 +154,7 @@ def _cdist_helper(
     """Helper function for the SIMD-accelerated distance functions."""
     distances = abd_distances.cdist(a, b, metric)
     assert distances.shape == (a.shape[0], b.shape[0])
-    expected = scipy_distance.cdist(a, b, metric)
+    expected = scipy_distance.cdist(a, b, metric)  # type: ignore
     if "cosine" in metric.lower():
         # The `scipy` implementation of the cosine distance has a lot of numerical
         # instability. So we use a small absolute tolerance instead of a relative one.
@@ -180,7 +180,7 @@ def _pdist_helper(
     distances = abd_distances.pdist(a, metric)
     num_distances = (a.shape[0] * (a.shape[0] - 1)) // 2
     assert distances.shape == (num_distances,)
-    expected = scipy_distance.pdist(a, metric)
+    expected = scipy_distance.pdist(a, metric)  # type: ignore
     if "cosine" in metric.lower():
         # The `scipy` implementation of the cosine distance has a lot of numerical
         # instability. So we use a small absolute tolerance instead of a relative one.

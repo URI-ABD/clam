@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use criterion::*;
 use rand::prelude::*;
 use symagen::random_data;

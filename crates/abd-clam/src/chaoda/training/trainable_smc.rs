@@ -4,11 +4,9 @@ use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
+    adapters::{Adapter, ParAdapter},
     chaoda::{inference::TrainedCombination, Graph, TrainedSmc, Vertex},
-    cluster::{
-        adapter::{Adapter, ParAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::ParDataset,
     metric::ParMetric,
     utils, Cluster, Dataset, Metric,
@@ -48,7 +46,7 @@ impl TrainableSmc {
     /// Get the combinations of `MetaMLModel`s and `GraphAlgorithm`s to train
     /// with.
     #[must_use]
-    pub fn combinations(&self) -> &[TrainableCombination] {
+    pub const fn combinations(&self) -> &Vec<TrainableCombination> {
         &self.0
     }
 

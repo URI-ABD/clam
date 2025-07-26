@@ -1,12 +1,8 @@
-[build-system]
-requires = ["maturin>=1.4,<2.0"]
-build-backend = "maturin"
-
 [project]
 name = "abd-distances"
 description = "Distance functions: A drop-in replacement for, and a super-set of the scipy.spatial.distance module."
 version = "1.0.4"
-requires-python = ">=3.9"
+requires-python = ">=3.13"
 keywords = ["distance", "metric", "simd"]
 classifiers = [
     "Programming Language :: Rust",
@@ -17,15 +13,22 @@ dependencies = [
     "numpy",
 ]
 
-[tool.rye]
+[tool.uv]
 dev-dependencies = [
     "seaborn>=0.13.2",
     "editdistance>=0.8.1",
-    "scipy>=1.13.1",
-    "tqdm>=4.66.4",
+    "scipy>=1.15.2",
+    "tqdm>=4.67.1",
 ]
+
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]
 profile = "release"
+
+[tool.mypy]
+disable_error_code = ["import-untyped"]

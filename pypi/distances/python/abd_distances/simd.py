@@ -10,9 +10,9 @@ pdist = simd.pdist
 
 
 __all__ = [
-    "euclidean",
-    "sqeuclidean",
-    "cosine",
     "cdist",
+    "cosine",
+    "euclidean",
     "pdist",
+    "sqeuclidean",
 ]

@@ -1,10 +1,10 @@
 //! Generate random strings for use in benchmarks, tests, and compression experiments.
 
-use distances::number::UInt;
-use distances::strings::levenshtein_custom;
-use distances::strings::needleman_wunsch::apply_edits;
-use distances::strings::Edit;
-use distances::strings::Penalties;
+use distances::{
+    number::UInt,
+    strings::{levenshtein_custom, needleman_wunsch::apply_edits, Edit, Penalties},
+    Number,
+};
 use rayon::prelude::*;
 
 /// Generates a random string of a given length from a given alphabet.
@@ -20,7 +20,7 @@ use rayon::prelude::*;
 #[must_use]
 pub fn generate_random_string(length: usize, alphabet: &[char]) -> String {
     (0..length)
-        .map(|_| alphabet[rand::random::<usize>() % alphabet.len()])
+        .map(|_| alphabet[rand::random::<u64>().as_usize() % alphabet.len()])
         .collect()
 }
 
@@ -52,14 +52,14 @@ pub fn generate_random_edit(string: &str, alphabet: &[char], min_len: usize, max
         rand::random::<u8>() % 3
     };
 
-    let char = alphabet[rand::random::<usize>() % alphabet.len()];
+    let char = alphabet[rand::random::<u64>().as_usize() % alphabet.len()];
     match edit_type {
         0 => {
-            let index = rand::random::<usize>() % (length + 1);
+            let index = rand::random::<u64>().as_usize() % (length + 1);
             Edit::Ins(index, char)
         }
-        1 => Edit::Sub(rand::random::<usize>() % length, char),
-        2 => Edit::Del(rand::random::<usize>() % length),
+        1 => Edit::Sub(rand::random::<u64>().as_usize() % length, char),
+        2 => Edit::Del(rand::random::<u64>().as_usize() % length),
         _ => unreachable!(),
     }
 }
