@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use rand::Rng;
 
 use distances::{
@@ -128,9 +130,9 @@ fn bounds_test() {
 fn hausdorff_test() {
     // Helper function to generate a vector of random points with given count and dimension
     fn gen_points(count: usize, dim: usize) -> Vec<Vec<u16>> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         (0..count)
-            .map(|_| (0..dim).map(|_| rng.gen_range(0..100)).collect())
+            .map(|_| (0..dim).map(|_| rng.random_range(0..100)).collect())
             .collect()
     }
 

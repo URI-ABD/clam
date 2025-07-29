@@ -5,6 +5,10 @@ use distances::number::Float;
 use super::{Metric, ParMetric};
 
 /// The `Euclidean` distance metric.
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct Euclidean;
 
 impl<I: AsRef<[T]>, T: Float> Metric<I, T> for Euclidean {
@@ -12,7 +16,7 @@ impl<I: AsRef<[T]>, T: Float> Metric<I, T> for Euclidean {
         distances::vectors::euclidean(a.as_ref(), b.as_ref())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "euclidean"
     }
 
@@ -37,4 +41,4 @@ impl<I: AsRef<[T]>, T: Float> Metric<I, T> for Euclidean {
     }
 }
 
-impl<I: AsRef<[U]> + Send + Sync, U: Float> ParMetric<I, U> for Euclidean {}
+impl<I: AsRef<[T]> + Send + Sync, T: Float> ParMetric<I, T> for Euclidean {}

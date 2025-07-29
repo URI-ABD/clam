@@ -277,6 +277,11 @@ impl<'a, T: Number, S: ParCluster<T>> Graph<'a, T, S> {
         }
     }
 
+    /// Iterate over the edges in the `Graph`.
+    pub fn par_iter_edges(&self) -> impl ParallelIterator<Item = (&Vertex<T, S>, &Vertex<T, S>, T)> + '_ {
+        self.components.par_iter().flat_map(Component::par_iter_edges)
+    }
+
     /// Parallel version of [`Graph::iter_clusters`](crate::chaoda::graph::Graph::iter_clusters).
     #[must_use]
     pub fn par_compute_stationary_probabilities(&self, log2_num_steps: usize) -> Vec<f32> {

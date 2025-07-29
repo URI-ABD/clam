@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use symagen::random_data;
 use test_case::test_case;
 
@@ -15,7 +17,7 @@ fn simd_distances_f32(naive: fn(&[f32], &[f32]) -> f32, simd: fn(&[f32], &[f32])
     let limit = limit.abs();
     let (min_val, max_val) = (-limit, limit);
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let data_x = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
     let data_y = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
@@ -50,7 +52,7 @@ fn simd_distances_f64(naive: fn(&[f64], &[f64]) -> f64, simd: fn(&[f64], &[f64])
     let limit = limit.abs();
     let (min_val, max_val) = (-limit, limit);
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let data_x = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
     let data_y = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);

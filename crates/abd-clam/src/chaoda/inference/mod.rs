@@ -5,10 +5,8 @@ use ndarray::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
-    cluster::{
-        adapter::{Adapter, ParAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    adapters::{Adapter, ParAdapter},
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::ParDataset,
     metric::ParMetric,
     Dataset,
@@ -25,28 +23,28 @@ pub use meta_ml::TrainedMetaMlModel;
 pub use trained_smc::TrainedSmc;
 
 /// A pre-trained Chaoda model.
-pub struct Chaoda<I, T: Number, const M: usize> {
+pub struct Chaoda<'m, I, T: Number, const M: usize> {
     /// The distance metrics to train with.
-    metrics: [Box<dyn ParMetric<I, T>>; M],
+    metrics: [&'m dyn ParMetric<I, T>; M],
     /// The trained models.
     combinations: [Vec<TrainedCombination>; M],
 }
 
-impl<I: Clone, T: Number, const M: usize> Chaoda<I, T, M> {
+impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> Chaoda<'m, I, T, M> {
     /// Create a new Chaoda model with the given metrics and trained combinations.
     #[must_use]
-    pub const fn new(metrics: [Box<dyn ParMetric<I, T>>; M], combinations: [Vec<TrainedCombination>; M]) -> Self {
+    pub const fn new(metrics: [&'m dyn ParMetric<I, T>; M], combinations: [Vec<TrainedCombination>; M]) -> Self {
         Self { metrics, combinations }
     }
 
     /// Get the distance metrics used by the model.
     #[must_use]
-    pub const fn metrics(&self) -> &[Box<dyn ParMetric<I, T>>; M] {
+    pub const fn metrics(&self) -> &[&'m dyn ParMetric<I, T>; M] {
         &self.metrics
     }
 
     /// Set the distance metrics to be used by the model.
-    pub fn set_metrics(&mut self, metrics: [Box<dyn ParMetric<I, T>>; M]) {
+    pub fn set_metrics(&mut self, metrics: [&'m dyn ParMetric<I, T>; M]) {
         self.metrics = metrics;
     }
 
@@ -131,7 +129,7 @@ impl<I: Clone, T: Number, const M: usize> Chaoda<I, T, M> {
     }
 }
 
-impl<I: Clone + Send + Sync, T: Number, const M: usize> Chaoda<I, T, M> {
+impl<I: Clone + Send + Sync, T: Number, const M: usize> Chaoda<'_, I, T, M> {
     /// Parallel version of [`Chaoda::create_trees`](crate::chaoda::Chaoda::create_trees).
     pub fn par_create_trees<D: ParDataset<I>, S: ParPartition<T>, C: (Fn(&S) -> bool) + Send + Sync>(
         &self,

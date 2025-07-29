@@ -1,9 +1,9 @@
-//! Physics simulations for dimension reduction.
+//! Simulating a mass-spring system.
 
+mod complex;
 mod mass;
 mod spring;
-mod system;
+mod vector;
 
-pub use mass::Mass;
-pub use spring::Spring;
-pub use system::System;
+pub use complex::Complex;
+pub use vector::Vector;

@@ -23,6 +23,9 @@ homepage = "https://github.com/URI-ABD/clam"
 # and update the release github action.
 publish = true
 
+[lints]
+workspace = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -44,19 +47,22 @@ smartcore = { version = "0.4", features = ["serde"], optional = true }
 # For:
 #  - MSA
 stringzilla = { workspace = true, optional = true }
+bytecount = { workspace = true, optional = true }
 
 # For:
 #  - Disk I/O for most clusters and datasets
 serde = { workspace = true, optional = true }
 bitcode = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
-# - Reading and writing CSV files from clusters' properties and some datasets
 csv = { workspace = true , optional = true }
+
+# For:
+#  - The mass-spring-system in the dimension reduction
+slotmap = { workspace = true, optional = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
 bitcode = { workspace = true }
-criterion = { version = "0.5", features = ["html_reports"] }
 tempdir = "0.3.7"
 float-cmp = "0.10.0"
 test-case = "3.2.1"
@@ -65,20 +71,6 @@ statistical = "1.0.0"
 [features]
 disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
 chaoda = ["dep:smartcore"]
-mbed = ["chaoda"]
-msa = ["dep:stringzilla"]
-all = ["disk-io", "chaoda", "mbed", "msa"]
-
-[[bench]]
-name = "vector_search"
-harness = false
-
-[[bench]]
-name = "genomic_search"
-harness = false
-required-features = ["msa"]
-
-[[bench]]
-name = "ann_benchmarks"
-harness = false
-required-features = ["disk-io"]
+mbed = ["chaoda", "dep:slotmap"]
+musals = ["dep:stringzilla", "dep:bytecount"]
+all = ["disk-io", "chaoda", "mbed", "musals"]

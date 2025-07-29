@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::collections::HashMap;
 
 use distances::strings::{levenshtein_custom, Penalties};

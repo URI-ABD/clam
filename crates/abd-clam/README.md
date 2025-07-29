@@ -15,7 +15,7 @@ This crate provides the following features:
 
 - `disk-io`: Enables easy IO for several structs, primarily using `bitcode` and `serde`.
 - `chaoda`: Enables anomaly detection using the CHAODA.
-- `msa`: Enables multiple sequence alignment.
+- `musals`: Enables multiple sequence alignment.
 - `mbed`: Enables dimensionality reduction algorithms.
 - `all`: Enables all features.
 
@@ -97,13 +97,16 @@ let knn_labels: Vec<bool> = knn_results.iter().map(|&(i, _)| labels[i]).collect(
 
 We also support compression of certain datasets and trees to reduce memory usage.
 We can then perform compressed search on the compressed dataset without having to decompress the whole dataset.
-```rust
+
+TODO: Add example.
+
+<!-- ```rust
 use abd_clam::{
     cakes::{self, ParSearchAlgorithm},
     cluster::{adapter::ParBallAdapter, ClusterIO, ParPartition},
     dataset::{AssociatesMetadataMut, DatasetIO},
     metric::Levenshtein,
-    msa::{Aligner, CostMatrix, Sequence},
+    musals::{Aligner, CostMatrix, Sequence},
     pancakes::{CodecData, SquishyBall},
     Ball, Cluster, Dataset, FlatVec,
 };
@@ -209,7 +212,7 @@ let codec_data = codec_data.transform_centers(|s| s.with_aligner(&aligner));
 
 // The compressed tree can be deserialized from disk.
 let squishy_ball: SquishyBall<u16, Ball<_>> = SquishyBall::read_from(&squishy_ball_path).unwrap();
-```
+``` -->
 
 ### Chaoda: Anomaly Detection
 

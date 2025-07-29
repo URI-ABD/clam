@@ -78,6 +78,22 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// The square-root of 2.
     const SQRT_2: Self;
 
+    /// The value of e.
+    const E: Self;
+
+    /// The value of π.
+    const PI: Self;
+
+    /// Returns the reciprocal of `self`.
+    #[must_use]
+    fn recip(self) -> Self {
+        Self::ONE / self
+    }
+
+    /// Returns the sign of `self`.
+    #[must_use]
+    fn signum(self) -> Self;
+
     /// Returns the square root of a `Float`.
     #[must_use]
     fn sqrt(self) -> Self;
@@ -103,10 +119,52 @@ pub trait Float: Number + core::ops::Neg<Output = Self> {
     /// Returns the logarithm of `self` with base 2.
     #[must_use]
     fn log2(self) -> Self;
+
+    /// Returns the natural logarithm of `self`.
+    #[must_use]
+    fn ln(self) -> Self;
+
+    /// Returns the sine of `self`.
+    #[must_use]
+    fn sin(self) -> Self;
+
+    /// Returns the cosine of `self`.
+    #[must_use]
+    fn cos(self) -> Self;
+
+    /// Returns the tangent of `self`.
+    #[must_use]
+    fn tan(self) -> Self {
+        self.sin() / self.cos()
+    }
+
+    /// Returns the floor of `self`.
+    #[must_use]
+    fn floor(self) -> Self;
+
+    /// Returns the ceiling of `self`.
+    #[must_use]
+    fn ceil(self) -> Self;
+
+    /// Returns whether the `Float` is NaN.
+    #[must_use]
+    fn is_nan(self) -> bool;
+
+    /// Returns whether the `Float` is finite.
+    #[must_use]
+    fn is_finite(self) -> bool;
 }
 
 impl Float for f32 {
     const SQRT_2: Self = core::f32::consts::SQRT_2;
+
+    const E: Self = core::f32::consts::E;
+
+    const PI: Self = core::f32::consts::PI;
+
+    fn signum(self) -> Self {
+        self.signum()
+    }
 
     fn sqrt(self) -> Self {
         Self::sqrt(self)
@@ -127,10 +185,46 @@ impl Float for f32 {
     fn log2(self) -> Self {
         Self::log2(self)
     }
+
+    fn ln(self) -> Self {
+        Self::ln(self)
+    }
+
+    fn sin(self) -> Self {
+        Self::sin(self)
+    }
+
+    fn cos(self) -> Self {
+        Self::cos(self)
+    }
+
+    fn floor(self) -> Self {
+        Self::floor(self)
+    }
+
+    fn ceil(self) -> Self {
+        Self::ceil(self)
+    }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn is_finite(self) -> bool {
+        self.is_finite()
+    }
 }
 
 impl Float for f64 {
     const SQRT_2: Self = core::f64::consts::SQRT_2;
+
+    const E: Self = core::f64::consts::E;
+
+    const PI: Self = core::f64::consts::PI;
+
+    fn signum(self) -> Self {
+        self.signum()
+    }
 
     fn sqrt(self) -> Self {
         Self::sqrt(self)
@@ -150,5 +244,33 @@ impl Float for f64 {
 
     fn log2(self) -> Self {
         Self::log2(self)
+    }
+
+    fn ln(self) -> Self {
+        Self::ln(self)
+    }
+
+    fn sin(self) -> Self {
+        Self::sin(self)
+    }
+
+    fn cos(self) -> Self {
+        Self::cos(self)
+    }
+
+    fn floor(self) -> Self {
+        Self::floor(self)
+    }
+
+    fn ceil(self) -> Self {
+        Self::ceil(self)
+    }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn is_finite(self) -> bool {
+        self.is_finite()
     }
 }

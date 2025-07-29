@@ -11,6 +11,7 @@ use super::{
 };
 
 /// A `Tree` of `Cluster`s.
+#[must_use]
 pub struct Tree<T: Number, C: Cluster<T>> {
     /// The `Cluster`s of the `Tree` are stored in `levels` where the first
     /// `Vec` contains the `Cluster`s at the first level, the second `Vec`
@@ -109,7 +110,7 @@ impl<T: Number, C: Cluster<T>> Tree<T, C> {
     }
 
     /// Returns the levels of the `Tree`.
-    pub fn levels(&self) -> &[Vec<(C, usize, usize)>] {
+    pub const fn levels(&self) -> &Vec<Vec<(C, usize, usize)>> {
         &self.levels
     }
 

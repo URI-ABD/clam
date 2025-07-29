@@ -211,7 +211,7 @@ fn trb_helper<U: UInt>(
                 aligned_y.push(y[row_i - 1]);
                 row_i -= 1;
             }
-        };
+        }
         trb_helper(table, [row_i, col_i], [x, y], [aligned_x, aligned_y]);
     }
 }

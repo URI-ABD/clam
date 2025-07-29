@@ -1,11 +1,26 @@
-//! The `Metric` trait is used for all distance computations in CLAM.
+//! The `Metric` and `ParMetric` traits are used for distance computations in
+//! CLAM.
+//!
+//! We provide reference implementations for some common distance functions
+//! including but not limited to the [Euclidean](Euclidean), [Manhattan](Manhattan),
+//! [Cosine](Cosine), and [Levenshtein](Levenshtein) distances.
+//!
+//! We also provide blanket implementations for some pointers and smart
+//! pointers including `&`, `&mut`, `Box`, `Rc`, and `Arc`.
+
+use std::{rc::Rc, sync::Arc};
 
 use distances::Number;
+
+use crate::{
+    impl_metric_block, impl_metric_for_smart_pointers, impl_par_metric_block, impl_par_metric_for_smart_pointers,
+};
 
 mod absolute_difference;
 mod cosine;
 mod euclidean;
 mod hypotenuse;
+mod macros;
 mod manhattan;
 
 pub use absolute_difference::AbsoluteDifference;
@@ -14,10 +29,10 @@ pub use euclidean::Euclidean;
 pub use hypotenuse::Hypotenuse;
 pub use manhattan::Manhattan;
 
-#[cfg(feature = "msa")]
+#[cfg(feature = "musals")]
 mod levenshtein;
 
-#[cfg(feature = "msa")]
+#[cfg(feature = "musals")]
 pub use levenshtein::Levenshtein;
 
 /// The `Metric` trait is used for all distance computations in CLAM.
@@ -160,68 +175,33 @@ pub trait ParMetric<I: Send + Sync, T: Number>: Metric<I, T> + Send + Sync {
     }
 }
 
-impl<I, T: Number> Metric<I, T> for Box<dyn Metric<I, T>> {
-    fn distance(&self, a: &I, b: &I) -> T {
-        (**self).distance(a, b)
-    }
+// Implementation for `& dyn Metric` and `& dyn ParMetric`
 
-    fn name(&self) -> &str {
-        (**self).name()
-    }
-
-    fn has_identity(&self) -> bool {
-        (**self).has_identity()
-    }
-
-    fn has_non_negativity(&self) -> bool {
-        (**self).has_non_negativity()
-    }
-
-    fn has_symmetry(&self) -> bool {
-        (**self).has_symmetry()
-    }
-
-    fn obeys_triangle_inequality(&self) -> bool {
-        (**self).obeys_triangle_inequality()
-    }
-
-    fn is_expensive(&self) -> bool {
-        (**self).is_expensive()
-    }
+impl<I, T: Number> Metric<I, T> for &dyn Metric<I, T> {
+    impl_metric_block!();
 }
 
-impl<I, T: Number> Metric<I, T> for Box<dyn ParMetric<I, T>> {
-    fn distance(&self, a: &I, b: &I) -> T {
-        (**self).distance(a, b)
-    }
-
-    fn name(&self) -> &str {
-        (**self).name()
-    }
-
-    fn has_identity(&self) -> bool {
-        (**self).has_identity()
-    }
-
-    fn has_non_negativity(&self) -> bool {
-        (**self).has_non_negativity()
-    }
-
-    fn has_symmetry(&self) -> bool {
-        (**self).has_symmetry()
-    }
-
-    fn obeys_triangle_inequality(&self) -> bool {
-        (**self).obeys_triangle_inequality()
-    }
-
-    fn is_expensive(&self) -> bool {
-        (**self).is_expensive()
-    }
+impl<I, T: Number> Metric<I, T> for &dyn ParMetric<I, T> {
+    impl_metric_block!();
 }
 
-impl<I: Send + Sync, T: Number> ParMetric<I, T> for Box<dyn ParMetric<I, T>> {
-    fn par_distance(&self, a: &I, b: &I) -> T {
-        (**self).par_distance(a, b)
-    }
+impl<I: Send + Sync, T: Number> ParMetric<I, T> for &dyn ParMetric<I, T> {
+    impl_par_metric_block!();
 }
+
+// Implementation for `&mut dyn Metric` and `&mut dyn ParMetric`
+
+impl<I, T: Number> Metric<I, T> for &mut dyn Metric<I, T> {
+    impl_metric_block!();
+}
+
+impl<I, T: Number> Metric<I, T> for &mut dyn ParMetric<I, T> {
+    impl_metric_block!();
+}
+
+impl<I: Send + Sync, T: Number> ParMetric<I, T> for &mut dyn ParMetric<I, T> {
+    impl_par_metric_block!();
+}
+
+impl_metric_for_smart_pointers!(Box, Rc, Arc);
+impl_par_metric_for_smart_pointers!(Box, Arc);

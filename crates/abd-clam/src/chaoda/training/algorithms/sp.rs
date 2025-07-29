@@ -26,7 +26,7 @@ impl StationaryProbability {
 }
 
 impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for StationaryProbability {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "sp"
     }
 

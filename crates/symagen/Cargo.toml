@@ -18,6 +18,9 @@ homepage = "https://github.com/URI-ABD/clam"
 # and update the release github action.
 publish = true
 
+[lints]
+workspace = true
+
 [dependencies]
 distances = { workspace = true }
 rayon = { workspace = true }

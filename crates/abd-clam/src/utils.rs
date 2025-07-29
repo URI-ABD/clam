@@ -3,6 +3,10 @@
 use core::cmp::Ordering;
 
 use distances::{number::Float, Number};
+use ftlog::{
+    appender::{FileAppender, Period},
+    LevelFilter, LoggerGuard,
+};
 use rand::prelude::*;
 
 /// The square root threshold for sub-sampling.
@@ -18,6 +22,16 @@ pub fn max_recursion_depth() -> usize {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(128)
+}
+
+/// Returns whether the three given lengths form a triangle with positive area.
+pub fn is_triangle<T: Number>(a: T, b: T, c: T) -> bool {
+    a + b > c && a + c > b && b + c > a
+}
+
+/// Returns whether the three given lengths are from collinear points.
+pub fn is_colinear<T: Number>(a: T, b: T, c: T) -> bool {
+    a + b == c || a + c == b || b + c == a
 }
 
 /// Return the number of samples to take from the given population size so as to
@@ -53,9 +67,41 @@ pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usiz
 pub fn choose_samples<T: Clone>(indices: &[T], sqrt_thresh: usize, log2_thresh: usize) -> Vec<T> {
     let mut indices = indices.to_vec();
     let n = crate::utils::num_samples(indices.len(), sqrt_thresh, log2_thresh);
-    indices.shuffle(&mut rand::thread_rng());
+    indices.shuffle(&mut rand::rng());
     indices.truncate(n);
     indices
+}
+
+/// Create a random derangement of the given size.
+///
+/// A "Derangement" is a permutation of the elements of a set, such that no
+/// element appears in its original position. We use the "Early Refusal"
+/// algorithm as described in [this paper](https://labdisia.disia.unifi.it/merlini/papers/Derangements.pdf).
+///
+/// # Arguments
+///
+/// * `rng` - The random number generator.
+/// * `n` - The size of the derangement.
+///
+/// # Returns
+///
+/// A vector containing the derangement.
+pub fn random_derangement<R: Rng>(rng: &mut R, n: usize) -> Vec<usize> {
+    loop {
+        let mut try_again = false;
+        let mut derangement = (0..n).collect::<Vec<_>>();
+        derangement.shuffle(rng);
+        for (i, &d) in derangement.iter().enumerate() {
+            if d == i {
+                // If the element is in its original position, shuffle again.
+                try_again = true;
+                break;
+            }
+        }
+        if !try_again {
+            return derangement;
+        }
+    }
 }
 
 /// Returns the number of distinct pairs that can be formed from `n` elements
@@ -120,7 +166,11 @@ pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
 
 /// Return the mean value of the given slice of values.
 pub fn mean<T: Number, F: Float>(values: &[T]) -> F {
-    F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
+    if values.is_empty() {
+        F::ZERO
+    } else {
+        F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
+    }
 }
 
 /// Return the variance of the given slice of values.
@@ -132,6 +182,17 @@ pub fn variance<T: Number, F: Float>(values: &[T], mean: F) -> F {
         .map(|v| v.powi(2))
         .sum::<F>()
         / F::from(values.len())
+}
+
+/// Return the coefficient of variation of the given slice of values.
+pub fn coefficient_of_variation<T: Number, F: Float>(values: &[T]) -> F {
+    let mean: F = mean(values);
+    let variance = variance(values, mean);
+    if mean.abs() <= F::EPSILON {
+        variance.sqrt()
+    } else {
+        variance.sqrt() / mean
+    }
 }
 
 /// Apply Gaussian normalization to the given values.
@@ -383,4 +444,38 @@ pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
     let encoding = bytes[*offset..*offset + len].to_vec();
     *offset += len;
     encoding.into_boxed_slice()
+}
+
+/// Configures the logger.
+///
+/// # Errors
+///
+/// - If a logs directory could not be located/created.
+/// - If the logger could not be initialized.
+pub fn configure_logger(file_name: &str, level: LevelFilter) -> Result<(LoggerGuard, std::path::PathBuf), String> {
+    let root_dir = std::path::PathBuf::from(".")
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let logs_dir = root_dir.join("logs");
+    if !logs_dir.exists() {
+        std::fs::create_dir(&logs_dir).map_err(|e| e.to_string())?;
+    }
+    let log_path = logs_dir.join(format!("{file_name}.log"));
+
+    let writer = FileAppender::builder().path(&log_path).rotate(Period::Day).build();
+
+    let err_path = log_path.with_extension("err.log");
+
+    let guard = ftlog::Builder::new()
+        // global max log level
+        .max_log_level(level)
+        // define root appender, pass None would write to stderr
+        .root(writer)
+        // write `Debug` and higher logs in ftlog::appender to `err_path` instead of `log_path`
+        .filter("ftlog::appender", "ftlog-appender", LevelFilter::Debug)
+        .appender("ftlog-appender", FileAppender::new(err_path))
+        .try_init()
+        .map_err(|e| e.to_string())?;
+
+    Ok((guard, log_path))
 }

@@ -5,11 +5,9 @@ use ndarray::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
+    adapters::{Adapter, ParAdapter},
     chaoda::{roc_auc_score, Vertex},
-    cluster::{
-        adapter::{Adapter, ParAdapter},
-        ParCluster, ParPartition, Partition,
-    },
+    cluster::{ParCluster, ParPartition, Partition},
     dataset::ParDataset,
     metric::ParMetric,
     Cluster, Dataset, Metric,
@@ -38,7 +36,7 @@ impl TrainedSmc {
 
     /// Get the trained combinations.
     #[must_use]
-    pub fn combinations(&self) -> &[TrainedCombination] {
+    pub const fn combinations(&self) -> &Vec<TrainedCombination> {
         &self.0
     }
 
@@ -128,7 +126,7 @@ impl TrainedSmc {
         if num_discerning == 0 {
             ftlog::warn!("No discerning combinations found. Returning all scores as `0.5`.");
             return vec![0.5; data.cardinality()];
-        };
+        }
 
         ftlog::info!("Averaging scores from {num_discerning} discerning combinations.");
         let shape = (data.cardinality(), num_discerning);
@@ -301,7 +299,7 @@ impl TrainedSmc {
         if num_discerning == 0 {
             ftlog::warn!("No discerning combinations found. Returning all scores as `0.5`.");
             return vec![0.5; data.cardinality()];
-        };
+        }
 
         ftlog::info!("Averaging scores from {num_discerning} discerning combinations.");
         let shape = (data.cardinality(), num_discerning);

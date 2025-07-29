@@ -1,273 +1,276 @@
-//! A point mass in the mass-spring system.
+//! A `Mass` is used to represent a `Cluster` of items in the original dataset.
+//!
+//! `Mass`es move under forces exerted by `Spring`s and eventually come to rest,
+//! representing a dimension of the dataset.
 
-use distances::Number;
-use rand::prelude::*;
+use std::sync::{Arc, RwLock};
 
-use crate::{cakes::PermutedBall, chaoda::Vertex, Cluster};
+use distances::{number::Float, Number};
+use rand::Rng;
 
-/// A `Mass` in the mass-spring system for dimensionality reduction.
-///
-/// A `Mass` represents a `Cluster` in the reduced space, and is defined by its:
-///
-/// - `position`: The position of the `Mass` in the reduced space.
-/// - `velocity`: The velocity of the `Mass` in the reduced space.
-/// - `mass`: The mass of the `Mass`.
-///
-/// A `Mass` also stores state information for referencing back to the `Cluster`
-/// it represents:
-///
-/// - `arg_center`: The index of the center of the `Cluster`.
-/// - `cardinality`: The cardinality of the `Cluster`.
-///
-/// The `Mass` also stores the force being applied to it, which is used to
-/// update the position and velocity of the `Mass`.
-///
-/// # Type Parameters
-///
-/// - `DIM`: The dimensionality of the reduced space.
-#[derive(Clone, Debug)]
-pub struct Mass<const DIM: usize> {
-    /// The index of the center of the `Cluster`.
-    arg_center: usize,
-    /// The offset of the `Cluster` that corresponds to the `Mass`.
-    offset: usize,
-    /// The cardinality of the `Cluster`.
-    cardinality: usize,
-    /// The position of the `Mass` in the reduced space.
-    position: [f32; DIM],
-    /// The velocity of the `Mass` in the reduced space.
-    velocity: [f32; DIM],
-    /// The force being applied to the `Mass`.
-    force: [f32; DIM],
-    /// The mass of the `Mass`.
-    m: f32,
+use crate::{Cluster, Dataset, Metric};
+
+use super::Vector;
+
+/// Represents a `Mass` in the system.
+#[derive(Clone)]
+pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
+    /// Reference to the associated `Cluster`.
+    cluster: &'a C,
+    /// The position of the `Mass` in the system.
+    position: Vector<F, DIM>,
+    /// The velocity of the `Mass` in the system.
+    velocity: Vector<F, DIM>,
+    /// The forces currently acting on the `Mass`.
+    forces: Arc<RwLock<Vec<Vector<F, DIM>>>>,
+    /// The total force Vector acting on the `Mass`.
+    total_force: Vector<F, DIM>,
+    /// Phantom data to store the type `T`.
+    phantom: std::marker::PhantomData<T>,
 }
 
-impl<const DIM: usize> core::hash::Hash for Mass<DIM> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.hash_key().hash(state);
+impl<T: Number, C: Cluster<T>, F: Float, const DIM: usize> std::fmt::Debug for Mass<'_, T, C, F, DIM> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mass")
+            .field("position", &self.position)
+            .field("velocity", &self.velocity)
+            .field("total_force", &self.total_force)
+            .finish()
     }
 }
 
-impl<const DIM: usize> PartialEq for Mass<DIM> {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash_key() == other.hash_key()
-    }
-}
-
-impl<const DIM: usize> Eq for Mass<DIM> {}
-
-impl<const DIM: usize> Mass<DIM> {
+impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F, DIM> {
     /// Creates a new `Mass`.
-    #[must_use]
-    pub fn new(arg_center: usize, offset: usize, cardinality: usize) -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// - `cluster`: A reference to the associated `Cluster`.
+    /// - `position`: The initial position of the `Mass`.
+    /// - `velocity`: The initial velocity of the `Mass`.
+    pub fn new(cluster: &'a C, position: Vector<F, DIM>, velocity: Vector<F, DIM>) -> Self {
         Self {
-            offset,
-            arg_center,
-            cardinality,
-            position: [0.0; DIM],
-            velocity: [0.0; DIM],
-            force: [0.0; DIM],
-            m: cardinality.as_f32(),
+            cluster,
+            position,
+            velocity,
+            forces: Arc::new(RwLock::new(Vec::new())),
+            total_force: Vector::zero(),
+            phantom: std::marker::PhantomData,
         }
-    }
-
-    /// Constructs a `Mass` to represent a `Cluster`.
-    ///
-    /// This assigns the `position` and `velocity` of the `Mass` to be the zero
-    /// vector, and the `mass` to be the cardinality of the `Cluster`.
-    #[must_use]
-    pub fn from_vertex<T, C>(c: &Vertex<T, PermutedBall<T, C>>) -> Self
-    where
-        T: Number,
-        C: Cluster<T>,
-    {
-        Self::new(c.arg_center(), c.source.offset(), c.cardinality())
-    }
-
-    /// Returns a hash-key for the `Mass`.
-    ///
-    /// This is a 2-tuple of the `offset` and `cardinality` of the `Mass`.
-    #[must_use]
-    pub const fn hash_key(&self) -> (usize, usize) {
-        (self.offset, self.cardinality)
-    }
-
-    /// Returns the index of the center of the `Cluster`.
-    #[must_use]
-    pub const fn arg_center(&self) -> usize {
-        self.arg_center
-    }
-
-    /// Returns the offset of the `Cluster`.
-    #[must_use]
-    pub const fn offset(&self) -> usize {
-        self.offset
-    }
-
-    /// Returns the cardinality of the `Cluster`.
-    #[must_use]
-    pub const fn cardinality(&self) -> usize {
-        self.cardinality
-    }
-
-    /// Returns the mass of the `Mass`.
-    #[must_use]
-    pub const fn mass(&self) -> f32 {
-        self.m
     }
 
     /// Returns the position of the `Mass`.
-    #[must_use]
-    pub const fn position(&self) -> &[f32; DIM] {
-        &self.position
+    pub const fn position(&self) -> Vector<F, DIM> {
+        self.position
     }
 
-    /// Returns the velocity of the `Mass`.
-    #[must_use]
-    pub const fn velocity(&self) -> &[f32; DIM] {
-        &self.velocity
+    /// Shifts the position of the `Mass` by a given vector.
+    pub fn shift_position(&mut self, shift: Vector<F, DIM>) {
+        self.position += shift;
     }
 
-    /// Returns the force being applied to the `Mass`.
-    #[must_use]
-    pub const fn force(&self) -> &[f32; DIM] {
-        &self.force
-    }
-
-    /// Sets the mass of the `Mass` to 1.
-    pub fn set_unit_mass(&mut self) {
-        self.m = 1.0;
-    }
-
-    /// Returns a `Mass` with a mass of 1.
-    #[must_use]
-    pub fn with_unit_mass(mut self) -> Self {
-        self.set_unit_mass();
-        self
-    }
-
-    /// Sets the mass of the `Mass`.
-    pub fn set_mass(&mut self, m: f32) {
-        self.m = m;
-    }
-
-    /// Returns a `Mass` with the given mass.
-    #[must_use]
-    pub fn with_mass(mut self, m: f32) -> Self {
-        self.set_mass(m);
-        self
-    }
-
-    /// Sets the position of the `Mass`.
-    pub fn set_position(&mut self, position: [f32; DIM]) {
-        self.position = position;
-    }
-
-    /// Returns a `Mass` with the given position.
-    #[must_use]
-    pub fn with_position(mut self, position: [f32; DIM]) -> Self {
-        self.set_position(position);
-        self
-    }
-
-    /// Sets the velocity of the `Mass`.
-    pub fn set_velocity(&mut self, velocity: [f32; DIM]) {
+    /// Sets a velocity for the `Mass`.
+    pub const fn set_velocity(&mut self, velocity: Vector<F, DIM>) {
         self.velocity = velocity;
     }
 
-    /// Returns a `Mass` with the given velocity.
-    #[must_use]
-    pub fn with_velocity(mut self, velocity: [f32; DIM]) -> Self {
-        self.set_velocity(velocity);
-        self
+    /// Calculates the distance in the original dataset.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: The other `Mass` to calculate the distance to.
+    /// - `data`: The dataset containing the items.
+    /// - `metric`: The metric to use for distance calculation.
+    ///
+    /// # Returns
+    ///
+    /// The distance between the two `Mass`es as a floating-point value.
+    pub fn original_distance<I, D, M>(&self, other: &Self, data: &D, metric: &M) -> F
+    where
+        D: Dataset<I>,
+        M: Metric<I, T>,
+    {
+        let a = self.cluster.arg_center();
+        let b = other.cluster.arg_center();
+
+        (F::from(data.one_to_one(a, b, metric)) + F::ONE.double() + F::EPSILON)
+            .ln()
+            .ln()
+            .abs()
+        // F::from(data.one_to_one(a, b, metric))
     }
 
-    /// Resets the `velocity` of the `Mass` to the zero vector.
-    pub fn reset_velocity(&mut self) {
-        self.velocity = [0.0; DIM];
+    /// Calculates the euclidean distance in the embedding space.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: The other `Mass` to calculate the distance to.
+    ///
+    /// # Returns
+    ///
+    /// The distance between the two `Mass`es as a floating-point value.
+    pub fn embedded_distance(&self, other: &Self) -> F {
+        (self.position - other.position).magnitude()
     }
 
-    /// Returns the distance vector from this `Mass` to another `Mass`.
-    #[must_use]
-    pub fn distance_vector_to(&self, other: &Self) -> [f32; DIM] {
-        let mut dv = [0.0; DIM];
-        for ((d, &p), &o) in dv.iter_mut().zip(self.position.iter()).zip(other.position.iter()) {
-            *d = o - p;
-        }
-        dv
+    /// Calculates the unit vector pointing from this `Mass` to another `Mass`.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: The other `Mass` to calculate the unit vector to.
+    ///
+    /// # Returns
+    ///
+    /// A `Vector` representing the unit vector pointing to the other `Mass`.
+    pub fn unit_vector_to(&self, other: &Self) -> Vector<F, DIM> {
+        self.position.unit_vector_to(&other.position)
     }
 
-    /// Returns the current distance to another `Mass`.
-    #[must_use]
-    pub fn current_distance_to(&self, other: &Self) -> f32 {
-        let dv = self.distance_vector_to(other);
-        distances::simd::euclidean_f32(&dv, &dv)
+    /// Returns whether the `Mass` represents a leaf cluster.
+    pub fn is_leaf(&self) -> bool {
+        self.cluster.is_leaf()
     }
 
-    /// Returns a unit vector pointing from this `Mass` to another `Mass`.
-    #[must_use]
-    pub fn unit_vector_to(&self, other: &Self) -> [f32; DIM] {
-        let mut uv = self.distance_vector_to(other);
+    /// Returns the radius of the cluster represented by the `Mass`.
+    pub fn radius(&self) -> F {
+        F::from(self.cluster.radius())
+    }
 
-        let mag = distances::simd::euclidean_f32(&uv, &uv);
-        if mag > (f32::EPSILON * DIM.as_f32()) {
-            for d in &mut uv {
-                *d /= mag;
-            }
+    /// Returns the mass of the `Mass`, which is equal to the cardinality of the cluster.
+    pub fn mass(&self) -> F {
+        F::from(self.cluster.cardinality())
+    }
+
+    /// Adds a given vector to the force acting on the `Mass`.
+    ///
+    /// # Panics
+    ///
+    /// - If the `forces` lock is poisoned.
+    #[allow(clippy::unwrap_used)]
+    pub fn add_force(&self, f: &Vector<F, DIM>) {
+        self.forces.write().unwrap().push(*f);
+    }
+
+    /// Subtracts a given vector from the force acting on the `Mass`.
+    ///
+    /// # Panics
+    ///
+    /// - If the `forces` lock is poisoned.
+    #[allow(clippy::unwrap_used)]
+    pub fn sub_force(&self, f: &Vector<F, DIM>) {
+        self.forces.write().unwrap().push(-*f);
+    }
+
+    /// Moves the `Mass` under the force it experiences.
+    ///
+    /// # Arguments
+    ///
+    /// - `drag`: The drag coefficient to reduce velocity.
+    /// - `dt`: The size of the time step for the movement.
+    ///
+    /// # Panics
+    ///
+    /// - If the `forces` lock is poisoned.
+    #[allow(clippy::unwrap_used)]
+    pub fn move_mass(&mut self, drag: F, dt: F) {
+        // Accumulate all forces acting on the mass.
+        self.total_force = self.forces.write().unwrap().drain(..).sum();
+
+        // Calculate friction from drag.
+        let friction = -self.velocity * drag;
+
+        // Calculate acceleration based on force and mass.
+        let acceleration = (self.total_force + friction) / self.mass();
+
+        // Update velocity based on acceleration.
+        self.velocity += acceleration * dt;
+
+        debug_assert!(!self.velocity.has_nan(), "{self:?} has NaN velocity");
+        debug_assert!(!self.velocity.has_inf(), "{self:?} has Inf velocity");
+
+        // Update position based on velocity.
+        self.position += self.velocity * dt;
+
+        debug_assert!(!self.position.has_nan(), "{self:?} has NaN position");
+        debug_assert!(!self.position.has_inf(), "{self:?} has Inf position");
+    }
+
+    /// Calculates the kinetic energy of the `Mass`.
+    ///
+    /// # Returns
+    ///
+    /// The kinetic energy as a floating-point value.
+    pub fn kinetic_energy(&self) -> F {
+        let speed_squared = self.velocity.dot(&self.velocity);
+        self.mass() * speed_squared.half()
+    }
+
+    /// Returns the indices and positions of the items in the `Cluster`.
+    pub fn itemized_positions(&self) -> Vec<(usize, Vector<F, DIM>)> {
+        let mut positions = self
+            .cluster
+            .indices()
+            .iter()
+            .map(|&i| (i, self.position))
+            .collect::<Vec<_>>();
+        // sort the positions by index
+        positions.sort_by_key(|(i, _)| *i);
+        positions
+    }
+
+    /// Explodes the `Mass`, creating new masses for the children of the cluster it represents.
+    ///
+    /// The caller must ensure that the `Mass` does not represent a leaf cluster.
+    ///
+    /// # Arguments
+    ///
+    /// - `rng`: A reference to the random number generator.
+    /// - `drag`: The drag coefficient to reduce velocity.
+    /// - `dt`: The size of the time step for the movement.
+    ///
+    /// # Returns
+    ///
+    /// A vector of new `Mass`es representing the children of the cluster.
+    ///
+    /// # Panics
+    ///
+    /// - If the `Mass` represents a leaf cluster.
+    #[allow(clippy::panic)]
+    pub(crate) fn explode<R: Rng>(&self, rng: &mut R, drag: F, dt: F) -> [Self; 2] {
+        debug_assert!(!self.cluster.is_leaf(), "Cannot explode a leaf cluster.");
+
+        // There should be exactly two children.
+        let [a, b] = {
+            let children = self.cluster.children();
+            [children[0], children[1]]
+        };
+        let [ma, mb] = [F::from(a.cardinality()), F::from(b.cardinality())];
+
+        let v_mag = self.velocity.magnitude();
+        let va = if v_mag > F::EPSILON {
+            // The first child will have a new velocity in a random direction and
+            // its magnitude will be proportional to its mass.
+            Vector::random_unit(rng) * (v_mag * ma / self.mass())
         } else {
-            // Move the `Mass` a small distance in a random direction.
-            uv = [0.0; DIM];
-            let dim = rand::thread_rng().gen_range(0..DIM);
-            let sign = if rand::thread_rng().gen_bool(0.5) { 1.0 } else { -1.0 };
-            uv[dim] = sign;
-        }
-        uv
-    }
+            // The mass is at rest, so the first child will have a random velocity.
+            Vector::random_unit(rng)
+        };
 
-    /// Adds a force to the `Mass`.
-    pub fn add_force(&mut self, force: [f32; DIM]) {
-        for (sf, &f) in self.force.iter_mut().zip(force.iter()) {
-            *sf += f;
-        }
-    }
+        // Use conservation of momentum to calculate the velocity of the second child.
+        let vb = (self.velocity * self.mass() - va * ma) / mb;
 
-    /// Subtracts a force from the `Mass`.
-    pub fn sub_force(&mut self, force: [f32; DIM]) {
-        for (sf, &f) in self.force.iter_mut().zip(force.iter()) {
-            *sf -= f;
-        }
-    }
+        // Create the new masses.
+        let mut a = Mass::new(a, self.position, va);
+        let mut b = Mass::new(b, self.position, vb);
 
-    /// Applies the force to the `Mass` for one time step.
-    ///
-    /// This will:
-    ///  - dampen the force with `beta`.
-    ///  - update the velocity of the `Mass`.
-    ///  - update the position of the `Mass`.
-    ///  - reset the force being applied to the `Mass`.
-    ///
-    /// # Parameters
-    ///
-    /// - `dt`: The time step to apply the force for.
-    /// - `beta`: The damping factor to apply to the force.
-    pub fn apply_force(&mut self, dt: f32, beta: f32) {
-        for ((p, v), f) in self
-            .position
-            .iter_mut()
-            .zip(self.velocity.iter_mut())
-            .zip(self.force.iter_mut())
-        {
-            *f -= (*v) * beta;
-            *v += ((*f) / self.m) * dt;
-            *p += (*v) * dt;
-            *f = 0.0;
-        }
-    }
+        debug_assert!(!va.has_nan(), "Child {a:?} of {self:?} has NaN velocity");
+        debug_assert!(!va.has_inf(), "Child {a:?} of {self:?} has Inf velocity");
+        debug_assert!(!vb.has_nan(), "Child {b:?} of {self:?} has NaN velocity");
+        debug_assert!(!vb.has_inf(), "Child {b:?} of {self:?} has Inf velocity");
 
-    /// Returns the kinetic energy of the `Mass`.
-    #[must_use]
-    pub fn kinetic_energy(&self) -> f32 {
-        0.5 * self.m * distances::simd::euclidean_sq_f32(&self.velocity, &self.velocity)
+        // Move the masses due to the explosion.
+        a.move_mass(drag, dt);
+        b.move_mass(drag, dt);
+
+        [a, b]
     }
 }

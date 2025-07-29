@@ -6,6 +6,10 @@ use super::{Metric, ParMetric};
 
 /// The `Hypotenuse` is just the `Euclidean` distance between two points in 2D
 /// space.
+#[cfg_attr(
+    feature = "disk-io",
+    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
+)]
 pub struct Hypotenuse;
 
 impl<T: Number, U: Float> Metric<(T, T), U> for Hypotenuse {
@@ -15,7 +19,7 @@ impl<T: Number, U: Float> Metric<(T, T), U> for Hypotenuse {
         distances::vectors::euclidean(&a, &b)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "hypotenuse"
     }
 

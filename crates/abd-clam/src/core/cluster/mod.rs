@@ -3,25 +3,22 @@
 use distances::{number::Float, Number};
 use rayon::prelude::*;
 
-pub mod adapter;
 mod balanced_ball;
 mod ball;
 mod lfd;
 mod partition;
+mod tree;
 
 pub use balanced_ball::BalancedBall;
 pub use ball::Ball;
 pub use lfd::LFD;
 pub use partition::{ParPartition, Partition};
-
-#[cfg(feature = "disk-io")]
-mod io;
-
-#[cfg(feature = "disk-io")]
-#[allow(clippy::module_name_repetitions)]
-pub use io::{ClusterIO, Csv, ParClusterIO, ParCsv};
+pub use tree::Tree;
 
 use super::{dataset::ParDataset, metric::ParMetric, Dataset, Metric};
+
+#[cfg(feature = "disk-io")]
+use std::io::Write;
 
 /// A `Cluster` is a collection of "similar" items in a dataset.
 ///
@@ -133,6 +130,12 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
 
     /// Returns whether the `Cluster` is a descendant of another `Cluster`.
     fn is_descendant_of(&self, other: &Self) -> bool;
+
+    /// Within a given tree, a `Cluster` must be uniquely identifiable by its
+    /// `cardinality` and the index of any one of its items.
+    fn unique_id(&self) -> (usize, usize) {
+        (self.arg_center(), self.cardinality())
+    }
 
     /// Clears the indices stored with every cluster in the tree.
     fn clear_indices(&mut self) {
@@ -254,6 +257,11 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
         }
     }
 
+    /// Returns the distance between the centers of two `Cluster`s.
+    fn distance_to<I, D: Dataset<I>, M: Metric<I, T>>(&self, other: &Self, data: &D, metric: &M) -> T {
+        data.one_to_one(self.arg_center(), other.arg_center(), metric)
+    }
+
     /// Returns whether this cluster has any overlap with a query and a radius,
     /// and the distances to the cluster extrema.
     fn overlaps_with<I, D: Dataset<I>, M: Metric<I, T>>(
@@ -295,6 +303,16 @@ pub trait ParCluster<T: Number>: Cluster<T> + Send + Sync {
     /// Parallel version of [`Cluster::indices`](crate::core::cluster::Cluster::indices).
     fn par_indices(&self) -> impl ParallelIterator<Item = usize>;
 
+    /// Returns the distance between the centers of two `Cluster`s.
+    fn par_distance_to<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+        &self,
+        other: &Self,
+        data: &D,
+        metric: &M,
+    ) -> T {
+        data.par_one_to_one(self.arg_center(), other.arg_center(), metric)
+    }
+
     /// Parallel version of [`Cluster::overlaps_with`](crate::core::cluster::Cluster::overlaps_with).
     fn par_overlaps_with<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
         &self,
@@ -325,5 +343,79 @@ pub trait ParCluster<T: Number>: Cluster<T> + Send + Sync {
             .filter(|&(_, (o, _))| o)
             .map(|(c, (_, ds))| (c, ds))
             .collect()
+    }
+}
+
+#[cfg(feature = "disk-io")]
+/// Write a tree to a CSV file.
+pub trait Csv<T: Number>: Cluster<T> {
+    /// Returns the names of the columns in the CSV file.
+    fn header(&self) -> Vec<String>;
+
+    /// Returns a row, corresponding to the `Cluster`, for the CSV file.
+    fn row(&self) -> Vec<String>;
+
+    /// Write to a CSV file, all the clusters in the tree.
+    ///
+    /// # Errors
+    ///
+    /// - If the file cannot be created.
+    /// - If the file cannot be written to.
+    /// - If the header cannot be written to the file.
+    /// - If any row cannot be written to the file.
+    fn write_to_csv<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
+        let line = |items: Vec<String>| {
+            let mut line = items.join(",");
+            line.push('\n');
+            line
+        };
+
+        // Create the file and write the header.
+        let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+        file.write_all(line(self.header()).as_bytes())
+            .map_err(|e| e.to_string())?;
+
+        // Write each row to the file.
+        for row in self.subtree().into_iter().map(Self::row).map(line) {
+            file.write_all(row.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "disk-io")]
+/// Parallel version of [`Csv`](crate::core::cluster::io::Csv).
+pub trait ParCsv<T: Number>: Csv<T> + ParCluster<T> {
+    /// Parallel version of [`Csv::write_to_csv`](crate::core::cluster::Csv::write_to_csv).
+    ///
+    /// # Errors
+    ///
+    /// See [`Csv::write_to_csv`](crate::core::cluster::Csv::write_to_csv).
+    fn par_write_to_csv<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
+        let line = |items: Vec<String>| {
+            let mut line = items.join(",");
+            line.push('\n');
+            line
+        };
+
+        // Create the file and write the header.
+        let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+        file.write_all(line(self.header()).as_bytes())
+            .map_err(|e| e.to_string())?;
+
+        let rows = self
+            .subtree()
+            .into_par_iter()
+            .map(Self::row)
+            .map(line)
+            .collect::<Vec<_>>();
+
+        // Write each row to the file.
+        for row in rows {
+            file.write_all(row.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
     }
 }
