@@ -7,6 +7,14 @@ use std::path::Path;
 
 use abd_clam::FlatVec;
 
+/// Reads the data from the file at the given path.
+pub fn read<P: AsRef<Path>>(path: P) -> Result<ShellFlatVec, String> {
+    match Format::from(&path) {
+        Format::Npy => ShellFlatVec::read_npy(path),
+        Format::Fasta => ShellFlatVec::read_fasta(path),
+    }
+}
+
 /// Data formats supported in the CLI.
 pub enum Format {
     /// Npy array format.
@@ -15,22 +23,16 @@ pub enum Format {
     Fasta,
 }
 
-impl Format {
-    /// Reads the data from the file at the given path.
-    pub fn read<P: AsRef<Path>>(path: P) -> Result<ShellFlatVec, String> {
-        match Self::from(&path) {
-            Self::Npy => ShellFlatVec::read_npy(path),
-            Self::Fasta => ShellFlatVec::read_fasta(path),
-        }
-    }
-}
-
 impl<P: AsRef<Path>> From<P> for Format {
     fn from(path: P) -> Self {
         match path.as_ref().extension().and_then(|s| s.to_str()) {
             Some("npy") => Format::Npy,
             Some("fasta") => Format::Fasta,
-            _ => panic!("Unknown format for path: {}", path.as_ref().display()),
+            Some(ext) => panic!("Unknown data format {ext} for path: {}", path.as_ref().display()),
+            None => panic!(
+                "Could not determine data format without extension for path: {}",
+                path.as_ref().display()
+            ),
         }
     }
 }

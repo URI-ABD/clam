@@ -4,9 +4,14 @@ use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
+    adapters::BallAdapter,
+    cakes::PermutedBall,
+    cluster::{ParPartition, Partition},
     dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset, Permutable},
+    metric::ParMetric,
+    musals::Columns,
     utils::{self, LOG2_THRESH, SQRT_THRESH},
-    Dataset, FlatVec,
+    Ball, Dataset, FlatVec, Metric,
 };
 
 use super::super::{Aligner, NUM_CHARS};
@@ -27,96 +32,85 @@ pub struct MSA<I: AsRef<[u8]>, T: Number, Me> {
     name: String,
 }
 
-impl<I: AsRef<[u8]>, T: Number, Me> Dataset<I> for MSA<I, T, Me> {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn with_name(self, name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            ..self
-        }
-    }
-
-    fn cardinality(&self) -> usize {
-        self.data.cardinality()
-    }
-
-    fn dimensionality_hint(&self) -> (usize, Option<usize>) {
-        self.data.dimensionality_hint()
-    }
-
-    fn get(&self, index: usize) -> &I {
-        self.data.get(index)
-    }
-}
-
-impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> ParDataset<I> for MSA<I, T, Me> {}
-
-impl<I: AsRef<[u8]>, T: Number, Me> Permutable for MSA<I, T, Me> {
-    fn permutation(&self) -> Vec<usize> {
-        self.data.permutation()
-    }
-
-    fn set_permutation(&mut self, permutation: &[usize]) {
-        self.data.set_permutation(permutation);
-    }
-
-    fn swap_two(&mut self, i: usize, j: usize) {
-        self.data.swap_two(i, j);
+impl<T: Number, Me: Clone> MSA<String, T, Me> {
+    /// Creates a new MSA using MUSALS from an unaligned dataset.
+    ///
+    /// # Arguments
+    ///
+    /// * `aligner` - The aligner.
+    /// * `data` - The data on which to build the MSA.
+    /// * `metric` - The metric used for clustering.
+    /// * `criteria` - The criteria used for clustering.
+    /// * `seed` - The seed to use for random number generation.
+    ///
+    /// # Returns
+    ///
+    /// The new MSA.
+    ///
+    /// # Errors
+    ///
+    /// - If any of the characters in the dataset are not `utf-8` compatible.
+    pub fn from_unaligned<I: AsRef<[u8]>, M: Metric<I, T>, C: Fn(&Ball<T>) -> bool>(
+        aligner: &Aligner<T>,
+        data: FlatVec<I, Me>,
+        metric: &M,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
+        let root = Ball::new_tree(&data, metric, criteria, seed);
+        let (root, data) = PermutedBall::from_ball_tree(root, data, metric);
+        let metadata = data.metadata().to_vec();
+        let data = Columns::new(b'-')
+            .with_binary_tree(&root, &data, aligner)
+            .to_flat_vec_strings()
+            .map_err(|e| format!("Failed to create MSA from unaligned dataset: {e}"))?;
+        let data = data.with_metadata(&metadata)?;
+        Self::from_aligned(aligner, data)
     }
 }
 
-impl<I: AsRef<[u8]>, T: Number, Me> AssociatesMetadata<I, Me> for MSA<I, T, Me> {
-    fn metadata(&self) -> &[Me] {
-        self.data.metadata()
-    }
-
-    fn metadata_at(&self, index: usize) -> &Me {
-        self.data.metadata_at(index)
-    }
-}
-
-impl<I: AsRef<[u8]>, T: Number, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, MSA<I, T, Met>> for MSA<I, T, Me> {
-    fn metadata_mut(&mut self) -> &mut [Me] {
-        <FlatVec<I, Me> as AssociatesMetadataMut<I, Me, Met, FlatVec<I, Met>>>::metadata_mut(&mut self.data)
-    }
-
-    fn metadata_at_mut(&mut self, index: usize) -> &mut Me {
-        <FlatVec<I, Me> as AssociatesMetadataMut<I, Me, Met, FlatVec<I, Met>>>::metadata_at_mut(&mut self.data, index)
-    }
-
-    fn with_metadata(self, metadata: &[Met]) -> Result<MSA<I, T, Met>, String> {
-        self.data.with_metadata(metadata).map(|data| MSA {
-            aligner: self.aligner,
-            data,
-            name: self.name,
-        })
-    }
-
-    fn transform_metadata<F: Fn(&Me) -> Met>(self, f: F) -> MSA<I, T, Met> {
-        MSA {
-            aligner: self.aligner,
-            data: self.data.transform_metadata(f),
-            name: self.name,
-        }
+impl<T: Number, Me: Clone + Send + Sync> MSA<String, T, Me> {
+    /// Parallel version of [`MSA::from_unaligned`](Self::from_unaligned).
+    ///
+    /// # Errors
+    ///
+    /// See [`MSA::from_unaligned`](Self::from_unaligned).
+    pub fn par_from_unaligned<
+        I: AsRef<[u8]> + Send + Sync,
+        M: ParMetric<I, T>,
+        C: (Fn(&Ball<T>) -> bool) + Send + Sync,
+    >(
+        aligner: &Aligner<T>,
+        data: FlatVec<I, Me>,
+        metric: &M,
+        criteria: &C,
+        seed: Option<u64>,
+    ) -> Result<Self, String> {
+        let root = Ball::par_new_tree(&data, metric, criteria, seed);
+        let (root, data) = PermutedBall::from_ball_tree(root, data, metric);
+        let metadata = data.metadata().to_vec();
+        let data = Columns::new(b'-')
+            .par_with_binary_tree(&root, &data, aligner)
+            .par_to_flat_vec_strings()
+            .map_err(|e| format!("Failed to create MSA from unaligned dataset: {e}"))?;
+        let data = data.with_metadata(&metadata)?;
+        Self::from_aligned(aligner, data)
     }
 }
 
 impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
-    /// Creates a new MSA.
+    /// Creates the MSA object from an aligned dataset.
     ///
     /// # Arguments
     ///
-    /// * `aligner` - The Needleman-Wunsch aligner.
+    /// * `aligner` - The aligner.
     /// * `data` - The data of the MSA.
     ///
     /// # Errors
     ///
     /// - If any sequence in the MSA is empty.
     /// - If the sequences in the MSA have different lengths.
-    pub fn new(aligner: &Aligner<T>, data: FlatVec<I, Me>) -> Result<Self, String> {
+    pub fn from_aligned(aligner: &Aligner<T>, data: FlatVec<I, Me>) -> Result<Self, String> {
         let (min_len, max_len) = data
             .items()
             .iter()
@@ -638,4 +632,81 @@ fn pd_inner(s1: &[u8], s2: &[u8], gap_char: u8) -> f32 {
         .filter(|(&a, &b)| a != gap_char && b != gap_char && a != b)
         .count();
     num_mismatches.as_f32() / s1.len().as_f32()
+}
+
+impl<I: AsRef<[u8]>, T: Number, Me> Dataset<I> for MSA<I, T, Me> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn with_name(self, name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            ..self
+        }
+    }
+
+    fn cardinality(&self) -> usize {
+        self.data.cardinality()
+    }
+
+    fn dimensionality_hint(&self) -> (usize, Option<usize>) {
+        self.data.dimensionality_hint()
+    }
+
+    fn get(&self, index: usize) -> &I {
+        self.data.get(index)
+    }
+}
+
+impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> ParDataset<I> for MSA<I, T, Me> {}
+
+impl<I: AsRef<[u8]>, T: Number, Me> Permutable for MSA<I, T, Me> {
+    fn permutation(&self) -> Vec<usize> {
+        self.data.permutation()
+    }
+
+    fn set_permutation(&mut self, permutation: &[usize]) {
+        self.data.set_permutation(permutation);
+    }
+
+    fn swap_two(&mut self, i: usize, j: usize) {
+        self.data.swap_two(i, j);
+    }
+}
+
+impl<I: AsRef<[u8]>, T: Number, Me> AssociatesMetadata<I, Me> for MSA<I, T, Me> {
+    fn metadata(&self) -> &[Me] {
+        self.data.metadata()
+    }
+
+    fn metadata_at(&self, index: usize) -> &Me {
+        self.data.metadata_at(index)
+    }
+}
+
+impl<I: AsRef<[u8]>, T: Number, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, MSA<I, T, Met>> for MSA<I, T, Me> {
+    fn metadata_mut(&mut self) -> &mut [Me] {
+        <FlatVec<I, Me> as AssociatesMetadataMut<I, Me, Met, FlatVec<I, Met>>>::metadata_mut(&mut self.data)
+    }
+
+    fn metadata_at_mut(&mut self, index: usize) -> &mut Me {
+        <FlatVec<I, Me> as AssociatesMetadataMut<I, Me, Met, FlatVec<I, Met>>>::metadata_at_mut(&mut self.data, index)
+    }
+
+    fn with_metadata(self, metadata: &[Met]) -> Result<MSA<I, T, Met>, String> {
+        self.data.with_metadata(metadata).map(|data| MSA {
+            aligner: self.aligner,
+            data,
+            name: self.name,
+        })
+    }
+
+    fn transform_metadata<F: Fn(&Me) -> Met>(self, f: F) -> MSA<I, T, Met> {
+        MSA {
+            aligner: self.aligner,
+            data: self.data.transform_metadata(f),
+            name: self.name,
+        }
+    }
 }

@@ -9,6 +9,19 @@ use distances::{number::Int, Number};
 use super::super::NUM_CHARS;
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
+///
+/// This matrix defines the costs of substituting one character for another,
+/// as well as the costs of opening and extending gaps.
+///
+/// The default matrix sets all costs to 1 and can be used with genomic or
+/// proteomic sequences. It is possible to fully customiuze the matrix using the
+/// provided methods. We already provide a small number of  specialized
+/// matrices. These include:
+///   - Extended IUPAC: From the [`CostMatrix::extended_iupac`](CostMatrix::extended_iupac)
+///     method, a matrix that uses the extended IUPAC nucleotide code.
+///   - BLOSUM62: From the [`CostMatrix::blosum62`](CostMatrix::blosum62)
+///     method, a matrix that uses the BLOSUM62 substitution scores for amino-
+///     acid sequences.
 #[derive(Clone, Debug)]
 #[cfg_attr(
     feature = "disk-io",
