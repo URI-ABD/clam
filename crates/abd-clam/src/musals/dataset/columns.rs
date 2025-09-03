@@ -12,6 +12,12 @@ use crate::{cakes::PermutedBall, cluster::ParCluster, dataset::ParDataset, Clust
 use super::super::Aligner;
 
 /// The columns of a partial MSA.
+///
+/// This can be used to build a full MSA. You first need a tree of
+/// `PermutedBall`s, the re-ordered dataset, and the `Aligner`. Then you can
+/// chain a couple of methods to build the MSA:
+///   - `Columns::new(b'-').with_binary_tree(&root, &data, &aligner).to_flat_vec_strings()?`
+///   - `Columns::new(b'-').par_with_binary_tree(&root, &data, &aligner).par_to_flat_vec_strings()?`
 #[must_use]
 pub struct Columns(Vec<Vec<u8>>, u8);
 
@@ -239,9 +245,9 @@ impl Columns {
         }
     }
 
-    /// Extract the multiple sequence alignment.
+    /// Extract the multiple sequence alignment as `char`s.
     #[must_use]
-    pub fn extract_msa(&self) -> Vec<Vec<u8>> {
+    pub fn extract_msa_chars(&self) -> Vec<Vec<u8>> {
         if self.is_empty() {
             Vec::new()
         } else {
@@ -249,13 +255,13 @@ impl Columns {
         }
     }
 
-    /// Extract the multiple sequence alignment over `String`s.
+    /// Extract the multiple sequence alignment as `String`s.
     ///
     /// # Errors
     ///
     /// - If any of the sequences are not valid UTF-8.
     pub fn extract_msa_strings(&self) -> Result<Vec<String>, FromUtf8Error> {
-        self.extract_msa().into_iter().map(String::from_utf8).collect()
+        self.extract_msa_chars().into_iter().map(String::from_utf8).collect()
     }
 
     /// Extract the columns as a `FlatVec`.
@@ -264,21 +270,33 @@ impl Columns {
             .unwrap_or_else(|e| unreachable!("{e}"))
             .with_dim_lower_bound(self.len())
             .with_dim_upper_bound(self.len())
-            .with_name("ColWiseMSA")
+            .with_name("ColumnarMSA")
     }
 
     /// Extract the rows as a `FlatVec`.
     pub fn to_flat_vec_rows(&self) -> FlatVec<Vec<u8>, usize> {
-        FlatVec::new(self.extract_msa())
+        FlatVec::new(self.extract_msa_chars())
             .unwrap_or_else(|e| unreachable!("{e}"))
             .with_dim_lower_bound(self.width())
             .with_dim_upper_bound(self.width())
-            .with_name("RowWiseMSA")
+            .with_name("CharsMSA")
+    }
+
+    /// Extract the rows as a `FlatVec` of `String`s.
+    ///
+    /// # Errors
+    ///
+    /// - If any of the sequences are not valid UTF-8.
+    pub fn to_flat_vec_strings(&self) -> Result<FlatVec<String, usize>, FromUtf8Error> {
+        Ok(FlatVec::new(self.extract_msa_strings()?)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .with_dim_lower_bound(self.width())
+            .with_dim_upper_bound(self.width()))
     }
 }
 
 impl Columns {
-    /// Parallel version of [`Columnar::with_binary_tree`](crate::msa::dataset::columnar::Columnar::with_binary_tree).
+    /// Parallel version of [`Columnar::with_binary_tree`](Self::with_binary_tree).
     pub fn par_with_binary_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]> + Send + Sync,
@@ -313,7 +331,7 @@ impl Columns {
         }
     }
 
-    /// Parallel version of [`Columnar::with_tree`](crate::msa::dataset::columnar::Columnar::with_tree).
+    /// Parallel version of [`Columnar::with_tree`](Self::with_tree).
     pub fn par_with_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]> + Send + Sync,
@@ -352,7 +370,7 @@ impl Columns {
         }
     }
 
-    /// Parallel version of [`Columnar::merge`](crate::msa::dataset::columnar::Columnar::merge).
+    /// Parallel version of [`Columnar::merge`](Self::merge).
     pub fn par_merge<T: Number>(
         mut self,
         s_center: usize,
@@ -391,9 +409,9 @@ impl Columns {
         Self(columns, self.1)
     }
 
-    /// Parallel version of [`Columnar::extract_msa`](crate::msa::dataset::columnar::Columnar::extract_msa).
+    /// Parallel version of [`Columnar::extract_msa_chars`](Self::extract_msa_chars).
     #[must_use]
-    pub fn par_extract_msa(&self) -> Vec<Vec<u8>> {
+    pub fn par_extract_msa_chars(&self) -> Vec<Vec<u8>> {
         if self.is_empty() {
             Vec::new()
         } else {
@@ -401,12 +419,27 @@ impl Columns {
         }
     }
 
-    /// Parallel version of [`Columnar::extract_msa_strings`](crate::msa::dataset::columnar::Columnar::extract_msa_strings).
+    /// Parallel version of [`Columnar::extract_msa_strings`](Self::extract_msa_strings).
     ///
     /// # Errors
     ///
-    /// See [`Columnar::extract_msa_strings`](crate::msa::dataset::columnar::Columnar::extract_msa_strings).
+    /// See [`Columnar::extract_msa_strings`](Self::extract_msa_strings).
     pub fn par_extract_msa_strings(&self) -> Result<Vec<String>, FromUtf8Error> {
-        self.extract_msa().into_par_iter().map(String::from_utf8).collect()
+        self.extract_msa_chars()
+            .into_par_iter()
+            .map(String::from_utf8)
+            .collect()
+    }
+
+    /// Parallel version of [`Columnar::to_flat_vec_strings`](Self::to_flat_vec_strings).
+    ///
+    /// # Errors
+    ///
+    /// See [`Columnar::to_flat_vec_strings`](Self::to_flat_vec_strings).
+    pub fn par_to_flat_vec_strings(&self) -> Result<FlatVec<String, usize>, FromUtf8Error> {
+        Ok(FlatVec::new(self.par_extract_msa_strings()?)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .with_dim_lower_bound(self.width())
+            .with_dim_upper_bound(self.width()))
     }
 }

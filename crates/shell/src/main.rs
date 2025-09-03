@@ -34,7 +34,6 @@ struct Args {
 
 fn main() -> Result<(), String> {
     let args = Args::parse();
-    println!("Args: {args:?}");
 
     let seed = args.seed;
     let inp_path = args.inp_path;
@@ -47,7 +46,7 @@ fn main() -> Result<(), String> {
                 balanced,
                 permuted,
             } => {
-                let inp_data = data::Format::read(inp_path)?;
+                let inp_data = data::read(inp_path)?;
                 commands::cakes::build_new_tree(inp_data, metric, seed, balanced, permuted, out_dir)?
             }
             commands::cakes::CakesAction::Search { .. } => {
@@ -56,7 +55,7 @@ fn main() -> Result<(), String> {
         },
         Commands::Musals { .. } => todo!("Emily"),
         Commands::Mbed { action } => {
-            let inp_data = data::Format::read(inp_path)?;
+            let inp_data = data::read(inp_path)?;
             const DIM: usize = 2; // TODO Najib: figure out how to make this dynamic
             match action {
                 commands::mbed::MbedAction::Build {

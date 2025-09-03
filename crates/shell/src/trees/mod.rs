@@ -19,6 +19,25 @@ pub enum ShellTree {
 
 impl ShellTree {
     /// Creates a new tree given a dataset and a metric.
+    ///
+    /// # Arguments
+    ///
+    /// - `inp_data`: The input data to build the tree from.
+    /// - `metric`: The distance metric to use for the tree.
+    /// - `seed`: The random seed to use.
+    /// - `balanced`: Whether to build a balanced tree.
+    /// - `permuted`: Whether to apply depth-first-reordering to the data.
+    ///
+    /// # Returns
+    ///
+    /// A new tree and the transformed data.
+    ///
+    /// # Errors
+    ///
+    /// - If the dataset and metric are incompatible. The valid combinations
+    ///   are:
+    ///   - String data with Levenshtein metric.
+    ///   - Float or Integer data with Euclidean or Cosine metrics.
     pub fn new(
         inp_data: ShellFlatVec,
         metric: &ShellMetric,
