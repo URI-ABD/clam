@@ -117,6 +117,7 @@ impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for GraphAlgorithm {
 /// A trait for how a `Graph` should be evaluated into anomaly scores.
 pub trait GraphEvaluator<T: Number, S: Cluster<T>> {
     /// Get the name of the algorithm.
+    #[allow(dead_code)]
     fn name(&self) -> &str;
 
     /// Evaluate the algorithm on a `Graph` and return a vector of scores for each

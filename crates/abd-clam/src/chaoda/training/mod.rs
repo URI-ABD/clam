@@ -386,13 +386,13 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     /// - `D`: The type of the datasets.
     /// - `S`: The type of the `Cluster` that were used to create the `Vertex` trees.
     pub fn train<const N: usize, D: Dataset<I>, S: Cluster<T>>(
-        &mut self,
+        &'_ mut self,
         datasets: &[D; N],
         trees: &[[Vertex<T, S>; M]; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         num_epochs: usize,
-    ) -> Result<Chaoda<I, T, M>, String> {
+    ) -> Result<Chaoda<'_, I, T, M>, String> {
         if min_depth == 0 {
             return Err("Minimum depth must be greater than 0.".to_string());
         }
@@ -690,13 +690,13 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
     ///
     /// See [`ChaodaTrainer::train`](crate::chaoda::training::ChaodaTrainer::train).
     pub fn par_train<const N: usize, D: ParDataset<I>, S: ParCluster<T>>(
-        &mut self,
+        &'_ mut self,
         datasets: &[D; N],
         trees: &[[Vertex<T, S>; M]; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         num_epochs: usize,
-    ) -> Result<Chaoda<I, T, M>, String> {
+    ) -> Result<Chaoda<'_, I, T, M>, String> {
         if min_depth == 0 {
             return Err("Minimum depth must be greater than 0.".to_string());
         }

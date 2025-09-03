@@ -133,9 +133,9 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
         while !stride_leaves.is_empty() {
             target_depth += depth_stride;
             let stride_criteria = |c: &Self| c.depth() < target_depth && criteria(c);
-            stride_leaves
-                .into_iter()
-                .for_each(|c| c.partition(data, metric, &stride_criteria, seed));
+            for c in stride_leaves {
+                c.partition(data, metric, &stride_criteria, seed);
+            }
             stride_leaves = root
                 .leaves_mut()
                 .into_iter()
