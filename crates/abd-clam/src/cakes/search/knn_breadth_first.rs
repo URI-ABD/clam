@@ -84,7 +84,9 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
                             c.indices().into_iter().for_each(|i| hits.push((d, i)));
                         } else {
                             let distances = data.par_query_to_all(metric, query, c).collect::<Vec<_>>();
-                            distances.into_iter().for_each(|(i, d)| hits.push((d, i)));
+                            for (i, d) in distances {
+                                hits.push((d, i));
+                            }
                         }
                     } else {
                         let distances = c

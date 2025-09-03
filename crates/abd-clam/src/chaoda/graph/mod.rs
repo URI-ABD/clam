@@ -172,7 +172,7 @@ impl<'a, T: Number, S: Cluster<T>> Graph<'a, T, S> {
     }
 
     /// Iterate over the `Component`s in the `Graph`.
-    pub fn iter_components(&self) -> impl Iterator<Item = &Component<T, S>> {
+    pub fn iter_components(&'_ self) -> impl Iterator<Item = &Component<'_, T, S>> {
         self.components.iter()
     }
 
