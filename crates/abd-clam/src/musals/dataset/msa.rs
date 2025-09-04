@@ -17,6 +17,31 @@ use crate::{
 use super::super::{Aligner, NUM_CHARS};
 
 /// A `Dataset` containing a multiple sequence alignment (MSA).
+///
+/// # Examples
+///
+/// ```no-run
+/// // Create a cost matrix and an aligner
+/// let cost_matrix = CostMatrix::extended_iupac();
+/// let aligner = ???;
+///
+/// // Read a dataset
+/// let data = ???; // FlatVec<String, String>
+///
+/// let metric = Levenshtein;
+/// let criteria = |b: &_| true;
+/// let seed = 42;
+///
+/// let msa = MSA::from_unaligned(&aligner, data, &metric, &criteria, Some(seed));
+/// let aligned_sequences = msa.extract_sequences()?;
+///
+/// let out_path = ???;
+/// let mut file = std::fs::File::create(out_path).unwrap();
+/// for seq in aligned_sequences {
+///   writeln!(file, "{seq}"));
+/// }
+/// // Alternatively, use the `bio` crate to write a FASTA file.
+/// ```
 #[derive(Clone)]
 #[cfg_attr(
     feature = "disk-io",
@@ -99,6 +124,21 @@ impl<T: Number, Me: Clone + Send + Sync> MSA<String, T, Me> {
 }
 
 impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
+    /// Extracts the aligned sequences from the MSA as a `Vec<String>`.
+    ///
+    /// # Errors
+    ///
+    /// - If any of the characters in the MSA are not `utf-8` compatible.
+    pub fn extract_sequences(&self) -> Result<Vec<String>, String> {
+        self.data
+            .items()
+            .iter()
+            .map(|s| s.as_ref().to_vec())
+            .map(String::from_utf8)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to convert sequence to String: {e}"))
+    }
+
     /// Creates the MSA object from an aligned dataset.
     ///
     /// # Arguments
