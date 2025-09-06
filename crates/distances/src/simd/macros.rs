@@ -169,6 +169,34 @@ macro_rules! impl_distances {
         use super::Naive;
         #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
         impl $name {
+            /// Calculate the dot product of two SIMD lane-slices
+            pub fn dot_product_inner(a: &[$ty], b: &[$ty]) -> $name {
+                let i = $name::from_slice(a);
+                let j = $name::from_slice(b);
+                i * j
+            }
+
+            /// Calculate the dot product of two slices of equal length,
+            /// using auto-vectorized SIMD primitives
+            pub fn dot_product(a: &[$ty], b: &[$ty]) -> $ty {
+                assert_eq!(a.len(), b.len());
+                if a.len() < $name::lanes() {
+                    return Naive::dot_product(a, b);
+                }
+                let mut i = 0;
+                let mut sum = $name::splat(0 as $ty);
+                while a.len() - $name::lanes() >= i {
+                    sum += $name::dot_product_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
+                    i += $name::lanes();
+                }
+
+                let mut sum = sum.horizontal_add();
+                if i < a.len() {
+                    sum += Naive::dot_product(&a[i..], &b[i..]);
+                }
+                sum
+            }
+
             /// Calculate the squared distance between two SIMD lane-slices
             pub fn euclidean_inner(a: &[$ty], b: &[$ty]) -> $name {
                 let i = $name::from_slice(a);
@@ -184,8 +212,8 @@ macro_rules! impl_distances {
                 [i * i, j * j, i * j]
             }
 
-            /// Calculate euclidean distance between two slices of equal length,
-            /// using auto-vectorized SIMD primitives
+            /// Calculate the squared euclidean distance between two slices of
+            /// equal length, using auto-vectorized SIMD primitives
             pub fn squared_euclidean(a: &[$ty], b: &[$ty]) -> $ty {
                 assert_eq!(a.len(), b.len());
                 if a.len() < $name::lanes() {
@@ -216,11 +244,7 @@ macro_rules! impl_distances {
                     return Naive::cosine_acc(a, b);
                 }
                 let mut i = 0;
-                let [mut xx, mut yy, mut xy] = [
-                    $name::splat(0 as $ty),
-                    $name::splat(0 as $ty),
-                    $name::splat(0 as $ty),
-                ];
+                let [mut xx, mut yy, mut xy] = [$name::splat(0 as $ty), $name::splat(0 as $ty), $name::splat(0 as $ty)];
                 while a.len() - $name::lanes() >= i {
                     let [xxs, yys, xys] = $name::cosine_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
                     xx += xxs;
@@ -246,11 +270,7 @@ macro_rules! impl_distances {
                     1 as $ty
                 } else {
                     let d = 1 as $ty - xy / (xx * yy).sqrt();
-                    if d < eps {
-                        0 as $ty
-                    } else {
-                        d
-                    }
+                    if d < eps { 0 as $ty } else { d }
                 }
             }
         }
@@ -279,11 +299,9 @@ macro_rules! impl_naive {
             }
 
             fn cosine_acc(self, other: Self) -> [Self::Output; 3] {
-                self.iter()
-                    .zip(other.iter())
-                    .fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
-                        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
-                    })
+                self.iter().zip(other.iter()).fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
+                    [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+                })
             }
 
             fn cosine(self, other: Self) -> Self::Output {
@@ -293,12 +311,16 @@ macro_rules! impl_naive {
                     1 as Self::Output
                 } else {
                     let d = 1 as Self::Output - xy / (xx * yy).sqrt();
-                    if d < eps {
-                        0 as Self::Output
-                    } else {
-                        d
-                    }
+                    if d < eps { 0 as Self::Output } else { d }
                 }
+            }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                let mut sum = 0 as Self::Output;
+                for i in 0..self.len() {
+                    sum += (self[i] * other[i]) as Self::Output;
+                }
+                sum
             }
         }
 
@@ -322,11 +344,9 @@ macro_rules! impl_naive {
             }
 
             fn cosine_acc(self, other: Self) -> [Self::Output; 3] {
-                self.iter()
-                    .zip(other.iter())
-                    .fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
-                        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
-                    })
+                self.iter().zip(other.iter()).fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
+                    [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+                })
             }
 
             fn cosine(self, other: Self) -> Self::Output {
@@ -336,12 +356,16 @@ macro_rules! impl_naive {
                     1 as Self::Output
                 } else {
                     let d = 1 as Self::Output - xy / (xx * yy).sqrt();
-                    if d < eps {
-                        0 as Self::Output
-                    } else {
-                        d
-                    }
+                    if d < eps { 0 as Self::Output } else { d }
                 }
+            }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                let mut sum = 0 as Self::Output;
+                for i in 0..self.len() {
+                    sum += (self[i] * other[i]) as Self::Output;
+                }
+                sum
             }
         }
     };

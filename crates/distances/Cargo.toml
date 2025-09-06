@@ -6,10 +6,11 @@ authors = [
     "Noah Daniels <noah_daniels@uri.edu>",
     "Tom Howard <info@tomhoward.codes>",
 ]
-edition = "2021"
 description = "Fast and generic distance functions for high-dimensional data."
-license = "MIT"
-readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme = "./README.md"
 
 # Publishing lock.
 # When you're ready to start publishing, set publish to true
@@ -21,23 +22,16 @@ workspace = true
 
 [dependencies]
 rand = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 libm = { workspace = true }
 num-integer = { workspace = true }
+rust-blas = { workspace = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
-criterion = { version = "0.5.1", features = ["html_reports"] }
-test-case = "3.2.1"
-stringzilla = "3.9.3"
-
-[[bench]]
-name = "inv-sqrt"
-harness = false
-
-[[bench]]
-name = "big-vectors"
-harness = false
+criterion = { workspace = true, features = ["html_reports"] }
+test-case = { workspace = true }
+stringzilla = { workspace = true, features = ["cpus"] }
 
 [[bench]]
 name = "big-lp"
@@ -48,7 +42,19 @@ name = "big-strings"
 harness = false
 
 [[bench]]
+name = "big-vectors"
+harness = false
+
+[[bench]]
+name = "inv-sqrt"
+harness = false
+
+[[bench]]
 name = "needleman-wunsch"
+harness = false
+
+[[bench]]
+name = "simd-cosine"
 harness = false
 
 [[bench]]

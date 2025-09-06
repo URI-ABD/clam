@@ -9,8 +9,8 @@ use crate::number::UInt;
 use super::Penalties;
 
 pub use helpers::{
-    aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, compute_edits, compute_table, trace_back_iterative,
-    trace_back_recursive, unaligned_x_to_y, x2y_helper, x_to_y_alignment, Edit,
+    Edit, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, compute_edits, compute_table, trace_back_iterative, trace_back_recursive, unaligned_x_to_y,
+    x_to_y_alignment, x2y_helper,
 };
 
 /// Use a custom set of penalties to create a function to that calculates the
@@ -63,10 +63,7 @@ pub fn edits_recursive_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str,
         let table = compute_table(x, y, penalties);
         let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
         (
-            [
-                unaligned_x_to_y(&aligned_x, &aligned_y),
-                unaligned_x_to_y(&aligned_y, &aligned_x),
-            ],
+            [unaligned_x_to_y(&aligned_x, &aligned_y), unaligned_x_to_y(&aligned_y, &aligned_x)],
             table[y.len()][x.len()].0,
         )
     }
@@ -94,10 +91,7 @@ pub fn edits_recursive<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
     let table = compute_table(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_recursive(&table, [x, y]);
     (
-        [
-            unaligned_x_to_y(&aligned_x, &aligned_y),
-            unaligned_x_to_y(&aligned_y, &aligned_x),
-        ],
+        [unaligned_x_to_y(&aligned_x, &aligned_y), unaligned_x_to_y(&aligned_y, &aligned_x)],
         table[y.len()][x.len()].0,
     )
 }
@@ -118,10 +112,7 @@ pub fn edits_iterative_custom<U: UInt>(penalties: Penalties<U>) -> impl Fn(&str,
         let table = compute_table(x, y, penalties);
         let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
         (
-            [
-                unaligned_x_to_y(&aligned_x, &aligned_y),
-                unaligned_x_to_y(&aligned_y, &aligned_x),
-            ],
+            [unaligned_x_to_y(&aligned_x, &aligned_y), unaligned_x_to_y(&aligned_y, &aligned_x)],
             table[y.len()][x.len()].0,
         )
     }
@@ -149,10 +140,7 @@ pub fn edits_iterative<U: UInt>(x: &str, y: &str) -> ([Vec<Edit>; 2], U) {
     let table = compute_table(x, y, Penalties::default());
     let (aligned_x, aligned_y) = trace_back_iterative(&table, [x, y]);
     (
-        [
-            unaligned_x_to_y(&aligned_x, &aligned_y),
-            unaligned_x_to_y(&aligned_y, &aligned_x),
-        ],
+        [unaligned_x_to_y(&aligned_x, &aligned_y), unaligned_x_to_y(&aligned_y, &aligned_x)],
         table[y.len()][x.len()].0,
     )
 }

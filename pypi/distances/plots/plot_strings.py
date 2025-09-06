@@ -13,7 +13,7 @@ from . import utils
 
 Functions = tuple[
     typing.Callable[[str, str], int],
-    tuple[typing.Optional[str], typing.Optional[typing.Callable[[str, str], int]]],
+    tuple[str | None, typing.Callable[[str, str], int] | None],
 ]
 
 FUNCTIONS: dict[str, Functions] = {

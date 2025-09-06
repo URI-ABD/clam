@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    number::{Float, Int},
     Number,
+    number::{Float, Int},
 };
 
 /// Jaccard distance.
@@ -175,10 +175,7 @@ pub fn hausdorff_one_way<T, U: Number>(a: &[T], b: &[T], ground_dist: fn(&T, &T)
     // supremum loop: iterate through all elements of `a`
     for x in a {
         // Get the minimum ground-distance from `x` to all elements of `b`
-        let shortest = b
-            .iter()
-            .map(|y| ground_dist(x, y))
-            .fold(U::ZERO, |acc, current| current.min(acc));
+        let shortest = b.iter().map(|y| ground_dist(x, y)).fold(U::ZERO, |acc, current| current.min(acc));
 
         // Update the supremum if needed
         supremum = supremum.max(shortest);

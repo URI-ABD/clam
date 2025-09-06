@@ -12,28 +12,13 @@ impl F32x16 {
     pub fn from_slice(slice: &[f32]) -> Self {
         debug_assert!(slice.len() >= Self::lanes());
         Self(
-            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7], slice[8], slice[9],
-            slice[10], slice[11], slice[12], slice[13], slice[14], slice[15],
+            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7], slice[8], slice[9], slice[10], slice[11], slice[12], slice[13],
+            slice[14], slice[15],
         )
     }
 
     pub fn horizontal_add(self) -> f32 {
-        self.0
-            + self.1
-            + self.2
-            + self.3
-            + self.4
-            + self.5
-            + self.6
-            + self.7
-            + self.8
-            + self.9
-            + self.10
-            + self.11
-            + self.12
-            + self.13
-            + self.14
-            + self.15
+        self.0 + self.1 + self.2 + self.3 + self.4 + self.5 + self.6 + self.7 + self.8 + self.9 + self.10 + self.11 + self.12 + self.13 + self.14 + self.15
     }
 }
 

@@ -1,0 +1,35 @@
+name: Lint and Test
+
+on: push
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install BLAS and LAPACK
+        run: sudo apt-get install -y libopenblas-dev
+      - name: Install Rust
+        run: rustup update --no-self-update
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Run linters
+        uses: pre-commit/action@v3.0.1
+      - name: Run Rust tests
+        run: |
+          cargo test --release --all-features
+      - name: Run Python tests
+        run: |
+          uv venv venv
+          source venv/bin/activate
+          uv sync --all-packages --active
+          uv run --active pytest

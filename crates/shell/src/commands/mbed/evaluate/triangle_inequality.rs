@@ -1,18 +1,20 @@
 //! Measure the distortion of a number of triangle inequalities.
 
-use abd_clam::{Dataset, FlatVec, metric::ParMetric};
+use abd_clam::{DistanceValue, ParDataset};
 use rand::prelude::*;
 
 /// Measure the distortion of a number of triangle inequalities.
-pub fn measure<I, M, const DIM: usize>(
-    original_data: &FlatVec<I, usize>,
+pub fn measure<I, T, M, D, const DIM: usize>(
+    original_data: &D,
     metric: &M,
-    reduced_data: &FlatVec<[f32; DIM], usize>,
+    reduced_data: &[[f32; DIM]],
     exhaustive: bool,
 ) -> f32
 where
     I: Send + Sync,
-    M: ParMetric<I, f32>,
+    T: DistanceValue + Send + Sync,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
 {
     let indices = if exhaustive {
         (0..original_data.cardinality()).collect::<Vec<_>>()
@@ -27,15 +29,17 @@ where
 
 /// Measure the quality using a subsample of the data.
 #[allow(unused_variables)]
-fn measure_subsample<I, M, const DIM: usize>(
-    original_data: &FlatVec<I, usize>,
+fn measure_subsample<I, T, M, D, const DIM: usize>(
+    original_data: &D,
     metric: &M,
-    reduced_data: &FlatVec<[f32; DIM], usize>,
+    reduced_data: &[[f32; DIM]],
     indices: &[usize],
 ) -> f32
 where
     I: Send + Sync,
-    M: ParMetric<I, f32>,
+    T: DistanceValue + Send + Sync,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
 {
     todo!()
 }

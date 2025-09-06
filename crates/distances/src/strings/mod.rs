@@ -4,10 +4,7 @@ pub mod needleman_wunsch;
 
 use crate::number::UInt;
 
-pub use needleman_wunsch::{
-    aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y, x2y_helper, x_to_y_alignment,
-    Edit,
-};
+pub use needleman_wunsch::{Edit, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, nw_distance, unaligned_x_to_y, x_to_y_alignment, x2y_helper};
 
 /// Penalties to use in the Needleman-Wunsch distance calculation.
 ///
@@ -169,11 +166,7 @@ fn lev_helper<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> U {
                     // insertion
                     cur[j] + penalties.gap,
                     // match or substitution
-                    pre + if c_x == c_y {
-                        penalties.match_
-                    } else {
-                        penalties.mismatch
-                    },
+                    pre + if c_x == c_y { penalties.match_ } else { penalties.mismatch },
                 ),
             );
             pre = tmp;

@@ -9,37 +9,13 @@ This means that the API is not yet stable and breaking changes may occur frequen
 
 This repository is a workspace that contains the following crates:
 
-- `abd-clam`: The main CLAM library. See [here](crates/abd-clam/README.md) for more information.
-- `distances`: Provides various distance functions and the `Number` trait. See [here](crates/distances/README.md) for more information.
-- `clam-mbed`: A CLI for running the dimensionality reduction algorithms. See [here](tools/mbed/README.md) for more information.
-- `shell`: The CLI for interacting with the CLAM library. See [here](crates/shell/README.md) for more information.
+- [`abd-clam`](crates/abd-clam/README.md): The main CLAM library.
+- [`distances`](crates/distances/README.md): Provides various distance functions and the `Number` trait.
+- [`shell`](crates/shell/README.md): The CLI for interacting with the CLAM library.
 
 and the following Python packages:
 
-- `abd-distances`: A Python wrapper for the `distances` crate, providing drop-in replacements for distance function `scipy.spatial.distance`. See [here](python/distances/README.md) for more information.
-
-## Reproducing Results from Papers
-
-This repository contains CLI tools to reproduce results from some of our papers.
-
-### CAKES
-
-This paper is currently under review at SIMODS.
-See [here](benches/cakes/README.md) for running Rust code to reproduce the results for the CAKES algorithms, and [here](benches/py-cakes/README.md) for running some Python code to generate plots from the results of running the Rust code.
-
-### CHAODA
-
-TODO ...
-
-### PANCAKES
-
-This paper was published at IEEE BigData 2024.
-See [here](benches/pancakes/README.md) for running Rust code to reproduce the results for the PANCAKES algorithms.
-
-### MUSALS
-
-This paper is a work in progress.
-See [here](benches/musals/README.md) for running Rust code to reproduce the results for the MUSALS algorithms.
+- [`abd-distances`](python/distances/README.md): A Python wrapper for the `distances` crate, providing drop-in replacements for `scipy.spatial.distance`.
 
 ## Publications
 

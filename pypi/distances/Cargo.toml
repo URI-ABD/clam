@@ -1,7 +1,9 @@
 [package]
 name = "abd-distances"
 version = "1.0.4"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 [lints]
 workspace = true
@@ -13,6 +15,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 distances = { workspace = true }
-ndarray = { workspace = true }
+ndarray = { workspace = true, features = ["rayon"] }
 numpy = { workspace = true }
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, features = ["abi3"] }

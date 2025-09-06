@@ -1,10 +1,10 @@
 //! SIMD accelerated distance functions for vectors.
 
-use distances::{simd, Number};
+use distances::{Number, simd};
 use numpy::{PyArray1, PyArray2};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
-use crate::utils::{cdist_generic, pdist_generic, Scalar, Vector1, Vector2};
+use crate::utils::{Scalar, Vector1, Vector2, cdist_generic, pdist_generic};
 
 /// Register the SIMD distance functions in a Python module.
 pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -156,55 +156,22 @@ fn cdist<'py>(py: Python<'py>, a: Vector2, b: Vector2, metric: &str) -> PyResult
             let metric = parse_metric_f64(metric)?;
             Ok(cdist_generic(py, a.as_array(), b.as_array(), metric))
         }
-        (Vector2::U8(_), Vector2::U8(_)) => {
+        (Vector2::U8(_), Vector2::U8(_))
+        | (Vector2::I8(_), Vector2::I8(_))
+        | (Vector2::U16(_), Vector2::U16(_))
+        | (Vector2::I16(_), Vector2::I16(_))
+        | (Vector2::U32(_), Vector2::U32(_))
+        | (Vector2::I32(_), Vector2::I32(_)) => {
             let a = a.cast::<f32>();
             let b = b.cast::<f32>();
             let metric = parse_metric_f32(metric)?;
             let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
             Ok(cdist_generic(py, a.view(), b.view(), metric))
         }
-        (Vector2::U16(_), Vector2::U16(_)) => {
-            let a = a.cast::<f32>();
-            let b = b.cast::<f32>();
-            let metric = parse_metric_f32(metric)?;
-            let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::U32(_), Vector2::U32(_)) => {
-            let a = a.cast::<f32>();
-            let b = b.cast::<f32>();
-            let metric = parse_metric_f32(metric)?;
-            let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::U64(_), Vector2::U64(_)) => {
-            let a = a.cast::<f64>();
-            let b = b.cast::<f64>();
-            let metric = parse_metric_f64(metric)?;
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::I8(_), Vector2::I8(_)) => {
-            let a = a.cast::<f32>();
-            let b = b.cast::<f32>();
-            let metric = parse_metric_f32(metric)?;
-            let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::I16(_), Vector2::I16(_)) => {
-            let a = a.cast::<f32>();
-            let b = b.cast::<f32>();
-            let metric = parse_metric_f32(metric)?;
-            let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::I32(_), Vector2::I32(_)) => {
-            let a = a.cast::<f32>();
-            let b = b.cast::<f32>();
-            let metric = parse_metric_f32(metric)?;
-            let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::I64(_), Vector2::I64(_)) => {
+        (Vector2::U64(_), Vector2::U64(_))
+        | (Vector2::I64(_), Vector2::I64(_))
+        | (Vector2::U64(_) | Vector2::I64(_), _)
+        | (_, Vector2::U64(_) | Vector2::I64(_)) => {
             let a = a.cast::<f64>();
             let b = b.cast::<f64>();
             let metric = parse_metric_f64(metric)?;
@@ -220,12 +187,6 @@ fn cdist<'py>(py: Python<'py>, a: Vector2, b: Vector2, metric: &str) -> PyResult
         (_, Vector2::F64(b)) => {
             let a = a.cast::<f64>();
             let b = b.as_array();
-            let metric = parse_metric_f64(metric)?;
-            Ok(cdist_generic(py, a.view(), b.view(), metric))
-        }
-        (Vector2::U64(_) | Vector2::I64(_), _) | (_, Vector2::U64(_) | Vector2::I64(_)) => {
-            let a = a.cast::<f64>();
-            let b = b.cast::<f64>();
             let metric = parse_metric_f64(metric)?;
             Ok(cdist_generic(py, a.view(), b.view(), metric))
         }
@@ -271,7 +232,7 @@ fn pdist<'py>(py: Python<'py>, a: Vector2, metric: &str) -> PyResult<Bound<'py, 
             let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
             Ok(pdist_generic(py, a.view(), metric))
         }
-        Vector2::U64(_) => {
+        Vector2::U64(_) | Vector2::I64(_) => {
             let a = a.cast::<f64>();
             let metric = parse_metric_f64(metric)?;
             Ok(pdist_generic(py, a.view(), metric))
@@ -292,11 +253,6 @@ fn pdist<'py>(py: Python<'py>, a: Vector2, metric: &str) -> PyResult<Bound<'py, 
             let a = a.cast::<f32>();
             let metric = parse_metric_f32(metric)?;
             let metric = |a: &[f32], b: &[f32]| metric(a, b).as_f64();
-            Ok(pdist_generic(py, a.view(), metric))
-        }
-        Vector2::I64(_) => {
-            let a = a.cast::<f64>();
-            let metric = parse_metric_f64(metric)?;
             Ok(pdist_generic(py, a.view(), metric))
         }
     }

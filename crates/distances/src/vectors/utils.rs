@@ -16,3 +16,8 @@ pub fn abs_diff_iter<'a, T: Number>(x: &'a [T], y: &'a [T]) -> impl Iterator<Ite
 // pub fn diff_iter<'a, T: Number>(x: &'a [T], y: &'a [T]) -> impl Iterator<Item = T> + 'a {
 //     x.iter().zip(y.iter()).map(|(&a, &b)| a - b)
 // }
+
+/// Computes the dot product of two vectors.
+pub fn dot_product<T: Number>(x: &[T], y: &[T]) -> T {
+    x.iter().zip(y.iter()).fold(T::ZERO, |xy, (&a, &b)| a.mul_add(b, xy))
+}

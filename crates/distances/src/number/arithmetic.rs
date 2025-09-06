@@ -7,9 +7,7 @@ use core::{
 
 /// The `Addition` trait provides the additive identity and operations for a
 /// `Number` type.
-pub trait Addition:
-    Copy + PartialOrd + Add<Output = Self> + AddAssign<Self> + Sum<Self> + Sub<Self, Output = Self> + SubAssign<Self>
-{
+pub trait Addition: Copy + PartialOrd + Add<Output = Self> + AddAssign<Self> + Sum<Self> + Sub<Self, Output = Self> + SubAssign<Self> {
     /// The additive identity.
     const ZERO: Self;
 
@@ -22,21 +20,13 @@ pub trait Addition:
     /// Returns the absolute value of `self`.
     #[must_use]
     fn abs(self) -> Self {
-        if self < Self::ZERO {
-            self.neg()
-        } else {
-            self
-        }
+        if self < Self::ZERO { self.neg() } else { self }
     }
 
     /// Returns the absolute difference between `self` and `other`.
     #[must_use]
     fn abs_diff(self, other: Self) -> Self {
-        if self < other {
-            other - self
-        } else {
-            self - other
-        }
+        if self < other { other - self } else { self - other }
     }
 }
 
@@ -64,13 +54,7 @@ impl Addition for f64 {
 /// The `Multiplication` trait provides the multiplicative identity and
 /// operations for a `Number` type.
 pub trait Multiplication:
-    Addition
-    + Mul<Output = Self>
-    + MulAssign<Self>
-    + Div<Self, Output = Self>
-    + DivAssign<Self>
-    + Rem<Self, Output = Self>
-    + RemAssign<Self>
+    Addition + Mul<Output = Self> + MulAssign<Self> + Div<Self, Output = Self> + DivAssign<Self> + Rem<Self, Output = Self> + RemAssign<Self>
 {
     /// The multiplicative identity.
     const ONE: Self;
@@ -93,11 +77,11 @@ pub trait Multiplication:
         Self::ONE / self
     }
 
-    /// Returns `self + a * b`, potentially as a fused multiply-add operation.
+    /// Returns `self * a + b`, potentially as a fused multiply-add operation.
     #[must_use]
     fn mul_add(self, a: Self, b: Self) -> Self;
 
-    /// Replace `self` with `self + a * b`, potentially as a fused
+    /// Replace `self` with `self * a + b`, potentially as a fused
     /// multiply-add-assign operation.
     fn mul_add_assign(&mut self, a: Self, b: Self);
 

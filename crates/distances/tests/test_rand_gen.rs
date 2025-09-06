@@ -1,6 +1,6 @@
 //! Tests to generate random numbers.
 
-use distances::{number::Bool, Number};
+use distances::{Number, number::Bool};
 use test_case::test_case;
 
 #[test_case(0)]

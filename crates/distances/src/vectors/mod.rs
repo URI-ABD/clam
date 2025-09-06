@@ -9,8 +9,9 @@
 mod angular;
 mod correlations;
 mod lp_norms;
-pub(crate) mod utils;
+mod utils;
 
 pub use angular::{bray_curtis, canberra, cosine, hamming};
 pub use correlations::pearson;
 pub use lp_norms::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan, minkowski, minkowski_p};
+pub use utils::dot_product;

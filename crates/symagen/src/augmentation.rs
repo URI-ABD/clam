@@ -21,22 +21,10 @@ pub fn augment_data(data: &[Vec<f32>], multiplier: usize, error: f32) -> Vec<Vec
 
     data.par_iter()
         .flat_map(|point| {
-            let perturbations = random_data::random_tabular(
-                multiplier,
-                dimensionality,
-                1.0 - dimensional_error,
-                1.0 + dimensional_error,
-                &mut rand::rng(),
-            );
+            let perturbations = random_data::random_tabular(multiplier, dimensionality, 1.0 - dimensional_error, 1.0 + dimensional_error, &mut rand::rng());
             perturbations
                 .into_iter()
-                .map(|perturbation| {
-                    point
-                        .iter()
-                        .zip(perturbation.iter())
-                        .map(|(&x, &y)| x * y)
-                        .collect::<Vec<_>>()
-                })
+                .map(|perturbation| point.iter().zip(perturbation.iter()).map(|(&x, &y)| x * y).collect::<Vec<_>>())
                 .chain(std::iter::once(point.clone()))
                 .collect::<Vec<_>>()
         })

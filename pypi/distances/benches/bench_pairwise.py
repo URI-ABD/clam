@@ -41,7 +41,7 @@ def bench_func(
 
 __benchmarks__ = [
     (
-        partial(bench_func, partial(scipy_distance.cdist, metric=name), gen_data, gen_data),  # type: ignore
+        partial(bench_func, partial(scipy_distance.cdist, metric=name), gen_data, gen_data),
         partial(bench_func, partial(simd.cdist, metric=name), gen_data, gen_data),
         f"SIMD, cdist, {name}, {dtype}",
     )
@@ -49,8 +49,8 @@ __benchmarks__ = [
     for name in METRICS
 ] + [
     (
-        partial(bench_func, partial(scipy_distance.pdist, metric=name), gen_data, None),  # type: ignore
-        partial(bench_func, partial(simd.pdist, metric=name), gen_data, None),  # type: ignore
+        partial(bench_func, partial(scipy_distance.pdist, metric=name), gen_data, None),
+        partial(bench_func, partial(simd.pdist, metric=name), gen_data, None),
         f"SIMD, pdist, {name}, {dtype}",
     )
     for dtype, gen_data in GEN_DATA.items()

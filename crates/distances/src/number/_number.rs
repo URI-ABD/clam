@@ -3,6 +3,8 @@
 //! We calculate distances over collections of `Number`s.
 //! Distance values are also represented as `Number`s.
 
+use rand::RngExt;
+
 use core::{
     fmt::{Debug, Display},
     str::FromStr,
@@ -11,9 +13,7 @@ use core::{
 use super::{Addition, Multiplication};
 
 /// Collections of `Number`s can be used to calculate distances.
-pub trait Number:
-    Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default + FromStr
-{
+pub trait Number: Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default + FromStr {
     /// The minimum possible value.
     const MIN: Self;
 
@@ -128,21 +128,13 @@ pub trait Number:
     /// Returns the smaller of two numbers.
     #[must_use]
     fn min(self, other: Self) -> Self {
-        if self < other {
-            self
-        } else {
-            other
-        }
+        if self < other { self } else { other }
     }
 
     /// Returns the larger of two numbers.
     #[must_use]
     fn max(self, other: Self) -> Self {
-        if self > other {
-            self
-        } else {
-            other
-        }
+        if self > other { self } else { other }
     }
 }
 

@@ -14,6 +14,7 @@ repos:
           - "--autofix"
           - "--indent=2"
           - "--no-sort-keys"
+        exclude_types: [jupyter]
       - id: check-toml
       - id: check-xml
       - id: check-yaml

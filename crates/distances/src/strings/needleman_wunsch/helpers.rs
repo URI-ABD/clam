@@ -65,11 +65,7 @@ pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<
     for (i, y_c) in y.chars().enumerate() {
         for (j, x_c) in x.chars().enumerate() {
             // Check if sequences match at position `i` in `x` and `j` in `y`.
-            let mismatch_penalty = if x_c == y_c {
-                penalties.match_
-            } else {
-                penalties.mismatch
-            };
+            let mismatch_penalty = if x_c == y_c { penalties.match_ } else { penalties.mismatch };
 
             // Compute the three possible penalties and use the minimum to set
             // the value for the next entry in the table.
@@ -86,11 +82,7 @@ pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<
 
 /// Returns the minimum of two penalties, defaulting to the first input.
 fn min2<U: UInt>(a: (U, Direction), b: (U, Direction)) -> (U, Direction) {
-    if a.0 <= b.0 {
-        a
-    } else {
-        b
-    }
+    if a.0 <= b.0 { a } else { b }
 }
 
 /// Iteratively traces back through the Needleman-Wunsch table to get the alignment of two sequences.
@@ -162,12 +154,7 @@ pub fn trace_back_iterative<U: UInt>(table: &[Vec<(U, Direction)>], [x, y]: [&st
 pub fn trace_back_recursive<U: UInt>(table: &[Vec<(U, Direction)>], [x, y]: [&str; 2]) -> (String, String) {
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
 
-    trb_helper(
-        table,
-        [y.len(), x.len()],
-        [x.as_bytes(), y.as_bytes()],
-        [&mut aligned_x, &mut aligned_y],
-    );
+    trb_helper(table, [y.len(), x.len()], [x.as_bytes(), y.as_bytes()], [&mut aligned_x, &mut aligned_y]);
 
     aligned_x.reverse();
     aligned_y.reverse();
@@ -187,12 +174,7 @@ pub fn trace_back_recursive<U: UInt>(table: &[Vec<(U, Direction)>], [x, y]: [&st
 /// * `[x, y]`: The two sequences to align, passed as slices of bytes.
 /// * `[aligned_x, aligned_y]`: mutable aligned sequences that will be built
 ///   up from initially empty vectors.
-fn trb_helper<U: UInt>(
-    table: &[Vec<(U, Direction)>],
-    [mut row_i, mut col_i]: [usize; 2],
-    [x, y]: [&[u8]; 2],
-    [aligned_x, aligned_y]: [&mut Vec<u8>; 2],
-) {
+fn trb_helper<U: UInt>(table: &[Vec<(U, Direction)>], [mut row_i, mut col_i]: [usize; 2], [x, y]: [&[u8]; 2], [aligned_x, aligned_y]: [&mut Vec<u8>; 2]) {
     if row_i > 0 || col_i > 0 {
         match table[row_i][col_i].1 {
             Direction::Diagonal => {

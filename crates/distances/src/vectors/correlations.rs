@@ -1,6 +1,6 @@
 //! Provides functions for calculating correlations between vectors.
 
-use crate::{number::Float, Number};
+use crate::{Number, number::Float};
 
 /// Pearson distance.
 ///
@@ -41,19 +41,14 @@ pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     let y_mean = U::from(y_sum) / U::from(y.len());
 
     // Determine covariances and standard deviations
-    let covariance = x.iter().zip(y.iter()).fold(U::ZERO, |acc, (&xi, &yi)| {
-        acc + (U::from(xi) - x_mean) * (U::from(yi) - y_mean)
-    });
-
-    let std_dev_x = x
+    let covariance = x
         .iter()
-        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - x_mean) * (U::from(i) - x_mean))
-        .sqrt();
+        .zip(y.iter())
+        .fold(U::ZERO, |acc, (&xi, &yi)| acc + (U::from(xi) - x_mean) * (U::from(yi) - y_mean));
 
-    let std_dev_y = y
-        .iter()
-        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - y_mean) * (U::from(i) - y_mean))
-        .sqrt();
+    let std_dev_x = x.iter().fold(U::ZERO, |acc, &i| acc + (U::from(i) - x_mean) * (U::from(i) - x_mean)).sqrt();
+
+    let std_dev_y = y.iter().fold(U::ZERO, |acc, &i| acc + (U::from(i) - y_mean) * (U::from(i) - y_mean)).sqrt();
 
     // 1.0 - Pearson correlation coefficient
     U::ONE - (covariance / (std_dev_x * std_dev_y))

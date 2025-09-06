@@ -2,9 +2,9 @@
 
 use std::convert::Infallible;
 
-use distances::{vectors, Number};
-use ndarray::{parallel::prelude::*, Array1, Array2};
-use numpy::{ndarray::Axis, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+use distances::{Number, vectors};
+use ndarray::{Array1, Array2, parallel::prelude::*};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ndarray::Axis};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     prelude::*,
@@ -219,12 +219,7 @@ pub fn manhattan_generic<T: Number, U: Number>(a: &[T], b: &[T]) -> U {
 /// Computes the pairwise distances between rows of two 2D arrays using a
 /// generic metric function, returning a 2D array of distances.
 #[expect(clippy::expect_used)]
-pub fn cdist_generic<'py, T, U, F>(
-    py: Python<'py>,
-    a: ndarray::ArrayView2<T>,
-    b: ndarray::ArrayView2<T>,
-    metric: F,
-) -> Bound<'py, PyArray2<U>>
+pub fn cdist_generic<'py, T, U, F>(py: Python<'py>, a: ndarray::ArrayView2<T>, b: ndarray::ArrayView2<T>, metric: F) -> Bound<'py, PyArray2<U>>
 where
     T: Number + numpy::Element,
     U: Number + numpy::Element,

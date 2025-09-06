@@ -13,52 +13,39 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 
 This crate provides the following features:
 
-- `disk-io`: Enables easy IO for several structs, primarily using `bitcode` and `serde`.
-- `chaoda`: Enables anomaly detection using the CHAODA.
-- `musals`: Enables multiple sequence alignment.
-- `mbed`: Enables dimensionality reduction algorithms.
-- `all`: Enables all features.
+- `serde`: Enables serialization and deserialization using `serde` and `databuf`.
+- `musals`: Enables multiple sequence alignment using the `musals` module.
+- `all`: Enables `serde` and `musals` features.
+- `profile`: Enables profiling using the `profi` crate.
 
 ### `Cakes`: Nearest Neighbor Search
 
 ```rust
 use abd_clam::{
     cakes::{self, SearchAlgorithm},
-    cluster::Partition,
-    dataset::AssociatesMetadataMut,
-    Ball, Cluster, FlatVec,
+    Ball, Cluster, Partition,
 };
 use rand::prelude::*;
 
-// Generate some random data. You can use your own data here.
-//
-// CLAM can handle arbitrarily large datasets. We use a small one here for
-// demonstration.
-//
-// We use the `symagen` crate for generating interesting datasets for examples
-// and tests.
+// Generate some random data.
 let seed = 42;
 let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1.0, 1.0);
-let rows: Vec<Vec<f32>> =
+let data: Vec<Vec<f32>> =
     symagen::random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
 
-// We will generate some random labels for each point.
-let labels: Vec<bool> = rows.iter().map(|v| v[0] > 0.0).collect();
-
 // We use the `Euclidean` metric for this example.
-let metric = abd_clam::metric::Euclidean;
-
-// We can create a `Dataset` object and assign metadata.
-let data = FlatVec::new(rows).unwrap().with_metadata(&labels).unwrap();
+fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
+    x.iter().zip(y.iter()).map(|(&a, &b)| a - b).map(|v| v * v).sum::<f32>().sqrt()
+}
 
 // We define the criteria for building the tree to partition the `Cluster`s
 // until each contains a single point.
 let criteria = |c: &Ball<_>| c.cardinality() > 1;
 
 // Now we create a tree.
-let root = Ball::new_tree(&data, &metric, &criteria, Some(seed));
+let root = Ball::new_tree(&data, &metric, &criteria);
 
 // We will use the origin as our query.
 let query = vec![0_f32; dimensionality];
@@ -83,20 +70,12 @@ let knn_results: Vec<(usize, f32)> = alg.search(&data, &metric, &root, &query);
 // The `KnnDepthFirst` algorithm searches the tree in a depth-first manner.
 let alg = cakes::KnnDepthFirst(k);
 let knn_results: Vec<(usize, f32)> = alg.search(&data, &metric, &root, &query);
-
-// We can use the results to get the labels of the points that are within the
-// radius of the query point.
-let rnn_labels: Vec<bool> = rnn_results.iter().map(|&(i, _)| labels[i]).collect();
-
-// We can use the results to get the labels of the points that are the k nearest
-// neighbors of the query point.
-let knn_labels: Vec<bool> = knn_results.iter().map(|&(i, _)| labels[i]).collect();
 ```
 
 ### `PanCakes`: Compression and Compressive Search
 
-We also support compression of certain datasets and trees to reduce memory usage.
-We can then perform compressed search on the compressed dataset without having to decompress the whole dataset.
+We also support compression of certain datasets to reduce memory usage.
+We can perform compressed search on the compressed dataset without having to decompress the whole dataset.
 
 TODO: Add example.
 
@@ -214,9 +193,17 @@ let codec_data = codec_data.transform_centers(|s| s.with_aligner(&aligner));
 let squishy_ball: SquishyBall<u16, Ball<_>> = SquishyBall::read_from(&squishy_ball_path).unwrap();
 ``` -->
 
-### Chaoda: Anomaly Detection
+### `Musals`: Multiple Sequence Alignment at Scale
 
-TODO ...
+For sequence data, we support multiple sequence alignment (MSA) creation and evaluation using the `musals` module.
+
+TODO: Add example.
+
+### `Chaoda`: Unsupervised Anomaly Detection
+
+The `chaoda` module provides unsupervised anomaly detection algorithms based on the CLAM framework.
+
+TODO: Add example.
 
 ## License
 

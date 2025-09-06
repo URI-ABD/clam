@@ -4,7 +4,7 @@ import editdistance
 from abd_distances import strings as abd_strings
 
 
-def test_hamming(strings: list[str]):
+def test_hamming(strings: list[str]) -> None:
     """Test the Hamming distance function."""
     assert abd_strings.hamming("NAJIBEATSPEPPERS", "NAJIBPEPPERSEATS") == 10
     assert abd_strings.hamming("TOMEATSWHATFOODEATS", "FOODEATSWHATTOMEATS") == 13
@@ -17,7 +17,7 @@ def test_hamming(strings: list[str]):
                 assert dist == expected, f"Expected: {expected}, got: {dist}"
 
 
-def test_levenshtein(strings: list[str]):
+def test_levenshtein(strings: list[str]) -> None:
     """Test the Levenshtein distance function."""
     assert abd_strings.levenshtein("NAJIBEATSPEPPERS", "NAJIBPEPPERSEATS") == 8
     assert abd_strings.levenshtein("TOMEATSWHATFOODEATS", "FOODEATSWHATTOMEATS") == 6
@@ -30,7 +30,7 @@ def test_levenshtein(strings: list[str]):
                 assert dist == expected, f"Expected: {expected}, got: {dist}"
 
 
-def test_needleman_wunsch(strings: list[str]):
+def test_needleman_wunsch(strings: list[str]) -> None:
     """Test the Needleman-Wunsch distance function."""
     assert abd_strings.needleman_wunsch("NAJIBEATSPEPPERS", "NAJIBPEPPERSEATS") == 8
     assert abd_strings.needleman_wunsch("TOMEATSWHATFOODEATS", "FOODEATSWHATTOMEATS") == 6

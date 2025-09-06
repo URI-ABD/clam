@@ -1,15 +1,14 @@
-target-version = "py39" # Assume Python 3.9.
-line-length = 100
+target-version = "py313" # Assume Python 3.13.
+line-length = 160
 
 [lint]
 select = [ "ALL" ]
 ignore = [
-  "PLR2004", # Use of magic value in comparison
-  "ANN401",  # Dynamically typed expressions are disallowed
-  "ICN001",  # {name} should be imported as {asname}  # I like my numpy imports
-  "COM812",
-  "ISC001",
-  "PGH003",  # Use specific rule codes when ignoring type issues
+  "G004",  # f-string used in logging function call.
+  "ICN001", # Alias `numpy` import as `np`.
+  "EM101", # string literal in exception.
+  "EM102", # f-string in exception.
+  "TRY003", # Long messages outside exception class.
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 
@@ -24,32 +23,18 @@ force-single-line = true
 convention = "google"
 
 [lint.per-file-ignores]
-"__init__.py" = ["F401"] # Unused import.
-"pypi/**/test_*.py" = [
-  "ANN001", # Missing type annotation for function argument.
-  "ANN003", # Missing type annotation for **kwargs.
-  "ANN201", # Missing return type annotation for public function.
-  "ANN205", # Missing return type annotation for staticmethod.
-  "D101",   # Missing docstring in public class.
-  "D102",   # Missing docstring in public method.
-  "D103",   # Missing docstring in public function.
-  "D100",   # Missing docstring in public module.
-  "NPY002", # Replace legacy `np.random.randn` call with `np.random.Generator`.
-  "PT009",  # Use of a regular `assert` instead of unittest-style.
-  "RET504", # Unecessary variable assignment before `return` statement.
-  "S101",   # Use of assert detected.
+"pypi/**/*.pyi" = [
+  "PYI021", # Doc-strings in stub files.
 ]
-"crates/abd_clam/**/*.py" = [
-  "ANN002",  # Missing type annotation for *args.
-  "ANN003",  # Missing type annotation for **kwargs.
-  "D100",    # Missing docstring in public module.
-  "D103",    # Missing docstring in public function.
-  "PLR0911", # Too many return statements
+"pypi/**/tests/**" = [
+  "S101", # Use of `assert`.
+  "PLR2004", # Magic number used in tests.
 ]
-"crates/abd_clam/anomaly_detection/pretrained_models.py" = [
-  "PLR5501", # Use `elif` instead of `else` then `if`.
-  "RET505",  # Unecessary `else` after `return`.
-]
-"pypi/distances/**/*.pyi" = [
-  "PYI021", # Docstrings should not be included in stubs
+"**/notebooks/*.ipynb" = [ # Ignore more lints in Jupyter notebooks.
+  "B905", # use of `zip()` without `strict=`
+  "C408", # Unnecessary `dict()` call
+  "S101", # Use of `assert`.
+  "PLR2004", # Magic number used in tests.
+  "FBT001", # boolean-typed positional argument in function definition
+  "FBT003", # boolean-typed positional value in function call
 ]

@@ -1,5 +1,7 @@
 #![allow(missing_docs)]
 
+use std::hint::black_box;
+
 use criterion::*;
 use rand::prelude::*;
 use symagen::random_data;
@@ -27,9 +29,7 @@ fn inv_sqrt_f32(c: &mut Criterion) {
         b.iter_with_large_drop(|| black_box(floats.iter().map(|&x| x.sqrt().recip()).collect::<Vec<_>>()))
     });
 
-    group.bench_function("quake_iii", |b| {
-        b.iter(|| black_box(floats.iter().map(|&x| x.inv_sqrt()).collect::<Vec<_>>()))
-    });
+    group.bench_function("quake_iii", |b| b.iter(|| black_box(floats.iter().map(|&x| x.inv_sqrt()).collect::<Vec<_>>())));
     group.finish();
 }
 
@@ -44,9 +44,7 @@ fn inv_sqrt_f64(c: &mut Criterion) {
         b.iter_with_large_drop(|| black_box(floats.iter().map(|&x| x.sqrt().recip()).collect::<Vec<_>>()))
     });
 
-    group.bench_function("quake_iii", |b| {
-        b.iter(|| black_box(floats.iter().map(|&x| x.inv_sqrt()).collect::<Vec<_>>()))
-    });
+    group.bench_function("quake_iii", |b| b.iter(|| black_box(floats.iter().map(|&x| x.inv_sqrt()).collect::<Vec<_>>())));
     group.finish();
 }
 

@@ -7,6 +7,7 @@ pub mod number;
 
 pub use number::Number;
 
+pub mod blas;
 pub mod sets;
 pub mod simd;
 pub mod strings;

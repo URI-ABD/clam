@@ -10,15 +10,19 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "numpy",
+    "numpy>=2.0",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "seaborn>=0.13.2",
     "editdistance>=0.8.1",
     "scipy>=1.15.2",
     "tqdm>=4.67.1",
+    "richbench>=1.0.3",
+    "types-seaborn>=0.13.2.20250516",
+    "types-tqdm>=4.67.0.20250516",
+    "types-editdistance>=0.8.0.20250401",
 ]
 
 [build-system]

@@ -1,5 +1,7 @@
 //! `NumBool` is a `Number` that can be used as a boolean.
 
+use rand::RngExt;
+
 use crate::Number;
 
 use super::{Addition, Multiplication};
@@ -38,11 +40,7 @@ impl Multiplication for Bool {
     }
 
     fn powi(self, _: i32) -> Self {
-        if self.0 == 0 {
-            Self(0)
-        } else {
-            Self(1)
-        }
+        if self.0 == 0 { Self(0) } else { Self(1) }
     }
 }
 
@@ -54,11 +52,7 @@ impl core::fmt::Display for Bool {
 
 impl core::iter::Sum for Bool {
     fn sum<I: Iterator<Item = Self>>(mut iter: I) -> Self {
-        if iter.any(|v| v.as_bool()) {
-            Self(1)
-        } else {
-            Self(0)
-        }
+        if iter.any(|v| v.as_bool()) { Self(1) } else { Self(0) }
     }
 }
 
@@ -148,11 +142,7 @@ impl Number for Bool {
     const NUM_BYTES: usize = 1;
 
     fn from<T: Number>(n: T) -> Self {
-        if n == T::ZERO {
-            Self::ZERO
-        } else {
-            Self::ONE
-        }
+        if n == T::ZERO { Self::ZERO } else { Self::ONE }
     }
 
     fn as_f32(self) -> f32 {

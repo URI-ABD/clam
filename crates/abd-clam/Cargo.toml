@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.32.0"
+version = "0.34.0"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -9,14 +9,14 @@ authors = [
     "Isaac Chen <ijchen@uri.edu>",
     "Oliver McLaughlin <olwmcjp@gmail.com>",
 ]
-edition = "2021"
-rust-version = "1.81"  # using: `total_cmp`
 description = "Clustering, Learning and Approximation with Manifolds"
-license = "MIT"
 readme = "./README.md"
 documentation = "https://docs.rs/abd-clam/latest/abd_clam/"
 repository = "https://github.com/URI-ABD/clam"
 homepage = "https://github.com/URI-ABD/clam"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 # Publishing lock.
 # When you're ready to start publishing, set publish to true
@@ -29,48 +29,42 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { workspace = true }
+num-traits = { workspace = true, features = ["libm"] }
 rayon = { workspace = true }
 rand = { workspace = true }
 ftlog = { workspace = true }
-
-# For:
-#  - IO from npy files
-#  - arrays in CHAODA
-ndarray = { workspace = true, optional = true }
-ndarray-npy = { workspace = true, optional = true }
-
-# For:
-#  - CHAODA
-smartcore = { version = "0.4", features = ["serde"], optional = true }
-
-# For:
-#  - MSA
-stringzilla = { workspace = true, optional = true }
+profi = { workspace = true, default-features = false, features = ["rayon"] }
+serde = { workspace = true, features = ["derive"], optional = true }
+databuf = { workspace = true, optional = true }
+num = { workspace = true, optional = true }
 bytecount = { workspace = true, optional = true }
 
 # For:
-#  - Disk I/O for most clusters and datasets
-serde = { workspace = true, optional = true }
-bitcode = { workspace = true, optional = true }
-flate2 = { workspace = true, optional = true }
-csv = { workspace = true , optional = true }
+#  - CHAODA
+# smartcore = { workspace = true, features = ["serde"], optional = true }
 
 # For:
 #  - The mass-spring-system in the dimension reduction
-slotmap = { workspace = true, optional = true }
+# slotmap = { workspace = true, optional = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
-bitcode = { workspace = true }
-tempdir = "0.3.7"
-float-cmp = "0.10.0"
-test-case = "3.2.1"
-statistical = "1.0.0"
+test-case = { workspace = true }
+criterion = { workspace = true, features = ["html_reports", "csv_output"] }
+ndarray = { workspace = true }
+ndarray-npy = { workspace = true }
+distances = { workspace = true }
+ordered-float = { workspace = true }
 
 [features]
-disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
-chaoda = ["dep:smartcore"]
-mbed = ["chaoda", "dep:slotmap"]
-musals = ["dep:stringzilla", "dep:bytecount"]
-all = ["disk-io", "chaoda", "mbed", "musals"]
+serde = ["dep:serde", "dep:databuf"]
+musals = ["dep:num", "dep:bytecount"]
+all = ["serde", "musals"]
+profile = ["profi/enable"]
+# codec = []
+# chaoda = ["dep:smartcore"]
+# mbed = ["chaoda", "dep:slotmap"]
+
+[[bench]]
+name = "cakes"
+harness = false

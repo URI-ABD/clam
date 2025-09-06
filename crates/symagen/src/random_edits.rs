@@ -1,9 +1,9 @@
 //! Generate random strings for use in benchmarks, tests, and compression experiments.
 
 use distances::{
-    number::UInt,
-    strings::{levenshtein_custom, needleman_wunsch::apply_edits, Edit, Penalties},
     Number,
+    number::UInt,
+    strings::{Edit, Penalties, levenshtein_custom, needleman_wunsch::apply_edits},
 };
 use rayon::prelude::*;
 
@@ -19,9 +19,7 @@ use rayon::prelude::*;
 /// A random string of the given length from the given alphabet.
 #[must_use]
 pub fn generate_random_string(length: usize, alphabet: &[char]) -> String {
-    (0..length)
-        .map(|_| alphabet[rand::random::<u64>().as_usize() % alphabet.len()])
-        .collect()
+    (0..length).map(|_| alphabet[rand::random::<u64>().as_usize() % alphabet.len()]).collect()
 }
 
 /// Generates (but does not apply) a random edit to a given string.
@@ -78,13 +76,7 @@ pub fn generate_random_edit(string: &str, alphabet: &[char], min_len: usize, max
 /// # Returns
 ///
 /// A randomly generated string with a distance greater than or equal to the target distance from the seed string.
-pub fn are_we_there_yet<U: UInt>(
-    seed_string: &str,
-    penalties: Penalties<U>,
-    alphabet: &[char],
-    target_distance: U,
-    len_delta: usize,
-) -> String {
+pub fn are_we_there_yet<U: UInt>(seed_string: &str, penalties: Penalties<U>, alphabet: &[char], target_distance: U, len_delta: usize) -> String {
     let mut new_string = seed_string.to_string();
     let mut distance = U::ZERO;
     let lev = levenshtein_custom(penalties);
@@ -170,15 +162,7 @@ pub fn generate_clumped_data<U: UInt>(
 
     // TODO(Morgan): change 10 to input parameter inter-clump distance
     let (min_distance, max_distance) = inter_clump_distance_range;
-    let clump_seeds = create_batch(
-        seed_string,
-        penalties,
-        min_distance,
-        max_distance,
-        alphabet,
-        num_clumps,
-        len_delta,
-    );
+    let clump_seeds = create_batch(seed_string, penalties, min_distance, max_distance, alphabet, num_clumps, len_delta);
 
     // Generate the clumps
     clump_seeds

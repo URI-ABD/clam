@@ -16,10 +16,6 @@ pub enum MbedAction {
         #[arg(short('o'), long)]
         out_dir: PathBuf,
 
-        /// Whether to build a balanced tree.
-        #[arg(short('b'), long, default_value_t = false)]
-        balanced: bool,
-
         /// The damping factor for the mass-spring system.
         #[arg(short('B'), long, default_value = "0.99")]
         beta: f64,
@@ -57,7 +53,7 @@ pub enum MbedAction {
         out_dir: PathBuf,
 
         /// The name of the quality measure to use.
-        #[arg(short('m'), long, default_value = "fnn")]
+        #[arg(short('M'), long, default_value = "fnn")]
         measure: evaluate::QualityMeasure,
 
         /// Whether to exhaustively measure the quality on all possible

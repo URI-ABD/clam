@@ -22,7 +22,7 @@ FUNCTIONS: dict[str, Functions] = {
 }
 
 
-def test_simd_f32(data_f32: numpy.ndarray):
+def test_simd_f32(data_f32: numpy.ndarray) -> None:
     """Test the SIMD-accelerated distance functions."""
     for a in data_f32:
         for b in data_f32:
@@ -31,7 +31,7 @@ def test_simd_f32(data_f32: numpy.ndarray):
                     _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-5)
 
 
-def test_simd_f64(data_f64: numpy.ndarray):
+def test_simd_f64(data_f64: numpy.ndarray) -> None:
     """Test the SIMD-accelerated distance functions."""
     for a in data_f64:
         for b in data_f64:
@@ -40,7 +40,7 @@ def test_simd_f64(data_f64: numpy.ndarray):
                     _simd_helper(a_, b_, name, simd_func, scipy_func, 1e-10)
 
 
-def test_cdist_f32(data_f32: numpy.ndarray):
+def test_cdist_f32(data_f32: numpy.ndarray) -> None:
     """Test the SIMD-accelerated distance functions."""
     for metric in METRICS:
         _cdist_helper(
@@ -52,7 +52,7 @@ def test_cdist_f32(data_f32: numpy.ndarray):
         )
 
 
-def test_cdist_f64(data_f64: numpy.ndarray):
+def test_cdist_f64(data_f64: numpy.ndarray) -> None:
     """Test the SIMD-accelerated distance functions."""
     for metric in METRICS:
         _cdist_helper(
@@ -64,7 +64,7 @@ def test_cdist_f64(data_f64: numpy.ndarray):
         )
 
 
-def test_pdist_f32(data_f32: numpy.ndarray):
+def test_pdist_f32(data_f32: numpy.ndarray) -> None:
     """Test the SIMD-accelerated distance functions."""
     for metric in METRICS:
         _pdist_helper(
@@ -75,7 +75,7 @@ def test_pdist_f32(data_f32: numpy.ndarray):
         )
 
 
-def test_pdist_f64(data_f64: numpy.ndarray):
+def test_pdist_f64(data_f64: numpy.ndarray) -> None:
     """Test the SIMD-accelerated distance functions."""
     for metric in METRICS:
         _pdist_helper(
@@ -115,7 +115,7 @@ def _cdist_helper(
     """Helper function for the SIMD-accelerated distance functions."""
     distances = simd_func(a, b, metric)
     assert distances.shape == (a.shape[0], b.shape[0])
-    expected = scipy_distance.cdist(a, b, metric)  # type: ignore
+    expected = scipy_distance.cdist(a, b, metric)
     abs_tol = abs_tol * expected if "cosine" not in metric.lower() else abs_tol
     assert numpy.allclose(
         distances,
@@ -134,7 +134,7 @@ def _pdist_helper(
     distances = simd_func(a, metric)
     num_distances = (a.shape[0] * (a.shape[0] - 1)) // 2
     assert distances.shape == (num_distances,)
-    expected = scipy_distance.pdist(a, metric)  # type: ignore
+    expected = scipy_distance.pdist(a, metric)
     abs_tol = abs_tol * expected if "cosine" not in metric.lower() else abs_tol
     assert numpy.allclose(
         distances,

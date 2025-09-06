@@ -1,15 +1,6 @@
 //! Data generation utilities for testing.
 
-use abd_clam::FlatVec;
-use distances::{number::Float, Number};
-use rand::prelude::*;
-
-pub fn gen_tiny_data() -> FlatVec<Vec<i32>, usize> {
-    let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
-    FlatVec::from_nested_vec(items).unwrap_or_else(|e| unreachable!("{e}"))
-}
-
-pub fn gen_pathological_line() -> FlatVec<f64, usize> {
+pub fn pathological_line() -> Vec<f64> {
     let min_delta = 1e-12;
     let mut delta = min_delta;
     let mut line = vec![0_f64];
@@ -21,23 +12,17 @@ pub fn gen_pathological_line() -> FlatVec<f64, usize> {
         delta += min_delta;
     }
 
-    FlatVec::new(line).unwrap_or_else(|e| unreachable!("{e}"))
+    line
 }
 
-pub fn gen_line_data(max: i32) -> FlatVec<i32, usize> {
-    let data = (-max..=max).collect::<Vec<_>>();
-    FlatVec::new(data).unwrap_or_else(|e| unreachable!("{e}"))
+pub fn line(max: i32) -> Vec<i32> {
+    (-max..=max).collect()
 }
 
-pub fn gen_grid_data(max: i32) -> FlatVec<(f32, f32), usize> {
-    let data = (-max..=max)
-        .flat_map(|x| (-max..=max).map(move |y| (x.as_f32(), y.as_f32())))
-        .collect::<Vec<_>>();
-    FlatVec::new(data).unwrap_or_else(|e| unreachable!("{e}"))
+pub fn grid(max: i32) -> Vec<(f32, f32)> {
+    (-max..=max).flat_map(|x| (-max..=max).map(move |y| (x as f32, y as f32))).collect()
 }
 
-pub fn gen_random_data<T: Float>(car: usize, dim: usize, max: T, seed: u64) -> FlatVec<Vec<T>, usize> {
-    let mut rng = StdRng::seed_from_u64(seed);
-    let data = symagen::random_data::random_tabular(car, dim, -max, max, &mut rng);
-    FlatVec::new(data).unwrap_or_else(|e| unreachable!("{e}"))
+pub fn tabular(car: usize, dim: usize, min: f32, max: f32) -> Vec<Vec<f32>> {
+    symagen::random_data::random_tabular_seedable(car, dim, min, max, 42)
 }

@@ -103,8 +103,8 @@ FUNCTION_PAIRS: dict[str, Functions] = {
         scipy_distance.braycurtis,
         utils.data_u64,
     ),  # type: ignore[attr-defined]
-    # "Hamming, i32": (vector_distances.hamming, scipy_distance.hamming, utils.data_i32),  # type: ignore[attr-defined]  # noqa: E501
-    # "Hamming, i64": (vector_distances.hamming, scipy_distance.hamming, utils.data_i64),  # type: ignore[attr-defined]  # noqa: E501
+    # "Hamming, i32": (vector_distances.hamming, scipy_distance.hamming, utils.data_i32),  # type: ignore[attr-defined]
+    # "Hamming, i64": (vector_distances.hamming, scipy_distance.hamming, utils.data_i64),  # type: ignore[attr-defined]
 }
 
 

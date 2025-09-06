@@ -1,6 +1,6 @@
 //! Provides functions for calculating Lp-norms between two vectors.
 
-use crate::{number::Float, Number};
+use crate::{Number, number::Float};
 
 use super::utils::abs_diff_iter;
 
@@ -149,13 +149,7 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// assert!((distance - (243.0_f64).sqrt().sqrt()).abs() <= f64::EPSILON);
 /// ```
 pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    abs_diff_iter(x, y)
-        .map(U::from)
-        .map(|v| v * v)
-        .map(|v| v * v)
-        .sum::<U>()
-        .sqrt()
-        .sqrt()
+    abs_diff_iter(x, y).map(U::from).map(|v| v * v).map(|v| v * v).sum::<U>().sqrt().sqrt()
 }
 
 /// Chebyshev distance between two vectors.

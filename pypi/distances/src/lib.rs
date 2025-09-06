@@ -1,7 +1,5 @@
 //! Python wrappers for distance functions implemented in Rust.
 
-#![expect(clippy::match_same_arms)]
-
 pub(crate) mod simd;
 pub(crate) mod strings;
 mod utils;

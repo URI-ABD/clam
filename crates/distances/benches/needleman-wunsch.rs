@@ -1,7 +1,9 @@
 #![allow(missing_docs)]
 
+use std::hint::black_box;
+
 use criterion::*;
-use symagen::random_data;
+use rand::prelude::*;
 
 use distances::strings::needleman_wunsch;
 
@@ -27,7 +29,8 @@ fn bench_with_edits(c: &mut Criterion) {
     group.throughput(Throughput::Elements((cardinality * cardinality) as u64));
 
     for len in [10, 25, 50, 100, 250, 500, 1000] {
-        let sequences = random_data::random_string(cardinality, len, len, alphabet[0], seed);
+        let mut rng = StdRng::seed_from_u64(seed);
+        let sequences = symagen::random_data::random_string(2, len, len, "ATCGN", &mut rng);
 
         let id = BenchmarkId::new("distance-len", len);
         group.bench_with_input(id, &len, |b, _| {
@@ -35,12 +38,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::nw_distance::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::nw_distance::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -52,12 +50,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_recursive::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_recursive::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -69,12 +62,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_iterative::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_iterative::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -82,7 +70,8 @@ fn bench_with_edits(c: &mut Criterion) {
     }
 
     for alf in alphabet {
-        let sequences = random_data::random_string(cardinality, seq_len, seq_len, alf, seed);
+        let mut rng = StdRng::seed_from_u64(seed);
+        let sequences = symagen::random_data::random_string(cardinality, seq_len, seq_len, alf, &mut rng);
 
         let id = BenchmarkId::new("distance-alf", alf.len());
         group.bench_with_input(id, &alf.len(), |b, _| {
@@ -90,12 +79,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::nw_distance::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::nw_distance::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -107,12 +91,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_recursive::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_recursive::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -124,12 +103,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_iterative::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_iterative::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })

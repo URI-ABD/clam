@@ -1,8 +1,6 @@
 #![allow(missing_docs)]
 
-use distances::strings::{
-    aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x2y_helper, x_to_y_alignment, Edit,
-};
+use distances::strings::{Edit, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, unaligned_x_to_y, x_to_y_alignment, x2y_helper};
 
 #[test]
 fn tiny_aligned() {
@@ -164,17 +162,7 @@ fn test_alignment() {
     let edits_20_20 = aligned_x_to_y(seq_1_20, seq_2_20);
     let mut deletes: Vec<usize> = vec![0, 0];
     let mut inserts: Vec<(usize, char)> = vec![(16, 'T'), (17, 'T')];
-    let mut substitutions: Vec<(usize, char)> = vec![
-        (3, 'G'),
-        (4, 'G'),
-        (5, 'A'),
-        (6, 'C'),
-        (7, 'G'),
-        (11, 'T'),
-        (12, 'G'),
-        (18, 'A'),
-        (19, 'C'),
-    ];
+    let mut substitutions: Vec<(usize, char)> = vec![(3, 'G'), (4, 'G'), (5, 'A'), (6, 'C'), (7, 'G'), (11, 'T'), (12, 'G'), (18, 'A'), (19, 'C')];
     assert_eq!(edits_20_20.len(), 13);
     for edit in edits_20_20 {
         match edit {

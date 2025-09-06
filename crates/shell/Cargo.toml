@@ -1,20 +1,23 @@
 [package]
 name = "shell"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 abd-clam = { workspace = true, features = ["all"] }
 distances = { workspace = true }
 symagen = { workspace = true }
-clap.workspace = true
-bitcode = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive"] }
+databuf = { workspace = true }
 ndarray.workspace = true
 ndarray-npy.workspace = true
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_yaml = "0.9"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 bio.workspace = true
 rand.workspace = true
 rayon.workspace = true
 ftlog.workspace = true
+stringzilla = { workspace = true, features = ["cpus"] }

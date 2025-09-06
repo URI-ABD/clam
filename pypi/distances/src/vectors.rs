@@ -1,12 +1,12 @@
 //! Distance functions for vectors.
 
-use distances::{vectors, Number};
+use distances::{Number, vectors};
 use numpy::{PyArray1, PyArray2};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
 use crate::utils::Scalar;
 
-use super::utils::{cdist_generic, chebyshev_generic, manhattan_generic, parse_metric, pdist_generic, Vector1, Vector2};
+use super::utils::{Vector1, Vector2, cdist_generic, chebyshev_generic, manhattan_generic, parse_metric, pdist_generic};
 
 /// Register the distance functions for vectors in the Python module.
 pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -145,63 +145,43 @@ fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
         // The types are different
         (Vector1::F64(a), _) => {
             let b = b.cast::<f64>();
-            let b = b
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let b = b.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F64(vectors::minkowski(p)(a.as_slice()?, b)))
         }
         (_, Vector1::F64(b)) => {
             let a = a.cast::<f64>();
-            let a = a
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let a = a.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F64(vectors::minkowski(p)(a, b.as_slice()?)))
         }
         (Vector1::U64(_) | Vector1::I64(_), _) => {
             let a = a.cast::<f64>();
-            let a = a
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let a = a.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             let b = b.cast::<f64>();
-            let b = b
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let b = b.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F64(vectors::minkowski(p)(a, b)))
         }
         (_, Vector1::U64(_) | Vector1::I64(_)) => {
             let a = a.cast::<f64>();
-            let a = a
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let a = a.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             let b = b.cast::<f64>();
-            let b = b
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let b = b.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F64(vectors::minkowski(p)(a, b)))
         }
         (Vector1::F32(a), _) => {
             let b = b.cast::<f32>();
-            let b = b
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let b = b.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F32(vectors::minkowski(p)(a.as_slice()?, b)))
         }
         (_, Vector1::F32(b)) => {
             let a = a.cast::<f32>();
-            let a = a
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let a = a.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F32(vectors::minkowski(p)(a, b.as_slice()?)))
         }
         _ => {
             let a = a.cast::<f32>();
-            let a = a
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let a = a.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             let b = b.cast::<f32>();
-            let b = b
-                .as_slice()
-                .map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
+            let b = b.as_slice().map_or_else(|| Err(PyValueError::new_err("Non-contiguous array")), Ok)?;
             Ok(Scalar::F32(vectors::minkowski(p)(a, b)))
         }
     }
@@ -211,13 +191,7 @@ fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
 #[expect(clippy::too_many_lines, clippy::needless_pass_by_value)]
 #[pyfunction]
 #[pyo3(signature = (a, b, metric, p=None))]
-fn cdist<'py>(
-    py: Python<'py>,
-    a: Vector2,
-    b: Vector2,
-    metric: &str,
-    p: Option<i32>,
-) -> PyResult<Bound<'py, PyArray2<f64>>> {
+fn cdist<'py>(py: Python<'py>, a: Vector2, b: Vector2, metric: &str, p: Option<i32>) -> PyResult<Bound<'py, PyArray2<f64>>> {
     match p {
         Some(p) => {
             if metric.to_lowercase() != "minkowski" {
@@ -359,13 +333,7 @@ fn cdist<'py>(
                 let metric = parse_metric(metric)?;
                 Ok(cdist_generic(py, a.view(), b.as_array(), metric))
             }
-            (Vector2::U64(_) | Vector2::I64(_), _) => {
-                let a = a.cast::<f64>();
-                let b = b.cast::<f64>();
-                let metric = parse_metric(metric)?;
-                Ok(cdist_generic(py, a.view(), b.view(), metric))
-            }
-            (_, Vector2::U64(_) | Vector2::I64(_)) => {
+            (Vector2::U64(_) | Vector2::I64(_), _) | (_, Vector2::U64(_) | Vector2::I64(_)) => {
                 let a = a.cast::<f64>();
                 let b = b.cast::<f64>();
                 let metric = parse_metric(metric)?;
