@@ -1,27 +1,27 @@
 //! Subgraph Cardinality algorithm.
 
-use distances::Number;
-
-use crate::{chaoda::Graph, Cluster};
+use crate::{
+    chaoda::{Graph, Vertex},
+    Cluster, DistanceValue,
+};
 
 use super::GraphEvaluator;
 
 /// `Cluster`s in subgraphs with relatively small population are more likely to
 /// be anomalous.
-#[derive(Clone)]
-#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct SubgraphCardinality;
 
-impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for SubgraphCardinality {
+impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for SubgraphCardinality {
     fn name(&self) -> &'static str {
         "sc"
     }
 
-    fn evaluate_clusters(&self, g: &Graph<T, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
         g.iter_components()
             .flat_map(|sg| {
-                let p = -sg.population().as_f32();
-                core::iter::repeat(p).take(sg.cardinality())
+                let p = -(sg.population() as f32);
+                core::iter::repeat_n(p, sg.cardinality())
             })
             .collect()
     }

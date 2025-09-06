@@ -1,7 +1,6 @@
 //! Traits for Disk IO with structs from the crate.
 
 /// Writes and reads structs to and from disk in binary.
-#[cfg(feature = "disk-io")]
 pub trait DiskIO: Sized {
     /// Convert the struct to a byte vector in binary.
     ///
@@ -40,7 +39,6 @@ pub trait DiskIO: Sized {
 }
 
 /// Parallel version of [`DiskIO`](DiskIO).
-#[cfg(feature = "disk-io")]
 pub trait ParDiskIO: DiskIO + Send + Sync {
     /// Parallel version of [`DiskIO::to_bytes`](DiskIO::to_bytes).
     ///

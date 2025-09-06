@@ -2,13 +2,8 @@
 
 use core::cmp::Reverse;
 
-use distances::Number;
-
 use crate::{
-    cakes::{dataset::HintedDataset, ParHintedDataset, RnnClustered},
-    cluster::ParCluster,
-    metric::ParMetric,
-    Cluster, Metric, SizedHeap, LFD,
+    cakes::{dataset::HintedDataset, ParHintedDataset, RnnClustered}, cluster::ParCluster, Cluster, DistanceValue, SizedHeap, LFD
 };
 
 use super::{knn_depth_first::d_min, ParSearchAlgorithm, SearchAlgorithm};
@@ -18,9 +13,9 @@ pub struct KnnHinted(pub usize);
 
 impl<I, T, C, M, D> SearchAlgorithm<I, T, C, M, D> for KnnHinted
 where
-    T: Number,
+    T: DistanceValue,
     C: Cluster<T>,
-    M: Metric<I, T>,
+    M: Fn(&I, &I) -> T,
     D: HintedDataset<I, T, C, M>,
 {
     fn name(&self) -> &'static str {
@@ -103,9 +98,9 @@ where
 impl<I, T, C, M, D> ParSearchAlgorithm<I, T, C, M, D> for KnnHinted
 where
     I: Send + Sync,
-    T: Number,
+    T: DistanceValue + Send + Sync,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
     D: ParHintedDataset<I, T, C, M>,
 {
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {

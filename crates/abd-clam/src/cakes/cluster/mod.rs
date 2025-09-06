@@ -2,4 +2,4 @@
 
 mod permuted_ball;
 
-pub use permuted_ball::{Offset, PermutedBall};
+pub use permuted_ball::PermutedBall;

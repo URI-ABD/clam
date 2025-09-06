@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::{data::ShellFlatVec, metrics::ShellMetric, trees::ShellTree};
+use crate::{data::ShellData, metrics::Metric, trees::ShellTree};
 
 /// Builds and writes the tree and data to the specified output directory.
 ///
@@ -26,14 +26,12 @@ use crate::{data::ShellFlatVec, metrics::ShellMetric, trees::ShellTree};
 /// - If the dataset and metric are deemed an incompatible combination. See
 ///   [`ShellTree::new`](crate::trees::ShellTree::new) for more details.
 pub fn build_new_tree<P: AsRef<Path>>(
-    inp_data: ShellFlatVec,
-    metric: ShellMetric,
-    seed: Option<u64>,
-    balanced: bool,
+    inp_data: ShellData,
+    metric: Metric,
     permuted: bool,
     out_dir: P,
 ) -> Result<(), String> {
-    let (ball, data) = ShellTree::new(inp_data, &metric, seed, balanced, permuted)?;
+    let (ball, data) = ShellTree::new(inp_data, &metric, permuted)?;
 
     let tree_path = out_dir.as_ref().join("tree.bin");
     ball.write_to(tree_path)?;

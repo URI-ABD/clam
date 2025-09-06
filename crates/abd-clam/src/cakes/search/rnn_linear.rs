@@ -1,21 +1,15 @@
 //! Ranged nearest neighbor search using a linear scan of the dataset.
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{
-    cakes::{ParSearchable, Searchable},
-    cluster::ParCluster,
-    metric::ParMetric,
-    Cluster, Metric,
-};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
 
 use super::{ParSearchAlgorithm, SearchAlgorithm};
 
 /// Ranged nearest neighbor search using a linear scan of the dataset.
-pub struct RnnLinear<T: Number>(pub T);
+pub struct RnnLinear<T: DistanceValue>(pub T);
 
-impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
+impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for RnnLinear<T>
 {
     fn name(&self) -> &'static str {
@@ -31,17 +25,24 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
     }
 
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
-        data.query_to_all(metric, query, root)
+        data.query_to_many(query, root.indices(), metric)
+            .into_iter()
             .filter(|&(_, d)| d <= self.0)
             .collect()
     }
 }
 
-impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
-    ParSearchAlgorithm<I, T, C, M, D> for RnnLinear<T>
+impl<
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        C: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        D: ParDataset<I>,
+    > ParSearchAlgorithm<I, T, C, M, D> for RnnLinear<T>
 {
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
-        data.par_query_to_all(metric, query, root)
+        data.par_query_to_many(query, root.indices(), metric)
+            .into_par_iter()
             .filter(|&(_, d)| d <= self.0)
             .collect()
     }

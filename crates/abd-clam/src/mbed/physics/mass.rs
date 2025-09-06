@@ -5,16 +5,15 @@
 
 use std::sync::{Arc, RwLock};
 
-use distances::{number::Float, Number};
-use rand::Rng;
+use rand::{distr::uniform::SampleUniform, Rng};
 
-use crate::{Cluster, Dataset, Metric};
+use crate::{Cluster, Dataset, DistanceValue, FloatDistanceValue};
 
 use super::Vector;
 
 /// Represents a `Mass` in the system.
 #[derive(Clone)]
-pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
+pub struct Mass<'a, T: DistanceValue, C: Cluster<T>, F: FloatDistanceValue, const DIM: usize> {
     /// Reference to the associated `Cluster`.
     cluster: &'a C,
     /// The position of the `Mass` in the system.
@@ -29,7 +28,9 @@ pub struct Mass<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Number, C: Cluster<T>, F: Float, const DIM: usize> std::fmt::Debug for Mass<'_, T, C, F, DIM> {
+impl<T: DistanceValue, C: Cluster<T>, F: FloatDistanceValue + std::fmt::Debug, const DIM: usize> std::fmt::Debug
+    for Mass<'_, T, C, F, DIM>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mass")
             .field("position", &self.position)
@@ -39,7 +40,7 @@ impl<T: Number, C: Cluster<T>, F: Float, const DIM: usize> std::fmt::Debug for M
     }
 }
 
-impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F, DIM> {
+impl<'a, T: DistanceValue, C: Cluster<T>, F: FloatDistanceValue, const DIM: usize> Mass<'a, T, C, F, DIM> {
     /// Creates a new `Mass`.
     ///
     /// # Arguments
@@ -87,16 +88,12 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     pub fn original_distance<I, D, M>(&self, other: &Self, data: &D, metric: &M) -> F
     where
         D: Dataset<I>,
-        M: Metric<I, T>,
+        M: Fn(&I, &I) -> T,
     {
         let a = self.cluster.arg_center();
         let b = other.cluster.arg_center();
 
-        (F::from(data.one_to_one(a, b, metric)) + F::ONE.double() + F::EPSILON)
-            .ln()
-            .ln()
-            .abs()
-        // F::from(data.one_to_one(a, b, metric))
+        F::from(data.one_to_one(a, b, metric)).unwrap_or_else(F::infinity)
     }
 
     /// Calculates the euclidean distance in the embedding space.
@@ -132,12 +129,12 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
 
     /// Returns the radius of the cluster represented by the `Mass`.
     pub fn radius(&self) -> F {
-        F::from(self.cluster.radius())
+        F::from(self.cluster.radius()).unwrap_or_else(F::infinity)
     }
 
     /// Returns the mass of the `Mass`, which is equal to the cardinality of the cluster.
     pub fn mass(&self) -> F {
-        F::from(self.cluster.cardinality())
+        F::from(self.cluster.cardinality()).unwrap_or_else(|| unreachable!("Cluster cardinality overflowed F"))
     }
 
     /// Adds a given vector to the force acting on the `Mass`.
@@ -171,7 +168,10 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     ///
     /// - If the `forces` lock is poisoned.
     #[allow(clippy::unwrap_used)]
-    pub fn move_mass(&mut self, drag: F, dt: F) {
+    pub fn move_mass(&mut self, drag: F, dt: F)
+    where
+        F: std::fmt::Debug,
+    {
         // Accumulate all forces acting on the mass.
         self.total_force = self.forces.write().unwrap().drain(..).sum();
 
@@ -201,7 +201,7 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     /// The kinetic energy as a floating-point value.
     pub fn kinetic_energy(&self) -> F {
         let speed_squared = self.velocity.dot(&self.velocity);
-        self.mass() * speed_squared.half()
+        self.mass() * speed_squared / (F::one() + F::one())
     }
 
     /// Returns the indices and positions of the items in the `Cluster`.
@@ -235,7 +235,10 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
     ///
     /// - If the `Mass` represents a leaf cluster.
     #[allow(clippy::panic)]
-    pub(crate) fn explode<R: Rng>(&self, rng: &mut R, drag: F, dt: F) -> [Self; 2] {
+    pub(crate) fn explode<R: Rng>(&self, rng: &mut R, drag: F, dt: F) -> [Self; 2]
+    where
+        F: SampleUniform + std::fmt::Debug,
+    {
         debug_assert!(!self.cluster.is_leaf(), "Cannot explode a leaf cluster.");
 
         // There should be exactly two children.
@@ -243,10 +246,13 @@ impl<'a, T: Number, C: Cluster<T>, F: Float, const DIM: usize> Mass<'a, T, C, F,
             let children = self.cluster.children();
             [children[0], children[1]]
         };
-        let [ma, mb] = [F::from(a.cardinality()), F::from(b.cardinality())];
+        let [ma, mb] = [
+            F::from(a.cardinality()).unwrap_or_else(|| unreachable!("Cluster cardinality overflowed F")),
+            F::from(b.cardinality()).unwrap_or_else(|| unreachable!("Cluster cardinality overflowed F")),
+        ];
 
         let v_mag = self.velocity.magnitude();
-        let va = if v_mag > F::EPSILON {
+        let va = if v_mag > F::epsilon() {
             // The first child will have a new velocity in a random direction and
             // its magnitude will be proportional to its mass.
             Vector::random_unit(rng) * (v_mag * ma / self.mass())

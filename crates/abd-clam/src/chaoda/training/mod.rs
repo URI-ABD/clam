@@ -1,19 +1,12 @@
 //! Utilities for training the Chaoda models.
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{
-    adapters::{Adapter, ParAdapter},
-    cluster::{ParCluster, ParPartition, Partition},
-    dataset::ParDataset,
-    metric::ParMetric,
-    Cluster, Dataset,
-};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset, ParPartition, Partition};
 
 use super::{
     inference::{Chaoda, TrainedCombination},
-    Graph, Vertex,
+    Graph, Metrics, OddBall, ParVertex, Vertex,
 };
 
 mod algorithms;
@@ -33,14 +26,14 @@ pub use trainable_smc::TrainableSmc;
 /// - `I`: The type of the input data.
 /// - `U`: The type of the distance values.
 /// - `M`: The number of metrics to train with.
-pub struct ChaodaTrainer<'m, I, T: Number, const M: usize> {
+pub struct ChaodaTrainer<'m, I, T: DistanceValue, const M: usize> {
     /// The distance metrics to train with.
-    metrics: [&'m dyn ParMetric<I, T>; M],
+    metrics: Metrics<'m, I, T, M>,
     /// The combinations of `MetaMLModel`s and `GraphAlgorithm`s to train with.
     combinations: [Vec<TrainableCombination>; M],
 }
 
-impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I, T, M> {
+impl<'m, I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> ChaodaTrainer<'m, I, T, M> {
     /// Create a new `ChaodaTrainer` with the given metrics and all pairs of
     /// `MetaMLModel`s and `GraphAlgorithm`s.
     ///
@@ -52,7 +45,7 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
     pub fn new_all_pairs(
-        metrics: [&'m dyn ParMetric<I, T>; M],
+        metrics: Metrics<'m, I, T, M>,
         meta_ml_models: Vec<TrainableMetaMlModel>,
         graph_algorithms: Vec<GraphAlgorithm>,
     ) -> Self {
@@ -83,7 +76,7 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     /// - `combinations`: The combinations of `MetaMLModel`s and `GraphAlgorithm`s to train with.
     #[must_use]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(metrics: [&'m dyn ParMetric<I, T>; M], combinations: Vec<TrainableCombination>) -> Self {
+    pub fn new(metrics: Metrics<'m, I, T, M>, combinations: Vec<TrainableCombination>) -> Self {
         let combinations = metrics
             .iter()
             .map(|_| combinations.clone())
@@ -111,29 +104,28 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     ///
     /// - `N`: The number of datasets to create trees for.
     /// - `D`: The type of the datasets.
-    /// - `S`: The type of the `Cluster` to use for creating the `Vertex` trees.
+    /// - `S`: The type of the `Cluster` to use for creating the `OddBall` trees.
     /// - `C`: The type of the criteria to use for creating the trees.
     pub fn create_trees<const N: usize, D: Dataset<I>, S: Partition<T>, C: Fn(&S) -> bool>(
         &self,
         datasets: &[D; N],
         criteria: &[[C; M]; N],
-        seed: Option<u64>,
-    ) -> [[Vertex<T, S>; M]; N] {
+    ) -> [[OddBall<T, S>; M]; N] {
         let mut trees = Vec::new();
         for (data, criteria) in datasets.iter().zip(criteria) {
             let mut metric_trees = Vec::new();
             for (metric, criteria) in self.metrics.iter().zip(criteria) {
-                let root = S::new_tree(data, metric, criteria, seed);
-                metric_trees.push(Vertex::adapt_tree(root, None, data, metric));
+                let root = S::new_tree(data, metric, criteria);
+                metric_trees.push(OddBall::from_cluster_tree(root));
             }
             let metric_trees = metric_trees.try_into().unwrap_or_else(|v: Vec<_>| {
-                unreachable!("Could not convert Vec<Vertex> to [Vertex; {M}]. Len was {}", v.len())
+                unreachable!("Could not convert Vec<OddBall> to [OddBall; {M}]. Len was {}", v.len())
             });
             trees.push(metric_trees);
         }
         trees.try_into().unwrap_or_else(|v: Vec<_>| {
             unreachable!(
-                "Could not convert Vec<[Vertex; {M}]> to [[Vertex; {M}]; {N}]. Len was {}",
+                "Could not convert Vec<[OddBall; {M}]> to [[OddBall; {M}]; {N}]. Len was {}",
                 v.len()
             )
         })
@@ -141,12 +133,15 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
 
     /// Create graphs for use in training the first epoch.
     #[allow(clippy::type_complexity)]
-    fn create_flat_graphs<'a, const N: usize, D: Dataset<I>, S: Cluster<T>>(
+    fn create_flat_graphs<'a, const N: usize, D: Dataset<I>, S: Cluster<T>, V: Vertex<T, S>>(
         &self,
         datasets: &[D; N],
-        trees: &'a [[Vertex<T, S>; M]; N],
+        trees: &'a [[V; M]; N],
         depths: &[usize],
-    ) -> [[Vec<Graph<'a, T, S>>; M]; N] {
+    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    where
+        T: 'a,
+    {
         let mut graphs_vmn = Vec::new();
         ftlog::info!("Creating flat graphs...");
 
@@ -169,7 +164,7 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
                         j + 1,
                         depths.len()
                     );
-                    let cluster_scorer = |clusters: &[&Vertex<T, S>]| {
+                    let cluster_scorer = |clusters: &[&V]| {
                         clusters
                             .iter()
                             .map(|c| {
@@ -234,13 +229,16 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     /// combination of `Dataset`, `Metric`, and pair of `MetaMLModel` and
     /// `GraphAlgorithm`.
     #[allow(clippy::type_complexity)]
-    fn create_graphs<'a, const N: usize, D: Dataset<I>, S: Cluster<T>>(
+    fn create_graphs<'a, const N: usize, D: Dataset<I>, S: Cluster<T>, V: Vertex<T, S>>(
         &self,
         datasets: &[D; N],
-        trees: &'a [[Vertex<T, S>; M]; N],
+        trees: &'a [[V; M]; N],
         trained_models: &[Vec<TrainedCombination>; M],
         min_depth: usize,
-    ) -> [[Vec<Graph<'a, T, S>>; M]; N] {
+    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    where
+        T: 'a,
+    {
         let mut graphs_vmn = Vec::new();
         ftlog::info!("Creating graphs...");
 
@@ -315,9 +313,9 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     ///
     /// The trained combinations and the mean roc-auc score.
     #[allow(clippy::type_complexity)]
-    fn train_epoch<const N: usize, S: Cluster<T>>(
+    fn train_epoch<const N: usize, S: Cluster<T>, V: Vertex<T, S>>(
         &mut self,
-        graphs: &[[Vec<Graph<T, S>>; M]; N],
+        graphs: &[[Vec<Graph<T, S, V>>; M]; N],
         labels: &[Vec<bool>; N],
     ) -> Result<([Vec<TrainedCombination>; M], f32), String> {
         let mut x = Vec::new();
@@ -343,7 +341,7 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
             let mut combinations_v = Vec::new();
             for combination in combinations {
                 combination.append_data(&x, &y, Some(roc_score))?;
-                let trained_combination = combination.train_step()?;
+                let trained_combination = combination.train_step::<T, S, V>()?;
                 combinations_v.push(trained_combination);
             }
             combinations_vm.push(combinations_v);
@@ -384,11 +382,11 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     ///
     /// - `N`: The number of datasets to train with.
     /// - `D`: The type of the datasets.
-    /// - `S`: The type of the `Cluster` that were used to create the `Vertex` trees.
-    pub fn train<const N: usize, D: Dataset<I>, S: Cluster<T>>(
+    /// - `S`: The type of the `Cluster` that were used to create the `OddBall` trees.
+    pub fn train<const N: usize, D: Dataset<I>, S: Cluster<T>, V: Vertex<T, S>>(
         &'_ mut self,
         datasets: &[D; N],
-        trees: &[[Vertex<T, S>; M]; N],
+        trees: &[[V; M]; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         num_epochs: usize,
@@ -433,29 +431,28 @@ impl<'m, I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'m, I,
     }
 }
 
-impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, M> {
+impl<I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> ChaodaTrainer<'_, I, T, M> {
     /// Parallel version of [`ChaodaTrainer::create_trees`](crate::chaoda::training::ChaodaTrainer::create_trees).
     pub fn par_create_trees<const N: usize, D: ParDataset<I>, S: ParPartition<T>, C: (Fn(&S) -> bool) + Send + Sync>(
         &self,
         datasets: &[D; N],
         criteria: &[[C; M]; N],
-        seed: Option<u64>,
-    ) -> [[Vertex<T, S>; M]; N] {
+    ) -> [[OddBall<T, S>; M]; N] {
         let mut trees = Vec::new();
         for (data, criteria) in datasets.iter().zip(criteria) {
             let mut metric_trees = Vec::new();
             for (metric, criteria) in self.metrics.iter().zip(criteria) {
-                let root = S::par_new_tree(data, metric, criteria, seed);
-                metric_trees.push(Vertex::par_adapt_tree(root, None, data, metric));
+                let root = S::par_new_tree(data, metric, criteria);
+                metric_trees.push(OddBall::from_cluster_tree(root));
             }
             let metric_trees = metric_trees.try_into().unwrap_or_else(|v: Vec<_>| {
-                unreachable!("Could not convert Vec<Vertex> to [Vertex; {M}]. Len was {}", v.len())
+                unreachable!("Could not convert Vec<OddBall> to [OddBall; {M}]. Len was {}", v.len())
             });
             trees.push(metric_trees);
         }
         trees.try_into().unwrap_or_else(|v: Vec<_>| {
             unreachable!(
-                "Could not convert Vec<[Vertex; {M}]> to [[Vertex; {M}]; {N}]. Len was {}",
+                "Could not convert Vec<[OddBall; {M}]> to [[OddBall; {M}]; {N}]. Len was {}",
                 v.len()
             )
         })
@@ -463,12 +460,15 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
 
     /// Parallel version of [`ChaodaTrainer::create_flat_graphs`](crate::chaoda::training::ChaodaTrainer::create_flat_graphs).
     #[allow(clippy::type_complexity)]
-    fn par_create_flat_graphs<'a, const N: usize, D: ParDataset<I>, S: ParCluster<T>>(
+    fn par_create_flat_graphs<'a, const N: usize, D: ParDataset<I>, S: ParCluster<T>, V: ParVertex<T, S>>(
         &self,
         datasets: &[D; N],
-        trees: &'a [[Vertex<T, S>; M]; N],
+        trees: &'a [[V; M]; N],
         depths: &[usize],
-    ) -> [[Vec<Graph<'a, T, S>>; M]; N] {
+    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    where
+        T: 'a,
+    {
         let mut graphs_vmn = Vec::new();
         ftlog::info!("Creating flat graphs...");
 
@@ -495,7 +495,7 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
                             );
                         })
                         .map(|&depth| {
-                            let cluster_scorer = |clusters: &[&Vertex<T, S>]| {
+                            let cluster_scorer = |clusters: &[&V]| {
                                 clusters
                                     .iter()
                                     .map(|c| {
@@ -552,13 +552,16 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
 
     /// Parallel version of [`ChaodaTrainer::create_graphs`](crate::chaoda::training::ChaodaTrainer::create_graphs).
     #[allow(clippy::type_complexity)]
-    fn par_create_graphs<'a, const N: usize, D: ParDataset<I>, S: ParCluster<T>>(
+    fn par_create_graphs<'a, const N: usize, D: ParDataset<I>, S: ParCluster<T>, V: ParVertex<T, S>>(
         &self,
         datasets: &[D; N],
-        trees: &'a [[Vertex<T, S>; M]; N],
+        trees: &'a [[V; M]; N],
         trained_models: &[Vec<TrainedCombination>; M],
         min_depth: usize,
-    ) -> [[Vec<Graph<'a, T, S>>; M]; N] {
+    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    where
+        T: 'a,
+    {
         let mut graphs_vmn = Vec::new();
         ftlog::info!("Creating graphs...");
 
@@ -624,9 +627,9 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
 
     /// Parallel version of [`ChaodaTrainer::train_epoch`](crate::chaoda::training::ChaodaTrainer::train_epoch).
     #[allow(clippy::type_complexity)]
-    fn par_train_epoch<const N: usize, S: ParCluster<T>>(
+    fn par_train_epoch<const N: usize, S: ParCluster<T>, V: ParVertex<T, S>>(
         &mut self,
-        graphs: &[[Vec<Graph<T, S>>; M]; N],
+        graphs: &[[Vec<Graph<T, S, V>>; M]; N],
         labels: &[Vec<bool>; N],
     ) -> Result<([Vec<TrainedCombination>; M], f32), String> {
         let mut x = Vec::new();
@@ -661,7 +664,7 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
                     .par_iter_mut()
                     .map(|combination| {
                         combination.append_data(&x, &y, Some(roc_score))?;
-                        combination.train_step()
+                        combination.train_step::<T, S, V>()
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok::<_, String>((i, combinations))
@@ -689,10 +692,10 @@ impl<I: Clone + Send + Sync, T: Number, const M: usize> ChaodaTrainer<'_, I, T, 
     /// # Errors
     ///
     /// See [`ChaodaTrainer::train`](crate::chaoda::training::ChaodaTrainer::train).
-    pub fn par_train<const N: usize, D: ParDataset<I>, S: ParCluster<T>>(
+    pub fn par_train<const N: usize, D: ParDataset<I>, S: ParCluster<T>, V: ParVertex<T, S>>(
         &'_ mut self,
         datasets: &[D; N],
-        trees: &[[Vertex<T, S>; M]; N],
+        trees: &[[V; M]; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         num_epochs: usize,

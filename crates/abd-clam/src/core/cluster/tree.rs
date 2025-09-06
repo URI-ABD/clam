@@ -2,7 +2,7 @@
 
 use distances::Number;
 
-use super::{Cluster, Dataset, Metric, ParCluster, ParDataset, ParMetric};
+use super::{Cluster, Dataset, ParCluster, ParDataset};
 
 /// A helpful struct to store a root `Cluster`, a `Dataset`, and a `Metric`.
 #[derive(Clone)]
@@ -11,7 +11,7 @@ use super::{Cluster, Dataset, Metric, ParCluster, ParDataset, ParMetric};
     derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
 )]
 #[must_use]
-pub struct Tree<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Metric<I, T>> {
+pub struct Tree<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Fn(&I, &I) -> T> {
     /// The root `Cluster` of the tree.
     root: C,
     /// The `Dataset` of the tree.
@@ -22,7 +22,7 @@ pub struct Tree<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Metric<I, T>> {
     phantom: std::marker::PhantomData<(I, T)>,
 }
 
-impl<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Metric<I, T>> Tree<I, T, D, C, M> {
+impl<I, T: Number, D: Dataset<I>, C: Cluster<T>, M: Fn(&I, &I) -> T> Tree<I, T, D, C, M> {
     /// Create a new `Tree` with the given root `Cluster`, `Dataset`, and `Metric`.
     pub const fn new(root: C, dataset: D, metric: M) -> Self {
         Self {
@@ -91,7 +91,7 @@ where
     T: Number + bitcode::Encode + bitcode::Decode,
     D: Dataset<I> + crate::DiskIO,
     C: Cluster<T> + crate::DiskIO,
-    M: Metric<I, T> + bitcode::Encode + bitcode::Decode,
+    M: (Fn(&I, &I) -> T) + bitcode::Encode + bitcode::Decode,
 {
     fn to_bytes(&self) -> Result<Vec<u8>, String> {
         let root = self.root.to_bytes()?;
@@ -131,6 +131,6 @@ where
     T: Number + bitcode::Encode + bitcode::Decode + Send + Sync,
     D: ParDataset<I> + crate::ParDiskIO,
     C: ParCluster<T> + crate::ParDiskIO,
-    M: ParMetric<I, T> + bitcode::Encode + bitcode::Decode,
+    M: (Fn(&I, &I) -> T) + Send + Sync + bitcode::Encode + bitcode::Decode,
 {
 }

@@ -3,4 +3,5 @@
 
 pub mod cluster;
 pub mod data_gen;
+pub mod metrics;
 pub mod search;

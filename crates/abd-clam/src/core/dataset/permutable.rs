@@ -1,31 +1,20 @@
-//! A collection whose elements can be permuted in-place.
+//! Datasets that can be permuted in-place.
 
-/// A collection whose elements can be permuted in-place.
+use super::Dataset;
+
+/// Datasets that can be permuted in-place.
 ///
-/// A `Permutable` dataset is useful for our search algorithms, as described in
-/// the `CAKES` paper.
+/// This trait extends the `Dataset` trait with the ability to permute the
+/// items in the dataset according to a given permutation of indices.
 ///
-/// We may *not* want to permute the dataset in-place, e.g. for use with
-/// `CHAODA` because it needs to deal with a given set of items under multiple
-/// metrics.
-pub trait Permutable {
-    /// Gets the current permutation of the collection, i.e. the ordering of the
-    /// original items into the current order.
-    ///
-    /// Our implementation of this method on `Vec<T>` and `&mut [T]` will always
-    /// return the identity permutation.
-    fn permutation(&self) -> Vec<usize>;
-
-    /// Sets the permutation of the collection without modifying the collection.
-    fn set_permutation(&mut self, permutation: &[usize]);
-
+/// We provide a blanket implementation of this trait for any type that
+/// implements `AsMut<[I]>`, which includes standard collections like `Vec<I>`
+/// and slices `[I]`.
+pub trait Permutable<I>: Dataset<I> {
     /// Swaps the location of two items in the collection.
     ///
-    /// # Arguments
-    ///
-    /// * `i` - An index in the collection.
-    /// * `j` - An index in the collection.
-    fn swap_two(&mut self, i: usize, j: usize);
+    /// The implementor may choose to panic if either index is out of bounds.
+    fn swap(&mut self, a: usize, b: usize);
 
     /// Permutes the collection in-place.
     ///
@@ -59,32 +48,22 @@ pub trait Permutable {
                 // Thus, because we followed the cycle to the correct index to swap,
                 // we know that the element at i, after this swap, is in the correct
                 // position.
-                self.swap_two(source_index, i);
+                self.swap(source_index, i);
             }
         }
     }
 }
 
-impl<T> Permutable for Vec<T> {
-    fn permutation(&self) -> Vec<usize> {
-        (0..self.len()).collect()
-    }
-
-    fn set_permutation(&mut self, _: &[usize]) {}
-
-    fn swap_two(&mut self, i: usize, j: usize) {
-        self.swap(i, j);
-    }
-}
-
-impl<T> Permutable for &mut [T] {
-    fn permutation(&self) -> Vec<usize> {
-        (0..self.len()).collect()
-    }
-
-    fn set_permutation(&mut self, _: &[usize]) {}
-
-    fn swap_two(&mut self, i: usize, j: usize) {
-        self.swap(i, j);
+impl<I, D: Dataset<I> + AsMut<[I]>> Permutable<I> for D {
+    fn swap(&mut self, a: usize, b: usize) {
+        // SAFETY: Since we have &mut self, we have exclusive access to the
+        // underlying data. Thus, the pointers ptr_a and ptr_b are guaranteed
+        // to be valid and non-overlapping.
+        #[allow(unsafe_code)]
+        unsafe {
+            let ptr_a = self.as_mut().as_mut_ptr().add(a);
+            let ptr_b = self.as_mut().as_mut_ptr().add(b);
+            std::ptr::swap(ptr_a, ptr_b);
+        }
     }
 }

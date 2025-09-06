@@ -1,13 +1,20 @@
 //! Utility functions for the crate.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+
 use core::cmp::Ordering;
 
-use distances::{number::Float, Number};
 use ftlog::{
     appender::{FileAppender, Period},
     LevelFilter, LoggerGuard,
 };
 use rand::prelude::*;
+
+use crate::{core::dataset::MaxItem, DistanceValue, FloatDistanceValue};
 
 /// The square root threshold for sub-sampling.
 pub(crate) const SQRT_THRESH: usize = 1000;
@@ -25,12 +32,12 @@ pub fn max_recursion_depth() -> usize {
 }
 
 /// Returns whether the three given lengths form a triangle with positive area.
-pub fn is_triangle<T: Number>(a: T, b: T, c: T) -> bool {
+pub fn is_triangle<T: DistanceValue>(a: T, b: T, c: T) -> bool {
     a + b > c && a + c > b && b + c > a
 }
 
 /// Returns whether the three given lengths are from collinear points.
-pub fn is_colinear<T: Number>(a: T, b: T, c: T) -> bool {
+pub fn is_colinear<T: DistanceValue>(a: T, b: T, c: T) -> bool {
     a + b == c || a + c == b || b + c == a
 }
 
@@ -52,11 +59,10 @@ pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usiz
     } else {
         sqrt_thresh
             + if population_size < sqrt_thresh + log2_thresh {
-                (population_size - sqrt_thresh).as_f64().sqrt()
+                ((population_size - sqrt_thresh) as f64).sqrt()
             } else {
-                log2_thresh.as_f64().sqrt() + (population_size - sqrt_thresh - log2_thresh).as_f64().log2()
-            }
-            .as_usize()
+                (log2_thresh as f64).sqrt() + ((population_size - sqrt_thresh - log2_thresh) as f64).log2()
+            } as usize
     }
 }
 
@@ -116,11 +122,19 @@ pub const fn n_pairs(n: usize) -> usize {
 /// NAN values are ordered as greater than all other values.
 ///
 /// This will return `None` if the given slice is empty.
-pub fn arg_min<T: PartialOrd + Number>(values: &[T]) -> Option<(usize, T)> {
+pub fn arg_min<T: DistanceValue>(values: &[T]) -> Option<(usize, T)> {
     values
         .iter()
         .enumerate()
-        .min_by(|&(_, l), &(_, r)| l.total_cmp(r))
+        .min_by(|&(_, l), &(_, r)| {
+            if l < r {
+                Ordering::Less
+            } else if l > r {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        })
         .map(|(i, v)| (i, *v))
 }
 
@@ -129,12 +143,13 @@ pub fn arg_min<T: PartialOrd + Number>(values: &[T]) -> Option<(usize, T)> {
 /// NAN values are ordered as smaller than all other values.
 ///
 /// This will return `None` if the given slice is empty.
-pub fn arg_max<T: PartialOrd + Number>(values: &[T]) -> Option<(usize, T)> {
+pub fn arg_max<T: DistanceValue>(values: &[T]) -> Option<(usize, T)> {
     values
         .iter()
         .enumerate()
-        .max_by(|&(_, l), &(_, r)| l.total_cmp(r))
-        .map(|(i, v)| (i, *v))
+        .map(|(i, &v)| MaxItem(i, v))
+        .max_by(Ord::cmp)
+        .map(|MaxItem(i, v)| (i, v))
 }
 
 /// Calculate the mean and variance of the given values.
@@ -148,13 +163,13 @@ pub fn arg_max<T: PartialOrd + Number>(values: &[T]) -> Option<(usize, T)> {
 /// # Returns:
 ///
 /// A tuple containing the mean and variance of the given values.
-pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
-    let n = F::from(values.len());
+pub fn mean_variance<T: DistanceValue, F: FloatDistanceValue>(values: &[T]) -> (F, F) {
+    let n = F::from(values.len()).unwrap_or_else(|| unreachable!("Length should be convertible to float."));
     let (sum, sum_squares) = values
         .iter()
-        .map(|&x| F::from(x))
+        .map(|&x| F::from(x).unwrap_or_else(|| unreachable!("Value should be convertible to float.")))
         .map(|x| (x, x.powi(2)))
-        .fold((F::ZERO, F::ZERO), |(sum, sum_squares), (x, xx)| {
+        .fold((F::zero(), F::zero()), |(sum, sum_squares), (x, xx)| {
             (sum + x, sum_squares + xx)
         });
 
@@ -165,30 +180,35 @@ pub fn mean_variance<T: Number, F: Float>(values: &[T]) -> (F, F) {
 }
 
 /// Return the mean value of the given slice of values.
-pub fn mean<T: Number, F: Float>(values: &[T]) -> F {
+pub fn mean<T: DistanceValue, F: FloatDistanceValue>(values: &[T]) -> F {
     if values.is_empty() {
-        F::ZERO
+        F::zero()
     } else {
-        F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
+        let numerator = F::from(values.iter().copied().sum::<T>())
+            .unwrap_or_else(|| unreachable!("Value should be convertible to float."));
+        let denominator =
+            F::from(values.len()).unwrap_or_else(|| unreachable!("Length should be convertible to float."));
+        numerator / denominator
+        // F::from(values.iter().copied().sum::<T>()) / F::from(values.len())
     }
 }
 
 /// Return the variance of the given slice of values.
-pub fn variance<T: Number, F: Float>(values: &[T], mean: F) -> F {
+pub fn variance<T: DistanceValue, F: FloatDistanceValue>(values: &[T], mean: F) -> F {
     values
         .iter()
-        .map(|v| F::from(*v))
+        .map(|v| F::from(*v).unwrap_or_else(|| unreachable!("Value should be convertible to float.")))
         .map(|v| v - mean)
         .map(|v| v.powi(2))
         .sum::<F>()
-        / F::from(values.len())
+        / F::from(values.len()).unwrap_or_else(|| unreachable!("Length should be convertible to float."))
 }
 
 /// Return the coefficient of variation of the given slice of values.
-pub fn coefficient_of_variation<T: Number, F: Float>(values: &[T]) -> F {
+pub fn coefficient_of_variation<T: DistanceValue, F: FloatDistanceValue>(values: &[T]) -> F {
     let mean: F = mean(values);
     let variance = variance(values, mean);
-    if mean.abs() <= F::EPSILON {
+    if mean.abs() <= F::epsilon() {
         variance.sqrt()
     } else {
         variance.sqrt() / mean
@@ -196,14 +216,13 @@ pub fn coefficient_of_variation<T: Number, F: Float>(values: &[T]) -> F {
 }
 
 /// Apply Gaussian normalization to the given values.
-#[allow(dead_code)]
-pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
+pub(crate) fn normalize_1d<F: FloatDistanceValue>(values: &[F], mean: F, sd: F) -> Vec<F> {
     values
         .iter()
         .map(|&v| v - mean)
-        .map(|v| v / ((F::EPSILON + sd) * F::SQRT_2))
+        .map(|v| v / ((F::epsilon() + sd) * (F::one() + F::one()).sqrt()))
         .map(F::erf)
-        .map(|v| (F::ONE + v) / F::from(2.))
+        .map(|v| (F::one() + v) / (F::one() + F::one()))
         .collect()
 }
 
@@ -218,10 +237,10 @@ pub(crate) fn normalize_1d<F: Float>(values: &[F], mean: F, sd: F) -> Vec<F> {
 /// * `ratio` - The ratio to compute the EMA of.
 /// * `parent_ema` - The parent EMA to use.
 #[must_use]
-pub fn next_ema<F: Float>(ratio: F, parent_ema: F) -> F {
+pub fn next_ema<F: FloatDistanceValue>(ratio: F, parent_ema: F) -> F {
     // TODO: Consider getting `alpha` from user. Perhaps via env vars?
-    let alpha = F::from(2) / F::from(11);
-    alpha.mul_add(ratio, (F::ONE - alpha) * parent_ema)
+    let alpha = F::from(2.0 / 11.0).unwrap_or_else(|| unreachable!("Value should be convertible to float."));
+    alpha.mul_add(ratio, (F::one() - alpha) * parent_ema)
 }
 
 /// Transpose a matrix represented as an array of arrays (slices) to an array of Vecs.
@@ -240,7 +259,7 @@ pub fn next_ema<F: Float>(ratio: F, parent_ema: F) -> F {
 /// An array of Vecs where each Vec represents a column of the original matrix.
 /// Note that all arrays in the input Vec must have 6 columns.
 #[must_use]
-pub fn rows_to_cols<F: Float>(values: &[[F; 6]]) -> [Vec<F>; 6] {
+pub fn rows_to_cols<F: FloatDistanceValue>(values: &[[F; 6]]) -> [Vec<F>; 6] {
     let all_ratios = values.iter().flat_map(|arr| arr.iter().copied()).collect::<Vec<_>>();
     let mut transposed: [Vec<F>; 6] = Default::default();
 
@@ -265,7 +284,7 @@ pub fn rows_to_cols<F: Float>(values: &[[F; 6]]) -> [Vec<F>; 6] {
 ///
 /// An array of means, where each element represents the mean of a row.
 #[must_use]
-pub fn calc_row_means<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
+pub fn calc_row_means<F: FloatDistanceValue>(values: &[Vec<F>; 6]) -> [F; 6] {
     values
         .iter()
         .map(|values| mean(values))
@@ -288,7 +307,7 @@ pub fn calc_row_means<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
 ///
 /// An array of standard deviations, where each element represents the standard deviation of a row.
 #[must_use]
-pub fn calc_row_sds<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
+pub fn calc_row_sds<F: FloatDistanceValue>(values: &[Vec<F>; 6]) -> [F; 6] {
     values
         .iter()
         .map(|values| (variance(values, mean::<_, F>(values))).sqrt())
@@ -307,7 +326,7 @@ pub fn calc_row_sds<F: Float>(values: &[Vec<F>; 6]) -> [F; 6] {
 /// # Arguments
 ///
 /// * `data` - The data to partition.
-fn partition<T: Number>(data: &[T]) -> Option<(Vec<T>, T, Vec<T>)> {
+fn partition<T: PartialOrd + Copy>(data: &[T]) -> Option<(Vec<T>, T, Vec<T>)> {
     data.split_first().map(|(&pivot, tail)| {
         let (left, right) = tail.iter().fold((vec![], vec![]), |(mut left, mut right), &next| {
             if next < pivot {
@@ -330,7 +349,7 @@ fn partition<T: Number>(data: &[T]) -> Option<(Vec<T>, T, Vec<T>)> {
 ///
 /// * `data` - The data to select the kth smallest element from.
 /// * `k` - The index of the element to select.
-fn select<T: Number>(data: &[T], k: usize) -> Option<T> {
+fn select<T: PartialOrd + Copy>(data: &[T], k: usize) -> Option<T> {
     let part = partition(data);
 
     match part {
@@ -359,7 +378,7 @@ fn select<T: Number>(data: &[T], k: usize) -> Option<T> {
 /// # Arguments
 ///
 /// * `data` - The data to find the median of.
-pub fn median<T: Number>(data: &[T]) -> Option<T> {
+pub fn median<T: PartialOrd + Copy>(data: &[T]) -> Option<T> {
     let size = data.len();
 
     match size {
@@ -387,7 +406,7 @@ pub fn median<T: Number>(data: &[T]) -> Option<T> {
 /// # Arguments
 ///
 /// * `values` - The data to find the STD of.
-pub fn standard_deviation<T: Number, F: Float>(values: &[T]) -> F {
+pub fn standard_deviation<T: DistanceValue, F: FloatDistanceValue>(values: &[T]) -> F {
     variance(values, mean::<_, F>(values)).sqrt()
 }
 
@@ -426,25 +445,38 @@ pub fn un_flatten<T>(data: Vec<T>, sizes: &[usize]) -> Result<Vec<Vec<T>>, Strin
     Ok(items)
 }
 
-/// Read a `Number` from a byte slice and increment the offset.
-pub fn read_number<T: Number>(bytes: &[u8], offset: &mut usize) -> T {
-    let num_bytes = T::NUM_BYTES;
-    let value = T::from_le_bytes(
-        bytes[*offset..*offset + num_bytes]
-            .try_into()
-            .unwrap_or_else(|e| unreachable!("{e}")),
-    );
-    *offset += num_bytes;
-    value
+/// Use the stringzilla implementation of the Levenshtein distance.
+///
+/// # Panics
+///
+/// - If the device could not be created.
+/// - If the Levenshtein distance engine could not be created.
+/// - If the distance could not be computed.
+#[cfg(feature = "musals")]
+#[allow(clippy::unwrap_used)]
+pub fn sz_lev_builder<I: AsRef<[u8]>>() -> impl Fn(&I, &I) -> usize {
+    let device = stringzilla::szs::DeviceScope::default().unwrap();
+    let szla_engine = stringzilla::szs::LevenshteinDistances::new(&device, 0, 1, 1, 1).unwrap();
+    move |x, y| szla_engine.compute(&device, &[x], &[y]).unwrap()[0]
 }
 
-/// Reads an encoded value from a byte array and increments the offset.
-pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
-    let len = read_number::<usize>(bytes, offset);
-    let encoding = bytes[*offset..*offset + len].to_vec();
-    *offset += len;
-    encoding.into_boxed_slice()
-}
+// /// Read a `Number` from a byte slice and increment the offset.
+// pub fn read_number<T: Num + FromBytes<Bytes = [u8; L]>, const L: usize>(arr: &[u8], offset: &mut usize) -> T {
+//     let bytes = (&arr[*offset..*offset + L])
+//         .try_into()
+//         .unwrap_or_else(|_| unreachable!("Slice always has length L."));
+//     let value = T::from_le_bytes(bytes);
+//     *offset += L;
+//     value
+// }
+
+// /// Reads an encoded value from a byte array and increments the offset.
+// pub fn read_encoding(bytes: &[u8], offset: &mut usize) -> Box<[u8]> {
+//     let len = read_number::<usize, 8>(bytes, offset);
+//     let encoding = bytes[*offset..*offset + len].to_vec();
+//     *offset += len;
+//     encoding.into_boxed_slice()
+// }
 
 /// Configures the logger.
 ///

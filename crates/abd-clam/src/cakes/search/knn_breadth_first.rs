@@ -2,22 +2,16 @@
 
 use core::cmp::{min, Ordering};
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{
-    cakes::{ParSearchable, Searchable},
-    cluster::ParCluster,
-    metric::ParMetric,
-    Cluster, Metric, SizedHeap,
-};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset, SizedHeap};
 
 use super::{ParSearchAlgorithm, SearchAlgorithm};
 
 /// K-Nearest Neighbors search using a Breadth First sieve.
 pub struct KnnBreadthFirst(pub usize);
 
-impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
+impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for KnnBreadthFirst
 {
     fn name(&self) -> &'static str {
@@ -36,24 +30,26 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));
 
-        let d = data.query_to_center(metric, query, root);
+        let d = data.query_to_one(query, root.arg_center(), metric);
         candidates.push((d_max(root, d), root));
 
         while !candidates.is_empty() {
             candidates = filter_candidates(candidates, self.0)
                 .into_iter()
                 .fold(Vec::new(), |mut acc, (d, c)| {
-                    if (c.cardinality() < (self.0 - acc.len())) || c.is_leaf() {
+                    if (acc.len() <= self.0 && (c.cardinality() < (self.0 - acc.len()))) || c.is_leaf() {
                         if c.is_singleton() {
                             c.indices().into_iter().for_each(|i| hits.push((d, i)));
                         } else {
-                            data.query_to_all(metric, query, c).for_each(|(i, d)| hits.push((d, i)));
+                            data.query_to_many(query, c.indices(), metric)
+                                .into_iter()
+                                .for_each(|(i, d)| hits.push((d, i)));
                         }
                     } else {
                         acc.extend(
                             c.children()
                                 .into_iter()
-                                .map(|c| (d_max(c, data.query_to_center(metric, query, c)), c)),
+                                .map(|c| (d_max(c, data.query_to_one(query, c.arg_center(), metric)), c)),
                         );
                     }
                     acc
@@ -64,26 +60,31 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
     }
 }
 
-impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
-    ParSearchAlgorithm<I, T, C, M, D> for KnnBreadthFirst
+impl<
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        C: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        D: ParDataset<I>,
+    > ParSearchAlgorithm<I, T, C, M, D> for KnnBreadthFirst
 {
     #[inline(never)]
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));
 
-        let d = data.par_query_to_center(metric, query, root);
+        let d = data.query_to_one(query, root.arg_center(), metric);
         candidates.push((d_max(root, d), root));
 
         while !candidates.is_empty() {
             candidates = filter_candidates(candidates, self.0)
                 .into_iter()
                 .fold(Vec::new(), |mut acc, (d, c)| {
-                    if (c.cardinality() < (self.0 - acc.len())) || c.is_leaf() {
+                    if (acc.len() <= self.0 && (c.cardinality() < (self.0 - acc.len()))) || c.is_leaf() {
                         if c.is_singleton() {
                             c.indices().into_iter().for_each(|i| hits.push((d, i)));
                         } else {
-                            let distances = data.par_query_to_all(metric, query, c).collect::<Vec<_>>();
+                            let distances = data.par_query_to_many(query, c.indices(), metric);
                             for (i, d) in distances {
                                 hits.push((d, i));
                             }
@@ -92,7 +93,7 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
                         let distances = c
                             .children()
                             .into_par_iter()
-                            .map(|c| (d_max(c, data.par_query_to_center(metric, query, c)), c))
+                            .map(|c| (d_max(c, data.query_to_one(query, c.arg_center(), metric)), c))
                             .collect::<Vec<_>>();
                         acc.extend(distances);
                     }
@@ -105,21 +106,21 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
 }
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
-fn d_max<T: Number, C: Cluster<T>>(c: &C, d: T) -> T {
+fn d_max<T: DistanceValue, C: Cluster<T>>(c: &C, d: T) -> T {
     c.radius() + d
 }
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
-fn filter_candidates<T: Number, C: Cluster<T>>(mut candidates: Vec<(T, &C)>, k: usize) -> Vec<(T, &C)> {
+fn filter_candidates<T: DistanceValue, C: Cluster<T>>(mut candidates: Vec<(T, &C)>, k: usize) -> Vec<(T, &C)> {
     let threshold_index = quick_partition(&mut candidates, k);
     let threshold = candidates[threshold_index].0;
 
     candidates
         .into_iter()
         .filter_map(|(d, c)| {
-            let diam = c.radius().double();
-            let d_min = if d <= diam { T::ZERO } else { d - diam };
+            let diam = c.radius() + c.radius();
+            let d_min = if d <= diam { T::zero() } else { d - diam };
             if d_min <= threshold {
                 Some((d, c))
             } else {
@@ -134,12 +135,12 @@ fn filter_candidates<T: Number, C: Cluster<T>>(mut candidates: Vec<(T, &C)>, k: 
 /// also reordering the list so that all elements to the left of the k-th
 /// smallest element are less than or equal to it, and all elements to the right
 /// of the k-th smallest element are greater than or equal to it.
-fn quick_partition<T: Number, C: Cluster<T>>(items: &mut [(T, &C)], k: usize) -> usize {
+fn quick_partition<T: DistanceValue, C: Cluster<T>>(items: &mut [(T, &C)], k: usize) -> usize {
     qps(items, k, 0, items.len() - 1)
 }
 
 /// The recursive helper function for the Quick Partition algorithm.
-fn qps<T: Number, C: Cluster<T>>(items: &mut [(T, &C)], k: usize, l: usize, r: usize) -> usize {
+fn qps<T: DistanceValue, C: Cluster<T>>(items: &mut [(T, &C)], k: usize, l: usize, r: usize) -> usize {
     if l >= r {
         min(l, r)
     } else {
@@ -183,7 +184,7 @@ fn qps<T: Number, C: Cluster<T>>(items: &mut [(T, &C)], k: usize, l: usize, r: u
 /// are greater than pivot.
 fn find_pivot<T, C>(items: &mut [(T, &C)], l: usize, r: usize, pivot: usize) -> usize
 where
-    T: Number,
+    T: DistanceValue,
     C: Cluster<T>,
 {
     // Move pivot to the end

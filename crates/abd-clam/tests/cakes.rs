@@ -1,58 +1,47 @@
 //! Tests of the CAKES algorithms.
 
-use std::collections::HashMap;
-
-use distances::Number;
-use test_case::test_case;
+use std::fmt::Debug;
 
 use abd_clam::{
-    adapters::{BallAdapter, ParBallAdapter},
-    cakes::{self, HintedDataset, ParHintedDataset, PermutedBall},
-    cluster::{ParCluster, ParPartition, Partition},
-    dataset::{AssociatesMetadataMut, Permutable},
-    metric::{AbsoluteDifference, Euclidean, Hypotenuse, Levenshtein, Manhattan, ParMetric},
-    Ball, Cluster, Dataset, FlatVec,
+    cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, PermutedBall, RnnClustered},
+    Ball, Cluster, DistanceValue, ParCluster, ParDataset, ParPartition, Partition, Permutable,
 };
+use rand::prelude::*;
+use test_case::test_case;
 
 mod common;
 
 #[test]
 fn line() {
-    let data = common::data_gen::gen_line_data(10).transform_metadata(|&i| (i, HashMap::<usize, i32>::new()));
-    let metric = AbsoluteDifference;
+    let data = common::data_gen::gen_line_data(10);
+    let metric = common::metrics::absolute_difference;
     let query = &0;
     let criteria = |c: &Ball<_>| c.cardinality() > 1;
-    let seed = Some(42);
 
-    let ball = Ball::new_tree(&data, &metric, &criteria, seed);
-    let par_ball = Ball::par_new_tree(&data, &metric, &criteria, seed);
+    let ball = Ball::new_tree(&data, &metric, &criteria);
+    let par_ball = Ball::par_new_tree(&data, &metric, &criteria);
 
-    let data = data.with_hints_from(&metric, &par_ball, 2, 4);
-    let (perm_ball, perm_data) = PermutedBall::from_ball_tree(ball.clone(), data.clone(), &metric);
+    let mut perm_data = data.clone();
+    let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_data);
 
     for radius in 0..=4 {
-        let alg = cakes::RnnClustered(radius);
+        let alg = RnnClustered(radius);
         common::search::check_rnn(&ball, &data, &metric, query, radius, &alg);
         common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg);
     }
 
     for k in [1, 4, 8] {
-        let alg = cakes::KnnDepthFirst(k);
+        let alg = KnnDepthFirst(k);
         common::search::check_knn(&ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
 
-        let alg = cakes::KnnBreadthFirst(k);
+        let alg = KnnBreadthFirst(k);
         common::search::check_knn(&ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
 
-        let alg = cakes::KnnRepeatedRnn(k, 2);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
-
-        let alg = cakes::KnnHinted(k);
+        let alg = KnnRepeatedRnn(k, 2);
         common::search::check_knn(&ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
@@ -61,42 +50,36 @@ fn line() {
 
 #[test]
 fn grid() {
-    let data = common::data_gen::gen_grid_data(10).transform_metadata(|&i| (i, HashMap::new()));
-    let metric = Hypotenuse;
+    let data = common::data_gen::gen_grid_data(10);
+    let metric = common::metrics::hypotenuse;
     let query = &(0.0, 0.0);
     let criteria = |c: &Ball<f32>| c.cardinality() > 1;
-    let seed = Some(42);
 
-    let ball = Ball::new_tree(&data, &metric, &criteria, seed);
-    let par_ball = Ball::par_new_tree(&data, &metric, &criteria, seed);
-    let data = data.with_hints_from(&metric, &par_ball, 2.0, 4);
+    let ball = Ball::new_tree(&data, &metric, &criteria);
+    let par_ball = Ball::par_new_tree(&data, &metric, &criteria);
 
-    let (perm_ball, perm_data) = PermutedBall::from_ball_tree(ball.clone(), data.clone(), &metric);
+    let mut perm_data = data.clone();
+    let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_data);
 
     for radius in 0..=4 {
-        let radius = radius.as_f32();
-        let alg = cakes::RnnClustered(radius);
+        let radius = radius as f32;
+        let alg = RnnClustered(radius);
         common::search::check_rnn(&ball, &data, &metric, query, radius, &alg);
         common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg);
     }
 
     for k in [1, 10] {
-        let alg = cakes::KnnDepthFirst(k);
+        let alg = KnnDepthFirst(k);
         common::search::check_knn(&ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
 
-        let alg = cakes::KnnBreadthFirst(k);
+        let alg = KnnBreadthFirst(k);
         common::search::check_knn(&ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
 
-        let alg = cakes::KnnRepeatedRnn(k, 2.0);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
-
-        let alg = cakes::KnnHinted(k);
+        let alg = KnnRepeatedRnn(k, 2.0);
         common::search::check_knn(&ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
         common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
@@ -109,32 +92,32 @@ fn grid() {
 #[test_case(10_000, 100)]
 fn vectors(car: usize, dim: usize) {
     let seed = 42;
-    let data = common::data_gen::gen_random_data(car, dim, 10.0, seed)
-        .with_name("random-vectors")
-        .transform_metadata(|&i| (i, HashMap::new()));
-    let seed = Some(seed);
+    let data = {
+        let max = 10.0;
+        let mut rng = StdRng::seed_from_u64(seed);
+        symagen::random_data::random_tabular(car, dim, -max, max, &mut rng)
+    };
     let query = vec![0.0; dim];
     let criteria = |c: &Ball<_>| c.cardinality() > 1;
 
     let radii = [0.01, 0.1];
     let ks = [1, 10];
 
-    let metrics: Vec<Box<dyn ParMetric<Vec<f64>, f64>>> = vec![Box::new(Euclidean), Box::new(Manhattan)];
+    let metrics: Vec<Box<dyn (Fn(&Vec<f64>, &Vec<f64>) -> f64) + Send + Sync>> = vec![
+        Box::new(common::metrics::euclidean),
+        Box::new(common::metrics::manhattan),
+    ];
 
     for metric in &metrics {
         let data = data.clone();
 
-        let ball = Ball::new_tree(&data, metric, &criteria, seed);
-        let par_ball = Ball::par_new_tree(&data, metric, &criteria, seed);
-        let (perm_ball, perm_data) = PermutedBall::par_from_ball_tree(par_ball.clone(), data.clone(), metric);
+        let ball = Ball::new_tree(&data, metric, &criteria);
+        let par_ball = Ball::par_new_tree(&data, metric, &criteria);
 
-        let radii = radii
-            .iter()
-            .map(|&f| f * ball.radius().as_f32())
-            .map(|r| r.as_f64())
-            .collect::<Vec<_>>();
+        let mut perm_data = data.clone();
+        let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_data);
 
-        let data = data.with_hints_from_tree(&ball, metric);
+        let radii = radii.iter().map(|&f| f * ball.radius()).collect::<Vec<_>>();
 
         build_and_check_search(
             (&ball, &data),
@@ -157,7 +140,7 @@ fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<()
     let penalties = distances::strings::Penalties::default();
     let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
     let len_delta = seed_length / 10;
-    let (metadata, data) = symagen::random_edits::generate_clumped_data(
+    let (_, sequences) = symagen::random_edits::generate_clumped_data(
         &seed_string,
         penalties,
         &alphabet,
@@ -170,35 +153,30 @@ fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<()
     .into_iter()
     .unzip::<_, _, Vec<_>, Vec<_>>();
 
-    let data = FlatVec::new(data)?
-        .with_metadata(&metadata)?
-        .with_name("random-strings")
-        .transform_metadata(|s| (s.clone(), HashMap::new()));
     let query = &seed_string;
-    let seed = Some(42);
 
     let radii = [0.01, 0.1];
     let ks = [1, 10];
 
-    let metric = Levenshtein;
-    let criteria = |c: &Ball<u32>| c.cardinality() > 1;
+    let metric = common::metrics::levenshtein;
+    let criteria = |c: &Ball<_>| c.cardinality() > 1;
 
-    let ball = Ball::new_tree(&data, &metric, &criteria, seed);
-    let par_ball = Ball::par_new_tree(&data, &metric, &criteria, seed);
-    let (perm_ball, perm_data) = PermutedBall::par_from_ball_tree(par_ball.clone(), data.clone(), &metric);
+    let ball = Ball::new_tree(&sequences, &metric, &criteria);
+    let par_ball = Ball::par_new_tree(&sequences, &metric, &criteria);
+
+    let mut perm_sequences = sequences.clone();
+    let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_sequences);
 
     let radii = radii
         .iter()
-        .map(|&f| f * ball.radius().as_f32())
-        .map(|r| r.as_u32())
+        .map(|&f| f * (ball.radius() as f32))
+        .map(|r| r.ceil() as usize)
         .collect::<Vec<_>>();
 
-    let data = data.with_hints_from_tree(&ball, &metric);
-
     build_and_check_search(
-        (&ball, &data),
+        (&ball, &sequences),
         &par_ball,
-        (&perm_ball, &perm_data),
+        (&perm_ball, &perm_sequences),
         &metric,
         &query,
         &radii,
@@ -218,40 +196,35 @@ fn build_and_check_search<I, T, C, M, D, Pd>(
     radii: &[T],
     ks: &[usize],
 ) where
-    I: core::fmt::Debug + Send + Sync + Clone,
-    T: Number,
+    I: Debug + Send + Sync + Clone,
+    T: DistanceValue + Send + Sync + Debug,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParHintedDataset<I, T, C, M> + Permutable + Clone,
-    Pd: ParHintedDataset<I, T, PermutedBall<T, C>, M> + Permutable + Clone,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I> + Permutable<I> + Clone,
+    Pd: ParDataset<I> + Clone,
 {
     let (ball, data) = ball_data;
     let (perm_ball, perm_data) = perm_ball_data;
 
     for &radius in radii {
-        let alg = cakes::RnnClustered(radius);
+        let alg = RnnClustered(radius);
         common::search::check_rnn(ball, data, metric, query, radius, &alg);
         common::search::check_rnn(par_ball, data, metric, query, radius, &alg);
         common::search::check_rnn(perm_ball, perm_data, metric, query, radius, &alg);
     }
 
     for &k in ks {
-        let alg = cakes::KnnRepeatedRnn(k, T::ONE.double());
+        let alg = KnnRepeatedRnn(k, T::one() + T::one());
         common::search::check_knn(ball, data, metric, query, k, &alg);
         common::search::check_knn(par_ball, data, metric, query, k, &alg);
         common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);
 
-        let alg = cakes::KnnBreadthFirst(k);
+        let alg = KnnBreadthFirst(k);
         common::search::check_knn(ball, data, metric, query, k, &alg);
         common::search::check_knn(par_ball, data, metric, query, k, &alg);
         common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);
 
-        let alg = cakes::KnnDepthFirst(k);
-        common::search::check_knn(ball, data, metric, query, k, &alg);
-        common::search::check_knn(par_ball, data, metric, query, k, &alg);
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);
-
-        let alg = cakes::KnnHinted(k);
+        let alg = KnnDepthFirst(k);
         common::search::check_knn(ball, data, metric, query, k, &alg);
         common::search::check_knn(par_ball, data, metric, query, k, &alg);
         common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);

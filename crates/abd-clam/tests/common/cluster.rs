@@ -1,8 +1,8 @@
 //! Checking properties of clusters.
 
-use abd_clam::{Ball, Cluster, Dataset, FlatVec};
+use abd_clam::{Ball, Cluster, Dataset};
 
-pub fn test_new(root: &Ball<i32>, data: &FlatVec<Vec<i32>, usize>) {
+pub fn test_new(root: &Ball<i32>, data: &Vec<Vec<i32>>) {
     let arg_r = root.arg_radial();
     let indices = (0..data.cardinality()).collect::<Vec<_>>();
 
@@ -14,7 +14,6 @@ pub fn test_new(root: &Ball<i32>, data: &FlatVec<Vec<i32>, usize>) {
     assert_eq!(root.arg_radial(), arg_r);
     assert!(root.children().is_empty());
     assert_eq!(root.indices(), indices);
-    assert_eq!(root.extents().len(), 1);
 }
 
 pub fn check_partition(root: &Ball<i32>) -> bool {
@@ -22,7 +21,6 @@ pub fn check_partition(root: &Ball<i32>) -> bool {
 
     assert!(!root.children().is_empty());
     assert_eq!(indices, &[0, 1, 2, 4, 3]);
-    assert_eq!(root.extents().len(), 2);
 
     let children = root.children();
     assert_eq!(children.len(), 2);

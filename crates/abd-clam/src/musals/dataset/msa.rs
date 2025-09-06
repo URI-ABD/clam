@@ -1,17 +1,18 @@
 //! A `Dataset` containing a multiple sequence alignment (MSA).
 
-use distances::Number;
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use rayon::prelude::*;
 
 use crate::{
-    adapters::BallAdapter,
     cakes::PermutedBall,
-    cluster::{ParPartition, Partition},
-    dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset, Permutable},
-    metric::ParMetric,
     musals::Columns,
     utils::{self, LOG2_THRESH, SQRT_THRESH},
-    Ball, Dataset, FlatVec, Metric,
+    Ball, Dataset, DistanceValue, ParPartition, Partition, Permutable,
 };
 
 use super::super::{Aligner, NUM_CHARS};
@@ -42,22 +43,18 @@ use super::super::{Aligner, NUM_CHARS};
 /// }
 /// // Alternatively, use the `bio` crate to write a FASTA file.
 /// ```
-#[derive(Clone)]
-#[cfg_attr(
-    feature = "disk-io",
-    derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
-)]
+#[derive(Clone, bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)]
 #[must_use]
-pub struct MSA<I: AsRef<[u8]>, T: Number, Me> {
+pub struct MSA<I: AsRef<[u8]>, T: DistanceValue, Me> {
     /// The Needleman-Wunsch aligner.
     aligner: Aligner<T>,
-    /// The data of the MSA.
-    data: FlatVec<I, Me>,
-    /// The name of the MSA.
-    name: String,
+    /// The sequences in the MSA.
+    sequences: Vec<I>,
+    /// The metadata for each sequence.
+    metadata: Vec<Me>,
 }
 
-impl<T: Number, Me: Clone> MSA<String, T, Me> {
+impl<I: AsRef<[u8]> + FromIterator<u8>, T: DistanceValue, Me: Clone> MSA<I, T, Me> {
     /// Creates a new MSA using MUSALS from an unaligned dataset.
     ///
     /// # Arguments
@@ -75,63 +72,35 @@ impl<T: Number, Me: Clone> MSA<String, T, Me> {
     /// # Errors
     ///
     /// - If any of the characters in the dataset are not `utf-8` compatible.
-    pub fn from_unaligned<I: AsRef<[u8]>, M: Metric<I, T>, C: Fn(&Ball<T>) -> bool>(
+    pub fn from_unaligned<M: Fn(&I, &I) -> T, C: Fn(&Ball<T>) -> bool>(
         aligner: &Aligner<T>,
-        data: FlatVec<I, Me>,
+        mut sequences: Vec<I>,
+        mut metadata: Vec<Me>,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
     ) -> Result<Self, String> {
-        let root = Ball::new_tree(&data, metric, criteria, seed);
-        let (root, data) = PermutedBall::from_ball_tree(root, data, metric);
-        let metadata = data.metadata().to_vec();
-        let data = Columns::new(b'-')
-            .with_binary_tree(&root, &data, aligner)
-            .to_flat_vec_strings()
-            .map_err(|e| format!("Failed to create MSA from unaligned dataset: {e}"))?;
-        let data = data.with_metadata(&metadata)?;
-        Self::from_aligned(aligner, data)
-    }
-}
+        if sequences.len() != metadata.len() {
+            return Err("The number of sequences must be equal to the number of metadata entries.".to_string());
+        }
 
-impl<T: Number, Me: Clone + Send + Sync> MSA<String, T, Me> {
-    /// Parallel version of [`MSA::from_unaligned`](Self::from_unaligned).
-    ///
-    /// # Errors
-    ///
-    /// See [`MSA::from_unaligned`](Self::from_unaligned).
-    pub fn par_from_unaligned<
-        I: AsRef<[u8]> + Send + Sync,
-        M: ParMetric<I, T>,
-        C: (Fn(&Ball<T>) -> bool) + Send + Sync,
-    >(
-        aligner: &Aligner<T>,
-        data: FlatVec<I, Me>,
-        metric: &M,
-        criteria: &C,
-        seed: Option<u64>,
-    ) -> Result<Self, String> {
-        let root = Ball::par_new_tree(&data, metric, criteria, seed);
-        let (root, data) = PermutedBall::from_ball_tree(root, data, metric);
-        let metadata = data.metadata().to_vec();
-        let data = Columns::new(b'-')
-            .par_with_binary_tree(&root, &data, aligner)
-            .par_to_flat_vec_strings()
-            .map_err(|e| format!("Failed to create MSA from unaligned dataset: {e}"))?;
-        let data = data.with_metadata(&metadata)?;
-        Self::from_aligned(aligner, data)
-    }
-}
+        let root = Ball::new_tree(&sequences, metric, criteria);
+        let (root, permutation) = PermutedBall::from_cluster_tree(root, &mut sequences);
 
-impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
+        metadata.permute(&permutation);
+        sequences = Columns::new(b'-')
+            .with_binary_tree(&root, &sequences, aligner)
+            .extract_msa_rows();
+
+        Self::from_aligned(aligner, sequences, metadata)
+    }
+
     /// Extracts the aligned sequences from the MSA as a `Vec<String>`.
     ///
     /// # Errors
     ///
     /// - If any of the characters in the MSA are not `utf-8` compatible.
-    pub fn extract_sequences(&self) -> Result<Vec<String>, String> {
-        self.data
-            .items()
+    pub fn extract_strings(&self) -> Result<Vec<String>, String> {
+        self.sequences
             .iter()
             .map(|s| s.as_ref().to_vec())
             .map(String::from_utf8)
@@ -144,17 +113,19 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// # Arguments
     ///
     /// * `aligner` - The aligner.
-    /// * `data` - The data of the MSA.
     ///
     /// # Errors
     ///
     /// - If any sequence in the MSA is empty.
     /// - If the sequences in the MSA have different lengths.
-    pub fn from_aligned(aligner: &Aligner<T>, data: FlatVec<I, Me>) -> Result<Self, String> {
-        let (min_len, max_len) = data
-            .items()
+    pub fn from_aligned(aligner: &Aligner<T>, sequences: Vec<I>, metadata: Vec<Me>) -> Result<Self, String> {
+        if sequences.len() != metadata.len() {
+            return Err("The number of sequences must be equal to the number of metadata entries.".to_string());
+        }
+
+        let (min_len, max_len) = sequences
             .iter()
-            .map(|item| item.as_ref().len())
+            .map(|seq| seq.as_ref().len())
             .fold((usize::MAX, 0), |(min, max), len| {
                 (Ord::min(min, len), Ord::max(max, len))
             });
@@ -162,11 +133,10 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         if min_len == 0 {
             Err("Empty sequences are not allowed in an MSA.".to_string())
         } else if min_len == max_len {
-            let name = format!("MSA({})", data.name());
             Ok(Self {
                 aligner: aligner.clone(),
-                data,
-                name,
+                sequences,
+                metadata,
             })
         } else {
             Err("Sequences in an MSA must have the same length.".to_string())
@@ -178,9 +148,14 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         &self.aligner
     }
 
-    /// Returns the data of the MSA.
-    pub const fn data(&self) -> &FlatVec<I, Me> {
-        &self.data
+    /// Returns the sequences of the MSA.
+    pub fn sequences(&self) -> &[I] {
+        &self.sequences
+    }
+
+    /// Returns the metadata of the MSA.
+    pub fn metadata(&self) -> &[Me] {
+        &self.metadata
     }
 
     /// The gap character in the MSA.
@@ -192,23 +167,22 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// Returns the width of the MSA.
     #[must_use]
     pub fn width(&self) -> usize {
-        self.dimensionality_hint().0
+        self.sequences.first().map_or(0, |s| s.as_ref().len())
     }
 
     /// Swaps between the row/col major order of the MSA.
     ///
     /// This will convert a row-major MSA to a col-major MSA and vice versa.
     pub fn change_major(&self) -> MSA<Vec<u8>, T, usize> {
-        let rows = self.data.items().iter().map(I::as_ref).collect::<Vec<_>>();
+        let rows = self.sequences().iter().map(I::as_ref).collect::<Vec<_>>();
         let cols = (0..self.width())
             .map(|i| rows.iter().map(|row| row[i]).collect::<Vec<_>>())
             .collect::<Vec<_>>();
-        let name = format!("Columnar({})", self.name);
-        let data = FlatVec::new(cols).unwrap_or_else(|e| unreachable!("Failed to create a FlatVec: {}", e));
+        let metadata = (0..cols.len()).collect::<Vec<_>>();
         MSA {
             aligner: self.aligner.clone(),
-            data,
-            name,
+            sequences: cols,
+            metadata,
         }
     }
 
@@ -216,14 +190,13 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     #[must_use]
     pub fn percent_gaps(&self) -> f32 {
         let num_gaps = self
-            .data
-            .items()
+            .sequences
             .iter()
             .map(AsRef::as_ref)
             .map(|s| bytecount::count(s, self.gap()))
             .collect::<Vec<_>>();
         let num_gaps: f32 = crate::utils::mean(&num_gaps);
-        num_gaps / self.data.dimensionality_hint().0.as_f32()
+        num_gaps / self.width() as f32
     }
 
     /// Scores each pair of columns in the MSA, applying a penalty for gaps and
@@ -234,13 +207,12 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     #[must_use]
     pub fn scoring_columns(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let score = self
-            .data
-            .items()
+            .sequences
             .iter()
             .map(AsRef::as_ref)
             .map(|c| sc_inner(c, self.gap(), gap_penalty, mismatch_penalty))
             .sum::<usize>();
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        score as f32 / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Calculates the mean and maximum `p-distance`s of all pairwise
@@ -252,7 +224,7 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         let (sum, max) = p_distances
             .into_iter()
             .fold((0.0, 0.0), |(sum, max), dist| (sum + dist, f32::max(max, dist)));
-        let avg = sum / n_pairs.as_f32();
+        let avg = sum / n_pairs as f32;
         (avg, max)
     }
 
@@ -265,21 +237,22 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         let (sum, max) = p_distances
             .into_iter()
             .fold((0.0, 0.0), |(sum, max), dist| (sum + dist, f32::max(max, dist)));
-        let avg = sum / n_pairs.as_f32();
+        let avg = sum / n_pairs as f32;
         (avg, max)
     }
 
     /// Calculates the `p-distance` of each pairwise alignment in the MSA.
     fn p_distances(&self) -> Vec<f32> {
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
-        self.apply_pairwise(&self.indices().collect::<Vec<_>>(), scorer)
-            .collect()
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        self.apply_pairwise(&indices, scorer).collect()
     }
 
     /// Same as `p_distances`, but only estimates the score for a subset of the
     /// pairwise alignments.
     fn p_distances_subsample(&self) -> Vec<f32> {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH, LOG2_THRESH);
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
         self.apply_pairwise(&indices, scorer).collect()
     }
@@ -288,19 +261,19 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// and the Hamming distance between each pair of sequences.
     #[must_use]
     pub fn distance_distortion(&self) -> f32 {
-        let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), |s1, s2| {
-            dd_inner(s1, s2, self.gap())
-        });
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let score = self.sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, self.gap()));
+        score / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Same as `distance_distortion`, but only estimates the score for a subset
     /// of the pairwise alignments.
     #[must_use]
     pub fn distance_distortion_subsample(&self) -> f32 {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH / 4, LOG2_THRESH / 4);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH / 4, LOG2_THRESH / 4);
         let score = self.sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, self.gap()));
-        score.as_f32() / utils::n_pairs(indices.len()).as_f32()
+        score / utils::n_pairs(indices.len()) as f32
     }
 
     /// Scores each pairwise alignment in the MSA, applying a penalty for gaps
@@ -317,19 +290,21 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     /// number of pairwise alignments.
     #[must_use]
     pub fn scoring_pairwise(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
         let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
-        let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        let score = self.sum_of_pairs(&indices, scorer);
+        score as f32 / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Same as `scoring_pairwise`, but only estimates the score for a subset of
     /// the pairwise alignments.
     #[must_use]
     pub fn scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH, LOG2_THRESH);
         let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
         let score = self.sum_of_pairs(&indices, scorer);
-        score.as_f32() / utils::n_pairs(indices.len()).as_f32()
+        score as f32 / utils::n_pairs(indices.len()) as f32
     }
 
     /// Scores each pairwise alignment in the MSA, applying penalties for
@@ -352,10 +327,11 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
         let scorer =
             |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
-        let score = self.sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        let score = self.sum_of_pairs(&indices, scorer);
+        score as f32 / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Same as `weighted_scoring_pairwise`, but only estimates the score for a subset of
@@ -367,15 +343,16 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH / 4, LOG2_THRESH / 4);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH / 4, LOG2_THRESH / 4);
         let scorer =
             |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
         let score = self.sum_of_pairs(&indices, scorer);
-        score.as_f32() / utils::n_pairs(indices.len()).as_f32()
+        score as f32 / utils::n_pairs(indices.len()) as f32
     }
 
     /// Applies a pairwise scorer to all pairs of sequences in the MSA.
-    fn apply_pairwise<'a, F, G: Number>(&'a self, indices: &'a [usize], scorer: F) -> impl Iterator<Item = G> + 'a
+    fn apply_pairwise<'a, F, G: DistanceValue>(&'a self, indices: &'a [usize], scorer: F) -> impl Iterator<Item = G> + 'a
     where
         F: (Fn(&[u8], &[u8]) -> G) + 'a,
     {
@@ -388,7 +365,7 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     }
 
     /// Calculate the sum of the pairwise scores for a given scorer.
-    fn sum_of_pairs<F, G: Number>(&self, indices: &[usize], scorer: F) -> G
+    fn sum_of_pairs<F, G: DistanceValue>(&self, indices: &[usize], scorer: F) -> G
     where
         F: Fn(&[u8], &[u8]) -> G,
     {
@@ -396,20 +373,48 @@ impl<I: AsRef<[u8]>, T: Number, Me> MSA<I, T, Me> {
     }
 }
 
-impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
+impl<I: AsRef<[u8]> + FromIterator<u8> + Send + Sync, T: DistanceValue + Send + Sync, Me: Clone + Send + Sync>
+    MSA<I, T, Me>
+{
+    /// Parallel version of [`MSA::from_unaligned`](Self::from_unaligned).
+    ///
+    /// # Errors
+    ///
+    /// See [`MSA::from_unaligned`](Self::from_unaligned).
+    pub fn par_from_unaligned<M: Fn(&I, &I) -> T + Send + Sync, C: (Fn(&Ball<T>) -> bool) + Send + Sync>(
+        aligner: &Aligner<T>,
+        mut sequences: Vec<I>,
+        mut metadata: Vec<Me>,
+        metric: &M,
+        criteria: &C,
+    ) -> Result<Self, String> {
+        if sequences.len() != metadata.len() {
+            return Err("The number of sequences must be equal to the number of metadata entries.".to_string());
+        }
+
+        let root = Ball::par_new_tree(&sequences, metric, criteria);
+        let (root, permutation) = PermutedBall::par_from_cluster_tree(root, &mut sequences);
+
+        metadata.permute(&permutation);
+        sequences = Columns::new(b'-')
+            .par_with_binary_tree(&root, &sequences, aligner)
+            .par_extract_msa_rows();
+
+        Self::from_aligned(aligner, sequences, metadata)
+    }
+
     /// Parallel version of [`MSA::change_major`](crate::msa::dataset::msa::MSA::change_major).
     pub fn par_change_major(&self) -> MSA<Vec<u8>, T, usize> {
-        let rows = self.data.items().par_iter().map(I::as_ref).collect::<Vec<_>>();
+        let rows = self.sequences.par_iter().map(I::as_ref).collect::<Vec<_>>();
         let cols = (0..self.width())
             .into_par_iter()
             .map(|i| rows.iter().map(|row| row[i]).collect::<Vec<_>>())
             .collect::<Vec<_>>();
-        let name = format!("Columnar({})", self.name);
-        let data = FlatVec::new(cols).unwrap_or_else(|e| unreachable!("Failed to create a FlatVec: {}", e));
+        let metadata = (0..cols.len()).collect::<Vec<_>>();
         MSA {
             aligner: self.aligner.clone(),
-            data,
-            name,
+            sequences: cols,
+            metadata,
         }
     }
 
@@ -418,13 +423,12 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     pub fn par_scoring_columns(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
         let num_seqs = self.get(0).as_ref().len();
         let score = self
-            .data
-            .items()
+            .sequences
             .par_iter()
             .map(AsRef::as_ref)
             .map(|c| sc_inner(c, self.gap(), gap_penalty, mismatch_penalty))
             .sum::<usize>();
-        score.as_f32() / utils::n_pairs(num_seqs).as_f32()
+        score as f32 / utils::n_pairs(num_seqs) as f32
     }
 
     /// Parallel version of [`MSA::p_distance_stats`](crate::msa::dataset::msa::MSA::p_distance_stats).
@@ -435,7 +439,7 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
         let (sum, max) = p_dists
             .into_iter()
             .fold((0.0, 0.0), |(sum, max), dist| (sum + dist, f32::max(max, dist)));
-        let avg = sum / n_pairs.as_f32();
+        let avg = sum / n_pairs as f32;
         (avg, max)
     }
 
@@ -447,20 +451,21 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
         let (sum, max) = p_dists
             .into_iter()
             .fold((0.0, 0.0), |(sum, max), dist| (sum + dist, f32::max(max, dist)));
-        let avg = sum / n_pairs.as_f32();
+        let avg = sum / n_pairs as f32;
         (avg, max)
     }
 
     /// Parallel version of [`MSA::p_distances`](crate::msa::dataset::msa::MSA::p_distances).
     fn par_p_distances(&self) -> Vec<f32> {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
-        self.par_apply_pairwise(&self.indices().collect::<Vec<_>>(), scorer)
-            .collect()
+        self.par_apply_pairwise(&indices, scorer).collect()
     }
 
     /// Parallel version of [`MSA::p_distances_subsample`](crate::msa::dataset::msa::MSA::p_distances_subsample).
     fn par_p_distances_subsample(&self) -> Vec<f32> {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH, LOG2_THRESH);
         let scorer = |s1: &[u8], s2: &[u8]| pd_inner(s1, s2, self.gap());
         self.par_apply_pairwise(&indices, scorer).collect()
     }
@@ -468,35 +473,37 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     /// Parallel version of [`MSA::distance_distortion`](crate::msa::dataset::msa::MSA::distance_distortion).
     #[must_use]
     pub fn par_distance_distortion(&self) -> f32 {
-        let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), |s1, s2| {
-            dd_inner(s1, s2, self.gap())
-        });
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let score = self.par_sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, self.gap()));
+        score / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Parallel version of [`MSA::distance_distortion_subsample`](crate::msa::dataset::msa::MSA::distance_distortion_subsample).
     #[must_use]
     pub fn par_distance_distortion_subsample(&self) -> f32 {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH / 8, LOG2_THRESH / 8);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH / 8, LOG2_THRESH / 8);
         let score = self.par_sum_of_pairs(&indices, |s1, s2| dd_inner(s1, s2, self.gap()));
-        score.as_f32() / utils::n_pairs(indices.len()).as_f32()
+        score / utils::n_pairs(indices.len()) as f32
     }
 
     /// Parallel version of [`MSA::scoring_pairwise`](crate::msa::dataset::msa::MSA::scoring_pairwise).
     #[must_use]
     pub fn par_scoring_pairwise(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
         let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
-        let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        let score = self.par_sum_of_pairs(&indices, scorer);
+        score as f32 / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Parallel version of [`MSA::scoring_pairwise_subsample`](crate::msa::dataset::msa::MSA::scoring_pairwise_subsample).
     #[must_use]
     pub fn par_scoring_pairwise_subsample(&self, gap_penalty: usize, mismatch_penalty: usize) -> f32 {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH, LOG2_THRESH);
         let scorer = |s1: &[u8], s2: &[u8]| sp_inner(s1, s2, self.gap(), gap_penalty, mismatch_penalty);
         let score = self.par_sum_of_pairs(&indices, scorer);
-        score.as_f32() / utils::n_pairs(indices.len()).as_f32()
+        score as f32 / utils::n_pairs(indices.len()) as f32
     }
 
     /// Parallel version of [`MSA::weighted_scoring_pairwise`](crate::msa::dataset::msa::MSA::weighted_scoring_pairwise).
@@ -507,10 +514,11 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
         let scorer =
             |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
-        let score = self.par_sum_of_pairs(&self.indices().collect::<Vec<_>>(), scorer);
-        score.as_f32() / utils::n_pairs(self.cardinality()).as_f32()
+        let score = self.par_sum_of_pairs(&indices, scorer);
+        score as f32 / utils::n_pairs(self.cardinality()) as f32
     }
 
     /// Parallel version of [`MSA::weighted_scoring_pairwise_subsample`](crate::msa::dataset::msa::MSA::weighted_scoring_pairwise_subsample).
@@ -521,15 +529,16 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
         gap_ext_penalty: usize,
         mismatch_penalty: usize,
     ) -> f32 {
-        let indices = utils::choose_samples(&self.indices().collect::<Vec<_>>(), SQRT_THRESH, LOG2_THRESH);
+        let indices = (0..self.cardinality()).collect::<Vec<_>>();
+        let indices = utils::choose_samples(&indices, SQRT_THRESH, LOG2_THRESH);
         let scorer =
             |s1: &[u8], s2: &[u8]| wsp_inner(s1, s2, self.gap(), gap_open_penalty, gap_ext_penalty, mismatch_penalty);
         let score = self.par_sum_of_pairs(&indices, scorer);
-        score.as_f32() / utils::n_pairs(indices.len()).as_f32()
+        score as f32 / utils::n_pairs(indices.len()) as f32
     }
 
     /// Parallel version of [`MSA::apply_pairwise`](crate::msa::dataset::msa::MSA::apply_pairwise).
-    fn par_apply_pairwise<'a, F, G: Number>(
+    fn par_apply_pairwise<'a, F, G: DistanceValue + Send + Sync>(
         &'a self,
         indices: &'a [usize],
         scorer: F,
@@ -546,7 +555,7 @@ impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> MSA<I, T, Me> {
     }
 
     /// Parallel version of [`MSA::sum_of_pairs`](crate::msa::dataset::msa::MSA::sum_of_pairs).
-    fn par_sum_of_pairs<F, G: Number>(&self, indices: &[usize], scorer: F) -> G
+    fn par_sum_of_pairs<F, G: DistanceValue + Send + Sync>(&self, indices: &[usize], scorer: F) -> G
     where
         F: (Fn(&[u8], &[u8]) -> G) + Send + Sync,
     {
@@ -654,12 +663,13 @@ fn dd_inner(s1: &[u8], s2: &[u8], gap_char: u8) -> f32 {
 
     let s1 = s1.iter().filter(|&&c| c != gap_char).copied().collect::<Vec<_>>();
     let s2 = s2.iter().filter(|&&c| c != gap_char).copied().collect::<Vec<_>>();
-    let lev = stringzilla::sz::edit_distance(s1, s2);
+    let sz_lev = crate::utils::sz_lev_builder();
+    let lev = sz_lev(&s1, &s2);
 
     if lev == 0 {
         1.0
     } else {
-        ham.as_f32() / lev.as_f32()
+        ham as f32 / lev as f32
     }
 }
 
@@ -671,82 +681,17 @@ fn pd_inner(s1: &[u8], s2: &[u8], gap_char: u8) -> f32 {
         .zip(s2.iter())
         .filter(|(&a, &b)| a != gap_char && b != gap_char && a != b)
         .count();
-    num_mismatches.as_f32() / s1.len().as_f32()
+    num_mismatches as f32 / s1.len() as f32
 }
 
-impl<I: AsRef<[u8]>, T: Number, Me> Dataset<I> for MSA<I, T, Me> {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn with_name(self, name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            ..self
-        }
-    }
-
-    fn cardinality(&self) -> usize {
-        self.data.cardinality()
-    }
-
-    fn dimensionality_hint(&self) -> (usize, Option<usize>) {
-        self.data.dimensionality_hint()
-    }
-
-    fn get(&self, index: usize) -> &I {
-        self.data.get(index)
+impl<I: AsRef<[u8]>, T: DistanceValue, Me> AsRef<[I]> for MSA<I, T, Me> {
+    fn as_ref(&self) -> &[I] {
+        &self.sequences
     }
 }
 
-impl<I: AsRef<[u8]> + Send + Sync, T: Number, Me: Send + Sync> ParDataset<I> for MSA<I, T, Me> {}
-
-impl<I: AsRef<[u8]>, T: Number, Me> Permutable for MSA<I, T, Me> {
-    fn permutation(&self) -> Vec<usize> {
-        self.data.permutation()
-    }
-
-    fn set_permutation(&mut self, permutation: &[usize]) {
-        self.data.set_permutation(permutation);
-    }
-
-    fn swap_two(&mut self, i: usize, j: usize) {
-        self.data.swap_two(i, j);
-    }
-}
-
-impl<I: AsRef<[u8]>, T: Number, Me> AssociatesMetadata<I, Me> for MSA<I, T, Me> {
-    fn metadata(&self) -> &[Me] {
-        self.data.metadata()
-    }
-
-    fn metadata_at(&self, index: usize) -> &Me {
-        self.data.metadata_at(index)
-    }
-}
-
-impl<I: AsRef<[u8]>, T: Number, Me, Met: Clone> AssociatesMetadataMut<I, Me, Met, MSA<I, T, Met>> for MSA<I, T, Me> {
-    fn metadata_mut(&mut self) -> &mut [Me] {
-        <FlatVec<I, Me> as AssociatesMetadataMut<I, Me, Met, FlatVec<I, Met>>>::metadata_mut(&mut self.data)
-    }
-
-    fn metadata_at_mut(&mut self, index: usize) -> &mut Me {
-        <FlatVec<I, Me> as AssociatesMetadataMut<I, Me, Met, FlatVec<I, Met>>>::metadata_at_mut(&mut self.data, index)
-    }
-
-    fn with_metadata(self, metadata: &[Met]) -> Result<MSA<I, T, Met>, String> {
-        self.data.with_metadata(metadata).map(|data| MSA {
-            aligner: self.aligner,
-            data,
-            name: self.name,
-        })
-    }
-
-    fn transform_metadata<F: Fn(&Me) -> Met>(self, f: F) -> MSA<I, T, Met> {
-        MSA {
-            aligner: self.aligner,
-            data: self.data.transform_metadata(f),
-            name: self.name,
-        }
+impl<I: AsRef<[u8]>, T: DistanceValue, Me> AsMut<[I]> for MSA<I, T, Me> {
+    fn as_mut(&mut self) -> &mut [I] {
+        &mut self.sequences
     }
 }

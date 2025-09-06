@@ -1,18 +1,18 @@
 //! A `BalancedBall` is a data structure that represents a balanced binary tree.
 
-use distances::Number;
+use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{dataset::ParDataset, metric::ParMetric, Dataset, Metric};
+use crate::{dataset::ParDataset, Dataset};
 
-use super::{Ball, Cluster, ParCluster, ParPartition, Partition};
+use super::{Ball, Cluster, DistanceValue, ParCluster, ParPartition, Partition};
 
 /// A `BalancedBall` is a data structure that represents a balanced binary tree.
 #[derive(Clone)]
 #[must_use]
-pub struct BalancedBall<T: Number>(Ball<T>, Vec<Box<Self>>);
+pub struct BalancedBall<T: DistanceValue>(Ball<T>, Vec<Box<Self>>);
 
-impl<T: Number> BalancedBall<T> {
+impl<T: DistanceValue> BalancedBall<T> {
     /// Converts the `BalancedBall` into a `Ball`.
     pub fn into_ball(mut self) -> Ball<T> {
         if !self.1.is_empty() {
@@ -23,7 +23,7 @@ impl<T: Number> BalancedBall<T> {
     }
 }
 
-impl<T: Number> core::fmt::Debug for BalancedBall<T> {
+impl<T: DistanceValue + core::fmt::Debug> core::fmt::Debug for BalancedBall<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("BalancedBall")
             .field("depth", &self.depth())
@@ -33,39 +33,32 @@ impl<T: Number> core::fmt::Debug for BalancedBall<T> {
             .field("arg_center", &self.arg_center())
             .field("arg_radial", &self.arg_radial())
             .field("indices", &self.indices())
-            .field("extents", &self.extents())
             .field("children", &!self.is_leaf())
             .finish()
     }
 }
 
-impl<T: Number> PartialEq for BalancedBall<T> {
+impl<T: DistanceValue> PartialEq for BalancedBall<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0 && self.1 == other.1
     }
 }
 
-impl<T: Number> Eq for BalancedBall<T> {}
+impl<T: DistanceValue> Eq for BalancedBall<T> {}
 
-impl<T: Number> PartialOrd for BalancedBall<T> {
+impl<T: DistanceValue> PartialOrd for BalancedBall<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Number> Ord for BalancedBall<T> {
+impl<T: DistanceValue> Ord for BalancedBall<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<T: Number> core::hash::Hash for BalancedBall<T> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl<T: Number> Cluster<T> for BalancedBall<T> {
+impl<T: DistanceValue> Cluster<T> for BalancedBall<T> {
     fn depth(&self) -> usize {
         self.0.depth()
     }
@@ -110,20 +103,8 @@ impl<T: Number> Cluster<T> for BalancedBall<T> {
         self.0.set_indices(indices);
     }
 
-    fn extents(&self) -> &[(usize, T)] {
-        self.0.extents()
-    }
-
-    fn extents_mut(&mut self) -> &mut [(usize, T)] {
-        self.0.extents_mut()
-    }
-
-    fn add_extent(&mut self, idx: usize, extent: T) {
-        self.0.add_extent(idx, extent);
-    }
-
-    fn take_extents(&mut self) -> Vec<(usize, T)> {
-        self.0.take_extents()
+    fn take_indices(&mut self) -> Vec<usize> {
+        self.0.take_indices()
     }
 
     fn children(&self) -> Vec<&Self> {
@@ -147,34 +128,33 @@ impl<T: Number> Cluster<T> for BalancedBall<T> {
     }
 }
 
-impl<T: Number> ParCluster<T> for BalancedBall<T> {
+impl<T: DistanceValue + Send + Sync> ParCluster<T> for BalancedBall<T> {
     fn par_indices(&self) -> impl rayon::prelude::ParallelIterator<Item = usize> {
         self.0.par_indices()
     }
 }
 
-impl<T: Number> Partition<T> for BalancedBall<T> {
-    fn new<I, D: Dataset<I>, M: Metric<I, T>>(
+impl<T: DistanceValue> Partition<T> for BalancedBall<T> {
+    fn new<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         data: &D,
         metric: &M,
         indices: &[usize],
         depth: usize,
-        seed: Option<u64>,
     ) -> Result<Self, String> {
-        Ball::new(data, metric, indices, depth, seed).map(|ball| Self(ball, Vec::new()))
+        Ball::new(data, metric, indices, depth).map(|ball| Self(ball, Vec::new()))
     }
 
-    fn find_extrema<I, D: Dataset<I>, M: Metric<I, T>>(&mut self, data: &D, metric: &M) -> Vec<usize> {
+    fn find_extrema<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(&self, data: &D, metric: &M) -> Vec<usize> {
         self.0.find_extrema(data, metric)
     }
 
     #[allow(clippy::similar_names)]
-    fn split_by_extrema<I, D: Dataset<I>, M: Metric<I, T>>(
+    fn split_by_extrema<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &self,
         data: &D,
         metric: &M,
         extrema: &[usize],
-    ) -> (Vec<Vec<usize>>, Vec<T>) {
+    ) -> Vec<Vec<usize>> {
         let [l, r] = [extrema[0], extrema[1]];
         let lr = data.one_to_one(l, r, metric);
 
@@ -188,15 +168,26 @@ impl<T: Number> Partition<T> for BalancedBall<T> {
         let l_distances = data.one_to_many(l, &items, metric);
         let r_distances = data.one_to_many(r, &items, metric);
 
-        let child_stacks = if metric.obeys_triangle_inequality() {
-            let lr = lr.as_f32();
+        let child_stacks = {
+            let lr = lr
+                .to_f32()
+                .unwrap_or_else(|| unreachable!("Cannot convert distance to f32"));
 
             // Find the distance from `l` to each item projected onto the line
             // connecting `l` and `r`.
             let lr_distances = {
                 let mut lr_distances = l_distances
-                    .map(|(a, d)| (a, d.as_f32()))
-                    .zip(r_distances.map(|(_, d)| d.as_f32()))
+                    .map(|(a, d)| {
+                        (
+                            a,
+                            d.to_f32()
+                                .unwrap_or_else(|| unreachable!("Cannot convert distance to f32")),
+                        )
+                    })
+                    .zip(r_distances.map(|(_, d)| {
+                        d.to_f32()
+                            .unwrap_or_else(|| unreachable!("Cannot convert distance to f32"))
+                    }))
                     .map(|((a, al), ar)| {
                         let cos = ar.mul_add(-ar, lr.mul_add(lr, al.powi(2))) / (2.0 * al * lr);
                         (a, al * cos)
@@ -205,7 +196,14 @@ impl<T: Number> Partition<T> for BalancedBall<T> {
                 lr_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
                 lr_distances
                     .into_iter()
-                    .map(|(a, d)| (a, T::from(d)))
+                    .map(|(a, d)| {
+                        (
+                            a,
+                            T::from_f32(d).unwrap_or_else(|| {
+                                unreachable!("Cannot convert f32 to {}", core::any::type_name::<T>())
+                            }),
+                        )
+                    })
                     .collect::<Vec<_>>()
             };
 
@@ -217,31 +215,11 @@ impl<T: Number> Partition<T> for BalancedBall<T> {
                 1 + lr_distances.len() / 2
             };
             let (ls, rs) = lr_distances.split_at(mid);
-            let l_stack = core::iter::once((l, T::ZERO))
+            let l_stack = core::iter::once((l, T::zero()))
                 .chain(ls.iter().copied())
                 .collect::<Vec<_>>();
-            let r_stack = core::iter::once((r, T::ZERO))
+            let r_stack = core::iter::once((r, T::zero()))
                 .chain(rs.iter().copied())
-                .collect::<Vec<_>>();
-
-            vec![l_stack, r_stack]
-        } else {
-            // If the metric does not obey the triangle inequality, we just sort
-            // the items by their distance to `l`.
-            let l_distances = {
-                let mut l_distances = l_distances.collect::<Vec<_>>();
-                l_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
-                l_distances
-            };
-
-            // Half of the items will be assigned to the left child and the
-            // other half to the right child.
-            let (ls, rs) = l_distances.split_at(l_distances.len() / 2);
-            let l_stack = core::iter::once((l, T::ZERO))
-                .chain(ls.iter().copied())
-                .collect::<Vec<_>>();
-            let r_stack = core::iter::once((r, T::ZERO))
-                .chain(rs.iter().map(|&(a, d)| (a, lr - d)))
                 .collect::<Vec<_>>();
 
             vec![l_stack, r_stack]
@@ -250,30 +228,25 @@ impl<T: Number> Partition<T> for BalancedBall<T> {
         child_stacks
             .into_iter()
             .map(|stack| {
-                let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                let extent = distances
-                    .into_iter()
-                    .max_by(Number::total_cmp)
-                    .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-                (indices, extent)
+                let (indices, _) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+                indices
             })
-            .unzip()
+            .collect()
     }
 }
 
-impl<T: Number> ParPartition<T> for BalancedBall<T> {
-    fn par_new<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+impl<T: DistanceValue + Send + Sync> ParPartition<T> for BalancedBall<T> {
+    fn par_new<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         data: &D,
         metric: &M,
         indices: &[usize],
         depth: usize,
-        seed: Option<u64>,
     ) -> Result<Self, String> {
-        Ball::par_new(data, metric, indices, depth, seed).map(|ball| Self(ball, Vec::new()))
+        Ball::par_new(data, metric, indices, depth).map(|ball| Self(ball, Vec::new()))
     }
 
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
-        &mut self,
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
+        &self,
         data: &D,
         metric: &M,
     ) -> Vec<usize> {
@@ -281,12 +254,12 @@ impl<T: Number> ParPartition<T> for BalancedBall<T> {
     }
 
     #[allow(clippy::similar_names)]
-    fn par_split_by_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    fn par_split_by_extrema<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         &self,
         data: &D,
         metric: &M,
         extrema: &[usize],
-    ) -> (Vec<Vec<usize>>, Vec<T>) {
+    ) -> Vec<Vec<usize>> {
         let [l, r] = [extrema[0], extrema[1]];
         let lr = data.par_one_to_one(l, r, metric);
 
@@ -296,16 +269,27 @@ impl<T: Number> ParPartition<T> for BalancedBall<T> {
         let l_distances = data.par_one_to_many(l, &items, metric).collect::<Vec<_>>();
         let r_distances = data.par_one_to_many(r, &items, metric).collect::<Vec<_>>();
 
-        let child_stacks = if metric.obeys_triangle_inequality() {
-            let lr = lr.as_f32();
+        let child_stacks = {
+            let lr = lr
+                .to_f32()
+                .unwrap_or_else(|| unreachable!("Cannot convert distance to f32"));
 
             // Find the distance from `l` to each item projected onto the line
             // connecting `l` and `r`.
             let lr_distances = {
                 let mut lr_distances = l_distances
                     .into_par_iter()
-                    .map(|(a, d)| (a, d.as_f32()))
-                    .zip(r_distances.into_par_iter().map(|(_, d)| d.as_f32()))
+                    .map(|(a, d)| {
+                        (
+                            a,
+                            d.to_f32()
+                                .unwrap_or_else(|| unreachable!("Cannot convert distance to f32")),
+                        )
+                    })
+                    .zip(r_distances.into_par_iter().map(|(_, d)| {
+                        d.to_f32()
+                            .unwrap_or_else(|| unreachable!("Cannot convert distance to f32"))
+                    }))
                     .map(|((a, al), ar)| {
                         let cos = ar.mul_add(-ar, lr.mul_add(lr, al.powi(2))) / (2.0 * al * lr);
                         (a, al * cos)
@@ -314,7 +298,14 @@ impl<T: Number> ParPartition<T> for BalancedBall<T> {
                 lr_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
                 lr_distances
                     .into_par_iter()
-                    .map(|(a, d)| (a, T::from(d)))
+                    .map(|(a, d)| {
+                        (
+                            a,
+                            T::from_f32(d).unwrap_or_else(|| {
+                                unreachable!("Cannot convert f32 to {}", core::any::type_name::<T>())
+                            }),
+                        )
+                    })
                     .collect::<Vec<_>>()
             };
 
@@ -326,52 +317,27 @@ impl<T: Number> ParPartition<T> for BalancedBall<T> {
                 1 + lr_distances.len() / 2
             };
             let (ls, rs) = lr_distances.split_at(mid);
-            let l_stack = core::iter::once((l, T::ZERO))
+            let l_stack = core::iter::once((l, T::zero()))
                 .chain(ls.iter().copied())
                 .collect::<Vec<_>>();
-            let r_stack = core::iter::once((r, T::ZERO))
+            let r_stack = core::iter::once((r, T::zero()))
                 .chain(rs.iter().copied())
-                .collect::<Vec<_>>();
-
-            vec![l_stack, r_stack]
-        } else {
-            // If the metric does not obey the triangle inequality, we just sort
-            // the items by their distance to `l`.
-            let l_distances = {
-                let mut l_distances = l_distances;
-                l_distances.sort_by(|(_, a), (_, b)| a.total_cmp(b));
-                l_distances
-            };
-
-            // Half of the items will be assigned to the left child and the
-            // other half to the right child.
-            let (ls, rs) = l_distances.split_at(l_distances.len() / 2);
-            let l_stack = core::iter::once((l, T::ZERO))
-                .chain(ls.iter().copied())
-                .collect::<Vec<_>>();
-            let r_stack = core::iter::once((r, T::ZERO))
-                .chain(rs.iter().map(|&(a, d)| (a, lr - d)))
                 .collect::<Vec<_>>();
 
             vec![l_stack, r_stack]
         };
 
         child_stacks
-            .into_par_iter()
+            .into_iter()
             .map(|stack| {
-                let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                let extent = distances
-                    .into_iter()
-                    .max_by(Number::total_cmp)
-                    .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-                (indices, extent)
+                let (indices, _) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+                indices
             })
-            .unzip()
+            .collect()
     }
 }
 
-#[cfg(feature = "disk-io")]
-impl<T: Number> crate::DiskIO for BalancedBall<T> {
+impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>> crate::DiskIO for BalancedBall<T> {
     fn to_bytes(&self) -> Result<Vec<u8>, String> {
         let mut bytes = Vec::new();
         let ball_bytes = self.0.to_bytes()?;
@@ -403,5 +369,7 @@ impl<T: Number> crate::DiskIO for BalancedBall<T> {
     }
 }
 
-#[cfg(feature = "disk-io")]
-impl<T: Number> crate::ParDiskIO for BalancedBall<T> {}
+impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>> + Send + Sync> crate::ParDiskIO
+    for BalancedBall<T>
+{
+}

@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use distances::Number;
+use num::traits::FromBytes;
 
-use crate::{dataset::ParDataset, Dataset};
+use crate::{dataset::ParDataset, Dataset, DistanceValue};
 
 /// Something that can decode items from a byte array or in terms of a reference.
 pub trait Decoder<I> {
@@ -47,10 +47,10 @@ pub trait Decompressible<I, Dec: Decoder<I>>: Dataset<I> {
         let mut items = Vec::new();
 
         let mut offset = 0;
-        let arg_center = crate::utils::read_number::<usize>(bytes, &mut offset);
+        let arg_center = crate::utils::read_number::<usize, 8>(bytes, &mut offset);
         let center = &self.centers()[&arg_center];
 
-        let cardinality = crate::utils::read_number::<usize>(bytes, &mut offset);
+        let cardinality = crate::utils::read_number::<usize, 8>(bytes, &mut offset);
 
         for i in 0..cardinality {
             let encoding = crate::utils::read_encoding(bytes, &mut offset);
@@ -70,14 +70,14 @@ pub trait ParDecompressible<I: Send + Sync, Dec: ParDecoder<I>>: Decompressible<
     }
 }
 
-impl<T: Number> Decoder<T> for T {
+impl<T: DistanceValue + FromBytes<Bytes = Vec<u8>>> Decoder<T> for T {
     fn from_byte_array(&self, bytes: &[u8]) -> T {
-        T::from_le_bytes(bytes)
+        T::from_le_bytes(&bytes.to_vec())
     }
 
     fn decode(&self, bytes: &[u8], _: &T) -> T {
-        T::from_le_bytes(bytes)
+        T::from_le_bytes(&bytes.to_vec())
     }
 }
 
-impl<T: Number> ParDecoder<T> for T {}
+impl<T: DistanceValue + FromBytes<Bytes = Vec<u8>> + Send + Sync> ParDecoder<T> for T {}

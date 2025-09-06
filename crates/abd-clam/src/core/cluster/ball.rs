@@ -1,19 +1,13 @@
 //! The most basic representation of a `Cluster` is a metric-`Ball`.
 
-use core::{
-    cmp::Ordering,
-    hash::{Hash, Hasher},
-};
+use core::cmp::Ordering;
 
-use distances::Number;
+use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
 use crate::{
-    core::{dataset::ParDataset, metric::ParMetric, Dataset, Metric},
-    utils,
+    core::dataset::MaxItem, utils, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, ParPartition, Partition, LFD,
 };
-
-use super::{partition::ParPartition, Cluster, ParCluster, Partition, LFD};
 
 /// A metric-`Ball` is a collection of items that are within a certain distance
 /// of a center.
@@ -22,18 +16,19 @@ use super::{partition::ParPartition, Cluster, ParCluster, Partition, LFD};
 ///
 /// ```rust
 /// use abd_clam::{
-///     cluster::{Partition, ParPartition},
-///     metric::AbsoluteDifference,
-///     Ball, Cluster, Dataset, FlatVec
+///     Partition, ParPartition,
+///     Ball, Cluster, Dataset
 /// };
 ///
-/// let items = (0..=100).collect::<Vec<_>>();
-/// let data = FlatVec::new(items).unwrap();
-/// let metric = AbsoluteDifference;
+/// let data = (0..=100).collect::<Vec<_>>();
+///
+/// fn metric(a: &i32, b: &i32) -> i32 {
+///     (a - b).abs()
+/// }
 ///
 /// // We will create a `Ball` with all the items in the `data`.
-/// let indices = data.indices().collect::<Vec<_>>();
-/// let ball = Ball::new(&data, &metric, &indices, 0, None).unwrap();
+/// let indices = (0..data.cardinality()).collect::<Vec<_>>();
+/// let ball = Ball::new(&data, &metric, &indices, 0).unwrap();
 ///
 /// assert_eq!(ball.depth(), 0);
 /// assert_eq!(ball.cardinality(), 101);
@@ -47,22 +42,18 @@ use super::{partition::ParPartition, Cluster, ParCluster, Partition, LFD};
 ///
 /// // We will now create a tree of `Ball`s with leaves being singletons.
 /// let partition_criteria = |ball: &Ball<_>| ball.cardinality() > 1;
-/// let root = Ball::new_tree(&data, &metric, &partition_criteria, None);
+/// let root = Ball::new_tree(&data, &metric, &partition_criteria);
 /// assert!(!root.is_leaf());
 ///
 /// // We can also use the equivalent parallelized methods to create the tree.
-/// let root = Ball::par_new_tree(&data, &metric, &partition_criteria, None);
+/// let root = Ball::par_new_tree(&data, &metric, &partition_criteria);
 /// assert!(!root.is_leaf());
 /// ```
-#[derive(Clone)]
-#[cfg_attr(
-    feature = "disk-io",
-    derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)
-)]
-#[cfg_attr(feature = "disk-io", bitcode(recursive))]
+#[derive(Clone, bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
+#[bitcode(recursive)]
 #[must_use]
-pub struct Ball<T: Number> {
-    /// Parameters used for creating the `Ball`.
+pub struct Ball<T: DistanceValue> {
+    /// The depth of the `Ball` in the tree.
     depth: usize,
     /// The number of items in the `Ball`.
     cardinality: usize,
@@ -76,20 +67,18 @@ pub struct Ball<T: Number> {
     arg_radial: usize,
     /// The indices of the items in the `Ball`.
     indices: Vec<usize>,
-    /// The extents of the `Ball`.
-    extents: Vec<(usize, T)>,
     /// The children of the `Ball`.
     children: Vec<Box<Self>>,
 }
 
-impl<T: Number> Ball<T> {
+impl<T: DistanceValue> Ball<T> {
     /// Returns the index of the item that is the furthest from the center.
     pub const fn arg_radial(&self) -> usize {
         self.arg_radial
     }
 }
 
-impl<T: Number> core::fmt::Debug for Ball<T> {
+impl<T: DistanceValue + core::fmt::Debug> core::fmt::Debug for Ball<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Ball")
             .field("depth", &self.depth)
@@ -99,13 +88,12 @@ impl<T: Number> core::fmt::Debug for Ball<T> {
             .field("arg_center", &self.arg_center)
             .field("arg_radial", &self.arg_radial)
             .field("indices", &self.indices)
-            .field("extents", &self.extents)
-            .field("children", &!self.children.is_empty())
+            .field("children", &self.children)
             .finish()
     }
 }
 
-impl<T: Number> PartialEq for Ball<T> {
+impl<T: DistanceValue> PartialEq for Ball<T> {
     fn eq(&self, other: &Self) -> bool {
         // Two `Clusters` in the same tree are uniquely identified by their
         // cardinality and the index of any one of their items.
@@ -113,15 +101,15 @@ impl<T: Number> PartialEq for Ball<T> {
     }
 }
 
-impl<T: Number> Eq for Ball<T> {}
+impl<T: DistanceValue> Eq for Ball<T> {}
 
-impl<T: Number> PartialOrd for Ball<T> {
+impl<T: DistanceValue> PartialOrd for Ball<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Number> Ord for Ball<T> {
+impl<T: DistanceValue> Ord for Ball<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.depth
             .cmp(&other.depth)
@@ -130,14 +118,14 @@ impl<T: Number> Ord for Ball<T> {
     }
 }
 
-impl<T: Number> Hash for Ball<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // We hash the `indices` field
-        self.unique_id().hash(state);
-    }
-}
+// impl<T: DistanceValue> Hash for Ball<T> {
+//     fn hash<H: Hasher>(&self, state: &mut H) {
+//         // We hash the `indices` field
+//         self.unique_id().hash(state);
+//     }
+// }
 
-impl<T: Number> Cluster<T> for Ball<T> {
+impl<T: DistanceValue> Cluster<T> for Ball<T> {
     fn depth(&self) -> usize {
         self.depth
     }
@@ -182,20 +170,8 @@ impl<T: Number> Cluster<T> for Ball<T> {
         self.indices = indices.to_vec();
     }
 
-    fn extents(&self) -> &[(usize, T)] {
-        &self.extents
-    }
-
-    fn extents_mut(&mut self) -> &mut [(usize, T)] {
-        &mut self.extents
-    }
-
-    fn add_extent(&mut self, index: usize, extent: T) {
-        self.extents.push((index, extent));
-    }
-
-    fn take_extents(&mut self) -> Vec<(usize, T)> {
-        core::mem::take(&mut self.extents)
+    fn take_indices(&mut self) -> Vec<usize> {
+        core::mem::take(&mut self.indices)
     }
 
     fn children(&self) -> Vec<&Self> {
@@ -219,19 +195,18 @@ impl<T: Number> Cluster<T> for Ball<T> {
     }
 }
 
-impl<T: Number> ParCluster<T> for Ball<T> {
+impl<T: DistanceValue + Send + Sync> ParCluster<T> for Ball<T> {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
         self.indices.par_iter().copied()
     }
 }
 
-impl<T: Number> Partition<T> for Ball<T> {
-    fn new<I, D: Dataset<I>, M: Metric<I, T>>(
+impl<T: DistanceValue> Partition<T> for Ball<T> {
+    fn new<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         data: &D,
         metric: &M,
         indices: &[usize],
         depth: usize,
-        seed: Option<u64>,
     ) -> Result<Self, String> {
         if indices.is_empty() {
             return Err("Cannot create a Ball with no items".to_string());
@@ -242,19 +217,36 @@ impl<T: Number> Partition<T> for Ball<T> {
             indices.to_vec()
         } else {
             let num_samples = utils::num_samples(cardinality, 100, 10_000);
-            data.choose_unique(indices, num_samples, seed, metric)
+            indices[..num_samples].to_vec()
         };
 
-        let arg_center = data.median(&samples, metric);
+        let arg_center = data.geometric_median(&samples, metric);
 
-        let distances = data.one_to_many(arg_center, indices, metric).collect::<Vec<_>>();
+        let distances = data.one_to_many(arg_center, indices, metric);
         let &(arg_radial, radius) = distances
             .iter()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .max_by(|(_, a), (_, b)| {
+                if a < b {
+                    Ordering::Less
+                } else if a > b {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                }
+            })
             .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
 
-        let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd = LFD::from_radial_distances(&distances, radius.half());
+        let distances = distances
+            .into_iter()
+            .map(|(_, d)| {
+                d.to_f32()
+                    .unwrap_or_else(|| unreachable!("Could convert distance to f32"))
+            })
+            .collect::<Vec<_>>();
+        let r = radius
+            .to_f32()
+            .unwrap_or_else(|| unreachable!("Could convert radius to f32"));
+        let lfd = LFD::from_radial_distances(&distances, r / 2.0);
 
         Ok(Self {
             depth,
@@ -264,30 +256,22 @@ impl<T: Number> Partition<T> for Ball<T> {
             arg_center,
             arg_radial,
             indices: indices.to_vec(),
-            extents: vec![(arg_center, radius)],
             children: Vec::new(),
         })
     }
 
-    fn find_extrema<I, D: Dataset<I>, M: Metric<I, T>>(&mut self, data: &D, metric: &M) -> Vec<usize> {
-        let (arg_l, d) = data
-            .one_to_many(self.arg_radial, &self.indices, metric)
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-
-        self.add_extent(self.arg_radial, d);
-
+    fn find_extrema<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(&self, data: &D, metric: &M) -> Vec<usize> {
+        let (arg_l, _) = data.farthest_among(self.arg_radial, &self.indices, metric);
         vec![arg_l, self.arg_radial]
     }
 }
 
-impl<T: Number> ParPartition<T> for Ball<T> {
-    fn par_new<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+impl<T: DistanceValue + Send + Sync> ParPartition<T> for Ball<T> {
+    fn par_new<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         data: &D,
         metric: &M,
         indices: &[usize],
         depth: usize,
-        seed: Option<u64>,
     ) -> Result<Self, String> {
         if indices.is_empty() {
             return Err("Cannot create a Ball with no items".to_string());
@@ -298,19 +282,32 @@ impl<T: Number> ParPartition<T> for Ball<T> {
             indices.to_vec()
         } else {
             let num_samples = utils::num_samples(cardinality, 100, 10_000);
-            data.choose_unique(indices, num_samples, seed, metric)
+            indices[..num_samples].to_vec()
         };
 
-        let arg_center = data.par_median(&samples, metric);
+        let arg_center = data.par_geometric_median(&samples, metric);
 
-        let distances = data.par_one_to_many(arg_center, indices, metric).collect::<Vec<_>>();
-        let &(arg_radial, radius) = distances
+        let distances = data.par_one_to_many(arg_center, indices, metric);
+        let (arg_radial, radius) = distances
             .iter()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
+            .map(|&(i, d)| MaxItem(i, d))
+            .max_by(Ord::cmp)
+            .map_or_else(
+                || unreachable!("Cannot find the maximum distance"),
+                |MaxItem(i, d)| (i, d),
+            );
 
-        let distances = distances.into_iter().map(|(_, d)| d).collect::<Vec<_>>();
-        let lfd = LFD::from_radial_distances(&distances, radius.half());
+        let distances = distances
+            .into_iter()
+            .map(|(_, d)| {
+                d.to_f32()
+                    .unwrap_or_else(|| unreachable!("Could convert distance to f32"))
+            })
+            .collect::<Vec<_>>();
+        let r = radius
+            .to_f32()
+            .unwrap_or_else(|| unreachable!("Could convert radius to f32"));
+        let lfd = LFD::from_radial_distances(&distances, r / 2.0);
 
         Ok(Self {
             depth,
@@ -320,72 +317,26 @@ impl<T: Number> ParPartition<T> for Ball<T> {
             arg_center,
             arg_radial,
             indices: indices.to_vec(),
-            extents: vec![(arg_center, radius)],
             children: Vec::new(),
         })
     }
 
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
-        &mut self,
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
+        &self,
         data: &D,
         metric: &M,
     ) -> Vec<usize> {
-        let (arg_l, d) = data
-            .par_one_to_many(self.arg_radial, &self.indices, metric)
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-
-        self.add_extent(self.arg_radial, d);
-
+        let (arg_l, _) = data.par_farthest_among(self.arg_radial, &self.indices, metric);
         vec![arg_l, self.arg_radial]
     }
 }
 
-#[cfg(feature = "disk-io")]
-impl<T: Number> super::Csv<T> for Ball<T> {
-    fn header(&self) -> Vec<String> {
-        vec![
-            "depth".to_string(),
-            "cardinality".to_string(),
-            "radius".to_string(),
-            "lfd".to_string(),
-            "arg_center".to_string(),
-            "arg_radial".to_string(),
-            "is_leaf".to_string(),
-        ]
-    }
-
-    fn row(&self) -> Vec<String> {
-        vec![
-            self.depth.to_string(),
-            self.cardinality.to_string(),
-            self.radius.to_string(),
-            format!("{:.8}", self.lfd),
-            self.arg_center.to_string(),
-            self.arg_radial.to_string(),
-            self.children.is_empty().to_string(),
-        ]
-    }
-}
-
-#[cfg(feature = "disk-io")]
-impl<T: Number> super::ParCsv<T> for Ball<T> {}
-
-#[cfg(feature = "disk-io")]
-impl<T: Number> crate::DiskIO for Ball<T> {
+impl<T: DistanceValue + ToBytes<Bytes = [u8; N]> + FromBytes<Bytes = [u8; N]>, const N: usize> crate::DiskIO
+    for Ball<T>
+{
     fn to_bytes(&self) -> Result<Vec<u8>, String> {
         #[allow(clippy::type_complexity)]
-        let members: (
-            usize,
-            usize,
-            Vec<u8>,
-            f32,
-            usize,
-            usize,
-            Vec<usize>,
-            Vec<(usize, Vec<u8>)>,
-            Vec<Vec<u8>>,
-        ) = (
+        let members: (usize, usize, [u8; N], f32, usize, usize, Vec<usize>, Vec<Vec<u8>>) = (
             self.depth,
             self.cardinality,
             self.radius.to_le_bytes(),
@@ -393,10 +344,6 @@ impl<T: Number> crate::DiskIO for Ball<T> {
             self.arg_center,
             self.arg_radial,
             self.indices.clone(),
-            self.extents
-                .iter()
-                .map(|(i, t)| (*i, t.to_le_bytes()))
-                .collect::<Vec<_>>(),
             self.children.iter().map(|c| c.to_bytes()).collect::<Result<_, _>>()?,
         );
 
@@ -405,23 +352,18 @@ impl<T: Number> crate::DiskIO for Ball<T> {
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         #[allow(clippy::type_complexity)]
-        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, extents, children_bytes): (
+        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, children_bytes): (
             usize,
             usize,
-            Vec<u8>,
+            [u8; N],
             f32,
             usize,
             usize,
             Vec<usize>,
-            Vec<(usize, Vec<u8>)>,
             Vec<Vec<u8>>,
         ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
 
-        let radius = T::from_le_bytes(radius_bytes.as_slice());
-        let extents = extents
-            .into_iter()
-            .map(|(i, t)| (i, T::from_le_bytes(t.as_slice())))
-            .collect::<Vec<_>>();
+        let radius = T::from_le_bytes(&radius_bytes);
         let children = children_bytes
             .into_iter()
             .map(|b| Self::from_bytes(b.as_slice()).map(Box::new))
@@ -435,27 +377,17 @@ impl<T: Number> crate::DiskIO for Ball<T> {
             arg_center,
             arg_radial,
             indices,
-            extents,
             children,
         })
     }
 }
 
-#[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T> {
+impl<T: DistanceValue + ToBytes<Bytes = [u8; N]> + FromBytes<Bytes = [u8; N]> + Send + Sync, const N: usize>
+    crate::ParDiskIO for Ball<T>
+{
     fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
         #[allow(clippy::type_complexity)]
-        let members: (
-            usize,
-            usize,
-            Vec<u8>,
-            f32,
-            usize,
-            usize,
-            Vec<usize>,
-            Vec<(usize, Vec<u8>)>,
-            Vec<Vec<u8>>,
-        ) = (
+        let members: (usize, usize, [u8; N], f32, usize, usize, Vec<usize>, Vec<Vec<u8>>) = (
             self.depth,
             self.cardinality,
             self.radius.to_le_bytes(),
@@ -463,10 +395,6 @@ impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T>
             self.arg_center,
             self.arg_radial,
             self.indices.clone(),
-            self.extents
-                .iter()
-                .map(|(i, t)| (*i, t.to_le_bytes()))
-                .collect::<Vec<_>>(),
             self.children
                 .par_iter()
                 .map(|c| c.par_to_bytes())
@@ -478,23 +406,18 @@ impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T>
 
     fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         #[allow(clippy::type_complexity)]
-        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, extents, children_bytes): (
+        let (depth, cardinality, radius_bytes, lfd, arg_center, arg_radial, indices, children_bytes): (
             usize,
             usize,
-            Vec<u8>,
+            [u8; N],
             f32,
             usize,
             usize,
             Vec<usize>,
-            Vec<(usize, Vec<u8>)>,
             Vec<Vec<u8>>,
         ) = bitcode::decode(bytes).map_err(|e| e.to_string())?;
 
-        let radius = T::from_le_bytes(radius_bytes.as_slice());
-        let extents = extents
-            .into_iter()
-            .map(|(i, t)| (i, T::from_le_bytes(t.as_slice())))
-            .collect::<Vec<_>>();
+        let radius = T::from_le_bytes(&radius_bytes);
         let children = children_bytes
             .into_par_iter()
             .map(|b| Self::par_from_bytes(b.as_slice()).map(Box::new))
@@ -508,7 +431,6 @@ impl<T: Number + bitcode::Encode + bitcode::Decode> crate::ParDiskIO for Ball<T>
             arg_center,
             arg_radial,
             indices,
-            extents,
             children,
         })
     }

@@ -17,10 +17,6 @@ pub enum CakesAction {
         #[arg(short('o'), long)]
         out_dir: PathBuf,
 
-        /// Whether to build a balanced tree.
-        #[arg(short('b'), long, default_value_t = false)]
-        balanced: bool,
-
         /// Whether to permute the dataset.
         #[arg(short('p'), long, default_value_t = true)]
         permuted: bool,

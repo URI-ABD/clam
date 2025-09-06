@@ -1,9 +1,9 @@
 //! Traits that define the behavior of compression algorithms.
 
-use distances::Number;
+use num::traits::ToBytes;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset};
+use crate::{cluster::ParCluster, dataset::ParDataset, Cluster, Dataset, DistanceValue, FlatVec};
 
 /// Something that can encode items into a byte array or in terms of a reference.
 pub trait Encoder<I> {
@@ -37,7 +37,11 @@ pub trait Compressible<I, Enc: Encoder<I>>: Dataset<I> {
     /// # Returns
     ///
     /// - A vector of byte arrays, each containing the encoded items of a leaf cluster.
-    fn encode_leaves<'a, T: Number + 'a, C: Cluster<T>>(&self, root: &'a C, encoder: &Enc) -> Vec<(&'a C, Box<[u8]>)> {
+    fn encode_leaves<'a, T: DistanceValue + 'a, C: Cluster<T>>(
+        &self,
+        root: &'a C,
+        encoder: &Enc,
+    ) -> Vec<(&'a C, Box<[u8]>)> {
         root.leaves()
             .into_iter()
             .map(|leaf| {
@@ -59,7 +63,7 @@ pub trait Compressible<I, Enc: Encoder<I>>: Dataset<I> {
 /// Parallel version of [`Compressible`](crate::pancakes::dataset::compression::Compressible).
 pub trait ParCompressible<I: Send + Sync, Enc: ParEncoder<I>>: Compressible<I, Enc> + ParDataset<I> {
     /// Parallel version of [`Compressible::encode_leaves`](crate::pancakes::dataset::compression::Compressible::encode_leaves).
-    fn par_encode_leaves<'a, T: Number + 'a, C: ParCluster<T>>(
+    fn par_encode_leaves<'a, T: DistanceValue + Send + Sync + 'a, C: ParCluster<T>>(
         &self,
         root: &'a C,
         encoder: &Enc,
@@ -82,7 +86,7 @@ pub trait ParCompressible<I: Send + Sync, Enc: ParEncoder<I>>: Compressible<I, E
     }
 }
 
-impl<T: Number> Encoder<T> for T {
+impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>>> Encoder<T> for T {
     fn to_byte_array(&self, item: &T) -> Box<[u8]> {
         item.to_le_bytes().into_boxed_slice()
     }
@@ -92,4 +96,8 @@ impl<T: Number> Encoder<T> for T {
     }
 }
 
-impl<T: Number> ParEncoder<T> for T {}
+impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + Send + Sync> ParEncoder<T> for T {}
+
+impl<I, Me, Enc: Encoder<I>> Compressible<I, Enc> for FlatVec<I, Me> {}
+
+impl<I: Send + Sync, Me: Send + Sync, Enc: ParEncoder<I>> ParCompressible<I, Enc> for FlatVec<I, Me> {}

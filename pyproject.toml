@@ -7,7 +7,16 @@ authors = [
     { name = "Tom Howard", email = "info@tomhoward.codes" },
 ]
 dependencies = [
+    "matplotlib>=3.10.3",
+    "numba>=0.61.2",
     "numpy>=2.2",
+    "pynndescent>=0.5.13",
+    "scikit-learn>=1.7.1",
+    "scipy>=1.16.0",
+    "seaborn>=0.13.2",
+    "tqdm>=4.67.1",
+    "typer>=0.17.4",
+    "umap-learn>=0.5.9.post2",
 ]
 readme = "README.md"
 requires-python = ">= 3.13"
@@ -28,22 +37,19 @@ dev-dependencies = [
     "types-seaborn>=0.13.2.20250111",
     "types-tqdm>=4.67.0.20250417",
     "types-editdistance>=0.8.0.20250401",
-    "scipy>=1.15.2",
     "editdistance>=0.8.1",
-    "tqdm>=4.67.1",
-    "seaborn>=0.13.2",
 ]
 package = false
 
 [tool.uv.workspace]
 members = [
     "pypi/distances",
-    "benches/py-cakes",
-    "benches/py-mbed",
+    "experiments/py-mbed",
 ]
 
 [tool.uv.sources]
 abd-distances = { workspace = true }
+py-mbed = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

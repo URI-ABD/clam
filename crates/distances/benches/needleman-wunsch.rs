@@ -1,5 +1,7 @@
 #![allow(missing_docs)]
 
+use std::hint::black_box;
+
 use criterion::*;
 use symagen::random_data;
 

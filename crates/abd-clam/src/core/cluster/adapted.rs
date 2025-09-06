@@ -1,20 +1,11 @@
-//! `Cluster`s can be adapted to other types of `Cluster`s. This module contains
-//! some traits that allow for this.
+//! Traits for `Cluster`s that have been adapted from other `Cluster`s.
 
-use distances::Number;
+use crate::DistanceValue;
 
 use super::Cluster;
 
-mod adapt;
-mod ball_adapter;
-mod params;
-
-pub use adapt::{Adapter, ParAdapter};
-pub use ball_adapter::{BallAdapter, ParBallAdapter};
-pub use params::{ParParams, Params};
-
 /// A `Cluster` that has been adapted from a different `Cluster`.
-pub trait Adapted<T: Number, S: Cluster<T>>: Cluster<T> {
+pub trait Adapted<T: DistanceValue, S: Cluster<T>>: Cluster<T> {
     /// Returns the `Cluster` that was adapted into this `Cluster`.
     fn source(&self) -> &S;
 

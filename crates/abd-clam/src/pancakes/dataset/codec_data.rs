@@ -3,17 +3,16 @@
 
 use std::collections::HashMap;
 
-use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
     cluster::ParCluster,
     dataset::{AssociatesMetadata, AssociatesMetadataMut, ParDataset, Permutable},
-    Cluster, Dataset, FlatVec,
+    Cluster, Dataset, DistanceValue, FlatVec,
 };
 
 use super::{
-    super::SquishyBall,
+    super::{ParSquishyCluster, SquishyCluster},
     compression::{Compressible, ParCompressible},
     decompression::{Decompressible, ParDecompressible},
     Decoder, Encoder, ParDecoder, ParEncoder,
@@ -61,9 +60,9 @@ pub struct CodecData<I, Me, Enc: Encoder<I>, Dec: Decoder<I>> {
 
 impl<I: Clone, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, usize, Enc, Dec> {
     /// Creates a `CodecData` from a compressible dataset and a `SquishyBall` tree.
-    pub fn from_compressible<T: Number, S: Cluster<T>, D: Compressible<I, Enc>>(
+    pub fn from_compressible<T: DistanceValue, S: Cluster<T>, C: SquishyCluster<T, S>, D: Compressible<I, Enc>>(
         data: &D,
-        root: &SquishyBall<T, S>,
+        root: &C,
         encoder: Enc,
         decoder: Dec,
     ) -> Self {
@@ -99,9 +98,14 @@ impl<I: Clone, Enc: Encoder<I>, Dec: Decoder<I>> CodecData<I, usize, Enc, Dec> {
 
 impl<I: Clone + Send + Sync, Enc: ParEncoder<I>, Dec: ParDecoder<I>> CodecData<I, usize, Enc, Dec> {
     /// Parallel version of [`CodecData::from_compressible`](crate::pancakes::dataset::CodecData::from_compressible).
-    pub fn par_from_compressible<T: Number, S: ParCluster<T>, D: ParCompressible<I, Enc>>(
+    pub fn par_from_compressible<
+        T: DistanceValue + Send + Sync,
+        S: ParCluster<T>,
+        C: ParSquishyCluster<T, S>,
+        D: ParCompressible<I, Enc>,
+    >(
         data: &D,
-        root: &SquishyBall<T, S>,
+        root: &C,
         encoder: Enc,
         decoder: Dec,
     ) -> Self {

@@ -3,23 +3,22 @@
 
 use std::collections::{HashMap, HashSet};
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, metric::ParMetric, Cluster, Dataset, Metric};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
 
 /// An `AdjacencyList` is a map from a `Cluster` to a map from each neighbor to
 /// the distance between them.
-pub struct AdjacencyList<'a, T: Number, C: Cluster<T>>(HashMap<&'a C, HashMap<&'a C, T>>);
+pub struct AdjacencyList<'a, T: DistanceValue, C: Cluster<T> + Eq + core::hash::Hash>(HashMap<&'a C, HashMap<&'a C, T>>);
 
-impl<'a, T: Number, C: Cluster<T>> AdjacencyList<'a, T, C> {
+impl<'a, T: DistanceValue, C: Cluster<T> + Eq + core::hash::Hash> AdjacencyList<'a, T, C> {
     /// Create new `AdjacencyList`s for each `Component` in a `Graph`.
     ///
     /// # Arguments
     ///
     /// * data: The `Dataset` that the `Cluster`s are based on.
     /// * clusters: The `Cluster`s to create the `AdjacencyList` from.
-    pub fn new<I, D: Dataset<I>, M: Metric<I, T>>(clusters: &[&'a C], data: &D, metric: &M) -> Vec<Self> {
+    pub fn new<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(clusters: &[&'a C], data: &D, metric: &M) -> Vec<Self> {
         // TODO: This is a naive implementation of creating an adjacency list.
         // We can improve this by using the search functionality from CAKES.
         let inner = clusters
@@ -113,7 +112,10 @@ impl<'a, T: Number, C: Cluster<T>> AdjacencyList<'a, T, C> {
         let mut transition_matrix = vec![0_f32; n * n];
         for (i, (_, neighbors)) in self.0.iter().enumerate() {
             for (j, (_, d)) in neighbors.iter().enumerate() {
-                transition_matrix[i * n + j] = d.as_f32().recip();
+                transition_matrix[i * n + j] = d
+                    .to_f32()
+                    .unwrap_or_else(|| unreachable!("Could not convert distance to f32"))
+                    .recip();
             }
         }
 
@@ -143,9 +145,9 @@ impl<'a, T: Number, C: Cluster<T>> AdjacencyList<'a, T, C> {
     }
 }
 
-impl<'a, T: Number, C: ParCluster<T>> AdjacencyList<'a, T, C> {
+impl<'a, T: DistanceValue + Send + Sync, C: ParCluster<T> + Eq + core::hash::Hash> AdjacencyList<'a, T, C> {
     /// Parallel version of [`AdjacencyList::new`](crate::chaoda::graph::adjacency_list::AdjacencyList::new).
-    pub fn par_new<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    pub fn par_new<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         clusters: &[&'a C],
         data: &D,
         metric: &M,
@@ -162,7 +164,7 @@ impl<'a, T: Number, C: ParCluster<T>> AdjacencyList<'a, T, C> {
                     .filter(|&(j, _)| i != j)
                     .filter_map(|(_, &v)| {
                         let (ru, rv) = (u.radius(), v.radius());
-                        let d = data.par_one_to_one(u.arg_center(), v.arg_center(), metric);
+                        let d = data.one_to_one(u.arg_center(), v.arg_center(), metric);
                         if d <= ru + rv {
                             Some((v, d))
                         } else {

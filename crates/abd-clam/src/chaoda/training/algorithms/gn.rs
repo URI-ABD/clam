@@ -1,14 +1,14 @@
 //! Graph Neighborhood Algorithm
 
-use distances::Number;
-
-use crate::{chaoda::Graph, Cluster};
+use crate::{
+    chaoda::{Graph, Vertex},
+    Cluster, DistanceValue,
+};
 
 use super::GraphEvaluator;
 
 /// `Cluster`s in an isolated neighborhood are more likely to be anomalous.
-#[derive(Clone)]
-#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct GraphNeighborhood {
     /// The fraction of graph diameter to use as the neighborhood radius.
     diameter_fraction: f32,
@@ -29,18 +29,18 @@ impl GraphNeighborhood {
     }
 }
 
-impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for GraphNeighborhood {
+impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for GraphNeighborhood {
     fn name(&self) -> &'static str {
         "gn"
     }
 
-    fn evaluate_clusters(&self, g: &Graph<T, S>) -> Vec<f32> {
+    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        let k = (self.diameter_fraction * diameter.as_f32()).round() as usize;
+        let k = (self.diameter_fraction * diameter as f32).round() as usize;
         g.iter_neighborhood_sizes()
             .map(|n| if n.len() <= k { n.last().unwrap_or(&0) } else { &n[k] })
-            .map(|&n| -n.as_f32())
+            .map(|&n| -(n as f32))
             .collect()
     }
 
