@@ -247,3 +247,39 @@ pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
 pub fn minkowski<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
     move |x: &[T], y: &[T]| minkowski_p::<T, U>(p)(x, y).powf(U::ONE / U::from(p))
 }
+
+/// Pearson distance.
+///
+/// Returns 1.0 - r, where r is the Pearson Correlation Coefficient.
+/// Measures linear correlation between two vectors,
+/// where 0 is a perfect positive correlation,
+/// 1 is no correlation, and 2 is a perfect negative correlation.
+pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
+    // Sanity check:
+    // Verify vectors are of same length, and that they contain data
+    if x.len() != y.len() || x.is_empty() {
+        println!("Error");
+    }
+
+    // Find means of each vector
+    let x_sum = x.iter().fold(T::ZERO, |acc, &i| acc + i);
+    let x_mean = U::from(x_sum) / U::from(x.len());
+    let y_sum = y.iter().fold(T::ZERO, |acc, &i| acc + i);
+    let y_mean = U::from(y_sum) / U::from(y.len());
+
+    // Determine covariances and standard deviations
+    let covariance = x.iter().zip(y.iter()).fold(U::ZERO, |acc, (&xi, &yi)| {
+        acc + (U::from(xi) - x_mean) * (U::from(yi) - y_mean)
+    });
+
+    let std_dev_x = x
+        .iter()
+        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - x_mean) * (U::from(i) - x_mean));
+
+    let std_dev_y = y
+        .iter()
+        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - y_mean) * (U::from(i) - y_mean));
+
+    // 1.0 - Pearson correlation coefficient
+    U::ONE - (covariance / std_dev_x.sqrt() * std_dev_y.sqrt())
+}
