@@ -3,7 +3,7 @@
 use rand::prelude::*;
 use symagen::random_data;
 
-use distances::vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan};
+use distances::vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan, pearson};
 
 fn l1(x: &[f32], y: &[f32]) -> f32 {
     x.iter().zip(y.iter()).fold(0., |acc, (x, y)| acc + (x - y).abs())
@@ -104,6 +104,44 @@ fn lp_f32() {
                 "Chebyshev: expected: {}, actual: {}",
                 e_l_inf,
                 a_l_inf
+            );
+
+            // Basic Pearson tests
+
+            // Perfect positive correlation
+            let c: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
+            let d: [f32; 4] = [0.5, 1.0, 1.5, 2.0];
+            let expected: f32 = 0.0;
+            let actual: f32 = pearson(&c, &d);
+            assert!(
+                (expected - actual).abs() <= f32::EPSILON,
+                "Pearson positive: expected: {}, actual: {}",
+                expected,
+                actual
+            );
+
+            // No correlation
+            let c: [f32; 4] = [1.0, 1.0, -1.0, -1.0];
+            let d: [f32; 4] = [1.0, -1.0, 1.0, -1.0];
+            let expected: f32 = 1.0;
+            let actual: f32 = pearson(&c, &d);
+            assert!(
+                (expected - actual).abs() <= f32::EPSILON,
+                "Pearson zero: expected: {}, actual: {}",
+                expected,
+                actual
+            );
+
+            // Perfect negative correlation
+            let c: [f32; 4] = [1.1, 2.2, 3.3, 4.4];
+            let d: [f32; 4] = [-1.1, -2.2, -3.3, -4.4];
+            let expected: f32 = 2.0;
+            let actual: f32 = pearson(&c, &d);
+            assert!(
+                (expected - actual).abs() <= f32::EPSILON,
+                "Pearson negative: expected: {}, actual: {}",
+                expected,
+                actual
             );
         }
     }

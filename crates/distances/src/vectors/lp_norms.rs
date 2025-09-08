@@ -258,7 +258,7 @@ pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     // Sanity check:
     // Verify vectors are of same length, and that they contain data
     if x.len() != y.len() || x.is_empty() {
-        println!("Error");
+        println!("Error"); // TODO: throw error
     }
 
     // Find means of each vector
@@ -266,6 +266,7 @@ pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     let x_mean = U::from(x_sum) / U::from(x.len());
     let y_sum = y.iter().fold(T::ZERO, |acc, &i| acc + i);
     let y_mean = U::from(y_sum) / U::from(y.len());
+    // Correct thus far
 
     // Determine covariances and standard deviations
     let covariance = x.iter().zip(y.iter()).fold(U::ZERO, |acc, (&xi, &yi)| {
@@ -274,12 +275,14 @@ pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 
     let std_dev_x = x
         .iter()
-        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - x_mean) * (U::from(i) - x_mean));
+        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - x_mean) * (U::from(i) - x_mean))
+        .sqrt();
 
     let std_dev_y = y
         .iter()
-        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - y_mean) * (U::from(i) - y_mean));
+        .fold(U::ZERO, |acc, &i| acc + (U::from(i) - y_mean) * (U::from(i) - y_mean))
+        .sqrt();
 
     // 1.0 - Pearson correlation coefficient
-    U::ONE - (covariance / std_dev_x.sqrt() * std_dev_y.sqrt())
+    U::ONE - (covariance / (std_dev_x * std_dev_y))
 }
