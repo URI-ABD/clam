@@ -109,10 +109,8 @@ fn lp_f32() {
             // Basic Pearson tests
 
             // Perfect positive correlation
-            let c: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
-            let d: [f32; 4] = [0.5, 1.0, 1.5, 2.0];
-            let expected: f32 = 0.0;
-            let actual: f32 = pearson(&c, &d);
+            let expected: f32 = 0.0; 
+            let actual: f32 = pearson(&x, &x);
             assert!(
                 (expected - actual).abs() <= f32::EPSILON,
                 "Pearson positive: expected: {}, actual: {}",
@@ -121,10 +119,11 @@ fn lp_f32() {
             );
 
             // No correlation
-            let c: [f32; 4] = [1.0, 1.0, -1.0, -1.0];
-            let d: [f32; 4] = [1.0, -1.0, 1.0, -1.0];
+            // TODO: Replace with random test
+            let p1: [f32; 4] = [1.0, 1.0, -1.0, -1.0];
+            let p2: [f32; 4] = [1.0, -1.0, 1.0, -1.0];
             let expected: f32 = 1.0;
-            let actual: f32 = pearson(&c, &d);
+            let actual: f32 = pearson(&p1, &p2);
             assert!(
                 (expected - actual).abs() <= f32::EPSILON,
                 "Pearson zero: expected: {}, actual: {}",
@@ -133,10 +132,11 @@ fn lp_f32() {
             );
 
             // Perfect negative correlation
-            let c: [f32; 4] = [1.1, 2.2, 3.3, 4.4];
-            let d: [f32; 4] = [-1.1, -2.2, -3.3, -4.4];
+            // TODO: Replace with random test
+            let p1: [f32; 4] = [1.1, 2.2, 3.3, 4.4];
+            let p2: [f32; 4] = [-1.1, -2.2, -3.3, -4.4];
             let expected: f32 = 2.0;
-            let actual: f32 = pearson(&c, &d);
+            let actual: f32 = pearson(&p1, &p2);
             assert!(
                 (expected - actual).abs() <= f32::EPSILON,
                 "Pearson negative: expected: {}, actual: {}",

@@ -266,7 +266,6 @@ pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     let x_mean = U::from(x_sum) / U::from(x.len());
     let y_sum = y.iter().fold(T::ZERO, |acc, &i| acc + i);
     let y_mean = U::from(y_sum) / U::from(y.len());
-    // Correct thus far
 
     // Determine covariances and standard deviations
     let covariance = x.iter().zip(y.iter()).fold(U::ZERO, |acc, (&xi, &yi)| {
