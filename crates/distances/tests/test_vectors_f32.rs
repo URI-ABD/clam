@@ -109,7 +109,7 @@ fn lp_f32() {
             // Basic Pearson tests
 
             // Perfect positive correlation
-            let expected: f32 = 0.0; 
+            let expected: f32 = 0.0;
             let actual: f32 = pearson(&x, &x);
             assert!(
                 (expected - actual).abs() <= f32::EPSILON,
