@@ -3,6 +3,7 @@
 mod commands;
 mod data;
 mod metrics;
+mod search;
 mod trees;
 
 use std::path::PathBuf;
@@ -49,9 +50,11 @@ fn main() -> Result<(), String> {
                 let inp_data = data::read(inp_path)?;
                 commands::cakes::build_new_tree(inp_data, metric, seed, balanced, permuted, out_dir)?
             }
-            commands::cakes::CakesAction::Search { .. } => {
-                todo!("Tom")
-            }
+            commands::cakes::CakesAction::Search {
+                tree_path,
+                instances_path,
+                query_algorithms,
+            } => crate::commands::cakes::search_tree(inp_path, tree_path, instances_path, query_algorithms, metric)?,
         },
         Commands::Musals { .. } => todo!("Emily"),
         Commands::Mbed { action } => {
