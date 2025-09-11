@@ -1,6 +1,7 @@
 //! The commands under the `clam` CLI.
 
 pub mod cakes;
+pub mod generate_data;
 pub mod mbed;
 pub mod musals;
 
@@ -22,5 +23,10 @@ pub enum Commands {
     Mbed {
         #[clap(subcommand)]
         action: mbed::MbedAction,
+    },
+    /// Generate synthetic datasets for testing and benchmarking
+    GenerateData {
+        #[clap(subcommand)]
+        action: generate_data::GenerateDataAction,
     },
 }

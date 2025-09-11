@@ -118,6 +118,35 @@ impl ShellTree {
     }
 }
 
+impl std::fmt::Display for ShellTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShellTree::Ball(ShellBall::String(_)) => write!(f, "Ball<String>"),
+            ShellTree::Ball(ShellBall::F32(_)) => write!(f, "Ball<F32>"),
+            ShellTree::Ball(ShellBall::F64(_)) => write!(f, "Ball<F64>"),
+            ShellTree::Ball(ShellBall::I8(_)) => write!(f, "Ball<I8>"),
+            ShellTree::Ball(ShellBall::I16(_)) => write!(f, "Ball<I16>"),
+            ShellTree::Ball(ShellBall::I32(_)) => write!(f, "Ball<I32>"),
+            ShellTree::Ball(ShellBall::I64(_)) => write!(f, "Ball<I64>"),
+            ShellTree::Ball(ShellBall::U8(_)) => write!(f, "Ball<U8>"),
+            ShellTree::Ball(ShellBall::U16(_)) => write!(f, "Ball<U16>"),
+            ShellTree::Ball(ShellBall::U32(_)) => write!(f, "Ball<U32>"),
+            ShellTree::Ball(ShellBall::U64(_)) => write!(f, "Ball<U64>"),
+            ShellTree::PermutedBall(ShellPermutedBall::String(_)) => write!(f, "PermutedBall<String>"),
+            ShellTree::PermutedBall(ShellPermutedBall::F32(_)) => write!(f, "PermutedBall<F32>"),
+            ShellTree::PermutedBall(ShellPermutedBall::F64(_)) => write!(f, "PermutedBall<F64>"),
+            ShellTree::PermutedBall(ShellPermutedBall::I8(_)) => write!(f, "PermutedBall<I8>"),
+            ShellTree::PermutedBall(ShellPermutedBall::I16(_)) => write!(f, "PermutedBall<I16>"),
+            ShellTree::PermutedBall(ShellPermutedBall::I32(_)) => write!(f, "PermutedBall<I32>"),
+            ShellTree::PermutedBall(ShellPermutedBall::I64(_)) => write!(f, "PermutedBall<I64>"),
+            ShellTree::PermutedBall(ShellPermutedBall::U8(_)) => write!(f, "PermutedBall<U8>"),
+            ShellTree::PermutedBall(ShellPermutedBall::U16(_)) => write!(f, "PermutedBall<U16>"),
+            ShellTree::PermutedBall(ShellPermutedBall::U32(_)) => write!(f, "PermutedBall<U32>"),
+            ShellTree::PermutedBall(ShellPermutedBall::U64(_)) => write!(f, "PermutedBall<U64>"),
+        }
+    }
+}
+
 #[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
 pub enum ShellBall {
     String(Ball<u32>),

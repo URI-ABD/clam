@@ -3,6 +3,7 @@
 mod commands;
 mod data;
 mod metrics;
+mod search;
 mod trees;
 
 use std::path::PathBuf;
@@ -15,9 +16,9 @@ use commands::Commands;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// The path to the input dataset file.
+    /// The path to the input dataset file (not required for generate-data).
     #[arg(short('i'), long)]
-    inp_path: PathBuf,
+    inp_path: Option<PathBuf>,
 
     /// The name of the distance metric to use for the CAKES tree.
     #[arg(short('m'), long, default_value = "euclidean")]
@@ -36,7 +37,40 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
 
     let seed = args.seed;
-    let inp_path = args.inp_path;
+
+    // Handle generate-data separately since it doesn't need input data
+    if let Commands::GenerateData { action } = args.command {
+        match action {
+            commands::generate_data::GenerateDataAction::Generate {
+                num_vectors,
+                dimensions,
+                filename,
+                data_type,
+                format,
+                partitions,
+                min_val,
+                max_val,
+            } => {
+                return commands::generate_data::generate_dataset(
+                    num_vectors,
+                    dimensions,
+                    filename,
+                    data_type,
+                    format,
+                    partitions,
+                    min_val,
+                    max_val,
+                    seed,
+                );
+            }
+        }
+    }
+
+    // For other commands, we need input data
+    let inp_path = args
+        .inp_path
+        .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
+    let inp_data = data::read(&inp_path)?;
     let metric = args.metric.shell_metric();
 
     match args.command {
@@ -45,17 +79,23 @@ fn main() -> Result<(), String> {
                 out_dir,
                 balanced,
                 permuted,
-            } => {
-                let inp_data = data::read(inp_path)?;
-                commands::cakes::build_new_tree(inp_data, metric, seed, balanced, permuted, out_dir)?
-            }
-            commands::cakes::CakesAction::Search { .. } => {
-                todo!("Tom")
-            }
+            } => commands::cakes::build_new_tree(inp_data, metric, seed, balanced, permuted, out_dir)?,
+            commands::cakes::CakesAction::Search {
+                tree_path,
+                instances_path,
+                query_algorithms,
+                output_path,
+            } => commands::cakes::search_tree(
+                inp_data,
+                tree_path,
+                data::read(instances_path)?,
+                query_algorithms,
+                metric,
+                output_path,
+            )?,
         },
         Commands::Musals { .. } => todo!("Emily"),
         Commands::Mbed { action } => {
-            let inp_data = data::read(inp_path)?;
             const DIM: usize = 2; // TODO Najib: figure out how to make this dynamic
             match action {
                 commands::mbed::MbedAction::Build {
@@ -100,7 +140,9 @@ fn main() -> Result<(), String> {
                 }
             }
         }
+        Commands::GenerateData { .. } => {
+            unreachable!("GenerateData is handled earlier in this function");
+        }
     }
-
     Ok(())
 }

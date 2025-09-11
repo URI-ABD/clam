@@ -30,3 +30,13 @@ pub enum ShellMetric {
     Euclidean(Euclidean),
     Cosine(Cosine),
 }
+
+impl std::fmt::Display for ShellMetric {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Levenshtein(_) => write!(f, "Levenshtein"),
+            Self::Euclidean(_) => write!(f, "Euclidean"),
+            Self::Cosine(_) => write!(f, "Cosine"),
+        }
+    }
+}
