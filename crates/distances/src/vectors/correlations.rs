@@ -8,6 +8,31 @@ use crate::{number::Float, Number};
 /// Measures linear correlation between two vectors,
 /// where 0 is a perfect positive correlation,
 /// 1 is no correlation, and 2 is a perfect negative correlation.
+///
+/// See the [`crate::vectors`] module documentation for information on this
+/// function's potentially unexpected behaviors
+///
+/// # Arguments
+///
+/// * `x`: A slice of numbers.
+/// * `y`: A slice of numbers.
+///
+/// # Examples
+///
+/// ```
+/// use distances::vectors::pearson;
+///
+/// let x: Vec<f32> = vec![1.0, 2.0, 3.0];
+/// let y: Vec<f32> = vec![-0.5, -1.0, -1.5];
+///
+/// let distance: f32 = pearson(&x, &y);
+///
+/// assert!((distance - 2.0).abs() < f32::EPSILON);
+/// ```
+///
+/// # References
+///
+/// * [Pearson correlation coefficient](https://en.wikipedia.org/wiki/Pearson_correlation_coefficient)
 pub fn pearson<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     // Find means of each vector
     let x_sum = x.iter().fold(T::ZERO, |acc, &i| acc + i);
