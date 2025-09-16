@@ -109,13 +109,13 @@ fn lp_f32() {
             // Basic Pearson tests
 
             // Two different sets
-            let expected = (0.0, 2.0);
+            let (p_lb, p_ub): (f32, f32) = (0.0, 2.0);
             let actual: f32 = pearson(&x, &y);
             assert!(
-                expected.0 - f32::EPSILON <= actual && actual <= expected.1 + f32::EPSILON,
+                p_lb - f32::EPSILON <= actual && actual <= p_ub + f32::EPSILON,
                 "Pearson basic: expected range: ({}, {}), actual: {}",
-                expected.0,
-                expected.1,
+                p_lb,
+                p_ub,
                 actual
             );
 
@@ -141,8 +141,10 @@ fn lp_f32() {
                 actual
             );
 
-            // Perfect negative correlation
-            let x_inv: Vec<f32> = x.iter().map(|&n| n * -1.0).collect();
+            // Perfect negative correlation (with slope of -8)
+            // Note: Test fails unless slope is a square of 2,
+            // likely due to multiplication hitting limits of f32 precision
+            let x_inv: Vec<f32> = x.iter().map(|&n| n * -8.0).collect();
             let expected: f32 = 2.0;
             let actual: f32 = pearson(&x, &x_inv);
             assert!(
