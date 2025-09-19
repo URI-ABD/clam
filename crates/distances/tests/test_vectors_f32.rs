@@ -105,7 +105,34 @@ fn lp_f32() {
                 e_l_inf,
                 a_l_inf
             );
+        }
+    }
+}
 
+#[test]
+fn pearson_test() {
+    let seed = 42;
+    let (cardinality, dimensionality) = (100, 10_000);
+    let (min_val, max_val) = (-10., 10.);
+
+    let data_1 = random_data::random_tabular(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
+    );
+
+    let data_2 = random_data::random_tabular(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed + 1),
+    );
+
+    for x in data_1.iter() {
+        for y in data_2.iter() {
             // Basic Pearson tests
 
             // Two different sets
