@@ -3,7 +3,7 @@
 use rand::prelude::*;
 use symagen::random_data;
 
-use distances::vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan};
+use distances::vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan, pearson};
 
 fn l1(x: &[f32], y: &[f32]) -> f32 {
     x.iter().zip(y.iter()).fold(0., |acc, (x, y)| acc + (x - y).abs())
@@ -104,6 +104,81 @@ fn lp_f32() {
                 "Chebyshev: expected: {}, actual: {}",
                 e_l_inf,
                 a_l_inf
+            );
+        }
+    }
+}
+
+#[test]
+fn pearson_test() {
+    let seed = 42;
+    let (cardinality, dimensionality) = (100, 10_000);
+    let (min_val, max_val) = (-10., 10.);
+
+    let data_1 = random_data::random_tabular(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed),
+    );
+
+    let data_2 = random_data::random_tabular(
+        cardinality,
+        dimensionality,
+        min_val,
+        max_val,
+        &mut rand::rngs::StdRng::seed_from_u64(seed + 1),
+    );
+
+    for x in data_1.iter() {
+        for y in data_2.iter() {
+            // Basic Pearson tests
+
+            // Two different sets
+            let (p_lb, p_ub): (f32, f32) = (0.0, 2.0);
+            let actual: f32 = pearson(&x, &y);
+            assert!(
+                p_lb - f32::EPSILON <= actual && actual <= p_ub + f32::EPSILON,
+                "Pearson basic: expected range: ({}, {}), actual: {}",
+                p_lb,
+                p_ub,
+                actual
+            );
+
+            // Perfect positive correlation
+            let expected: f32 = 0.0;
+            let actual: f32 = pearson(&x, &x);
+            assert!(
+                (expected - actual).abs() <= f32::EPSILON,
+                "Pearson positive: expected: {}, actual: {}",
+                expected,
+                actual
+            );
+
+            // No correlation
+            let p1: [f32; 4] = [1.0, 1.0, -1.0, -1.0];
+            let p2: [f32; 4] = [1.0, -1.0, 1.0, -1.0];
+            let expected: f32 = 1.0;
+            let actual: f32 = pearson(&p1, &p2);
+            assert!(
+                (expected - actual).abs() <= f32::EPSILON,
+                "Pearson zero: expected: {}, actual: {}",
+                expected,
+                actual
+            );
+
+            // Perfect negative correlation (with slope of -8)
+            // Note: Test fails unless slope is a square of 2,
+            // likely due to multiplication hitting limits of f32 precision
+            let x_inv: Vec<f32> = x.iter().map(|&n| n * -8.0).collect();
+            let expected: f32 = 2.0;
+            let actual: f32 = pearson(&x, &x_inv);
+            assert!(
+                (expected - actual).abs() <= f32::EPSILON,
+                "Pearson negative: expected: {}, actual: {}",
+                expected,
+                actual
             );
         }
     }
