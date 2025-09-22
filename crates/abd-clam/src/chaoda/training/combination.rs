@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, Vertex},
-    Cluster, DistanceValue,
+    DistanceValue,
 };
 
 /// A trainable combination of a `MetaMLModel` and a `GraphAlgorithm`.
@@ -62,9 +62,9 @@ impl TrainableCombination {
     /// # Errors
     ///
     /// - If any roc-auc score calculation fails.
-    pub fn data_from_graph<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>>(
+    pub fn data_from_graph<T: DistanceValue, V: Vertex<T>>(
         &self,
-        graph: &Graph<T, S, V>,
+        graph: &Graph<T, V>,
         labels: &[bool],
     ) -> Result<([Vec<f32>; 2], f32), String> {
         let props = graph
@@ -74,7 +74,7 @@ impl TrainableCombination {
         let predictions = self.graph_algorithm.evaluate_points(graph);
 
         let scores = graph
-            .iter_clusters()
+            .iter_vertices()
             .map(|c| {
                 // Get the labels and predictions and append a dummy true and false value to avoid empty classes for roc_auc_score
                 let indices = c.indices();
@@ -137,9 +137,7 @@ impl TrainableCombination {
     /// of the `Cluster`s in the `Graph` to the training data. After that, it
     /// will train the model using the training data. Finally, it will return
     /// the trained model.
-    pub fn train_step<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>>(
-        &self,
-    ) -> Result<inference::TrainedCombination, String> {
+    pub fn train_step<T: DistanceValue, V: Vertex<T>>(&self) -> Result<inference::TrainedCombination, String> {
         let meta_ml = self.meta_ml.train(V::NUM_FEATURES, &self.train_x, &self.train_y)?;
         let graph_algorithm = self.graph_algorithm.clone();
         Ok(inference::TrainedCombination::new(

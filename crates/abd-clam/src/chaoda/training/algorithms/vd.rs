@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{Graph, Vertex},
-    Cluster, DistanceValue,
+    DistanceValue,
 };
 
 use super::GraphEvaluator;
@@ -11,12 +11,8 @@ use super::GraphEvaluator;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct VertexDegree;
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for VertexDegree {
-    fn name(&self) -> &'static str {
-        "vd"
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for VertexDegree {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
         g.iter_neighbors().map(|n| -(n.len() as f32)).collect()
     }
 

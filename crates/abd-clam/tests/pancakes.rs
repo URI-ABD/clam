@@ -128,13 +128,21 @@ where
 
     for &radius in radii {
         let alg = RnnClustered(radius);
-        common::search::check_rnn(&root, &data, metric, query, radius, &alg);
+        common::search::check_rnn(&root, &data, metric, query, radius, &alg, "RnnClustered");
     }
 
     for &k in ks {
-        common::search::check_knn(&root, &data, metric, query, k, &KnnRepeatedRnn(k, T::one() + T::one()));
-        common::search::check_knn(&root, &data, metric, query, k, &KnnBreadthFirst(k));
-        common::search::check_knn(&root, &data, metric, query, k, &KnnDepthFirst(k));
+        common::search::check_knn(
+            &root,
+            &data,
+            metric,
+            query,
+            k,
+            &KnnRepeatedRnn(k, T::one() + T::one()),
+            "KnnRepeatedRnn",
+        );
+        common::search::check_knn(&root, &data, metric, query, k, &KnnBreadthFirst(k), "KnnBreadthFirst");
+        common::search::check_knn(&root, &data, metric, query, k, &KnnDepthFirst(k), "KnnDepthFirst");
     }
 
     Ok(())

@@ -12,18 +12,6 @@ pub struct RnnLinear<T: DistanceValue>(pub T);
 impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for RnnLinear<T>
 {
-    fn name(&self) -> &'static str {
-        "RnnLinear"
-    }
-
-    fn radius(&self) -> Option<T> {
-        Some(self.0)
-    }
-
-    fn k(&self) -> Option<usize> {
-        None
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         data.query_to_many(query, root.indices(), metric)
             .into_iter()

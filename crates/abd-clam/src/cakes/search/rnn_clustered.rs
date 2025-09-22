@@ -13,18 +13,6 @@ pub struct RnnClustered<T: DistanceValue>(pub T);
 impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for RnnClustered<T>
 {
-    fn name(&self) -> &'static str {
-        "RnnClustered"
-    }
-
-    fn radius(&self) -> Option<T> {
-        Some(self.0)
-    }
-
-    fn k(&self) -> Option<usize> {
-        None
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let [confirmed, straddlers] = tree_search(data, metric, root, query, self.0);
         leaf_search(data, metric, confirmed, straddlers, query, self.0)

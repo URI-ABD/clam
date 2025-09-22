@@ -1,29 +1,29 @@
-//! A `Node` in a `Graph` stores a reference to the `OddBall` it represents and
+//! A `Node` in a `Graph` stores a reference to the `Vertex` it represents and
 //! some additional information for the `Graph`-based anomaly detection
 //! algorithms.
 
 use std::collections::HashSet;
 
-use crate::{chaoda::Vertex, Cluster, DistanceValue};
+use crate::DistanceValue;
 
-use super::adjacency_list::AdjacencyList;
+use super::{adjacency_list::AdjacencyList, Vertex};
 
-/// A `Node` in a `Graph` stores a reference to the `OddBall` it represents and
+/// A `Node` in a `Graph` stores a reference to the `Vertex` it represents and
 /// some additional information for the `Graph`-based anomaly detection
 /// algorithms.
 #[derive(Clone)]
-pub struct GraphNode<'a, T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> {
+pub struct GraphNode<'a, T: DistanceValue, V: Vertex<T>> {
     /// The `Vertex` that the `Node` represents.
     vertex: &'a V,
     /// The cumulative size of the `Graph` neighborhood of the `Node` at each
     /// step of a breadth-first traversal.
     neighborhood_sizes: Vec<usize>,
     /// Ghost marker to retain the cluster type.
-    _marker: core::marker::PhantomData<(T, S)>,
+    _marker: core::marker::PhantomData<T>,
 }
 
-impl<'a, T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphNode<'a, T, S, V> {
-    /// Create a new `Node` from a `OddBall` and an `AdjacencyList`.
+impl<'a, T: DistanceValue, V: Vertex<T>> GraphNode<'a, T, V> {
+    /// Create a new `Node` from a `Vertex` and an `AdjacencyList`.
     ///
     /// # Arguments
     ///
@@ -96,16 +96,22 @@ impl<'a, T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphNode<'a, T, S, V
     }
 }
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> Eq for GraphNode<'_, T, S, V> {}
+impl<T: DistanceValue, V: Vertex<T>> Eq for GraphNode<'_, T, V> {}
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> PartialEq for GraphNode<'_, T, S, V> {
+impl<T: DistanceValue, V: Vertex<T>> PartialEq for GraphNode<'_, T, V> {
     fn eq(&self, other: &Self) -> bool {
         self.vertex == other.vertex
     }
 }
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> core::hash::Hash for GraphNode<'_, T, S, V> {
+impl<T: DistanceValue, V: Vertex<T>> core::hash::Hash for GraphNode<'_, T, V> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.vertex.hash(state);
+    }
+}
+
+impl<T: DistanceValue, V: Vertex<T>> AsRef<V> for GraphNode<'_, T, V> {
+    fn as_ref(&self) -> &V {
+        self.vertex
     }
 }

@@ -9,7 +9,7 @@ mod vd;
 
 use crate::{
     chaoda::{Graph, Vertex},
-    utils, Cluster, DistanceValue,
+    utils, DistanceValue,
 };
 
 /// The algorithms that make up the CHAODA ensemble.
@@ -79,19 +79,8 @@ impl GraphAlgorithm {
     }
 }
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for GraphAlgorithm {
-    fn name(&self) -> &str {
-        match self {
-            Self::CC(a) => <cc::ClusterCardinality as GraphEvaluator<T, S, V>>::name(a),
-            Self::GN(a) => <gn::GraphNeighborhood as GraphEvaluator<T, S, V>>::name(a),
-            Self::PC(a) => <pc::ParentCardinality as GraphEvaluator<T, S, V>>::name(a),
-            Self::SC(a) => <sc::SubgraphCardinality as GraphEvaluator<T, S, V>>::name(a),
-            Self::SP(a) => <sp::StationaryProbability as GraphEvaluator<T, S, V>>::name(a),
-            Self::VD(a) => <vd::VertexDegree as GraphEvaluator<T, S, V>>::name(a),
-        }
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for GraphAlgorithm {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
         match self {
             Self::CC(a) => a.evaluate_clusters(g),
             Self::GN(a) => a.evaluate_clusters(g),
@@ -104,37 +93,33 @@ impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> f
 
     fn normalize_by_cluster(&self) -> bool {
         match self {
-            Self::CC(a) => <cc::ClusterCardinality as GraphEvaluator<T, S, V>>::normalize_by_cluster(a),
-            Self::GN(a) => <gn::GraphNeighborhood as GraphEvaluator<T, S, V>>::normalize_by_cluster(a),
-            Self::PC(a) => <pc::ParentCardinality as GraphEvaluator<T, S, V>>::normalize_by_cluster(a),
-            Self::SC(a) => <sc::SubgraphCardinality as GraphEvaluator<T, S, V>>::normalize_by_cluster(a),
-            Self::SP(a) => <sp::StationaryProbability as GraphEvaluator<T, S, V>>::normalize_by_cluster(a),
-            Self::VD(a) => <vd::VertexDegree as GraphEvaluator<T, S, V>>::normalize_by_cluster(a),
+            Self::CC(a) => <cc::ClusterCardinality as GraphEvaluator<T, V>>::normalize_by_cluster(a),
+            Self::GN(a) => <gn::GraphNeighborhood as GraphEvaluator<T, V>>::normalize_by_cluster(a),
+            Self::PC(a) => <pc::ParentCardinality as GraphEvaluator<T, V>>::normalize_by_cluster(a),
+            Self::SC(a) => <sc::SubgraphCardinality as GraphEvaluator<T, V>>::normalize_by_cluster(a),
+            Self::SP(a) => <sp::StationaryProbability as GraphEvaluator<T, V>>::normalize_by_cluster(a),
+            Self::VD(a) => <vd::VertexDegree as GraphEvaluator<T, V>>::normalize_by_cluster(a),
         }
     }
 }
 
 /// A trait for how a `Graph` should be evaluated into anomaly scores.
-pub trait GraphEvaluator<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> {
-    /// Get the name of the algorithm.
-    #[allow(dead_code)]
-    fn name(&self) -> &str;
-
+pub trait GraphEvaluator<T: DistanceValue, V: Vertex<T>> {
     /// Evaluate the algorithm on a `Graph` and return a vector of scores for each
     /// `OddBall` in the `Graph`.
     ///
     /// The output vector must be the same length as the number of `OddBall`s in
     /// the `Graph`, and the order of the scores must correspond to the order of the
     /// `OddBall`s in the `Graph`.
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32>;
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32>;
 
     /// Whether to normalize anomaly scores by cluster or by point.
     fn normalize_by_cluster(&self) -> bool;
 
     /// Have points inherit scores from `OddBall`s.
-    fn inherit_scores(&self, g: &Graph<T, S, V>, scores: &[f32]) -> Vec<f32> {
+    fn inherit_scores(&self, g: &Graph<T, V>, scores: &[f32]) -> Vec<f32> {
         let mut points_scores = vec![0.0; g.population()];
-        for (c, &s) in g.iter_clusters().zip(scores.iter()) {
+        for (c, &s) in g.iter_vertices().zip(scores.iter()) {
             for i in c.indices() {
                 points_scores[i] = s;
             }
@@ -152,7 +137,7 @@ pub trait GraphEvaluator<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> {
     /// # Returns
     ///
     /// * A vector of anomaly scores for each point in the `Graph`.
-    fn evaluate_points(&self, g: &Graph<T, S, V>) -> Vec<f32> {
+    fn evaluate_points(&self, g: &Graph<T, V>) -> Vec<f32> {
         let cluster_scores = {
             let scores = self.evaluate_clusters(g);
             if self.normalize_by_cluster() {

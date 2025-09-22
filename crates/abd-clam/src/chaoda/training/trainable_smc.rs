@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{
     chaoda::{inference::TrainedCombination, Graph, OddBall, ParVertex, TrainedSmc, Vertex},
-    utils, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, ParPartition, Partition,
+    utils, Dataset, DistanceValue, ParDataset, ParPartition, Partition,
 };
 
 use super::{GraphAlgorithm, TrainableCombination, TrainableMetaMlModel};
@@ -109,19 +109,18 @@ impl TrainableSmc {
     /// # Returns
     ///
     /// An array of graphs (one at each depth) created for each dataset.
-    fn create_flat_graphs<'a, const N: usize, I, T, D, M, S, V>(
+    fn create_flat_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
         roots: &'a [V; N],
         depths: &[usize],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S, V>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
         T: DistanceValue + 'a,
         D: Dataset<I>,
         M: Fn(&I, &I) -> T,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         let graphs = datasets
             .iter()
@@ -153,19 +152,18 @@ impl TrainableSmc {
     /// - `trained_models`: The trained model combinations to use for selecting
     ///   the best clusters.
     /// - `min_depth`: The minimum depth to create graphs for.
-    fn create_graphs<'a, const N: usize, I, T, D, M, S, V>(
+    fn create_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
         roots: &'a [V; N],
         trained_combinations: &[TrainedCombination],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S, V>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
         T: DistanceValue + 'a,
         D: Dataset<I>,
         M: Fn(&I, &I) -> T,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         let graphs = datasets
             .iter()
@@ -209,14 +207,14 @@ impl TrainableSmc {
     ///
     /// - `N`: The number of datasets.
     /// - `T`: The type of the distance values.
-    /// - `S`: The type of the source cluster which were adapted into `OddBall`.
+    /// - `V`: The type of the vertices in the graphs.
     ///
     /// # Errors
     ///
     /// - If the meta-ml model fails to train.
-    fn train_epoch<const N: usize, T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>>(
+    fn train_epoch<const N: usize, T: DistanceValue, V: Vertex<T>>(
         &mut self,
-        graphs: &[Vec<Graph<T, S, V>>; N],
+        graphs: &[Vec<Graph<T, V>>; N],
         labels: &[Vec<bool>; N],
     ) -> Result<(Vec<TrainedCombination>, f64), String> {
         let num_combinations = self.0.len();
@@ -272,7 +270,7 @@ impl TrainableSmc {
                     combination.name()
                 );
 
-                combination.train_step::<T, S, V>().map(|trained| (trained, roc_score))
+                combination.train_step::<T, V>().map(|trained| (trained, roc_score))
             })
             .collect::<Result<Vec<_>, String>>()?
             .into_iter()
@@ -305,8 +303,7 @@ impl TrainableSmc {
     /// - `T`: The type of the distance values.
     /// - `D`: The type of the datasets.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the source cluster which will be added to `OddBall`.
-    /// - `C`: The type of the criteria function for building a tree.
+    /// - `V`: The type of the vertices in the graphs.
     ///
     /// # Errors
     ///
@@ -316,7 +313,7 @@ impl TrainableSmc {
     /// - If and depth in `depths` is less than `min_depth`.
     /// - If any meta-ml model fails to train.
     #[allow(clippy::too_many_arguments)]
-    pub fn train<const N: usize, I, T, D, M, S, V>(
+    pub fn train<const N: usize, I, T, D, M, V>(
         &mut self,
         datasets: &[D; N],
         metric: &M,
@@ -330,8 +327,7 @@ impl TrainableSmc {
         T: DistanceValue,
         D: Dataset<I>,
         M: Fn(&I, &I) -> T,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         if min_depth == 0 {
             return Err("Minimum depth must be greater than 0".to_string());
@@ -391,20 +387,19 @@ impl TrainableSmc {
     }
 
     /// Parallel version of [`TrainableSmc::create_flat_graphs`](crate::chaoda::training::TrainableSmc::create_flat_graphs).
-    fn par_create_flat_graphs<'a, const N: usize, I, T, D, M, S, V>(
+    fn par_create_flat_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
         roots: &'a [V; N],
         depths: &[usize],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S, V>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
         I: Send + Sync,
         T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
-        S: ParCluster<T>,
-        V: ParVertex<T, S>,
+        V: ParVertex<T>,
     {
         let graphs = datasets
             .par_iter()
@@ -427,20 +422,19 @@ impl TrainableSmc {
     }
 
     /// Parallel version of [`TrainableSmc::create_graphs`](crate::chaoda::training::TrainableSmc::create_graphs).
-    fn par_create_graphs<'a, const N: usize, I, T, D, M, S, V>(
+    fn par_create_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
         roots: &'a [V; N],
         trained_combinations: &[TrainedCombination],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S, V>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
         I: Send + Sync,
         T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
-        S: ParCluster<T>,
-        V: ParVertex<T, S>,
+        V: ParVertex<T>,
     {
         let graphs = datasets
             .par_iter()
@@ -474,9 +468,9 @@ impl TrainableSmc {
     /// # Errors
     ///
     /// - See [`TrainableSmc::train_epoch`](crate::chaoda::training::TrainableSmc::train_epoch).
-    fn par_train_epoch<const N: usize, T: DistanceValue + Send + Sync, S: ParCluster<T>, V: ParVertex<T, S>>(
+    fn par_train_epoch<const N: usize, T: DistanceValue + Send + Sync, V: ParVertex<T>>(
         &mut self,
-        graphs: &[Vec<Graph<T, S, V>>; N],
+        graphs: &[Vec<Graph<T, V>>; N],
         labels: &[Vec<bool>; N],
     ) -> Result<(Vec<TrainedCombination>, f64), String> {
         let num_combinations = self.0.len();
@@ -545,7 +539,7 @@ impl TrainableSmc {
                     combination.name()
                 );
 
-                combination.train_step::<T, S, V>().map(|trained| (trained, roc_score))
+                combination.train_step::<T, V>().map(|trained| (trained, roc_score))
             })
             .collect::<Result<Vec<_>, String>>()?
             .into_iter()
@@ -561,7 +555,7 @@ impl TrainableSmc {
     ///
     /// - See [`TrainableSmc::train`](crate::chaoda::training::TrainableSmc::train).
     #[allow(clippy::too_many_arguments)]
-    pub fn par_train<const N: usize, I, T, D, M, S, V>(
+    pub fn par_train<const N: usize, I, T, D, M, V>(
         &mut self,
         datasets: &[D; N],
         metric: &M,
@@ -576,8 +570,7 @@ impl TrainableSmc {
         T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
-        S: ParCluster<T>,
-        V: ParVertex<T, S>,
+        V: ParVertex<T>,
     {
         if min_depth == 0 {
             return Err("Minimum depth must be greater than 0".to_string());

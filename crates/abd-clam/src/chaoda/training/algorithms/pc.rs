@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{Graph, Vertex},
-    Cluster, DistanceValue,
+    DistanceValue,
 };
 
 use super::GraphEvaluator;
@@ -12,12 +12,8 @@ use super::GraphEvaluator;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ParentCardinality;
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for ParentCardinality {
-    fn name(&self) -> &'static str {
-        "pc"
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for ParentCardinality {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
         g.iter_accumulated_cp_car_ratios().collect()
     }
 

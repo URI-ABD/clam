@@ -26,25 +26,25 @@ fn line() {
 
     for radius in 0..=4 {
         let alg = RnnClustered(radius);
-        common::search::check_rnn(&ball, &data, &metric, query, radius, &alg);
-        common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg);
+        common::search::check_rnn(&ball, &data, &metric, query, radius, &alg, "RnnClustered");
+        common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg, "RnnClustered");
     }
 
     for k in [1, 4, 8] {
         let alg = KnnDepthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
+        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
+        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
+        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnDepthFirst");
 
         let alg = KnnBreadthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
+        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
+        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
+        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnBreadthFirst");
 
         let alg = KnnRepeatedRnn(k, 2);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
+        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
+        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
+        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnRepeatedRnn");
     }
 }
 
@@ -64,25 +64,25 @@ fn grid() {
     for radius in 0..=4 {
         let radius = radius as f32;
         let alg = RnnClustered(radius);
-        common::search::check_rnn(&ball, &data, &metric, query, radius, &alg);
-        common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg);
+        common::search::check_rnn(&ball, &data, &metric, query, radius, &alg, "RnnClustered");
+        common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg, "RnnClustered");
     }
 
     for k in [1, 10] {
         let alg = KnnDepthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
+        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
+        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
+        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnDepthFirst");
 
         let alg = KnnBreadthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
+        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
+        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
+        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnBreadthFirst");
 
         let alg = KnnRepeatedRnn(k, 2.0);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg);
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg);
+        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
+        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
+        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnRepeatedRnn");
     }
 }
 
@@ -208,25 +208,25 @@ fn build_and_check_search<I, T, C, M, D, Pd>(
 
     for &radius in radii {
         let alg = RnnClustered(radius);
-        common::search::check_rnn(ball, data, metric, query, radius, &alg);
-        common::search::check_rnn(par_ball, data, metric, query, radius, &alg);
-        common::search::check_rnn(perm_ball, perm_data, metric, query, radius, &alg);
+        common::search::check_rnn(ball, data, metric, query, radius, &alg, "RnnClustered");
+        common::search::check_rnn(par_ball, data, metric, query, radius, &alg, "RnnClustered");
+        common::search::check_rnn(perm_ball, perm_data, metric, query, radius, &alg, "RnnClustered");
     }
 
     for &k in ks {
         let alg = KnnRepeatedRnn(k, T::one() + T::one());
-        common::search::check_knn(ball, data, metric, query, k, &alg);
-        common::search::check_knn(par_ball, data, metric, query, k, &alg);
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);
+        common::search::check_knn(ball, data, metric, query, k, &alg, "KnnRepeatedRnn");
+        common::search::check_knn(par_ball, data, metric, query, k, &alg, "KnnRepeatedRnn");
+        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg, "KnnRepeatedRnn");
 
         let alg = KnnBreadthFirst(k);
-        common::search::check_knn(ball, data, metric, query, k, &alg);
-        common::search::check_knn(par_ball, data, metric, query, k, &alg);
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);
+        common::search::check_knn(ball, data, metric, query, k, &alg, "KnnBreadthFirst");
+        common::search::check_knn(par_ball, data, metric, query, k, &alg, "KnnBreadthFirst");
+        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg, "KnnBreadthFirst");
 
         let alg = KnnDepthFirst(k);
-        common::search::check_knn(ball, data, metric, query, k, &alg);
-        common::search::check_knn(par_ball, data, metric, query, k, &alg);
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg);
+        common::search::check_knn(ball, data, metric, query, k, &alg, "KnnDepthFirst");
+        common::search::check_knn(par_ball, data, metric, query, k, &alg, "KnnDepthFirst");
+        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg, "KnnDepthFirst");
     }
 }

@@ -67,7 +67,7 @@ pub fn check_search_by_distance<T: DistanceValue + Debug>(
     }
 }
 
-pub fn check_rnn<I, T, C, M, D, A>(root: &C, data: &D, metric: &M, query: &I, radius: T, alg: &A)
+pub fn check_rnn<I, T, C, M, D, A>(root: &C, data: &D, metric: &M, query: &I, radius: T, alg: &A, name: &str)
 where
     I: core::fmt::Debug + Send + Sync,
     T: DistanceValue + Send + Sync + Debug,
@@ -84,13 +84,12 @@ where
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
-        "{} search on {c_name} failed: {pred_hits:?}",
-        alg.name()
+        "{name} on {c_name} failed: {pred_hits:?}"
     );
-    check_search_by_index(true_hits.clone(), pred_hits, alg.name());
+    check_search_by_index(true_hits.clone(), pred_hits, name);
 
     let pred_hits = alg.par_search(data, metric, root, query);
-    let par_name = format!("Par{}", alg.name());
+    let par_name = format!("Par{}", name);
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
@@ -100,7 +99,7 @@ where
 }
 
 /// Check a k-NN search algorithm.
-pub fn check_knn<I, T, D, M, C, A>(root: &C, data: &D, metric: &M, query: &I, k: usize, alg: &A)
+pub fn check_knn<I, T, D, M, C, A>(root: &C, data: &D, metric: &M, query: &I, k: usize, alg: &A, name: &str)
 where
     I: core::fmt::Debug + Send + Sync,
     T: DistanceValue + Send + Sync + Debug,
@@ -116,13 +115,12 @@ where
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
-        "{} search on {c_name} failed: pred {pred_hits:?} vs true {true_hits:?}",
-        alg.name()
+        "{name} on {c_name} failed: pred {pred_hits:?} vs true {true_hits:?}"
     );
-    check_search_by_distance(true_hits.clone(), pred_hits, alg.name());
+    check_search_by_distance(true_hits.clone(), pred_hits, name);
 
     let pred_hits = alg.par_search(data, metric, root, query);
-    let par_name = format!("Par{}", alg.name());
+    let par_name = format!("Par{}", name);
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),

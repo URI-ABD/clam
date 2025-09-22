@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{training::GraphEvaluator, Graph, GraphAlgorithm, ParVertex, Vertex},
-    Cluster, Dataset, DistanceValue, ParCluster, ParDataset,
+    Dataset, DistanceValue, ParDataset,
 };
 
 use super::TrainedMetaMlModel;
@@ -67,11 +67,10 @@ impl TrainedCombination {
     }
 
     /// Get the meta-ML scorer function in a callable for any number of `Vertex`es.
-    pub fn meta_ml_scorer<T, S, V>(&self) -> impl Fn(&[&V]) -> Vec<f32> + '_
+    pub fn meta_ml_scorer<T, V>(&self) -> impl Fn(&[&V]) -> Vec<f32> + '_
     where
         T: DistanceValue,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         move |clusters| {
             let props = clusters
@@ -79,26 +78,19 @@ impl TrainedCombination {
                 .flat_map(|c| c.feature_vector().as_ref().to_vec())
                 .collect::<Vec<_>>();
             self.meta_ml
-                .predict::<T, S, V>(&props)
+                .predict::<T, V>(&props)
                 .unwrap_or_else(|e| unreachable!("{e}"))
         }
     }
 
     /// Create a `Graph` from the `root` with the given `data` and `min_depth`
     /// using the `TrainedMetaMLModel`.
-    pub fn create_graph<'a, I, T, D, M, S, V>(
-        &self,
-        root: &'a V,
-        data: &D,
-        metric: &M,
-        min_depth: usize,
-    ) -> Graph<'a, T, S, V>
+    pub fn create_graph<'a, I, T, D, M, V>(&self, root: &'a V, data: &D, metric: &M, min_depth: usize) -> Graph<'a, T, V>
     where
         T: DistanceValue + 'a,
         D: Dataset<I>,
         M: Fn(&I, &I) -> T,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         let cluster_scorer = self.meta_ml_scorer();
         Graph::from_root(root, data, metric, cluster_scorer, min_depth)
@@ -108,7 +100,7 @@ impl TrainedCombination {
     ///
     /// # Arguments
     ///
-    /// * `root`: A root `OddBall` of the tree.
+    /// * `root`: A root `Vertex` of the tree.
     /// * `data`: The `Dataset` to predict on.
     /// * `min_depth`: The minimum depth at which to consider a `Cluster` for `Graph` construction.
     ///
@@ -117,19 +109,18 @@ impl TrainedCombination {
     /// A tuple of:
     /// * The `Graph` constructed from the `root`.
     /// * The anomaly scores of the points in the `data`.
-    pub fn predict<'a, I, T, D, M, S, V>(
+    pub fn predict<'a, I, T, D, M, V>(
         &self,
         root: &'a V,
         data: &D,
         metric: &M,
         min_depth: usize,
-    ) -> (Graph<'a, T, S, V>, Vec<f32>)
+    ) -> (Graph<'a, T, V>, Vec<f32>)
     where
         T: DistanceValue + 'a,
         D: Dataset<I>,
         M: Fn(&I, &I) -> T,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         ftlog::debug!("Predicting with {}...", self.name());
 
@@ -146,40 +137,38 @@ impl TrainedCombination {
     }
 
     /// Parallel version of [`TrainingCombination::create_graph`](crate::chaoda::inference::combination::TrainedCombination::create_graph).
-    pub fn par_create_graph<'a, I, T, D, M, S, V>(
+    pub fn par_create_graph<'a, I, T, D, M, V>(
         &self,
         root: &'a V,
         data: &D,
         metric: &M,
         min_depth: usize,
-    ) -> Graph<'a, T, S, V>
+    ) -> Graph<'a, T, V>
     where
         I: Send + Sync,
         T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
-        S: ParCluster<T>,
-        V: ParVertex<T, S>,
+        V: ParVertex<T>,
     {
         let cluster_scorer = self.meta_ml_scorer();
         Graph::par_from_root(root, data, metric, cluster_scorer, min_depth)
     }
 
     /// Parallel version of [`TrainingCombination::predict`](crate::chaoda::inference::combination::TrainedCombination::predict).
-    pub fn par_predict<'a, I, T, D, M, S, V>(
+    pub fn par_predict<'a, I, T, D, M, V>(
         &self,
         root: &'a V,
         data: &D,
         metric: &M,
         min_depth: usize,
-    ) -> (Graph<'a, T, S, V>, Vec<f32>)
+    ) -> (Graph<'a, T, V>, Vec<f32>)
     where
         I: Send + Sync,
         T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
-        S: ParCluster<T>,
-        V: ParVertex<T, S>,
+        V: ParVertex<T>,
     {
         ftlog::debug!("Predicting with {}...", self.name());
 

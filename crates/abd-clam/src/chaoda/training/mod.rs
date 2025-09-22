@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset, ParPartition, Partition};
+use crate::{Dataset, DistanceValue, ParDataset, ParPartition, Partition};
 
 use super::{
     inference::{Chaoda, TrainedCombination},
@@ -133,12 +133,12 @@ impl<'m, I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize>
 
     /// Create graphs for use in training the first epoch.
     #[allow(clippy::type_complexity)]
-    fn create_flat_graphs<'a, const N: usize, D: Dataset<I>, S: Cluster<T>, V: Vertex<T, S>>(
+    fn create_flat_graphs<'a, const N: usize, D: Dataset<I>, V: Vertex<T>>(
         &self,
         datasets: &[D; N],
         trees: &'a [[V; M]; N],
         depths: &[usize],
-    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    ) -> [[Vec<Graph<'a, T, V>>; M]; N]
     where
         T: 'a,
     {
@@ -229,13 +229,13 @@ impl<'m, I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize>
     /// combination of `Dataset`, `Metric`, and pair of `MetaMLModel` and
     /// `GraphAlgorithm`.
     #[allow(clippy::type_complexity)]
-    fn create_graphs<'a, const N: usize, D: Dataset<I>, S: Cluster<T>, V: Vertex<T, S>>(
+    fn create_graphs<'a, const N: usize, D: Dataset<I>, V: Vertex<T>>(
         &self,
         datasets: &[D; N],
         trees: &'a [[V; M]; N],
         trained_models: &[Vec<TrainedCombination>; M],
         min_depth: usize,
-    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    ) -> [[Vec<Graph<'a, T, V>>; M]; N]
     where
         T: 'a,
     {
@@ -313,9 +313,9 @@ impl<'m, I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize>
     ///
     /// The trained combinations and the mean roc-auc score.
     #[allow(clippy::type_complexity)]
-    fn train_epoch<const N: usize, S: Cluster<T>, V: Vertex<T, S>>(
+    fn train_epoch<const N: usize, V: Vertex<T>>(
         &mut self,
-        graphs: &[[Vec<Graph<T, S, V>>; M]; N],
+        graphs: &[[Vec<Graph<T, V>>; M]; N],
         labels: &[Vec<bool>; N],
     ) -> Result<([Vec<TrainedCombination>; M], f32), String> {
         let mut x = Vec::new();
@@ -341,7 +341,7 @@ impl<'m, I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize>
             let mut combinations_v = Vec::new();
             for combination in combinations {
                 combination.append_data(&x, &y, Some(roc_score))?;
-                let trained_combination = combination.train_step::<T, S, V>()?;
+                let trained_combination = combination.train_step::<T, V>()?;
                 combinations_v.push(trained_combination);
             }
             combinations_vm.push(combinations_v);
@@ -382,8 +382,8 @@ impl<'m, I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize>
     ///
     /// - `N`: The number of datasets to train with.
     /// - `D`: The type of the datasets.
-    /// - `S`: The type of the `Cluster` that were used to create the `OddBall` trees.
-    pub fn train<const N: usize, D: Dataset<I>, S: Cluster<T>, V: Vertex<T, S>>(
+    /// - `V`: The type of the `Vertex` in the trees.
+    pub fn train<const N: usize, D: Dataset<I>, V: Vertex<T>>(
         &'_ mut self,
         datasets: &[D; N],
         trees: &[[V; M]; N],
@@ -460,12 +460,12 @@ impl<I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> Cha
 
     /// Parallel version of [`ChaodaTrainer::create_flat_graphs`](crate::chaoda::training::ChaodaTrainer::create_flat_graphs).
     #[allow(clippy::type_complexity)]
-    fn par_create_flat_graphs<'a, const N: usize, D: ParDataset<I>, S: ParCluster<T>, V: ParVertex<T, S>>(
+    fn par_create_flat_graphs<'a, const N: usize, D: ParDataset<I>, V: ParVertex<T>>(
         &self,
         datasets: &[D; N],
         trees: &'a [[V; M]; N],
         depths: &[usize],
-    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    ) -> [[Vec<Graph<'a, T, V>>; M]; N]
     where
         T: 'a,
     {
@@ -552,13 +552,13 @@ impl<I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> Cha
 
     /// Parallel version of [`ChaodaTrainer::create_graphs`](crate::chaoda::training::ChaodaTrainer::create_graphs).
     #[allow(clippy::type_complexity)]
-    fn par_create_graphs<'a, const N: usize, D: ParDataset<I>, S: ParCluster<T>, V: ParVertex<T, S>>(
+    fn par_create_graphs<'a, const N: usize, D: ParDataset<I>, V: ParVertex<T>>(
         &self,
         datasets: &[D; N],
         trees: &'a [[V; M]; N],
         trained_models: &[Vec<TrainedCombination>; M],
         min_depth: usize,
-    ) -> [[Vec<Graph<'a, T, S, V>>; M]; N]
+    ) -> [[Vec<Graph<'a, T, V>>; M]; N]
     where
         T: 'a,
     {
@@ -627,9 +627,9 @@ impl<I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> Cha
 
     /// Parallel version of [`ChaodaTrainer::train_epoch`](crate::chaoda::training::ChaodaTrainer::train_epoch).
     #[allow(clippy::type_complexity)]
-    fn par_train_epoch<const N: usize, S: ParCluster<T>, V: ParVertex<T, S>>(
+    fn par_train_epoch<const N: usize, V: ParVertex<T>>(
         &mut self,
-        graphs: &[[Vec<Graph<T, S, V>>; M]; N],
+        graphs: &[[Vec<Graph<T, V>>; M]; N],
         labels: &[Vec<bool>; N],
     ) -> Result<([Vec<TrainedCombination>; M], f32), String> {
         let mut x = Vec::new();
@@ -664,7 +664,7 @@ impl<I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> Cha
                     .par_iter_mut()
                     .map(|combination| {
                         combination.append_data(&x, &y, Some(roc_score))?;
-                        combination.train_step::<T, S, V>()
+                        combination.train_step::<T, V>()
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok::<_, String>((i, combinations))
@@ -692,7 +692,7 @@ impl<I: Clone + Send + Sync, T: DistanceValue + Send + Sync, const M: usize> Cha
     /// # Errors
     ///
     /// See [`ChaodaTrainer::train`](crate::chaoda::training::ChaodaTrainer::train).
-    pub fn par_train<const N: usize, D: ParDataset<I>, S: ParCluster<T>, V: ParVertex<T, S>>(
+    pub fn par_train<const N: usize, D: ParDataset<I>, V: ParVertex<T>>(
         &'_ mut self,
         datasets: &[D; N],
         trees: &[[V; M]; N],

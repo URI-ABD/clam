@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{Graph, Vertex},
-    Cluster, DistanceValue,
+    DistanceValue,
 };
 
 use super::GraphEvaluator;
@@ -25,12 +25,8 @@ impl StationaryProbability {
     }
 }
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for StationaryProbability {
-    fn name(&self) -> &'static str {
-        "sp"
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for StationaryProbability {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
         g.compute_stationary_probabilities(self.num_steps)
             .into_iter()
             .map(|x| 1.0 - x)

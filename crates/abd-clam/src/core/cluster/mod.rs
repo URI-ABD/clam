@@ -3,14 +3,10 @@
 use num::ToPrimitive;
 use rayon::prelude::*;
 
-mod adapted;
-// mod balanced_ball;
 mod ball;
 mod lfd;
 mod partition;
 
-pub use adapted::Adapted;
-// pub use balanced_ball::BalancedBall;
 pub use ball::Ball;
 pub use lfd::LFD;
 pub use partition::{ParPartition, Partition};
@@ -56,9 +52,7 @@ use crate::{Dataset, DistanceValue, ParDataset};
 /// See:
 ///
 /// - [`Ball`](crate::core::cluster::Ball)
-/// - [`BalancedBall`](crate::core::cluster::BalancedBall)
 /// - [`PermutedBall`](crate::cakes::PermutedBall)
-/// - [`SquishyBall`](crate::pancakes::SquishyBall)
 pub trait Cluster<T: DistanceValue>: Ord {
     /// Returns the depth of the `Cluster` in the tree.
     fn depth(&self) -> usize;

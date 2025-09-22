@@ -14,18 +14,6 @@ pub struct KnnBreadthFirst(pub usize);
 impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for KnnBreadthFirst
 {
-    fn name(&self) -> &'static str {
-        "KnnBreadthFirst"
-    }
-
-    fn radius(&self) -> Option<T> {
-        None
-    }
-
-    fn k(&self) -> Option<usize> {
-        Some(self.0)
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));

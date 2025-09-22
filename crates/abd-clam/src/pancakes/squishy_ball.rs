@@ -6,7 +6,7 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{cakes::PermutedBall, Adapted, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, Permutable};
+use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, Permutable};
 
 use super::{Decoder, Encoder, ParDecoder, ParEncoder};
 
@@ -303,58 +303,6 @@ impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParCluster<T> for Squishy
         self.source.par_indices()
     }
 }
-
-impl<T: DistanceValue, S: Cluster<T>> Adapted<T, PermutedBall<T, S>> for SquishyBall<T, S> {
-    fn source(&self) -> &PermutedBall<T, S> {
-        &self.source
-    }
-
-    fn source_mut(&mut self) -> &mut PermutedBall<T, S> {
-        &mut self.source
-    }
-
-    fn take_source(self) -> PermutedBall<T, S> {
-        self.source
-    }
-}
-
-impl<T: DistanceValue, S: Cluster<T>> Adapted<T, S> for SquishyBall<T, S> {
-    fn source(&self) -> &S {
-        self.source.source()
-    }
-
-    fn source_mut(&mut self) -> &mut S {
-        self.source.source_mut()
-    }
-
-    fn take_source(self) -> S {
-        self.source.take_source()
-    }
-}
-
-// impl<T: DistanceValue, S: Cluster<T>> SquishyCluster<T, S> for SquishyBall<T, S> {
-//     fn flat_cost(&self) -> usize {
-//         self.flat_cost
-//     }
-
-//     fn set_flat_cost(&mut self, cost: usize) {
-//         self.flat_cost = cost;
-//     }
-
-//     fn recursive_cost(&self) -> usize {
-//         self.recursive_cost
-//     }
-
-//     fn set_recursive_cost(&mut self, cost: usize) {
-//         self.recursive_cost = cost;
-//     }
-
-//     fn min_cost(&self) -> usize {
-//         self.minimum_cost
-//     }
-// }
-
-// impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParSquishyCluster<T, S> for SquishyBall<T, S> {}
 
 impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>, S: Cluster<T> + crate::DiskIO>
     crate::DiskIO for SquishyBall<T, S>

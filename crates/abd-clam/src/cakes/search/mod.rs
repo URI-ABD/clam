@@ -20,15 +20,6 @@ pub use rnn_linear::RnnLinear;
 /// Common trait for entropy scaling search algorithms.
 #[allow(clippy::module_name_repetitions)]
 pub trait SearchAlgorithm<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> {
-    /// Return the name of the search algorithm.
-    fn name(&self) -> &str;
-
-    /// Get the radius if it is a ranged search algorithm.
-    fn radius(&self) -> Option<T>;
-
-    /// Get the value of k if it is a k-NN search algorithm.
-    fn k(&self) -> Option<usize>;
-
     /// Perform a search using the given parameters.
     ///
     /// # Arguments
@@ -74,63 +65,63 @@ pub trait ParSearchAlgorithm<
     }
 }
 
-/// A blanket implementation of `SearchAlgorithm` for `Box<dyn SearchAlgorithm>`.
-impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
-    for Box<dyn SearchAlgorithm<I, T, C, M, D>>
-{
-    fn name(&self) -> &str {
-        self.as_ref().name()
-    }
+// /// A blanket implementation of `SearchAlgorithm` for `Box<dyn SearchAlgorithm>`.
+// impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
+//     for Box<dyn SearchAlgorithm<I, T, C, M, D>>
+// {
+//     fn name(&self) -> &str {
+//         self.as_ref().name()
+//     }
 
-    fn radius(&self) -> Option<T> {
-        self.as_ref().radius()
-    }
+//     fn radius(&self) -> Option<T> {
+//         self.as_ref().radius()
+//     }
 
-    fn k(&self) -> Option<usize> {
-        self.as_ref().k()
-    }
+//     fn k(&self) -> Option<usize> {
+//         self.as_ref().k()
+//     }
 
-    fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
-        self.as_ref().search(data, metric, root, query)
-    }
-}
+//     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+//         self.as_ref().search(data, metric, root, query)
+//     }
+// }
 
-/// A blanket implementation of `SearchAlgorithm` for `Box<dyn ParSearchAlgorithm>`.
-impl<
-        I: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        C: ParCluster<T>,
-        M: (Fn(&I, &I) -> T) + Send + Sync,
-        D: ParDataset<I>,
-    > SearchAlgorithm<I, T, C, M, D> for Box<dyn ParSearchAlgorithm<I, T, C, M, D>>
-{
-    fn name(&self) -> &str {
-        self.as_ref().name()
-    }
+// /// A blanket implementation of `SearchAlgorithm` for `Box<dyn ParSearchAlgorithm>`.
+// impl<
+//         I: Send + Sync,
+//         T: DistanceValue + Send + Sync,
+//         C: ParCluster<T>,
+//         M: (Fn(&I, &I) -> T) + Send + Sync,
+//         D: ParDataset<I>,
+//     > SearchAlgorithm<I, T, C, M, D> for Box<dyn ParSearchAlgorithm<I, T, C, M, D>>
+// {
+//     fn name(&self) -> &str {
+//         self.as_ref().name()
+//     }
 
-    fn radius(&self) -> Option<T> {
-        self.as_ref().radius()
-    }
+//     fn radius(&self) -> Option<T> {
+//         self.as_ref().radius()
+//     }
 
-    fn k(&self) -> Option<usize> {
-        self.as_ref().k()
-    }
+//     fn k(&self) -> Option<usize> {
+//         self.as_ref().k()
+//     }
 
-    fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
-        self.as_ref().search(data, metric, root, query)
-    }
-}
+//     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+//         self.as_ref().search(data, metric, root, query)
+//     }
+// }
 
-/// A blanket implementation of `ParSearchAlgorithm` for `Box<dyn ParSearchAlgorithm>`.
-impl<
-        I: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        C: ParCluster<T>,
-        M: (Fn(&I, &I) -> T) + Send + Sync,
-        D: ParDataset<I>,
-    > ParSearchAlgorithm<I, T, C, M, D> for Box<dyn ParSearchAlgorithm<I, T, C, M, D>>
-{
-    fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
-        self.as_ref().par_search(data, metric, root, query)
-    }
-}
+// /// A blanket implementation of `ParSearchAlgorithm` for `Box<dyn ParSearchAlgorithm>`.
+// impl<
+//         I: Send + Sync,
+//         T: DistanceValue + Send + Sync,
+//         C: ParCluster<T>,
+//         M: (Fn(&I, &I) -> T) + Send + Sync,
+//         D: ParDataset<I>,
+//     > ParSearchAlgorithm<I, T, C, M, D> for Box<dyn ParSearchAlgorithm<I, T, C, M, D>>
+// {
+//     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+//         self.as_ref().par_search(data, metric, root, query)
+//     }
+// }

@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{Graph, Vertex},
-    Cluster, DistanceValue,
+    DistanceValue,
 };
 
 use super::GraphEvaluator;
@@ -11,13 +11,9 @@ use super::GraphEvaluator;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ClusterCardinality;
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for ClusterCardinality {
-    fn name(&self) -> &'static str {
-        "cc"
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
-        g.iter_clusters().map(|c| -(c.cardinality() as f32)).collect()
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for ClusterCardinality {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
+        g.iter_vertices().map(|c| -(c.cardinality() as f32)).collect()
     }
 
     fn normalize_by_cluster(&self) -> bool {

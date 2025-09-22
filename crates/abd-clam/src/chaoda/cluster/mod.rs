@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use crate::{Adapted, Cluster, DistanceValue, ParCluster};
+use crate::{Cluster, DistanceValue, ParCluster};
 
 mod odd_ball;
 
@@ -12,14 +12,14 @@ pub use odd_ball::OddBall;
 ///
 /// Vertices, and the relationships between them, can then be used to detect
 /// anomalies.
-pub trait Vertex<T: DistanceValue, S: Cluster<T>>: Adapted<T, S> + Hash {
+pub trait Vertex<T: DistanceValue>: Cluster<T> + Hash {
     /// The number of features in the feature vector.
     const NUM_FEATURES: usize;
 
     /// The type of the feature vector.
     ///
     /// This is treated as an array of length `NUM_FEATURES`.
-    type FeatureVector: AsRef<[f32]> + AsMut<[f32]>;
+    type FeatureVector: AsRef<[f32]>;
 
     /// Returns the feature vector used for anomaly detection.
     ///
@@ -32,4 +32,4 @@ pub trait Vertex<T: DistanceValue, S: Cluster<T>>: Adapted<T, S> + Hash {
 }
 
 /// Parallel version of the `Vertex` trait.
-pub trait ParVertex<T: DistanceValue + Send + Sync, S: ParCluster<T>>: Vertex<T, S> + ParCluster<T> {}
+pub trait ParVertex<T: DistanceValue + Send + Sync>: Vertex<T> + ParCluster<T> {}

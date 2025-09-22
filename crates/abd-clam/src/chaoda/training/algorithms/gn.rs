@@ -2,7 +2,7 @@
 
 use crate::{
     chaoda::{Graph, Vertex},
-    Cluster, DistanceValue,
+    DistanceValue,
 };
 
 use super::GraphEvaluator;
@@ -29,12 +29,8 @@ impl GraphNeighborhood {
     }
 }
 
-impl<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>> GraphEvaluator<T, S, V> for GraphNeighborhood {
-    fn name(&self) -> &'static str {
-        "gn"
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S, V>) -> Vec<f32> {
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for GraphNeighborhood {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let k = (self.diameter_fraction * diameter as f32).round() as usize;

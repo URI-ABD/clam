@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::{
     chaoda::{ParVertex, Vertex},
-    Adapted, Cluster, DistanceValue, ParCluster,
+    Cluster, DistanceValue, ParCluster,
 };
 
 /// The `OddBall` is a `Cluster` adapter used to represent `Cluster`s in the
@@ -211,21 +211,7 @@ impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParCluster<T> for OddBall
     }
 }
 
-impl<T: DistanceValue, S: Cluster<T>> Adapted<T, S> for OddBall<T, S> {
-    fn source(&self) -> &S {
-        &self.source
-    }
-
-    fn source_mut(&mut self) -> &mut S {
-        &mut self.source
-    }
-
-    fn take_source(self) -> S {
-        self.source
-    }
-}
-
-impl<T: DistanceValue, S: Cluster<T>> Vertex<T, S> for OddBall<T, S> {
+impl<T: DistanceValue, S: Cluster<T>> Vertex<T> for OddBall<T, S> {
     const NUM_FEATURES: usize = 6;
 
     type FeatureVector = [f32; 6];
@@ -239,4 +225,4 @@ impl<T: DistanceValue, S: Cluster<T>> Vertex<T, S> for OddBall<T, S> {
     }
 }
 
-impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParVertex<T, S> for OddBall<T, S> {}
+impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParVertex<T> for OddBall<T, S> {}

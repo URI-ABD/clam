@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{
     chaoda::{roc_auc_score, OddBall, ParVertex, Vertex},
-    Cluster, Dataset, DistanceValue, ParCluster, ParDataset, ParPartition, Partition,
+    Dataset, DistanceValue, ParDataset, ParPartition, Partition,
 };
 
 use super::TrainedCombination;
@@ -85,8 +85,8 @@ impl TrainedSmc {
     /// - `T`: The type of the metric values.
     /// - `D`: The type of the dataset.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the cluster that was adapted to `OddBall`.
-    pub fn predict_from_tree<I, T, D, M, S, V>(
+    /// - `V`: The type of the vertex in the tree.
+    pub fn predict_from_tree<I, T, D, M, V>(
         &self,
         data: &D,
         metric: &M,
@@ -98,8 +98,7 @@ impl TrainedSmc {
         T: DistanceValue,
         D: Dataset<I>,
         M: Fn(&I, &I) -> T,
-        S: Cluster<T>,
-        V: Vertex<T, S>,
+        V: Vertex<T>,
     {
         let (num_discerning, scores) = self
             .0
@@ -240,7 +239,7 @@ impl TrainedSmc {
     }
 
     /// Parallel version of [`TrainedSmc::predict_from_tree`](crate::chaoda::inference::TrainedSmc::predict_from_tree).
-    pub fn par_predict_from_tree<I, T, D, M, S, V>(
+    pub fn par_predict_from_tree<I, T, D, M, V>(
         &self,
         data: &D,
         metric: &M,
@@ -253,8 +252,7 @@ impl TrainedSmc {
         T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
-        S: ParCluster<T>,
-        V: ParVertex<T, S>,
+        V: ParVertex<T>,
     {
         let (num_discerning, scores) = self
             .0

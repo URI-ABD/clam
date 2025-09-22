@@ -3,7 +3,7 @@
 use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{Adapted, Cluster, DistanceValue, ParCluster, ParDataset, Permutable};
+use crate::{Cluster, DistanceValue, ParCluster, ParDataset, Permutable};
 
 /// A `Cluster` that stores indices after reordering the dataset.
 ///
@@ -253,20 +253,6 @@ impl<T: DistanceValue, S: Cluster<T>> Cluster<T> for PermutedBall<T, S> {
 impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParCluster<T> for PermutedBall<T, S> {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
         (self.offset..(self.offset + self.cardinality())).into_par_iter()
-    }
-}
-
-impl<T: DistanceValue, S: Cluster<T>> Adapted<T, S> for PermutedBall<T, S> {
-    fn source(&self) -> &S {
-        &self.source
-    }
-
-    fn source_mut(&mut self) -> &mut S {
-        &mut self.source
-    }
-
-    fn take_source(self) -> S {
-        self.source
     }
 }
 

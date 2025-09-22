@@ -14,18 +14,6 @@ pub struct KnnDepthFirst(pub usize);
 impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for KnnDepthFirst
 {
-    fn name(&self) -> &'static str {
-        "KnnDepthFirst"
-    }
-
-    fn radius(&self) -> Option<T> {
-        None
-    }
-
-    fn k(&self) -> Option<usize> {
-        Some(self.0)
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let mut candidates = SizedHeap::<(Reverse<T>, &C)>::new(None);
         let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));

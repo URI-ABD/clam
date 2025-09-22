@@ -5,7 +5,7 @@ use smartcore::{
     tree::decision_tree_regressor::DecisionTreeRegressor,
 };
 
-use crate::{chaoda::Vertex, Cluster, DistanceValue};
+use crate::{chaoda::Vertex, DistanceValue};
 
 /// A trained meta-ml model.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -52,7 +52,7 @@ impl TrainedMetaMlModel {
     ///
     /// * If the number of features in the data does not match the number of features in the model.
     /// * If the model cannot predict the data.
-    pub fn predict<T: DistanceValue, S: Cluster<T>, V: Vertex<T, S>>(&self, props: &[f32]) -> Result<Vec<f32>, String> {
+    pub fn predict<T: DistanceValue, V: Vertex<T>>(&self, props: &[f32]) -> Result<Vec<f32>, String> {
         if props.is_empty() || (props.len() % V::NUM_FEATURES != 0) {
             return Err(format!(
                 "Number of features in data ({}) does not match number of features in model ({})",

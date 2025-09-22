@@ -6,7 +6,7 @@ pub mod pancakes;
 pub mod utils;
 
 pub use core::{
-    cluster::{Adapted, Ball, Cluster, ParCluster, ParPartition, Partition, LFD},
+    cluster::{Ball, Cluster, ParCluster, ParPartition, Partition, LFD},
     dataset::{Dataset, ParDataset, Permutable, SizedHeap},
     io::{DiskIO, ParDiskIO},
     DistanceValue, FloatDistanceValue,

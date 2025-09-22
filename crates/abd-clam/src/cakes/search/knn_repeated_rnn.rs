@@ -21,18 +21,6 @@ pub struct KnnRepeatedRnn<T: DistanceValue>(pub usize, pub T);
 impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for KnnRepeatedRnn<T>
 {
-    fn name(&self) -> &'static str {
-        "KnnRepeatedRnn"
-    }
-
-    fn radius(&self) -> Option<T> {
-        None
-    }
-
-    fn k(&self) -> Option<usize> {
-        Some(self.0)
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let mut radius = root.radius_for_k(self.0);
 
