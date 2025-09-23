@@ -3,7 +3,7 @@
 
 use rayon::prelude::*;
 
-use crate::{pancakes::squishy_ball::SquishyBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, Permutable};
+use crate::{pancakes::squishy_ball::SquishyBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
 
 use super::{CodecContents, CodecItem, Decoder, Encoder, ParDecoder, ParEncoder};
 
@@ -69,8 +69,8 @@ where
         trim_min_depth: usize,
     ) -> (Self, Vec<usize>)
     where
-        I: Clone,
-        D: Permutable<I>,
+        I: Clone, // TODO Najib: Remove Clone bound on `I`
+        D: Dataset<I>,
         S: Cluster<T>,
         M: Fn(&I, &I) -> T,
     {
@@ -82,7 +82,7 @@ where
     /// Recursive helper function for [`from_cluster_tree`](Self::from_cluster_tree).
     fn adapt_tree_recursive<D, S>(mut source: SquishyBall<T, S>, data: &D, encoder: &Enc) -> Self
     where
-        I: Clone,
+        I: Clone, // TODO Najib: Remove Clone bound on `I`
         D: Dataset<I>,
         S: Cluster<T>,
     {
@@ -178,7 +178,7 @@ where
     ) -> (Self, Vec<usize>)
     where
         I: Clone,
-        D: ParDataset<I> + Permutable<I>,
+        D: ParDataset<I>,
         S: ParCluster<T>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
     {

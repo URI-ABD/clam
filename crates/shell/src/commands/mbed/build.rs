@@ -100,7 +100,7 @@ where
 #[allow(clippy::too_many_arguments)]
 fn build_generic<P, I, T, M, F, const DIM: usize, const N: usize>(
     out_dir: &P,
-    data: &[I],
+    data: &Vec<I>,
     metric: &M,
     beta: F,
     k: F,
@@ -124,7 +124,7 @@ where
     let root = if tree_path.exists() {
         Ball::<T>::par_read_from(&tree_path)?
     } else {
-        let root = Ball::par_new_tree_iterative(&data, metric, &|_| true, 128);
+        let root = Ball::par_new_tree_iterative(data, metric, &|_| true, 128);
         root.par_write_to(&tree_path)?;
         root
     };
@@ -138,7 +138,7 @@ where
     ftlog::info!("Running the simulation...");
     let tolerance = target;
     let n = patience;
-    let checkpoints = system.par_simulate_to_leaves(&mut rng, &data, metric, max_steps, tolerance, dt, n);
+    let checkpoints = system.par_simulate_to_leaves(&mut rng, data, metric, max_steps, tolerance, dt, n);
 
     ftlog::info!("Writing the energy history...");
     let energy_history = system

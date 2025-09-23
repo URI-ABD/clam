@@ -7,7 +7,7 @@ pub mod utils;
 
 pub use core::{
     cluster::{Ball, Cluster, ParCluster, ParPartition, Partition, LFD},
-    dataset::{Dataset, ParDataset, Permutable, SizedHeap},
+    dataset::{Dataset, ParDataset, SizedHeap},
     io::{DiskIO, ParDiskIO},
     DistanceValue, FloatDistanceValue,
 };

@@ -8,7 +8,12 @@ use rand::prelude::*;
 use crate::metrics::euclidean;
 
 /// Measure the FNN (False Nearest Neighbors) of a dimension reduction.
-pub fn measure<I, T, M, D, const DIM: usize>(original_data: &D, metric: &M, reduced_data: &[[f32; DIM]], _: bool) -> f32
+pub fn measure<I, T, M, D, const DIM: usize>(
+    original_data: &D,
+    metric: &M,
+    reduced_data: &Vec<[f32; DIM]>,
+    _: bool,
+) -> f32
 where
     I: Send + Sync + Clone,
     T: DistanceValue + Send + Sync,
@@ -23,7 +28,7 @@ where
 
     let reduced_metric = euclidean::<_, _, f32>;
     let criteria = |_: &Ball<_>| true;
-    let reduced_root = Ball::par_new_tree_iterative(&reduced_data, &reduced_metric, &criteria, depth_stride);
+    let reduced_root = Ball::par_new_tree_iterative(reduced_data, &reduced_metric, &criteria, depth_stride);
 
     let k = 10;
     let indices = {
@@ -43,7 +48,7 @@ where
     let original_neighbors = knn_alg.par_batch_search(original_data, metric, &original_root, &original_queries);
     let original_neighbors = keep_indices(original_neighbors);
 
-    let reduced_neighbors = knn_alg.par_batch_search(&reduced_data, &reduced_metric, &reduced_root, &reduced_queries);
+    let reduced_neighbors = knn_alg.par_batch_search(reduced_data, &reduced_metric, &reduced_root, &reduced_queries);
     let reduced_neighbors = keep_indices(reduced_neighbors);
 
     let mbed_recalls = original_neighbors

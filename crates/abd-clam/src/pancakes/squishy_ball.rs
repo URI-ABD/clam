@@ -6,7 +6,7 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, Permutable};
+use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
 
 use super::{Decoder, Encoder, ParDecoder, ParEncoder};
 
@@ -31,7 +31,7 @@ impl<T: DistanceValue, S: Cluster<T>> SquishyBall<T, S> {
     /// Create a new `SquishyBall` from a source `Cluster` tree.
     pub fn from_cluster_tree<I, D, M, Enc, Dec>(root: S, data: &mut D, metric: &M, encoder: &Enc) -> (Self, Vec<usize>)
     where
-        D: Permutable<I>,
+        D: Dataset<I>,
         M: Fn(&I, &I) -> T,
         Enc: Encoder<I, Dec>,
         Dec: Decoder<I, Enc>,
@@ -119,7 +119,7 @@ impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> SquishyBall<T, S> {
     ) -> (Self, Vec<usize>)
     where
         I: Send + Sync,
-        D: ParDataset<I> + Permutable<I>,
+        D: ParDataset<I>,
         M: (Fn(&I, &I) -> T) + Send + Sync,
         Enc: ParEncoder<I, Dec>,
         Dec: ParDecoder<I, Enc>,

@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use abd_clam::{
     cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, PermutedBall, RnnClustered},
-    Ball, Cluster, DistanceValue, ParCluster, ParDataset, ParPartition, Partition, Permutable,
+    Ball, Cluster, DistanceValue, ParCluster, ParDataset, ParPartition, Partition,
 };
 use rand::prelude::*;
 use test_case::test_case;
@@ -200,7 +200,7 @@ fn build_and_check_search<I, T, C, M, D, Pd>(
     T: DistanceValue + Send + Sync + Debug,
     C: ParCluster<T>,
     M: (Fn(&I, &I) -> T) + Send + Sync,
-    D: ParDataset<I> + Permutable<I> + Clone,
+    D: ParDataset<I> + Clone,
     Pd: ParDataset<I> + Clone,
 {
     let (ball, data) = ball_data;

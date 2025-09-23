@@ -46,7 +46,7 @@ impl QualityMeasure {
         &self,
         inp_data: &ShellData,
         metric: &Metric,
-        reduced_data: &[[f32; DIM]],
+        reduced_data: &Vec<[f32; DIM]>,
         exhaustive: bool,
     ) -> f32 {
         match (inp_data, metric) {
@@ -75,7 +75,7 @@ impl QualityMeasure {
         &self,
         inp_data: &D,
         metric: &M,
-        reduced_data: &[[f32; DIM]],
+        reduced_data: &Vec<[f32; DIM]>,
         exhaustive: bool,
     ) -> f32
     where

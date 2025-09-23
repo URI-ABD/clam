@@ -6,7 +6,7 @@ use abd_clam::{
     cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, RnnClustered},
     musals::{Aligner, CostMatrix},
     pancakes::{ParDecoder, ParEncoder, SquishedBall},
-    Ball, Cluster, DiskIO, DistanceValue, ParDataset, ParPartition, Partition, Permutable,
+    Ball, Cluster, DiskIO, DistanceValue, ParDataset, ParPartition, Partition,
 };
 use test_case::test_case;
 
@@ -103,7 +103,7 @@ fn build_and_check_search<I, T, D, M, Enc, Dec>(
 ) where
     I: core::fmt::Debug + Send + Sync + Eq + Clone,
     T: DistanceValue + core::fmt::Debug + Send + Sync,
-    D: ParDataset<I> + Permutable<I> + Clone,
+    D: ParDataset<I> + Clone,
     M: (Fn(&I, &I) -> T) + Send + Sync,
     Enc: ParEncoder<I, Dec>,
     Dec: ParDecoder<I, Enc>,
