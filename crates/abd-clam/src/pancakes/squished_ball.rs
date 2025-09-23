@@ -3,9 +3,9 @@
 
 use rayon::prelude::*;
 
-use crate::{pancakes::squishy_ball::SquishyBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster};
 
-use super::{CodecContents, CodecItem, Decoder, Encoder, ParDecoder, ParEncoder};
+use super::{CodecContents, CodecItem, Decoder, Encoder, SquishyBall};
 
 /// A `Cluster` that has been compressed using `PanCAKES`.
 #[must_use]
@@ -31,29 +31,6 @@ pub struct SquishedBall<I, T: DistanceValue, Enc: Encoder<I, Dec>, Dec: Decoder<
     pub(crate) contents: CodecContents<I, T, Enc, Dec>,
 }
 
-impl<I, T, Enc, Dec> Clone for SquishedBall<I, T, Enc, Dec>
-where
-    I: Clone,
-    T: DistanceValue + Clone,
-    Enc: Encoder<I, Dec>,
-    Dec: Decoder<I, Enc>,
-    Enc::Bytes: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            depth: self.depth,
-            offset: self.offset,
-            cardinality: self.cardinality,
-            radius: self.radius,
-            lfd: self.lfd,
-            arg_center: self.arg_center,
-            arg_radial: self.arg_radial,
-            center: self.center.clone(),
-            contents: self.contents.clone(),
-        }
-    }
-}
-
 impl<I, T, Enc, Dec> SquishedBall<I, T, Enc, Dec>
 where
     T: DistanceValue,
@@ -69,20 +46,48 @@ where
         trim_min_depth: usize,
     ) -> (Self, Vec<usize>)
     where
-        I: Clone, // TODO Najib: Remove Clone bound on `I`
         D: Dataset<I>,
         S: Cluster<T>,
         M: Fn(&I, &I) -> T,
     {
         let (root, permutation) = SquishyBall::from_cluster_tree(root, data, metric, encoder);
-        let root = Self::adapt_tree_recursive(root.trim(trim_min_depth), data, encoder);
+        let root = Self::from_squishy_ball(root.trim(trim_min_depth), data, encoder);
         (root, permutation)
     }
 
-    /// Recursive helper function for [`from_cluster_tree`](Self::from_cluster_tree).
-    fn adapt_tree_recursive<D, S>(mut source: SquishyBall<T, S>, data: &D, encoder: &Enc) -> Self
+    /// Create a new `SquishedBall` from a `SquishyBall`.
+    ///
+    /// This assumes that the `SquishyBall` has already been trimmed to the
+    /// desired depth.
+    pub fn from_squishy_ball<D, S>(root: SquishyBall<T, S>, data: &D, encoder: &Enc) -> Self
     where
-        I: Clone, // TODO Najib: Remove Clone bound on `I`
+        D: Dataset<I>,
+        S: Cluster<T>,
+    {
+        let (mut root, center) = Self::adapt_tree_recursive(root, data, encoder);
+        // Now that the entire tree has been adapted, we can use a raw encoding
+        // for the root's center because it has no parent.
+        root.center = CodecItem::Encoded(encoder.encode_raw(center));
+        root
+    }
+
+    /// Recursive helper function for [`from_squishy_ball`](Self::from_squishy_ball).
+    ///
+    /// INVARIANT: The returned `SquishedBall` has its center set to
+    /// `CodecItem::Encoded(Enc::Bytes::default())`. The caller is responsible
+    /// for setting the center to the correct value.
+    ///
+    /// This invariant ensures that all child nodes can encode their contents in
+    /// terms of their own _decoded_ center. After recursion completes, the
+    /// caller can then encode the child's center in terms of the parent's
+    /// _decoded_ center.
+    ///
+    /// # Returns
+    ///
+    /// The adapted `SquishedBall` and a reference to the decoded center item
+    /// for that `SquishedBall`.
+    fn adapt_tree_recursive<'a, D, S>(mut source: SquishyBall<T, S>, data: &'a D, encoder: &Enc) -> (Self, &'a I)
+    where
         D: Dataset<I>,
         S: Cluster<T>,
     {
@@ -103,7 +108,7 @@ where
                     .into_iter()
                     .map(|i| data.get(i))
                     .map(|item| encoder.encode(item, center))
-                    .map(CodecItem::new_encoded)
+                    .map(CodecItem::Encoded)
                     .collect(),
             )
         } else {
@@ -112,8 +117,9 @@ where
                     .take_children()
                     .into_iter()
                     .map(|child| Self::adapt_tree_recursive(*child, data, encoder))
-                    .map(|mut child| {
-                        child.center = child.center.encode(encoder, center);
+                    .map(|(mut child, child_center)| {
+                        // The placeholder value is replaced here.
+                        child.center = CodecItem::Encoded(encoder.encode(child_center, center));
                         child
                     })
                     .map(Box::new)
@@ -121,7 +127,14 @@ where
             )
         };
 
-        Self {
+        // SAFETY: We are creating a placeholder value for the center that will
+        // be replaced by the caller. Since this method is private, we can
+        // ensure that the placeholder is always replaced before use. We use
+        // `zeroed` to avoid requiring `I: Clone` or `Enc::Bytes: Default`.
+        #[allow(unsafe_code)]
+        let zero_bytes = unsafe { core::mem::zeroed() };
+
+        let root = Self {
             depth,
             offset,
             cardinality,
@@ -129,18 +142,60 @@ where
             lfd,
             arg_center,
             arg_radial,
-            center: CodecItem::new_decoded(center.clone()),
+            center: CodecItem::Encoded(zero_bytes), // Placeholder, will be set by the caller.
             contents,
+        };
+
+        (root, center)
+    }
+
+    /// Encode all items in the tree, keeping the tree structure intact.
+    pub fn encode_from_root(&mut self, encoder: &Enc) {
+        match &self.center {
+            CodecItem::Encoded(_) => (), // Already encoded, nothing to do.
+            CodecItem::Decoded(center) => {
+                self.contents.encode_subtree(encoder, center);
+                self.center = CodecItem::Encoded(encoder.encode_raw(center));
+            }
+        }
+    }
+
+    /// Encode the subtree rooted at this node, using the provided encoder and
+    /// the center of the parent node as the reference item.
+    pub(crate) fn encode_subtree(&mut self, encoder: &Enc, parent_center: &I) {
+        // INVARIANT: The center is encoded only after all its children have
+        // been encoded.
+        match &self.center {
+            CodecItem::Encoded(_) => (), // Already encoded, nothing to do.
+            CodecItem::Decoded(center) => {
+                self.contents.encode_subtree(encoder, center);
+                self.center = CodecItem::Encoded(encoder.encode(center, parent_center));
+            }
         }
     }
 
     /// Decode all items in the tree, keeping the tree structure intact.
-    pub fn decode_tree(&mut self, decoder: &Dec) {
+    pub fn decode_from_root(&mut self, decoder: &Dec) {
         match &self.center {
             CodecItem::Encoded(encoded) => {
                 let center = decoder.decode_raw(encoded);
                 self.contents.decode_subtree(decoder, &center);
-                self.center = CodecItem::new_decoded(center);
+                self.center = CodecItem::Decoded(center);
+            }
+            CodecItem::Decoded(center) => {
+                self.contents.decode_subtree(decoder, center);
+            }
+        }
+    }
+
+    /// Decode the subtree rooted at this node, using the provided decoder and
+    /// the center of the parent node as the reference item.
+    pub(crate) fn decode_subtree(&mut self, decoder: &Dec, parent_center: &I) {
+        match &self.center {
+            CodecItem::Encoded(encoded) => {
+                let center = decoder.decode(parent_center, encoded);
+                self.contents.decode_subtree(decoder, &center);
+                self.center = CodecItem::Decoded(center);
             }
             CodecItem::Decoded(center) => {
                 self.contents.decode_subtree(decoder, center);
@@ -156,114 +211,6 @@ where
                 self.contents.decode_all(decoder, &center)
             }
             CodecItem::Decoded(center) => self.contents.decode_all(decoder, center),
-        }
-    }
-}
-
-impl<I, T, Enc, Dec> SquishedBall<I, T, Enc, Dec>
-where
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    Enc: ParEncoder<I, Dec>,
-    Dec: ParDecoder<I, Enc>,
-    Enc::Bytes: Send + Sync,
-{
-    /// Parallel version of [`from_cluster_tree`](SquishedBall::from_cluster_tree).
-    pub fn par_from_cluster_tree<D, S, M>(
-        root: S,
-        data: &mut D,
-        metric: &M,
-        encoder: &Enc,
-        trim_min_depth: usize,
-    ) -> (Self, Vec<usize>)
-    where
-        I: Clone,
-        D: ParDataset<I>,
-        S: ParCluster<T>,
-        M: (Fn(&I, &I) -> T) + Send + Sync,
-    {
-        let (root, permutation) = SquishyBall::par_from_cluster_tree(root, data, metric, encoder);
-        let root = Self::par_adapt_tree_recursive(root.par_trim(trim_min_depth), data, encoder);
-        (root, permutation)
-    }
-
-    /// Parallel version of [`adapt_tree_recursive`](SquishedBall::adapt_tree_recursive).
-    fn par_adapt_tree_recursive<D, S>(mut source: SquishyBall<T, S>, data: &D, encoder: &Enc) -> Self
-    where
-        I: Clone,
-        D: ParDataset<I>,
-        S: ParCluster<T>,
-    {
-        let depth = source.depth();
-        let offset = source.offset();
-        let cardinality = source.cardinality();
-        let radius = source.radius();
-        let lfd = source.lfd();
-        let arg_center = source.arg_center();
-        let arg_radial = source.arg_radial();
-
-        let center = data.get(source.arg_center());
-
-        let contents = if source.is_leaf() {
-            CodecContents::Leaf(
-                source
-                    .indices()
-                    .into_par_iter()
-                    .map(|i| data.get(i))
-                    .map(|item| encoder.encode(item, center))
-                    .map(CodecItem::new_encoded)
-                    .collect(),
-            )
-        } else {
-            CodecContents::Recursive(
-                source
-                    .take_children()
-                    .into_par_iter()
-                    .map(|child| Self::par_adapt_tree_recursive(*child, data, encoder))
-                    .map(|mut child| {
-                        child.center = child.center.par_encode(encoder, center);
-                        child
-                    })
-                    .map(Box::new)
-                    .collect(),
-            )
-        };
-
-        Self {
-            depth,
-            offset,
-            cardinality,
-            radius,
-            lfd,
-            arg_center,
-            arg_radial,
-            center: CodecItem::new_decoded(center.clone()),
-            contents,
-        }
-    }
-
-    /// Parallel version of [`decode_tree`](Self::decode_tree).
-    pub fn par_decode_tree(&mut self, decoder: &Dec) {
-        match &self.center {
-            CodecItem::Encoded(encoded) => {
-                let center = decoder.par_decode_raw(encoded);
-                self.contents.par_decode_subtree(decoder, &center);
-                self.center = CodecItem::new_decoded(center);
-            }
-            CodecItem::Decoded(center) => {
-                self.contents.par_decode_subtree(decoder, center);
-            }
-        }
-    }
-
-    /// Parallel version of [`decode_all`](Self::decode_all).
-    pub fn par_decode_all(self, decoder: &Dec) -> Vec<I> {
-        match &self.center {
-            CodecItem::Encoded(encoded) => {
-                let center = decoder.par_decode_raw(encoded);
-                self.contents.par_decode_all(decoder, &center)
-            }
-            CodecItem::Decoded(center) => self.contents.par_decode_all(decoder, center),
         }
     }
 }
@@ -436,9 +383,9 @@ impl<I, T, Enc, Dec> ParCluster<T> for SquishedBall<I, T, Enc, Dec>
 where
     I: Send + Sync,
     T: DistanceValue + Send + Sync,
-    Enc: ParEncoder<I, Dec>,
+    Enc: super::ParEncoder<I, Dec>,
     Enc::Bytes: Send + Sync,
-    Dec: ParDecoder<I, Enc>,
+    Dec: super::ParDecoder<I, Enc>,
 {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
         (self.offset..self.offset + self.cardinality).into_par_iter()

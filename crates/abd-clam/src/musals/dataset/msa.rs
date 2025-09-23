@@ -21,15 +21,15 @@ use super::super::{Aligner, NUM_CHARS};
 ///
 /// # Examples
 ///
-/// ```no-run
+/// ```compile_fail
 /// // Create a cost matrix and an aligner
 /// let cost_matrix = CostMatrix::extended_iupac();
 /// let aligner = ???;
 ///
 /// // Read a dataset
-/// let data = ???; // FlatVec<String, String>
+/// let data = ???; // Vec<(String, String)>
 ///
-/// let metric = Levenshtein;
+/// let metric = levenshtein_function;
 /// let criteria = |b: &_| true;
 /// let seed = 42;
 ///

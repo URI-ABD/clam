@@ -1,6 +1,6 @@
 //! An item in a dataset, which can be either encoded or decoded.
 
-use super::{Decoder, Encoder, ParDecoder, ParEncoder};
+use super::{Decoder, Encoder};
 
 /// The item in a dataset, which can be either encoded or decoded.
 #[derive(Debug)]
@@ -12,84 +12,22 @@ pub enum CodecItem<I, Enc: Encoder<I, Dec>, Dec: Decoder<I, Enc>> {
     Decoded(I),
 }
 
-impl<I, Enc, Dec> Clone for CodecItem<I, Enc, Dec>
-where
-    I: Clone,
-    Enc: Encoder<I, Dec>,
-    Dec: Decoder<I, Enc>,
-    Enc::Bytes: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::Encoded(encoded) => Self::Encoded(encoded.clone()),
-            Self::Decoded(item) => Self::Decoded(item.clone()),
-        }
-    }
-}
-
 impl<I, Enc: Encoder<I, Dec>, Dec: Decoder<I, Enc>> CodecItem<I, Enc, Dec> {
-    /// Creates a new encoded item.
-    pub const fn new_encoded(encoded: Enc::Bytes) -> Self {
-        Self::Encoded(encoded)
-    }
-
-    /// Creates a new decoded item.
-    pub const fn new_decoded(item: I) -> Self {
-        Self::Decoded(item)
-    }
-
     /// Encodes the item if it is decoded, using the provided encoder and
     /// reference item.
-    pub fn encode(mut self, encoder: &Enc, reference: &I) -> Self {
+    pub fn encoded(self, encoder: &Enc, reference: &I) -> Enc::Bytes {
         match self {
-            Self::Decoded(item) => {
-                self = Self::Encoded(encoder.encode(&item, reference));
-            }
-            Self::Encoded(_) => {
-                // Nothing to do if already encoded.
-            }
+            Self::Decoded(item) => encoder.encode(&item, reference),
+            Self::Encoded(delta) => delta,
         }
-        self
     }
 
     /// Decodes the item if it is encoded, using the provided decoder and
     /// reference item.
-    pub fn decode(mut self, decoder: &Dec, reference: &I) -> Self {
+    pub fn decoded(self, decoder: &Dec, reference: &I) -> I {
         match self {
-            Self::Decoded(_) => (),
-            Self::Encoded(encoded) => {
-                self = Self::Decoded(decoder.decode(reference, &encoded));
-            }
+            Self::Decoded(item) => item,
+            Self::Encoded(delta) => decoder.decode(reference, &delta),
         }
-        self
-    }
-}
-
-impl<I: Send + Sync, Enc: ParEncoder<I, Dec>, Dec: ParDecoder<I, Enc>> CodecItem<I, Enc, Dec>
-where
-    Enc::Bytes: Send + Sync,
-{
-    /// Parallel version of [`encode`](Self::encode).
-    pub fn par_encode(mut self, encoder: &Enc, reference: &I) -> Self {
-        match self {
-            Self::Decoded(item) => {
-                self = Self::Encoded(encoder.par_encode(&item, reference));
-            }
-            Self::Encoded(_) => {
-                // Nothing to do if already encoded.
-            }
-        }
-        self
-    }
-
-    /// Parallel version of [`decode`](Self::decode).
-    pub fn par_decode(mut self, decoder: &Dec, reference: &I) -> Self {
-        match self {
-            Self::Decoded(_) => (),
-            Self::Encoded(encoded) => {
-                self = Self::Decoded(decoder.par_decode(reference, &encoded));
-            }
-        }
-        self
     }
 }
