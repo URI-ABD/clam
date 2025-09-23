@@ -16,7 +16,7 @@ use common::metrics::levenshtein;
 
 #[test_case(16, 16, 2 ; "16x16x2")]
 #[test_case(32, 16, 3 ; "32x16x3")]
-fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
+fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) {
     let matrix = CostMatrix::<u16>::default_affine(Some(10));
     let aligner = Aligner::new(&matrix, b'-');
 
@@ -55,12 +55,10 @@ fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<()
     //     &radii,
     //     &ks,
     // );
-
-    Ok(())
 }
 
 #[test]
-fn ser_de() -> Result<(), String> {
+fn ser_de() {
     use abd_clam::Dataset;
 
     // The items.
@@ -85,14 +83,12 @@ fn ser_de() -> Result<(), String> {
     let ball = B::new_tree(&data, &metric, &criteria);
     let (root, _) = Sb::from_cluster_tree(ball, &mut data, &metric, &(), 4);
 
-    let co_data = root.decode_all(&())?;
+    let co_data = root.decode_all(&());
 
     // let serialized = co_data.to_bytes()?;
     // let deserialized = Co::from_bytes(&serialized)?;
 
     // assert_eq!(co_data.cardinality(), deserialized.cardinality());
-
-    Ok(())
 }
 
 /// Build trees and check the search results.
@@ -104,16 +100,14 @@ fn build_and_check_search<I, T, D, M, Enc, Dec>(
     query: &I,
     radii: &[T],
     ks: &[usize],
-) -> Result<(), Dec::Err>
-where
+) where
     I: core::fmt::Debug + Send + Sync + Eq + Clone,
     T: DistanceValue + core::fmt::Debug + Send + Sync,
     D: ParDataset<I> + Permutable<I> + Clone,
     M: (Fn(&I, &I) -> T) + Send + Sync,
     Enc: ParEncoder<I, Dec>,
     Dec: ParDecoder<I, Enc>,
-    Enc::Bytes: Send + Sync,
-    Dec::Err: core::fmt::Debug + Send + Sync,
+    Enc::Bytes: Clone + Send + Sync,
 {
     let criterion = |c: &Ball<T>| c.cardinality() > 1;
 
@@ -121,7 +115,7 @@ where
         let ball = Ball::par_new_tree(&data, metric, &criterion);
 
         let (root, _) = SquishedBall::par_from_cluster_tree(ball, &mut data, metric, encoder, 4);
-        let decoded_items = root.clone().par_decode_all(decoder)?;
+        let decoded_items = root.clone().par_decode_all(decoder);
 
         (root, decoded_items)
     };
@@ -144,6 +138,4 @@ where
         common::search::check_knn(&root, &data, metric, query, k, &KnnBreadthFirst(k), "KnnBreadthFirst");
         common::search::check_knn(&root, &data, metric, query, k, &KnnDepthFirst(k), "KnnDepthFirst");
     }
-
-    Ok(())
 }

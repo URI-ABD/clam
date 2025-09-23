@@ -17,6 +17,7 @@ where
     I: Clone,
     Enc: Encoder<I, Dec>,
     Dec: Decoder<I, Enc>,
+    Enc::Bytes: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -53,26 +54,20 @@ impl<I, Enc: Encoder<I, Dec>, Dec: Decoder<I, Enc>> CodecItem<I, Enc, Dec> {
 
     /// Decodes the item if it is encoded, using the provided decoder and
     /// reference item.
-    ///
-    /// # Errors
-    ///
-    ///   - If decoding fails, returns the error from the decoder.
-    pub fn decode(mut self, decoder: &Dec, reference: &I) -> Result<Self, Dec::Err> {
+    pub fn decode(mut self, decoder: &Dec, reference: &I) -> Self {
         match self {
             Self::Decoded(_) => (),
             Self::Encoded(encoded) => {
-                let item = decoder.decode(reference, &encoded)?;
-                self = Self::Decoded(item);
+                self = Self::Decoded(decoder.decode(reference, &encoded));
             }
         }
-        Ok(self)
+        self
     }
 }
 
 impl<I: Send + Sync, Enc: ParEncoder<I, Dec>, Dec: ParDecoder<I, Enc>> CodecItem<I, Enc, Dec>
 where
     Enc::Bytes: Send + Sync,
-    Dec::Err: Send + Sync,
 {
     /// Parallel version of [`encode`](Self::encode).
     pub fn par_encode(mut self, encoder: &Enc, reference: &I) -> Self {
@@ -88,18 +83,13 @@ where
     }
 
     /// Parallel version of [`decode`](Self::decode).
-    ///
-    /// # Errors
-    ///
-    /// See [`decode`](Self::decode) for details.
-    pub fn par_decode(mut self, decoder: &Dec, reference: &I) -> Result<Self, Dec::Err> {
+    pub fn par_decode(mut self, decoder: &Dec, reference: &I) -> Self {
         match self {
             Self::Decoded(_) => (),
             Self::Encoded(encoded) => {
-                let item = decoder.par_decode(reference, &encoded)?;
-                self = Self::Decoded(item);
+                self = Self::Decoded(decoder.par_decode(reference, &encoded));
             }
         }
-        Ok(self)
+        self
     }
 }

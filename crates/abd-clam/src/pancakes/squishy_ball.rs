@@ -124,7 +124,6 @@ impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> SquishyBall<T, S> {
         Enc: ParEncoder<I, Dec>,
         Dec: ParDecoder<I, Enc>,
         Enc::Bytes: Send + Sync,
-        Dec::Err: Send + Sync,
     {
         let (permuted, permutation) = PermutedBall::par_from_cluster_tree(root, data);
         let root = Self::par_adapt_tree_recursive(permuted, data, metric, encoder);
@@ -161,7 +160,6 @@ impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> SquishyBall<T, S> {
         Enc: ParEncoder<I, Dec>,
         Dec: ParDecoder<I, Enc>,
         Enc::Bytes: Send + Sync,
-        Dec::Err: Send + Sync,
     {
         let center = data.get(source.arg_center());
         let flat_cost = source

@@ -37,6 +37,7 @@ where
     T: DistanceValue + Clone,
     Enc: Encoder<I, Dec>,
     Dec: Decoder<I, Enc>,
+    Enc::Bytes: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -134,33 +135,24 @@ where
     }
 
     /// Decode all items in the tree, keeping the tree structure intact.
-    ///
-    /// # Errors
-    ///
-    /// If decoding any item fails, an error is returned.
-    pub fn decode_tree(&mut self, decoder: &Dec) -> Result<(), Dec::Err> {
+    pub fn decode_tree(&mut self, decoder: &Dec) {
         match &self.center {
             CodecItem::Encoded(encoded) => {
-                let center = decoder.from_bytes(encoded)?;
-                self.contents.decode_subtree(decoder, &center)?;
+                let center = decoder.decode_raw(encoded);
+                self.contents.decode_subtree(decoder, &center);
                 self.center = CodecItem::new_decoded(center);
             }
             CodecItem::Decoded(center) => {
-                self.contents.decode_subtree(decoder, center)?;
+                self.contents.decode_subtree(decoder, center);
             }
         }
-        Ok(())
     }
 
     /// Decodes and returns all items in the tree.
-    ///
-    /// # Errors
-    ///
-    /// If decoding any item fails, an error is returned.
-    pub fn decode_all(self, decoder: &Dec) -> Result<Vec<I>, Dec::Err> {
+    pub fn decode_all(self, decoder: &Dec) -> Vec<I> {
         match &self.center {
             CodecItem::Encoded(encoded) => {
-                let center = decoder.from_bytes(encoded)?;
+                let center = decoder.decode_raw(encoded);
                 self.contents.decode_all(decoder, &center)
             }
             CodecItem::Decoded(center) => self.contents.decode_all(decoder, center),
@@ -175,7 +167,6 @@ where
     Enc: ParEncoder<I, Dec>,
     Dec: ParDecoder<I, Enc>,
     Enc::Bytes: Send + Sync,
-    Dec::Err: Send + Sync,
 {
     /// Parallel version of [`from_cluster_tree`](SquishedBall::from_cluster_tree).
     pub fn par_from_cluster_tree<D, S, M>(
@@ -252,33 +243,24 @@ where
     }
 
     /// Parallel version of [`decode_tree`](Self::decode_tree).
-    ///
-    /// # Errors
-    ///
-    /// See [`decode_tree`](Self::decode_tree).
-    pub fn par_decode_tree(&mut self, decoder: &Dec) -> Result<(), Dec::Err> {
+    pub fn par_decode_tree(&mut self, decoder: &Dec) {
         match &self.center {
             CodecItem::Encoded(encoded) => {
-                let center = decoder.par_from_bytes(encoded)?;
-                self.contents.par_decode_subtree(decoder, &center)?;
+                let center = decoder.par_decode_raw(encoded);
+                self.contents.par_decode_subtree(decoder, &center);
                 self.center = CodecItem::new_decoded(center);
             }
             CodecItem::Decoded(center) => {
-                self.contents.par_decode_subtree(decoder, center)?;
+                self.contents.par_decode_subtree(decoder, center);
             }
         }
-        Ok(())
     }
 
     /// Parallel version of [`decode_all`](Self::decode_all).
-    ///
-    /// # Errors
-    ///
-    /// See [`decode_all`](Self::decode_all).
-    pub fn par_decode_all(self, decoder: &Dec) -> Result<Vec<I>, Dec::Err> {
+    pub fn par_decode_all(self, decoder: &Dec) -> Vec<I> {
         match &self.center {
             CodecItem::Encoded(encoded) => {
-                let center = decoder.par_from_bytes(encoded)?;
+                let center = decoder.par_decode_raw(encoded);
                 self.contents.par_decode_all(decoder, &center)
             }
             CodecItem::Decoded(center) => self.contents.par_decode_all(decoder, center),
@@ -457,7 +439,6 @@ where
     Enc: ParEncoder<I, Dec>,
     Enc::Bytes: Send + Sync,
     Dec: ParDecoder<I, Enc>,
-    Dec::Err: Send + Sync,
 {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
         (self.offset..self.offset + self.cardinality).into_par_iter()

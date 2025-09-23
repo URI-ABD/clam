@@ -24,6 +24,7 @@ where
     T: DistanceValue + Clone,
     Enc: Encoder<I, Dec>,
     Dec: Decoder<I, Enc>,
+    Enc::Bytes: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -36,11 +37,7 @@ where
 impl<I, T: DistanceValue, Enc: Encoder<I, Dec>, Dec: Decoder<I, Enc>> CodecContents<I, T, Enc, Dec> {
     /// Decodes all items in the subtree rooted at this node, using the provided
     /// decoder and the center of the parent node as the reference item.
-    ///
-    /// # Errors
-    ///
-    /// If any item fails to decode.
-    pub fn decode_subtree(&mut self, decoder: &Dec, parent_center: &I) -> Result<(), Dec::Err> {
+    pub fn decode_subtree(&mut self, decoder: &Dec, parent_center: &I) {
         match self {
             Self::Recursive(children) => {
                 *children = children
@@ -48,36 +45,31 @@ impl<I, T: DistanceValue, Enc: Encoder<I, Dec>, Dec: Decoder<I, Enc>> CodecConte
                     .map(|mut child| {
                         match &child.center {
                             CodecItem::Encoded(encoded) => {
-                                let center = decoder.decode(parent_center, encoded)?;
-                                child.contents.decode_subtree(decoder, &center)?;
+                                let center = decoder.decode(parent_center, encoded);
+                                child.contents.decode_subtree(decoder, &center);
                                 child.center = CodecItem::Decoded(center);
                             }
                             CodecItem::Decoded(center) => {
-                                child.contents.decode_subtree(decoder, center)?;
+                                child.contents.decode_subtree(decoder, center);
                             }
                         }
-                        Ok(child)
+                        child
                     })
-                    .collect::<Result<_, _>>()?;
+                    .collect();
             }
             Self::Leaf(items) => {
                 *items = items
                     .drain(..)
                     .map(|item| item.decode(decoder, parent_center))
-                    .collect::<Result<_, _>>()?;
+                    .collect();
             }
         }
-        Ok(())
     }
 
     /// Decodes all items in the subtree rooted at this node, using the provided
     /// decoder and the center of the parent node as the reference item, and
     /// returns them as a flat vector.
-    ///
-    /// # Errors
-    ///
-    /// If any item fails to decode.
-    pub fn decode_all(self, decoder: &Dec, parent_center: &I) -> Result<Vec<I>, Dec::Err> {
+    pub fn decode_all(self, decoder: &Dec, parent_center: &I) -> Vec<I> {
         match self {
             Self::Recursive(children) => {
                 let mut items = Vec::with_capacity(children.iter().map(|c| c.cardinality()).sum());
@@ -85,22 +77,22 @@ impl<I, T: DistanceValue, Enc: Encoder<I, Dec>, Dec: Decoder<I, Enc>> CodecConte
                 for mut child in children {
                     match &child.center {
                         CodecItem::Decoded(center) => {
-                            items.extend(child.contents.decode_all(decoder, center)?);
+                            items.extend(child.contents.decode_all(decoder, center));
                         }
                         CodecItem::Encoded(encoded) => {
-                            let center = decoder.decode(parent_center, encoded)?;
-                            items.extend(child.contents.decode_all(decoder, &center)?);
+                            let center = decoder.decode(parent_center, encoded);
+                            items.extend(child.contents.decode_all(decoder, &center));
                             child.center = CodecItem::Decoded(center);
                         }
                     }
                 }
 
-                Ok(items)
+                items
             }
             Self::Leaf(items) => items
                 .into_iter()
                 .map(|item| match item {
-                    CodecItem::Decoded(item) => Ok(item),
+                    CodecItem::Decoded(item) => item,
                     CodecItem::Encoded(encoded) => decoder.decode(parent_center, &encoded),
                 })
                 .collect(),
@@ -115,14 +107,9 @@ where
     Enc: ParEncoder<I, Dec>,
     Dec: ParDecoder<I, Enc>,
     Enc::Bytes: Send + Sync,
-    Dec::Err: Send + Sync,
 {
     /// Parallel version of [`decode_subtree`](Self::decode_subtree).
-    ///
-    /// # Errors
-    ///
-    /// See [`decode_subtree`](Self::decode_subtree).
-    pub fn par_decode_subtree(&mut self, decoder: &Dec, parent_center: &I) -> Result<(), Dec::Err> {
+    pub fn par_decode_subtree(&mut self, decoder: &Dec, parent_center: &I) {
         match self {
             Self::Recursive(children) => {
                 *children = children
@@ -130,55 +117,46 @@ where
                     .map(|mut child| {
                         match &child.center {
                             CodecItem::Encoded(encoded) => {
-                                let center = decoder.par_decode(parent_center, encoded)?;
-                                child.contents.par_decode_subtree(decoder, &center)?;
+                                let center = decoder.par_decode(parent_center, encoded);
+                                child.contents.par_decode_subtree(decoder, &center);
                                 child.center = CodecItem::Decoded(center);
                             }
                             CodecItem::Decoded(center) => {
-                                child.contents.par_decode_subtree(decoder, center)?;
+                                child.contents.par_decode_subtree(decoder, center);
                             }
                         }
-                        Ok(child)
+                        child
                     })
-                    .collect::<Result<_, _>>()?;
+                    .collect();
             }
             Self::Leaf(items) => {
                 *items = items
                     .par_drain(..)
                     .map(|item| item.par_decode(decoder, parent_center))
-                    .collect::<Result<_, _>>()?;
+                    .collect();
             }
         }
-        Ok(())
     }
 
     /// Parallel version of [`decode_all`](Self::decode_all).
-    ///
-    /// # Errors
-    ///
-    /// See [`decode_all`](Self::decode_all).
-    pub fn par_decode_all(self, decoder: &Dec, parent_center: &I) -> Result<Vec<I>, Dec::Err> {
+    pub fn par_decode_all(self, decoder: &Dec, parent_center: &I) -> Vec<I> {
         match self {
-            Self::Recursive(mut children) => {
-                let items = children
-                    .par_drain(..)
-                    .flat_map(|mut child| match &child.center {
-                        CodecItem::Decoded(center) => child.contents.par_decode_all(decoder, center),
-                        CodecItem::Encoded(encoded) => {
-                            let center = decoder.decode(parent_center, encoded)?;
-                            let items = child.contents.par_decode_all(decoder, &center)?;
-                            child.center = CodecItem::Decoded(center);
-                            Ok(items)
-                        }
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>();
-                Ok(items)
-            }
+            Self::Recursive(mut children) => children
+                .par_drain(..)
+                .flat_map(|mut child| match &child.center {
+                    CodecItem::Decoded(center) => child.contents.par_decode_all(decoder, center),
+                    CodecItem::Encoded(encoded) => {
+                        let center = decoder.decode(parent_center, encoded);
+                        let items = child.contents.par_decode_all(decoder, &center);
+                        child.center = CodecItem::Decoded(center);
+                        items
+                    }
+                })
+                .collect(),
             Self::Leaf(items) => items
                 .into_par_iter()
                 .map(|item| match item {
-                    CodecItem::Decoded(item) => Ok(item),
+                    CodecItem::Decoded(item) => item,
                     CodecItem::Encoded(encoded) => decoder.par_decode(parent_center, &encoded),
                 })
                 .collect(),

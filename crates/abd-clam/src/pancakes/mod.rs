@@ -23,10 +23,10 @@ pub use squished_ball::SquishedBall;
 /// override the default implementation of this method.
 pub trait Encoder<I, Dec: Decoder<I, Self>>: Sized {
     /// The type of byte representation used by this encoder.
-    type Bytes: AsRef<[u8]> + Clone;
+    type Bytes;
 
-    /// Encode an item to a byte vector.
-    fn to_bytes(&self, item: &I) -> Self::Bytes;
+    /// Encode an item by itself without using a reference item.
+    fn encode_raw(&self, item: &I) -> Self::Bytes;
 
     /// Encode an item as a delta against a reference item.
     fn encode(&self, item: &I, reference: &I) -> Self::Bytes;
@@ -39,74 +39,16 @@ pub trait Encoder<I, Dec: Decoder<I, Self>>: Sized {
     }
 }
 
-/// Parallel version of [`Encoder`](Encoder).
-pub trait ParEncoder<I, Dec: ParDecoder<I, Self>>: Send + Sync + Encoder<I, Dec>
-where
-    Self::Bytes: Send + Sync,
-    Dec::Err: Send + Sync,
-{
-    /// Parallel version of [`to_bytes`](Encoder::to_bytes).
-    fn par_to_bytes(&self, item: &I) -> Self::Bytes;
-
-    /// Parallel version of [`encode`](Encoder::encode).
-    fn par_encode(&self, item: &I, reference: &I) -> Self::Bytes;
-
-    /// Parallel version of [`estimate_delta_size`](Encoder::estimate_delta_size).
-    fn par_estimate_delta_size<T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
-        &self,
-        item: &I,
-        reference: &I,
-        metric: &M,
-    ) -> usize {
-        (metric(item, reference))
-            .to_usize()
-            .unwrap_or(core::mem::size_of::<I>())
-    }
-}
-
 /// A trait for objects that can be used to decode items of type `T`.
 ///
 /// The items can be decoded from bytes and from deltas against a reference
 /// item.
 pub trait Decoder<I, Enc: Encoder<I, Self>>: Sized {
-    /// The type of error that can occur during decoding.
-    type Err;
-
-    /// Decode an item from a byte slice.
-    ///
-    /// # Errors
-    ///
-    /// If the byte slice is malformed or cannot be decoded.
-    #[allow(clippy::wrong_self_convention)]
-    fn from_bytes(&self, bytes: &Enc::Bytes) -> Result<I, Self::Err>;
+    /// Decode an item from its byte representation.
+    fn decode_raw(&self, bytes: &Enc::Bytes) -> I;
 
     /// Decode an item from a delta against a reference item.
-    ///
-    /// # Errors
-    ///
-    /// If the delta is malformed or cannot be applied to the reference item.
-    fn decode(&self, reference: &I, delta: &Enc::Bytes) -> Result<I, Self::Err>;
-}
-
-/// Parallel version of [`Decoder`](Decoder).
-pub trait ParDecoder<I, Enc: ParEncoder<I, Self>>: Send + Sync + Decoder<I, Enc>
-where
-    Enc::Bytes: Send + Sync,
-    Self::Err: Send + Sync,
-{
-    /// Parallel version of [`from_bytes`](Decoder::from_bytes).\
-    ///
-    /// # Errors
-    ///
-    /// See [`Decoder::from_bytes`](Decoder::from_bytes).
-    fn par_from_bytes(&self, bytes: &Enc::Bytes) -> Result<I, Self::Err>;
-
-    /// Parallel version of [`decode`](Decoder::decode).
-    ///
-    /// # Errors
-    ///
-    /// See [`Decoder::decode`](Decoder::decode).
-    fn par_decode(&self, reference: &I, delta: &Enc::Bytes) -> Result<I, Self::Err>;
+    fn decode(&self, reference: &I, delta: &Enc::Bytes) -> I;
 }
 
 /// A macro to implement `Encoder` and `Decoder` for primitive distance value types.
@@ -115,12 +57,12 @@ macro_rules! impl_codec_for_dist_val {
         impl Encoder<$T, ()> for () {
             type Bytes = [u8; $L];
 
-            fn to_bytes(&self, item: &$T) -> Self::Bytes {
+            fn encode_raw(&self, item: &$T) -> Self::Bytes {
                 item.to_be_bytes()
             }
 
             fn encode(&self, item: &$T, _: &$T) -> Self::Bytes {
-                self.to_bytes(item)
+                self.encode_raw(item)
             }
 
             fn estimate_delta_size<T_: DistanceValue, M: Fn(&$T, &$T) -> T_>(&self, _: &$T, _: &$T, _: &M) -> usize {
@@ -129,14 +71,12 @@ macro_rules! impl_codec_for_dist_val {
         }
 
         impl Decoder<$T, ()> for () {
-            type Err = String;
-
-            fn from_bytes(&self, bytes: &<() as Encoder<$T, ()>>::Bytes) -> Result<$T, Self::Err> {
-                Ok(<$T>::from_be_bytes(*bytes))
+            fn decode_raw(&self, bytes: &<() as Encoder<$T, ()>>::Bytes) -> $T {
+                <$T>::from_be_bytes(*bytes)
             }
 
-            fn decode(&self, _: &$T, delta: &[u8; $L]) -> Result<$T, Self::Err> {
-                self.from_bytes(delta)
+            fn decode(&self, _: &$T, delta: &[u8; $L]) -> $T {
+                self.decode_raw(delta)
             }
         }
     };
@@ -155,16 +95,52 @@ impl_codec_for_dist_val!(f64, 8);
 impl_codec_for_dist_val!(usize, core::mem::size_of::<usize>());
 impl_codec_for_dist_val!(isize, core::mem::size_of::<isize>());
 
+/// Parallel version of [`Encoder`](Encoder).
+pub trait ParEncoder<I, Dec: ParDecoder<I, Self>>: Send + Sync + Encoder<I, Dec>
+where
+    Self::Bytes: Send + Sync,
+{
+    /// Parallel version of [`encode_raw`](Encoder::encode_raw).
+    fn par_encode_raw(&self, item: &I) -> Self::Bytes;
+
+    /// Parallel version of [`encode`](Encoder::encode).
+    fn par_encode(&self, item: &I, reference: &I) -> Self::Bytes;
+
+    /// Parallel version of [`estimate_delta_size`](Encoder::estimate_delta_size).
+    fn par_estimate_delta_size<T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
+        &self,
+        item: &I,
+        reference: &I,
+        metric: &M,
+    ) -> usize {
+        (metric(item, reference))
+            .to_usize()
+            .unwrap_or(core::mem::size_of::<I>())
+    }
+}
+
+/// Parallel version of [`Decoder`](Decoder).
+pub trait ParDecoder<I, Enc: ParEncoder<I, Self>>: Send + Sync + Decoder<I, Enc>
+where
+    Enc::Bytes: Send + Sync,
+{
+    /// Parallel version of [`decode_raw`](Decoder::decode_raw).
+    fn par_decode_raw(&self, bytes: &Enc::Bytes) -> I;
+
+    /// Parallel version of [`decode`](Decoder::decode).
+    fn par_decode(&self, reference: &I, delta: &Enc::Bytes) -> I;
+}
+
 /// Parallel versions of the [`impl_codec_for_dist_val`](impl_codec_for_dist_val) macro.
 macro_rules! impl_par_codec_for_dist_val {
     ($T: ty, $L: expr) => {
         impl ParEncoder<$T, ()> for () {
-            fn par_to_bytes(&self, item: &$T) -> Self::Bytes {
+            fn par_encode_raw(&self, item: &$T) -> Self::Bytes {
                 item.to_be_bytes()
             }
 
             fn par_encode(&self, item: &$T, _: &$T) -> Self::Bytes {
-                self.par_to_bytes(item)
+                self.par_encode_raw(item)
             }
 
             fn par_estimate_delta_size<T_: DistanceValue, M: Fn(&$T, &$T) -> T_>(&self, _: &$T, _: &$T, _: &M) -> usize {
@@ -173,12 +149,12 @@ macro_rules! impl_par_codec_for_dist_val {
         }
 
         impl ParDecoder<$T, ()> for () {
-            fn par_from_bytes(&self, bytes: &<() as Encoder<$T, ()>>::Bytes) -> Result<$T, Self::Err> {
-                Ok(<$T>::from_be_bytes(*bytes))
+            fn par_decode_raw(&self, bytes: &<() as Encoder<$T, ()>>::Bytes) -> $T {
+                <$T>::from_be_bytes(*bytes)
             }
 
-            fn par_decode(&self, _: &$T, delta: &[u8; $L]) -> Result<$T, Self::Err> {
-                self.par_from_bytes(delta)
+            fn par_decode(&self, _: &$T, delta: &[u8; $L]) -> $T {
+                self.par_decode_raw(delta)
             }
         }
     };
