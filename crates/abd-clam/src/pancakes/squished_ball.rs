@@ -64,29 +64,38 @@ where
         D: Dataset<I>,
         S: Cluster<T>,
     {
-        let (mut root, center) = Self::adapt_tree_recursive(root, data, encoder);
-        // Now that the entire tree has been adapted, we can use a raw encoding
-        // for the root's center because it has no parent.
-        root.center = CodecItem::Encoded(encoder.encode_raw(center));
-        root
+        // SAFETY: We immediately replace the placeholder center value with the
+        // correctly encoded center value after the recursion completes.
+        #[allow(unsafe_code)]
+        unsafe {
+            let (mut root, center) = Self::adapt_tree_recursive(root, data, encoder);
+            root.center = CodecItem::Encoded(encoder.encode_raw(center));
+            root
+        }
     }
 
     /// Recursive helper function for [`from_squishy_ball`](Self::from_squishy_ball).
     ///
-    /// INVARIANT: The returned `SquishedBall` has its center set to
-    /// `CodecItem::Encoded(Enc::Bytes::default())`. The caller is responsible
-    /// for setting the center to the correct value.
+    /// SAFETY: The returned `SquishedBall` has its center set to a placeholder
+    /// value that must be replaced by the caller before use. The function
+    /// returns a reference to the decoded center item that the caller can use
+    /// for this purpose.
     ///
     /// This invariant ensures that all child nodes can encode their contents in
     /// terms of their own _decoded_ center. After recursion completes, the
     /// caller can then encode the child's center in terms of the parent's
     /// _decoded_ center.
     ///
+    /// This invariant also allows us to avoid requiring `I: Clone`, which could
+    /// be expensive for large item types, or `Enc::Bytes: Default`, which would
+    /// likely be non-sensical for many encoders.
+    ///
     /// # Returns
     ///
     /// The adapted `SquishedBall` and a reference to the decoded center item
     /// for that `SquishedBall`.
-    fn adapt_tree_recursive<'a, D, S>(mut source: SquishyBall<T, S>, data: &'a D, encoder: &Enc) -> (Self, &'a I)
+    #[allow(unsafe_code)]
+    unsafe fn adapt_tree_recursive<'a, D, S>(mut source: SquishyBall<T, S>, data: &'a D, encoder: &Enc) -> (Self, &'a I)
     where
         D: Dataset<I>,
         S: Cluster<T>,
@@ -116,23 +125,20 @@ where
                 source
                     .take_children()
                     .into_iter()
-                    .map(|child| Self::adapt_tree_recursive(*child, data, encoder))
-                    .map(|(mut child, child_center)| {
-                        // The placeholder value is replaced here.
-                        child.center = CodecItem::Encoded(encoder.encode(child_center, center));
-                        child
+                    .map(|child| {
+                        // SAFETY: The placeholder value is replaced immediately
+                        // after this call returns.
+                        #[allow(unsafe_code)]
+                        unsafe {
+                            let (mut child, child_center) = Self::adapt_tree_recursive(*child, data, encoder);
+                            child.center = CodecItem::Encoded(encoder.encode(child_center, center));
+                            child
+                        }
                     })
                     .map(Box::new)
                     .collect(),
             )
         };
-
-        // SAFETY: We are creating a placeholder value for the center that will
-        // be replaced by the caller. Since this method is private, we can
-        // ensure that the placeholder is always replaced before use. We use
-        // `zeroed` to avoid requiring `I: Clone` or `Enc::Bytes: Default`.
-        #[allow(unsafe_code)]
-        let zero_bytes = unsafe { core::mem::zeroed() };
 
         let root = Self {
             depth,
@@ -142,7 +148,9 @@ where
             lfd,
             arg_center,
             arg_radial,
-            center: CodecItem::Encoded(zero_bytes), // Placeholder, will be set by the caller.
+            // SAFETY: This is a placeholder value that will be replaced by
+            // the caller.
+            center: CodecItem::Encoded(unsafe { core::mem::zeroed() }),
             contents,
         };
 
