@@ -44,47 +44,38 @@ pub trait Decoder<T, Enc: Encoder<T, Self>>: Sized {
 
 /// A macro to implement `Encoder` and `Decoder` for primitive distance value types.
 macro_rules! impl_codec_for_dist_val {
-    ($T: ty, $L: expr) => {
-        impl Encoder<$T, ()> for () {
-            type Output = [u8; $L];
+    ($($T:ty),*) => {
+        $(
+            impl Encoder<$T, ()> for () {
+                type Output = [u8; core::mem::size_of::<$T>()];
 
-            fn encode_raw(&self, item: &$T) -> Self::Output {
-                item.to_be_bytes()
+                fn encode_raw(&self, item: &$T) -> Self::Output {
+                    item.to_be_bytes()
+                }
+
+                fn encode(&self, item: &$T, _: &$T) -> Self::Output {
+                    self.encode_raw(item)
+                }
+
+                fn estimate_delta_size(&self, _: &$T, _: &$T) -> usize {
+                    core::mem::size_of::<$T>()
+                }
             }
 
-            fn encode(&self, item: &$T, _: &$T) -> Self::Output {
-                self.encode_raw(item)
-            }
+            impl Decoder<$T, ()> for () {
+                fn decode_raw(&self, bytes: &<() as Encoder<$T, ()>>::Output) -> $T {
+                    <$T>::from_be_bytes(*bytes)
+                }
 
-            fn estimate_delta_size(&self, _: &$T, _: &$T) -> usize {
-                $L
+                fn decode(&self, _: &$T, delta: &[u8; core::mem::size_of::<$T>()]) -> $T {
+                    self.decode_raw(delta)
+                }
             }
-        }
-
-        impl Decoder<$T, ()> for () {
-            fn decode_raw(&self, bytes: &<() as Encoder<$T, ()>>::Output) -> $T {
-                <$T>::from_be_bytes(*bytes)
-            }
-
-            fn decode(&self, _: &$T, delta: &[u8; $L]) -> $T {
-                self.decode_raw(delta)
-            }
-        }
+        )*
     };
 }
 
-impl_codec_for_dist_val!(u8, 1);
-impl_codec_for_dist_val!(u16, 2);
-impl_codec_for_dist_val!(u32, 4);
-impl_codec_for_dist_val!(u64, 8);
-impl_codec_for_dist_val!(i8, 1);
-impl_codec_for_dist_val!(i16, 2);
-impl_codec_for_dist_val!(i32, 4);
-impl_codec_for_dist_val!(i64, 8);
-impl_codec_for_dist_val!(f32, 4);
-impl_codec_for_dist_val!(f64, 8);
-impl_codec_for_dist_val!(usize, core::mem::size_of::<usize>());
-impl_codec_for_dist_val!(isize, core::mem::size_of::<isize>());
+impl_codec_for_dist_val!(u8, u16, u32, u64, i8, i16, i32, i64, f32, f64, usize, isize);
 
 /// Parallel version of [`Encoder`](Encoder).
 pub trait ParEncoder<I, Dec: ParDecoder<I, Self>>: Send + Sync + Encoder<I, Dec>
@@ -115,42 +106,33 @@ where
 
 /// Parallel versions of the [`impl_codec_for_dist_val`](impl_codec_for_dist_val) macro.
 macro_rules! impl_par_codec_for_dist_val {
-    ($T: ty, $L: expr) => {
-        impl ParEncoder<$T, ()> for () {
-            fn par_encode_raw(&self, item: &$T) -> Self::Output {
-                item.to_be_bytes()
+    ($($T:ty),*) => {
+        $(
+            impl ParEncoder<$T, ()> for () {
+                fn par_encode_raw(&self, item: &$T) -> Self::Output {
+                    item.to_be_bytes()
+                }
+
+                fn par_encode(&self, item: &$T, _: &$T) -> Self::Output {
+                    self.par_encode_raw(item)
+                }
+
+                fn par_estimate_delta_size(&self, _: &$T, _: &$T) -> usize {
+                    core::mem::size_of::<$T>()
+                }
             }
 
-            fn par_encode(&self, item: &$T, _: &$T) -> Self::Output {
-                self.par_encode_raw(item)
-            }
+            impl ParDecoder<$T, ()> for () {
+                fn par_decode_raw(&self, bytes: &<() as Encoder<$T, ()>>::Output) -> $T {
+                    <$T>::from_be_bytes(*bytes)
+                }
 
-            fn par_estimate_delta_size(&self, _: &$T, _: &$T) -> usize {
-                $L
+                fn par_decode(&self, _: &$T, delta: &[u8; core::mem::size_of::<$T>()]) -> $T {
+                    self.par_decode_raw(delta)
+                }
             }
-        }
-
-        impl ParDecoder<$T, ()> for () {
-            fn par_decode_raw(&self, bytes: &<() as Encoder<$T, ()>>::Output) -> $T {
-                <$T>::from_be_bytes(*bytes)
-            }
-
-            fn par_decode(&self, _: &$T, delta: &[u8; $L]) -> $T {
-                self.par_decode_raw(delta)
-            }
-        }
+        )*
     };
 }
 
-impl_par_codec_for_dist_val!(u8, 1);
-impl_par_codec_for_dist_val!(u16, 2);
-impl_par_codec_for_dist_val!(u32, 4);
-impl_par_codec_for_dist_val!(u64, 8);
-impl_par_codec_for_dist_val!(i8, 1);
-impl_par_codec_for_dist_val!(i16, 2);
-impl_par_codec_for_dist_val!(i32, 4);
-impl_par_codec_for_dist_val!(i64, 8);
-impl_par_codec_for_dist_val!(f32, 4);
-impl_par_codec_for_dist_val!(f64, 8);
-impl_par_codec_for_dist_val!(usize, core::mem::size_of::<usize>());
-impl_par_codec_for_dist_val!(isize, core::mem::size_of::<isize>());
+impl_par_codec_for_dist_val!(u8, u16, u32, u64, i8, i16, i32, i64, f32, f64, usize, isize);
