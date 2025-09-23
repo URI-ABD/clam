@@ -14,8 +14,8 @@ mod common;
 
 use common::metrics::levenshtein;
 
-#[test_case(16, 16, 2)]
-#[test_case(32, 16, 3)]
+#[test_case(16, 16, 2 ; "16x16x2")]
+#[test_case(32, 16, 3 ; "32x16x3")]
 fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
     let matrix = CostMatrix::<u16>::default_affine(Some(10));
     let aligner = Aligner::new(&matrix, b'-');
@@ -78,7 +78,7 @@ fn ser_de() -> Result<(), String> {
     // The squishy ball
     type Sb = SquishedBall<I, T, Enc, Dec>;
 
-    let mut data: Co = common::data_gen::gen_line_data(100);
+    let mut data: Co = common::data_gen::line(100);
     let metric = common::metrics::absolute_difference;
 
     let criteria = |c: &B| c.cardinality() > 1;

@@ -13,7 +13,7 @@ mod common;
 
 #[test]
 fn line() {
-    let data = common::data_gen::gen_line_data(10);
+    let data = common::data_gen::line(10);
     let metric = common::metrics::absolute_difference;
     let query = &0;
     let criteria = |c: &Ball<_>| c.cardinality() > 1;
@@ -50,7 +50,7 @@ fn line() {
 
 #[test]
 fn grid() {
-    let data = common::data_gen::gen_grid_data(10);
+    let data = common::data_gen::grid(10);
     let metric = common::metrics::hypotenuse;
     let query = &(0.0, 0.0);
     let criteria = |c: &Ball<f32>| c.cardinality() > 1;
@@ -86,10 +86,10 @@ fn grid() {
     }
 }
 
-#[test_case(1_000, 10)]
-#[test_case(10_000, 10)]
-#[test_case(1_000, 100)]
-#[test_case(10_000, 100)]
+#[test_case(1_000, 10 ; "1_000x10")]
+#[test_case(10_000, 10 ; "10_000x10")]
+#[test_case(1_000, 100 ; "1_000x100")]
+#[test_case(10_000, 100 ; "10_000x100")]
 fn vectors(car: usize, dim: usize) {
     let seed = 42;
     let data = {
@@ -131,8 +131,8 @@ fn vectors(car: usize, dim: usize) {
     }
 }
 
-#[test_case(16, 16, 2)]
-#[test_case(32, 16, 3)]
+#[test_case(16, 16, 2 ; "16x16x2")]
+#[test_case(32, 16, 3 ; "32x16x3")]
 fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
     let seed_length = 30;
     let alphabet = "ACTGN".chars().collect::<Vec<_>>();

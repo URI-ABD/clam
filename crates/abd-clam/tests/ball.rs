@@ -6,7 +6,7 @@ mod common;
 
 #[test]
 fn new() {
-    let data = common::data_gen::gen_tiny_data();
+    let data = common::data_gen::tiny();
     let metric = common::metrics::manhattan;
 
     let indices = (0..data.cardinality()).collect::<Vec<_>>();
@@ -26,7 +26,7 @@ fn new() {
 
 #[test]
 fn tree() {
-    let data = common::data_gen::gen_tiny_data();
+    let data = common::data_gen::tiny();
     let metric = common::metrics::manhattan;
     let criteria = |c: &Ball<_>| c.depth() < 1;
 
@@ -50,7 +50,7 @@ fn tree() {
 
 #[test]
 fn tree_iterative() {
-    let data = common::data_gen::gen_pathological_line();
+    let data = common::data_gen::pathological_line();
     let metric = common::metrics::absolute_difference;
     let depth_stride = abd_clam::utils::max_recursion_depth();
 
@@ -105,7 +105,7 @@ fn trim_and_graft() -> Result<(), String> {
 
 #[test]
 fn permutation() {
-    let mut data = common::data_gen::gen_tiny_data();
+    let mut data = common::data_gen::tiny();
     let metric = common::metrics::manhattan;
     let criteria = |c: &Ball<_>| c.depth() < 1;
 
