@@ -1,18 +1,12 @@
 //! An adaptation of `Ball` that allows for compression of the dataset.
 
-use std::io::{Read, Write};
-
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
+use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster};
 
-use super::{Decoder, Encoder, ParDecoder, ParEncoder};
+use super::{Decoder, Encoder};
 
 /// A `Cluster` for use in compressive search.
-#[derive(Clone, bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)]
-#[bitcode(recursive)]
 #[must_use]
 pub struct SquishyBall<T: DistanceValue, S: Cluster<T>> {
     /// The `Cluster` type that the `SquishyBall` is based on.
@@ -29,15 +23,14 @@ pub struct SquishyBall<T: DistanceValue, S: Cluster<T>> {
 
 impl<T: DistanceValue, S: Cluster<T>> SquishyBall<T, S> {
     /// Create a new `SquishyBall` from a source `Cluster` tree.
-    pub fn from_cluster_tree<I, D, M, Enc, Dec>(root: S, data: &mut D, metric: &M, encoder: &Enc) -> (Self, Vec<usize>)
+    pub fn from_cluster_tree<I, D, Enc, Dec>(root: S, data: &mut D, encoder: &Enc) -> (Self, Vec<usize>)
     where
         D: Dataset<I>,
-        M: Fn(&I, &I) -> T,
         Enc: Encoder<I, Dec>,
         Dec: Decoder<I, Enc>,
     {
         let (permuted, permutation) = PermutedBall::from_cluster_tree(root, data);
-        let root = Self::adapt_tree_recursive(permuted, data, metric, encoder);
+        let root = Self::adapt_tree_recursive(permuted, data, encoder);
         (root, permutation)
     }
 
@@ -64,15 +57,9 @@ impl<T: DistanceValue, S: Cluster<T>> SquishyBall<T, S> {
     }
 
     /// Recursive helper for [`from_cluster_tree`](Self::from_cluster_tree).
-    fn adapt_tree_recursive<I, D, M, Enc, Dec>(
-        mut source: PermutedBall<T, S>,
-        data: &D,
-        metric: &M,
-        encoder: &Enc,
-    ) -> Self
+    fn adapt_tree_recursive<I, D, Enc, Dec>(mut source: PermutedBall<T, S>, data: &D, encoder: &Enc) -> Self
     where
         D: Dataset<I>,
-        M: Fn(&I, &I) -> T,
         Enc: Encoder<I, Dec>,
         Dec: Decoder<I, Enc>,
     {
@@ -81,7 +68,7 @@ impl<T: DistanceValue, S: Cluster<T>> SquishyBall<T, S> {
             .indices()
             .iter()
             .map(|&i| data.get(i))
-            .map(|item| encoder.estimate_delta_size(item, center, metric))
+            .map(|item| encoder.estimate_delta_size(item, center))
             .sum::<usize>();
 
         let (children, costs): (Vec<_>, Vec<_>) = source
@@ -89,93 +76,8 @@ impl<T: DistanceValue, S: Cluster<T>> SquishyBall<T, S> {
             .into_iter()
             .map(|child| {
                 let child_center = data.get(child.arg_center());
-                let delta_size = encoder.estimate_delta_size(child_center, center, metric);
-                let child = Self::adapt_tree_recursive(*child, data, metric, encoder);
-                let rec_cost = child.minimum_cost + delta_size;
-                (Box::new(child), rec_cost)
-            })
-            .unzip();
-
-        let recursive_cost = costs.iter().sum();
-        let minimum_cost = flat_cost.min(recursive_cost);
-
-        Self {
-            source,
-            children,
-            recursive_cost,
-            flat_cost,
-            minimum_cost,
-        }
-    }
-}
-
-impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> SquishyBall<T, S> {
-    /// Create a new `SquishyBall` from a source `Cluster` tree.
-    pub fn par_from_cluster_tree<I, D, M, Enc, Dec>(
-        root: S,
-        data: &mut D,
-        metric: &M,
-        encoder: &Enc,
-    ) -> (Self, Vec<usize>)
-    where
-        I: Send + Sync,
-        D: ParDataset<I>,
-        M: (Fn(&I, &I) -> T) + Send + Sync,
-        Enc: ParEncoder<I, Dec>,
-        Dec: ParDecoder<I, Enc>,
-        Enc::Bytes: Send + Sync,
-    {
-        let (permuted, permutation) = PermutedBall::par_from_cluster_tree(root, data);
-        let root = Self::par_adapt_tree_recursive(permuted, data, metric, encoder);
-        (root, permutation)
-    }
-
-    /// Trims the tree to only include nodes where recursive compression is
-    /// cheaper than flat compression.
-    pub fn par_trim(mut self, min_depth: usize) -> Self {
-        if self.flat_cost < self.recursive_cost && self.depth() >= min_depth {
-            self.children.clear();
-        } else if !self.is_leaf() {
-            self.children = self
-                .children
-                .drain(..)
-                .map(|child| child.trim(min_depth))
-                .map(Box::new)
-                .collect();
-        }
-        self
-    }
-
-    /// Recursive helper for [`par_from_cluster_tree`](Self::par_from_cluster_tree).
-    fn par_adapt_tree_recursive<I, D, M, Enc, Dec>(
-        mut source: PermutedBall<T, S>,
-        data: &D,
-        metric: &M,
-        encoder: &Enc,
-    ) -> Self
-    where
-        I: Send + Sync,
-        D: ParDataset<I>,
-        M: (Fn(&I, &I) -> T) + Send + Sync,
-        Enc: ParEncoder<I, Dec>,
-        Dec: ParDecoder<I, Enc>,
-        Enc::Bytes: Send + Sync,
-    {
-        let center = data.get(source.arg_center());
-        let flat_cost = source
-            .indices()
-            .par_iter()
-            .map(|&i| data.get(i))
-            .map(|item| encoder.par_estimate_delta_size(item, center, metric))
-            .sum::<usize>();
-
-        let (children, costs): (Vec<_>, Vec<_>) = source
-            .take_children()
-            .into_par_iter()
-            .map(|child| {
-                let child_center = data.get(child.arg_center());
-                let delta_size = encoder.par_estimate_delta_size(child_center, center, metric);
-                let child = Self::par_adapt_tree_recursive(*child, data, metric, encoder);
+                let delta_size = encoder.estimate_delta_size(child_center, center);
+                let child = Self::adapt_tree_recursive(*child, data, encoder);
                 let rec_cost = child.minimum_cost + delta_size;
                 (Box::new(child), rec_cost)
             })
@@ -299,127 +201,5 @@ impl<T: DistanceValue, S: Cluster<T>> Cluster<T> for SquishyBall<T, S> {
 impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParCluster<T> for SquishyBall<T, S> {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
         self.source.par_indices()
-    }
-}
-
-impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>, S: Cluster<T> + crate::ClamIO>
-    crate::ClamIO for SquishyBall<T, S>
-{
-    fn to_bytes(&self) -> Result<Vec<u8>, String> {
-        let costs: [[u8; 8]; 3] = [
-            self.recursive_cost.to_le_bytes(),
-            self.flat_cost.to_le_bytes(),
-            self.minimum_cost.to_le_bytes(),
-        ];
-        let members: (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) = (
-            self.source.to_bytes()?,
-            bitcode::encode(&costs).map_err(|e| e.to_string())?,
-            self.children
-                .iter()
-                .map(|c| c.to_bytes())
-                .collect::<Result<Vec<_>, _>>()?,
-        );
-        bitcode::encode(&members).map_err(|e| e.to_string())
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let (source_bytes, costs_bytes, children_bytes): (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) =
-            bitcode::decode(bytes).map_err(|e| e.to_string())?;
-
-        let source = PermutedBall::<T, S>::from_bytes(&source_bytes)?;
-        let [recursive_bytes, unitary_bytes, minimum_bytes]: [[u8; 8]; 3] =
-            bitcode::decode(&costs_bytes).map_err(|e| e.to_string())?;
-        let recursive_cost = usize::from_le_bytes(recursive_bytes);
-        let flat_cost = usize::from_le_bytes(unitary_bytes);
-        let minimum_cost = usize::from_le_bytes(minimum_bytes);
-
-        let children = children_bytes
-            .into_iter()
-            .map(|b| Self::from_bytes(&b).map(Box::new))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(Self {
-            source,
-            children,
-            recursive_cost,
-            flat_cost,
-            minimum_cost,
-        })
-    }
-
-    fn write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&self.to_bytes()?).map_err(|e| e.to_string())?;
-        let bytes = encoder.finish().map_err(|e| e.to_string())?;
-        std::fs::write(path, bytes).map_err(|e| e.to_string())
-    }
-
-    fn read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
-        let mut bytes = Vec::new();
-        let mut decoder = GzDecoder::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
-        decoder.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-        Self::from_bytes(&bytes)
-    }
-}
-
-impl<
-        T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>> + Send + Sync,
-        S: ParCluster<T> + crate::ParClamIO,
-    > crate::ParClamIO for SquishyBall<T, S>
-{
-    fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
-        let costs: [[u8; 8]; 3] = [
-            self.recursive_cost.to_le_bytes(),
-            self.flat_cost.to_le_bytes(),
-            self.minimum_cost.to_le_bytes(),
-        ];
-        let members: (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) = (
-            self.source.par_to_bytes()?,
-            bitcode::encode(&costs).map_err(|e| e.to_string())?,
-            self.children
-                .par_iter()
-                .map(|c| c.par_to_bytes())
-                .collect::<Result<Vec<_>, _>>()?,
-        );
-        bitcode::encode(&members).map_err(|e| e.to_string())
-    }
-
-    fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let (source_bytes, costs_bytes, children_bytes): (Vec<u8>, Vec<u8>, Vec<Vec<u8>>) =
-            bitcode::decode(bytes).map_err(|e| e.to_string())?;
-
-        let source = PermutedBall::<T, S>::par_from_bytes(&source_bytes)?;
-        let [recursive_bytes, unitary_bytes, minimum_bytes]: [[u8; 8]; 3] =
-            bitcode::decode(&costs_bytes).map_err(|e| e.to_string())?;
-        let recursive_cost = usize::from_le_bytes(recursive_bytes);
-        let flat_cost = usize::from_le_bytes(unitary_bytes);
-        let minimum_cost = usize::from_le_bytes(minimum_bytes);
-
-        let children = children_bytes
-            .into_par_iter()
-            .map(|b| Self::par_from_bytes(&b).map(Box::new))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(Self {
-            source,
-            children,
-            recursive_cost,
-            flat_cost,
-            minimum_cost,
-        })
-    }
-
-    fn par_write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&self.par_to_bytes()?).map_err(|e| e.to_string())?;
-        let bytes = encoder.finish().map_err(|e| e.to_string())?;
-        std::fs::write(path, bytes).map_err(|e| e.to_string())
-    }
-
-    fn par_read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
-        let mut bytes = Vec::new();
-        let mut decoder = GzDecoder::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
-        decoder.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-        Self::par_from_bytes(&bytes)
     }
 }

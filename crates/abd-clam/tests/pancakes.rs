@@ -47,15 +47,7 @@ fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) {
     let ks = [1, 10, 20];
 
     // TODO (Najib): Implement Encoder/Decoder for strings and re-enable pancakes search tests.
-    // build_and_check_search(
-    //     sequences,
-    //     &levenshtein,
-    //     &encoder,
-    //     &decoder,
-    //     &query,
-    //     &radii,
-    //     &ks,
-    // );
+    // build_and_check_search(...);
 }
 
 #[test]
@@ -81,7 +73,7 @@ fn ser_de() {
 
     let criteria = |c: &B| c.cardinality() > 1;
     let ball = B::new_tree(&data, &metric, &criteria);
-    let (root, _) = Sb::from_cluster_tree(ball, &mut data, &metric, &(), 4);
+    let (root, _) = Sb::from_cluster_tree(ball, &mut data, &(), 4);
 
     let co_data = root.decode_all(&());
 
@@ -107,14 +99,14 @@ fn build_and_check_search<I, T, D, M, Enc, Dec>(
     M: (Fn(&I, &I) -> T) + Send + Sync,
     Enc: ParEncoder<I, Dec>,
     Dec: ParDecoder<I, Enc>,
-    Enc::Bytes: Clone + Send + Sync,
+    Enc::Output: Send + Sync,
 {
     let criterion = |c: &Ball<T>| c.cardinality() > 1;
 
     let (root, data) = {
         let ball = Ball::par_new_tree(&data, metric, &criterion);
 
-        let (root, _) = SquishedBall::from_cluster_tree(ball, &mut data, metric, encoder, 4);
+        let (root, _) = SquishedBall::from_cluster_tree(ball, &mut data, encoder, 4);
 
         // SAFETY: We are cloning the tree for tests only, and we can't derive
         // `Clone` because reasons.

@@ -38,19 +38,12 @@ where
     Dec: Decoder<I, Enc>,
 {
     /// Create a new `SquishedBall`.
-    pub fn from_cluster_tree<D, S, M>(
-        root: S,
-        data: &mut D,
-        metric: &M,
-        encoder: &Enc,
-        trim_min_depth: usize,
-    ) -> (Self, Vec<usize>)
+    pub fn from_cluster_tree<D, S>(root: S, data: &mut D, encoder: &Enc, trim_min_depth: usize) -> (Self, Vec<usize>)
     where
         D: Dataset<I>,
         S: Cluster<T>,
-        M: Fn(&I, &I) -> T,
     {
-        let (root, permutation) = SquishyBall::from_cluster_tree(root, data, metric, encoder);
+        let (root, permutation) = SquishyBall::from_cluster_tree(root, data, encoder);
         let root = Self::from_squishy_ball(root.trim(trim_min_depth), data, encoder);
         (root, permutation)
     }
@@ -392,7 +385,7 @@ where
     I: Send + Sync,
     T: DistanceValue + Send + Sync,
     Enc: super::ParEncoder<I, Dec>,
-    Enc::Bytes: Send + Sync,
+    Enc::Output: Send + Sync,
     Dec: super::ParDecoder<I, Enc>,
 {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
