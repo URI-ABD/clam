@@ -302,8 +302,8 @@ impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParCluster<T> for Squishy
     }
 }
 
-impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>, S: Cluster<T> + crate::DiskIO>
-    crate::DiskIO for SquishyBall<T, S>
+impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>, S: Cluster<T> + crate::ClamIO>
+    crate::ClamIO for SquishyBall<T, S>
 {
     fn to_bytes(&self) -> Result<Vec<u8>, String> {
         let costs: [[u8; 8]; 3] = [
@@ -364,8 +364,8 @@ impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>, S
 
 impl<
         T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>> + Send + Sync,
-        S: ParCluster<T> + crate::ParDiskIO,
-    > crate::ParDiskIO for SquishyBall<T, S>
+        S: ParCluster<T> + crate::ParClamIO,
+    > crate::ParClamIO for SquishyBall<T, S>
 {
     fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
         let costs: [[u8; 8]; 3] = [

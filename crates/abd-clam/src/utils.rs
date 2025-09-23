@@ -14,7 +14,7 @@ use ftlog::{
 };
 use rand::prelude::*;
 
-use crate::{core::dataset::MaxItem, DistanceValue, FloatDistanceValue};
+use crate::{DistanceValue, FloatDistanceValue, MaxItem, MinItem};
 
 /// The square root threshold for sub-sampling.
 pub(crate) const SQRT_THRESH: usize = 1000;
@@ -126,16 +126,9 @@ pub fn arg_min<T: DistanceValue>(values: &[T]) -> Option<(usize, T)> {
     values
         .iter()
         .enumerate()
-        .min_by(|&(_, l), &(_, r)| {
-            if l < r {
-                Ordering::Less
-            } else if l > r {
-                Ordering::Greater
-            } else {
-                Ordering::Equal
-            }
-        })
-        .map(|(i, v)| (i, *v))
+        .map(|(i, &v)| MinItem(i, v))
+        .min_by(Ord::cmp)
+        .map(|MinItem(i, v)| (i, v))
 }
 
 /// Return the index and value of the maximum value in the given slice of values.

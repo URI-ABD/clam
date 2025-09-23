@@ -5,9 +5,7 @@ use core::cmp::Ordering;
 use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{
-    core::dataset::MaxItem, utils, Cluster, Dataset, DistanceValue, ParCluster, ParDataset, ParPartition, Partition, LFD,
-};
+use crate::{utils, Cluster, Dataset, DistanceValue, MaxItem, ParCluster, ParDataset, ParPartition, Partition, LFD};
 
 /// A metric-`Ball` is a collection of items that are within a certain distance
 /// of a center.
@@ -331,7 +329,7 @@ impl<T: DistanceValue + Send + Sync> ParPartition<T> for Ball<T> {
     }
 }
 
-impl<T: DistanceValue + ToBytes<Bytes = [u8; N]> + FromBytes<Bytes = [u8; N]>, const N: usize> crate::DiskIO
+impl<T: DistanceValue + ToBytes<Bytes = [u8; N]> + FromBytes<Bytes = [u8; N]>, const N: usize> crate::ClamIO
     for Ball<T>
 {
     fn to_bytes(&self) -> Result<Vec<u8>, String> {
@@ -383,7 +381,7 @@ impl<T: DistanceValue + ToBytes<Bytes = [u8; N]> + FromBytes<Bytes = [u8; N]>, c
 }
 
 impl<T: DistanceValue + ToBytes<Bytes = [u8; N]> + FromBytes<Bytes = [u8; N]> + Send + Sync, const N: usize>
-    crate::ParDiskIO for Ball<T>
+    crate::ParClamIO for Ball<T>
 {
     fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
         #[allow(clippy::type_complexity)]

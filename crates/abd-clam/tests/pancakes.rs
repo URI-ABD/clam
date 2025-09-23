@@ -6,7 +6,7 @@ use abd_clam::{
     cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, RnnClustered},
     musals::{Aligner, CostMatrix},
     pancakes::{ParDecoder, ParEncoder, SquishedBall},
-    Ball, Cluster, DiskIO, DistanceValue, ParDataset, ParPartition, Partition,
+    Ball, ClamIO, Cluster, DistanceValue, ParDataset, ParPartition, Partition,
 };
 use test_case::test_case;
 

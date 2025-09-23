@@ -1,8 +1,12 @@
 //! The core traits and structs for CLAM.
 
-pub mod cluster;
-pub mod dataset;
-pub mod io;
+mod cluster;
+mod dataset;
+mod io;
+
+pub use cluster::{Ball, Cluster, ParCluster, ParPartition, Partition, LFD};
+pub use dataset::{Dataset, MaxItem, MinItem, ParDataset, SizedHeap};
+pub use io::{ClamIO, ParClamIO};
 
 /// A trait for types that can be used as distance values in clustering algorithms.
 pub trait DistanceValue:

@@ -407,7 +407,7 @@ fn decompress_and_decode<T: bitcode::Decode>(bytes: &[u8]) -> Result<T, String> 
 }
 
 #[cfg(feature = "disk-io")]
-impl<I, Me, Enc, Dec> crate::DiskIO for CodecData<I, Me, Enc, Dec>
+impl<I, Me, Enc, Dec> crate::ClamIO for CodecData<I, Me, Enc, Dec>
 where
     I: bitcode::Encode + bitcode::Decode,
     Me: bitcode::Encode + bitcode::Decode,
@@ -500,7 +500,7 @@ where
 }
 
 #[cfg(feature = "disk-io")]
-impl<I, Me, Enc, Dec> crate::ParDiskIO for CodecData<I, Me, Enc, Dec>
+impl<I, Me, Enc, Dec> crate::ParClamIO for CodecData<I, Me, Enc, Dec>
 where
     I: bitcode::Encode + bitcode::Decode + Send + Sync,
     Me: bitcode::Encode + bitcode::Decode + Send + Sync,

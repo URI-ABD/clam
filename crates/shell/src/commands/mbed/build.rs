@@ -1,6 +1,6 @@
 //! Build the dimension reduction.
 
-use abd_clam::{Ball, DistanceValue, FloatDistanceValue, ParDiskIO, ParPartition, mbed::Complex};
+use abd_clam::{Ball, DistanceValue, FloatDistanceValue, ParClamIO, ParPartition, mbed::Complex};
 use ndarray::prelude::*;
 use num::traits::{FromBytes, ToBytes};
 use rand::distr::uniform::SampleUniform;

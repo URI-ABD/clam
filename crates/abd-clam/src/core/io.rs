@@ -1,7 +1,7 @@
 //! Traits for Disk IO with structs from the crate.
 
 /// Writes and reads structs to and from disk in binary.
-pub trait DiskIO: Sized {
+pub trait ClamIO: Sized {
     /// Convert the struct to a byte vector in binary.
     ///
     /// # Errors
@@ -38,48 +38,48 @@ pub trait DiskIO: Sized {
     }
 }
 
-/// Parallel version of [`DiskIO`](DiskIO).
-pub trait ParDiskIO: DiskIO + Send + Sync {
-    /// Parallel version of [`DiskIO::to_bytes`](DiskIO::to_bytes).
+/// Parallel version of [`ClamIO`](ClamIO).
+pub trait ParClamIO: ClamIO + Send + Sync {
+    /// Parallel version of [`ClamIO::to_bytes`](ClamIO::to_bytes).
     ///
     /// The default implementation offers no parallelism.
     ///
     /// # Errors
     ///
-    /// See [`DiskIO::to_bytes`](DiskIO::to_bytes).
+    /// See [`ClamIO::to_bytes`](ClamIO::to_bytes).
     fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
         self.to_bytes()
     }
 
-    /// Parallel version of [`DiskIO::from_bytes`](DiskIO::from_bytes).
+    /// Parallel version of [`ClamIO::from_bytes`](ClamIO::from_bytes).
     ///
     /// The default implementation offers no parallelism.
     ///
     /// # Errors
     ///
-    /// See [`DiskIO::from_bytes`](DiskIO::from_bytes).
+    /// See [`ClamIO::from_bytes`](ClamIO::from_bytes).
     fn par_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         Self::from_bytes(bytes)
     }
 
-    /// Parallel version of [`DiskIO::write_to`](DiskIO::write_to).
+    /// Parallel version of [`ClamIO::write_to`](ClamIO::write_to).
     ///
     /// The default implementation offers no parallelism.
     ///
     /// # Errors
     ///
-    /// See [`BitCodeIO::write_to`](DiskIO::write_to).
+    /// See [`BitCodeIO::write_to`](ClamIO::write_to).
     fn par_write_to<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
         self.write_to(path)
     }
 
-    /// Parallel version of [`DiskIO::read_from`](DiskIO::read_from).
+    /// Parallel version of [`ClamIO::read_from`](ClamIO::read_from).
     ///
     /// The default implementation offers no parallelism.
     ///
     /// # Errors
     ///
-    /// See [`DiskIO::read_from`](DiskIO::read_from).
+    /// See [`ClamIO::read_from`](ClamIO::read_from).
     fn par_read_from<P: AsRef<std::path::Path>>(path: &P) -> Result<Self, String> {
         Self::read_from(path)
     }

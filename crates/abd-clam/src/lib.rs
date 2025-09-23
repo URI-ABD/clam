@@ -6,11 +6,11 @@ pub mod pancakes;
 pub mod utils;
 
 pub use core::{
-    cluster::{Ball, Cluster, ParCluster, ParPartition, Partition, LFD},
-    dataset::{Dataset, ParDataset, SizedHeap},
-    io::{DiskIO, ParDiskIO},
-    DistanceValue, FloatDistanceValue,
+    Ball, ClamIO, Cluster, Dataset, DistanceValue, FloatDistanceValue, ParClamIO, ParCluster, ParDataset, ParPartition,
+    Partition, SizedHeap, LFD,
 };
+
+use core::{MaxItem, MinItem};
 
 #[cfg(feature = "chaoda")]
 pub mod chaoda;
