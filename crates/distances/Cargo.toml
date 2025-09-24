@@ -21,7 +21,7 @@ workspace = true
 
 [dependencies]
 rand = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 libm = { workspace = true }
 num-integer = { workspace = true }
 
