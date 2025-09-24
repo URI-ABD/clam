@@ -5,10 +5,12 @@ mod core;
 pub mod pancakes;
 pub mod utils;
 
-pub use core::{adapters, cluster, dataset, metric, tree, Ball, Cluster, Dataset, FlatVec, Metric, SizedHeap, LFD};
+pub use core::{
+    Ball, ClamIO, Cluster, Dataset, DatasetMut, DistanceValue, FloatDistanceValue, ParClamIO, ParCluster, ParDataset,
+    ParPartition, Partition, SizedHeap, LFD,
+};
 
-#[cfg(feature = "disk-io")]
-pub use core::{DiskIO, ParDiskIO};
+use core::{MaxItem, MinItem};
 
 #[cfg(feature = "chaoda")]
 pub mod chaoda;

@@ -2,42 +2,23 @@
 
 use core::cmp::Reverse;
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{
-    cakes::{ParSearchable, Searchable},
-    cluster::ParCluster,
-    dataset::SizedHeap,
-    metric::ParMetric,
-    Cluster, Metric,
-};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset, SizedHeap};
 
 use super::{ParSearchAlgorithm, SearchAlgorithm};
 
 /// K-Nearest Neighbors search using a Depth First sieve.
 pub struct KnnDepthFirst(pub usize);
 
-impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
+impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for KnnDepthFirst
 {
-    fn name(&self) -> &'static str {
-        "KnnDepthFirst"
-    }
-
-    fn radius(&self) -> Option<T> {
-        None
-    }
-
-    fn k(&self) -> Option<usize> {
-        Some(self.0)
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let mut candidates = SizedHeap::<(Reverse<T>, &C)>::new(None);
         let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));
 
-        let d = data.query_to_center(metric, query, root);
+        let d = data.query_to_one(query, root.arg_center(), metric);
         candidates.push((Reverse(d_min(root, d)), root));
 
         while !hits.is_full()  // We do not have enough hits.
@@ -56,14 +37,19 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
     }
 }
 
-impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
-    ParSearchAlgorithm<I, T, C, M, D> for KnnDepthFirst
+impl<
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        C: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        D: ParDataset<I>,
+    > ParSearchAlgorithm<I, T, C, M, D> for KnnDepthFirst
 {
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let mut candidates = SizedHeap::<(Reverse<T>, &C)>::new(None);
         let mut hits = SizedHeap::<(T, usize)>::new(Some(self.0));
 
-        let d = data.par_query_to_center(metric, query, root);
+        let d = data.query_to_one(query, root.arg_center(), metric);
         candidates.push((Reverse(d_min(root, d)), root));
 
         while !hits.is_full()  // We do not have enough hits.
@@ -84,9 +70,9 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,
 /// the closest a point in a given cluster could possibly be to the query.
-pub fn d_min<T: Number, C: Cluster<T>>(c: &C, d: T) -> T {
+pub fn d_min<T: DistanceValue, C: Cluster<T>>(c: &C, d: T) -> T {
     if d < c.radius() {
-        T::ZERO
+        T::zero()
     } else {
         d - c.radius()
     }
@@ -101,10 +87,10 @@ fn pop_till_leaf<'a, I, T, C, M, D>(
     candidates: &mut SizedHeap<(Reverse<T>, &'a C)>,
 ) -> (T, &'a C)
 where
-    T: Number + 'a,
+    T: DistanceValue + 'a,
     C: Cluster<T>,
-    M: Metric<I, T>,
-    D: Searchable<I, T, C, M>,
+    M: Fn(&I, &I) -> T,
+    D: Dataset<I>,
 {
     while candidates
         .peek() // The top candidate
@@ -115,7 +101,10 @@ where
             .pop()
             .map_or_else(|| unreachable!("`candidates` is non-empty"), |(_, c)| c);
         parent.children().into_iter().for_each(|child| {
-            candidates.push((Reverse(d_min(child, data.query_to_center(metric, query, child))), child));
+            candidates.push((
+                Reverse(d_min(child, data.query_to_one(query, child.arg_center(), metric))),
+                child,
+            ));
         });
     }
     candidates
@@ -127,10 +116,10 @@ where
 fn par_pop_till_leaf<'a, I, T, C, M, D>(data: &D, metric: &M, query: &I, candidates: &mut SizedHeap<(Reverse<T>, &'a C)>)
 where
     I: Send + Sync,
-    T: Number + 'a,
+    T: DistanceValue + Send + Sync + 'a,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParSearchable<I, T, C, M>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
 {
     while candidates
         .peek() // The top candidate
@@ -143,7 +132,7 @@ where
         parent
             .children()
             .into_par_iter()
-            .map(|child| (child, data.par_query_to_center(metric, query, child)))
+            .map(|child| (child, data.query_to_one(query, child.arg_center(), metric)))
             .collect::<Vec<_>>()
             .into_iter()
             .for_each(|(child, d)| candidates.push((Reverse(d_min(child, d)), child)));
@@ -153,15 +142,16 @@ where
 /// Pops from the top of `candidates` and adds its points to `hits`.
 fn leaf_into_hits<I, T, C, M, D>(data: &D, metric: &M, query: &I, hits: &mut SizedHeap<(T, usize)>, d: T, leaf: &C)
 where
-    T: Number,
+    T: DistanceValue,
     C: Cluster<T>,
-    M: Metric<I, T>,
-    D: Searchable<I, T, C, M>,
+    M: Fn(&I, &I) -> T,
+    D: Dataset<I>,
 {
     if leaf.is_singleton() {
         leaf.indices().into_iter().for_each(|i| hits.push((d, i)));
     } else {
-        data.query_to_all(metric, query, leaf)
+        data.query_to_many(query, leaf.indices(), metric)
+            .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
     }
 }
@@ -175,10 +165,10 @@ fn par_leaf_into_hits<I, T, C, M, D>(
     candidates: &mut SizedHeap<(Reverse<T>, &C)>,
 ) where
     I: Send + Sync,
-    T: Number,
+    T: DistanceValue + Send + Sync,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParSearchable<I, T, C, M>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
 {
     let (d, leaf) = candidates
         .pop()
@@ -186,8 +176,7 @@ fn par_leaf_into_hits<I, T, C, M, D>(
     if leaf.is_singleton() {
         leaf.indices().into_iter().for_each(|i| hits.push((d, i)));
     } else {
-        data.query_to_all(metric, query, leaf)
-            .collect::<Vec<_>>()
+        data.par_query_to_many(query, leaf.indices(), metric)
             .into_iter()
             .for_each(|(i, d)| hits.push((d, i)));
     }

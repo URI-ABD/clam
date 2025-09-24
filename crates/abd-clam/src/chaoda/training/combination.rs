@@ -1,15 +1,8 @@
 //! Utilities for handling a pair of `MetaMLModel` and `GraphAlgorithm`.
 
-use distances::{
-    number::{Addition, Multiplication},
-    Number,
-};
-
 use crate::{
-    chaoda::{
-        inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, NUM_RATIOS,
-    },
-    Cluster,
+    chaoda::{inference, roc_auc_score, training::GraphEvaluator, Graph, GraphAlgorithm, TrainableMetaMlModel, Vertex},
+    DistanceValue,
 };
 
 /// A trainable combination of a `MetaMLModel` and a `GraphAlgorithm`.
@@ -69,16 +62,19 @@ impl TrainableCombination {
     /// # Errors
     ///
     /// - If any roc-auc score calculation fails.
-    pub fn data_from_graph<T, S>(&self, graph: &Graph<T, S>, labels: &[bool]) -> Result<([Vec<f32>; 2], f32), String>
-    where
-        T: Number,
-        S: Cluster<T>,
-    {
-        let props = graph.iter_anomaly_properties().flatten().collect::<Vec<f32>>();
+    pub fn data_from_graph<T: DistanceValue, V: Vertex<T>>(
+        &self,
+        graph: &Graph<T, V>,
+        labels: &[bool],
+    ) -> Result<([Vec<f32>; 2], f32), String> {
+        let props = graph
+            .iter_anomaly_properties()
+            .flat_map(|v| v.as_ref().to_vec())
+            .collect::<Vec<f32>>();
         let predictions = self.graph_algorithm.evaluate_points(graph);
 
         let scores = graph
-            .iter_clusters()
+            .iter_vertices()
             .map(|c| {
                 // Get the labels and predictions and append a dummy true and false value to avoid empty classes for roc_auc_score
                 let indices = c.indices();
@@ -101,15 +97,10 @@ impl TrainableCombination {
                 // to `Cluster`s whose ROC AUC score is very different from 0.5.
                 // `Cluster`s with high scores will be preferentially selected
                 // for `Graph`s.
-                let diff = roc_score.abs_diff(0.5).double();
+                let diff = (roc_score - 0.5).abs() * 2.0;
                 Ok::<_, String>(diff)
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        if scores.len() != props.len() / NUM_RATIOS {
-            return Err("The number of clusters does not match the number of properties".to_string());
-        }
-        ftlog::debug!("Training {} with {} samples", self.name(), self.train_y.len());
 
         let roc_score = roc_auc_score(labels, &predictions)?;
 
@@ -132,14 +123,6 @@ impl TrainableCombination {
         if x.is_empty() || y.is_empty() {
             return Err("The data are empty".to_string());
         }
-        if x.len() % NUM_RATIOS != 0 {
-            return Err(format!(
-                "The number of properties is not a multiple of NUM_RATIOS: {NUM_RATIOS}"
-            ));
-        }
-        if x.len() / NUM_RATIOS != y.len() {
-            return Err("The number of samples does not match the number of targets".to_string());
-        }
 
         self.train_x.extend_from_slice(x);
         self.train_y.extend_from_slice(y);
@@ -154,8 +137,8 @@ impl TrainableCombination {
     /// of the `Cluster`s in the `Graph` to the training data. After that, it
     /// will train the model using the training data. Finally, it will return
     /// the trained model.
-    pub fn train_step(&self) -> Result<inference::TrainedCombination, String> {
-        let meta_ml = self.meta_ml.train(NUM_RATIOS, &self.train_x, &self.train_y)?;
+    pub fn train_step<T: DistanceValue, V: Vertex<T>>(&self) -> Result<inference::TrainedCombination, String> {
+        let meta_ml = self.meta_ml.train(V::NUM_FEATURES, &self.train_x, &self.train_y)?;
         let graph_algorithm = self.graph_algorithm.clone();
         Ok(inference::TrainedCombination::new(
             meta_ml,

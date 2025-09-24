@@ -1,15 +1,10 @@
 //! A trainable Single-Metric-CHAODA ensemble.
 
-use distances::Number;
 use rayon::prelude::*;
 
 use crate::{
-    adapters::{Adapter, ParAdapter},
-    chaoda::{inference::TrainedCombination, Graph, TrainedSmc, Vertex},
-    cluster::{ParCluster, ParPartition, Partition},
-    dataset::ParDataset,
-    metric::ParMetric,
-    utils, Cluster, Dataset, Metric,
+    chaoda::{inference::TrainedCombination, Graph, OddBall, ParVertex, TrainedSmc, Vertex},
+    utils, Dataset, DistanceValue, ParDataset, ParPartition, Partition,
 };
 
 use super::{GraphAlgorithm, TrainableCombination, TrainableMetaMlModel};
@@ -70,19 +65,18 @@ impl TrainableSmc {
     /// - `T`: The type of the distance values.
     /// - `D`: The type of the datasets.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the source cluster which will be added to `Vertex`.
+    /// - `S`: The type of the source cluster which will be added to `OddBall`.
     /// - `C`: The type of the criteria function for building a tree.
     pub fn create_trees<const N: usize, I, T, D, M, S, C>(
         &self,
         datasets: &[D; N],
         criteria: &[C; N],
         metric: &M,
-        seed: Option<u64>,
-    ) -> [Vertex<T, S>; N]
+    ) -> [OddBall<T, S>; N]
     where
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
-        M: Metric<I, T>,
+        M: Fn(&I, &I) -> T,
         S: Partition<T>,
         C: Fn(&S) -> bool,
     {
@@ -92,8 +86,8 @@ impl TrainableSmc {
             .zip(criteria.iter())
             .inspect(|((i, _), _)| ftlog::info!("Creating tree for dataset {}/{N}", i + 1))
             .map(|((_, data), c)| {
-                let root = S::new_tree(data, metric, c, seed);
-                Vertex::adapt_tree(root, None, data, metric)
+                let root = S::new_tree(data, metric, c);
+                OddBall::from_cluster_tree(root)
             })
             .collect::<Vec<_>>();
         trees
@@ -115,18 +109,18 @@ impl TrainableSmc {
     /// # Returns
     ///
     /// An array of graphs (one at each depth) created for each dataset.
-    fn create_flat_graphs<'a, const N: usize, I, T, D, M, S>(
+    fn create_flat_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
-        roots: &'a [Vertex<T, S>; N],
+        roots: &'a [V; N],
         depths: &[usize],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
-        T: Number,
+        T: DistanceValue + 'a,
         D: Dataset<I>,
-        M: Metric<I, T>,
-        S: Cluster<T>,
+        M: Fn(&I, &I) -> T,
+        V: Vertex<T>,
     {
         let graphs = datasets
             .iter()
@@ -158,18 +152,18 @@ impl TrainableSmc {
     /// - `trained_models`: The trained model combinations to use for selecting
     ///   the best clusters.
     /// - `min_depth`: The minimum depth to create graphs for.
-    fn create_graphs<'a, const N: usize, I, T, D, M, S>(
+    fn create_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
-        roots: &'a [Vertex<T, S>; N],
+        roots: &'a [V; N],
         trained_combinations: &[TrainedCombination],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
-        T: Number,
+        T: DistanceValue + 'a,
         D: Dataset<I>,
-        M: Metric<I, T>,
-        S: Cluster<T>,
+        M: Fn(&I, &I) -> T,
+        V: Vertex<T>,
     {
         let graphs = datasets
             .iter()
@@ -213,14 +207,14 @@ impl TrainableSmc {
     ///
     /// - `N`: The number of datasets.
     /// - `T`: The type of the distance values.
-    /// - `S`: The type of the source cluster which were adapted into `Vertex`.
+    /// - `V`: The type of the vertices in the graphs.
     ///
     /// # Errors
     ///
     /// - If the meta-ml model fails to train.
-    fn train_epoch<const N: usize, T: Number, S: Cluster<T>>(
+    fn train_epoch<const N: usize, T: DistanceValue, V: Vertex<T>>(
         &mut self,
-        graphs: &[Vec<Graph<T, S>>; N],
+        graphs: &[Vec<Graph<T, V>>; N],
         labels: &[Vec<bool>; N],
     ) -> Result<(Vec<TrainedCombination>, f64), String> {
         let num_combinations = self.0.len();
@@ -276,7 +270,7 @@ impl TrainableSmc {
                     combination.name()
                 );
 
-                combination.train_step().map(|trained| (trained, roc_score))
+                combination.train_step::<T, V>().map(|trained| (trained, roc_score))
             })
             .collect::<Result<Vec<_>, String>>()?
             .into_iter()
@@ -309,8 +303,7 @@ impl TrainableSmc {
     /// - `T`: The type of the distance values.
     /// - `D`: The type of the datasets.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the source cluster which will be added to `Vertex`.
-    /// - `C`: The type of the criteria function for building a tree.
+    /// - `V`: The type of the vertices in the graphs.
     ///
     /// # Errors
     ///
@@ -320,21 +313,21 @@ impl TrainableSmc {
     /// - If and depth in `depths` is less than `min_depth`.
     /// - If any meta-ml model fails to train.
     #[allow(clippy::too_many_arguments)]
-    pub fn train<const N: usize, I, T, D, M, S>(
+    pub fn train<const N: usize, I, T, D, M, V>(
         &mut self,
         datasets: &[D; N],
         metric: &M,
-        roots: &[Vertex<T, S>; N],
+        roots: &[V; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         depths: &[usize],
         num_epochs: usize,
     ) -> Result<TrainedSmc, String>
     where
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
-        M: Metric<I, T>,
-        S: Cluster<T>,
+        M: Fn(&I, &I) -> T,
+        V: Vertex<T>,
     {
         if min_depth == 0 {
             return Err("Minimum depth must be greater than 0".to_string());
@@ -369,13 +362,12 @@ impl TrainableSmc {
         datasets: &[D; N],
         criteria: &[C; N],
         metric: &M,
-        seed: Option<u64>,
-    ) -> [Vertex<T, S>; N]
+    ) -> [OddBall<T, S>; N]
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
         S: ParPartition<T>,
         C: (Fn(&S) -> bool) + Send + Sync,
     {
@@ -385,8 +377,8 @@ impl TrainableSmc {
             .zip(criteria.par_iter())
             .inspect(|((i, _), _)| ftlog::info!("Creating tree for dataset {}/{N}", i + 1))
             .map(|((_, data), c)| {
-                let root = S::par_new_tree(data, metric, c, seed);
-                Vertex::par_adapt_tree(root, None, data, metric)
+                let root = S::par_new_tree(data, metric, c);
+                OddBall::from_cluster_tree(root)
             })
             .collect::<Vec<_>>();
         trees
@@ -395,19 +387,19 @@ impl TrainableSmc {
     }
 
     /// Parallel version of [`TrainableSmc::create_flat_graphs`](crate::chaoda::training::TrainableSmc::create_flat_graphs).
-    fn par_create_flat_graphs<'a, const N: usize, I, T, D, M, S>(
+    fn par_create_flat_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
-        roots: &'a [Vertex<T, S>; N],
+        roots: &'a [V; N],
         depths: &[usize],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        S: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        V: ParVertex<T>,
     {
         let graphs = datasets
             .par_iter()
@@ -430,19 +422,19 @@ impl TrainableSmc {
     }
 
     /// Parallel version of [`TrainableSmc::create_graphs`](crate::chaoda::training::TrainableSmc::create_graphs).
-    fn par_create_graphs<'a, const N: usize, I, T, D, M, S>(
+    fn par_create_graphs<'a, const N: usize, I, T, D, M, V>(
         datasets: &[D; N],
         metric: &M,
-        roots: &'a [Vertex<T, S>; N],
+        roots: &'a [V; N],
         trained_combinations: &[TrainedCombination],
         min_depth: usize,
-    ) -> [Vec<Graph<'a, T, S>>; N]
+    ) -> [Vec<Graph<'a, T, V>>; N]
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        S: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        V: ParVertex<T>,
     {
         let graphs = datasets
             .par_iter()
@@ -476,9 +468,9 @@ impl TrainableSmc {
     /// # Errors
     ///
     /// - See [`TrainableSmc::train_epoch`](crate::chaoda::training::TrainableSmc::train_epoch).
-    fn par_train_epoch<const N: usize, T: Number, S: ParCluster<T>>(
+    fn par_train_epoch<const N: usize, T: DistanceValue + Send + Sync, V: ParVertex<T>>(
         &mut self,
-        graphs: &[Vec<Graph<T, S>>; N],
+        graphs: &[Vec<Graph<T, V>>; N],
         labels: &[Vec<bool>; N],
     ) -> Result<(Vec<TrainedCombination>, f64), String> {
         let num_combinations = self.0.len();
@@ -547,7 +539,7 @@ impl TrainableSmc {
                     combination.name()
                 );
 
-                combination.train_step().map(|trained| (trained, roc_score))
+                combination.train_step::<T, V>().map(|trained| (trained, roc_score))
             })
             .collect::<Result<Vec<_>, String>>()?
             .into_iter()
@@ -563,11 +555,11 @@ impl TrainableSmc {
     ///
     /// - See [`TrainableSmc::train`](crate::chaoda::training::TrainableSmc::train).
     #[allow(clippy::too_many_arguments)]
-    pub fn par_train<const N: usize, I, T, D, M, S>(
+    pub fn par_train<const N: usize, I, T, D, M, V>(
         &mut self,
         datasets: &[D; N],
         metric: &M,
-        roots: &[Vertex<T, S>; N],
+        roots: &[V; N],
         labels: &[Vec<bool>; N],
         min_depth: usize,
         depths: &[usize],
@@ -575,10 +567,10 @@ impl TrainableSmc {
     ) -> Result<TrainedSmc, String>
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        S: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        V: ParVertex<T>,
     {
         if min_depth == 0 {
             return Err("Minimum depth must be greater than 0".to_string());

@@ -21,15 +21,15 @@ workspace = true
 
 [dependencies]
 rand = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 libm = { workspace = true }
 num-integer = { workspace = true }
 
 [dev-dependencies]
 symagen = { workspace = true }
-criterion = { version = "0.5.1", features = ["html_reports"] }
-test-case = "3.2.1"
-stringzilla = "3.9.3"
+criterion = { workspace = true, features = ["html_reports"] }
+test-case = { workspace = true }
+stringzilla = { workspace = true, features = ["cpus"] }
 
 [[bench]]
 name = "inv-sqrt"

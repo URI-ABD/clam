@@ -4,7 +4,9 @@ use core::ops::Neg;
 
 use std::collections::HashSet;
 
-use distances::{number::Int, Number};
+use num::Integer;
+
+use crate::DistanceValue;
 
 use super::super::NUM_CHARS;
 
@@ -22,13 +24,9 @@ use super::super::NUM_CHARS;
 ///   - BLOSUM62: From the [`CostMatrix::blosum62`](CostMatrix::blosum62)
 ///     method, a matrix that uses the BLOSUM62 substitution scores for amino-
 ///     acid sequences.
-#[derive(Clone, Debug)]
-#[cfg_attr(
-    feature = "disk-io",
-    derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
-)]
+#[derive(Clone, Debug, bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)]
 #[must_use]
-pub struct CostMatrix<T: Number> {
+pub struct CostMatrix<T: DistanceValue> {
     /// The cost of substituting one character for another.
     sub_matrix: Vec<Vec<T>>,
     /// The cost to open a gap.
@@ -37,20 +35,23 @@ pub struct CostMatrix<T: Number> {
     gap_ext: T,
 }
 
-impl<T: Number> Default for CostMatrix<T> {
+impl<T: DistanceValue> Default for CostMatrix<T> {
     fn default() -> Self {
-        Self::new(T::ONE, T::ONE, T::ONE)
+        Self::new(T::one(), T::one(), T::one())
     }
 }
 
-impl<T: Number> CostMatrix<T> {
+impl<T: DistanceValue> CostMatrix<T> {
     /// Create a new substitution matrix.
     pub fn new(default_sub: T, gap_open: T, gap_ext: T) -> Self {
         // Initialize the substitution matrix.
         let mut sub_matrix = [[default_sub; NUM_CHARS]; NUM_CHARS];
 
         // Set the diagonal to zero.
-        sub_matrix.iter_mut().enumerate().for_each(|(i, row)| row[i] = T::ZERO);
+        sub_matrix
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, row)| row[i] = T::zero());
 
         Self {
             sub_matrix: sub_matrix.iter().map(|row| row.to_vec()).collect(),
@@ -67,9 +68,11 @@ impl<T: Number> CostMatrix<T> {
     ///
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
-    pub fn default_affine(gap_open: Option<usize>) -> Self {
-        let gap_open = gap_open.map_or_else(|| T::from(10), T::from);
-        Self::new(T::ONE, gap_open, T::ONE)
+    pub fn default_affine(gap_open: Option<T>) -> Self {
+        let gap_open = gap_open.unwrap_or_else(|| {
+            T::from_i8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types"))
+        });
+        Self::new(T::one(), gap_open, T::one())
     }
 
     /// Add a constant to all substitution costs.
@@ -137,7 +140,7 @@ impl<T: Number> CostMatrix<T> {
     }
 }
 
-impl<T: Number + Neg<Output = T>> CostMatrix<T> {
+impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
     /// zero and all non-zero costs are positive.
     pub fn normalize(self) -> Self {
@@ -145,13 +148,13 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             .sub_matrix
             .iter()
             .flatten()
-            .fold(T::MAX, |a, &b| if a < b { a } else { b });
+            .fold(T::max_value(), |a, &b| if a < b { a } else { b });
 
         self.shift(-shift)
     }
 }
 
-impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
+impl<T: DistanceValue + Neg<Output = T>> Neg for CostMatrix<T> {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
@@ -166,7 +169,7 @@ impl<T: Number + Neg<Output = T>> Neg for CostMatrix<T> {
     }
 }
 
-impl<T: Number + Neg<Output = T>> CostMatrix<T> {
+impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
     /// A substitution matrix for the Needleman-Wunsch aligner using the
     /// extendedIUPAC alphabet for nucleotides.
     ///
@@ -177,15 +180,17 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     ///
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
-    pub fn extended_iupac(gap_open: Option<usize>) -> Self {
-        let gap_open = gap_open.unwrap_or(10);
+    pub fn extended_iupac(gap_open: Option<T>) -> Self {
+        let gap_open = gap_open.unwrap_or_else(|| {
+            T::from_i8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types"))
+        });
 
         // For each pair of IUPAC characters, the cost is 1 - n / m, where m is
         // the number possible pairs of nucleotides that can be represented by
         // the IUPAC characters, and n is the number of matching pairs.
         #[rustfmt::skip]
         let costs = vec![
-            ('A', 'R', 1, 2), ('C', 'Y', 1, 2), ('G', 'R', 1, 2), ('T', 'Y', 1, 2),
+            ('A', 'R', 1_i8, 2_i8), ('C', 'Y', 1, 2), ('G', 'R', 1, 2), ('T', 'Y', 1, 2),
             ('A', 'W', 1, 2), ('C', 'S', 1, 2), ('G', 'S', 1, 2), ('T', 'W', 1, 2),
             ('A', 'M', 1, 2), ('C', 'M', 1, 2), ('G', 'K', 1, 2), ('T', 'K', 1, 2),
             ('A', 'D', 1, 3), ('C', 'B', 1, 3), ('G', 'B', 1, 3), ('T', 'B', 1, 3),
@@ -248,16 +253,28 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
         let matrix = Self::default()
-            .with_sub_cost(b'-', b'.', T::ZERO)
-            .with_sub_cost(b'.', b'-', T::ZERO)
-            .scale(T::from(lcm));
+            .with_sub_cost(b'-', b'.', T::zero())
+            .with_sub_cost(b'.', b'-', T::zero())
+            .scale(
+                T::from_i8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+            );
+
+        let lcm_t =
+            T::from_i8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
 
         // Add all costs to the matrix.
         costs
             .into_iter()
             .chain(t_to_u)
             // Scale the costs to integers.
-            .map(|(a, b, n, m)| (a, b, T::from(n * (lcm / m))))
+            .map(|(a, b, n, m)| {
+                (
+                    a,
+                    b,
+                    T::from_i8(n * (lcm / m))
+                        .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+                )
+            })
             .flat_map(|(a, b, cost)| {
                 // Add the costs for the upper and lower case versions of the
                 // characters.
@@ -273,8 +290,8 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             // Add the costs to the substitution matrix.
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
             // Add affine gap penalties.
-            .with_gap_open(T::from(lcm * gap_open))
-            .with_gap_ext(T::from(lcm))
+            .with_gap_open(lcm_t * gap_open)
+            .with_gap_ext(lcm_t)
     }
 
     /// The BLOSUM62 substitution matrix for proteins.
@@ -285,12 +302,14 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
     ///
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
-    pub fn blosum62(gap_open: Option<usize>) -> Self {
-        let gap_open = gap_open.unwrap_or(10);
+    pub fn blosum62(gap_open: Option<T>) -> Self {
+        let gap_open = gap_open.unwrap_or_else(|| {
+            T::from_i8(10).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"))
+        });
 
         #[rustfmt::skip]
         let costs = [
-            vec![ 9],  // C
+            vec![ 9_i8],  // C
             vec![-1,  4],  // S
             vec![-1,  1,  5],  // T
             vec![ 0,  1,  0,  4],  // A
@@ -314,10 +333,14 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
 
         // Calculate the maximum difference between any two substitution costs.
         let max_delta = {
-            let (min, max) = costs.iter().flatten().fold((i32::MAX, i32::MIN), |(min, max), &cost| {
+            let (min, max) = costs.iter().flatten().fold((i8::MAX, i8::MIN), |(min, max), &cost| {
                 (Ord::min(min, cost), Ord::max(max, cost))
             });
-            <usize as Number>::from(max.abs_diff(min))
+            if max > min {
+                max - min
+            } else {
+                min - max
+            }
         };
 
         // The amino acid codes.
@@ -326,19 +349,29 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
         let matrix = Self::default()
-            .with_sub_cost(b'-', b'.', T::ZERO)
-            .with_sub_cost(b'.', b'-', T::ZERO)
-            .scale(T::from(max_delta));
+            .with_sub_cost(b'-', b'.', T::zero())
+            .with_sub_cost(b'.', b'-', T::zero())
+            .scale(
+                T::from_i8(max_delta)
+                    .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+            );
+
+        let max_delta_t = T::from_i8(max_delta)
+            .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
 
         // Flatten the costs into a vector of (a, b, cost) tuples.
         codes
             .chars()
             .zip(costs.iter())
             .flat_map(|(a, costs)| {
-                codes
-                    .chars()
-                    .zip(costs.iter())
-                    .map(move |(b, &cost)| (a, b, T::from(cost)))
+                codes.chars().zip(costs.iter()).map(move |(b, &cost)| {
+                    (
+                        a,
+                        b,
+                        T::from_i8(cost)
+                            .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+                    )
+                })
             })
             .flat_map(|(a, b, cost)| {
                 // Add the costs for the upper and lower case versions of the
@@ -361,7 +394,7 @@ impl<T: Number + Neg<Output = T>> CostMatrix<T> {
             .neg()
             .normalize()
             // Add affine gap penalties.
-            .with_gap_open(T::from(max_delta * gap_open))
-            .with_gap_ext(T::from(max_delta))
+            .with_gap_open(max_delta_t * gap_open)
+            .with_gap_ext(max_delta_t)
     }
 }

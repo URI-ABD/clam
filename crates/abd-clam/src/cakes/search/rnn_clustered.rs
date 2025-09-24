@@ -1,44 +1,31 @@
 //! Ranged Nearest Neighbors search using a tree, as described in the CHESS
 //! paper.
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{
-    cakes::{ParSearchable, Searchable},
-    cluster::ParCluster,
-    metric::ParMetric,
-    Cluster, Metric,
-};
+use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
 
 use super::{ParSearchAlgorithm, RnnLinear, SearchAlgorithm};
 
 /// Ranged Nearest Neighbors search using a tree.
-pub struct RnnClustered<T: Number>(pub T);
+pub struct RnnClustered<T: DistanceValue>(pub T);
 
-impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> SearchAlgorithm<I, T, C, M, D>
+impl<I, T: DistanceValue, C: Cluster<T>, M: Fn(&I, &I) -> T, D: Dataset<I>> SearchAlgorithm<I, T, C, M, D>
     for RnnClustered<T>
 {
-    fn name(&self) -> &'static str {
-        "RnnClustered"
-    }
-
-    fn radius(&self) -> Option<T> {
-        Some(self.0)
-    }
-
-    fn k(&self) -> Option<usize> {
-        None
-    }
-
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let [confirmed, straddlers] = tree_search(data, metric, root, query, self.0);
         leaf_search(data, metric, confirmed, straddlers, query, self.0)
     }
 }
 
-impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
-    ParSearchAlgorithm<I, T, C, M, D> for RnnClustered<T>
+impl<
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        C: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        D: ParDataset<I>,
+    > ParSearchAlgorithm<I, T, C, M, D> for RnnClustered<T>
 {
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         let [confirmed, straddlers] = par_tree_search(data, metric, root, query, self.0);
@@ -65,19 +52,19 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
 #[inline(never)]
 pub fn tree_search<'a, I, T, C, M, D>(data: &D, metric: &M, root: &'a C, query: &I, radius: T) -> [Vec<(&'a C, T)>; 2]
 where
-    T: Number + 'a,
+    T: DistanceValue + 'a,
     C: Cluster<T>,
-    M: Metric<I, T>,
-    D: Searchable<I, T, C, M>,
+    M: Fn(&I, &I) -> T,
+    D: Dataset<I>,
 {
-    let (overlap, distances) = root.overlaps_with(data, metric, query, radius);
+    let (overlap, d) = root.overlaps_with(data, metric, query, radius);
     if !overlap {
         return [Vec::new(), Vec::new()];
     }
 
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
-    let mut candidates = vec![(root, distances[0])];
+    let mut candidates = vec![(root, d)];
 
     while !candidates.is_empty() {
         candidates = candidates.into_iter().fold(Vec::new(), |mut next_candidates, (c, d)| {
@@ -86,11 +73,7 @@ where
             } else if c.is_leaf() {
                 straddlers.push((c, d));
             } else {
-                next_candidates.extend(
-                    c.overlapping_children(data, metric, query, radius)
-                        .into_iter()
-                        .map(|(c, ds)| (c, ds[0])),
-                );
+                next_candidates.extend(c.overlapping_children(data, metric, query, radius));
             }
             next_candidates
         });
@@ -109,19 +92,19 @@ pub fn par_tree_search<'a, I, T, C, M, D>(
 ) -> [Vec<(&'a C, T)>; 2]
 where
     I: Send + Sync,
-    T: Number + 'a,
+    T: DistanceValue + Send + Sync + 'a,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParSearchable<I, T, C, M>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
 {
-    let (overlap, distances) = root.par_overlaps_with(data, metric, query, radius);
+    let (overlap, d) = root.overlaps_with(data, metric, query, radius);
     if !overlap {
         return [Vec::new(), Vec::new()];
     }
 
     let mut confirmed = Vec::new();
     let mut straddlers = Vec::new();
-    let mut candidates = vec![(root, distances[0])];
+    let mut candidates = vec![(root, d)];
 
     while !candidates.is_empty() {
         candidates = candidates.into_iter().fold(Vec::new(), |mut next_candidates, (c, d)| {
@@ -130,11 +113,7 @@ where
             } else if c.is_leaf() {
                 straddlers.push((c, d));
             } else {
-                next_candidates.extend(
-                    c.par_overlapping_children(data, metric, query, radius)
-                        .into_iter()
-                        .map(|(c, ds)| (c, ds[0])),
-                );
+                next_candidates.extend(c.par_overlapping_children(data, metric, query, radius));
             }
             next_candidates
         });
@@ -169,10 +148,10 @@ pub fn leaf_search<I, T, D, M, C>(
     radius: T,
 ) -> Vec<(usize, T)>
 where
-    T: Number,
+    T: DistanceValue,
     C: Cluster<T>,
-    M: Metric<I, T>,
-    D: Searchable<I, T, C, M>,
+    M: Fn(&I, &I) -> T,
+    D: Dataset<I>,
 {
     confirmed
         .into_iter()
@@ -180,7 +159,7 @@ where
             if c.is_singleton() {
                 c.indices().into_iter().map(|i| (i, d)).collect::<Vec<_>>()
             } else {
-                data.query_to_all(metric, query, c).collect()
+                data.query_to_many(query, c.indices(), metric)
             }
         })
         .chain(
@@ -202,10 +181,10 @@ pub fn par_leaf_search<I, T, C, M, D>(
 ) -> Vec<(usize, T)>
 where
     I: Send + Sync,
-    T: Number,
+    T: DistanceValue + Send + Sync,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParSearchable<I, T, C, M>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
 {
     confirmed
         .into_par_iter()
@@ -213,7 +192,7 @@ where
             if c.is_singleton() {
                 c.indices().into_iter().map(|i| (i, d)).collect::<Vec<_>>()
             } else {
-                data.par_query_to_all(metric, query, c).collect()
+                data.par_query_to_many(query, c.indices(), metric)
             }
         })
         .chain(

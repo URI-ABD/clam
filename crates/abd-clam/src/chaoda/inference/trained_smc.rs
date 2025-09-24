@@ -1,22 +1,16 @@
 //! A trained Single-Metric-CHAODA ensemble.
-
-use distances::Number;
 use ndarray::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
-    adapters::{Adapter, ParAdapter},
-    chaoda::{roc_auc_score, Vertex},
-    cluster::{ParCluster, ParPartition, Partition},
-    dataset::ParDataset,
-    metric::ParMetric,
-    Cluster, Dataset, Metric,
+    chaoda::{roc_auc_score, OddBall, ParVertex, Vertex},
+    Dataset, DistanceValue, ParDataset, ParPartition, Partition,
 };
 
 use super::TrainedCombination;
 
 /// A trained Single-Metric-CHAODA ensemble.
-#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct TrainedSmc(Vec<TrainedCombination>);
 
 impl TrainedSmc {
@@ -55,18 +49,18 @@ impl TrainedSmc {
     /// - `T`: The type of the metric values.
     /// - `D`: The type of the dataset.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the cluster that will be adapted to `Vertex`.
+    /// - `S`: The type of the cluster that will be adapted to `OddBall`.
     /// - `C`: The type of the criteria function.
-    fn create_tree<I, T, D, M, S, C>(data: &D, metric: &M, criteria: &C, seed: Option<u64>) -> Vertex<T, S>
+    fn create_tree<I, T, D, M, S, C>(data: &D, metric: &M, criteria: &C) -> OddBall<T, S>
     where
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
-        M: Metric<I, T>,
+        M: Fn(&I, &I) -> T,
         S: Partition<T>,
         C: Fn(&S) -> bool,
     {
-        let source = S::new_tree(data, metric, criteria, seed);
-        Vertex::adapt_tree(source, None, data, metric)
+        let source = S::new_tree(data, metric, criteria);
+        OddBall::from_cluster_tree(source)
     }
 
     /// Run inference on the given data using the pre-built tree.
@@ -91,20 +85,20 @@ impl TrainedSmc {
     /// - `T`: The type of the metric values.
     /// - `D`: The type of the dataset.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the cluster that was adapted to `Vertex`.
-    pub fn predict_from_tree<I, T, D, M, S>(
+    /// - `V`: The type of the vertex in the tree.
+    pub fn predict_from_tree<I, T, D, M, V>(
         &self,
         data: &D,
         metric: &M,
-        root: &Vertex<T, S>,
+        root: &V,
         min_depth: usize,
         tol: f32,
     ) -> Vec<f32>
     where
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
-        M: Metric<I, T>,
-        S: Cluster<T>,
+        M: Fn(&I, &I) -> T,
+        V: Vertex<T>,
     {
         let (num_discerning, scores) = self
             .0
@@ -167,25 +161,17 @@ impl TrainedSmc {
     /// - `T`: The type of the metric values.
     /// - `D`: The type of the dataset.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the cluster that will be adapted to `Vertex`.
+    /// - `S`: The type of the cluster that will be adapted to `OddBall`.
     /// - `C`: The type of the criteria function.
-    pub fn predict<I, T, D, M, S, C>(
-        &self,
-        data: &D,
-        metric: &M,
-        criteria: &C,
-        seed: Option<u64>,
-        min_depth: usize,
-        tol: f32,
-    ) -> Vec<f32>
+    pub fn predict<I, T, D, M, S, C>(&self, data: &D, metric: &M, criteria: &C, min_depth: usize, tol: f32) -> Vec<f32>
     where
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
-        M: Metric<I, T>,
+        M: Fn(&I, &I) -> T,
         S: Partition<T>,
         C: Fn(&S) -> bool,
     {
-        let root = Self::create_tree(data, metric, criteria, seed);
+        let root = Self::create_tree(data, metric, criteria);
         self.predict_from_tree(data, metric, &root, min_depth, tol)
     }
 
@@ -213,7 +199,7 @@ impl TrainedSmc {
     /// - `T`: The type of the metric values.
     /// - `D`: The type of the dataset.
     /// - `M`: The type of the metric.
-    /// - `S`: The type of the cluster that will be adapted to `Vertex`.
+    /// - `S`: The type of the cluster that will be adapted to `OddBall`.
     /// - `C`: The type of the criteria function.
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate<I, T, D, M, S, C>(
@@ -222,52 +208,51 @@ impl TrainedSmc {
         labels: &[bool],
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
         min_depth: usize,
         tol: f32,
     ) -> f32
     where
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
-        M: Metric<I, T>,
+        M: Fn(&I, &I) -> T,
         S: Partition<T>,
         C: Fn(&S) -> bool,
     {
-        let root = Self::create_tree(data, metric, criteria, seed);
+        let root = Self::create_tree(data, metric, criteria);
         let scores = self.predict_from_tree(data, metric, &root, min_depth, tol);
         roc_auc_score(labels, &scores)
-            .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for dataset {}: {e}", data.name()))
+            .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for dataset: {e}"))
     }
 
     /// Parallel version of [`TrainedSmc::create_tree`](crate::chaoda::inference::TrainedSmc::create_tree).
-    fn par_create_tree<I, T, D, M, S, C>(data: &D, metric: &M, criteria: &C, seed: Option<u64>) -> Vertex<T, S>
+    fn par_create_tree<I, T, D, M, S, C>(data: &D, metric: &M, criteria: &C) -> OddBall<T, S>
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
         S: ParPartition<T>,
         C: (Fn(&S) -> bool) + Send + Sync,
     {
-        let source = S::par_new_tree(data, metric, criteria, seed);
-        Vertex::par_adapt_tree(source, None, data, metric)
+        let source = S::par_new_tree(data, metric, criteria);
+        OddBall::from_cluster_tree(source)
     }
 
     /// Parallel version of [`TrainedSmc::predict_from_tree`](crate::chaoda::inference::TrainedSmc::predict_from_tree).
-    pub fn par_predict_from_tree<I, T, D, M, S>(
+    pub fn par_predict_from_tree<I, T, D, M, V>(
         &self,
         data: &D,
         metric: &M,
-        root: &Vertex<T, S>,
+        root: &V,
         min_depth: usize,
         tol: f32,
     ) -> Vec<f32>
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        S: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        V: ParVertex<T>,
     {
         let (num_discerning, scores) = self
             .0
@@ -323,19 +308,18 @@ impl TrainedSmc {
         data: &D,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
         min_depth: usize,
         tol: f32,
     ) -> Vec<f32>
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
         S: ParPartition<T>,
         C: (Fn(&S) -> bool) + Send + Sync,
     {
-        let root = Self::par_create_tree(data, metric, criteria, seed);
+        let root = Self::par_create_tree(data, metric, criteria);
         self.par_predict_from_tree(data, metric, &root, min_depth, tol)
     }
 
@@ -347,21 +331,20 @@ impl TrainedSmc {
         labels: &[bool],
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
         min_depth: usize,
         tol: f32,
     ) -> f32
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
         S: ParPartition<T>,
         C: (Fn(&S) -> bool) + Send + Sync,
     {
-        let root = Self::par_create_tree(data, metric, criteria, seed);
+        let root = Self::par_create_tree(data, metric, criteria);
         let scores = self.par_predict_from_tree(data, metric, &root, min_depth, tol);
         roc_auc_score(labels, &scores)
-            .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for dataset {}: {e}", data.name()))
+            .unwrap_or_else(|e| unreachable!("Could not compute ROC-AUC score for dataset: {e}"))
     }
 }

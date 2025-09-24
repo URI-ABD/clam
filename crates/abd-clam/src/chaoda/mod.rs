@@ -1,19 +1,21 @@
 //! Clustered Hierarchical Anomaly and Outlier Detection Algorithms
 
+#![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+
 mod cluster;
 mod graph;
 mod inference;
 mod training;
 
-pub use cluster::{Ratios, Vertex};
-use distances::Number;
+pub use cluster::{OddBall, ParVertex, Vertex};
 pub use graph::Graph;
 pub use inference::{Chaoda, TrainedMetaMlModel, TrainedSmc};
 #[allow(clippy::module_name_repetitions)]
 pub use training::{ChaodaTrainer, GraphAlgorithm, TrainableMetaMlModel, TrainableSmc};
 
-/// The number of anomaly ratios we use in CHAODA
-const NUM_RATIOS: usize = 6;
+/// A type alias for an array of distance functions.
+type Metrics<'a, I, T, const M: usize> = [&'a fn(&I, &I) -> T; M];
+// type Metrics<'a, I, T, const M: usize> = [&'a (dyn (Fn(&I, &I) -> T) + Send + Sync); M];
 
 /// The area under the receiver operating characteristic curve.
 ///
@@ -40,5 +42,5 @@ pub fn roc_auc_score(y_true: &[bool], y_pred: &[f32]) -> Result<f32, String> {
         .map(|&t| if t { 1_f32 } else { 0_f32 })
         .collect::<Vec<_>>();
     let y_pred = y_pred.to_vec();
-    Ok(smartcore::metrics::roc_auc_score(&y_true, &y_pred).as_f32())
+    Ok(smartcore::metrics::roc_auc_score(&y_true, &y_pred) as f32)
 }

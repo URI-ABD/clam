@@ -4,10 +4,9 @@ use core::ops::Index;
 
 use std::string::FromUtf8Error;
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cakes::PermutedBall, cluster::ParCluster, dataset::ParDataset, Cluster, Dataset, FlatVec};
+use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
 
 use super::super::Aligner;
 
@@ -43,7 +42,7 @@ impl Columns {
     pub fn with_binary_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]>,
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
         C: Cluster<T>,
     {
@@ -76,7 +75,7 @@ impl Columns {
     pub fn with_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]>,
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
         C: Cluster<T>,
     {
@@ -123,7 +122,7 @@ impl Columns {
     pub fn with_cluster<I, T, D, C>(self, c: &C, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]>,
-        T: Number,
+        T: DistanceValue,
         D: Dataset<I>,
         C: Cluster<T>,
     {
@@ -187,7 +186,13 @@ impl Columns {
     }
 
     /// Merge two MSAs.
-    pub fn merge<T: Number>(mut self, s_center: usize, mut other: Self, o_center: usize, aligner: &Aligner<T>) -> Self {
+    pub fn merge<T: DistanceValue>(
+        mut self,
+        s_center: usize,
+        mut other: Self,
+        o_center: usize,
+        aligner: &Aligner<T>,
+    ) -> Self {
         ftlog::trace!(
             "Merging MSAs with cardinalities: {} and {}, and centers {s_center} and {o_center}",
             self.len(),
@@ -245,14 +250,10 @@ impl Columns {
         }
     }
 
-    /// Extract the multiple sequence alignment as `char`s.
+    /// Extract the columns as a `Vec` of `Vec<u8>`.
     #[must_use]
-    pub fn extract_msa_chars(&self) -> Vec<Vec<u8>> {
-        if self.is_empty() {
-            Vec::new()
-        } else {
-            (0..self.len()).map(|i| self.get_sequence(i)).collect()
-        }
+    pub fn extract_msa_cols(&self) -> Vec<Vec<u8>> {
+        self.0.clone()
     }
 
     /// Extract the multiple sequence alignment as `String`s.
@@ -261,37 +262,27 @@ impl Columns {
     ///
     /// - If any of the sequences are not valid UTF-8.
     pub fn extract_msa_strings(&self) -> Result<Vec<String>, FromUtf8Error> {
-        self.extract_msa_chars().into_iter().map(String::from_utf8).collect()
+        if self.is_empty() {
+            Ok(Vec::new())
+        } else {
+            (0..self.len())
+                .map(|i| self.get_sequence(i))
+                .map(String::from_utf8)
+                .collect()
+        }
     }
 
-    /// Extract the columns as a `FlatVec`.
-    pub fn to_flat_vec_columns(&self) -> FlatVec<Vec<u8>, usize> {
-        FlatVec::new(self.0.clone())
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .with_dim_lower_bound(self.len())
-            .with_dim_upper_bound(self.len())
-            .with_name("ColumnarMSA")
-    }
-
-    /// Extract the rows as a `FlatVec`.
-    pub fn to_flat_vec_rows(&self) -> FlatVec<Vec<u8>, usize> {
-        FlatVec::new(self.extract_msa_chars())
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .with_dim_lower_bound(self.width())
-            .with_dim_upper_bound(self.width())
-            .with_name("CharsMSA")
-    }
-
-    /// Extract the rows as a `FlatVec` of `String`s.
-    ///
-    /// # Errors
-    ///
-    /// - If any of the sequences are not valid UTF-8.
-    pub fn to_flat_vec_strings(&self) -> Result<FlatVec<String, usize>, FromUtf8Error> {
-        Ok(FlatVec::new(self.extract_msa_strings()?)
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .with_dim_lower_bound(self.width())
-            .with_dim_upper_bound(self.width()))
+    /// Extract the rows as a `Vec<I>`, where `I` can be any type that can be
+    /// constructed from an iterator of `u8`.
+    #[must_use]
+    pub fn extract_msa_rows<I: FromIterator<u8>>(&self) -> Vec<I> {
+        if self.is_empty() {
+            Vec::new()
+        } else {
+            (0..self.len())
+                .map(|i| self.get_sequence(i).into_iter().collect())
+                .collect()
+        }
     }
 }
 
@@ -300,7 +291,7 @@ impl Columns {
     pub fn par_with_binary_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]> + Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
         C: ParCluster<T>,
     {
@@ -335,7 +326,7 @@ impl Columns {
     pub fn par_with_tree<I, T, D, C>(self, c: &PermutedBall<T, C>, data: &D, aligner: &Aligner<T>) -> Self
     where
         I: AsRef<[u8]> + Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync,
         D: ParDataset<I>,
         C: ParCluster<T>,
     {
@@ -371,7 +362,7 @@ impl Columns {
     }
 
     /// Parallel version of [`Columnar::merge`](Self::merge).
-    pub fn par_merge<T: Number>(
+    pub fn par_merge<T: DistanceValue + Send + Sync>(
         mut self,
         s_center: usize,
         mut other: Self,
@@ -409,37 +400,33 @@ impl Columns {
         Self(columns, self.1)
     }
 
-    /// Parallel version of [`Columnar::extract_msa_chars`](Self::extract_msa_chars).
-    #[must_use]
-    pub fn par_extract_msa_chars(&self) -> Vec<Vec<u8>> {
-        if self.is_empty() {
-            Vec::new()
-        } else {
-            (0..self.len()).into_par_iter().map(|i| self.get_sequence(i)).collect()
-        }
-    }
-
     /// Parallel version of [`Columnar::extract_msa_strings`](Self::extract_msa_strings).
     ///
     /// # Errors
     ///
-    /// See [`Columnar::extract_msa_strings`](Self::extract_msa_strings).
+    /// - If any of the sequences are not valid UTF-8.
     pub fn par_extract_msa_strings(&self) -> Result<Vec<String>, FromUtf8Error> {
-        self.extract_msa_chars()
-            .into_par_iter()
-            .map(String::from_utf8)
-            .collect()
+        if self.is_empty() {
+            Ok(Vec::new())
+        } else {
+            (0..self.len())
+                .into_par_iter()
+                .map(|i| self.get_sequence(i))
+                .map(String::from_utf8)
+                .collect()
+        }
     }
 
-    /// Parallel version of [`Columnar::to_flat_vec_strings`](Self::to_flat_vec_strings).
-    ///
-    /// # Errors
-    ///
-    /// See [`Columnar::to_flat_vec_strings`](Self::to_flat_vec_strings).
-    pub fn par_to_flat_vec_strings(&self) -> Result<FlatVec<String, usize>, FromUtf8Error> {
-        Ok(FlatVec::new(self.par_extract_msa_strings()?)
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .with_dim_lower_bound(self.width())
-            .with_dim_upper_bound(self.width()))
+    /// Parallel version of [`Columnar::extract_msa_cols`](Self::extract_msa_cols).
+    #[must_use]
+    pub fn par_extract_msa_rows<I: FromIterator<u8> + Send + Sync>(&self) -> Vec<I> {
+        if self.is_empty() {
+            Vec::new()
+        } else {
+            (0..self.len())
+                .into_par_iter()
+                .map(|i| self.get_sequence(i).into_iter().collect())
+                .collect()
+        }
     }
 }

@@ -4,25 +4,25 @@
 
 use std::collections::HashSet;
 
-use distances::Number;
+use crate::DistanceValue;
 
-use crate::{chaoda::Vertex, Cluster};
-
-use super::adjacency_list::AdjacencyList;
+use super::{adjacency_list::AdjacencyList, Vertex};
 
 /// A `Node` in a `Graph` stores a reference to the `Vertex` it represents and
 /// some additional information for the `Graph`-based anomaly detection
 /// algorithms.
 #[derive(Clone)]
-pub struct Node<'a, T: Number, S: Cluster<T>> {
+pub struct GraphNode<'a, T: DistanceValue, V: Vertex<T>> {
     /// The `Vertex` that the `Node` represents.
-    vertex: &'a Vertex<T, S>,
+    vertex: &'a V,
     /// The cumulative size of the `Graph` neighborhood of the `Node` at each
     /// step of a breadth-first traversal.
     neighborhood_sizes: Vec<usize>,
+    /// Ghost marker to retain the cluster type.
+    _marker: core::marker::PhantomData<T>,
 }
 
-impl<'a, T: Number, S: Cluster<T>> Node<'a, T, S> {
+impl<'a, T: DistanceValue, V: Vertex<T>> GraphNode<'a, T, V> {
     /// Create a new `Node` from a `Vertex` and an `AdjacencyList`.
     ///
     /// # Arguments
@@ -30,21 +30,19 @@ impl<'a, T: Number, S: Cluster<T>> Node<'a, T, S> {
     /// * `vertex`: The `Vertex` that the `Node` represents.
     /// * `adjacency_list`: The `AdjacencyList` of the `Component` that the
     ///   `Vertex` belongs to.
-    pub fn new(vertex: &'a Vertex<T, S>, adjacency_list: &AdjacencyList<T, Vertex<T, S>>) -> Self {
+    pub fn new(vertex: &'a V, adjacency_list: &AdjacencyList<T, V>) -> Self {
         let neighborhood_sizes = Self::compute_neighborhood_sizes(vertex, adjacency_list);
 
         Self {
             vertex,
             neighborhood_sizes,
+            _marker: core::marker::PhantomData,
         }
     }
 
     /// Get the cumulative size of the `Graph` neighborhood of the `Node` at
     /// each step of a breadth-first traversal.
-    fn compute_neighborhood_sizes(
-        vertex: &'a Vertex<T, S>,
-        adjacency_list: &AdjacencyList<T, Vertex<T, S>>,
-    ) -> Vec<usize> {
+    fn compute_neighborhood_sizes(vertex: &'a V, adjacency_list: &AdjacencyList<T, V>) -> Vec<usize> {
         let mut frontier_sizes = vec![];
         let mut visited = HashSet::new();
         let mut stack = vec![vertex];
@@ -82,32 +80,38 @@ impl<'a, T: Number, S: Cluster<T>> Node<'a, T, S> {
     }
 
     /// Get the accumulated child-parent cardinality ratio of the `Node`.
-    pub const fn accumulated_cp_car_ratio(&self) -> f32 {
-        self.vertex.accumulated_cp_car_ratio()
+    pub fn accumulated_cp_car_ratio(&self) -> f32 {
+        self.vertex.accumulated_cp_cardinality_ratio()
     }
 
     /// Get the anomaly detection properties of the `Node`.
-    pub const fn anomaly_properties(&self) -> [f32; 6] {
-        self.vertex.ratios()
+    pub fn anomaly_properties(&self) -> V::FeatureVector {
+        self.vertex.feature_vector()
     }
 
     /// Get the cumulative size of the `Graph` neighborhood of the `Node` at
     /// each step of a breadth-first traversal.
-    pub const fn neighborhood_sizes(&self) -> &Vec<usize> {
+    pub fn neighborhood_sizes(&self) -> &[usize] {
         &self.neighborhood_sizes
     }
 }
 
-impl<T: Number, S: Cluster<T>> Eq for Node<'_, T, S> {}
+impl<T: DistanceValue, V: Vertex<T>> Eq for GraphNode<'_, T, V> {}
 
-impl<T: Number, S: Cluster<T>> PartialEq for Node<'_, T, S> {
+impl<T: DistanceValue, V: Vertex<T>> PartialEq for GraphNode<'_, T, V> {
     fn eq(&self, other: &Self) -> bool {
         self.vertex == other.vertex
     }
 }
 
-impl<T: Number, S: Cluster<T>> core::hash::Hash for Node<'_, T, S> {
+impl<T: DistanceValue, V: Vertex<T>> core::hash::Hash for GraphNode<'_, T, V> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.vertex.hash(state);
+    }
+}
+
+impl<T: DistanceValue, V: Vertex<T>> AsRef<V> for GraphNode<'_, T, V> {
+    fn as_ref(&self) -> &V {
+        self.vertex
     }
 }

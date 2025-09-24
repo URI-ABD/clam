@@ -1,17 +1,10 @@
 //! Traits for partitioning a `Cluster` and making trees.
 
-use distances::Number;
 use rayon::prelude::*;
 
-use crate::{
-    core::{
-        dataset::{Dataset, ParDataset},
-        metric::{Metric, ParMetric},
-    },
-    utils,
-};
+use crate::{utils, Dataset, ParDataset};
 
-use super::{Cluster, ParCluster};
+use super::{Cluster, DistanceValue, ParCluster};
 
 /// `Cluster`s that can be partitioned into child `Cluster`s, and recursively
 /// partitioned into a tree.
@@ -26,7 +19,7 @@ use super::{Cluster, ParCluster};
 ///
 /// - [`Ball`](crate::core::cluster::Ball)
 /// - [`BalancedBall`](crate::core::cluster::BalancedBall)
-pub trait Partition<T: Number>: Cluster<T> + Sized {
+pub trait Partition<T: DistanceValue>: Cluster<T> + Sized {
     /// Creates a new `Cluster`.
     ///
     /// # Arguments
@@ -35,7 +28,6 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - `metric`: The metric to use for distance calculations.
     /// - `indices`: The indices of items in the `Cluster`.
     /// - `depth`: The depth of the `Cluster` in the tree.
-    /// - `seed`: An optional seed for random number generation.
     ///
     /// # Type Parameters
     ///
@@ -48,12 +40,11 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - If the `indices` are empty.
     /// - Any error that occurs when creating the `Cluster` depending on the
     ///   implementation.
-    fn new<I, D: Dataset<I>, M: Metric<I, T>>(
+    fn new<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         data: &D,
         metric: &M,
         indices: &[usize],
         depth: usize,
-        seed: Option<u64>,
     ) -> Result<Self, String>;
 
     /// Finds the extrema of the `Cluster`.
@@ -75,7 +66,7 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - `I`: The items in the dataset.
     /// - `D`: The dataset.
     /// - `M`: The metric.
-    fn find_extrema<I, D: Dataset<I>, M: Metric<I, T>>(&mut self, data: &D, metric: &M) -> Vec<usize>;
+    fn find_extrema<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(&self, data: &D, metric: &M) -> Vec<usize>;
 
     /// Creates a new `Cluster` tree.
     ///
@@ -98,32 +89,26 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - `D`: The dataset.
     /// - `M`: The metric.
     /// - `C`: The criteria function for partitioning.
-    fn new_tree<I, D: Dataset<I>, M: Metric<I, T>, C: Fn(&Self) -> bool>(
-        data: &D,
-        metric: &M,
-        criteria: &C,
-        seed: Option<u64>,
-    ) -> Self {
+    fn new_tree<I, D: Dataset<I>, M: Fn(&I, &I) -> T, C: Fn(&Self) -> bool>(data: &D, metric: &M, criteria: &C) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let mut root = Self::new(data, metric, &indices, 0, seed)
+        let mut root = Self::new(data, metric, &indices, 0)
             .unwrap_or_else(|e| unreachable!("We ensured that the indices are not empty: {e}"));
-        root.partition(data, metric, criteria, seed);
+        root.partition(data, metric, criteria);
         root
     }
 
     /// Creates a new `Cluster` tree using an iterative partitioning method to
     /// avoid stack overflows from the lack of tail call optimization.
-    fn new_tree_iterative<I, D: Dataset<I>, M: Metric<I, T>, C: Fn(&Self) -> bool>(
+    fn new_tree_iterative<I, D: Dataset<I>, M: Fn(&I, &I) -> T, C: Fn(&Self) -> bool>(
         data: &D,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
         depth_stride: usize,
     ) -> Self {
         let mut target_depth = depth_stride;
         let stride_criteria = |c: &Self| c.depth() < target_depth && criteria(c);
 
-        let mut root = Self::new_tree(data, metric, &stride_criteria, seed);
+        let mut root = Self::new_tree(data, metric, &stride_criteria);
 
         let mut stride_leaves = root
             .leaves_mut()
@@ -134,7 +119,7 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
             target_depth += depth_stride;
             let stride_criteria = |c: &Self| c.depth() < target_depth && criteria(c);
             for c in stride_leaves {
-                c.partition(data, metric, &stride_criteria, seed);
+                c.partition(data, metric, &stride_criteria);
             }
             stride_leaves = root
                 .leaves_mut()
@@ -171,12 +156,12 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - `I`: The items in the dataset.
     /// - `D`: The dataset.
     /// - `M`: The metric.
-    fn split_by_extrema<I, D: Dataset<I>, M: Metric<I, T>>(
+    fn split_by_extrema<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &self,
         data: &D,
         metric: &M,
         extrema: &[usize],
-    ) -> (Vec<Vec<usize>>, Vec<T>) {
+    ) -> Vec<Vec<usize>> {
         let items = self
             .indices()
             .into_iter()
@@ -188,7 +173,7 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
 
         // Convert the distances from row-major to column-major.
         let distances = {
-            let mut distances = vec![vec![T::ZERO; extrema.len()]; items.len()];
+            let mut distances = vec![vec![T::zero(); extrema.len()]; items.len()];
             for (r, row) in extremal_distances.into_iter().enumerate() {
                 for (c, (_, _, d)) in row.into_iter().enumerate() {
                     distances[c][r] = d;
@@ -198,7 +183,7 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
         };
 
         // Initialize a child stack for each extremum.
-        let mut child_stacks = extrema.iter().map(|&p| vec![(p, T::ZERO)]).collect::<Vec<_>>();
+        let mut child_stacks = extrema.iter().map(|&p| vec![(p, T::zero())]).collect::<Vec<_>>();
 
         // For each extremum, find the items that are closer to it than to
         // any other extremum.
@@ -209,28 +194,16 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
 
         child_stacks
             .into_iter()
-            .map(|stack| {
-                let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                let extent = distances
-                    .into_iter()
-                    .max_by(Number::total_cmp)
-                    .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-                (indices, extent)
-            })
-            .unzip()
+            .map(|stack| stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>().0)
+            .collect()
     }
 
     /// Partitions the `Cluster` once instead of recursively.
-    fn partition_once<I, D: Dataset<I>, M: Metric<I, T>>(
-        &mut self,
-        data: &D,
-        metric: &M,
-        seed: Option<u64>,
-    ) -> Vec<Box<Self>> {
+    fn partition_once<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(&self, data: &D, metric: &M) -> Vec<Box<Self>> {
         // Find the extrema.
         let extrema = self.find_extrema(data, metric);
         // Split the items by the extrema.
-        let (child_stacks, child_extents) = self.split_by_extrema(data, metric, &extrema);
+        let child_stacks = self.split_by_extrema(data, metric, &extrema);
         // Increment the depth for the children.
         let depth = self.depth() + 1;
 
@@ -238,16 +211,10 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
         child_stacks
             .into_iter()
             .map(|child_indices| {
-                Self::new(data, metric, &child_indices, depth, seed)
+                Self::new(data, metric, &child_indices, depth)
                     .unwrap_or_else(|e| unreachable!("We ensured that the indices are not empty: {e}"))
             })
             .map(Box::new)
-            .zip(extrema)
-            .zip(child_extents)
-            .map(|((mut c, i), d)| {
-                c.add_extent(i, d);
-                c
-            })
             .collect()
     }
 
@@ -273,12 +240,11 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
     /// - `D`: The dataset.
     /// - `M`: The metric.
     /// - `C`: The criteria function for partitioning.
-    fn partition<I, D: Dataset<I>, M: Metric<I, T>, C: Fn(&Self) -> bool>(
+    fn partition<I, D: Dataset<I>, M: Fn(&I, &I) -> T, C: Fn(&Self) -> bool>(
         &mut self,
         data: &D,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
     ) {
         if !self.is_singleton() && criteria(self) {
             ftlog::trace!(
@@ -287,9 +253,9 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
                 self.cardinality()
             );
 
-            let mut children = self.partition_once(data, metric, seed);
+            let mut children = self.partition_once(data, metric);
             for child in &mut children {
-                child.partition(data, metric, criteria, seed);
+                child.partition(data, metric, criteria);
             }
             let indices = children.iter().flat_map(|c| c.indices()).collect::<Vec<_>>();
             self.set_indices(&indices);
@@ -313,38 +279,41 @@ pub trait Partition<T: Number>: Cluster<T> + Sized {
 /// - [`Ball`](crate::core::cluster::Ball)
 /// - [`BalancedBall`](crate::core::cluster::BalancedBall)
 #[allow(clippy::module_name_repetitions)]
-pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
+pub trait ParPartition<T: DistanceValue + Send + Sync>: ParCluster<T> + Partition<T> {
     /// Parallelized version of [`Partition::new`](crate::core::cluster::Partition::new).
     ///
     /// # Errors
     ///
     /// See [`Partition::new`](crate::core::cluster::Partition::new).
-    fn par_new<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    fn par_new<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         data: &D,
         metric: &M,
         indices: &[usize],
         depth: usize,
-        seed: Option<u64>,
     ) -> Result<Self, String>;
 
     /// Parallelized version of [`Partition::find_extrema`](crate::core::cluster::Partition::find_extrema).
-    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
-        &mut self,
+    fn par_find_extrema<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
+        &self,
         data: &D,
         metric: &M,
     ) -> Vec<usize>;
 
     /// Parallelized version of [`Partition::new_tree`](crate::core::cluster::Partition::new_tree).
-    fn par_new_tree<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, C: (Fn(&Self) -> bool) + Send + Sync>(
+    fn par_new_tree<
+        I: Send + Sync,
+        D: ParDataset<I>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        C: (Fn(&Self) -> bool) + Send + Sync,
+    >(
         data: &D,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
     ) -> Self {
         let indices = (0..data.cardinality()).collect::<Vec<_>>();
-        let mut root = Self::par_new(data, metric, &indices, 0, seed)
+        let mut root = Self::par_new(data, metric, &indices, 0)
             .unwrap_or_else(|e| unreachable!("We ensured that the indices are not empty: {e}"));
-        root.par_partition(data, metric, criteria, seed);
+        root.par_partition(data, metric, criteria);
         root
     }
 
@@ -352,19 +321,18 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
     fn par_new_tree_iterative<
         I: Send + Sync,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
         C: (Fn(&Self) -> bool) + Send + Sync,
     >(
         data: &D,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
         depth_stride: usize,
     ) -> Self {
         let mut target_depth = depth_stride;
         let stride_criteria = |c: &Self| c.depth() < target_depth && criteria(c);
 
-        let mut root = Self::par_new_tree(data, metric, &stride_criteria, seed);
+        let mut root = Self::par_new_tree(data, metric, &stride_criteria);
 
         let mut stride_leaves = root
             .leaves_mut()
@@ -376,7 +344,7 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
             let stride_criteria = |c: &Self| c.depth() < target_depth && criteria(c);
             stride_leaves
                 .into_par_iter()
-                .for_each(|c| c.par_partition(data, metric, &stride_criteria, seed));
+                .for_each(|c| c.par_partition(data, metric, &stride_criteria));
             stride_leaves = root
                 .leaves_mut()
                 .into_par_iter()
@@ -388,23 +356,23 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
     }
 
     /// Parallelized version of [`Partition::split_by_extrema`](crate::core::cluster::Partition::split_by_extrema).
-    fn par_split_by_extrema<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    fn par_split_by_extrema<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         &self,
         data: &D,
         metric: &M,
         extrema: &[usize],
-    ) -> (Vec<Vec<usize>>, Vec<T>) {
+    ) -> Vec<Vec<usize>> {
         let items = self
             .indices()
             .into_iter()
             .filter(|i| !extrema.contains(i))
             .collect::<Vec<_>>();
         // Find the distances from each extremum to each item.
-        let extremal_distances = data.par_many_to_many(extrema, &items, metric).collect::<Vec<_>>();
+        let extremal_distances = data.par_many_to_many(extrema, &items, metric);
 
         // Convert the distances from row-major to column-major.
         let distances = {
-            let mut distances = vec![vec![T::ZERO; extrema.len()]; items.len()];
+            let mut distances = vec![vec![T::zero(); extrema.len()]; items.len()];
             for (r, row) in extremal_distances.into_iter().enumerate() {
                 for (c, (_, _, d)) in row.into_iter().enumerate() {
                     distances[c][r] = d;
@@ -414,7 +382,7 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
         };
 
         // Initialize a child stack for each extremum.
-        let mut child_stacks = extrema.iter().map(|&p| vec![(p, T::ZERO)]).collect::<Vec<_>>();
+        let mut child_stacks = extrema.iter().map(|&p| vec![(p, T::zero())]).collect::<Vec<_>>();
 
         // For each extremum, find the items that are closer to it than to
         // any other extremum.
@@ -423,31 +391,22 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
             child_stacks[e_index].push((item, d));
         }
 
-        // Find the maximum distance for each child and return the items.
         child_stacks
-            .into_par_iter()
-            .map(|stack| {
-                let (indices, distances) = stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-                let extent = distances
-                    .into_iter()
-                    .max_by(Number::total_cmp)
-                    .unwrap_or_else(|| unreachable!("Cannot find the maximum distance"));
-                (indices, extent)
-            })
-            .unzip()
+            .into_iter()
+            .map(|stack| stack.into_iter().unzip::<_, _, Vec<_>, Vec<_>>().0)
+            .collect()
     }
 
     /// Parallelized version of [`Partition::partition_once`](crate::core::cluster::Partition::partition_once).
-    fn par_partition_once<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
-        &mut self,
+    fn par_partition_once<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
+        &self,
         data: &D,
         metric: &M,
-        seed: Option<u64>,
     ) -> Vec<Box<Self>> {
         // Find the extrema.
         let extrema = self.par_find_extrema(data, metric);
         // Split the items by the extrema.
-        let (child_stacks, child_extents) = self.par_split_by_extrema(data, metric, &extrema);
+        let child_stacks = self.par_split_by_extrema(data, metric, &extrema);
         // Increment the depth for the children.
         let depth = self.depth() + 1;
 
@@ -455,26 +414,24 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
         child_stacks
             .into_par_iter()
             .map(|child_indices| {
-                Self::par_new(data, metric, &child_indices, depth, seed)
+                Self::par_new(data, metric, &child_indices, depth)
                     .unwrap_or_else(|e| unreachable!("We ensured that the indices are not empty: {e}"))
             })
             .map(Box::new)
-            .zip(extrema)
-            .zip(child_extents)
-            .map(|((mut c, i), d)| {
-                c.add_extent(i, d);
-                c
-            })
             .collect()
     }
 
     /// Parallelized version of [`Partition::partition`](crate::core::cluster::Partition::partition).
-    fn par_partition<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>, C: (Fn(&Self) -> bool) + Send + Sync>(
+    fn par_partition<
+        I: Send + Sync,
+        D: ParDataset<I>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        C: (Fn(&Self) -> bool) + Send + Sync,
+    >(
         &mut self,
         data: &D,
         metric: &M,
         criteria: &C,
-        seed: Option<u64>,
     ) {
         if !self.is_singleton() && criteria(self) {
             ftlog::trace!(
@@ -483,9 +440,9 @@ pub trait ParPartition<T: Number>: ParCluster<T> + Partition<T> {
                 self.cardinality()
             );
 
-            let mut children = self.par_partition_once(data, metric, seed);
+            let mut children = self.par_partition_once(data, metric);
             children.par_iter_mut().for_each(|child| {
-                child.par_partition(data, metric, criteria, seed);
+                child.par_partition(data, metric, criteria);
             });
             let indices = children.iter().flat_map(|c| c.indices()).collect::<Vec<_>>();
             self.set_indices(&indices);

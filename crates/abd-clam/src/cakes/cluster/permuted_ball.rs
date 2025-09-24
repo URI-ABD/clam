@@ -1,15 +1,9 @@
 //! An adaptation of `Ball` that stores indices after reordering the dataset.
 
-use distances::Number;
+use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{
-    adapters::{Adapted, Adapter, BallAdapter, ParAdapter, ParBallAdapter, ParParams, Params},
-    cluster::ParCluster,
-    dataset::{ParDataset, Permutable},
-    metric::ParMetric,
-    Ball, Cluster, Dataset, Metric,
-};
+use crate::{Cluster, DatasetMut, DistanceValue, ParCluster, ParDataset};
 
 /// A `Cluster` that stores indices after reordering the dataset.
 ///
@@ -17,87 +11,174 @@ use crate::{
 ///
 /// - `T`: The type of the distance values.
 /// - `S`: The `Cluster` type that the `PermutedBall` is based on.
-#[derive(Clone)]
-#[cfg_attr(
-    feature = "disk-io",
-    derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
-)]
-#[cfg_attr(feature = "disk-io", bitcode(recursive))]
+#[derive(Clone, bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)]
+#[bitcode(recursive)]
 #[must_use]
-pub struct PermutedBall<T: Number, S: Cluster<T>> {
+pub struct PermutedBall<T: DistanceValue, S: Cluster<T>> {
     /// The `Cluster` type that the `PermutedBall` is based on.
     source: S,
     /// The children of the `Cluster`.
     children: Vec<Box<Self>>,
     /// The parameters of the `Cluster`.
-    params: Offset,
+    offset: usize,
     /// Ghosts in the machine.
     phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: Number, S: Cluster<T>> PermutedBall<T, S> {
-    /// Clears the indices of the source `Cluster` and its children.
-    pub fn clear_source_indices(&mut self) {
-        self.source.clear_indices();
-        if !self.is_leaf() {
-            self.children_mut().into_iter().for_each(Self::clear_source_indices);
-        }
+impl<T: DistanceValue, S: Cluster<T>> PermutedBall<T, S> {
+    /// Creates a new `PermutedBall` tree from a source `Cluster` tree and
+    /// reorders the dataset in place.
+    pub fn from_cluster_tree<I, D: DatasetMut<I>>(root: S, data: &mut D) -> (Self, Vec<usize>) {
+        let (root, permutation) = Self::adapt_tree_recursive(root, 0);
+        data.permute(&permutation);
+        (root, permutation)
     }
 
-    /// Returns an iterator over the indices.
-    pub fn iter_indices(&self) -> impl Iterator<Item = usize> {
-        self.params.offset..(self.params.offset + self.cardinality())
+    /// Returns the offset of the `Cluster`.
+    #[must_use]
+    pub const fn offset(&self) -> usize {
+        self.offset
+    }
+
+    /// Returns an iterator over the indices of the `Cluster`.
+    pub fn iter_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        self.offset..(self.offset + self.cardinality())
+    }
+
+    /// Recursive helper for [`from_cluster_tree`](Self::from_cluster_tree).
+    fn adapt_tree_recursive(mut source: S, offset: usize) -> (Self, Vec<usize>) {
+        let (children, indices) = if source.is_leaf() {
+            (vec![], source.take_indices())
+        } else {
+            let children = source.take_children();
+            let child_offsets = children
+                .iter()
+                .scan(offset, |state, child| {
+                    let current = *state;
+                    *state += child.cardinality();
+                    Some(current)
+                })
+                .collect::<Vec<_>>();
+
+            let (children, child_indices): (Vec<_>, Vec<_>) = children
+                .into_iter()
+                .zip(child_offsets)
+                .map(|(child, off)| Self::adapt_tree_recursive(*child, off))
+                .map(|(c, indices)| (Box::new(c), indices))
+                .unzip();
+
+            let indices = child_indices.into_iter().flatten().collect();
+
+            (children, indices)
+        };
+
+        source.set_arg_center(new_index(source.arg_center(), &indices, offset));
+        source.set_arg_radial(new_index(source.arg_radial(), &indices, offset));
+
+        let c = Self {
+            source,
+            children,
+            offset,
+            phantom: core::marker::PhantomData,
+        };
+        (c, indices)
     }
 }
 
-impl<T: Number, S: Cluster<T> + core::fmt::Debug> core::fmt::Debug for PermutedBall<T, S> {
+impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> PermutedBall<T, S> {
+    /// Creates a new `PermutedBall` tree from a source `Cluster` tree and
+    /// reorders the dataset in place.
+    pub fn par_from_cluster_tree<I: Send + Sync, D: ParDataset<I> + DatasetMut<I>>(
+        root: S,
+        data: &mut D,
+    ) -> (Self, Vec<usize>) {
+        let (root, permutation) = Self::par_adapt_tree_recursive(root, 0);
+        data.permute(&permutation);
+        (root, permutation)
+    }
+
+    /// Recursive helper for [`par_from_cluster_tree`](Self::par_from_cluster_tree).
+    fn par_adapt_tree_recursive(mut source: S, offset: usize) -> (Self, Vec<usize>) {
+        let (children, indices) = if source.is_leaf() {
+            (vec![], source.take_indices())
+        } else {
+            let children = source.take_children();
+            let child_offsets = children
+                .iter()
+                .scan(offset, |state, child| {
+                    let current = *state;
+                    *state += child.cardinality();
+                    Some(current)
+                })
+                .collect::<Vec<_>>();
+
+            let (children, child_indices): (Vec<_>, Vec<_>) = children
+                .into_par_iter()
+                .zip(child_offsets)
+                .map(|(child, off)| Self::par_adapt_tree_recursive(*child, off))
+                .map(|(c, indices)| (Box::new(c), indices))
+                .unzip();
+
+            let indices = child_indices.into_iter().flatten().collect();
+
+            (children, indices)
+        };
+
+        source.set_arg_center(new_index(source.arg_center(), &indices, offset));
+        source.set_arg_radial(new_index(source.arg_radial(), &indices, offset));
+
+        let c = Self {
+            source,
+            children,
+            offset,
+            phantom: core::marker::PhantomData,
+        };
+        (c, indices)
+    }
+}
+
+/// Helper for computing a new index after permutation of data.
+fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
+    offset
+        + indices
+            .iter()
+            .position(|x| *x == i)
+            .unwrap_or_else(|| unreachable!("i: {i}, indices: {indices:?}, offset: {offset}"))
+}
+
+impl<T: DistanceValue, S: Cluster<T> + core::fmt::Debug> core::fmt::Debug for PermutedBall<T, S> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PermutedBall")
             .field("source", &self.source)
-            .field("offset", &self.params.offset)
+            .field("offset", &self.offset)
             .field("children", &!self.children.is_empty())
             .finish()
     }
 }
 
-impl<T: Number, S: Cluster<T>> PartialEq for PermutedBall<T, S> {
+impl<T: DistanceValue, S: Cluster<T>> PartialEq for PermutedBall<T, S> {
     fn eq(&self, other: &Self) -> bool {
-        self.params.offset == other.params.offset && self.cardinality() == other.cardinality()
+        self.offset == other.offset && self.cardinality() == other.cardinality()
     }
 }
 
-impl<T: Number, S: Cluster<T>> Eq for PermutedBall<T, S> {}
+impl<T: DistanceValue, S: Cluster<T>> Eq for PermutedBall<T, S> {}
 
-impl<T: Number, S: Cluster<T>> PartialOrd for PermutedBall<T, S> {
+impl<T: DistanceValue, S: Cluster<T>> PartialOrd for PermutedBall<T, S> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Number, S: Cluster<T>> Ord for PermutedBall<T, S> {
+impl<T: DistanceValue, S: Cluster<T>> Ord for PermutedBall<T, S> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.params
-            .offset
-            .cmp(&other.params.offset)
+        self.offset
+            .cmp(&self.offset)
             .then_with(|| other.cardinality().cmp(&self.cardinality()))
     }
 }
 
-impl<T: Number, S: Cluster<T>> std::hash::Hash for PermutedBall<T, S> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (self.params.offset, self.cardinality()).hash(state);
-    }
-}
-
-impl<T: Number, S: Cluster<T>> PermutedBall<T, S> {
-    /// Returns the offset of the `Cluster`.
-    #[must_use]
-    pub const fn offset(&self) -> usize {
-        self.params.offset
-    }
-}
-
-impl<T: Number, S: Cluster<T>> Cluster<T> for PermutedBall<T, S> {
+impl<T: DistanceValue, S: Cluster<T>> Cluster<T> for PermutedBall<T, S> {
     fn depth(&self) -> usize {
         self.source.depth()
     }
@@ -131,32 +212,20 @@ impl<T: Number, S: Cluster<T>> Cluster<T> for PermutedBall<T, S> {
     }
 
     fn contains(&self, index: usize) -> bool {
-        (self.params.offset..(self.params.offset + self.cardinality())).contains(&index)
+        (self.offset..(self.offset + self.cardinality())).contains(&index)
     }
 
     fn indices(&self) -> Vec<usize> {
-        self.iter_indices().collect()
+        (self.offset..(self.offset + self.cardinality())).collect()
     }
 
     fn set_indices(&mut self, indices: &[usize]) {
         let offset = indices[0];
-        self.params.offset = offset;
+        self.offset = offset;
     }
 
-    fn extents(&self) -> &[(usize, T)] {
-        self.source.extents()
-    }
-
-    fn extents_mut(&mut self) -> &mut [(usize, T)] {
-        self.source.extents_mut()
-    }
-
-    fn add_extent(&mut self, idx: usize, extent: T) {
-        self.source.add_extent(idx, extent);
-    }
-
-    fn take_extents(&mut self) -> Vec<(usize, T)> {
-        self.source.take_extents()
+    fn take_indices(&mut self) -> Vec<usize> {
+        self.indices()
     }
 
     fn children(&self) -> Vec<&Self> {
@@ -176,159 +245,20 @@ impl<T: Number, S: Cluster<T>> Cluster<T> for PermutedBall<T, S> {
     }
 
     fn is_descendant_of(&self, other: &Self) -> bool {
-        let range = other.params.offset..(other.params.offset + other.cardinality());
+        let range = self.offset..(self.offset + other.cardinality());
         range.contains(&self.offset()) && self.cardinality() <= other.cardinality()
     }
 }
 
-impl<T: Number, S: ParCluster<T>> ParCluster<T> for PermutedBall<T, S> {
+impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> ParCluster<T> for PermutedBall<T, S> {
     fn par_indices(&self) -> impl ParallelIterator<Item = usize> {
-        (self.params.offset..(self.params.offset + self.cardinality())).into_par_iter()
+        (self.offset..(self.offset + self.cardinality())).into_par_iter()
     }
 }
 
-impl<T: Number, S: Cluster<T>> Adapted<T, S> for PermutedBall<T, S> {
-    fn source(&self) -> &S {
-        &self.source
-    }
-
-    fn source_mut(&mut self) -> &mut S {
-        &mut self.source
-    }
-
-    fn take_source(self) -> S {
-        self.source
-    }
-}
-
-/// Parameters for adapting the `PermutedBall`.
-#[derive(Debug, Default, Copy, Clone)]
-#[cfg_attr(
-    feature = "disk-io",
-    derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
-)]
-pub struct Offset {
-    /// The offset of the slice of indices of the `Cluster` in the reordered
-    /// dataset.
-    offset: usize,
-}
-
-impl<I, T: Number, D: Dataset<I>, S: Cluster<T>, M: Metric<I, T>> Params<I, T, D, S, M> for Offset {
-    fn child_params(&self, children: &[S], _: &D, _: &M) -> Vec<Self> {
-        let mut offset = self.offset;
-        children
-            .iter()
-            .map(|child| {
-                let params = Self { offset };
-                offset += child.cardinality();
-                params
-            })
-            .collect()
-    }
-}
-
-impl<I: Send + Sync, T: Number, D: ParDataset<I>, S: ParCluster<T>, M: ParMetric<I, T>> ParParams<I, T, D, S, M>
-    for Offset
+impl<T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>>, S: Cluster<T> + crate::ClamIO>
+    crate::ClamIO for PermutedBall<T, S>
 {
-    fn par_child_params(&self, children: &[S], data: &D, metric: &M) -> Vec<Self> {
-        // Since we need to keep track of the offset, we cannot parallelize this.
-        self.child_params(children, data, metric)
-    }
-}
-
-impl<I, T: Number, D: Dataset<I> + Permutable, M: Metric<I, T>> BallAdapter<I, T, D, D, M, Offset>
-    for PermutedBall<T, Ball<T>>
-{
-    /// Creates a new `PermutedBall` tree from a `Ball` tree.
-    fn from_ball_tree(ball: Ball<T>, mut data: D, metric: &M) -> (Self, D) {
-        let mut root = Self::adapt_tree_iterative(ball, None, &data, metric);
-        data.permute(&root.source.indices());
-        root.clear_source_indices();
-        (root, data)
-    }
-}
-
-impl<I: Send + Sync, T: Number, D: ParDataset<I> + Permutable, M: ParMetric<I, T>> ParBallAdapter<I, T, D, D, M, Offset>
-    for PermutedBall<T, Ball<T>>
-{
-    /// Creates a new `PermutedBall` tree from a `Ball` tree.
-    fn par_from_ball_tree(ball: Ball<T>, mut data: D, metric: &M) -> (Self, D) {
-        let mut root = Self::par_adapt_tree_iterative(ball, None, &data, metric);
-        data.permute(&root.source.indices());
-        root.clear_source_indices();
-        (root, data)
-    }
-}
-
-impl<I, T: Number, D: Dataset<I> + Permutable, S: Cluster<T>, M: Metric<I, T>> Adapter<I, T, D, D, S, M, Offset>
-    for PermutedBall<T, S>
-{
-    fn new_adapted(source: S, children: Vec<Box<Self>>, params: Offset, _: &D, _: &M) -> Self {
-        Self {
-            source,
-            params,
-            children,
-            phantom: core::marker::PhantomData,
-        }
-    }
-
-    fn post_traversal(&mut self) {
-        // Update the indices of the important items in the `Cluster`.
-        let offset = self.params.offset;
-        let indices = self.source.indices();
-        self.set_arg_center(new_index(self.source.arg_center(), &indices, offset));
-        self.set_arg_radial(new_index(self.source.arg_radial(), &indices, offset));
-        for (i, _) in self.extents_mut() {
-            *i = new_index(*i, &indices, offset);
-        }
-    }
-
-    fn params(&self) -> &Offset {
-        &self.params
-    }
-}
-
-/// Helper for computing a new index after permutation of data.
-fn new_index(i: usize, indices: &[usize], offset: usize) -> usize {
-    offset
-        + indices
-            .iter()
-            .position(|x| *x == i)
-            .unwrap_or_else(|| unreachable!("This is a private function and we always pass a valid item."))
-}
-
-impl<I: Send + Sync, T: Number, D: ParDataset<I> + Permutable, S: ParCluster<T>, M: ParMetric<I, T>>
-    ParAdapter<I, T, D, D, S, M, Offset> for PermutedBall<T, S>
-{
-    fn par_new_adapted(source: S, children: Vec<Box<Self>>, params: Offset, data: &D, metric: &M) -> Self {
-        Self::new_adapted(source, children, params, data, metric)
-    }
-}
-
-#[cfg(feature = "disk-io")]
-impl<T: Number, S: crate::cluster::Csv<T>> crate::cluster::Csv<T> for PermutedBall<T, S> {
-    fn header(&self) -> Vec<String> {
-        let mut header = self.source.header();
-        header.push("offset".to_string());
-        header
-    }
-
-    fn row(&self) -> Vec<String> {
-        let mut row = self.source.row();
-        row.pop();
-        row.extend(vec![
-            self.children.is_empty().to_string(),
-            self.params.offset.to_string(),
-        ]);
-        row
-    }
-}
-
-#[cfg(feature = "disk-io")]
-impl<T: Number, S: crate::cluster::ParCsv<T>> crate::cluster::ParCsv<T> for PermutedBall<T, S> {}
-
-#[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskIO> crate::DiskIO for PermutedBall<T, S> {
     fn to_bytes(&self) -> Result<Vec<u8>, String> {
         let members: (Vec<u8>, Vec<Vec<u8>>, usize) = (
             self.source.to_bytes()?,
@@ -336,7 +266,7 @@ impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskI
                 .iter()
                 .map(|child| child.to_bytes())
                 .collect::<Result<Vec<_>, _>>()?,
-            self.params.offset,
+            self.offset,
         );
 
         bitcode::encode(&members).map_err(|e| e.to_string())
@@ -353,15 +283,16 @@ impl<T: Number + bitcode::Encode + bitcode::Decode, S: Cluster<T> + crate::DiskI
         Ok(Self {
             source,
             children,
-            params: Offset { offset },
+            offset,
             phantom: core::marker::PhantomData,
         })
     }
 }
 
-#[cfg(feature = "disk-io")]
-impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::ParDiskIO> crate::ParDiskIO
-    for PermutedBall<T, S>
+impl<
+        T: DistanceValue + ToBytes<Bytes = Vec<u8>> + FromBytes<Bytes = Vec<u8>> + Send + Sync,
+        S: ParCluster<T> + crate::ParClamIO,
+    > crate::ParClamIO for PermutedBall<T, S>
 {
     fn par_to_bytes(&self) -> Result<Vec<u8>, String> {
         let members: (Vec<u8>, Vec<Vec<u8>>, usize) = (
@@ -370,7 +301,7 @@ impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::Pa
                 .par_iter()
                 .map(|child| child.par_to_bytes())
                 .collect::<Result<Vec<_>, _>>()?,
-            self.params.offset,
+            self.offset,
         );
 
         bitcode::encode(&members).map_err(|e| e.to_string())
@@ -387,7 +318,7 @@ impl<T: Number + bitcode::Encode + bitcode::Decode, S: ParCluster<T> + crate::Pa
         Ok(Self {
             source,
             children,
-            params: Offset { offset },
+            offset,
             phantom: core::marker::PhantomData,
         })
     }

@@ -1,329 +1,254 @@
-//! Traits relating to datasets.
+//! Traits for datasets that can be used with CLAM.
 
-use distances::Number;
-use rand::prelude::*;
-use rayon::prelude::*;
+use super::DistanceValue;
 
-use super::{metric::ParMetric, Metric};
-
-mod associates_metadata;
-mod flat_vec;
-mod permutable;
+mod ord_items;
+mod par_dataset;
 mod sized_heap;
 
-pub use associates_metadata::{AssociatesMetadata, AssociatesMetadataMut};
-pub use flat_vec::FlatVec;
-pub use permutable::Permutable;
+pub use ord_items::{MaxItem, MinItem};
+pub use par_dataset::ParDataset;
 pub use sized_heap::SizedHeap;
 
-/// A dataset is a collection of items.
+/// A trait for datasets that can be used with CLAM.
 ///
-/// # Type Parameters
+/// A dataset is a collection of items that can be indexed. Each item in the
+/// dataset is of type `I`, and the distance between items is computed using a
+/// metric function of type `M`. The distance values are of type `T`, which must
+/// implement the `DistanceValue` trait.
 ///
-/// - `I`: The type of the items.
+/// In CLAM, we assume that datasets are non-empty and finite. We also assume
+/// that `M` is a valid distance measure, meaning it satisfies the following
+/// properties for all items `x` and `y` in the dataset:
 ///
-/// # Example
+/// 1. Non-negativity: `M(x, y) >= 0`
+/// 2. Identity of indiscernibles: `M(x, y) == 0` if and only if `x == y`
+/// 3. Symmetry: `M(x, y) == M(y, x)`
 ///
-/// See:
+/// If `M` also satisfies the triangle inequality (`M(x, z) <= M(x, y) + M(y, z)`),
+/// then it is a metric in the strict sense, and CLAM can leverage this property
+/// to prove exactness of certain algorithms, most notably the search algorithms
+/// in the [`cakes`](crate::cakes) and [`pancakes`](crate::pancakes) modules.
 ///
-/// - [`FlatVec`](crate::core::dataset::FlatVec)
-/// - [`CodecData`](crate::pancakes::CodecData)
+/// We provide a blanket implementation of this trait for any type that
+/// implements `AsRef<[I]>`, i.e. any slice-like type. This allows us to use
+/// standard Rust collections like `Vec<I>` as datasets out of the box.
 pub trait Dataset<I> {
-    /// Returns the name of the dataset.
-    fn name(&self) -> &str;
-
-    /// Changes the name of the dataset.
-    #[must_use]
-    fn with_name(self, name: &str) -> Self;
+    /// Returns a reference to an indexed item from the dataset.
+    ///
+    /// The implementor may choose to panic if the index is out of bounds.
+    fn get(&self, index: usize) -> &I;
 
     /// Returns the number of items in the dataset.
     fn cardinality(&self) -> usize;
 
-    /// A range of values for the dimensionality of the dataset.
-    ///
-    /// The first value is the lower bound, and the second value is the upper
-    /// bound.
-    fn dimensionality_hint(&self) -> (usize, Option<usize>);
-
-    /// Returns the item at the given index. May panic if the index is out
-    /// of bounds.
-    fn get(&self, index: usize) -> &I;
-
-    /// Returns an iterator over the indices of the items.
-    fn indices(&self) -> impl Iterator<Item = usize> {
-        0..self.cardinality()
+    /// Returns the distance from a query item to the given indexed item.
+    fn query_to_one<T: DistanceValue, M: Fn(&I, &I) -> T>(&self, query: &I, b: usize, metric: &M) -> T {
+        metric(query, self.get(b))
     }
 
-    /// Computes the distance between two items by their indices.
-    fn one_to_one<T: Number, M: Metric<I, T>>(&self, i: usize, j: usize, metric: &M) -> T {
-        metric.distance(self.get(i), self.get(j))
-    }
-
-    /// Computes the distances between an item and a collection of items.
-    ///
-    /// Each tuple `(j, d)` represents the distance between the items at
-    /// indices `i` and `j`.
-    fn one_to_many<T: Number, M: Metric<I, T>>(
-        &self,
-        i: usize,
-        js: &[usize],
-        metric: &M,
-    ) -> impl Iterator<Item = (usize, T)> {
-        js.iter().map(move |&j| (j, self.one_to_one(i, j, metric)))
-    }
-
-    /// Computes the distance between a query and an item.
-    fn query_to_one<T: Number, M: Metric<I, T>>(&self, query: &I, i: usize, metric: &M) -> T {
-        metric.distance(query, self.get(i))
-    }
-
-    /// Computes the distances between a query and a collection of items.
-    ///
-    /// Each tuple `(i, d)` represents the distance between the query and the
-    /// item at index `i`.
-    fn query_to_many<T: Number, M: Metric<I, T>>(
+    /// Returns the distances from a query item to all indexed items in the
+    /// given slice.
+    fn query_to_many<S: AsRef<[usize]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
         &self,
         query: &I,
-        is: &[usize],
+        b: S,
         metric: &M,
-    ) -> impl Iterator<Item = (usize, T)> {
-        is.iter().map(move |&i| (i, self.query_to_one(query, i, metric)))
+    ) -> Vec<(usize, T)> {
+        b.as_ref().iter().map(|&j| (j, metric(query, self.get(j)))).collect()
     }
 
-    /// Computes the distances between two collections of items.
-    ///
-    /// Each triplet `(i, j, d)` represents the distance between the items at
-    /// indices `i` and `j`.
-    fn many_to_many<T: Number, M: Metric<I, T>>(
+    /// Computes the distance between two indexed items in the dataset.
+    fn one_to_one<T: DistanceValue, M: Fn(&I, &I) -> T>(&self, a: usize, b: usize, metric: &M) -> T {
+        self.query_to_one(self.get(a), b, metric)
+    }
+
+    /// Computes the distances from one indexed item to all indexed items in the
+    /// given slice.
+    fn one_to_many<S: AsRef<[usize]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
         &self,
-        is: &[usize],
-        js: &[usize],
+        a: usize,
+        b: S,
         metric: &M,
-    ) -> impl Iterator<Item = Vec<(usize, usize, T)>> {
-        is.iter()
-            .map(|&i| js.iter().map(|&j| (i, j, self.one_to_one(i, j, metric))).collect())
+    ) -> Vec<(usize, T)> {
+        self.query_to_many(self.get(a), b, metric)
     }
 
-    /// Computes the distances between all given pairs of items.
-    ///
-    /// Each triplet `(i, j, d)` represents the distance between the items at
-    /// indices `i` and `j`.
-    fn pairs<T: Number, M: Metric<I, T>>(
+    /// Computes the pairwise distances between two slices of indexed items.
+    fn many_to_many<S1: AsRef<[usize]>, S2: AsRef<[usize]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
         &self,
-        pairs: &[(usize, usize)],
+        a: S1,
+        b: S2,
         metric: &M,
-    ) -> impl Iterator<Item = (usize, usize, T)> {
-        pairs.iter().map(|&(i, j)| (i, j, self.one_to_one(i, j, metric)))
+    ) -> Vec<Vec<(usize, usize, T)>> {
+        a.as_ref()
+            .iter()
+            .map(|&i| {
+                b.as_ref()
+                    .iter()
+                    .map(|&j| (i, j, self.one_to_one(i, j, metric)))
+                    .collect()
+            })
+            .collect()
     }
 
-    /// Computes the distances between all pairs of items.
-    ///
-    /// Each triplet `(i, j, d)` represents the distance between the items at
-    /// indices `i` and `j`.
-    fn pairwise<T: Number, M: Metric<I, T>>(&self, is: &[usize], metric: &M) -> Vec<Vec<(usize, usize, T)>> {
-        if metric.has_symmetry() {
-            let mut matrix = is
-                .iter()
-                .map(|&i| is.iter().map(move |&j| (i, j, T::ZERO)).collect::<Vec<_>>())
-                .collect::<Vec<_>>();
+    /// Computes the distances between the given pairs of indexed items.
+    fn pairs<S: AsRef<[(usize, usize)]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
+        &self,
+        pairs: S,
+        metric: &M,
+    ) -> Vec<(usize, usize, T)> {
+        pairs
+            .as_ref()
+            .iter()
+            .map(|&(i, j)| (i, j, self.one_to_one(i, j, metric)))
+            .collect()
+    }
 
-            for (i, &p) in is.iter().enumerate() {
-                let pairs = is.iter().skip(i + 1).map(|&q| (p, q)).collect::<Vec<_>>();
-                self.pairs(&pairs, metric)
-                    .enumerate()
-                    .map(|(j, d)| (j + i + 1, d))
-                    .for_each(|(j, (p, q, d))| {
-                        matrix[i][j] = (p, q, d);
-                        matrix[j][i] = (q, p, d);
-                    });
+    /// Returns the pairwise distance matrix between the given slice of indexed
+    /// items.
+    fn pairwise<S: AsRef<[usize]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
+        &self,
+        indices: S,
+        metric: &M,
+    ) -> Vec<Vec<(usize, usize, T)>> {
+        let indices = indices.as_ref();
+        let n = indices.len();
+        let mut matrix = vec![vec![(0, 0, T::zero()); n]; n];
+        for (row, &i) in indices.iter().enumerate() {
+            for (col, &j) in indices.iter().enumerate().take(row) {
+                let d = self.one_to_one(i, j, metric);
+                matrix[row][col] = (i, j, d);
+                matrix[col][row] = (j, i, d);
             }
-
-            if !metric.has_identity() {
-                // compute the diagonal for non-metrics
-                let pairs = is.iter().map(|&p| (p, p)).collect::<Vec<_>>();
-                self.pairs(&pairs, metric)
-                    .enumerate()
-                    .for_each(|(i, (p, q, d))| matrix[i][i] = (p, q, d));
-            }
-
-            matrix
-        } else {
-            self.many_to_many(is, is, metric).collect()
         }
+        matrix
     }
 
-    /// Chooses a subset of items that are unique.
+    /// Returns the index of the geometric median of the slice of indexed items.
     ///
-    /// If the metric has an identity, the first `choose` unique items, i.e.
-    /// items that are not equal to any other item, are chosen. Otherwise, a
-    /// random subset is chosen.
-    fn choose_unique<T: Number, M: Metric<I, T>>(
+    /// The geometric median is the item that minimizes the sum of distances to
+    /// all other items in the slice.
+    fn geometric_median<S: AsRef<[usize]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
         &self,
-        is: &[usize],
-        choose: usize,
-        seed: Option<u64>,
+        indices: S,
         metric: &M,
-    ) -> Vec<usize> {
-        let mut rng = seed.map_or_else(StdRng::from_os_rng, StdRng::seed_from_u64);
-
-        if metric.has_identity() {
-            let mut choices = Vec::with_capacity(choose);
-            for (i, a) in is.iter().map(|&i| (i, self.get(i))) {
-                if !choices.iter().any(|&(_, b)| metric.is_equal(a, b)) {
-                    choices.push((i, a));
-                }
-
-                if choices.len() == choose {
-                    break;
-                }
-            }
-            choices.into_iter().map(|(i, _)| i).collect()
-        } else {
-            let mut is = is.to_vec();
-            is.shuffle(&mut rng);
-            is.truncate(choose);
-            is
-        }
-    }
-
-    /// Calculates the geometric median of the given items.
-    ///
-    /// The geometric median is the item that minimizes the sum of distances
-    /// to all other items.
-    fn median<T: Number, M: Metric<I, T>>(&self, is: &[usize], metric: &M) -> usize {
-        let (arg_median, _) = self
-            .pairwise(is, metric)
+    ) -> usize {
+        let distance_matrix = self.pairwise(&indices, metric);
+        let gm_index = distance_matrix
             .into_iter()
             .map(|row| row.into_iter().map(|(_, _, d)| d).sum::<T>())
             .enumerate()
-            .fold(
-                (0, T::MAX),
-                |(arg_min, min_sum), (i, sum)| {
-                    if sum < min_sum {
-                        (i, sum)
-                    } else {
-                        (arg_min, min_sum)
-                    }
-                },
-            );
-        is[arg_median]
+            .map(|(i, s)| MinItem(i, s))
+            .min_by(Ord::cmp)
+            .map_or_else(|| unreachable!("Dataset is empty"), |MinItem(i, _)| i);
+        indices.as_ref()[gm_index]
+    }
+
+    /// Returns the index of the farthest item from the given indexed item
+    /// within the slice of indexed items.
+    fn farthest_among<S: AsRef<[usize]>, T: DistanceValue, M: Fn(&I, &I) -> T>(
+        &self,
+        a: usize,
+        b: S,
+        metric: &M,
+    ) -> (usize, T) {
+        self.one_to_many(a, &b, metric)
+            .into_iter()
+            .map(|(i, d)| MaxItem(i, d))
+            .max_by(Ord::cmp)
+            .map_or_else(|| unreachable!("Dataset is empty"), |MaxItem(i, d)| (i, d))
     }
 }
 
-/// Parallel version of [`Dataset`](crate::core::dataset::Dataset).
-#[allow(clippy::module_name_repetitions)]
-pub trait ParDataset<I: Send + Sync>: Dataset<I> + Send + Sync {
-    /// Parallel version of [`Dataset::one_to_one`](crate::core::dataset::Dataset::one_to_one).
-    fn par_one_to_one<T: Number, M: ParMetric<I, T>>(&self, i: usize, j: usize, metric: &M) -> T {
-        metric.par_distance(self.get(i), self.get(j))
-    }
-
-    /// Parallel version of [`Dataset::one_to_many`](crate::core::dataset::Dataset::one_to_many).
-    fn par_one_to_many<T: Number, M: ParMetric<I, T>>(
-        &self,
-        i: usize,
-        js: &[usize],
-        metric: &M,
-    ) -> impl ParallelIterator<Item = (usize, T)> {
-        js.par_iter().map(move |&j| (j, self.par_one_to_one(i, j, metric)))
-    }
-
-    /// Computes the distance between a query and an item.
-    fn par_query_to_one<T: Number, M: ParMetric<I, T>>(&self, query: &I, i: usize, metric: &M) -> T {
-        metric.par_distance(query, self.get(i))
-    }
-
-    /// Computes the distances between a query and a collection of items.
+/// An extension of the `Dataset` trait for mutable datasets.
+///
+/// This trait provides additional methods for modifying the dataset, such as
+/// permuting and shuffling the items.
+///
+/// We provide a blanket implementation of this trait for any type that
+/// implements both `Dataset<I>` and `AsMut<[I]>`, which includes standard
+/// collections like `Vec<I>`.
+pub trait DatasetMut<I>: Dataset<I> {
+    /// Returns a mutable reference to an indexed item from the dataset.
     ///
-    /// Each tuple `(i, d)` represents the distance between the query and the
-    /// item at index `i`.
-    fn par_query_to_many<T: Number, M: ParMetric<I, T>>(
-        &self,
-        query: &I,
-        is: &[usize],
-        metric: &M,
-    ) -> impl ParallelIterator<Item = (usize, T)> {
-        is.par_iter()
-            .map(move |&i| (i, self.par_query_to_one(query, i, metric)))
-    }
+    /// The implementor may choose to panic if the index is out of bounds.
+    fn get_mut(&mut self, index: usize) -> &mut I;
 
-    /// Parallel version of [`Dataset::many_to_many`](crate::core::dataset::Dataset::many_to_many).
-    fn par_many_to_many<T: Number, M: ParMetric<I, T>>(
-        &self,
-        is: &[usize],
-        js: &[usize],
-        metric: &M,
-    ) -> impl ParallelIterator<Item = Vec<(usize, usize, T)>> {
-        is.par_iter().map(|&i| {
-            js.par_iter()
-                .map(|&j| (i, j, self.par_one_to_one(i, j, metric)))
-                .collect()
-        })
-    }
+    /// Permutes the collection in-place.
+    ///
+    /// # Arguments
+    ///
+    /// * `permutation` - A permutation of the indices of the collection.
+    fn permute<S: AsRef<[usize]>>(&mut self, permutation: S) {
+        let permutation = permutation.as_ref();
 
-    /// Parallel version of [`Dataset::pairs`](crate::core::dataset::Dataset::pairs).
-    fn par_pairs<T: Number, M: ParMetric<I, T>>(
-        &self,
-        pairs: &[(usize, usize)],
-        metric: &M,
-    ) -> impl ParallelIterator<Item = (usize, usize, T)> {
-        pairs.par_iter().map(|&(i, j)| (i, j, self.one_to_one(i, j, metric)))
-    }
+        // The `source_index` represents the index that we will swap to
+        let mut source_index: usize;
 
-    /// Parallel version of [`Dataset::pairwise`](crate::core::dataset::Dataset::pairwise).
-    fn par_pairwise<T: Number, M: ParMetric<I, T>>(&self, a: &[usize], metric: &M) -> Vec<Vec<(usize, usize, T)>> {
-        if metric.has_symmetry() {
-            let mut matrix = a
-                .iter()
-                .map(|&i| a.iter().map(move |&j| (i, j, T::ZERO)).collect::<Vec<_>>())
-                .collect::<Vec<_>>();
+        // INVARIANT: After each iteration of the loop, the elements of the
+        // sub-array `0..i` are in the correct position.
+        for i in 0..(permutation.len() - 1) {
+            source_index = permutation[i];
 
-            for (i, &p) in a.iter().enumerate() {
-                let pairs = a.iter().skip(i + 1).map(|&q| (p, q)).collect::<Vec<_>>();
-                let distances = self.par_pairs(&pairs, metric).collect::<Vec<_>>();
-                distances
-                    .into_iter()
-                    .enumerate()
-                    .map(|(j, d)| (j + i + 1, d))
-                    .for_each(|(j, (p, q, d))| {
-                        matrix[i][j] = (p, q, d);
-                        matrix[j][i] = (q, p, d);
-                    });
+            // Here we're essentially following the cycle. We *know* by
+            // the invariant that all elements to the left of `i` are in
+            // the correct position, so what we're doing is following
+            // the cycle until we find an index to the right of `i`. Which,
+            // because we followed the position changes, is the correct
+            // index to swap.
+            while source_index < i {
+                source_index = permutation[source_index];
             }
 
-            if !metric.has_identity() {
-                // compute the diagonal for non-metrics
-                let pairs = a.iter().map(|&p| (p, p)).collect::<Vec<_>>();
-                let distances = self.par_pairs(&pairs, metric).collect::<Vec<_>>();
-                distances
-                    .into_iter()
-                    .enumerate()
-                    .for_each(|(i, (p, q, d))| matrix[i][i] = (p, q, d));
-            }
+            // If the element at is already at the correct position, we can
+            // just skip.
+            if source_index != i {
+                // We swap to the correct index. Importantly, this index is
+                // always to the right of `i`, we do not modify any index to the
+                // left of `i`. Thus, because we followed the cycle to the
+                // correct index to swap, we know that the element at `i`, after
+                // this swap, is in the correct position.
 
-            matrix
-        } else {
-            self.par_many_to_many(a, a, metric).collect()
+                let ptr_a = self.get_mut(i) as *mut I;
+                let ptr_b = self.get_mut(source_index) as *mut I;
+                // SAFETY: Since we have &mut self, we have exclusive access to
+                // the underlying data. We have also checked that `source_index`
+                // and `i` are different, so the pointers `ptr_a` and `ptr_b`
+                // are guaranteed to be valid and non-overlapping.
+                #[allow(unsafe_code)]
+                unsafe {
+                    std::ptr::swap(ptr_a, ptr_b);
+                }
+            }
         }
     }
 
-    /// Parallel version of [`Dataset::median`](crate::core::dataset::Dataset::median).
-    fn par_median<T: Number, M: ParMetric<I, T>>(&self, is: &[usize], metric: &M) -> usize {
-        let (arg_median, _) = self
-            .par_pairwise(is, metric)
-            .into_iter()
-            .map(|row| row.into_iter().map(|(_, _, d)| d).sum::<T>())
-            .enumerate()
-            .fold(
-                (0, T::MAX),
-                |(arg_min, min_sum), (i, sum)| {
-                    if sum < min_sum {
-                        (i, sum)
-                    } else {
-                        (arg_min, min_sum)
-                    }
-                },
-            );
-        is[arg_median]
+    /// Shuffles the `Dataset` in-place using the given random number generator.
+    fn shuffle<R: rand::Rng>(&mut self, rng: &mut R) {
+        let n = self.cardinality();
+        let mut permutation: Vec<usize> = (0..n).collect();
+        permutation.shuffle(rng);
+        self.permute(&permutation);
+    }
+}
+
+/// Blanket implementation of `Dataset` for any type that implements
+/// `AsRef<[I]>`.
+impl<I, D: AsRef<[I]>> Dataset<I> for D {
+    fn get(&self, index: usize) -> &I {
+        &self.as_ref()[index]
+    }
+
+    fn cardinality(&self) -> usize {
+        self.as_ref().len()
+    }
+}
+
+/// Blanket implementation of `DatasetMut` for any type that implements
+/// `Dataset<I>` and `AsMut<[I]>`.
+impl<I, D: Dataset<I> + AsMut<[I]>> DatasetMut<I> for D {
+    fn get_mut(&mut self, index: usize) -> &mut I {
+        &mut self.as_mut()[index]
     }
 }

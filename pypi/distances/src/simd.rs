@@ -143,7 +143,7 @@ build_fn!(cosine, cosine_f32, cosine_f64);
 
 /// Compute the pairwise distances between rows of two 2D arrays using a specified metric.
 #[pyfunction]
-#[expect(clippy::needless_pass_by_value)]
+#[expect(clippy::needless_pass_by_value, clippy::match_same_arms)]
 fn cdist<'py>(py: Python<'py>, a: Vector2, b: Vector2, metric: &str) -> PyResult<Bound<'py, PyArray2<f64>>> {
     match (&a, &b) {
         // The types are the same
@@ -241,7 +241,7 @@ fn cdist<'py>(py: Python<'py>, a: Vector2, b: Vector2, metric: &str) -> PyResult
 
 /// Compute the pairwise distances between the rows of a 2D array using a specified metric.
 #[pyfunction]
-#[expect(clippy::needless_pass_by_value)]
+#[expect(clippy::needless_pass_by_value, clippy::match_same_arms)]
 fn pdist<'py>(py: Python<'py>, a: Vector2, metric: &str) -> PyResult<Bound<'py, PyArray1<f64>>> {
     match &a {
         Vector2::F32(a) => {

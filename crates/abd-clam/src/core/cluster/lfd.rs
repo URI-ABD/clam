@@ -1,6 +1,10 @@
 //! Helpers for dealing with Local Fractal Dimension (LFD) calculations.
 
-use distances::{number::Addition, Number};
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 
 /// Helpers for dealing with Local Fractal Dimension (LFD) calculations.
 ///
@@ -21,15 +25,16 @@ impl LFD {
     /// # Returns
     ///
     /// The LFD of the points at the given scale.
-    pub fn from_radial_distances<T: Number>(distances: &[T], half_max: T) -> f32 {
-        if half_max <= T::EPSILON {
+    #[must_use]
+    pub fn from_radial_distances(distances: &[f32], half_max: f32) -> f32 {
+        if half_max <= 0.0 {
             1.0
         } else {
             let count = distances.iter().filter(|&&d| d <= half_max).count();
             if count == 0 {
                 1.0
             } else {
-                (distances.len().as_f32() / count.as_f32()).log2()
+                (distances.len() as f32 / count as f32).log2()
             }
         }
     }
@@ -45,8 +50,9 @@ impl LFD {
     /// * `distances` - The distances of the points.
     /// * `low_scale` - The scale at which to calculate the LFD.
     /// * `max_scale` - The maximum scale of the cluster.
-    pub fn from_distances<T: Number>(distances: &[T], low_scale: T, max_scale: T) -> f32 {
-        if low_scale.abs_diff(max_scale) <= T::EPSILON {
+    #[must_use]
+    pub fn from_distances(distances: &[f32], low_scale: f32, max_scale: f32) -> f32 {
+        if low_scale <= 0.0 || max_scale < low_scale || (max_scale - low_scale) <= 0.0 {
             1.0
         } else {
             let low_count = distances.iter().filter(|&&d| d <= low_scale).count();
@@ -54,8 +60,7 @@ impl LFD {
                 1.0
             } else {
                 let max_count = distances.iter().filter(|&&d| d <= max_scale).count();
-                (max_count.as_f32().log2() - low_count.as_f32().log2())
-                    / (max_scale.as_f32().log2() - low_scale.as_f32().log2())
+                ((max_count as f32).log2() - (low_count as f32).log2()) / (max_scale.log2() - low_scale.log2())
             }
         }
     }
@@ -74,8 +79,8 @@ impl LFD {
     /// The multiplier to use for increasing the radius.
     #[must_use]
     pub fn multiplier_for_k(lfd: f32, cardinality: usize, k: usize) -> f32 {
-        let ratio = k.as_f32() / cardinality.as_f32();
-        if lfd.abs_diff(1.0) <= f32::EPSILON {
+        let ratio = k as f32 / cardinality as f32;
+        if (lfd - 1.0).abs() <= f32::EPSILON {
             ratio
         } else {
             ratio.powf(1. / (lfd + f32::EPSILON))

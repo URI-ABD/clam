@@ -1,12 +1,11 @@
 //! A `Complex` is a set of `Mass`es and `Spring`s that are used to construct a
 //! lower-dimensional embedding of the original dataset.
 
-use distances::{number::Float, Number};
-use rand::Rng;
+use rand::{distr::uniform::SampleUniform, Rng};
 use rayon::prelude::*;
 use slotmap::HopSlotMap;
 
-use crate::{cluster::ParCluster, dataset::ParDataset, metric::ParMetric, Cluster, Dataset, FlatVec, Metric};
+use crate::{Cluster, Dataset, DistanceValue, FloatDistanceValue, ParCluster, ParDataset};
 
 use super::{mass::Mass, spring::Spring, Vector};
 
@@ -17,14 +16,14 @@ slotmap::new_key_type! { pub struct MassKey; }
 pub type MassMap<'a, T, C, F, const DIM: usize> = HopSlotMap<MassKey, Mass<'a, T, C, F, DIM>>;
 
 /// A type alias for a checkpoint in the simulation.
-type Checkpoint<F, const DIM: usize> = FlatVec<[F; DIM], usize>;
+type Checkpoint<F, const DIM: usize> = Vec<[F; DIM]>;
 
 /// Represents a collection of masses and springs.
 pub struct Complex<'a, T, C, F, const DIM: usize>
 where
-    T: Number,
+    T: DistanceValue,
     C: Cluster<T>,
-    F: Float,
+    F: FloatDistanceValue,
 {
     /// A map of masses, keyed by `MassKey`.
     masses: MassMap<'a, T, C, F, DIM>,
@@ -42,9 +41,9 @@ where
 
 impl<'a, T, C, F, const DIM: usize> Complex<'a, T, C, F, DIM>
 where
-    T: Number,
+    T: DistanceValue,
     C: Cluster<T>,
-    F: Float,
+    F: FloatDistanceValue + SampleUniform + core::fmt::Debug,
 {
     /// Creates a new `Complex` with a root `Cluster`.
     ///
@@ -105,7 +104,7 @@ where
     /// system, the number of steps taken during relaxation, and the positions of
     /// the items in the system.
     #[allow(clippy::too_many_arguments)]
-    pub fn simulate_to_leaves<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(
+    pub fn simulate_to_leaves<R: Rng, I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &mut self,
         rng: &mut R,
         data: &D,
@@ -137,10 +136,10 @@ where
             checkpoints.push(self.extract_embedding());
 
             ftlog::info!(
-                "Checkpoint {} recorded: steps: {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                "Checkpoint {} recorded: steps: {steps}, ke: {:?}, pe: {:?} with {} masses and {} springs",
                 checkpoints.len(),
-                ke.as_f32(),
-                pe.as_f32(),
+                ke,
+                pe,
                 self.masses.len(),
                 self.springs.len()
             );
@@ -152,10 +151,10 @@ where
             self.center_at_origin();
             checkpoints.push(self.extract_embedding());
             ftlog::info!(
-                "Checkpoint {} recorded: steps {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                "Checkpoint {} recorded: steps {steps}, ke: {:?}, pe: {:?} with {} masses and {} springs",
                 checkpoints.len(),
-                ke.as_f32(),
-                pe.as_f32(),
+                ke,
+                pe,
                 self.masses.len(),
                 self.springs.len()
             );
@@ -175,7 +174,12 @@ where
     /// - `rng`: A mutable reference to a random number generator.
     /// - `data`: A reference to the dataset containing the items.
     /// - `metric`: The metric to use for distance calculation.
-    pub fn add_random_springs<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(&mut self, rng: &mut R, data: &D, metric: &M) {
+    pub fn add_random_springs<R: Rng, I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
+        &mut self,
+        rng: &mut R,
+        data: &D,
+        metric: &M,
+    ) {
         let keys = self.masses.keys().collect::<Vec<_>>();
         let derangement = crate::utils::random_derangement(rng, keys.len());
 
@@ -203,7 +207,7 @@ where
                 let [a, b] = s.mass_keys();
                 let [a, b] = [&self.masses[a], &self.masses[b]];
                 let threshold = a.radius() + b.radius();
-                s.rest_length() <= threshold * F::SQRT_2
+                s.rest_length() <= threshold * (F::one() + F::one()).sqrt()
             }
         });
     }
@@ -228,7 +232,7 @@ where
     /// # Returns
     ///
     /// The new `Spring` connecting the two masses.
-    fn add_spring<I, D: Dataset<I>, M: Metric<I, T>>(
+    fn add_spring<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &mut self,
         a_key: MassKey,
         b_key: MassKey,
@@ -254,7 +258,9 @@ where
 
     /// Calculates the mean kinetic energy of all masses in the `Complex`.
     fn mean_kinetic_energy(&self) -> F {
-        self.total_kinetic_energy() / F::from(self.masses.len())
+        self.total_kinetic_energy()
+            / F::from(self.masses.len())
+                .unwrap_or_else(|| unreachable!("We know that the system contains at least one mass."))
     }
 
     /// Calculates the total potential energy stored in all springs in the `Complex`.
@@ -268,7 +274,9 @@ where
 
     /// Calculates the mean potential energy of all springs in the `Complex`.
     fn mean_potential_energy(&self) -> F {
-        self.total_potential_energy() / F::from(self.springs.len())
+        self.total_potential_energy()
+            / F::from(self.springs.len())
+                .unwrap_or_else(|| unreachable!("We know that the system contains at least one spring."))
     }
 
     /// Calculates the mean and standard deviation of the kinetic energy over the previous `n` steps.
@@ -282,7 +290,7 @@ where
     /// A tuple containing the mean and standard deviation of the kinetic energy.
     fn kinetic_energy_stats(&self, n: usize) -> (F, F) {
         if n == 0 {
-            (F::ZERO, F::ZERO)
+            (F::zero(), F::zero())
         } else {
             let len = self.energy_history.len();
             let start = len.saturating_sub(n);
@@ -323,7 +331,7 @@ where
     fn last_energy(&self) -> (F, F) {
         self.energy_history
             .last()
-            .map_or((F::ZERO, F::ZERO), |&(ke, pe)| (ke, pe))
+            .map_or_else(|| (F::zero(), F::zero()), |&(ke, pe)| (ke, pe))
     }
 
     /// Returns the energy history of the system.
@@ -385,7 +393,7 @@ where
     /// # Returns
     ///
     /// The kinetic and potential energies of the system after the update.
-    pub fn major_update<R: Rng, I, D: Dataset<I>, M: Metric<I, T>>(
+    pub fn major_update<R: Rng, I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &mut self,
         rng: &mut R,
         dt: F,
@@ -446,7 +454,7 @@ where
     }
 
     /// Extracts the positions of the items in the `Complex`.
-    pub fn extract_embedding(&self) -> FlatVec<[F; DIM], usize> {
+    pub fn extract_embedding(&self) -> Vec<[F; DIM]> {
         let mut positions = self
             .masses
             .values()
@@ -454,8 +462,7 @@ where
             .collect::<Vec<_>>();
         // sort by index
         positions.sort_by_key(|(i, _)| *i);
-        let positions = positions.into_iter().map(|(_, pos)| pos.into()).collect();
-        FlatVec::new(positions).unwrap_or_else(|_| unreachable!("We know that the system contains at least one mass."))
+        positions.into_iter().map(|(_, pos)| pos.into()).collect()
     }
 
     /// Stop all masses that are not connected to any springs.
@@ -474,11 +481,14 @@ where
 
     /// Computes the location of the center of mass of the system.
     pub fn center_of_mass(&self) -> Vector<F, DIM> {
-        let (pos, mass) = self.masses.values().fold((Vector::zero(), F::ZERO), |(pos, mass), m| {
-            let m_pos = m.position();
-            let m_mass = m.mass();
-            (pos + m_pos * m_mass, mass + m_mass)
-        });
+        let (pos, mass) = self
+            .masses
+            .values()
+            .fold((Vector::zero(), F::zero()), |(pos, mass), m| {
+                let m_pos = m.position();
+                let m_mass = m.mass();
+                (pos + m_pos * m_mass, mass + m_mass)
+            });
         pos / mass
     }
 
@@ -491,13 +501,13 @@ where
 
 impl<T, C, F, const DIM: usize> Complex<'_, T, C, F, DIM>
 where
-    T: Number,
+    T: DistanceValue + Send + Sync,
     C: ParCluster<T>,
-    F: Float,
+    F: FloatDistanceValue + SampleUniform + std::fmt::Debug + Send + Sync,
 {
     /// Parallel version of the [`simulate_to_leaves`](Self::simulate_to_leaves) method.
     #[allow(clippy::too_many_arguments)]
-    pub fn par_simulate_to_leaves<R: Rng, I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    pub fn par_simulate_to_leaves<R: Rng, I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         &mut self,
         rng: &mut R,
         data: &D,
@@ -529,10 +539,10 @@ where
             checkpoints.push(self.extract_embedding());
 
             ftlog::info!(
-                "Checkpoint {} recorded: steps: {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                "Checkpoint {} recorded: steps: {steps}, ke: {:?}, pe: {:?} with {} masses and {} springs",
                 checkpoints.len(),
-                ke.as_f32(),
-                pe.as_f32(),
+                ke,
+                pe,
                 self.masses.len(),
                 self.springs.len()
             );
@@ -544,10 +554,10 @@ where
             self.center_at_origin();
             checkpoints.push(self.extract_embedding());
             ftlog::info!(
-                "Checkpoint {} recorded: steps {steps}, ke: {:.3e}, pe: {:.3e} with {} masses and {} springs",
+                "Checkpoint {} recorded: steps {steps}, ke: {:?}, pe: {:?} with {} masses and {} springs",
                 checkpoints.len(),
-                ke.as_f32(),
-                pe.as_f32(),
+                ke,
+                pe,
                 self.masses.len(),
                 self.springs.len()
             );

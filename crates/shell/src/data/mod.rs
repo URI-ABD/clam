@@ -1,17 +1,15 @@
 //! Data formats supported in the CLI.
 
-mod fasta;
-mod npy;
-
 use std::path::Path;
 
-use abd_clam::FlatVec;
+mod fasta;
+pub mod npy;
 
 /// Reads the data from the file at the given path.
-pub fn read<P: AsRef<Path>>(path: P) -> Result<ShellFlatVec, String> {
+pub fn read<P: AsRef<Path>>(path: P) -> Result<ShellData, String> {
     match Format::from(&path) {
-        Format::Npy => ShellFlatVec::read_npy(path),
-        Format::Fasta => ShellFlatVec::read_fasta(path),
+        Format::Npy => ShellData::read_npy(path),
+        Format::Fasta => ShellData::read_fasta(path),
     }
 }
 
@@ -38,23 +36,23 @@ impl<P: AsRef<Path>> From<P> for Format {
 }
 
 #[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
-pub enum ShellFlatVec {
-    /// FlatVec for strings from FASTA files.
-    String(FlatVec<String, usize>),
-    /// FlatVec for various numeric types from NPY files.
-    F32(FlatVec<Vec<f32>, usize>),
-    F64(FlatVec<Vec<f64>, usize>),
-    I8(FlatVec<Vec<i8>, usize>),
-    I16(FlatVec<Vec<i16>, usize>),
-    I32(FlatVec<Vec<i32>, usize>),
-    I64(FlatVec<Vec<i64>, usize>),
-    U8(FlatVec<Vec<u8>, usize>),
-    U16(FlatVec<Vec<u16>, usize>),
-    U32(FlatVec<Vec<u32>, usize>),
-    U64(FlatVec<Vec<u64>, usize>),
+pub enum ShellData {
+    /// Vec of sequences and their metadata from FASTA files.
+    String(Vec<(String, String)>),
+    /// Vec of various numeric types from NPY files.
+    F32(Vec<Vec<f32>>),
+    F64(Vec<Vec<f64>>),
+    I8(Vec<Vec<i8>>),
+    I16(Vec<Vec<i16>>),
+    I32(Vec<Vec<i32>>),
+    I64(Vec<Vec<i64>>),
+    U8(Vec<Vec<u8>>),
+    U16(Vec<Vec<u16>>),
+    U32(Vec<Vec<u32>>),
+    U64(Vec<Vec<u64>>),
 }
 
-impl ShellFlatVec {
+impl ShellData {
     /// Reads a NPY file and returns a ShellFlatVec.
     pub fn read_npy<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         npy::NpyType::read(path)
@@ -62,7 +60,7 @@ impl ShellFlatVec {
 
     /// Reads a FASTA file and returns a ShellFlatVec.
     pub fn read_fasta<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        fasta::read(path)
+        fasta::read(path).map(ShellData::String)
     }
 
     /// Saves the ShellFlatVec to the specified path using bincode.

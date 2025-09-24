@@ -1,13 +1,17 @@
 //! Common functions for testing search algorithms.
 
-use abd_clam::{
-    cakes::{self, ParSearchAlgorithm, ParSearchable, SearchAlgorithm},
-    cluster::ParCluster,
-    metric::ParMetric,
-};
-use distances::Number;
+use std::{cmp::Ordering, fmt::Debug};
 
-pub fn check_search_by_index<T: Number>(mut true_hits: Vec<(usize, T)>, mut pred_hits: Vec<(usize, T)>, name: &str) {
+use abd_clam::{
+    cakes::{KnnLinear, ParSearchAlgorithm, RnnLinear},
+    DistanceValue, ParCluster, ParDataset,
+};
+
+pub fn check_search_by_index<T: DistanceValue + Debug>(
+    mut true_hits: Vec<(usize, T)>,
+    mut pred_hits: Vec<(usize, T)>,
+    name: &str,
+) {
     true_hits.sort_by_key(|(i, _)| *i);
     pred_hits.sort_by_key(|(i, _)| *i);
 
@@ -15,15 +19,37 @@ pub fn check_search_by_index<T: Number>(mut true_hits: Vec<(usize, T)>, mut pred
     assert_eq!(true_hits.len(), pred_hits.len(), "{name}: {rest}");
 
     for ((i, p), (j, q)) in true_hits.into_iter().zip(pred_hits) {
-        let msg = format!("Failed {name} i: {i}, j: {j}, p: {p}, q: {q}");
+        let msg = format!("Failed {name} i: {i}, j: {j}, p: {p:?}, q: {q:?}");
         assert_eq!(i, j, "{msg} {rest}");
-        assert!(p.abs_diff(q) <= T::EPSILON, "{msg} in {rest}.");
+
+        let abs_diff = if p > q { p - q } else { q - p };
+        assert_eq!(abs_diff, T::zero(), "{msg} in {rest}.");
     }
 }
 
-pub fn check_search_by_distance<T: Number>(mut true_hits: Vec<(usize, T)>, mut pred_hits: Vec<(usize, T)>, name: &str) {
-    true_hits.sort_by(|(_, p), (_, q)| p.total_cmp(q));
-    pred_hits.sort_by(|(_, p), (_, q)| p.total_cmp(q));
+pub fn check_search_by_distance<T: DistanceValue + Debug>(
+    mut true_hits: Vec<(usize, T)>,
+    mut pred_hits: Vec<(usize, T)>,
+    name: &str,
+) {
+    true_hits.sort_by(|(i, p), (j, q)| {
+        if p < q {
+            Ordering::Less
+        } else if p > q {
+            Ordering::Greater
+        } else {
+            i.cmp(j)
+        }
+    });
+    pred_hits.sort_by(|(i, p), (j, q)| {
+        if p < q {
+            Ordering::Less
+        } else if p > q {
+            Ordering::Greater
+        } else {
+            i.cmp(j)
+        }
+    });
 
     assert_eq!(
         true_hits.len(),
@@ -32,37 +58,38 @@ pub fn check_search_by_distance<T: Number>(mut true_hits: Vec<(usize, T)>, mut p
     );
 
     for (i, (&(_, p), &(_, q))) in true_hits.iter().zip(pred_hits.iter()).enumerate() {
-        assert!(
-            p.abs_diff(q) <= T::EPSILON,
-            "Failed {name} i-th: {i}, p: {p}, q: {q} in {true_hits:?} vs {pred_hits:?}."
+        let abs_diff = if p > q { p - q } else { q - p };
+        assert_eq!(
+            abs_diff,
+            T::zero(),
+            "Failed {name} i-th: {i}, p: {p:?}, q: {q:?} in \n{true_hits:?} vs \n{pred_hits:?}."
         );
     }
 }
 
-pub fn check_rnn<I, T, C, M, D, A>(root: &C, data: &D, metric: &M, query: &I, radius: T, alg: &A)
+pub fn check_rnn<I, T, C, M, D, A>(root: &C, data: &D, metric: &M, query: &I, radius: T, alg: &A, name: &str)
 where
     I: core::fmt::Debug + Send + Sync,
-    T: Number,
+    T: DistanceValue + Send + Sync + Debug,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParSearchable<I, T, C, M>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
     A: ParSearchAlgorithm<I, T, C, M, D>,
 {
     let c_name = std::any::type_name::<C>();
 
-    let true_hits = cakes::RnnLinear(radius).search(data, metric, root, query);
+    let true_hits = RnnLinear(radius).par_search(data, metric, root, query);
 
     let pred_hits = alg.search(data, metric, root, query);
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
-        "{} search on {c_name} failed: {pred_hits:?}",
-        alg.name()
+        "{name} on {c_name} failed: {pred_hits:?}"
     );
-    check_search_by_index(true_hits.clone(), pred_hits, alg.name());
+    check_search_by_index(true_hits.clone(), pred_hits, name);
 
     let pred_hits = alg.par_search(data, metric, root, query);
-    let par_name = format!("Par{}", alg.name());
+    let par_name = format!("Par{}", name);
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
@@ -72,33 +99,32 @@ where
 }
 
 /// Check a k-NN search algorithm.
-pub fn check_knn<I, T, D, M, C, A>(root: &C, data: &D, metric: &M, query: &I, k: usize, alg: &A)
+pub fn check_knn<I, T, D, M, C, A>(root: &C, data: &D, metric: &M, query: &I, k: usize, alg: &A, name: &str)
 where
     I: core::fmt::Debug + Send + Sync,
-    T: Number,
+    T: DistanceValue + Send + Sync + Debug,
     C: ParCluster<T>,
-    M: ParMetric<I, T>,
-    D: ParSearchable<I, T, C, M>,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+    D: ParDataset<I>,
     A: ParSearchAlgorithm<I, T, C, M, D>,
 {
     let c_name = std::any::type_name::<C>();
-    let true_hits = cakes::KnnLinear(k).search(data, metric, root, query);
+    let true_hits = KnnLinear(k).par_search(data, metric, root, query);
 
     let pred_hits = alg.search(data, metric, root, query);
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
-        "{} search on {c_name} failed: pred {pred_hits:?} vs true {true_hits:?}",
-        alg.name()
+        "{name} on {c_name} failed: pred {pred_hits:?} vs true {true_hits:?}"
     );
-    check_search_by_distance(true_hits.clone(), pred_hits, alg.name());
+    check_search_by_distance(true_hits.clone(), pred_hits, name);
 
     let pred_hits = alg.par_search(data, metric, root, query);
-    let par_name = format!("Par{}", alg.name());
+    let par_name = format!("Par{}", name);
     assert_eq!(
         pred_hits.len(),
         true_hits.len(),
-        "{par_name} search on {c_name} failed: pred {pred_hits:?} vs true {true_hits:?}"
+        "{par_name} search on {c_name} failed: pred \n{pred_hits:?} vs true \n{true_hits:?}"
     );
     check_search_by_distance(true_hits, pred_hits, &par_name);
 }

@@ -1,23 +1,19 @@
 //! Relative Parent Cardinality algorithm.
 
-use distances::Number;
-
-use crate::{chaoda::Graph, Cluster};
+use crate::{
+    chaoda::{Graph, Vertex},
+    DistanceValue,
+};
 
 use super::GraphEvaluator;
 
 /// `Cluster`s with a smaller fraction of points from their parent `Cluster` are
 /// more anomalous.
-#[derive(Clone)]
-#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ParentCardinality;
 
-impl<T: Number, S: Cluster<T>> GraphEvaluator<T, S> for ParentCardinality {
-    fn name(&self) -> &'static str {
-        "pc"
-    }
-
-    fn evaluate_clusters(&self, g: &Graph<T, S>) -> Vec<f32> {
+impl<T: DistanceValue, V: Vertex<T>> GraphEvaluator<T, V> for ParentCardinality {
+    fn evaluate_clusters(&self, g: &Graph<T, V>) -> Vec<f32> {
         g.iter_accumulated_cp_car_ratios().collect()
     }
 

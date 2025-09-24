@@ -10,7 +10,7 @@ authors = [
     "Oliver McLaughlin <olwmcjp@gmail.com>",
 ]
 edition = "2021"
-rust-version = "1.81"  # using: `total_cmp`
+rust-version = "1.86"  # using: `next_up`
 description = "Clustering, Learning and Approximation with Manifolds"
 license = "MIT"
 readme = "./README.md"
@@ -29,48 +29,40 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-distances = { workspace = true }
+num = { workspace = true }
+libm = { workspace = true }
 rayon = { workspace = true }
 rand = { workspace = true }
 ftlog = { workspace = true }
-
-# For:
-#  - IO from npy files
-#  - arrays in CHAODA
-ndarray = { workspace = true, optional = true }
-ndarray-npy = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+bitcode = { workspace = true }
+ndarray = { workspace = true }
 
 # For:
 #  - CHAODA
-smartcore = { version = "0.4", features = ["serde"], optional = true }
+smartcore = { workspace = true, features = ["serde"], optional = true }
 
 # For:
 #  - MSA
-stringzilla = { workspace = true, optional = true }
+stringzilla = { workspace = true, optional = true, features = ["cpus"] }
 bytecount = { workspace = true, optional = true }
-
-# For:
-#  - Disk I/O for most clusters and datasets
-serde = { workspace = true, optional = true }
-bitcode = { workspace = true, optional = true }
-flate2 = { workspace = true, optional = true }
-csv = { workspace = true , optional = true }
 
 # For:
 #  - The mass-spring-system in the dimension reduction
 slotmap = { workspace = true, optional = true }
 
 [dev-dependencies]
+distances = { workspace = true }
 symagen = { workspace = true }
 bitcode = { workspace = true }
-tempdir = "0.3.7"
-float-cmp = "0.10.0"
-test-case = "3.2.1"
-statistical = "1.0.0"
+tempfile = { workspace = true }
+float-cmp = { workspace = true }
+test-case = { workspace = true }
+statistical = { workspace = true }
 
 [features]
-disk-io = ["dep:serde", "dep:csv", "dep:bitcode", "dep:flate2", "dep:ndarray", "dep:ndarray-npy"]
+# disk-io = ["dep:flate2"]
 chaoda = ["dep:smartcore"]
 mbed = ["chaoda", "dep:slotmap"]
 musals = ["dep:stringzilla", "dep:bytecount"]
-all = ["disk-io", "chaoda", "mbed", "musals"]
+all = ["chaoda", "mbed", "musals"]

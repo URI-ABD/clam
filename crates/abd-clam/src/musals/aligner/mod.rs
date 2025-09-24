@@ -1,12 +1,12 @@
 //! Needleman-Wunsch algorithm for global sequence alignment.
 
-use distances::Number;
-
 mod cost_matrix;
 pub mod ops;
 
 pub use cost_matrix::CostMatrix;
 use ops::{Direction, Edit, Edits};
+
+use crate::DistanceValue;
 
 /// A table of edit distances between prefixes of two sequences.
 type NwTable<T> = Vec<Vec<(T, Direction)>>;
@@ -15,19 +15,15 @@ type NwTable<T> = Vec<Vec<(T, Direction)>>;
 ///
 /// This works with any sequence of bytes, and also provides helpers for working
 /// with strings.
-#[derive(Clone, Debug)]
-#[cfg_attr(
-    feature = "disk-io",
-    derive(bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)
-)]
-pub struct Aligner<T: Number> {
+#[derive(Clone, Debug, bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)]
+pub struct Aligner<T: DistanceValue> {
     /// The cost matrix for the alignment.
     matrix: CostMatrix<T>,
     /// The gap character.
     gap: u8,
 }
 
-impl<T: Number> Aligner<T> {
+impl<T: DistanceValue> Aligner<T> {
     /// Create a new Needleman-Wunsch aligner that minimizes the cost.
     pub fn new(matrix: &CostMatrix<T>, gap: u8) -> Self {
         Self {
@@ -44,7 +40,10 @@ impl<T: Number> Aligner<T> {
 
     /// Compute the minimized edit distance between two sequences' DP table.
     pub fn distance(&self, dp_table: &NwTable<T>) -> T {
-        dp_table.last().and_then(|row| row.last()).map_or(T::ZERO, |&(d, _)| d)
+        dp_table
+            .last()
+            .and_then(|row| row.last())
+            .map_or_else(T::zero, |&(d, _)| d)
     }
 
     /// Compute the dynamic programming table for the Needleman-Wunsch algorithm.
@@ -68,7 +67,7 @@ impl<T: Number> Aligner<T> {
         let (x, y) = (x.as_ref(), y.as_ref());
 
         // Initialize the DP table.
-        let mut table = vec![vec![(T::ZERO, Direction::Diagonal); x.len() + 1]; y.len() + 1];
+        let mut table = vec![vec![(T::zero(), Direction::Diagonal); x.len() + 1]; y.len() + 1];
 
         // Initialize the first row to the cost of inserting characters from the
         // first sequence.

@@ -1,19 +1,14 @@
 //! Utilities for handling a pair of `MetaMLModel` and `GraphAlgorithm`.
 
-use distances::Number;
-
 use crate::{
-    chaoda::{training::GraphEvaluator, Graph, GraphAlgorithm, Vertex},
-    cluster::ParCluster,
-    dataset::ParDataset,
-    metric::ParMetric,
-    Cluster, Dataset, Metric,
+    chaoda::{training::GraphEvaluator, Graph, GraphAlgorithm, ParVertex, Vertex},
+    Dataset, DistanceValue, ParDataset,
 };
 
 use super::TrainedMetaMlModel;
 
 /// A combination of `TrainedMetaMLModel` and `GraphAlgorithm`.
-#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct TrainedCombination {
     /// The `MetaMLModel` to use.
@@ -72,31 +67,30 @@ impl TrainedCombination {
     }
 
     /// Get the meta-ML scorer function in a callable for any number of `Vertex`es.
-    pub fn meta_ml_scorer<T, S>(&self) -> impl Fn(&[&Vertex<T, S>]) -> Vec<f32> + '_
+    pub fn meta_ml_scorer<T, V>(&self) -> impl Fn(&[&V]) -> Vec<f32> + '_
     where
-        T: Number,
-        S: Cluster<T>,
+        T: DistanceValue,
+        V: Vertex<T>,
     {
         move |clusters| {
-            let props = clusters.iter().flat_map(|c| c.ratios()).collect::<Vec<_>>();
-            self.meta_ml.predict(&props).unwrap_or_else(|e| unreachable!("{e}"))
+            let props = clusters
+                .iter()
+                .flat_map(|c| c.feature_vector().as_ref().to_vec())
+                .collect::<Vec<_>>();
+            self.meta_ml
+                .predict::<T, V>(&props)
+                .unwrap_or_else(|e| unreachable!("{e}"))
         }
     }
 
     /// Create a `Graph` from the `root` with the given `data` and `min_depth`
     /// using the `TrainedMetaMLModel`.
-    pub fn create_graph<'a, I, T, D, M, S>(
-        &self,
-        root: &'a Vertex<T, S>,
-        data: &D,
-        metric: &M,
-        min_depth: usize,
-    ) -> Graph<'a, T, S>
+    pub fn create_graph<'a, I, T, D, M, V>(&self, root: &'a V, data: &D, metric: &M, min_depth: usize) -> Graph<'a, T, V>
     where
-        T: Number,
+        T: DistanceValue + 'a,
         D: Dataset<I>,
-        M: Metric<I, T>,
-        S: Cluster<T>,
+        M: Fn(&I, &I) -> T,
+        V: Vertex<T>,
     {
         let cluster_scorer = self.meta_ml_scorer();
         Graph::from_root(root, data, metric, cluster_scorer, min_depth)
@@ -115,18 +109,18 @@ impl TrainedCombination {
     /// A tuple of:
     /// * The `Graph` constructed from the `root`.
     /// * The anomaly scores of the points in the `data`.
-    pub fn predict<'a, I, T, D, M, S>(
+    pub fn predict<'a, I, T, D, M, V>(
         &self,
-        root: &'a Vertex<T, S>,
+        root: &'a V,
         data: &D,
         metric: &M,
         min_depth: usize,
-    ) -> (Graph<'a, T, S>, Vec<f32>)
+    ) -> (Graph<'a, T, V>, Vec<f32>)
     where
-        T: Number,
+        T: DistanceValue + 'a,
         D: Dataset<I>,
-        M: Metric<I, T>,
-        S: Cluster<T>,
+        M: Fn(&I, &I) -> T,
+        V: Vertex<T>,
     {
         ftlog::debug!("Predicting with {}...", self.name());
 
@@ -143,38 +137,38 @@ impl TrainedCombination {
     }
 
     /// Parallel version of [`TrainingCombination::create_graph`](crate::chaoda::inference::combination::TrainedCombination::create_graph).
-    pub fn par_create_graph<'a, I, T, D, M, S>(
+    pub fn par_create_graph<'a, I, T, D, M, V>(
         &self,
-        root: &'a Vertex<T, S>,
+        root: &'a V,
         data: &D,
         metric: &M,
         min_depth: usize,
-    ) -> Graph<'a, T, S>
+    ) -> Graph<'a, T, V>
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        S: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        V: ParVertex<T>,
     {
         let cluster_scorer = self.meta_ml_scorer();
         Graph::par_from_root(root, data, metric, cluster_scorer, min_depth)
     }
 
     /// Parallel version of [`TrainingCombination::predict`](crate::chaoda::inference::combination::TrainedCombination::predict).
-    pub fn par_predict<'a, I, T, D, M, S>(
+    pub fn par_predict<'a, I, T, D, M, V>(
         &self,
-        root: &'a Vertex<T, S>,
+        root: &'a V,
         data: &D,
         metric: &M,
         min_depth: usize,
-    ) -> (Graph<'a, T, S>, Vec<f32>)
+    ) -> (Graph<'a, T, V>, Vec<f32>)
     where
         I: Send + Sync,
-        T: Number,
+        T: DistanceValue + Send + Sync + 'a,
         D: ParDataset<I>,
-        M: ParMetric<I, T>,
-        S: ParCluster<T>,
+        M: (Fn(&I, &I) -> T) + Send + Sync,
+        V: ParVertex<T>,
     {
         ftlog::debug!("Predicting with {}...", self.name());
 

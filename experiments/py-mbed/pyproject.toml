@@ -1,0 +1,27 @@
+[project]
+name = "py-mbed"
+version = "0.1.0"
+description = "Experiments with Dimension Reduction with CLAM-MBED."
+readme = "README.md"
+authors = [
+    { name = "Najib Ishaq", email = "najib_ishaq@zoho.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.3",
+    "numba>=0.61.2",
+    "numpy>=2.2.6",
+    "pynndescent>=0.5.13",
+    "scikit-learn>=1.7.1",
+    "scipy>=1.16.0",
+    "seaborn>=0.13.2",
+    "tqdm>=4.67.1",
+    "umap-learn>=0.5.9.post2",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+py-mbed = "py_mbed.__main__:app"

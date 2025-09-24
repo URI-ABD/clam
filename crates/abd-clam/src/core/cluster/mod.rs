@@ -1,24 +1,17 @@
 //! A `Cluster` is a collection of "similar" items in a dataset.
 
-use distances::{number::Float, Number};
+use num::ToPrimitive;
 use rayon::prelude::*;
 
-mod balanced_ball;
 mod ball;
 mod lfd;
 mod partition;
-mod tree;
 
-pub use balanced_ball::BalancedBall;
 pub use ball::Ball;
 pub use lfd::LFD;
 pub use partition::{ParPartition, Partition};
-pub use tree::Tree;
 
-use super::{dataset::ParDataset, metric::ParMetric, Dataset, Metric};
-
-#[cfg(feature = "disk-io")]
-use std::io::Write;
+use crate::{Dataset, DistanceValue, ParDataset};
 
 /// A `Cluster` is a collection of "similar" items in a dataset.
 ///
@@ -59,10 +52,8 @@ use std::io::Write;
 /// See:
 ///
 /// - [`Ball`](crate::core::cluster::Ball)
-/// - [`BalancedBall`](crate::core::cluster::BalancedBall)
 /// - [`PermutedBall`](crate::cakes::PermutedBall)
-/// - [`SquishyBall`](crate::pancakes::SquishyBall)
-pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Hash {
+pub trait Cluster<T: DistanceValue>: Ord {
     /// Returns the depth of the `Cluster` in the tree.
     fn depth(&self) -> usize;
 
@@ -100,19 +91,8 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
     /// Sets the indices of the items in the `Cluster`.
     fn set_indices(&mut self, indices: &[usize]);
 
-    /// The `extents` of a cluster are pairs of an index of an item in the
-    /// cluster and the distance from that item to the farthest item in the
-    /// cluster.
-    fn extents(&self) -> &[(usize, T)];
-
-    /// Returns the extents as a mutable slice.
-    fn extents_mut(&mut self) -> &mut [(usize, T)];
-
-    /// Adds an extent to the `Cluster`.
-    fn add_extent(&mut self, idx: usize, extent: T);
-
-    /// Clears the extents of the `Cluster` and returns the old extents.
-    fn take_extents(&mut self) -> Vec<(usize, T)>;
+    /// Removes the indices of the items in this cluster.
+    fn take_indices(&mut self) -> Vec<usize>;
 
     /// Returns the children of the `Cluster`.
     #[must_use]
@@ -135,14 +115,6 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
     /// `cardinality` and the index of any one of its items.
     fn unique_id(&self) -> (usize, usize) {
         (self.arg_center(), self.cardinality())
-    }
-
-    /// Clears the indices stored with every cluster in the tree.
-    fn clear_indices(&mut self) {
-        if !self.is_leaf() {
-            self.children_mut().into_iter().for_each(Self::clear_indices);
-        }
-        self.set_indices(&[]);
     }
 
     /// Trims the tree at the given depth. Returns the trimmed roots in the same
@@ -238,184 +210,83 @@ pub trait Cluster<T: Number>: PartialEq + Eq + PartialOrd + Ord + core::hash::Ha
 
     /// Whether the `Cluster` is a singleton.
     fn is_singleton(&self) -> bool {
-        self.cardinality() == 1 || self.radius() < T::EPSILON
+        self.cardinality() == 1 || self.radius() == T::zero()
     }
 
-    /// Returns the expected radii for `k` items from each cluster center using
-    /// clusters whose cardinality is no greater than `k` but whose parents have
-    /// cardinality greater than `k`.
-    fn radii_for_k<F: Float>(&self, k: usize) -> Vec<F> {
-        if self.cardinality() <= k {
-            vec![F::from(self.radius())]
+    /// Returns the expected radius for `k` items from the cluster center, using
+    /// the cluster's LFD to make the estimate.
+    fn radius_for_k(&self, k: usize) -> f32 {
+        let r = self
+            .radius()
+            .to_f32()
+            .unwrap_or_else(|| unreachable!("Radius is not finite"));
+        if self.cardinality() == k {
+            r
         } else {
-            self.children()
-                .into_iter()
-                .map(|c| (c.cardinality(), c.radii_for_k::<F>(k)))
-                .flat_map(|(car, radii)| radii.into_iter().map(move |r| (car, r)))
-                .map(|(c, r)| if c == k { r } else { r * F::from(c) / F::from(k) })
-                .collect()
+            let car = self
+                .cardinality()
+                .to_f32()
+                .unwrap_or_else(|| unreachable!("Cardinality is not finite"));
+            let k = k.to_f32().unwrap_or_else(|| unreachable!("k is not finite"));
+            r * (k / car).powf(self.lfd().recip())
         }
     }
 
     /// Returns the distance between the centers of two `Cluster`s.
-    fn distance_to<I, D: Dataset<I>, M: Metric<I, T>>(&self, other: &Self, data: &D, metric: &M) -> T {
+    fn distance_to<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(&self, other: &Self, data: &D, metric: &M) -> T {
         data.one_to_one(self.arg_center(), other.arg_center(), metric)
     }
 
-    /// Returns whether this cluster has any overlap with a query and a radius,
-    /// and the distances to the cluster extrema.
-    fn overlaps_with<I, D: Dataset<I>, M: Metric<I, T>>(
+    /// Returns whether this cluster has any overlap with a query ball, along
+    /// with the distance from the query to the cluster center.
+    fn overlaps_with<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &self,
         data: &D,
         metric: &M,
         query: &I,
         radius: T,
-    ) -> (bool, Vec<T>) {
-        let (extrema, extents): (Vec<_>, Vec<_>) = self.extents().iter().copied().unzip();
-        let distances = data
-            .query_to_many(query, &extrema, metric)
-            .map(|(_, d)| d)
-            .collect::<Vec<_>>();
-        (distances.iter().zip(extents).all(|(&d, e)| d <= e + radius), distances)
+    ) -> (bool, T) {
+        let d = data.query_to_one(query, self.arg_center(), metric);
+        (d <= self.radius() + radius, d)
     }
 
     /// Returns only those children of the `Cluster` that overlap with a query
-    /// and a radius.
-    fn overlapping_children<I, D: Dataset<I>, M: Metric<I, T>>(
+    /// ball, along with the distance from the query to each child's center.
+    fn overlapping_children<I, D: Dataset<I>, M: Fn(&I, &I) -> T>(
         &self,
         data: &D,
         metric: &M,
         query: &I,
         radius: T,
-    ) -> Vec<(&Self, Vec<T>)> {
+    ) -> Vec<(&Self, T)> {
         self.children()
             .into_iter()
             .map(|c| (c, c.overlaps_with(data, metric, query, radius)))
             .filter(|&(_, (o, _))| o)
-            .map(|(c, (_, ds))| (c, ds))
+            .map(|(c, (_, d))| (c, d))
             .collect()
     }
 }
 
 /// A parallelized version of the `Cluster` trait.
 #[allow(clippy::module_name_repetitions)]
-pub trait ParCluster<T: Number>: Cluster<T> + Send + Sync {
+pub trait ParCluster<T: DistanceValue + Send + Sync>: Cluster<T> + Send + Sync {
     /// Parallel version of [`Cluster::indices`](crate::core::cluster::Cluster::indices).
     fn par_indices(&self) -> impl ParallelIterator<Item = usize>;
 
-    /// Returns the distance between the centers of two `Cluster`s.
-    fn par_distance_to<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
-        &self,
-        other: &Self,
-        data: &D,
-        metric: &M,
-    ) -> T {
-        data.par_one_to_one(self.arg_center(), other.arg_center(), metric)
-    }
-
-    /// Parallel version of [`Cluster::overlaps_with`](crate::core::cluster::Cluster::overlaps_with).
-    fn par_overlaps_with<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
-        &self,
-        data: &D,
-        metric: &M,
-        query: &I,
-        radius: T,
-    ) -> (bool, Vec<T>) {
-        let (extrema, extents): (Vec<_>, Vec<_>) = self.extents().iter().copied().unzip();
-        let distances = data
-            .par_query_to_many(query, &extrema, metric)
-            .map(|(_, d)| d)
-            .collect::<Vec<_>>();
-        (distances.iter().zip(extents).all(|(&d, e)| d <= e + radius), distances)
-    }
-
     /// Parallel version of [`Cluster::overlapping_children`](crate::core::cluster::Cluster::overlapping_children).
-    fn par_overlapping_children<I: Send + Sync, D: ParDataset<I>, M: ParMetric<I, T>>(
+    fn par_overlapping_children<I: Send + Sync, D: ParDataset<I>, M: (Fn(&I, &I) -> T) + Send + Sync>(
         &self,
         data: &D,
         metric: &M,
         query: &I,
         radius: T,
-    ) -> Vec<(&Self, Vec<T>)> {
+    ) -> Vec<(&Self, T)> {
         self.children()
             .into_par_iter()
-            .map(|c| (c, c.par_overlaps_with(data, metric, query, radius)))
+            .map(|c| (c, c.overlaps_with(data, metric, query, radius)))
             .filter(|&(_, (o, _))| o)
-            .map(|(c, (_, ds))| (c, ds))
+            .map(|(c, (_, d))| (c, d))
             .collect()
-    }
-}
-
-#[cfg(feature = "disk-io")]
-/// Write a tree to a CSV file.
-pub trait Csv<T: Number>: Cluster<T> {
-    /// Returns the names of the columns in the CSV file.
-    fn header(&self) -> Vec<String>;
-
-    /// Returns a row, corresponding to the `Cluster`, for the CSV file.
-    fn row(&self) -> Vec<String>;
-
-    /// Write to a CSV file, all the clusters in the tree.
-    ///
-    /// # Errors
-    ///
-    /// - If the file cannot be created.
-    /// - If the file cannot be written to.
-    /// - If the header cannot be written to the file.
-    /// - If any row cannot be written to the file.
-    fn write_to_csv<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
-        let line = |items: Vec<String>| {
-            let mut line = items.join(",");
-            line.push('\n');
-            line
-        };
-
-        // Create the file and write the header.
-        let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-        file.write_all(line(self.header()).as_bytes())
-            .map_err(|e| e.to_string())?;
-
-        // Write each row to the file.
-        for row in self.subtree().into_iter().map(Self::row).map(line) {
-            file.write_all(row.as_bytes()).map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
-    }
-}
-
-#[cfg(feature = "disk-io")]
-/// Parallel version of [`Csv`](crate::core::cluster::io::Csv).
-pub trait ParCsv<T: Number>: Csv<T> + ParCluster<T> {
-    /// Parallel version of [`Csv::write_to_csv`](crate::core::cluster::Csv::write_to_csv).
-    ///
-    /// # Errors
-    ///
-    /// See [`Csv::write_to_csv`](crate::core::cluster::Csv::write_to_csv).
-    fn par_write_to_csv<P: AsRef<std::path::Path>>(&self, path: &P) -> Result<(), String> {
-        let line = |items: Vec<String>| {
-            let mut line = items.join(",");
-            line.push('\n');
-            line
-        };
-
-        // Create the file and write the header.
-        let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-        file.write_all(line(self.header()).as_bytes())
-            .map_err(|e| e.to_string())?;
-
-        let rows = self
-            .subtree()
-            .into_par_iter()
-            .map(Self::row)
-            .map(line)
-            .collect::<Vec<_>>();
-
-        // Write each row to the file.
-        for row in rows {
-            file.write_all(row.as_bytes()).map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
     }
 }

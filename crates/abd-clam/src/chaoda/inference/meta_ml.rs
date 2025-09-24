@@ -5,10 +5,10 @@ use smartcore::{
     tree::decision_tree_regressor::DecisionTreeRegressor,
 };
 
-use crate::chaoda::NUM_RATIOS;
+use crate::{chaoda::Vertex, DistanceValue};
 
 /// A trained meta-ml model.
-#[cfg_attr(feature = "disk-io", derive(serde::Serialize, serde::Deserialize))]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum TrainedMetaMlModel {
     /// A linear regression model.
     LinearRegression(LinearRegression<f32, f32, DenseMatrix<f32>, Vec<f32>>),
@@ -52,15 +52,18 @@ impl TrainedMetaMlModel {
     ///
     /// * If the number of features in the data does not match the number of features in the model.
     /// * If the model cannot predict the data.
-    pub fn predict(&self, props: &[f32]) -> Result<Vec<f32>, String> {
-        if props.is_empty() || (props.len() % NUM_RATIOS != 0) {
+    pub fn predict<T: DistanceValue, V: Vertex<T>>(&self, props: &[f32]) -> Result<Vec<f32>, String> {
+        if props.is_empty() || (props.len() % V::NUM_FEATURES != 0) {
             return Err(format!(
                 "Number of features in data ({}) does not match number of features in model ({})",
                 props.len(),
-                NUM_RATIOS
+                V::NUM_FEATURES
             ));
         }
-        let props = props.chunks_exact(NUM_RATIOS).map(<[f32]>::to_vec).collect::<Vec<_>>();
+        let props = props
+            .chunks_exact(V::NUM_FEATURES)
+            .map(<[f32]>::to_vec)
+            .collect::<Vec<_>>();
         let props = DenseMatrix::from_2d_vec(&props).map_err(|e| format!("Failed to create matrix of samples: {e}"))?;
 
         match self {

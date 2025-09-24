@@ -61,6 +61,6 @@ repos:
         pass_filenames: false
       - id: cargo-clippy
         name: cargo clippy
-        entry: cargo clippy --all -- -D warnings
+        entry: cargo clippy --all --all-features -- -D warnings
         language: system
         pass_filenames: false

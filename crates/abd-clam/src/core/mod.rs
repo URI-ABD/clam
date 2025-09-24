@@ -1,17 +1,60 @@
 //! The core traits and structs for CLAM.
 
-pub mod adapters;
-pub mod cluster;
-pub mod dataset;
-pub mod metric;
-pub mod tree;
-
-pub use cluster::{Ball, Cluster, LFD};
-pub use dataset::{Dataset, FlatVec, SizedHeap};
-pub use metric::Metric;
-
-#[cfg(feature = "disk-io")]
+mod cluster;
+mod dataset;
 mod io;
 
-#[cfg(feature = "disk-io")]
-pub use io::{DiskIO, ParDiskIO};
+pub use cluster::{Ball, Cluster, ParCluster, ParPartition, Partition, LFD};
+pub use dataset::{Dataset, DatasetMut, MaxItem, MinItem, ParDataset, SizedHeap};
+pub use io::{ClamIO, ParClamIO};
+
+/// A trait for types that can be used as distance values in clustering algorithms.
+pub trait DistanceValue:
+    num::Num
+    + num::Bounded
+    + num::ToPrimitive
+    + num::FromPrimitive
+    + num::traits::NumAssignOps
+    + std::iter::Sum
+    + PartialOrd
+    + Copy
+{
+}
+
+/// Blanket implementation of `DistanceValue` for all types that satisfy the
+/// trait bounds.
+impl<T> DistanceValue for T where
+    T: num::Num
+        + num::Bounded
+        + num::ToPrimitive
+        + num::FromPrimitive
+        + num::traits::NumAssignOps
+        + std::iter::Sum
+        + PartialOrd
+        + Copy
+{
+}
+
+/// A trait for types that can be used as floating-point distance values in
+/// clustering algorithms.
+pub trait FloatDistanceValue: DistanceValue + num::Float {
+    /// The gauss error function.
+    ///
+    /// The `libm` crate is used to provide the implementations for `f32` and `f64`.
+    #[must_use]
+    fn erf(self) -> Self;
+}
+
+/// Implementation of `FloatDistanceValue` for `f32`
+impl FloatDistanceValue for f32 {
+    fn erf(self) -> Self {
+        libm::erff(self)
+    }
+}
+
+/// Implementation of `FloatDistanceValue` for `f64`
+impl FloatDistanceValue for f64 {
+    fn erf(self) -> Self {
+        libm::erf(self)
+    }
+}

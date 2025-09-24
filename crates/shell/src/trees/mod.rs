@@ -2,14 +2,12 @@
 
 use std::path::Path;
 
-use abd_clam::{
-    Ball,
-    adapters::ParBallAdapter,
-    cakes::PermutedBall,
-    cluster::{BalancedBall, ParPartition},
-};
+use abd_clam::{Ball, DatasetMut, ParPartition, cakes::PermutedBall};
 
-use crate::{data::ShellFlatVec, metrics::ShellMetric};
+use crate::{
+    data::ShellData,
+    metrics::{Metric, cosine, euclidean, levenshtein},
+};
 
 #[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
 pub enum ShellTree {
@@ -25,7 +23,6 @@ impl ShellTree {
     /// - `inp_data`: The input data to build the tree from.
     /// - `metric`: The distance metric to use for the tree.
     /// - `seed`: The random seed to use.
-    /// - `balanced`: Whether to build a balanced tree.
     /// - `permuted`: Whether to apply depth-first-reordering to the data.
     ///
     /// # Returns
@@ -38,64 +35,52 @@ impl ShellTree {
     ///   are:
     ///   - String data with Levenshtein metric.
     ///   - Float or Integer data with Euclidean or Cosine metrics.
-    pub fn new(
-        inp_data: ShellFlatVec,
-        metric: &ShellMetric,
-        seed: Option<u64>,
-        balanced: bool,
-        permuted: bool,
-    ) -> Result<(ShellTree, ShellFlatVec), String> {
+    pub fn new(inp_data: ShellData, metric: &Metric, permuted: bool) -> Result<(ShellTree, ShellData), String> {
         // TODO Najib: Implement a macro to handle the match arms more elegantly.
         match inp_data {
-            ShellFlatVec::String(data) => match metric {
-                ShellMetric::Levenshtein(metric) => {
-                    let ball = if balanced {
-                        BalancedBall::par_new_tree(&data, metric, &|_| true, seed).into_ball()
-                    } else {
-                        Ball::par_new_tree(&data, metric, &|_| true, seed)
-                    };
+            ShellData::String(data) => match metric {
+                Metric::Levenshtein => {
+                    let (mut data, mut metadata): (Vec<_>, Vec<_>) = data.into_iter().unzip();
+                    let ball = Ball::par_new_tree(&data, &levenshtein, &|_| true);
                     if permuted {
-                        let (ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
+                        let (ball, permutation) = PermutedBall::par_from_cluster_tree(ball, &mut data);
                         let ball = Self::PermutedBall(ShellPermutedBall::String(ball));
-                        let data = ShellFlatVec::String(data);
+
+                        metadata.permute(&permutation);
+
+                        let data = ShellData::String(data.into_iter().zip(metadata).collect());
                         Ok((ball, data))
                     } else {
-                        Ok((Self::Ball(ShellBall::String(ball)), ShellFlatVec::String(data)))
+                        Ok((
+                            Self::Ball(ShellBall::String(ball)),
+                            ShellData::String(data.into_iter().zip(metadata).collect()),
+                        ))
                     }
                 }
-                ShellMetric::Euclidean(_) => Err("Euclidean metric cannot be used for string data".to_string()),
-                ShellMetric::Cosine(_) => Err("Cosine metric cannot be used for string data".to_string()),
+                _ => Err(format!("Metric {} cannot be used for string data", metric.name())),
             },
-            ShellFlatVec::F32(data) => match metric {
-                ShellMetric::Levenshtein(_) => Err("Levenshtein metric cannot be used for vector data".to_string()),
-                ShellMetric::Euclidean(metric) => {
-                    let ball = if balanced {
-                        BalancedBall::par_new_tree(&data, metric, &|_| true, seed).into_ball()
-                    } else {
-                        Ball::par_new_tree(&data, metric, &|_| true, seed)
-                    };
+            ShellData::F32(mut data) => match metric {
+                Metric::Levenshtein => Err("Levenshtein metric cannot be used for vector data".to_string()),
+                Metric::Euclidean => {
+                    let ball = Ball::par_new_tree(&data, &euclidean, &|_| true);
                     if permuted {
-                        let (ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
+                        let (ball, _) = PermutedBall::par_from_cluster_tree(ball, &mut data);
                         let ball = Self::PermutedBall(ShellPermutedBall::F32(ball));
-                        let data = ShellFlatVec::F32(data);
+                        let data = ShellData::F32(data);
                         Ok((ball, data))
                     } else {
-                        Ok((Self::Ball(ShellBall::F32(ball)), ShellFlatVec::F32(data)))
+                        Ok((Self::Ball(ShellBall::F32(ball)), ShellData::F32(data)))
                     }
                 }
-                ShellMetric::Cosine(metric) => {
-                    let ball = if balanced {
-                        BalancedBall::par_new_tree(&data, metric, &|_| true, seed).into_ball()
-                    } else {
-                        Ball::par_new_tree(&data, metric, &|_| true, seed)
-                    };
+                Metric::Cosine => {
+                    let ball = Ball::par_new_tree(&data, &cosine, &|_| true);
                     if permuted {
-                        let (ball, data) = PermutedBall::par_from_ball_tree(ball, data, metric);
+                        let (ball, _) = PermutedBall::par_from_cluster_tree(ball, &mut data);
                         let ball = Self::PermutedBall(ShellPermutedBall::F32(ball));
-                        let data = ShellFlatVec::F32(data);
+                        let data = ShellData::F32(data);
                         Ok((ball, data))
                     } else {
-                        Ok((Self::Ball(ShellBall::F32(ball)), ShellFlatVec::F32(data)))
+                        Ok((Self::Ball(ShellBall::F32(ball)), ShellData::F32(data)))
                     }
                 }
             },
