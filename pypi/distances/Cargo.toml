@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 distances = { workspace = true }
-ndarray = { workspace = true }
+ndarray = { workspace = true, features = ["rayon", "approx"] }
 numpy = { workspace = true }
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, features = ["extension-module", "abi3-py313"] }
+# pyo3-ffi = { workspace = true, features = ["extension-module", "abi3-py313"] }

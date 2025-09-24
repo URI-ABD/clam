@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use abd_clam::{Ball, Dataset, ParPartition, cakes::PermutedBall};
+use abd_clam::{Ball, DatasetMut, ParPartition, cakes::PermutedBall};
 
 use crate::{
     data::ShellData,

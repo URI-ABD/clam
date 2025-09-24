@@ -3,7 +3,7 @@
 use num::traits::{FromBytes, ToBytes};
 use rayon::prelude::*;
 
-use crate::{Cluster, Dataset, DistanceValue, ParCluster, ParDataset};
+use crate::{Cluster, DatasetMut, DistanceValue, ParCluster, ParDataset};
 
 /// A `Cluster` that stores indices after reordering the dataset.
 ///
@@ -28,7 +28,7 @@ pub struct PermutedBall<T: DistanceValue, S: Cluster<T>> {
 impl<T: DistanceValue, S: Cluster<T>> PermutedBall<T, S> {
     /// Creates a new `PermutedBall` tree from a source `Cluster` tree and
     /// reorders the dataset in place.
-    pub fn from_cluster_tree<I, D: Dataset<I>>(root: S, data: &mut D) -> (Self, Vec<usize>) {
+    pub fn from_cluster_tree<I, D: DatasetMut<I>>(root: S, data: &mut D) -> (Self, Vec<usize>) {
         let (root, permutation) = Self::adapt_tree_recursive(root, 0);
         data.permute(&permutation);
         (root, permutation)
@@ -88,7 +88,10 @@ impl<T: DistanceValue, S: Cluster<T>> PermutedBall<T, S> {
 impl<T: DistanceValue + Send + Sync, S: ParCluster<T>> PermutedBall<T, S> {
     /// Creates a new `PermutedBall` tree from a source `Cluster` tree and
     /// reorders the dataset in place.
-    pub fn par_from_cluster_tree<I: Send + Sync, D: ParDataset<I>>(root: S, data: &mut D) -> (Self, Vec<usize>) {
+    pub fn par_from_cluster_tree<I: Send + Sync, D: ParDataset<I> + DatasetMut<I>>(
+        root: S,
+        data: &mut D,
+    ) -> (Self, Vec<usize>) {
         let (root, permutation) = Self::par_adapt_tree_recursive(root, 0);
         data.permute(&permutation);
         (root, permutation)

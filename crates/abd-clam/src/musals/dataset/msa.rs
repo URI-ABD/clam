@@ -12,7 +12,7 @@ use crate::{
     cakes::PermutedBall,
     musals::Columns,
     utils::{self, LOG2_THRESH, SQRT_THRESH},
-    Ball, Dataset, DistanceValue, ParPartition, Partition,
+    Ball, Dataset, DatasetMut, DistanceValue, ParPartition, Partition,
 };
 
 use super::super::{Aligner, NUM_CHARS};

@@ -3,7 +3,7 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, Dataset, DistanceValue, ParCluster};
+use crate::{Cluster, Dataset, DatasetMut, DistanceValue, ParCluster};
 
 use super::{CodecContents, CodecItem, Decoder, Encoder, SquishyBall};
 
@@ -40,7 +40,7 @@ where
     /// Create a new `SquishedBall`.
     pub fn from_cluster_tree<D, S>(root: S, data: &mut D, encoder: &Enc, trim_min_depth: usize) -> (Self, Vec<usize>)
     where
-        D: Dataset<I>,
+        D: DatasetMut<I>,
         S: Cluster<T>,
     {
         let (root, permutation) = SquishyBall::from_cluster_tree(root, data, encoder);

@@ -34,28 +34,28 @@ unnecessary_debug_formatting = { level = "allow", priority = 1 }  # TODO Najib: 
 abd-clam = { version = "0.32.0", path = "crates/abd-clam" }
 distances = { version = "1.8.0", path = "crates/distances" }
 symagen = { version = "0.5.0", path = "crates/symagen" }
+shell = { version = "0.1.0", path = "crates/shell" }
 
 num = "0.4"
 rayon = "1.11"
-rand = { version = "0.9", features = [] }
-serde = { version = "1.0", features = ["derive"] }
-bitcode = { version = "0.5" }  # not upgrading: For generic params on types, and for recursive types.
+rand = "0.9"
+serde = "1.0"
+bitcode = "0.5"  # not upgrading: For generic params on types, and for recursive types.
 libm = "0.2.14"
-ndarray = { version = "0.16", features = ["rayon", "approx"] }
+ndarray = "0.16"
 ndarray-npy = "0.9"
-csv = { version = "1.3.0" }
-flate2 = { version = "1.1" }
+csv = "1.3.0"
+flate2 = "1.1"
 num-integer = "0.1"
 bio = "3.0"
 stringzilla = "4.0"
-clap = { version = "4.5", features = ["derive"] }
-ftlog = { version = "0.2" }
+clap = "4.5"
+ftlog = "0.2"
 hdf5 = { package = "hdf5-metno", version = "0.10.1" }
 bytecount = "0.6"
-slotmap = { version = "1.0", features = ["serde"] }
+slotmap = "1.0"
 numpy = "0.25"
-pyo3 = { version = "0.25", features = ["extension-module", "abi3-py313"] }
-pyo3-ffi = { version = "0.25", features = ["extension-module", "abi3-py313"] }
+pyo3 = "0.25"
 float-cmp = "0.10.0"
 smartcore = "0.4"
 statistical = "1.0.0"

@@ -31,18 +31,13 @@ pub use sized_heap::SizedHeap;
 /// in the [`cakes`](crate::cakes) and [`pancakes`](crate::pancakes) modules.
 ///
 /// We provide a blanket implementation of this trait for any type that
-/// implements `AsRef<[I]>` and `AsMut<[I]>`, which includes standard
-/// collections like `Vec<I>`.
+/// implements `AsRef<[I]>`, i.e. any slice-like type. This allows us to use
+/// standard Rust collections like `Vec<I>` as datasets out of the box.
 pub trait Dataset<I> {
     /// Returns a reference to an indexed item from the dataset.
     ///
     /// The implementor may choose to panic if the index is out of bounds.
     fn get(&self, index: usize) -> &I;
-
-    /// Returns a mutable reference to an indexed item from the dataset.
-    ///
-    /// The implementor may choose to panic if the index is out of bounds.
-    fn get_mut(&mut self, index: usize) -> &mut I;
 
     /// Returns the number of items in the dataset.
     fn cardinality(&self) -> usize;
@@ -164,6 +159,21 @@ pub trait Dataset<I> {
             .max_by(Ord::cmp)
             .map_or_else(|| unreachable!("Dataset is empty"), |MaxItem(i, d)| (i, d))
     }
+}
+
+/// An extension of the `Dataset` trait for mutable datasets.
+///
+/// This trait provides additional methods for modifying the dataset, such as
+/// permuting and shuffling the items.
+///
+/// We provide a blanket implementation of this trait for any type that
+/// implements both `Dataset<I>` and `AsMut<[I]>`, which includes standard
+/// collections like `Vec<I>`.
+pub trait DatasetMut<I>: Dataset<I> {
+    /// Returns a mutable reference to an indexed item from the dataset.
+    ///
+    /// The implementor may choose to panic if the index is out of bounds.
+    fn get_mut(&mut self, index: usize) -> &mut I;
 
     /// Permutes the collection in-place.
     ///
@@ -213,20 +223,32 @@ pub trait Dataset<I> {
             }
         }
     }
+
+    /// Shuffles the `Dataset` in-place using the given random number generator.
+    fn shuffle<R: rand::Rng>(&mut self, rng: &mut R) {
+        let n = self.cardinality();
+        let mut permutation: Vec<usize> = (0..n).collect();
+        permutation.shuffle(rng);
+        self.permute(&permutation);
+    }
 }
 
 /// Blanket implementation of `Dataset` for any type that implements
-/// `AsRef<[I]>` and `AsMut<[I]>`.
-impl<I, D: AsRef<[I]> + AsMut<[I]>> Dataset<I> for D {
+/// `AsRef<[I]>`.
+impl<I, D: AsRef<[I]>> Dataset<I> for D {
     fn get(&self, index: usize) -> &I {
         &self.as_ref()[index]
     }
 
-    fn get_mut(&mut self, index: usize) -> &mut I {
-        &mut self.as_mut()[index]
-    }
-
     fn cardinality(&self) -> usize {
         self.as_ref().len()
+    }
+}
+
+/// Blanket implementation of `DatasetMut` for any type that implements
+/// `Dataset<I>` and `AsMut<[I]>`.
+impl<I, D: Dataset<I> + AsMut<[I]>> DatasetMut<I> for D {
+    fn get_mut(&mut self, index: usize) -> &mut I {
+        &mut self.as_mut()[index]
     }
 }

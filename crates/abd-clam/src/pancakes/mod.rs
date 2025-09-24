@@ -5,9 +5,10 @@ mod item;
 mod squished_ball;
 mod squishy_ball;
 
+pub use squished_ball::SquishedBall;
+
 use contents::CodecContents;
 use item::CodecItem;
-pub use squished_ball::SquishedBall;
 use squishy_ball::SquishyBall;
 
 /// A trait for objects that can be used to encode items of type `T`.

@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{cakes::PermutedBall, Cluster, Dataset, DistanceValue, ParCluster};
+use crate::{cakes::PermutedBall, Cluster, Dataset, DatasetMut, DistanceValue, ParCluster};
 
 use super::{Decoder, Encoder};
 
@@ -25,7 +25,7 @@ impl<T: DistanceValue, S: Cluster<T>> SquishyBall<T, S> {
     /// Create a new `SquishyBall` from a source `Cluster` tree.
     pub fn from_cluster_tree<I, D, Enc, Dec>(root: S, data: &mut D, encoder: &Enc) -> (Self, Vec<usize>)
     where
-        D: Dataset<I>,
+        D: DatasetMut<I>,
         Enc: Encoder<I, Dec>,
         Dec: Decoder<I, Enc>,
     {

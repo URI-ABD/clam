@@ -34,10 +34,9 @@ libm = { workspace = true }
 rayon = { workspace = true }
 rand = { workspace = true }
 ftlog = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 bitcode = { workspace = true }
 ndarray = { workspace = true }
-flate2 = { workspace = true }
 
 # For:
 #  - CHAODA

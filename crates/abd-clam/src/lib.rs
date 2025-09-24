@@ -6,8 +6,8 @@ pub mod pancakes;
 pub mod utils;
 
 pub use core::{
-    Ball, ClamIO, Cluster, Dataset, DistanceValue, FloatDistanceValue, ParClamIO, ParCluster, ParDataset, ParPartition,
-    Partition, SizedHeap, LFD,
+    Ball, ClamIO, Cluster, Dataset, DatasetMut, DistanceValue, FloatDistanceValue, ParClamIO, ParCluster, ParDataset,
+    ParPartition, Partition, SizedHeap, LFD,
 };
 
 use core::{MaxItem, MinItem};
