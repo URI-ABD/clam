@@ -1,7 +1,10 @@
 //! Multiple Sequence Alignment At Scale (`MuSAlS`) with CLAM.
 //!
 //! This module provides functionality to compute multiple sequence alignments (MSA) of genomic and protein sequences using the [`Tree::into_msa`] and
-//! [`Tree::par_into_msa`] methods.
+//! [`Tree::par_into_msa`] methods. It also provides the [`Sequence`] trait, which abstracts over the specific sequence types that can be aligned and have edit
+//! distances computed among them.
+//!
+//! Once an MSA is computed, the [`QualityMetric`] and [`QualityMetricResult`] enums provide functionality to compute various quality metrics of the MSA.
 
 use std::collections::HashMap;
 

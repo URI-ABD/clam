@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use rayon::prelude::*;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +91,11 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         (self.items, self.cluster_map, self.metric)
     }
 
+    /// Creates a `Tree` from its members.
+    pub(crate) const fn from_parts(items: Vec<(Id, I)>, cluster_map: HashMap<usize, Cluster<T, A>>, metric: M) -> Self {
+        Self { items, cluster_map, metric }
+    }
+
     /// Returns a reference to all items in the tree.
     pub fn items(&self) -> &[(Id, I)] {
         &self.items
@@ -108,6 +114,28 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Returns a reference to the hash map of all clusters in the tree.
     pub const fn cluster_map(&self) -> &HashMap<usize, Cluster<T, A>> {
         &self.cluster_map
+    }
+
+    /// Returns a reference to a cluster in the tree given its center index, if it exists.
+    ///
+    /// # Errors
+    ///
+    /// If no cluster with the given center index exists in the tree.
+    pub fn get_cluster(&self, id: usize) -> Result<&Cluster<T, A>, String> {
+        self.cluster_map
+            .get(&id)
+            .ok_or_else(|| format!("No cluster with center index {id} found in the tree."))
+    }
+
+    /// Returns a mutable reference to a cluster in the tree given its center index, if it exists.
+    ///
+    /// # Errors
+    ///
+    /// If no cluster with the given center index exists in the tree.
+    pub fn get_cluster_mut(&mut self, id: usize) -> Result<&mut Cluster<T, A>, String> {
+        self.cluster_map
+            .get_mut(&id)
+            .ok_or_else(|| format!("No cluster with center index {id} found in the tree."))
     }
 
     /// Returns the number of clusters in the tree.
@@ -132,15 +160,6 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         &self.metric
     }
 
-    /// Changes the metric used in the tree to the provided one.
-    pub fn with_metric<N>(self, metric: N) -> Tree<Id, I, T, A, N> {
-        Tree {
-            items: self.items,
-            cluster_map: self.cluster_map,
-            metric,
-        }
-    }
-
     /// Returns a reference to the root cluster of the tree.
     pub fn root(&self) -> &Cluster<T, A> {
         self.cluster_map
@@ -150,20 +169,49 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
 
     /// Returns references to the children of the given cluster, if any.
     pub fn children_of(&self, cluster: &Cluster<T, A>) -> Option<Vec<&Cluster<T, A>>> {
-        cluster.child_center_indices().map(|center_indices| {
-            center_indices
-                .iter()
-                .map(|&ci| {
-                    self.cluster_map
-                        .get(&ci)
-                        .unwrap_or_else(|| unreachable!("Invalid center index {ci} from parent {}", cluster.center_index()))
-                })
-                .collect()
-        })
+        cluster
+            .child_center_indices()
+            .map(|center_indices| center_indices.iter().filter_map(|&ci| self.cluster_map.get(&ci)).collect())
     }
 }
 
-/// Constructors and methods for computing distances in `Tree`.
+/// Various setters for `Tree`.
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
+    /// Changes the metric used in the tree to the provided one.
+    pub fn with_metric<NewM>(self, metric: NewM) -> Tree<Id, I, T, A, NewM> {
+        Tree {
+            items: self.items,
+            cluster_map: self.cluster_map,
+            metric,
+        }
+    }
+
+    /// Applies the given closure to every item and identifier.
+    pub fn apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
+    where
+        F: Fn(Id, I) -> (NewId, NewI),
+    {
+        let (items, cluster_map, metric) = self.into_parts();
+        let items = items.into_iter().map(|(id, item)| f(id, item)).collect();
+        Tree { items, cluster_map, metric }
+    }
+
+    /// Parallel version of [`Self::apply_to_items`]
+    pub fn par_apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        F: Fn(Id, I) -> (NewId, NewI) + Send + Sync,
+        NewId: Send + Sync,
+        NewI: Send + Sync,
+    {
+        let (items, cluster_map, metric) = self.into_parts();
+        let items = items.into_par_iter().map(|(id, item)| f(id, item)).collect();
+        Tree { items, cluster_map, metric }
+    }
+}
+
+/// Constructors for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
     T: DistanceValue,
@@ -210,7 +258,7 @@ where
                 );
 
                 // Increment relevant indices
-                child.depth += 1;
+                child.depth = cluster.depth + 1;
                 child.increment_indices(offset);
                 for (ci, _) in &mut child_splits {
                     *ci += offset;
@@ -229,29 +277,9 @@ where
         ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self { items, cluster_map, metric })
     }
-
-    /// Returns the distance between the query item and the item with the given index.
-    pub fn distance_to(&self, query: &I, i: usize) -> T {
-        (self.metric)(query, &self.items[i].1)
-    }
-
-    /// Returns the distance between the query item and the center of the given cluster.
-    pub fn distance_to_center(&self, query: &I, cluster: &Cluster<T, A>) -> T {
-        self.distance_to(query, cluster.center_index())
-    }
-
-    /// Returns the distances between the query item and all items in the given cluster, excluding the cluster's center.
-    pub fn distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> impl Iterator<Item = (usize, T)> {
-        cluster.items_indices().skip(1).map(|i| (i, self.distance_to(query, i)))
-    }
-
-    /// Returns the distances between the query item and all items in the given cluster, including the cluster's center.
-    pub fn distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> impl Iterator<Item = (usize, T)> {
-        cluster.items_indices().map(|i| (i, self.distance_to(query, i)))
-    }
 }
 
-/// Parallelized constructors and methods for computing distances in `Tree`.
+/// Parallelized constructors for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
     Id: Send + Sync,
@@ -294,7 +322,7 @@ where
                 );
 
                 // Increment relevant indices
-                child.depth += 1;
+                child.depth = cluster.depth + 1;
                 child.increment_indices(offset);
                 for (ci, _) in &mut child_splits {
                     *ci += offset;
@@ -313,15 +341,32 @@ where
         ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self { items, cluster_map, metric })
     }
+}
 
-    /// Parallel version of [`distances_to_items_in_subtree`](Self::distances_to_items_in_subtree).
-    pub fn par_distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> impl ParallelIterator<Item = (usize, T)> {
-        cluster.items_indices().into_par_iter().skip(1).map(|i| (i, self.distance_to(query, i)))
-    }
+impl<Id, I, T, A, B, M> Tree<Id, I, T, (A, B), M> {
+    /// De-compounds the annotations of the clusters in the tree and returns a new tree with the de-compounded annotations along with the other annotations.
+    ///
+    /// See [`Cluster::compound_annotation`] and [`Cluster::decompound_annotation`] for more details on how annotations are compounded and de-compounded.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    ///
+    /// - A new `Tree` with the same items, the same metric, but with the annotations of the clusters de-compounded.
+    /// - A `HashMap` mapping each cluster's center index to the de-compounded part of its annotation.
+    #[expect(clippy::type_complexity)]
+    pub fn decompound_annotations(self) -> (Tree<Id, I, T, A, M>, HashMap<usize, B>) {
+        let (items, cluster_map, metric) = self.into_parts();
 
-    /// Parallel version of [`distances_to_items_in_cluster`](Self::distances_to_items_in_cluster).
-    pub fn par_distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> impl ParallelIterator<Item = (usize, T)> {
-        cluster.items_indices().into_par_iter().map(|i| (i, self.distance_to(query, i)))
+        let (cluster_map, annotations_map) = cluster_map
+            .into_iter()
+            .map(|(ci, cluster)| {
+                let (cluster, b) = cluster.decompound_annotation();
+                ((ci, cluster), (ci, b))
+            })
+            .unzip();
+
+        (Tree { items, cluster_map, metric }, annotations_map)
     }
 }
 

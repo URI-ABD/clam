@@ -59,9 +59,9 @@ ordered-float = { workspace = true }
 [features]
 serde = ["dep:serde", "dep:databuf"]
 musals = ["dep:num", "dep:bytecount"]
-all = ["serde", "musals"]
+pancakes = []
+all = ["serde", "musals", "pancakes"]
 profile = ["profi/enable"]
-# codec = []
 # chaoda = ["dep:smartcore"]
 # mbed = ["chaoda", "dep:slotmap"]
 

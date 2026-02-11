@@ -57,9 +57,9 @@ impl<T> DistanceValue for T where
 {
 }
 
-/// A trait for types that can be used as floating-point distance values in clustering algorithms.
-///
-/// We provide a blanket implementation for all types that satisfy the trait bounds. This includes all primitive float types.
-pub trait FloatDistanceValue: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
+// /// A trait for types that can be used as floating-point distance values in clustering algorithms.
+// ///
+// /// We provide a blanket implementation for all types that satisfy the trait bounds. This includes all primitive float types.
+// pub trait FloatDistanceValue: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
 
-impl<T> FloatDistanceValue for T where T: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
+// impl<T> FloatDistanceValue for T where T: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}

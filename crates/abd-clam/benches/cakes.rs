@@ -6,7 +6,7 @@ use std::usize;
 
 use abd_clam::{
     DistanceValue, PartitionStrategy, Tree,
-    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, approximate, search_quality_stats},
+    cakes::{self, ParSearch, approximate, search_quality_stats},
     partition_strategy::{BranchingFactor, SpanReductionFactor},
 };
 use rand::prelude::*;
@@ -33,32 +33,29 @@ fn bench_for_args<Id, I, T, A, M>(
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     for &k in ks {
-        let true_hits = KnnLinear(k).par_batch_search(tree, queries);
+        let true_hits = cakes::KnnLinear(k).par_batch_search(tree, queries);
 
         // Benchmark the exact algorithms
-        bench_one_alg(group, tree, &KnnDfs(k), queries, &true_hits, multiplier);
-        bench_one_alg(group, tree, &KnnBfs(k), queries, &true_hits, multiplier);
-        bench_one_alg(group, tree, &KnnBranch(k), queries, &true_hits, multiplier);
-        bench_one_alg(group, tree, &KnnRrnn(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &cakes::KnnDfs(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &cakes::KnnBfs(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &cakes::KnnRrnn(k), queries, &true_hits, multiplier);
 
         // Benchmark the approximate algorithms
         for n in [10, 100, 1000] {
             // Varying number of leaves explored
-            let l_alg = approximate::KnnDfs(k, n, usize::MAX);
+            let l_alg = approximate::KnnDfs::new(k, n, usize::MAX);
             bench_one_alg(group, tree, &l_alg, queries, &true_hits, multiplier);
             // Varying number of distance computations performed
-            let d_alg = approximate::KnnDfs(k, usize::MAX, n * 100);
+            let d_alg = approximate::KnnDfs::new(k, usize::MAX, n * 100);
             bench_one_alg(group, tree, &d_alg, queries, &true_hits, multiplier);
         }
     }
 
     for &r in rs {
-        let true_hits = RnnLinear(r).par_batch_search(tree, queries);
+        let true_hits = cakes::RnnLinear(r).par_batch_search(tree, queries);
 
         // Benchmark the exact algorithms
-        bench_one_alg(group, tree, &RnnChess(r), queries, &true_hits, multiplier);
-
-        // TODO(Najib): Add benchmarking for approximate RNN algorithms if/when implemented
+        bench_one_alg(group, tree, &cakes::RnnChess(r), queries, &true_hits, multiplier);
     }
 }
 
@@ -147,6 +144,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
                 .collect();
         }
 
+        // TODO(Najib): Add more strategies back in once we have a better sense of which ones are promising.
         // let strategies = {
         //     let mut strategies: Vec<PartitionStrategy<_>> = vec![];
 
@@ -226,10 +224,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = rand::rng();
 
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
-    let max_items = 200_000;
+    let max_items = 100_000;
     let max_queries = 100;
-    let branching_factors = [2, 10, 100];
-    let ks = [10];
+    let branching_factors = [2];
+    let ks = [10, 100];
     let rs = [0.1, 1.0, 10.0, 100.0, 1000.0];
 
     let base = base_dir().unwrap();

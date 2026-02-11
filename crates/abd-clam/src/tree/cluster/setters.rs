@@ -14,20 +14,40 @@ impl<T, A> Cluster<T, A> {
         }
     }
 
+    /// Compounds the annotation of this cluster with the additional annotation.
+    pub fn compound_annotation<B>(self, additional_annotation: B) -> Cluster<T, (A, B)> {
+        Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius,
+            lfd: self.lfd,
+            children: self.children,
+            annotation: (self.annotation, additional_annotation),
+            parent_center_index: self.parent_center_index,
+        }
+    }
+
     /// Sets the annotation of this cluster, replacing any existing annotation.
     pub fn set_annotation(&mut self, annotation: A) {
         self.annotation = annotation;
     }
+}
 
-    /// Sets the annotation of this cluster using the given function and additional parameter, returning the old annotation.
-    ///
-    /// The function is called with:
-    ///
-    /// - A reference to this cluster.
-    /// - A reference to the old annotation.
-    /// - The additional parameter `args`, which may contain any extra information needed to compute the new annotation.
-    pub fn annotate_with<F: FnOnce(&Self, &A, Args) -> A, Args>(&mut self, f: F, args: Args) -> A {
-        let new_annotation = f(self, &self.annotation, args);
-        std::mem::replace(&mut self.annotation, new_annotation)
+impl<T, A, B> Cluster<T, (A, B)> {
+    /// Removes the additional annotation from this cluster, returning a cluster with the original annotation and the additional annotation as a separate value.
+    pub fn decompound_annotation(self) -> (Cluster<T, A>, B) {
+        let (original_annotation, additional_annotation) = self.annotation;
+        let cluster = Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius,
+            lfd: self.lfd,
+            children: self.children,
+            annotation: original_annotation,
+            parent_center_index: self.parent_center_index,
+        };
+        (cluster, additional_annotation)
     }
 }

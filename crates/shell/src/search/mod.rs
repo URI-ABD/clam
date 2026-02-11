@@ -3,13 +3,12 @@ use std::collections::HashMap;
 
 use abd_clam::{
     DistanceValue,
-    cakes::{Cakes, KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear},
+    cakes::{Cakes, KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellCakes {
     KnnBfs(HashMap<String, String>),
-    KnnBranch(HashMap<String, String>),
     KnnDfs(HashMap<String, String>),
     KnnLinear(HashMap<String, String>),
     KnnRrnn(HashMap<String, String>),
@@ -22,7 +21,6 @@ impl core::fmt::Display for ShellCakes {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::KnnBfs(params) => write!(f, "KnnBfs({})", display_params(params)),
-            Self::KnnBranch(params) => write!(f, "KnnBranch({})", display_params(params)),
             Self::KnnDfs(params) => write!(f, "KnnDfs({})", display_params(params)),
             Self::KnnLinear(params) => write!(f, "KnnLinear({})", display_params(params)),
             Self::KnnRrnn(params) => write!(f, "KnnRrnn({})", display_params(params)),
@@ -46,7 +44,6 @@ impl FromStr for ShellCakes {
 
         match alg.to_lowercase().as_str() {
             "knn-bfs" => Ok(Self::KnnBfs(params)),
-            "knn-branch" => Ok(Self::KnnBranch(params)),
             "knn-dfs" => Ok(Self::KnnDfs(params)),
             "knn-linear" => Ok(Self::KnnLinear(params)),
             "knn-rrnn" => Ok(Self::KnnRrnn(params)),
@@ -68,10 +65,6 @@ impl ShellCakes {
             Self::KnnBfs(params) => {
                 let k = parse_param(params, "k", "KnnBfs")?;
                 Ok(Cakes::KnnBfs(KnnBfs(k)))
-            }
-            Self::KnnBranch(params) => {
-                let k = parse_param(params, "k", "KnnBranch")?;
-                Ok(Cakes::KnnBranch(KnnBranch(k)))
             }
             Self::KnnDfs(params) => {
                 let k = parse_param(params, "k", "KnnDfs")?;
@@ -97,7 +90,7 @@ impl ShellCakes {
                 let k = parse_param(params, "k", "ApproxKnnDfs")?;
                 let d = parse_param(params, "d", "ApproxKnnDfs")?;
                 let l = parse_param(params, "l", "ApproxKnnDfs")?;
-                Ok(Cakes::ApproxKnnDfs(abd_clam::cakes::approximate::KnnDfs(k, d, l)))
+                Ok(Cakes::ApproxKnnDfs(abd_clam::cakes::approximate::KnnDfs::new(k, l, d)))
             }
         }
     }

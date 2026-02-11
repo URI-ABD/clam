@@ -2,7 +2,7 @@
 
 use abd_clam::{
     DistanceValue, Tree,
-    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
+    cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
 };
 use ordered_float::OrderedFloat;
 use test_case::test_case;
@@ -60,11 +60,6 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
         let dfs_hits = sort_nondescending(dfs_hits);
         check_hits(&linear_hits, &dfs_hits, format!("KnnDfs({k})"))?;
 
-        let branch_alg = KnnBranch(k);
-        let branch_hits = branch_alg.search(&tree, &query);
-        let branch_hits = sort_nondescending(branch_hits);
-        check_hits(&linear_hits, &branch_hits, format!("KnnBranch({k})"))?;
-
         let bfs_alg = KnnBfs(k);
         let bfs_hits = bfs_alg.search(&tree, &query);
         let bfs_hits = sort_nondescending(bfs_hits);
@@ -116,11 +111,6 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
         let dfs_hits = dfs_alg.par_search(&tree, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
         check_hits(&linear_hits, &dfs_hits, format!("KnnDfs({k})"))?;
-
-        let branch_alg = KnnBranch(k);
-        let branch_hits = branch_alg.par_search(&tree, &query);
-        let branch_hits = sort_nondescending(branch_hits);
-        check_hits(&linear_hits, &branch_hits, format!("KnnBranch({k})"))?;
 
         let bfs_alg = KnnBfs(k);
         let bfs_hits = bfs_alg.par_search(&tree, &query);

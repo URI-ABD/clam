@@ -1,12 +1,10 @@
 //! K-Nearest Neighbor (KNN) search with a naive linear scan.
 
-use rayon::iter::ParallelIterator;
+use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    cakes::{ParSearch, Search},
-    utils::SizedHeap,
-};
+use crate::{DistanceValue, Tree, utils::SizedHeap};
+
+use super::super::{ParSearch, Search};
 
 /// K-Nearest Neighbor (KNN) search with a naive linear scan.
 ///
@@ -23,8 +21,9 @@ where
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        let distances = tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
         let mut heap = SizedHeap::new(Some(self.0));
-        heap.extend(tree.distances_to_items_in_cluster(query, tree.root()));
+        heap.extend(distances);
         heap.take_items().collect()
     }
 }
@@ -46,8 +45,9 @@ where
         A: Send + Sync,
         M: Send + Sync,
     {
+        let distances = tree.items.par_iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
         let mut heap = SizedHeap::new(Some(self.0));
-        heap.extend(tree.par_distances_to_items_in_cluster(query, tree.root()).collect::<Vec<_>>());
+        heap.extend(distances.collect::<Vec<_>>());
         heap.take_items().collect()
     }
 }

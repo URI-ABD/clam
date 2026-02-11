@@ -6,7 +6,7 @@ mod distance_value;
 mod ord_items;
 mod sized_heap;
 
-pub use distance_value::{DistanceValue, FloatDistanceValue};
+pub use distance_value::DistanceValue;
 pub use ord_items::{MaxItem, MinItem};
 pub use sized_heap::SizedHeap;
 
