@@ -313,6 +313,11 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
 
         path
     }
+
+    /// Returns the maximum depth of any cluster in the tree.
+    pub fn max_depth(&self) -> usize {
+        self.iter_clusters().map(|c| c.depth).max().unwrap_or(0)
+    }
 }
 
 /// Constructors for `Tree`.

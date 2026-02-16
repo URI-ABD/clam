@@ -10,6 +10,7 @@ use crate::{tree::data::ShellDataType, utils::ReportFormat};
 use super::tree::ShellMetric;
 
 mod cakes;
+mod chaoda;
 mod explore;
 mod generate_data;
 mod musals;
@@ -60,6 +61,15 @@ pub enum Commands {
         /// The specific action to perform with Pancakes.
         #[clap(subcommand)]
         action: pancakes::Action,
+    },
+    /// Anomaly detection built on top of CLAM.
+    Chaoda {
+        /// The format of the output file. If not provided, we will use `json`.
+        #[arg(short('f'), long)]
+        out_fmt: Option<ReportFormat>,
+        /// The specific action to perform with CHAODA.
+        #[clap(subcommand)]
+        action: chaoda::Action,
     },
     /// Multiple Sequence Alignment
     Musals {
@@ -142,6 +152,7 @@ impl Commands {
                 let out_fmt = out_fmt.unwrap_or_default();
                 action.perform(&tree_path, out_dir.as_ref(), out_fmt, queries_path, *num_queries, algorithm, rng)?;
             }
+            Self::Chaoda { .. } => todo!("CHAODA command not implemented yet."),
             Self::Pancakes { .. } => todo!("Pancakes command not implemented yet."),
             Self::Musals { out_fmt, action } => {
                 // Check that the input path exists and is a file.

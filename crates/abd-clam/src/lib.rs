@@ -8,6 +8,7 @@
 //! - [`cakes`]: Entropy-Scaling Search. These algorithms leverage the geometric and topological structure inherent in real-world datasets to achieve sub-linear
 //!   scaling in search throughput with respect to dataset size, and are designed to work efficiently with large high-dimensional datasets under arbitrary
 //!   distance functions.
+//! - [`chaoda`]: Anomaly detection algorithms using clustering trees and graphs.
 //! - [`musals`]: Multiple Sequence Alignment. This provides the required functionality to create multiple sequence alignments from a set of sequences, as well
 //!   implementations of edit-distance metrics using arbitrary cost matrices. The MSA algorithms use the [`Tree`] as a guide tree, and are designed to scale to
 //!   very large collections of sequences.
@@ -33,14 +34,14 @@ pub use tree::{Cluster, PartitionStrategy, Tree};
 pub mod cakes;
 pub use cakes::Cakes;
 
+#[cfg(feature = "chaoda")]
+pub mod chaoda;
+
 #[cfg(feature = "musals")]
 pub mod musals;
 
 #[cfg(feature = "pancakes")]
 pub mod pancakes;
-
-// #[cfg(feature = "chaoda")]
-// pub mod chaoda;
 
 // #[cfg(feature = "mbed")]
 // pub mod mbed;

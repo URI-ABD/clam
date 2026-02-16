@@ -149,7 +149,7 @@ where
         expected.len(),
         actual.len(),
         "{}: Hit count mismatch: \nexp {expected:?}, \ngot {actual:?}",
-        &alg.name()
+        alg.name()
     );
 
     for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {

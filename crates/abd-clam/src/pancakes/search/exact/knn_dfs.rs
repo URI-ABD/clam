@@ -113,8 +113,7 @@ where
     while candidates
         .peek()
         .and_then(|(&id, _)| tree.items[id].2.as_cluster())
-        .filter(|c| !c.is_leaf())
-        .is_some()
+        .is_some_and(|c| !c.is_leaf())
     {
         profi::prof!("pop-while-not-leaf");
 
@@ -196,8 +195,7 @@ where
     while candidates
         .peek()
         .and_then(|(&id, _)| tree.items[id].2.as_cluster())
-        .filter(|c| !c.is_leaf())
-        .is_some()
+        .is_some_and(|c| !c.is_leaf())
     {
         profi::prof!("pop-while-not-leaf");
 

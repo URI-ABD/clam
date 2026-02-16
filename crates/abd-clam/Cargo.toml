@@ -28,8 +28,9 @@ workspace = true
 
 [features]
 serde = ["dep:serde", "dep:databuf"]
-pancakes = ["dep:deepsize"]
 musals = ["dep:num"]
+chaoda = ["dep:libm", "dep:smartcore"]
+pancakes = ["dep:deepsize"]
 all = ["serde", "musals", "pancakes"]
 shell = [
     "all",
@@ -66,7 +67,9 @@ yaml_serde = { workspace = true, optional = true }
 bio = { workspace = true, optional = true }
 lazy-regex = { workspace = true }
 tqdm = { workspace = true }
-deepsize = { workspace = true, features = ["derive"], optional = true }
+libm = { workspace = true, optional = true }
+smartcore = { workspace = true, optional = true }
+deepsize = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-case = { workspace = true }
