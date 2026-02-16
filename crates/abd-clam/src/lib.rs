@@ -6,9 +6,9 @@
 //! ## Algorithm Families and Applications
 //!
 //! - [`cakes`]: Search (k-NN, p-NN) algorithms.
+//! - [`chaoda`]: Anomaly detection algorithms using clustering trees and graphs.
 //! - [`musals`]: Multiple sequence alignment of genomic and protein sequences.
 //! - [`pancakes`]: Compression and compressive search algorithms.
-//! - `chaoda`: Anomaly detection algorithms using clustering trees and graphs.
 //! - `mbed`: Dimension reduction algorithms.
 //!
 //! ## Features
@@ -26,6 +26,9 @@ pub use tree::{Cluster, Dataset, PartitionStrategy, Tree, partition_strategy};
 pub use utils::DistanceValue;
 
 pub mod cakes;
+
+#[cfg(feature = "chaoda")]
+pub mod chaoda;
 
 #[cfg(feature = "musals")]
 pub mod musals;

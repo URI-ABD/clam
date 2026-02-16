@@ -38,10 +38,9 @@ serde = { workspace = true, features = ["derive"], optional = true }
 databuf = { workspace = true, optional = true }
 num = { workspace = true, optional = true }
 bytecount = { workspace = true, optional = true }
-
-# For:
-#  - CHAODA
-# smartcore = { workspace = true, features = ["serde"], optional = true }
+smartcore = { workspace = true, features = ["serde"], optional = true }
+libm = { workspace = true, optional = true }
+ndarray = { workspace = true, optional = true }
 
 # For:
 #  - The mass-spring-system in the dimension reduction
@@ -58,11 +57,11 @@ ordered-float = { workspace = true }
 
 [features]
 serde = ["dep:serde", "dep:databuf"]
-musals = ["dep:num", "dep:bytecount"]
+chaoda = ["dep:smartcore", "dep:libm", "dep:ndarray"]
 pancakes = []
-all = ["serde", "musals", "pancakes"]
+musals = ["dep:num", "dep:bytecount"]
+all = ["serde", "chaoda", "musals", "pancakes"]
 profile = ["profi/enable"]
-# chaoda = ["dep:smartcore"]
 # mbed = ["chaoda", "dep:slotmap"]
 
 [[bench]]

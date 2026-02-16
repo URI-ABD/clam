@@ -59,6 +59,7 @@ num = "0.4"
 bio = "3.0"
 bytecount = "0.6"
 enum_dispatch = "0.3"
+smartcore = "0.4"
 # Dev dependencies.
 test-case = "3.2.1"
 criterion = "0.8"

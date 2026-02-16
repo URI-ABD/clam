@@ -162,6 +162,27 @@ impl<D, M, T, A> Tree<D, M, T, A> {
             .child_center_indices()
             .map(|center_indices| center_indices.iter().filter_map(|&ci| self.cluster_map.get(&ci)).collect())
     }
+
+    /// Counts the numbers of leaf and parent clusters at each depth in the tree.
+    pub fn count_clusters_by_depth(&self) -> Vec<(usize, usize)> {
+        let mut counts = HashMap::new();
+        for cluster in self.cluster_map.values() {
+            let (n_leaves, n_parents) = counts.entry(cluster.depth).or_insert((0, 0));
+            if cluster.is_leaf() {
+                *n_leaves += 1;
+            } else {
+                *n_parents += 1;
+            }
+        }
+        let mut counts = counts.into_iter().collect::<Vec<_>>();
+        counts.sort_by_key(|(depth, _)| *depth);
+        counts.into_iter().map(|(_, v)| v).collect()
+    }
+
+    /// Returns the maximum depth of the tree.
+    pub fn max_depth(&self) -> usize {
+        self.cluster_map.values().map(|c| c.depth).max().unwrap_or(0)
+    }
 }
 
 /// Various setters for `Tree`.
