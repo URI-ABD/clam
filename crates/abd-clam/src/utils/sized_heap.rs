@@ -16,7 +16,8 @@ use super::MinItem;
 /// - `A`: The type of the associated data with each item in the heap. This is
 ///   ignored when determining the ordering of the heap.
 /// - `T`: The type of the items by which the heap is ordered.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
 pub struct SizedHeap<A, T: PartialOrd> {
     /// The heap of items.
     heap: BinaryHeap<MinItem<A, T>>,
@@ -34,7 +35,7 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
                 k: usize::MAX,
             },
             |k| Self {
-                heap: BinaryHeap::with_capacity(k),
+                heap: BinaryHeap::with_capacity(k * 2),
                 k,
             },
         )
@@ -42,6 +43,7 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
 
     /// Pushes an item onto the heap, maintaining the max size.
     pub fn push(&mut self, (a, item): (A, T)) {
+        profi::prof!("SizedHeap:push");
         if self.heap.len() < self.k {
             self.heap.push(MinItem(a, item));
         } else if let Some(top) = self.heap.peek()
@@ -54,28 +56,46 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
 
     /// Pushes several items onto the heap, maintaining the max size.
     pub fn extend<I: IntoIterator<Item = (A, T)>>(&mut self, items: I) {
+        profi::prof!("SizedHeap:extend");
+        // for v in items
+        //     .into_iter()
+        //     .map(|(a, t)| MinItem(a, t))
+        //     .filter_map(|v| self.heap.pop().map(|top| if v < top { top } else { v }))
+        // {
+        //     self.heap.push(v);
+        // }
+
         for (a, item) in items {
             self.heap.push(MinItem(a, item));
-        }
-        while self.heap.len() > self.k {
-            self.heap.pop();
+            if self.heap.len() > self.k {
+                self.heap.pop();
+            }
         }
     }
 
     /// Peeks at the top item in the heap.
     #[must_use]
     pub fn peek(&self) -> Option<(&A, &T)> {
+        profi::prof!("SizedHeap:peek");
         self.heap.peek().map(|MinItem(a, x)| (a, x))
     }
 
     /// Pops the top item from the heap.
     pub fn pop(&mut self) -> Option<(A, T)> {
+        profi::prof!("SizedHeap:pop");
         self.heap.pop().map(|MinItem(a, x)| (a, x))
     }
 
     /// Consumes the `SizedHeap` and returns the items in an iterator.
     pub fn take_items(self) -> impl Iterator<Item = (A, T)> {
+        profi::prof!("SizedHeap:take_items");
         self.heap.into_iter().map(|MinItem(a, x)| (a, x))
+    }
+
+    /// Returns the number of items in the heap.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.heap.len()
     }
 
     /// Returns whether the heap is empty.
@@ -87,6 +107,7 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     /// Returns whether the heap is full.
     #[must_use]
     pub fn is_full(&self) -> bool {
+        profi::prof!("SizedHeap:is_full");
         self.heap.len() >= self.k
     }
 

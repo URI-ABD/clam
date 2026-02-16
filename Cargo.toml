@@ -3,14 +3,13 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/symagen",
-    "crates/shell",
     "pypi/distances",
 ]
 resolver = "2"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.90"  # using: `cargo publish --workspace`
+rust-version = "1.94" # using: `Iterator::array_windows`
 license = "MIT"
 
 # TODO: Najib: Rework the `lints` section after [this issue](https://github.com/rust-lang/cargo/issues/12918) is resolved.
@@ -37,9 +36,10 @@ unnecessary_debug_formatting = { level = "allow", priority = 1 }
 
 [workspace.dependencies]
 # Local crates.
-abd-clam = { version = "0.34.0", path = "crates/abd-clam" }
+abd-clam = { version = "0.31.0", path = "crates/abd-clam" }
 distances = { version = "1.8.0", path = "crates/distances" }
 symagen = { version = "0.5.0", path = "crates/symagen" }
+
 # Crate dependencies.
 num-traits = "0.2"
 rayon = "1.11"
@@ -54,20 +54,22 @@ clap = "4.5"
 ftlog = "0.2"
 numpy = "0.26"
 pyo3 = "0.26"
-csv = "1.4"
 num = "0.4"
 bio = "3.0"
-bytecount = "0.6"
-enum_dispatch = "0.3"
+lazy-regex = "3.6.0"
+serde-jsonlines = "0.7.0"
+serde_json = "1.0"
+yaml_serde = "0.10"
+ndarray = "0.16"
+ndarray-npy = "0.9"
+tqdm = "0.8.0"
+deepsize = "0.2.0"
+
 # Dev dependencies.
 test-case = "3.2.1"
 criterion = "0.8"
-ndarray = "0.16"
-ndarray-npy = "0.9"
 stringzilla = "4.2"
-serde_json = "1.0"
 float_eq = "1.0"
-serde_yaml = "0.9"
 ordered-float = "5.1"
 
 [profile.test]
@@ -76,5 +78,6 @@ debug = true
 overflow-checks = true
 
 [profile.release]
-lto = true
-codegen-units = 1
+debug = true # for better profiling results
+# lto = true
+# codegen-units = 1

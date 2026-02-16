@@ -2,7 +2,7 @@
 
 use abd_clam::{
     DistanceValue, NamedAlgorithm, Tree,
-    cakes::{self, ParSearch, Search},
+    cakes::{self, Search},
 };
 use test_case::test_case;
 
@@ -29,18 +29,28 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
 
     let tree = Tree::new_minimal(data, metric)?;
     for radius in [0.5, 1.0, 1.5, 2.0] {
-        let linear_alg = cakes::RnnLinear(radius);
+        let linear_alg = cakes::RnnLinear::new(radius);
         let linear_hits = linear_alg.search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
 
-        let clustered_alg = cakes::RnnChess(radius);
+        let clustered_alg = cakes::RnnChess::new(radius);
         let clustered_hits = clustered_alg.search(&tree, &query);
         let clustered_hits = sort_nondescending(clustered_hits);
-        check_hits(&linear_hits, &clustered_hits, &clustered_alg.name());
+        check_hits(&linear_hits, &clustered_hits, &clustered_alg);
+
+        let query_batch = vec![query.clone(); 10];
+        let linear_hits = linear_alg.batch_search(&tree, &query_batch);
+        let linear_hits = linear_hits.into_iter().map(sort_nondescending).collect::<Vec<_>>();
+
+        let clustered_hits = clustered_alg.batch_search(&tree, &query_batch);
+        let clustered_hits = clustered_hits.into_iter().map(sort_nondescending).collect::<Vec<_>>();
+        for (linear_hits, clustered_hits) in linear_hits.iter().zip(clustered_hits.iter()) {
+            check_hits(linear_hits, clustered_hits, &clustered_alg);
+        }
     }
 
     for k in [1, 10, 100] {
-        let linear_alg = cakes::KnnLinear(k);
+        let linear_alg = cakes::KnnLinear::new(k);
         let linear_hits = linear_alg.search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
         assert_eq!(
@@ -51,20 +61,25 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
             k.min(car)
         );
 
-        let dfs_alg = cakes::KnnDfs(k);
+        let dfs_alg = cakes::KnnDfs::new(k);
         let dfs_hits = dfs_alg.search(&tree, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
-        check_hits(&linear_hits, &dfs_hits, &dfs_alg.name());
+        check_hits(&linear_hits, &dfs_hits, &dfs_alg);
 
-        let bfs_alg = cakes::KnnBfs(k);
+        let bfs_alg = cakes::KnnBfs::new(k);
         let bfs_hits = bfs_alg.search(&tree, &query);
         let bfs_hits = sort_nondescending(bfs_hits);
-        check_hits(&linear_hits, &bfs_hits, &bfs_alg.name());
+        check_hits(&linear_hits, &bfs_hits, &bfs_alg);
 
-        let rrnn_alg = cakes::KnnRrnn(k);
+        let rrnn_alg = cakes::KnnRrnn::new(k);
         let rrnn_hits = rrnn_alg.search(&tree, &query);
         let rrnn_hits = sort_nondescending(rrnn_hits);
-        check_hits(&linear_hits, &rrnn_hits, &rrnn_alg.name());
+        check_hits(&linear_hits, &rrnn_hits, &rrnn_alg);
+
+        let sieve_alg = cakes::KnnSieve::new(k);
+        let sieve_hits = sieve_alg.search(&tree, &query);
+        let sieve_hits = sort_nondescending(sieve_hits);
+        check_hits(&linear_hits, &sieve_hits, &sieve_alg);
     }
 
     Ok(())
@@ -78,18 +93,18 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
 
     let tree = Tree::par_new_minimal(data, metric)?;
     for radius in [1.0, 1.5, 2.0] {
-        let linear_alg = cakes::RnnLinear(radius);
+        let linear_alg = cakes::RnnLinear::new(radius);
         let linear_hits = linear_alg.par_search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
 
-        let clustered_alg = cakes::RnnChess(radius);
+        let clustered_alg = cakes::RnnChess::new(radius);
         let clustered_hits = clustered_alg.par_search(&tree, &query);
         let clustered_hits = sort_nondescending(clustered_hits);
-        check_hits(&linear_hits, &clustered_hits, &clustered_alg.name());
+        check_hits(&linear_hits, &clustered_hits, &clustered_alg);
     }
 
     for k in [1, 10, 100] {
-        let linear_alg = cakes::KnnLinear(k);
+        let linear_alg = cakes::KnnLinear::new(k);
         let linear_hits = linear_alg.par_search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
         assert_eq!(
@@ -100,38 +115,48 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
             k.min(car)
         );
 
-        let dfs_alg = cakes::KnnDfs(k);
+        let dfs_alg = cakes::KnnDfs::new(k);
         let dfs_hits = dfs_alg.par_search(&tree, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
-        check_hits(&linear_hits, &dfs_hits, &dfs_alg.name());
+        check_hits(&linear_hits, &dfs_hits, &dfs_alg);
 
-        let bfs_alg = cakes::KnnBfs(k);
+        let bfs_alg = cakes::KnnBfs::new(k);
         let bfs_hits = bfs_alg.par_search(&tree, &query);
         let bfs_hits = sort_nondescending(bfs_hits);
-        check_hits(&linear_hits, &bfs_hits, &bfs_alg.name());
+        check_hits(&linear_hits, &bfs_hits, &bfs_alg);
 
-        let rrnn_alg = cakes::KnnRrnn(k);
+        let rrnn_alg = cakes::KnnRrnn::new(k);
         let rrnn_hits = rrnn_alg.par_search(&tree, &query);
         let rrnn_hits = sort_nondescending(rrnn_hits);
-        check_hits(&linear_hits, &rrnn_hits, &rrnn_alg.name());
+        check_hits(&linear_hits, &rrnn_hits, &rrnn_alg);
+
+        let sieve_alg = cakes::KnnSieve::new(k);
+        let sieve_hits = sieve_alg.par_search(&tree, &query);
+        let sieve_hits = sort_nondescending(sieve_hits);
+        check_hits(&linear_hits, &sieve_hits, &sieve_alg);
     }
 
     Ok(())
 }
 
-fn check_hits<T: DistanceValue>(expected: &[(usize, T)], actual: &[(usize, T)], alg_name: &str) {
+fn check_hits<T, Alg>(expected: &[(usize, T)], actual: &[(usize, T)], alg: &Alg)
+where
+    T: DistanceValue,
+    Alg: NamedAlgorithm,
+{
     assert_eq!(
         expected.len(),
         actual.len(),
-        "{alg_name}: Hit count mismatch: \nexp {expected:?}, \ngot {actual:?}",
+        "{}: Hit count mismatch: \nexp {expected:?}, \ngot {actual:?}",
+        &alg.name()
     );
 
     for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
-        assert_eq!(e, a, "{alg_name}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}",);
+        assert_eq!(e, a, "{alg}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}");
     }
 }
 
 fn sort_nondescending(mut items: Vec<(usize, f32)>) -> Vec<(usize, f32)> {
-    items.sort_by(|(_, l), (_, r)| ordered_float::OrderedFloat(*l).cmp(&ordered_float::OrderedFloat(*r)));
+    items.sort_by(|&(_, l), (_, r)| l.total_cmp(r));
     items
 }

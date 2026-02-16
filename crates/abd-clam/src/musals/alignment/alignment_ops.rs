@@ -1,8 +1,10 @@
 //! Alignment operations for Needleman-Wunsch algorithm.
 
 /// The direction of the edit operation in the DP table.
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 #[must_use]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
+#[cfg_attr(feature = "pancakes", derive(deepsize::DeepSizeOf))]
 pub enum Direction {
     /// Diagonal (Up and Left) for a match or substitution.
     Diagonal,
@@ -14,45 +16,102 @@ pub enum Direction {
 
 /// The type of edit operation.
 #[must_use]
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
+#[cfg_attr(feature = "pancakes", derive(deepsize::DeepSizeOf))]
 pub enum Edit {
     /// Substitution of one character for another.
-    Sub(u8),
+    Sub(char),
     /// Insertion of a character.
-    Ins(u8),
+    Ins(char),
     /// Deletion of a character.
     Del,
-}
-
-impl core::fmt::Debug for Edit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Sub(c) => f.debug_tuple("Sub").field(&(*c as char)).finish(),
-            Self::Ins(c) => f.debug_tuple("Ins").field(&(*c as char)).finish(),
-            Self::Del => write!(f, "Del"),
-        }
-    }
 }
 
 /// The sequence of edits needed to turn one unaligned sequence into another.
 ///
 /// The `Edits` are a vector of tuples, where each tuple contains the index at which the edit occurs *in the original sequence*, and the `Edit` operation to be
 /// applied at that index.
-#[derive(Clone, Debug)]
 #[must_use]
-pub struct Edits(Vec<(usize, Edit)>);
-
-impl Edits {
-    /// Create a new `Edits` from a vector.
-    pub const fn new(edits: Vec<(usize, Edit)>) -> Self {
-        Self(edits)
-    }
-}
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "pancakes", derive(deepsize::DeepSizeOf))]
+pub struct Edits(pub Vec<(usize, Edit)>);
 
 impl core::ops::Deref for Edits {
-    type Target = Vec<(usize, Edit)>;
+    type Target = [(usize, Edit)];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl core::ops::DerefMut for Edits {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "serde")]
+impl databuf::Encode for Edits {
+    fn encode<const CONFIG: u16>(&self, buffer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+        let edits = self.0.clone().into_boxed_slice();
+        edits.encode::<CONFIG>(buffer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> databuf::Decode<'de> for Edits {
+    fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
+        let edits = Box::<[(usize, Edit)]>::decode::<CONFIG>(buffer)?;
+        Ok(Self(edits.into_vec()))
+    }
+}
+
+/// The sequence of substitutions needed to turn one aligned sequence into aligned sequence.
+#[must_use]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "pancakes", derive(deepsize::DeepSizeOf))]
+pub struct Substitutions(pub Vec<(usize, char)>);
+
+impl core::ops::Deref for Substitutions {
+    type Target = [(usize, char)];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for Substitutions {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "serde")]
+impl databuf::Encode for Substitutions {
+    fn encode<const CONFIG: u16>(&self, buffer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+        let (indices, chars): (Vec<_>, String) = self.0.iter().copied().unzip();
+
+        let indices_boxed = indices.into_boxed_slice();
+        indices_boxed.encode::<CONFIG>(buffer)?;
+
+        let chars_boxed = chars.into_boxed_str();
+        chars_boxed.encode::<CONFIG>(buffer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> databuf::Decode<'de> for Substitutions {
+    fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
+        let indices = Box::<[usize]>::decode::<CONFIG>(buffer)?;
+        let chars = Box::<str>::decode::<CONFIG>(buffer)?;
+        if indices.len() == chars.len() {
+            let substitutions = indices.into_iter().zip(chars.chars()).collect();
+            Ok(Self(substitutions))
+        } else {
+            Err(format!("Mismatched lengths for indices and characters: {} vs {}", indices.len(), chars.len()).into())
+        }
     }
 }

@@ -8,7 +8,8 @@
 /// incomparable items are treated as less than any other item. The additional
 /// type parameter `A` is used to store arbitrary data alongside the item and is
 /// ignored for ordering purposes.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
 pub struct MaxItem<A, T: PartialOrd>(pub A, pub T);
 
 impl<A, T: PartialOrd> PartialEq for MaxItem<A, T> {
@@ -38,7 +39,8 @@ impl<A, T: PartialOrd> Ord for MaxItem<A, T> {
 /// incomparable items are treated as greater than any other item. The
 /// additional type parameter `A` is used to store arbitrary data alongside the
 /// item and is ignored for ordering purposes.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
 pub struct MinItem<A, T: PartialOrd>(pub A, pub T);
 
 impl<A, T: PartialOrd> PartialEq for MinItem<A, T> {

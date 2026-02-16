@@ -1,55 +1,55 @@
 //! K-Nearest Neighbor (KNN) search with a naive linear scan.
 
+use core::borrow::Borrow;
+
 use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    cakes::KnnLinear,
-    pancakes::{Codec, MaybeCompressed},
-    utils::SizedHeap,
-};
+use crate::{DistanceValue, cakes::KnnLinear, utils::SizedHeap};
 
-use super::super::{CompressiveSearch, ParCompressiveSearch};
+use super::super::{Codec, Compressible, CompressiveSearch, PancakesTree};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnLinear
+impl<Id, I, T, A, M, C> CompressiveSearch<Id, I, T, A, M, C> for KnnLinear
 where
-    I: Codec,
+    I: Compressible,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    C: Codec<I>,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search<Query: Borrow<I>>(&self, tree: &mut PancakesTree<Id, I, T, A, M, C>, query: &Query) -> Vec<(usize, T)> {
         tree.decompress_subtree(0);
         let distances = tree
             .items
             .iter()
             .enumerate()
-            .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-            .collect::<Result<Vec<_>, String>>()?;
-        let mut heap = SizedHeap::new(Some(self.0));
+            .map(|(i, (_, item, _))| item.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+            .collect::<Result<Vec<_>, String>>()
+            .unwrap_or_else(|_| unreachable!("We just decompressed the whole tree, so there should be no errors"));
+        let mut heap = SizedHeap::new(Some(self.k));
         heap.extend(distances);
-        Ok(heap.take_items().collect())
+        heap.take_items().collect()
     }
-}
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for KnnLinear
-where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-{
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search<Query: Borrow<I> + Send + Sync>(&self, tree: &mut PancakesTree<Id, I, T, A, M, C>, query: &Query) -> Vec<(usize, T)>
+    where
+        Self: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        I::Compressed: Send + Sync,
+        T: Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+        C: Send + Sync,
+    {
         tree.par_decompress_subtree(0);
         let distances = tree
             .items
             .par_iter()
             .enumerate()
-            .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-            .collect::<Result<Vec<_>, String>>()?;
-        let mut heap = SizedHeap::new(Some(self.0));
+            .map(|(i, (_, item, _))| item.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+            .collect::<Result<Vec<_>, String>>()
+            .unwrap_or_else(|_| unreachable!("We just decompressed the whole tree, so there should be no errors"));
+        let mut heap = SizedHeap::new(Some(self.k));
         heap.extend(distances);
-        Ok(heap.take_items().collect())
+        heap.take_items().collect()
     }
 }

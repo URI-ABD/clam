@@ -1,19 +1,22 @@
 //! Compression and decompression of trees with items implementing the `Codec` trait.
 
+use core::borrow::Borrow;
+
 use std::collections::{HashMap, HashSet};
 
-use crate::{Cluster, DistanceValue, Tree};
+use crate::{Cluster, DistanceValue, Tree, tree::ClusterLocation};
 
-use super::{Codec, MaybeCompressed};
+use super::{Codec, Compressible, MaybeCompressed, PancakesTree};
 
 mod par_tree;
 
 /// Stores the cost of unitary compression of a cluster and the cost of cost of compression of child centers, along with the old annotation of the cluster.
+#[derive(Debug, Clone)]
 pub struct CompressionCost {
     /// The cost of compressing all non-center items in the cluster in terms of the center.
-    pub unitary_cost: usize,
+    unitary_cost: usize,
     /// If the cluster is a parent, the cost of recursive compression of the cluster. Otherwise, `None`.
-    pub recursive_cost: Option<usize>,
+    recursive_cost: Option<usize>,
 }
 
 impl CompressionCost {
@@ -36,111 +39,58 @@ impl CompressionCost {
     }
 }
 
-impl<Id, I, T, A, M> Tree<Id, I, T, (A, CompressionCost), M>
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
-    I: Codec,
+    I: Compressible,
+    T: DistanceValue,
 {
-    /// Computes the cost of recursive compression for all parent clusters in the tree and sets the recursive cost in the annotation of the clusters.
-    fn annotate_recursive_compression_costs(&mut self) {
-        // The starting frontier contains all leaf clusters.
-        let mut frontier = self
-            .cluster_map
+    /// Annotates all clusters in the tree with unitary compression costs.
+    pub(crate) fn annotate_unitary_compression_costs<C: Codec<I>>(self, codec: C) -> PancakesTree<Id, I, T, (A, CompressionCost), M, C> {
+        let Self { items, metric } = self;
+
+        let annotator = |c: &Cluster<T, A>| {
+            let reference = &items[c.center_index].1;
+            let unitary_cost = items[c.subtree_range()]
+                .iter()
+                .map(|(_, target, _)| codec.compress(reference, target))
+                .map(|compressed| I::compressed_size(&compressed))
+                .sum();
+            CompressionCost::new(unitary_cost)
+        };
+        // We collect the annotations in a separate vector here because the `annotator` closure needs to borrow the items in the tree.
+        let unitary_costs = items
             .iter()
-            .filter_map(|(&id, c)| if c.is_leaf() { Some(id) } else { None })
+            .map(|(_, _, loc)| match loc {
+                ClusterLocation::Cluster(c) => Some(annotator(c)),
+                ClusterLocation::CenterIndex(_) => None,
+            })
             .collect::<Vec<_>>();
 
-        // Traverse the tree from the frontier to the root, and update the recursive cost of the clusters as we go up.
-        while self.root().annotation.1.recursive_cost.is_none() {
-            // The next frontier contains the parents of the current frontier clusters.
-            let next_frontier = frontier
-                .iter()
-                .filter_map(|id| self.cluster_map.get(id).and_then(|c| c.parent_center_index))
-                .collect::<HashSet<_>>();
+        // We can now take change the items in the tree to include the cluster annotations, since we are done borrowing them for the annotation step.
+        let items = items
+            .into_iter()
+            .zip(unitary_costs)
+            .map(|((id, item, loc), cost)| {
+                let loc = match (loc, cost) {
+                    (ClusterLocation::CenterIndex(i), _) => ClusterLocation::CenterIndex(i),
+                    (ClusterLocation::Cluster(c), Some(cost)) => ClusterLocation::Cluster(c.compound_annotation(cost)),
+                    _ => unreachable!("Annotation should be present for clusters"),
+                };
+                (id, MaybeCompressed::Original(item), loc)
+            })
+            .collect();
 
-            // Update the recursive cost of the clusters in the current frontier.
-            for id in frontier {
-                if let Some(cost) = self
-                    .cluster_map
-                    .get(&id)
-                    .and_then(|c| c.child_center_indices().map(<[_]>::to_vec))
-                    .map(|child_center_indices| {
-                        let centers_cost = self.compression_cost(id, &child_center_indices);
-                        let child_costs = child_center_indices
-                            .into_iter()
-                            .filter_map(|cid| self.cluster_map.get(&cid).map(|c| c.annotation.1.smaller_cost()))
-                            .sum::<usize>();
-                        centers_cost + child_costs
-                    })
-                    && let Some(c) = self.cluster_map.get_mut(&id)
-                {
-                    c.annotation.1.recursive_cost = Some(cost);
-                }
-            }
-
-            // Update the frontier to be the next frontier.
-            frontier = next_frontier.into_iter().collect();
-        }
-    }
-
-    /// Removes the descendants of the first unitary cluster along each branch of the tree.
-    pub(crate) fn trim_to_unitary_clusters(&mut self, min_depth: usize) {
-        // We start with the frontier containing the root cluster, and traverse down the tree. If we encounter a unitary cluster.
-        let mut frontier = vec![0];
-        let mut clusters_to_retain = HashSet::<usize>::new();
-
-        // Expand the frontier with the children of the clusters in the frontier until we encounter unitary clusters.
-        while !frontier.is_empty() {
-            clusters_to_retain.extend(frontier.iter());
-
-            frontier = frontier
-                .into_iter()
-                .filter_map(|id| {
-                    self.cluster_map.get_mut(&id).and_then(|c| {
-                        if c.depth < min_depth || c.annotation.1.is_recursive() {
-                            // This cluster is either too shallow or recursively compressed, so we need to keep traversing down the tree.
-                            c.child_center_indices().map(<[_]>::to_vec)
-                        } else {
-                            // This is a unitary compressed cluster, so we need to remove its descendants from the tree and not add them to the frontier.
-                            c.children = None;
-                            None
-                        }
-                    })
-                })
-                .flatten()
-                .collect();
-        }
-
-        // Remove the clusters that are not in the cluster_to_retain set from the tree.
-        self.cluster_map.retain(|id, _| clusters_to_retain.contains(id));
+        // Construct the tree and return it.
+        let tree = Tree { items, metric };
+        PancakesTree { tree, codec }
     }
 }
 
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+impl<Id, I, T, A, M, C> PancakesTree<Id, I, T, A, M, C>
 where
-    I: Codec,
+    I: Compressible,
+    C: Codec<I>,
 {
-    /// Compresses the tree.
-    pub fn compress_all(self, min_depth: usize) -> Tree<Id, MaybeCompressed<I>, T, A, M>
-    where
-        T: DistanceValue,
-    {
-        // Annotate the clusters with their unitary and recursive compression costs and trim the tree down to the first unitary cluster along each branch.
-        let mut tree = self.annotate_unitary_compression_costs();
-        tree.annotate_recursive_compression_costs();
-        tree.trim_to_unitary_clusters(min_depth);
-
-        // Convert the type of the items in the tree to `MaybeCompressed`.
-        let (items, cluster_map, metric) = tree.into_parts();
-        let items = items.into_iter().map(|(id, item)| (id, MaybeCompressed::Original(item))).collect();
-
-        // Compress the items in the tree.
-        let mut tree = Tree::from_parts(items, cluster_map, metric);
-        tree.compress_root();
-
-        // Remove the cost annotations from the clusters, since they are no longer needed.
-        tree.decompound_annotations().0
-    }
-
     /// Returns the cost of compressing the indexed target items in terms of the indexed reference.
     ///
     /// # Arguments
@@ -148,88 +98,44 @@ where
     /// - `reference`: index of the reference item.
     /// - `targets`: indices of the target items to compress.
     fn compression_cost(&self, reference: usize, targets: &[usize]) -> usize {
-        let reference = &self.items[reference].1;
-        targets.iter().map(|&i| I::compressed_size(&reference.compress(&self.items[i].1))).sum()
-    }
-
-    /// Annotates all clusters in the tree with unitary compression costs.
-    fn annotate_unitary_compression_costs(self) -> Tree<Id, I, T, (A, CompressionCost), M>
-    where
-        T: Clone,
-    {
-        let (items, cluster_map, metric) = self.into_parts();
-        let annotator = |c: Cluster<T, A>| {
-            let center = &items[c.center_index].1;
-            let unitary_cost = items[c.subtree_indices()]
-                .iter()
-                .map(|(_, item)| I::compressed_size(&center.compress(item)))
-                .sum();
-            c.compound_annotation(CompressionCost::new(unitary_cost))
-        };
-        let cluster_map = cluster_map.into_iter().map(|(id, cluster)| (id, annotator(cluster))).collect();
-        Tree::from_parts(items, cluster_map, metric)
-    }
-}
-
-impl<Id, I, T, A, M> Tree<Id, MaybeCompressed<I>, T, A, M>
-where
-    I: Codec,
-    T: DistanceValue,
-{
-    /// Returns the tree with decompressed items.
-    pub fn decompress_all(mut self) -> Tree<Id, I, T, A, M> {
-        self.decompress_root();
-        let (items, cluster_map, metric) = self.into_parts();
-        let items = items
-            .into_iter()
-            .map(|(id, item)| {
-                let item = item
-                    .take_original()
-                    .unwrap_or_else(|| unreachable!("All items should be in their original form by the time the frontier is empty"));
-                (id, item)
+        let reference = self.items[reference]
+            .1
+            .original()
+            .unwrap_or_else(|| unreachable!("The reference item should be decompressed when computing compression costs"));
+        targets
+            .iter()
+            .map(|&i| match &self.tree.items[i].1 {
+                MaybeCompressed::Original(target) => I::compressed_size(&self.codec.compress(reference, target)),
+                MaybeCompressed::Compressed(compressed) => I::compressed_size(compressed),
             })
-            .collect();
-        Tree::from_parts(items, cluster_map, metric)
+            .sum()
     }
 
-    /// Compresses the tree from the root.
-    pub fn compress_root(&mut self) {
-        let (mut frontier, parents) = self.cluster_map.iter().map(|(&id, c)| (id, c)).partition::<Vec<_>, _>(|(_, c)| c.is_leaf());
-
-        let mut parents_in_waiting = parents
-            .into_iter()
-            .map(|(i, c)| (i, (c.child_center_indices().map_or(0, <[_]>::len), c)))
-            .collect::<HashMap<_, _>>();
-
-        while !frontier.is_empty() {
-            for (id, c) in frontier {
-                // Get the targets to compress in terms of the center.
-                let targets = c.child_center_indices().map_or_else(
-                    || c.subtree_indices().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
-                    <[_]>::to_vec,                    // If the cluster is a parent, we only compress the child centers.
-                );
-                // Compress the targets and overwrite the original items with the compressed ones.
-                for (i, compressed) in self.compressed_items(id, &targets) {
-                    self.items[i].1 = MaybeCompressed::Compressed(compressed);
-                }
-                // Update the count of remaining children for the parent cluster.
-                if let Some(pid) = c.parent_center_index
-                    && let Some((count, _)) = parents_in_waiting.get_mut(&pid)
-                {
-                    *count -= 1;
-                }
-            }
-
-            // Update the frontier to the parents whose children have all been processed.
-            let full_parents: HashMap<_, _>;
-            (full_parents, parents_in_waiting) = parents_in_waiting.into_iter().partition(|&(_, (count, _))| count == 0);
-            frontier = full_parents.into_iter().map(|(id, (_, cluster))| (id, cluster)).collect();
+    /// Returns the distance from a query item to a tree item, decompressing any required items in the process.
+    pub(crate) fn distance_to_uncompressed<Query: Borrow<I>>(&mut self, query: &Query, item_index: usize) -> T
+    where
+        M: Fn(&I, &I) -> T,
+    {
+        if let Some(item) = self.items[item_index].1.original() {
+            return (self.metric)(query.borrow(), item);
         }
-    }
 
-    /// Decompresses the tree from the root.
-    pub fn decompress_root(&mut self) {
-        self.decompress_subtree(0);
+        let path_from_root = self.path_to_item_unchecked(item_index);
+        for &[l, r] in path_from_root.array_windows() {
+            if let Some(r_compressed) = self.items[r].1.compressed() {
+                let reference = self.items[l]
+                    .1
+                    .original()
+                    .unwrap_or_else(|| unreachable!("All items on the path from the root to an item should be decompressed by the time we reach the item"));
+                self.tree.items[r].1 = MaybeCompressed::Original(self.codec.decompress(reference, r_compressed));
+            }
+        }
+
+        let item = self.items[item_index]
+            .1
+            .original()
+            .unwrap_or_else(|| unreachable!("The target item should be decompressed by the time we reach it"));
+        (self.metric)(query.borrow(), item)
     }
 
     /// Given the index of a cluster center, decompresses the subtree of that cluster.
@@ -240,10 +146,10 @@ where
     pub(crate) fn decompress_subtree(&mut self, id: usize) {
         let mut frontier = vec![id];
         while let Some(id) = frontier.pop()
-            && let Some(cluster) = self.cluster_map.get(&id)
+            && let Some(cluster) = self.items[id].2.as_cluster()
         {
             let targets = cluster.child_center_indices().map_or_else(
-                || cluster.subtree_indices().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
+                || cluster.subtree_range().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
                 |child_ids| {
                     // Add the children of the cluster to the frontier because they may also be recursively compressed.
                     frontier.extend(child_ids);
@@ -251,7 +157,7 @@ where
                 },
             );
             for (i, item) in self.decompressed_items(id, &targets) {
-                self.items[i].1 = MaybeCompressed::Original(item);
+                self.tree.items[i].1 = MaybeCompressed::Original(item);
             }
         }
     }
@@ -265,20 +171,14 @@ where
     /// # Returns
     ///
     /// - If the cluster has children, returns the indices of the child centers.
-    ///
-    /// # Errors
-    ///
-    /// - If the `id` is not the center of any cluster.
-    /// - If the cluster center is compressed.
-    /// - If the cluster does not have children.
-    pub(crate) fn decompress_child_centers(&mut self, id: usize) -> Result<Vec<usize>, String> {
-        if let Some(targets) = self.get_cluster(id)?.child_center_indices().map(<[_]>::to_vec) {
+    pub(crate) fn decompress_child_centers(&mut self, id: usize) -> Option<Vec<usize>> {
+        if let Some(targets) = self.get_cluster_unchecked(id).child_center_indices().map(<[_]>::to_vec) {
             for (i, item) in self.decompressed_items(id, &targets) {
-                self.items[i].1 = MaybeCompressed::Original(item);
+                self.tree.items[i].1 = MaybeCompressed::Original(item);
             }
-            Ok(targets)
+            Some(targets)
         } else {
-            Err(format!("Cluster with id {id} does not have child centers"))
+            None
         }
     }
 
@@ -306,7 +206,7 @@ where
             |center| {
                 targets
                     .iter()
-                    .filter_map(|&i| self.items[i].1.original().map(|item| (i, center.compress(item))))
+                    .filter_map(|&i| self.tree.items[i].1.original().map(|item| (i, self.codec.compress(center, item))))
                     .collect()
             },
         )
@@ -336,9 +236,105 @@ where
             |center| {
                 targets
                     .iter()
-                    .filter_map(|&i| self.items[i].1.compressed().map(|compressed| (i, center.decompress(compressed))))
+                    .filter_map(|&i| self.items[i].1.compressed().map(|compressed| (i, self.codec.decompress(center, compressed))))
                     .collect()
             },
         )
+    }
+}
+
+impl<Id, I, T, A, M, C> PancakesTree<Id, I, T, (A, CompressionCost), M, C>
+where
+    I: Compressible,
+    C: Codec<I>,
+{
+    /// Computes the cost of recursive compression for all parent clusters in the tree and sets the recursive cost in the annotation of the clusters.
+    pub(crate) fn annotate_recursive_compression_costs(&mut self) {
+        let (leaves, parents) = self.iter_clusters().partition::<Vec<_>, _>(|c| c.is_leaf());
+
+        // The starting frontier contains all leaf clusters.
+        let mut frontier = leaves.into_iter().map(|c| c.center_index).collect::<Vec<_>>();
+
+        // The "parents-in-waiting" map stores the parent clusters whose children have not all been processed yet.
+        let mut parents_in_waiting = parents
+            .into_iter()
+            .map(|c| (c.center_index, (c.child_center_indices().map_or(0, <[_]>::len))))
+            .collect::<HashMap<_, _>>();
+        let mut full_parents: HashMap<_, _>;
+
+        // Traverse the tree from the frontier to the root, and update the recursive cost of the clusters as we go up.
+        while self.root().annotation.1.recursive_cost.is_none() {
+            // Update the recursive cost of the clusters in the current frontier.
+            for id in frontier {
+                let c = self.get_cluster_unchecked(id);
+                let cost = c.child_center_indices().map_or(c.annotation.1.unitary_cost, |child_center_indices| {
+                    // If the cluster is a parent, then the cost of recursive compression is the cost of compressing the child centers in terms of the center,
+                    // plus the cost of compressing the children themselves.
+                    let centers_cost = self.compression_cost(id, child_center_indices);
+                    let child_costs = child_center_indices
+                        .iter()
+                        .filter_map(|&cid| self.tree.items[cid].2.as_cluster().map(|c| c.annotation.1.smaller_cost()))
+                        .sum::<usize>();
+                    centers_cost + child_costs
+                });
+
+                let c = self.get_cluster_unchecked_mut(id);
+                c.annotation.1.recursive_cost = Some(cost);
+
+                // Update the count of remaining children for the parent cluster.
+                if let Some(pid) = c.parent_center_index
+                    && let Some(count) = parents_in_waiting.get_mut(&pid)
+                {
+                    *count -= 1;
+                }
+            }
+
+            // The next frontier contains the parents whose children have all been processed.
+            (full_parents, parents_in_waiting) = parents_in_waiting.into_iter().partition(|&(_, count)| count == 0);
+            frontier = full_parents.into_keys().collect();
+        }
+    }
+
+    /// Removes the descendants of the first unitary cluster along each branch of the tree.
+    pub(crate) fn trim_to_unitary_clusters(&mut self, min_depth: usize) {
+        // We start with the frontier containing the root cluster, and traverse down the tree. If we encounter a unitary cluster.
+        let mut frontier = vec![0];
+        let mut clusters_to_retain = HashSet::<usize>::new();
+
+        // Expand the frontier with the children of the clusters in the frontier until we encounter unitary clusters.
+        while !frontier.is_empty() {
+            clusters_to_retain.extend(frontier.iter());
+
+            frontier = frontier
+                .into_iter()
+                .filter_map(|id| {
+                    self.tree.items[id].2.as_cluster_mut().and_then(|c| {
+                        if c.depth < min_depth || c.annotation.1.is_recursive() {
+                            // This cluster is either too shallow or recursively compressed, so we need to keep traversing down the tree.
+                            c.child_center_indices().map(<[_]>::to_vec)
+                        } else {
+                            // This is a unitary compressed cluster, so we need to remove its descendants from the tree and not add them to the frontier.
+                            c.children = None;
+                            None
+                        }
+                    })
+                })
+                .flatten()
+                .collect();
+        }
+
+        // Update the locations of the items in the retained leaves to point to the retained cluster instead of the removed clusters.
+        for i in clusters_to_retain {
+            if let Some(indices) = self.items[i]
+                .2
+                .as_cluster()
+                .and_then(|c| if c.is_leaf() { Some(c.subtree_range()) } else { None })
+            {
+                // Only update the locations for leaf clusters.
+                for j in indices {
+                    self.tree.items[j].2 = ClusterLocation::CenterIndex(i);
+                }
+            }
+        }
     }
 }

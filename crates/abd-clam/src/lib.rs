@@ -5,33 +5,42 @@
 //!
 //! ## Algorithm Families and Applications
 //!
-//! - [`cakes`]: Search (k-NN, p-NN) algorithms.
-//! - [`musals`]: Multiple sequence alignment of genomic and protein sequences.
+//! - [`cakes`]: Entropy-Scaling Search. These algorithms leverage the geometric and topological structure inherent in real-world datasets to achieve sub-linear
+//!   scaling in search throughput with respect to dataset size, and are designed to work efficiently with large high-dimensional datasets under arbitrary
+//!   distance functions.
+//! - [`musals`]: Multiple Sequence Alignment. This provides the required functionality to create multiple sequence alignments from a set of sequences, as well
+//!   implementations of edit-distance metrics using arbitrary cost matrices. The MSA algorithms use the [`Tree`] as a guide tree, and are designed to scale to
+//!   very large collections of sequences.
 //! - [`pancakes`]: Compression and compressive search algorithms.
-//! - `chaoda`: Anomaly detection algorithms using clustering trees and graphs.
-//! - `mbed`: Dimension reduction algorithms.
 //!
 //! ## Features
 //!
 //! - `serde`: Enables serialization and deserialization of various data structures using [`serde`] and [`databuf`].
-//! - `musals`: Enables the `musals` module for multiple sequence alignment.
-//! - `pancakes`: Enables the `pancakes` module for compression and compressive search.
+//! - `musals`: Enables the [`Tree::align`] and [`Tree::par_align`] methods for creating multiple sequence alignments, as the relevant types and algorithms.
+//! - `pancakes`: Enables compression and decompression of [`Tree`]s, the [`CompressiveSearch`](pancakes::CompressiveSearch) trait to support search on
+//!   compressed [`Tree`]s, and implementations of this trait for the algorithms in the [`cakes`] module.
 //! - `all`: Enables the `serde`, `musals`, and `pancakes` features.
-//! - `profile`: Enables profiling using the [`profi`] crate.
+//! - `profile`: Enables some minimal profiling using the [`profi`] crate.
+//! - `shell`: Enables the `clam-shell` CLI.
 
-mod tree;
-mod utils;
+#[macro_use]
+pub mod utils;
+pub use utils::{DistanceValue, FloatDistanceValue, NamedAlgorithm};
 
-pub use tree::{Cluster, PartitionStrategy, Tree, partition_strategy};
-pub use utils::{DistanceValue, NamedAlgorithm};
+pub mod tree;
+pub use tree::{Cluster, PartitionStrategy, Tree};
 
 pub mod cakes;
+pub use cakes::Cakes;
 
 #[cfg(feature = "musals")]
 pub mod musals;
 
 #[cfg(feature = "pancakes")]
 pub mod pancakes;
+
+// #[cfg(feature = "chaoda")]
+// pub mod chaoda;
 
 // #[cfg(feature = "mbed")]
 // pub mod mbed;

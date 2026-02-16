@@ -3,38 +3,41 @@
 #![expect(clippy::unwrap_used, clippy::cast_precision_loss)]
 
 use abd_clam::{PartitionStrategy, Tree};
-use ordered_float::OrderedFloat;
 use test_case::test_case;
 
 mod common;
 
 #[test]
+#[expect(clippy::expect_used)]
 fn new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
-    let items = items.into_iter().enumerate().collect::<Vec<_>>();
+    let items = items.into_iter().enumerate().collect::<Vec<_>>(); // Convert to Vec<(usize, Vec<i32>)> to use index as metadata
     let cardinality = items.len();
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::never();
-    let tree = Tree::new(items.clone(), metric, &strategy, &|_| ())?;
+    let tree = Tree::new(items.clone(), metric, &|_| (), &|_| false, &PartitionStrategy::default())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(tree.items()[root.center_index()].1, vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(root.center_index(), 0, "Center index mismatch: {root:?}");
+    assert_eq!(
+        tree.iter_items().next().map(|(_, item, _)| item),
+        Some(&vec![5, 6]),
+        "Center mismatch: {root:?}"
+    );
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
     // Now partition the root
-    let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::new(items, metric, &strategy, &|_| ())?;
+    let tree = Tree::new(items, metric, &|_| (), &|c| c.cardinality() > 2, &PartitionStrategy::default())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
 
-    let subtree: Vec<&abd_clam::Cluster<i32, ()>> = tree.sorted_clusters();
+    let subtree = tree.iter_clusters().collect::<Vec<_>>();
     if subtree.len() != 3 {
         eprintln!("{subtree:?}");
     }
@@ -63,38 +66,57 @@ fn new() -> Result<(), String> {
         8 => assert_eq!(subtree[2].radius(), 4, "Child radius mismatch: {:?}", subtree[2]),
         r => unreachable!("Unexpected child radius: {r}, {:?}", subtree[1]),
     }
+
+    // Check paths from root to items
+    assert!(tree.path_to_item(0).is_some_and(|path| path.is_empty()), "Path to root center should be empty");
+    let path_1 = tree.path_to_item(1).expect("Path to item 1 should exist");
+    assert_eq!(path_1, vec![1]);
+
+    let path_2 = tree.path_to_item(2).expect("Path to item 2 should exist");
+    assert_eq!(path_2, vec![1, 2]);
+
+    let path_3 = tree.path_to_item(3).expect("Path to item 3 should exist");
+    assert_eq!(path_3, vec![3]);
+
+    let path_4 = tree.path_to_item(4).expect("Path to item 4 should exist");
+    assert_eq!(path_4, vec![3, 4]);
 
     Ok(())
 }
 
 #[test]
+#[expect(clippy::expect_used)]
 fn par_new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
-    let items = items.into_iter().enumerate().collect::<Vec<_>>();
+    let items = items.into_iter().enumerate().collect::<Vec<_>>(); // Convert to Vec<(usize, Vec<i32>)> to use index as metadata
     let cardinality = items.len();
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::never();
-    let tree = Tree::par_new(items.clone(), metric, &strategy, &|_| ())?;
+    let tree = Tree::par_new(items.clone(), metric, &|_| (), &|_| false, &PartitionStrategy::default())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(tree.items()[root.center_index()].1, vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(root.center_index(), 0, "Center index mismatch: {root:?}");
+    assert_eq!(
+        tree.iter_items().next().map(|(_, item, _)| item),
+        Some(&vec![5, 6]),
+        "Center mismatch: {root:?}"
+    );
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     // Now partition the root
-    let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::par_new(items, metric, &strategy, &|_| ())?;
+    let strategy = PartitionStrategy::binary();
+    let tree = Tree::par_new(items, metric, &|_| (), &|c| c.cardinality() > 2, &strategy)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
 
-    let subtree = tree.sorted_clusters();
+    let subtree = tree.iter_clusters().collect::<Vec<_>>();
     if subtree.len() != 3 {
         eprintln!("{subtree:?}");
     }
@@ -123,6 +145,20 @@ fn par_new() -> Result<(), String> {
         8 => assert_eq!(subtree[2].radius(), 4, "Child radius mismatch: {:?}", subtree[2]),
         r => unreachable!("Unexpected child radius: {r}, {:?}", subtree[1]),
     }
+
+    // Check paths from root to items
+    assert!(tree.path_to_item(0).is_some_and(|path| path.is_empty()), "Path to root center should be empty");
+    let path_1 = tree.path_to_item(1).expect("Path to item 1 should exist");
+    assert_eq!(path_1, vec![1]);
+
+    let path_2 = tree.path_to_item(2).expect("Path to item 2 should exist");
+    assert_eq!(path_2, vec![1, 2]);
+
+    let path_3 = tree.path_to_item(3).expect("Path to item 3 should exist");
+    assert_eq!(path_3, vec![3]);
+
+    let path_4 = tree.path_to_item(4).expect("Path to item 4 should exist");
+    assert_eq!(path_4, vec![3, 4]);
 
     Ok(())
 }
@@ -137,9 +173,9 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
     };
     let (min, max) = (-1.0, 1.0);
     let max_hypot = ((4 * dim) as f32).sqrt();
+    let max_radius = 1.1 * max_hypot / 2.0; // Allow some slack for the radius due to the randomness of the data, and approximate geometric medians.
 
-    let mut ratios = Vec::new();
-    for i in 0..10 {
+    for _ in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
         let data = data
             .into_iter()
@@ -161,17 +197,15 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
             (min_ratio..=max_ratio).contains(&ratio),
             "Unexpected number of clusters: {n_clusters} for {car} items (ratio: {ratio:.3}, expected range: [{min_ratio}, {max_ratio}])"
         );
-        ratios.push(ratio);
-        assert_eq!(ratios.len(), i + 1);
 
         let root = tree.root();
         assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
         assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
-        assert!(root.radius() <= max_hypot / 2.0, "Radius too large: {:.6}", root.radius());
+        assert!(root.radius() <= max_radius, "Radius too large: {:.6} vs {max_radius}", root.radius());
 
         assert_eq!(tree.root().depth(), 0, "Root depth should be 0");
-        for cluster in tree.cluster_map().values() {
+        for cluster in tree.iter_clusters() {
             if let Some(children) = tree.children_of(cluster) {
                 for child in children {
                     assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1",);
@@ -188,12 +222,12 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
 fn par_big(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let (min, max) = (-1.0, 1.0);
-    let hypot = ((4 * dim) as f32).sqrt();
+    let max_hypot = ((4 * dim) as f32).sqrt();
+    let max_radius = 1.1 * max_hypot / 2.0; // Allow some slack for the radius due to the randomness of the data, and approximate geometric medians.
 
-    let mut ratios = Vec::new();
-    for i in 0..10 {
+    for _ in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let tree = Tree::par_new_minimal(data, metric)?;
+        let tree = Tree::par_new_binary(data, metric)?;
         let n_clusters = tree.n_clusters();
 
         // These bounds were derived for large `car`
@@ -205,17 +239,15 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
             (min_ratio..=max_ratio).contains(&ratio),
             "Unexpected number of clusters: {n_clusters} for {car} items (ratio: {ratio:.3}, expected range: [{min_ratio}, {max_ratio}])"
         );
-        ratios.push(ratio);
-        assert_eq!(ratios.len(), i + 1);
 
         let root = tree.root();
         assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
         assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
-        assert!(root.radius() <= hypot / 2.0, "Radius too large: {:.6}", root.radius());
+        assert!(root.radius() <= max_radius, "Radius too large: {:.6} vs {max_radius}", root.radius());
 
         assert_eq!(tree.root().depth(), 0, "Root depth should be 0");
-        for cluster in tree.cluster_map().values() {
+        for cluster in tree.iter_clusters() {
             if let Some(children) = tree.children_of(cluster) {
                 for child in children {
                     assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1",);
@@ -263,10 +295,40 @@ fn counting_clusters(k: usize) {
         .map(|(i, v)| ((i, v), v as f64 / i as f64))
         .collect::<Vec<_>>();
 
-    let min_i = values.iter().min_by_key(|&&((i, _), r)| (OrderedFloat(r), i)).map(|&((i, _), _)| i).unwrap();
+    let min_i = values
+        .iter()
+        .fold(None, |min_i, &((i, _), r)| {
+            Some(match min_i {
+                None => (i, r),
+                Some((min_i, min_r)) => {
+                    if (r < min_r) || ((r - min_r).abs() < f64::EPSILON && i < min_i) {
+                        (i, r)
+                    } else {
+                        (min_i, min_r)
+                    }
+                }
+            })
+        })
+        .map(|(i, _)| i)
+        .unwrap();
     let ((min_i, min_v), min_r) = values[min_i - noisy_n];
 
-    let max_i = values.iter().max_by_key(|&&((i, _), r)| (OrderedFloat(r), i)).map(|&((i, _), _)| i).unwrap();
+    let max_i = values
+        .iter()
+        .fold(None, |max_i, &((i, _), r)| {
+            Some(match max_i {
+                None => (i, r),
+                Some((max_i, max_r)) => {
+                    if (r > max_r) || ((r - max_r).abs() < f64::EPSILON && i > max_i) {
+                        (i, r)
+                    } else {
+                        (max_i, max_r)
+                    }
+                }
+            })
+        })
+        .map(|(i, _)| i)
+        .unwrap();
     let ((max_i, max_v), max_r) = values[max_i - noisy_n];
 
     let mean_r = values.iter().map(|&(_, r)| r).sum::<f64>() / (values.len() as f64);

@@ -1,49 +1,43 @@
 //! K-Nearest Neighbors (KNN) search using the Depth-First Sieve algorithm.
 
-use core::cmp::Reverse;
+use core::{borrow::Borrow, cmp::Reverse};
 
 use rayon::prelude::*;
 
 use crate::{
-    DistanceValue, Tree,
+    DistanceValue,
     cakes::{KnnDfs, d_max, d_min},
-    pancakes::{Codec, MaybeCompressed},
     utils::SizedHeap,
 };
 
-use super::super::{CompressiveSearch, ParCompressiveSearch};
+use super::super::{Codec, Compressible, CompressiveSearch, PancakesTree};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnDfs
+impl<Id, I, T, A, M, C> CompressiveSearch<Id, I, T, A, M, C> for KnnDfs
 where
-    I: Codec,
+    I: Compressible,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    C: Codec<I>,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
-            // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.decompress_subtree(0);
-            return tree
-                .items
-                .iter()
-                .enumerate()
-                .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                .collect();
+    fn compressive_search<Query: Borrow<I>>(&self, tree: &mut PancakesTree<Id, I, T, A, M, C>, query: &Query) -> Vec<(usize, T)> {
+        if self.k > tree.cardinality() {
+            // If k is greater than the number of points in the tree, just run linear search.
+            return self.linear_variant().compressive_search(tree, query);
         }
 
-        let radius = tree.root().radius();
-        let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
-        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
-
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
+        let d = tree.distance_to_uncompressed(query, 0);
         hits.push((0, d));
+
+        let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
+        let radius = tree.root().radius();
         candidates.push((0, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
-            let (leaf, d, _) = pop_till_leaf(query, tree, &mut candidates, &mut hits)?;
+            let (leaf_id, d) = pop_till_leaf(query, tree, &mut candidates, &mut hits);
             // Process the leaf and update hits.
-            leaf_into_hits(query, tree, &mut hits, leaf, d)?;
+            leaf_into_hits(query, tree, &mut hits, leaf_id, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates.peek().map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
@@ -53,44 +47,38 @@ where
             }
         }
 
-        Ok(hits.take_items().collect())
+        hits.take_items().collect()
     }
-}
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for KnnDfs
-where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-{
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
-            // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.decompress_subtree(0);
-            return tree
-                .items
-                .par_iter()
-                .enumerate()
-                .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                .collect();
+    fn par_compressive_search<Query: Borrow<I> + Send + Sync>(&self, tree: &mut PancakesTree<Id, I, T, A, M, C>, query: &Query) -> Vec<(usize, T)>
+    where
+        Self: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        I::Compressed: Send + Sync,
+        T: Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+        C: Send + Sync,
+    {
+        if self.k > tree.cardinality() {
+            // If k is greater than the number of points in the tree, just run linear search.
+            return self.linear_variant().par_compressive_search(tree, query);
         }
 
-        let radius = tree.root().radius();
-        let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
-        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
-
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
+        let d = tree.distance_to_uncompressed(query, 0);
         hits.push((0, d));
+
+        let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
+        let radius = tree.root().radius();
         candidates.push((0, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
-            let (leaf, d, _) = par_pop_till_leaf(query, tree, &mut candidates, &mut hits)?;
+            let (leaf_id, d) = par_pop_till_leaf(query, tree, &mut candidates, &mut hits);
             // Process the leaf and update hits.
-            par_leaf_into_hits(query, tree, &mut hits, leaf, d)?;
+            par_leaf_into_hits(query, tree, &mut hits, leaf_id, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates.peek().map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
@@ -100,49 +88,49 @@ where
             }
         }
 
-        Ok(hits.take_items().collect())
+        hits.take_items().collect()
     }
 }
 
 /// Pop candidates until the top candidate is a leaf, then pop and return that leaf along with its minimum distance from the query.
 ///
 /// The user must ensure that `candidates` is non-empty before calling this function.
-pub fn pop_till_leaf<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn pop_till_leaf<Id, I, T, A, M, C, Query>(
+    query: &Query,
+    tree: &mut PancakesTree<Id, I, T, A, M, C>,
     candidates: &mut SizedHeap<usize, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
-) -> Result<(usize, T, usize), String>
+) -> (usize, T)
 where
-    I: Codec,
+    I: Compressible,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    C: Codec<I>,
+    Query: Borrow<I>,
 {
     profi::prof!("KnnDfs::pop_till_leaf");
 
-    let mut distance_computations = 0;
-
     while candidates
         .peek()
-        .and_then(|(id, _)| tree.cluster_map.get(id))
+        .and_then(|(&id, _)| tree.items[id].2.as_cluster())
         .filter(|c| !c.is_leaf())
         .is_some()
     {
         profi::prof!("pop-while-not-leaf");
 
         if let Some((id, _)) = candidates.pop()
-            && let Ok(child_center_indices) = tree.decompress_child_centers(id)
+            && let Some(child_center_indices) = tree.decompress_child_centers(id)
         {
-            distance_computations += child_center_indices.len();
+            child_center_indices.len();
 
             let distances = child_center_indices
                 .into_iter()
-                .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                .collect::<Result<Vec<_>, _>>()?;
+                .map(|i| tree.items[i].1.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_else(|_| unreachable!("We just decompressed child centers."));
 
             for (cid, d) in distances {
-                let child = tree.get_cluster(cid)?;
-                let radius = child.radius();
+                let radius = tree.get_cluster_unchecked(cid).radius();
                 hits.push((cid, d));
                 candidates.push((cid, Reverse((d_min(radius, d), d_max(radius, d), d))));
             }
@@ -152,85 +140,78 @@ where
     let (leaf, d) = candidates
         .pop()
         .map_or_else(|| unreachable!("`candidates` is non-empty."), |(leaf, Reverse((_, _, d)))| (leaf, d));
-    Ok((leaf, d, distance_computations))
+    (leaf, d)
 }
 
 /// Given a leaf cluster, compute the distance from the query to each item in the leaf and push them onto `hits`.
 ///
 /// Returns the number of distance computations performed, excluding the distance to the center (which is already known).
-pub fn leaf_into_hits<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
-    hits: &mut SizedHeap<usize, T>,
-    leaf_id: usize,
-    d: T,
-) -> Result<usize, String>
+pub fn leaf_into_hits<Id, I, T, A, M, C, Query>(query: &Query, tree: &mut PancakesTree<Id, I, T, A, M, C>, hits: &mut SizedHeap<usize, T>, leaf_id: usize, d: T)
 where
-    I: Codec,
+    I: Compressible,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    C: Codec<I>,
+    Query: Borrow<I>,
 {
     profi::prof!("KnnDfs::leaf_into_hits");
 
     tree.decompress_subtree(leaf_id);
-    let leaf = tree.get_cluster(leaf_id)?;
+    let leaf = tree.get_cluster_unchecked(leaf_id);
 
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are exactly `d` from the query.
-        hits.extend(leaf.subtree_indices().map(|i| (i, d)));
-        Ok(0)
+        hits.extend(leaf.subtree_range().map(|i| (i, d)));
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute the distance from the query to each item in the leaf.
         let distances = leaf
-            .subtree_indices()
-            .zip(tree.items[leaf.subtree_indices()].iter())
-            .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-            .collect::<Result<Vec<_>, _>>()?;
+            .subtree_range()
+            .zip(tree.items[leaf.subtree_range()].iter())
+            .map(|(i, (_, item, _))| item.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap_or_else(|_| unreachable!("We just decompressed the leaf."));
         hits.extend(distances);
-        Ok(leaf.cardinality() - 1) // We already knew the distance to the center.
     }
 }
 
 /// Parallel version of [`pop_till_leaf`].
-pub fn par_pop_till_leaf<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn par_pop_till_leaf<Id, I, T, A, M, C, Query>(
+    query: &Query,
+    tree: &mut PancakesTree<Id, I, T, A, M, C>,
     candidates: &mut SizedHeap<usize, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
-) -> Result<(usize, T, usize), String>
+) -> (usize, T)
 where
     Id: Send + Sync,
-    I: Codec + Send + Sync,
+    I: Compressible + Send + Sync,
     I::Compressed: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
+    C: Codec<I> + Send + Sync,
+    Query: Borrow<I> + Send + Sync,
 {
     profi::prof!("KnnDfs::pop_till_leaf");
 
-    let mut distance_computations = 0;
-
     while candidates
         .peek()
-        .and_then(|(id, _)| tree.cluster_map.get(id))
+        .and_then(|(&id, _)| tree.items[id].2.as_cluster())
         .filter(|c| !c.is_leaf())
         .is_some()
     {
         profi::prof!("pop-while-not-leaf");
 
         if let Some((id, _)) = candidates.pop()
-            && let Some(child_center_indices) = tree.par_decompress_child_centers(id)?
+            && let Some(child_center_indices) = tree.par_decompress_child_centers(id)
         {
-            distance_computations += child_center_indices.len();
-
             let distances = child_center_indices
                 .into_par_iter()
-                .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                .collect::<Result<Vec<_>, _>>()?;
+                .map(|i| tree.items[i].1.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_else(|_| unreachable!("We just decompressed child centers."));
 
             for (cid, d) in distances {
-                let child = tree.get_cluster(cid)?;
-                let radius = child.radius();
+                let radius = tree.get_cluster_unchecked(cid).radius();
                 hits.push((cid, d));
                 candidates.push((cid, Reverse((d_min(radius, d), d_max(radius, d), d))));
             }
@@ -240,43 +221,43 @@ where
     let (leaf, d) = candidates
         .pop()
         .map_or_else(|| unreachable!("`candidates` is non-empty."), |(leaf, Reverse((_, _, d)))| (leaf, d));
-    Ok((leaf, d, distance_computations))
+    (leaf, d)
 }
 
 /// Parallel version of [`leaf_into_hits`].
-pub fn par_leaf_into_hits<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn par_leaf_into_hits<Id, I, T, A, M, C, Query>(
+    query: &Query,
+    tree: &mut PancakesTree<Id, I, T, A, M, C>,
     hits: &mut SizedHeap<usize, T>,
     leaf_id: usize,
     d: T,
-) -> Result<usize, String>
-where
+) where
     Id: Send + Sync,
-    I: Codec + Send + Sync,
+    I: Compressible + Send + Sync,
     I::Compressed: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
+    C: Codec<I> + Send + Sync,
+    Query: Borrow<I> + Send + Sync,
 {
     profi::prof!("KnnDfs::leaf_into_hits");
 
     tree.par_decompress_subtree(leaf_id);
-    let leaf = tree.get_cluster(leaf_id)?;
+    let leaf = tree.get_cluster_unchecked(leaf_id);
 
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are exactly `d` from the query.
-        hits.extend(leaf.subtree_indices().map(|i| (i, d)));
-        Ok(0)
+        hits.extend(leaf.subtree_range().map(|i| (i, d)));
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute the distance from the query to each item in the leaf.
         let distances = leaf
-            .subtree_indices()
+            .subtree_range()
             .into_par_iter()
-            .zip(tree.items[leaf.subtree_indices()].par_iter())
-            .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-            .collect::<Result<Vec<_>, _>>()?;
+            .zip(tree.items[leaf.subtree_range()].par_iter())
+            .map(|(i, (_, item, _))| item.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap_or_else(|_| unreachable!("We just decompressed the leaf."));
         hits.extend(distances);
-        Ok(leaf.cardinality() - 1) // We already knew the distance to the center.
     }
 }

@@ -1,10 +1,12 @@
 //! Utilities for selecting the fastest CAKES KNN search algorithm for a given dataset and metric.
 
+use core::borrow::Borrow;
+
 use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
-    cakes::{Cakes, ParSearch, Search},
+    cakes::{Cakes, Search},
 };
 
 /// Measures the throughput (Queries per Second) of a CAKES algorithm on the given root cluster with the given metric.
@@ -12,14 +14,15 @@ use crate::{
 /// This function runs the algorithm on the provided queries and measures the time taken to complete them. It uses only
 /// a single thread for the measurement.
 #[allow(clippy::cast_precision_loss, clippy::while_float)]
-pub fn measure_throughput<Id, I, T, A, M, Alg>(tree: &Tree<Id, I, T, A, M>, n_queries: usize, alg: &Alg, min_time_secs: f64) -> f64
+pub fn measure_throughput<Id, I, T, A, M, Alg, Item>(tree: &Tree<Id, Item, T, A, M>, n_queries: usize, alg: &Alg, min_time_secs: f64) -> f64
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
-    Alg: Search<Id, I, T, A, M> + ?Sized,
+    Alg: Search<Id, I, T, A, M>,
+    Item: Borrow<I>,
 {
     let n_queries = n_queries.min(tree.cardinality());
-    let queries = tree.items[..n_queries].iter().map(|(_, item)| item).collect::<Vec<_>>();
+    let queries = tree.items[..n_queries].iter().map(|(_, item, _)| item.borrow()).collect::<Vec<_>>();
 
     let mut total_queries = 0;
     let min_time = std::time::Duration::from_secs_f64(min_time_secs);
@@ -34,17 +37,18 @@ where
 
 /// Parallel version of [`measure_throughput`].
 #[allow(clippy::cast_precision_loss, clippy::while_float)]
-pub fn par_measure_throughput<Id, I, T, A, M, Alg>(tree: &Tree<Id, I, T, A, M>, n_queries: usize, alg: &Alg, min_time_secs: f64) -> f64
+pub fn par_measure_throughput<Id, I, T, A, M, Alg, Item>(tree: &Tree<Id, Item, T, A, M>, n_queries: usize, alg: &Alg, min_time_secs: f64) -> f64
 where
     Id: Send + Sync,
     I: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: ParSearch<Id, I, T, A, M> + ?Sized,
+    Alg: Search<Id, I, T, A, M> + Send + Sync,
+    Item: Borrow<I> + Send + Sync,
 {
     let n_queries = n_queries.min(tree.cardinality());
-    let queries = tree.items[..n_queries].iter().map(|(_, item)| item).collect::<Vec<_>>();
+    let queries = tree.items[..n_queries].iter().map(|(_, item, _)| item.borrow()).collect::<Vec<_>>();
 
     let mut total_queries = 0;
     let min_time = std::time::Duration::from_secs_f64(min_time_secs);
@@ -59,8 +63,8 @@ where
 
 /// Selects the fastest CAKES algorithm for the given dataset and metric.
 #[allow(clippy::type_complexity)]
-pub fn select_fastest_algorithm<'a, Id, I, T, A, M>(
-    tree: &Tree<Id, I, T, A, M>,
+pub fn select_fastest_algorithm<'a, Id, I, T, A, M, Item>(
+    tree: &Tree<Id, Item, T, A, M>,
     n_queries: usize,
     min_time_secs: f64,
     algorithms: &'a [Cakes<T>],
@@ -68,6 +72,7 @@ pub fn select_fastest_algorithm<'a, Id, I, T, A, M>(
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    Item: Borrow<I>,
 {
     algorithms
         .iter()
@@ -81,22 +86,23 @@ where
 
 /// Parallel version of [`select_fastest_algorithm`](.
 #[allow(clippy::type_complexity)]
-pub fn par_select_fastest_algorithm<'a, Id, I, T, A, M>(
-    tree: &Tree<Id, I, T, A, M>,
+pub fn par_select_fastest_algorithm<'a, Id, I, T, A, M, Item>(
+    tree: &Tree<Id, Item, T, A, M>,
     n_queries: usize,
     min_time_secs: f64,
-    algorithms: &[&'a dyn ParSearch<Id, I, T, A, M>],
-) -> (&'a dyn ParSearch<Id, I, T, A, M>, f64)
+    algorithms: &'a [Cakes<T>],
+) -> (&'a Cakes<T>, f64)
 where
     Id: Send + Sync,
     I: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
+    Item: Borrow<I> + Send + Sync,
 {
     algorithms
         .iter()
-        .map(|&alg| {
+        .map(|alg| {
             let throughput = par_measure_throughput(tree, n_queries, alg, min_time_secs);
             (alg, throughput)
         })

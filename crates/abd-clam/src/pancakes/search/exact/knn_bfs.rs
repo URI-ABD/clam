@@ -1,79 +1,78 @@
 //! K-Nearest Neighbors (KNN) search using the Breadth-First Sieve algorithm.
 
+use core::borrow::Borrow;
+
 use rayon::prelude::*;
 
 use crate::{
-    DistanceValue, Tree,
+    DistanceValue,
     cakes::{KnnBfs, d_max},
-    pancakes::{Codec, MaybeCompressed},
     utils::SizedHeap,
 };
 
-use super::super::{CompressiveSearch, ParCompressiveSearch};
+use super::super::{Codec, Compressible, CompressiveSearch, PancakesTree};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnBfs
+impl<Id, I, T, A, M, C> CompressiveSearch<Id, I, T, A, M, C> for KnnBfs
 where
-    I: Codec,
+    I: Compressible,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    C: Codec<I>,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
-            // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.decompress_subtree(0);
-            return tree
-                .items
-                .iter()
-                .enumerate()
-                .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                .collect();
+    fn compressive_search<Query: Borrow<I>>(&self, tree: &mut PancakesTree<Id, I, T, A, M, C>, query: &Query) -> Vec<(usize, T)> {
+        if self.k > tree.cardinality() {
+            // If k is greater than the number of points in the tree, just run linear search.
+            return self.linear_variant().compressive_search(tree, query);
         }
 
-        let mut candidates: Vec<(usize, T, usize, T)> = Vec::new(); // (Cluster center index, distance to cluster center, guaranteed cardinality, radius)
-        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
-
-        let root = tree.root();
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
+        let d = tree.distance_to_uncompressed(query, 0);
         hits.push((0, d));
+
+        let mut candidates: Vec<(usize, T, usize, T)> = Vec::new(); // (Cluster center index, distance to cluster center, guaranteed cardinality, radius)
+        let root = tree.root();
         candidates.push((0, d_max(root.radius(), d), root.cardinality(), root.radius()));
 
         while !candidates.is_empty() {
             let mut next_candidates: Vec<(usize, T, usize, T)> = Vec::new();
-            candidates = filter_candidates(candidates, self.0);
+            candidates = filter_candidates(candidates, self.k);
 
             for (id, d, car, _) in candidates {
                 if (
-                    next_candidates.len() <= self.0  // We still need more points to satisfy k, AND
-                    && (car < (self.0 - next_candidates.len()))  // The cluster cannot provide enough points to get to k
+                    next_candidates.len() <= self.k  // We still need more points to satisfy k, AND
+                    && (car < (self.k - next_candidates.len()))  // The cluster cannot provide enough points to get to k
                 )  // OR
-                || tree.get_cluster(id)?.is_leaf()
+                || tree.get_cluster_unchecked(id).is_leaf()
                 {
                     profi::prof!("KnnBfs::process_leaf");
                     // The cluster is a leaf, so we have to look at its points
                     tree.decompress_subtree(id);
 
-                    let leaf = tree.get_cluster(id)?;
+                    let leaf = tree.get_cluster_unchecked(id);
                     if leaf.is_singleton() {
                         // It's a singleton, so just add non-center items with the precomputed distance
-                        hits.extend(leaf.subtree_indices().map(|i| (i, d)));
+                        hits.extend(leaf.subtree_range().map(|i| (i, d)));
                     } else {
                         // Not a singleton, so compute distances to all non-center items and add them to hits
                         let distances = leaf
-                            .subtree_indices()
-                            .zip(tree.items[leaf.subtree_indices()].iter())
-                            .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                            .collect::<Result<Vec<_>, _>>()?;
+                            .subtree_range()
+                            .zip(tree.items[leaf.subtree_range()].iter())
+                            .map(|(i, (_, item, _))| item.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap_or_else(|_| unreachable!("We just decompressed the subtree."));
                         hits.extend(distances);
                     }
                 } else {
                     profi::prof!("KnnBfs::process_parent");
-                    if let Ok(child_center_indices) = tree.decompress_child_centers(id) {
+                    if let Some(child_center_indices) = tree.decompress_child_centers(id) {
                         for (cid, d) in child_center_indices
                             .into_iter()
-                            .map(|cid| tree.items[cid].1.distance_to_query(query, &tree.metric).map(|d| (cid, d)))
-                            .collect::<Result<Vec<_>, _>>()?
+                            .map(|cid| tree.items[cid].1.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (cid, d)))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap_or_else(|_| unreachable!("We just decompressed the child centers."))
                         {
-                            let (car, radius) = tree.get_cluster(cid).map(|c| (c.cardinality, c.radius))?;
+                            let c = tree.get_cluster_unchecked(cid);
+                            let (car, radius) = (c.cardinality, c.radius);
                             hits.push((cid, d));
                             next_candidates.push((cid, d_max(radius, d), car, radius));
                         }
@@ -84,77 +83,74 @@ where
             candidates = next_candidates;
         }
 
-        Ok(hits.take_items().collect())
+        hits.take_items().collect()
     }
-}
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for KnnBfs
-where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-{
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
-            // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.par_decompress_subtree(0);
-            return tree
-                .items
-                .par_iter()
-                .enumerate()
-                .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                .collect();
+    fn par_compressive_search<Query: Borrow<I> + Send + Sync>(&self, tree: &mut PancakesTree<Id, I, T, A, M, C>, query: &Query) -> Vec<(usize, T)>
+    where
+        Self: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        I::Compressed: Send + Sync,
+        T: Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+        C: Send + Sync,
+    {
+        if self.k > tree.cardinality() {
+            // If k is greater than the number of points in the tree, just run linear search.
+            return self.linear_variant().par_compressive_search(tree, query);
         }
 
-        let mut candidates: Vec<(usize, T, usize, T)> = Vec::new(); // (Cluster center index, distance to cluster center, guaranteed cardinality, radius)
-        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
-
-        let root = tree.root();
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
+        let d = tree.distance_to_uncompressed(query, 0);
         hits.push((0, d));
+
+        let mut candidates: Vec<(usize, T, usize, T)> = Vec::new(); // (Cluster center index, distance to cluster center, guaranteed cardinality, radius)
+        let root = tree.root();
         candidates.push((0, d_max(root.radius(), d), root.cardinality(), root.radius()));
 
         while !candidates.is_empty() {
             let mut next_candidates: Vec<(usize, T, usize, T)> = Vec::new();
-            candidates = filter_candidates(candidates, self.0);
+            candidates = filter_candidates(candidates, self.k);
 
             for (id, d, car, _) in candidates {
                 if (
-                    next_candidates.len() <= self.0  // We still need more points to satisfy k, AND
-                    && (car < (self.0 - next_candidates.len()))  // The cluster cannot provide enough points to get to k
+                    next_candidates.len() <= self.k  // We still need more points to satisfy k, AND
+                    && (car < (self.k - next_candidates.len()))  // The cluster cannot provide enough points to get to k
                 )  // OR
-                || tree.get_cluster(id)?.is_leaf()
+                || tree.get_cluster_unchecked(id).is_leaf()
                 {
                     profi::prof!("KnnBfs::par_process_leaf");
                     // The cluster is a leaf, so we have to look at its points
                     tree.par_decompress_subtree(id);
 
-                    let leaf = tree.get_cluster(id)?;
+                    let leaf = tree.get_cluster_unchecked(id);
                     if leaf.is_singleton() {
                         // It's a singleton, so just add non-center items with the precomputed distance
-                        hits.extend(leaf.subtree_indices().map(|i| (i, d)));
+                        hits.extend(leaf.subtree_range().map(|i| (i, d)));
                     } else {
                         // Not a singleton, so compute distances to all non-center items and add them to hits
                         let distances = leaf
-                            .subtree_indices()
+                            .subtree_range()
                             .into_par_iter()
-                            .zip(tree.items[leaf.subtree_indices()].par_iter())
-                            .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
-                            .collect::<Result<Vec<_>, _>>()?;
+                            .zip(tree.items[leaf.subtree_range()].par_iter())
+                            .map(|(i, (_, item, _))| item.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (i, d)))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap_or_else(|_| unreachable!("We just decompressed the subtree."));
                         hits.extend(distances);
                     }
                 } else {
                     profi::prof!("KnnBfs::par_process_parent");
-                    if let Some(child_center_indices) = tree.par_decompress_child_centers(id)? {
+                    if let Some(child_center_indices) = tree.par_decompress_child_centers(id) {
                         for (cid, d) in child_center_indices
                             .into_par_iter()
-                            .map(|cid| tree.items[cid].1.distance_to_query(query, &tree.metric).map(|d| (cid, d)))
-                            .collect::<Result<Vec<_>, _>>()?
+                            .map(|cid| tree.items[cid].1.distance_to_uncompressed(query.borrow(), &tree.metric).map(|d| (cid, d)))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap_or_else(|_| unreachable!("We just decompressed the child centers."))
                         {
-                            let (car, radius) = tree.get_cluster(cid).map(|c| (c.cardinality, c.radius))?;
+                            let c = tree.get_cluster_unchecked(cid);
+                            let (car, radius) = (c.cardinality, c.radius);
                             hits.push((cid, d));
                             next_candidates.push((cid, d_max(radius, d), car, radius));
                         }
@@ -165,7 +161,7 @@ where
             candidates = next_candidates;
         }
 
-        Ok(hits.take_items().collect())
+        hits.take_items().collect()
     }
 }
 

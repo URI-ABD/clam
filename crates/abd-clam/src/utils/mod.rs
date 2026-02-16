@@ -1,37 +1,28 @@
-//! Utility functions for the crate. Intended for private use, but made public for testing.
+//! Utility functions, traits and types used in and with the `abd-clam` crate.
 
+use rand::prelude::*;
 use rayon::prelude::*;
 
 mod distance_value;
+#[macro_use]
+mod named_algorithm;
 mod ord_items;
+mod quality_measure;
 mod sized_heap;
 
-pub use distance_value::DistanceValue;
-pub use ord_items::{MaxItem, MinItem};
-pub use sized_heap::SizedHeap;
+pub use distance_value::{DistanceValue, FloatDistanceValue};
+pub use named_algorithm::NamedAlgorithm;
+pub use quality_measure::{MeasurableQuality, MeasuredQuality, QualityMeasurer};
 
-/// The golden ratio `φ = (1 + √5) / 2`
-#[allow(clippy::excessive_precision)]
-pub const PHI_F64: f64 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f64;
+pub(crate) use ord_items::{MaxItem, MinItem};
+pub(crate) use sized_heap::SizedHeap;
 
-/// The golden ratio `φ = (1 + √5) / 2`
-#[allow(clippy::excessive_precision)]
-pub const PHI_F32: f32 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f32;
-
-/// A trait for algorithms that have a name. Most algorithms in this crate implement this trait.
-pub trait NamedAlgorithm {
-    /// Returns the name of the algorithm.
-    fn name(&self) -> String;
-}
-
-/// A blanket implementation of `NamedAlgorithm` for references to types that implement `NamedAlgorithm`.
-impl<Alg> NamedAlgorithm for &Alg
-where
-    Alg: NamedAlgorithm,
-{
-    fn name(&self) -> String {
-        (*self).name()
-    }
+/// Generates `s` random indices, without replacement, from the range `0..n` using the provided random number generator `rng`.
+pub(crate) fn random_indices_in_range<R: rand::Rng>(n: usize, s: usize, rng: &mut R) -> Vec<usize> {
+    let mut indices = (0..n).collect::<Vec<_>>();
+    indices.shuffle(rng);
+    indices.truncate(s);
+    indices
 }
 
 /// Estimates the Local Fractal Dimension (LFD) using the distances of items from a center, and the maximum value among those distances.
@@ -41,7 +32,7 @@ where
 ///
 /// If the radius is zero or if there are no items within half the radius, the LFD is, by definition, `1.0`.
 #[expect(clippy::cast_precision_loss)]
-pub fn lfd_estimate<T>(distances: &[T], radius: T) -> f64
+pub(crate) fn lfd_estimate<T>(distances: &[T], radius: T) -> f64
 where
     T: DistanceValue,
 {
@@ -64,7 +55,7 @@ where
 /// The geometric median is the item that minimizes the sum of distances to all other items in the slice.
 ///
 /// The user must ensure that the items slice is not empty.
-pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {
+pub(crate) fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {
     // Find the index of the item with the minimum total distance to all other items.
     pairwise_distances(items, metric)
         .into_iter()
@@ -75,14 +66,15 @@ pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(I
 }
 
 /// Parallel version of [`geometric_median`].
-pub fn par_geometric_median<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
+pub(crate) fn par_geometric_median<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
     items: &[(Id, I)],
     metric: &M,
 ) -> usize {
+    profi::prof!("par_geometric_median");
     // Find the index of the item with the minimum total distance to all
     // other items.
     par_pairwise_distances(items, metric)
-        .into_par_iter()
+        .into_iter()
         .map(|row| row.into_iter().sum::<T>())
         .enumerate()
         .min_by_key(|&(i, v)| MinItem(i, v))
@@ -107,6 +99,7 @@ fn par_pairwise_distances<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Se
     items: &[(Id, I)],
     metric: &M,
 ) -> Vec<Vec<T>> {
+    profi::prof!("par_pairwise_distances");
     let matrix = vec![vec![T::zero(); items.len()]; items.len()];
     items.par_iter().enumerate().for_each(|(r, (_, i))| {
         items.par_iter().enumerate().take(r).for_each(|(c, (_, j))| {

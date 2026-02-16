@@ -1,147 +1,244 @@
 //! Compression and compressive search algorithms.
 //!
-//! This module enables the [`Tree::compress_all`](crate::Tree::compress_all) and [`Tree::decompress_all`](crate::Tree::decompress_all) methods, along with
-//! their parallel variants. These methods require that the items stored in the tree implement the [`Codec`] trait, and use that trait implementation to create
-//! compressed trees. The compressed trees can be used with the [`CompressiveSearch`] and [`ParCompressiveSearch`] algorithms, which are variants of the
-//! [`Search`](crate::cakes::Search) and [`ParSearch`](crate::cakes::ParSearch) algorithms that can perform search in a compressed space while only
-//! decompressing those items that are needed to compute the distances to a query.
+//! This module enables the [`Tree::compress`](crate::Tree::compress) to create a [`PancakesTree`]. The [`PancakesTree::decompress`] method can be used to
+//! invert the compression operation, and recover a `Tree` that contains the same items as the original tree, but may have trimmed several clusters that were
+//! removed during the compression step. These methods require that the items stored in the tree implement the [`Compressible`] trait using a codec that
+//! implements a corresponding compression/decompression scheme using the [`Codec`] trait.
+//!
+//! The compressed trees can be used with the [`CompressiveSearch`] algorithms, which are extensions of the [`Search`](crate::cakes::Search) algorithms for
+//! performing search in a compressed space while only decompressing those items that are needed to compute the distances to a query.
 
-#[cfg(feature = "serde")]
-use std::io::Read;
+use std::collections::HashMap;
 
+use crate::{DistanceValue, Tree};
+
+mod codec;
 mod search;
 mod tree;
 
-pub use search::{CompressiveSearch, ParCompressiveSearch};
+pub use codec::{Codec, Compressible, MaybeCompressed};
+pub use search::CompressiveSearch;
 
-/// Methods for compressing and decompressing items in terms of other items.
+/// A tree with items of type `I` that can be compressed using a codec of type `C`.
 ///
-/// This trait abstracts over the specific compression algorithm used, and allows us to use different compression algorithms for different types of items in the
-/// tree. Given two uncompressed items, the `compress` method should return a compressed representation of the target item in terms of the reference item.
-/// Conversely, given a reference item and a compressed representation of a target item, the `decompress` method should return the original target item. The
-/// `compressed_size` and `original_size` methods should return the number of bytes required to store the compressed representation and the original item,
-/// respectively. These are used to determine whether recursive or unitary compression is better for each cluster in the tree.
-pub trait Codec {
-    /// The type of the compressed representation.
-    type Compressed;
-
-    /// Encodes the `target` item in terms of `self`.
-    fn compress(&self, target: &Self) -> Self::Compressed;
-
-    /// Decodes the `compressed` representation in terms of `self`.
-    #[must_use]
-    fn decompress(&self, compressed: &Self::Compressed) -> Self;
-
-    /// Returns the number of bytes in the `compressed` representation.
-    fn compressed_size(compressed: &Self::Compressed) -> usize;
-
-    /// Returns the number of bytes in the original representation of `self`.
-    fn original_size(&self) -> usize;
-}
-
-/// An item that might be stored in a compressed form.
-///
-/// These are used in the compressed trees, so that we can store some items in their original form and some items in their compressed form, and only decompress
-/// the items that we need to compute the distances to the query during [`CompressiveSearch`] and [`ParCompressiveSearch`].
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[must_use]
-pub enum MaybeCompressed<I: Codec> {
-    /// The original item.
-    Original(I),
-    /// The compressed representation of the item.
-    Compressed(I::Compressed),
-}
-
-impl<I: Codec> MaybeCompressed<I> {
-    /// Returns the original item if the item is stored in its original form, and None otherwise.
-    pub(crate) fn take_original(self) -> Option<I> {
-        match self {
-            Self::Original(item) => Some(item),
-            Self::Compressed(_) => None,
-        }
-    }
-
-    /// Returns a reference to the original item if the item is stored in its original form, and None otherwise.
-    pub const fn original(&self) -> Option<&I> {
-        match self {
-            Self::Original(item) => Some(item),
-            Self::Compressed(_) => None,
-        }
-    }
-
-    /// Returns a reference to the compressed representation of the item if the item is stored in its compressed form, and None otherwise.
-    pub const fn compressed(&self) -> Option<&I::Compressed> {
-        match self {
-            Self::Original(_) => None,
-            Self::Compressed(compressed) => Some(compressed),
-        }
-    }
-
-    /// Returns the number of bytes required to store the item.
-    pub fn size(&self) -> usize {
-        match self {
-            Self::Original(item) => item.original_size(),
-            Self::Compressed(compressed) => I::compressed_size(compressed),
-        }
-    }
-
-    /// Returns the distance from the query to this item if it is in its original form, and an error otherwise.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The query to compute the distance to.
-    /// * `metric` - The metric to use to compute the distance.
-    ///
-    /// # Errors
-    ///
-    /// If the item is in its compressed form.
-    pub fn distance_to_query<T, M>(&self, query: &I, metric: &M) -> Result<T, String>
-    where
-        M: Fn(&I, &I) -> T,
-    {
-        self.original().map_or_else(
-            || Err("Tried to compute distance on a compressed item.".to_string()),
-            |item| Ok(metric(item, query)),
-        )
-    }
-}
-
-/// Implementation of [`databuf::Encode`] for [`MaybeCompressed`], gated by the `serde` feature.
-#[cfg(feature = "serde")]
-impl<I> databuf::Encode for MaybeCompressed<I>
+/// Use the [`Tree::compress`] or [`Tree::par_compress`] method to create a `PancakesTree` from a `Tree`.
+pub struct PancakesTree<Id, I, T, A, M, C>
 where
-    I: Codec + databuf::Encode,
-    I::Compressed: databuf::Encode,
+    I: Compressible,
+    C: Codec<I>,
 {
-    fn encode<const CONFIG: u16>(&self, buf: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
-        match self {
-            Self::Original(item) => {
-                buf.write_all(&[0])?;
-                item.encode::<CONFIG>(buf)
+    /// The underlying tree.
+    tree: Tree<Id, MaybeCompressed<I>, T, A, M>,
+    /// The codec used for compression and decompression.
+    codec: C,
+}
+
+impl<Id, I, T, A, M, C> core::ops::Deref for PancakesTree<Id, I, T, A, M, C>
+where
+    I: Compressible,
+    C: Codec<I>,
+{
+    type Target = Tree<Id, MaybeCompressed<I>, T, A, M>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tree
+    }
+}
+
+impl<Id, I, T, A, M, C> core::ops::DerefMut for PancakesTree<Id, I, T, A, M, C>
+where
+    I: Compressible,
+    C: Codec<I>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tree
+    }
+}
+
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+where
+    I: Compressible,
+    T: DistanceValue,
+{
+    /// Compresses the tree.
+    ///
+    /// The compression is done using the following steps:
+    ///
+    /// 1. Annotate the clusters with their unitary compression costs, i.e. the total cost of compressing all non-center items in the cluster in terms of the
+    ///    center.
+    /// 2. Annotate the clusters with their recursive compression costs, i.e. the total cost of compressing the child centers of the cluster and the smaller of
+    ///    the unitary and recursive compression costs of the child clusters, using a bottom-up traversal of the tree.
+    /// 3. Trim the tree to only retain the first cluster along each branch for which unitary compression is cheaper than recursive compression, and remove the
+    ///    descendants of those clusters, using a top-down traversal of the tree. The parameter `min_depth` can be used to specify a minimum depth for the
+    ///    clusters to retain.
+    /// 4. Compress the items in the tree from the root down to the new leaves, using a top-down traversal of the tree. Each parent cluster uses recursive
+    ///    compression, and each leaf cluster uses unitary compression.
+    ///
+    /// Note that the center of the root cluster is never compressed, so the tree always contains at least one uncompressed item.
+    pub fn compress<C: Codec<I>>(self, codec: C, min_depth: usize) -> PancakesTree<Id, I, T, A, M, C> {
+        let mut tree = self.annotate_unitary_compression_costs(codec);
+        tree.annotate_recursive_compression_costs();
+        tree.trim_to_unitary_clusters(min_depth);
+        tree.compress_from_root();
+        let PancakesTree { tree, codec } = tree;
+        let tree = tree.decompound_annotations().0;
+        PancakesTree { tree, codec }
+    }
+}
+
+impl<Id, I, T, A, M, C> PancakesTree<Id, I, T, A, M, C>
+where
+    I: Compressible,
+    C: Codec<I>,
+{
+    /// Gets a reference to the codec used for compression and decompression.
+    pub const fn codec(&self) -> &C {
+        &self.codec
+    }
+
+    /// Takes ownership of the underlying tree and the codec.
+    pub fn into_inner(self) -> (Tree<Id, MaybeCompressed<I>, T, A, M>, C) {
+        let Self { tree, codec } = self;
+        (tree, codec)
+    }
+
+    /// Inverts the [`Tree::compress`] operation, except that it cannot recover the clusters that were removed in the trimming step.
+    pub fn decompress(mut self) -> (Tree<Id, I, T, A, M>, C) {
+        self.decompress_subtree(0);
+
+        let Self { tree, codec } = self;
+        let Tree { items, metric } = tree;
+        let items = items
+            .into_iter()
+            .filter_map(|(id, item, loc)| item.take_original().map(|item| (id, item, loc)))
+            .collect();
+
+        let tree = Tree { items, metric };
+        (tree, codec)
+    }
+
+    /// Compresses the tree from the root cluster to the leaves.
+    ///
+    /// This can be used to reset the tree to its fully compressed state after it has been partially decompressed in applications such as compressive search.
+    pub fn compress_from_root(&mut self) {
+        let (leaves, parents) = self.iter_clusters().partition::<Vec<_>, _>(|c| c.is_leaf());
+        let mut frontier = leaves.into_iter().map(|c| c.center_index).collect::<Vec<_>>();
+
+        let mut parents_in_waiting = parents
+            .into_iter()
+            .map(|c| (c.center_index, (c.child_center_indices().map_or(0, <[_]>::len))))
+            .collect::<HashMap<_, _>>();
+        let mut full_parents: HashMap<_, _>;
+
+        while !frontier.is_empty() {
+            for id in frontier {
+                let c = self.get_cluster_unchecked(id);
+                let pid = c.parent_center_index;
+                // Get the targets to compress in terms of the center.
+                let targets = c.child_center_indices().map_or_else(
+                    || c.subtree_range().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
+                    <[_]>::to_vec,                  // If the cluster is a parent, we only compress the child centers.
+                );
+                // Compress the targets and overwrite the original items with the compressed ones.
+                for (i, compressed) in self.compressed_items(c.center_index, &targets) {
+                    self.tree.items[i].1 = MaybeCompressed::Compressed(compressed);
+                }
+                // Update the count of remaining children for the parent cluster.
+                if let Some(pid) = pid
+                    && let Some(count) = parents_in_waiting.get_mut(&pid)
+                {
+                    *count -= 1;
+                }
             }
-            Self::Compressed(compressed) => {
-                buf.write_all(&[1])?;
-                compressed.encode::<CONFIG>(buf)
-            }
+
+            // Update the frontier to the parents whose children have all been processed.
+            (full_parents, parents_in_waiting) = parents_in_waiting.into_iter().partition(|&(_, count)| count == 0);
+            frontier = full_parents.into_keys().collect();
         }
     }
 }
 
-/// Implementation of [`databuf::Decode`] for [`MaybeCompressed`], gated by the `serde` feature.
-#[cfg(feature = "serde")]
-impl<'de, I> databuf::Decode<'de> for MaybeCompressed<I>
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
-    I: Codec + databuf::Decode<'de>,
-    I::Compressed: databuf::Decode<'de>,
+    Id: Send + Sync,
+    I: Compressible + Send + Sync,
+    I::Compressed: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Send + Sync,
 {
-    fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
-        let mut variant = [0];
-        buffer.read_exact(&mut variant)?;
-        match variant[0] {
-            0 => Ok(Self::Original(I::decode::<CONFIG>(buffer)?)),
-            1 => Ok(Self::Compressed(I::Compressed::decode::<CONFIG>(buffer)?)),
-            _ => Err("Invalid variant for MaybeCompressed".to_string().into()),
+    /// Parallel version of [`Self::compress`]
+    pub fn par_compress<C: Codec<I> + Send + Sync>(self, codec: C, min_depth: usize) -> PancakesTree<Id, I, T, A, M, C> {
+        let mut tree = self.par_annotate_unitary_compression_costs(codec);
+        tree.par_annotate_recursive_compression_costs();
+        tree.trim_to_unitary_clusters(min_depth);
+        tree.par_compress_from_root();
+        let PancakesTree { tree, codec } = tree;
+        let tree = tree.decompound_annotations().0;
+        PancakesTree { tree, codec }
+    }
+}
+
+impl<Id, I, T, A, M, C> PancakesTree<Id, I, T, A, M, C>
+where
+    Id: Send + Sync,
+    I: Compressible + Send + Sync,
+    I::Compressed: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Send + Sync,
+    C: Codec<I> + Send + Sync,
+{
+    /// Parallel version of [`Self::decompress`]
+    pub fn par_decompress(mut self) -> (Tree<Id, I, T, A, M>, C) {
+        self.par_decompress_subtree(0);
+
+        let Self { tree, codec } = self;
+        let Tree { items, metric } = tree;
+        let items = items
+            .into_iter()
+            .filter_map(|(id, item, loc)| item.take_original().map(|item| (id, item, loc)))
+            .collect();
+
+        let tree = Tree { items, metric };
+        (tree, codec)
+    }
+
+    /// Parallel version of [`Self::compress_from_root`]
+    pub fn par_compress_from_root(&mut self) {
+        let (leaves, parents) = self.iter_clusters().partition::<Vec<_>, _>(|c| c.is_leaf());
+        let mut frontier = leaves.into_iter().map(|c| c.center_index).collect::<Vec<_>>();
+
+        let mut parents_in_waiting = parents
+            .into_iter()
+            .map(|c| (c.center_index, (c.child_center_indices().map_or(0, <[_]>::len))))
+            .collect::<HashMap<_, _>>();
+        let mut full_parents: HashMap<_, _>;
+
+        while !frontier.is_empty() {
+            for id in frontier {
+                let c = self.get_cluster_unchecked(id);
+                let pid = c.parent_center_index;
+                // Get the targets to compress in terms of the center.
+                let targets = c.child_center_indices().map_or_else(
+                    || c.subtree_range().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
+                    <[_]>::to_vec,                  // If the cluster is a parent, we only compress the child centers.
+                );
+                // Compress the targets and overwrite the original items with the compressed ones.
+                for (i, compressed) in self.par_compressed_items(c.center_index, &targets) {
+                    self.tree.items[i].1 = MaybeCompressed::Compressed(compressed);
+                }
+                // Update the count of remaining children for the parent cluster.
+                if let Some(pid) = pid
+                    && let Some(count) = parents_in_waiting.get_mut(&pid)
+                {
+                    *count -= 1;
+                }
+            }
+
+            // Update the frontier to the parents whose children have all been processed.
+            (full_parents, parents_in_waiting) = parents_in_waiting.into_iter().partition(|&(_, count)| count == 0);
+            frontier = full_parents.into_keys().collect();
         }
     }
 }

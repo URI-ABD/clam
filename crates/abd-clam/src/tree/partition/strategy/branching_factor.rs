@@ -1,74 +1,123 @@
-//! How the number of children is determined when partitioning a cluster.
+//! A strategy that directly chooses the number of children to create.
 
 use crate::{
-    DistanceValue,
+    DistanceValue, NamedAlgorithm,
     utils::{MinItem, SizedHeap},
 };
 
-use super::{BipolarSplit, InitialPole};
+use super::{BipolarSplit, InitialPole, PartitionStrategy};
 
-/// The branching factor determines how many children any given cluster can have when partitioning.
+/// This strategy directly chooses the number of children to create, and repeatedly splits the largest sub-split until the desired number of splits is reached.
+///
+/// The number of children to create is either pre-determined for the whole tree, or is determined using the cardinality of the cluster being split. The
+/// [`BranchingFactor::Adaptive`] variant is, perhaps, the most interesting, as it attempts to minimize the total number of clusters that will be created for
+/// the tree.
 #[must_use]
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Default)]
 pub enum BranchingFactor {
-    /// Each cluster can have zero or `n` children. If `n < 2`, it is treated as 2.
+    /// A cluster can have zero or two children. This is the default branching factor, and corresponds to a binary tree.
+    #[default]
+    Binary,
+    /// A cluster can have zero or `n` children. If `n < 3`, it is treated as `Self::Binary`.
     Fixed(usize),
-    /// A cluster with `n` non-center items will have `ceil(log n)` children.
+    /// A cluster with `n` non-center items will have `ceil(log_2 n)` children.
     Logarithmic,
-    /// The branching factor will be between 2 and the given `n`, and is selected to minimize the expected size of the subtree relative to the cardinality of
-    /// the cluster. If `n < 2`, it is treated as 2.
+    /// The branching factor will be between 4 and the given `n`, and is selected to minimize the expected size of the subtree relative to the cardinality of
+    /// the cluster. If `n < 4`, it is treated as 4.
     ///
     /// We use some heuristics from our analysis of the expected ratio of the size of the subtree to the cardinality of the cluster, to select a branching
     /// factor that minimizes the expected size of the subtree. This branching factor is recomputed for each cluster based on the number of non-center items in
     /// that cluster.
     Adaptive(usize),
-    /// The branching factor is effectively unbounded and will be controlled by the [`SpanReductionFactor`](super::SpanReductionFactor) (SRF).
-    #[default]
-    Unbounded,
 }
 
-impl std::fmt::Display for BranchingFactor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl From<BranchingFactor> for PartitionStrategy {
+    fn from(branching_factor: BranchingFactor) -> Self {
+        Self::BranchingFactor(branching_factor)
+    }
+}
+
+impl core::fmt::Display for BranchingFactor {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Fixed(k) => write!(f, "Fixed({k})"),
-            Self::Logarithmic => write!(f, "Logarithmic"),
-            Self::Adaptive(max_k) => write!(f, "Adaptive({max_k})"),
-            Self::Unbounded => write!(f, "Unbounded"),
+            Self::Binary => write!(f, "branching-factor::binary"),
+            Self::Fixed(k) => write!(f, "branching-factor::fixed={k}"),
+            Self::Logarithmic => write!(f, "branching-factor::logarithmic"),
+            Self::Adaptive(max_k) => write!(f, "branching-factor::adaptive={max_k}"),
         }
     }
 }
 
-impl From<usize> for BranchingFactor {
-    fn from(value: usize) -> Self {
-        Self::Fixed(value.max(2))
+impl core::str::FromStr for BranchingFactor {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let template = Self::regex_pattern();
+        if let Some(captures) = template.captures(s) {
+            if let Some(fixed) = captures.name("fixed") {
+                let k = fixed
+                    .as_str()
+                    .parse::<usize>()
+                    .map_err(|e| format!("Failed to parse fixed branching factor: {e}"))?;
+                Ok(Self::Fixed(k))
+            } else if let Some(adaptive) = captures.name("adaptive") {
+                let max_k = adaptive
+                    .as_str()
+                    .parse::<usize>()
+                    .map_err(|e| format!("Failed to parse adaptive max branching factor: {e}"))?;
+                Ok(Self::Adaptive(max_k))
+            } else if s == "branching-factor::binary" {
+                Ok(Self::Binary)
+            } else if s == "branching-factor::logarithmic" {
+                Ok(Self::Logarithmic)
+            } else {
+                Err(format!("Invalid branching factor strategy: {s}. Expected format: {template}"))
+            }
+        } else {
+            Err(format!("Invalid branching factor strategy: {s}. Expected format: {template}"))
+        }
+    }
+}
+
+impl NamedAlgorithm for BranchingFactor {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Binary => "branching-factor::binary",
+            Self::Fixed(_) => "branching-factor::fixed",
+            Self::Logarithmic => "branching-factor::logarithmic",
+            Self::Adaptive(_) => "branching-factor::adaptive",
+        }
+    }
+
+    fn regex_pattern<'a>() -> &'a lazy_regex::Regex {
+        lazy_regex::regex!(r"^branching-factor::(binary|fixed=(?P<fixed>[0-9]*\.?[0-9]+)|logarithmic|adaptive=(?P<adaptive>[0-9]*\.?[0-9]+))$")
     }
 }
 
 impl BranchingFactor {
-    /// Returns the branching factor for a cluster with the given the cardinality of the cluster, if not `Unbounded`.
+    /// Returns the branching factor for a cluster with the given the cardinality of the cluster.
     #[expect(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     #[must_use]
-    fn for_cardinality(&self, n: usize) -> usize {
+    fn for_cardinality(self, n: usize) -> usize {
         match self {
-            Self::Fixed(b) => *b,
+            Self::Fixed(b) if b > 3 => b,
             Self::Logarithmic if n >= 5 => {
                 // Use a branching factor of O(log n), where n is the number of non-center items in the cluster.
                 // Since `cardinality > 2`, this is at least 2.
                 ((n - 1) as f64).log2().ceil() as usize
             }
-            Self::Logarithmic => 2, // For n < 5, just use a branching factor of 2
-            Self::Adaptive(max_b) => (2..=*max_b)
+            Self::Binary | Self::Logarithmic | Self::Fixed(_) => 2, // For n < 5 with logarithmic or n < 3 with fixed, just use a branching factor of 2
+            Self::Adaptive(max_b) => (4..=max_b)
                 .map(|b| (b, expected_num_clusters(n, b) as f64 / n as f64))
                 .min_by_key(|&(_, r)| MinItem((), r))
-                .map_or(2, |(b, _)| b),
-            Self::Unbounded => n - 1, // Effectively no limit on branching factor; SRF will control the actual branching factor
+                .map_or(4, |(b, _)| b),
         }
     }
 
     /// Splits the given items.
     pub(crate) fn split<'a, Id, I, T, M>(
-        &self,
+        self,
         metric: &M,
         l_items: &'a mut [(Id, I)],
         r_items: &'a mut [(Id, I)],
@@ -119,7 +168,7 @@ impl BranchingFactor {
 
     /// Parallel version of [`Self::split`].
     pub(crate) fn par_split<'a, Id, I, T, M>(
-        &self,
+        self,
         metric: &M,
         l_items: &'a mut [(Id, I)],
         r_items: &'a mut [(Id, I)],
@@ -132,6 +181,8 @@ impl BranchingFactor {
         T: DistanceValue + Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
     {
+        profi::prof!("BranchingFactor::par_split");
+
         // Get the sizes of the left and right splits.
         let nl = l_items.len();
         let nr = r_items.len();

@@ -1,14 +1,10 @@
 //! Substitution matrix for the Needleman-Wunsch aligner.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use num::Integer;
-use serde::{Serialize, ser::SerializeStruct};
 
 use crate::DistanceValue;
-
-/// The number of characters in the substitution matrix.
-const NUM_CHARS: usize = 256;
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
 ///
@@ -18,16 +14,19 @@ const NUM_CHARS: usize = 256;
 /// methods. We already provide a small number of  specialized matrices. These include:
 ///   - Extended IUPAC: From the [`CostMatrix::extended_iupac`](CostMatrix::extended_iupac) method, a matrix that uses the extended IUPAC nucleotide code.
 ///   - BLOSUM62: From the [`CostMatrix::blosum62`](CostMatrix::blosum62) method, a matrix that uses the BLOSUM62 substitution scores for amino-acid sequences.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(databuf::Encode, databuf::Decode))]
 #[must_use]
-pub struct CostMatrix<T: DistanceValue> {
-    /// The cost of substituting one character for another.
-    sub_matrix: [[T; NUM_CHARS]; NUM_CHARS],
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
+#[cfg_attr(feature = "pancakes", derive(deepsize::DeepSizeOf))]
+pub struct CostMatrix<T> {
+    /// The default cost of substituting one character for another. This is used when a specific cost is not set for a pair of characters.
+    default_sub: T,
     /// The cost to open a gap.
     gap_open: T,
     /// The cost to extend a gap.
     gap_ext: T,
+    /// The cost of substituting one character for another.
+    sub_costs: HashMap<(char, char), T>,
 }
 
 impl<T: DistanceValue> Default for CostMatrix<T> {
@@ -39,27 +38,19 @@ impl<T: DistanceValue> Default for CostMatrix<T> {
 impl<T: DistanceValue> CostMatrix<T> {
     /// Create a new substitution matrix.
     pub fn new(default_sub: T, gap_open: T, gap_ext: T) -> Self {
-        // Initialize the substitution matrix.
-        let mut sub_matrix = [[default_sub; NUM_CHARS]; NUM_CHARS];
-
-        // Set the diagonal to zero.
-        sub_matrix.iter_mut().enumerate().for_each(|(i, row)| row[i] = T::zero());
-
-        Self { sub_matrix, gap_open, gap_ext }
+        Self {
+            sub_costs: HashMap::new(),
+            default_sub,
+            gap_open,
+            gap_ext,
+        }
     }
 
     /// Cast the cost matrix to another distance value type.
     pub fn cast<U: DistanceValue, F: Fn(T) -> U>(&self, caster: F) -> CostMatrix<U> {
-        let mut new_sub_matrix = [[U::zero(); NUM_CHARS]; NUM_CHARS];
-
-        for (i, row) in new_sub_matrix.iter_mut().enumerate().take(NUM_CHARS) {
-            for (j, cost) in row.iter_mut().enumerate().take(NUM_CHARS) {
-                *cost = caster(self.sub_matrix[i][j]);
-            }
-        }
-
         CostMatrix {
-            sub_matrix: new_sub_matrix,
+            sub_costs: self.sub_costs.iter().map(|(&(a, b), &cost)| ((a, b), caster(cost))).collect(),
+            default_sub: caster(self.default_sub),
             gap_open: caster(self.gap_open),
             gap_ext: caster(self.gap_ext),
         }
@@ -79,31 +70,28 @@ impl<T: DistanceValue> CostMatrix<T> {
 
     /// Add a constant to all substitution costs.
     pub fn shift_up(mut self, shift: T) -> Self {
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                self.sub_matrix[i][j] += shift;
-            }
+        for cost in self.sub_costs.values_mut() {
+            *cost += shift;
         }
+        self.default_sub += shift;
         self
     }
 
     /// Subtract a constant from all substitution costs.
     pub fn shift_down(mut self, shift: T) -> Self {
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                self.sub_matrix[i][j] -= shift;
-            }
+        for cost in self.sub_costs.values_mut() {
+            *cost -= shift;
         }
+        self.default_sub -= shift;
         self
     }
 
     /// Multiply all substitution costs by a constant.
     pub fn scale(mut self, scale: T) -> Self {
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                self.sub_matrix[i][j] *= scale;
-            }
+        for cost in self.sub_costs.values_mut() {
+            *cost *= scale;
         }
+        self.default_sub *= scale;
         self
     }
 
@@ -114,8 +102,14 @@ impl<T: DistanceValue> CostMatrix<T> {
     /// * `a`: The old character to be substituted.
     /// * `b`: The new character to substitute with.
     /// * `cost`: The cost of the substitution.
-    pub const fn with_sub_cost(mut self, a: u8, b: u8, cost: T) -> Self {
-        self.sub_matrix[a as usize][b as usize] = cost;
+    pub fn with_sub_cost(mut self, a: char, b: char, cost: T) -> Self {
+        self.sub_costs.insert((a, b), cost);
+        self
+    }
+
+    /// Set the default cost of substituting one character for another. This is used when a specific cost is not set for a pair of characters.
+    pub const fn with_default_sub(mut self, cost: T) -> Self {
+        self.default_sub = cost;
         self
     }
 
@@ -137,8 +131,17 @@ impl<T: DistanceValue> CostMatrix<T> {
     ///
     /// * `a`: The old character to be substituted.
     /// * `b`: The new character to substitute with.
-    pub const fn sub_cost(&self, a: u8, b: u8) -> T {
-        self.sub_matrix[a as usize][b as usize]
+    pub fn sub_cost(&self, a: char, b: char) -> T {
+        if a == b {
+            T::zero()
+        } else {
+            *self.sub_costs.get(&(a, b)).unwrap_or(&self.default_sub)
+        }
+    }
+
+    /// Get the default cost of substituting one character for another. This is used when a specific cost is not set for a pair of characters.
+    pub const fn default_sub(&self) -> T {
+        self.default_sub
     }
 
     /// Get the cost of opening a gap.
@@ -153,28 +156,27 @@ impl<T: DistanceValue> CostMatrix<T> {
 
     /// Shift all costs up or down so that the minimum cost is zero.
     pub fn normalize(self) -> Self {
-        let shift = self.sub_matrix.iter().flatten().fold(T::max_value(), |a, &b| if a < b { a } else { b });
-
+        let shift = self.sub_costs.values().fold(T::max_value(), |a, &b| if a < b { a } else { b });
         self.shift_down(shift)
     }
 
     /// Invert all costs in the matrix, i.e. subtract them from the maximum cost and then normalize.
     pub fn invert(mut self) -> Self {
-        let max_cost = self.sub_matrix.iter().flatten().fold(T::min_value(), |a, &b| if a > b { a } else { b });
-
-        self.sub_matrix = self.sub_matrix.map(|row| row.map(|cost| max_cost - cost));
-
+        let max_cost = self.sub_costs.values().fold(T::min_value(), |a, &b| if a > b { a } else { b });
+        for cost in self.sub_costs.values_mut() {
+            *cost = max_cost - *cost;
+        }
         self.normalize()
     }
 
     /// Returns the minimum substitution cost in the matrix.
     pub fn min_sub_cost(&self) -> T {
-        self.sub_matrix.iter().flatten().fold(T::max_value(), |a, &b| if a < b { a } else { b })
+        self.sub_costs.values().fold(T::max_value(), |a, &b| if a < b { a } else { b })
     }
 
     /// Returns the maximum substitution cost in the matrix.
     pub fn max_sub_cost(&self) -> T {
-        self.sub_matrix.iter().flatten().fold(T::min_value(), |a, &b| if a > b { a } else { b })
+        self.sub_costs.values().fold(T::min_value(), |a, &b| if a > b { a } else { b })
     }
 }
 
@@ -249,8 +251,8 @@ impl<T: DistanceValue> CostMatrix<T> {
 
         // The initial matrix with the default costs, except for gaps which are interchangeable.
         let matrix = Self::default()
-            .with_sub_cost(b'-', b'.', T::zero())
-            .with_sub_cost(b'.', b'-', T::zero())
+            .with_sub_cost('-', '.', T::zero())
+            .with_sub_cost('.', '-', T::zero())
             .scale(T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")));
 
         let lcm_t = T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
@@ -276,8 +278,6 @@ impl<T: DistanceValue> CostMatrix<T> {
                     (a.to_ascii_lowercase(), b.to_ascii_lowercase(), cost),
                 ]
             })
-            // Cast the characters to bytes.
-            .map(|(a, b, cost)| (a as u8, b as u8, cost))
             // Add the costs to the substitution matrix.
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost))
             // Add affine gap penalties.
@@ -334,8 +334,8 @@ impl<T: DistanceValue> CostMatrix<T> {
         // The initial matrix with the default costs, except for gaps which are
         // interchangeable.
         let matrix = Self::default()
-            .with_sub_cost(b'-', b'.', T::zero())
-            .with_sub_cost(b'.', b'-', T::zero())
+            .with_sub_cost('-', '.', T::zero())
+            .with_sub_cost('.', '-', T::zero())
             .scale(T::from_i8(max_delta).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")));
 
         let max_delta_t = T::from_i8(max_delta).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8: {max_delta}"));
@@ -363,8 +363,6 @@ impl<T: DistanceValue> CostMatrix<T> {
                     (a.to_ascii_lowercase(), b.to_ascii_lowercase(), cost),
                 ]
             })
-            // Convert the characters to bytes.
-            .map(|(a, b, cost)| (a as u8, b as u8, cost))
             // And combine them into a matrix.
             .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost))
             // Convert the matrix into a form that can be used to minimize the
@@ -373,64 +371,5 @@ impl<T: DistanceValue> CostMatrix<T> {
             // Add affine gap penalties.
             .with_gap_open(max_delta_t * gap_open)
             .with_gap_ext(max_delta_t)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<T> Serialize for CostMatrix<T>
-where
-    T: DistanceValue + serde::Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut state = serializer.serialize_struct("CostMatrix", 3)?;
-        let sub_vec_vec = self.sub_matrix.iter().map(|row| row.to_vec()).collect::<Vec<_>>();
-        state.serialize_field("sub_matrix", &sub_vec_vec)?;
-        state.serialize_field("gap_open", &self.gap_open)?;
-        state.serialize_field("gap_ext", &self.gap_ext)?;
-        state.end()
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, T> serde::Deserialize<'de> for CostMatrix<T>
-where
-    T: DistanceValue + serde::Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        /// Helper struct for deserialization.
-        #[derive(serde::Deserialize)]
-        struct CostMatrixHelper<T: DistanceValue> {
-            /// Using Vec<Vec<T>> to facilitate deserialization
-            sub_vec_vec: Vec<Vec<T>>,
-            /// Using T directly for gap costs
-            gap_open: T,
-            /// The cost to extend a gap.
-            gap_ext: T,
-        }
-
-        let CostMatrixHelper {
-            sub_vec_vec,
-            gap_open,
-            gap_ext,
-        } = CostMatrixHelper::deserialize(deserializer)?;
-        let sub_vec_arr = sub_vec_vec
-            .into_iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<[T; NUM_CHARS]>, _>>()
-            .map_err(|vec: Vec<T>| format!("Invalid row length in CostMatrix: expected {}, got {}", NUM_CHARS, vec.len()))
-            .map_err(serde::de::Error::custom)?;
-
-        let sub_matrix = sub_vec_arr
-            .try_into()
-            .map_err(|vec: Vec<[T; 256]>| format!("Invalid number of rows in CostMatrix: expected {}, got {}", NUM_CHARS, vec.len()))
-            .map_err(serde::de::Error::custom)?;
-
-        Ok(Self { sub_matrix, gap_open, gap_ext })
     }
 }

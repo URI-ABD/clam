@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::DistanceValue;
 
-/// Two partitions of items created by bipolar split.
+/// Two partitions of items created by bipolar split where a pole is as defined in [`PartitionStrategy`](super::PartitionStrategy).
 #[derive(Debug)]
 pub struct BipolarSplit<'a, Id, I, T> {
     /// The left partition of items. The 0th item is the left pole.
@@ -54,13 +54,12 @@ where
             // If there are only two items, just return them as the two partitions.
             let span = metric(&items[0].1, &items[1].1);
             let (l_items, r_items) = items.split_at_mut(1);
-            let (l_distances, r_distances) = (vec![span], vec![span]);
             return Self {
                 l_items,
                 r_items,
                 span,
-                l_distances,
-                r_distances,
+                l_distances: Vec::new(),
+                r_distances: Vec::new(),
             };
         }
         ftlog::debug!("Splitting a slice with {} items", items.len());
@@ -148,18 +147,19 @@ where
     where
         M: Fn(&I, &I) -> T + Send + Sync,
     {
+        profi::prof!("BipolarSplit::par_new");
+
         if items.len() == 2 {
             ftlog::debug!("Splitting a slice with only two items");
             // If there are only two items, just return them as the two partitions.
             let span = metric(&items[0].1, &items[1].1);
             let (l_items, r_items) = items.split_at_mut(1);
-            let (l_distances, r_distances) = (vec![span], vec![span]);
             return Self {
                 l_items,
                 r_items,
                 span,
-                l_distances,
-                r_distances,
+                l_distances: Vec::new(),
+                r_distances: Vec::new(),
             };
         }
         ftlog::debug!("Splitting a slice with {} items", items.len());

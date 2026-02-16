@@ -32,6 +32,42 @@ pub fn euclidean<I: AsRef<[T]>, T: DistanceValue, U: Float + Sum>(a: &I, b: &I) 
         .sqrt()
 }
 
-// pub fn levenshtein<I: AsRef<[u8]>>(a: &I, b: &I) -> usize {
-//     abd_clam::sz_lev_builder()(a, b)
-// }
+/// Compute the Levenshtein edit distance between two strings.
+pub fn lev_unaligned<S>(x: S, y: S) -> usize
+where
+    S: AsRef<str>,
+{
+    lev_helper(x.as_ref().chars(), y.as_ref().chars())
+}
+
+/// Compute the Levenshtein edit distance between two aligned sequences.
+#[cfg(feature = "musals")]
+pub fn lev_aligned(x: &abd_clam::musals::AlignedSequence, y: &abd_clam::musals::AlignedSequence) -> usize {
+    lev_helper(x.iter(), y.iter())
+}
+
+/// Compute the Levenshtein edit distance between two sequences.
+fn lev_helper<S1: Iterator<Item = char>, S2: Iterator<Item = char>>(x: S1, y: S2) -> usize {
+    let y = y.collect::<Vec<_>>();
+
+    // calculate edit distance
+    let mut cur = (0..=y.len()).collect::<Vec<_>>();
+    for (i, char_x) in x.enumerate().map(|(i, c)| (i + 1, c)) {
+        // get first column for this row
+        let mut pre = cur[0];
+        cur[0] = i;
+        for (j, &char_y) in y.iter().enumerate() {
+            let tmp = cur[j + 1];
+            cur[j + 1] = core::cmp::min(
+                tmp + 1, // deletion
+                core::cmp::min(
+                    cur[j] + 1,                          // insertion
+                    pre + usize::from(char_x != char_y), // match or substitution
+                ),
+            );
+            pre = tmp;
+        }
+    }
+
+    cur[y.len()]
+}

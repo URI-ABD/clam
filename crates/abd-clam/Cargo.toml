@@ -1,6 +1,6 @@
 [package]
 name = "abd-clam"
-version = "0.34.0"
+version = "0.31.0"
 authors = [
     "Najib Ishaq <najib_ishaq@zoho.com>",
     "Tom Howard <info@tomhoward.codes>",
@@ -26,6 +26,27 @@ publish = true
 [lints]
 workspace = true
 
+[features]
+serde = ["dep:serde", "dep:databuf"]
+pancakes = ["dep:deepsize"]
+musals = ["dep:num"]
+all = ["serde", "musals", "pancakes"]
+shell = [
+    "all",
+    "dep:clap",
+    "dep:ndarray",
+    "dep:ndarray-npy",
+    "dep:serde_json",
+    "dep:yaml_serde",
+    "dep:bio",
+]
+profile = ["profi/enable"]
+
+[[bin]]
+name = "clam-shell"
+path = "src/bin/shell/main.rs"
+required-features = ["shell"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -37,34 +58,15 @@ profi = { workspace = true, default-features = false, features = ["rayon"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 databuf = { workspace = true, optional = true }
 num = { workspace = true, optional = true }
-bytecount = { workspace = true, optional = true }
-
-# For:
-#  - CHAODA
-# smartcore = { workspace = true, features = ["serde"], optional = true }
-
-# For:
-#  - The mass-spring-system in the dimension reduction
-# slotmap = { workspace = true, optional = true }
+clap = { workspace = true, features = ["derive"], optional = true }
+ndarray = { workspace = true, optional = true }
+ndarray-npy = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+yaml_serde = { workspace = true, optional = true }
+bio = { workspace = true, optional = true }
+lazy-regex = { workspace = true }
+tqdm = { workspace = true }
+deepsize = { workspace = true, features = ["derive"], optional = true }
 
 [dev-dependencies]
-symagen = { workspace = true }
 test-case = { workspace = true }
-criterion = { workspace = true, features = ["html_reports", "csv_output"] }
-ndarray = { workspace = true }
-ndarray-npy = { workspace = true }
-distances = { workspace = true }
-ordered-float = { workspace = true }
-
-[features]
-serde = ["dep:serde", "dep:databuf"]
-musals = ["dep:num", "dep:bytecount"]
-pancakes = []
-all = ["serde", "musals", "pancakes"]
-profile = ["profi/enable"]
-# chaoda = ["dep:smartcore"]
-# mbed = ["chaoda", "dep:slotmap"]
-
-[[bench]]
-name = "cakes"
-harness = false
