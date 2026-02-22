@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree};
+use crate::{Dataset, DistanceValue, Tree};
 
 mod alignment;
 mod quality_metrics;
@@ -21,17 +21,16 @@ pub use quality_metrics::{QualityMetric, QualityMetricResult};
 use alignment::PartialMsa;
 
 /// Extension of [`Tree`], gated behind the `musals` feature, providing methods for computing multiple sequence alignments and computing MSA quality metrics.
-///
-/// Note the use of `S` for `Sequence` instead of `I`. See the [`Sequence`] trait documentation for more information.
-impl<Id, S, T, A, M> Tree<Id, S, T, A, M>
+impl<D, M, T, A> Tree<D, M, T, A>
 where
-    S: Sequence,
+    D: Dataset,
+    D::Item: Sequence,
     T: DistanceValue,
 {
     /// Aligns all sequences in the tree into a multiple sequence alignment (MSA).
     #[expect(clippy::missing_panics_doc)]
     pub fn into_msa(mut self, cost_matrix: &CostMatrix<T>) -> Self {
-        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
+        ftlog::info!("Computing MSA for tree with {} sequences.", self.dataset.cardinality());
         // In the following, `ci` is the center index of a cluster, and `pci` is the parent center index of a cluster.
 
         let (leaves, parents): (Vec<_>, Vec<_>) = self.cluster_map.iter().map(|(&ci, cluster)| (ci, cluster)).partition(|(_, c)| c.is_leaf());
@@ -50,7 +49,7 @@ where
             .into_iter()
             .map(|(ci, leaf)| {
                 let pci = leaf.parent_center_index();
-                let leaf_items = &self.items[leaf.items_indices()];
+                let leaf_items = &self.dataset.as_slice()[leaf.items_indices()];
                 let msa = PartialMsa::from_leaf(leaf, leaf_items, cost_matrix);
                 (ci, pci, msa)
             })
@@ -85,7 +84,7 @@ where
 
                     // Align the parent cluster.
                     let child_alignments = child_alignments.into_iter().map(|(_, msa)| msa).collect::<Vec<_>>();
-                    let parent_center = &self.items[parent.center_index()].1;
+                    let parent_center = &self.dataset.as_slice()[parent.center_index()].1;
                     let parent_msa = PartialMsa::from_parent(parent_center, child_alignments, cost_matrix);
 
                     // Return the aligned parent MSA with its center and parent center indices.
@@ -103,33 +102,35 @@ where
         let (ci, pci, msa) = frontier.pop().unwrap_or_else(|| unreachable!("Frontier should contain the root cluster."));
         assert_eq!(ci, 0, "The root cluster should have center index 0.");
         assert!(pci.is_none(), "The root cluster should have no parent center index.");
-        assert_eq!(self.items.len(), msa.n_seq(), "Number of sequences in the final MSA should match the original.");
+        assert_eq!(
+            self.dataset.cardinality(),
+            msa.n_seq(),
+            "Number of sequences in the final MSA should match the original."
+        );
 
         let aligned_rows = msa.into_rows(true);
-        self.items = self
-            .items
-            .into_iter()
-            .zip(aligned_rows)
-            .map(|((id, _), aligned_seq)| (id, aligned_seq))
-            .collect();
+        self.dataset.as_mut_slice().iter_mut().zip(aligned_rows).for_each(|((_, prev_seq), new_seq)| {
+            *prev_seq = new_seq;
+        });
 
         self
     }
 }
 
 /// Parallel versions of the MSA methods for the `musals` feature.
-impl<Id, S, T, A, M> Tree<Id, S, T, A, M>
+impl<D, M, T, A> Tree<D, M, T, A>
 where
-    Id: Send + Sync,
-    S: Sequence + Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Sequence + Send + Sync,
+    M: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Send + Sync,
 {
     /// Parallel version of [`Self::into_msa`].
     #[expect(clippy::missing_panics_doc)]
     pub fn par_into_msa(mut self, cost_matrix: &CostMatrix<T>) -> Self {
-        ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.cardinality());
+        ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.dataset.cardinality());
         // In the following, `ci` is the center index of a cluster, and `pci` is the parent center index of a cluster.
 
         let (leaves, parents): (Vec<_>, Vec<_>) = self.cluster_map.par_iter().map(|(&ci, cluster)| (ci, cluster)).partition(|(_, c)| c.is_leaf());
@@ -148,7 +149,7 @@ where
             .into_par_iter()
             .map(|(ci, leaf)| {
                 let pci = leaf.parent_center_index();
-                let leaf_items = &self.items[leaf.items_indices()];
+                let leaf_items = &self.dataset.as_slice()[leaf.items_indices()];
                 let msa = PartialMsa::par_from_leaf(leaf, leaf_items, cost_matrix);
                 (ci, pci, msa)
             })
@@ -185,7 +186,7 @@ where
 
                     // Align the parent cluster.
                     let child_alignments = child_alignments.into_iter().map(|(_, msa)| msa).collect::<Vec<_>>();
-                    let parent_center = &self.items[parent.center_index()].1;
+                    let parent_center = &self.dataset.as_slice()[parent.center_index()].1;
                     let parent_msa = PartialMsa::par_from_parent(parent_center, child_alignments, cost_matrix);
 
                     // Return the aligned parent MSA with its center and parent center indices.
@@ -203,15 +204,20 @@ where
         let (ci, pci, msa) = frontier.pop().unwrap_or_else(|| unreachable!("Frontier should contain the root cluster."));
         assert_eq!(ci, 0, "The root cluster should have center index 0.");
         assert!(pci.is_none(), "The root cluster should have no parent center index.");
-        assert_eq!(self.items.len(), msa.n_seq(), "Number of aligned sequences should match the original.");
+        assert_eq!(
+            self.dataset.cardinality(),
+            msa.n_seq(),
+            "Number of aligned sequences should match the original."
+        );
 
         let aligned_rows = msa.par_into_rows(true);
-        self.items = self
-            .items
-            .into_par_iter()
+        self.dataset
+            .as_mut_slice()
+            .par_iter_mut()
             .zip(aligned_rows)
-            .map(|((id, _), aligned_seq)| (id, aligned_seq))
-            .collect();
+            .for_each(|((_, prev_seq), new_seq)| {
+                *prev_seq = new_seq;
+            });
 
         self
     }
@@ -223,24 +229,25 @@ mod tests {
     use rand::prelude::*;
     use test_case::test_case;
 
-    use crate::Tree;
+    use crate::{Dataset, Tree};
 
     use super::{CostMatrix, Sequence};
 
-    fn check_sequences_equal<Id, S, T, A, M>(original: &Tree<Id, S, T, A, M>, aligned: &Tree<Id, S, T, A, M>, mode: &str)
+    fn check_sequences_equal<D, M, T, A>(original: &Tree<D, M, T, A>, aligned: &Tree<D, M, T, A>, mode: &str)
     where
-        Id: Eq + core::fmt::Debug,
-        S: Sequence + Eq + core::fmt::Debug,
+        D: Dataset + Send + Sync,
+        D::Item: Sequence + Eq + core::fmt::Debug,
+        D::Id: Eq + core::fmt::Debug,
     {
         assert_eq!(
-            original.cardinality(),
-            aligned.cardinality(),
+            original.dataset.cardinality(),
+            aligned.dataset.cardinality(),
             "Number of sequences should match in {} mode.",
             mode
         );
 
-        let max_len = original.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
-        let aligned_max_len = aligned.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
+        let max_len = original.dataset.as_slice().iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
+        let aligned_max_len = aligned.dataset.as_slice().iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
         assert!(
             aligned_max_len >= max_len,
             "Aligned sequences should be at least as long as the longest original sequence in {} mode.",
@@ -252,13 +259,13 @@ mod tests {
             mode
         );
 
-        let o_sequences = original.items.iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
-        let a_sequences = aligned.items.iter().map(|(_, seq)| seq.without_gaps()).collect::<Vec<_>>();
+        let o_sequences = original.dataset.as_slice().iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
+        let a_sequences = aligned.dataset.as_slice().iter().map(|(_, seq)| seq.without_gaps()).collect::<Vec<_>>();
 
         assert_eq!(o_sequences.len(), a_sequences.len(), "Number of sequences should match in {} mode.", mode);
         assert_eq!(o_sequences, a_sequences, "Sequences should match after alignment in {} mode.", mode);
 
-        for (i, ((o_id, o_seq), (a_id, a_seq))) in original.items.iter().zip(aligned.items.iter()).enumerate() {
+        for (i, ((o_id, o_seq), (a_id, a_seq))) in original.dataset.as_slice().iter().zip(aligned.dataset.as_slice().iter()).enumerate() {
             assert_eq!(o_id, a_id, "Sequence IDs at index {} do not match after alignment in {} mode.", i, mode);
             assert_eq!(
                 o_seq,
@@ -281,6 +288,7 @@ mod tests {
             "GAACT".to_string(),
             "AACTG".to_string(),
         ];
+        let sequences = sequences.into_iter().enumerate().collect::<Vec<_>>();
 
         let tree = Tree::new_minimal(sequences.clone(), &metric)?;
         let msa_tree = tree.clone().into_msa(&cost_matrix);
@@ -309,6 +317,7 @@ mod tests {
                 (0..len).map(|_| characters[rng.random_range(0..characters.len())]).collect::<String>()
             })
             .collect::<Vec<String>>();
+        let sequences = sequences.into_iter().enumerate().collect::<Vec<_>>();
 
         let tree = Tree::new_minimal(sequences.clone(), &metric)?;
         let msa_tree = tree.clone().into_msa(&cost_matrix);

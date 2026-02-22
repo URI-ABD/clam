@@ -5,26 +5,28 @@ use core::cmp::Reverse;
 use rayon::prelude::*;
 
 use crate::{
-    DistanceValue, Tree,
+    Dataset, DistanceValue, Tree,
     cakes::{KnnDfs, d_max, d_min},
-    pancakes::{Codec, MaybeCompressed},
+    pancakes::{Codec, MaybeCompressedItem},
     utils::SizedHeap,
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnDfs
+impl<Item, D, M, T, A> CompressiveSearch<Item, D, M, T, A> for KnnDfs
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    M: Fn(&Item, &Item) -> T,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.decompress_subtree(0)?;
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .iter()
                 .enumerate()
                 .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
@@ -35,7 +37,7 @@ where
         let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let d = tree.dataset.as_slice()[0].1.distance_to_query(query, &tree.metric)?;
         hits.push((0, d));
         candidates.push((0, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
@@ -57,21 +59,23 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for KnnDfs
+impl<Item, D, M, T, A> ParCompressiveSearch<Item, D, M, T, A> for KnnDfs
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.decompress_subtree(0)?;
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .par_iter()
                 .enumerate()
                 .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
@@ -82,7 +86,7 @@ where
         let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let d = tree.dataset.as_slice()[0].1.distance_to_query(query, &tree.metric)?;
         hits.push((0, d));
         candidates.push((0, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
@@ -107,16 +111,17 @@ where
 /// Pop candidates until the top candidate is a leaf, then pop and return that leaf along with its minimum distance from the query.
 ///
 /// The user must ensure that `candidates` is non-empty before calling this function.
-pub fn pop_till_leaf<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn pop_till_leaf<Item, D, M, T, A>(
+    query: &Item,
+    tree: &mut Tree<D, M, T, A>,
     candidates: &mut SizedHeap<usize, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
 ) -> Result<(usize, T, usize), String>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
+    M: Fn(&Item, &Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     profi::prof!("KnnDfs::pop_till_leaf");
 
@@ -137,7 +142,7 @@ where
 
             let distances = child_center_indices
                 .into_iter()
-                .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
+                .map(|i| tree.dataset.as_slice()[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
                 .collect::<Result<Vec<_>, _>>()?;
 
             for (cid, d) in distances {
@@ -158,17 +163,18 @@ where
 /// Given a leaf cluster, compute the distance from the query to each item in the leaf and push them onto `hits`.
 ///
 /// Returns the number of distance computations performed, excluding the distance to the center (which is already known).
-pub fn leaf_into_hits<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn leaf_into_hits<Item, D, M, T, A>(
+    query: &Item,
+    tree: &mut Tree<D, M, T, A>,
     hits: &mut SizedHeap<usize, T>,
     leaf_id: usize,
     d: T,
 ) -> Result<usize, String>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
+    M: Fn(&Item, &Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     profi::prof!("KnnDfs::leaf_into_hits");
 
@@ -183,7 +189,7 @@ where
         // A non-singleton leaf may have non-zero radius, so we need to compute the distance from the query to each item in the leaf.
         let distances = leaf
             .subtree_indices()
-            .zip(tree.items[leaf.subtree_indices()].iter())
+            .zip(tree.dataset.as_slice()[leaf.subtree_indices()].iter())
             .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
             .collect::<Result<Vec<_>, _>>()?;
         hits.extend(distances);
@@ -192,19 +198,20 @@ where
 }
 
 /// Parallel version of [`pop_till_leaf`].
-pub fn par_pop_till_leaf<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn par_pop_till_leaf<Item, D, M, T, A>(
+    query: &Item,
+    tree: &mut Tree<D, M, T, A>,
     candidates: &mut SizedHeap<usize, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
 ) -> Result<(usize, T, usize), String>
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
     profi::prof!("KnnDfs::pop_till_leaf");
 
@@ -225,7 +232,7 @@ where
 
             let distances = child_center_indices
                 .into_par_iter()
-                .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
+                .map(|i| tree.dataset.as_slice()[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
                 .collect::<Result<Vec<_>, _>>()?;
 
             for (cid, d) in distances {
@@ -244,20 +251,21 @@ where
 }
 
 /// Parallel version of [`leaf_into_hits`].
-pub fn par_leaf_into_hits<Id, I, T, A, M>(
-    query: &I,
-    tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>,
+pub fn par_leaf_into_hits<Item, D, M, T, A>(
+    query: &Item,
+    tree: &mut Tree<D, M, T, A>,
     hits: &mut SizedHeap<usize, T>,
     leaf_id: usize,
     d: T,
 ) -> Result<usize, String>
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
     profi::prof!("KnnDfs::leaf_into_hits");
 
@@ -273,7 +281,7 @@ where
         let distances = leaf
             .subtree_indices()
             .into_par_iter()
-            .zip(tree.items[leaf.subtree_indices()].par_iter())
+            .zip(tree.dataset.as_slice()[leaf.subtree_indices()].par_iter())
             .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
             .collect::<Result<Vec<_>, _>>()?;
         hits.extend(distances);

@@ -3,26 +3,28 @@
 use rayon::prelude::*;
 
 use crate::{
-    DistanceValue, Tree,
+    Dataset, DistanceValue, Tree,
     cakes::{KnnBfs, d_max},
-    pancakes::{Codec, MaybeCompressed},
+    pancakes::{Codec, MaybeCompressedItem},
     utils::SizedHeap,
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnBfs
+impl<Item, D, M, T, A> CompressiveSearch<Item, D, M, T, A> for KnnBfs
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    M: Fn(&Item, &Item) -> T,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.decompress_subtree(0)?;
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .iter()
                 .enumerate()
                 .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
@@ -33,7 +35,7 @@ where
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
         let root = tree.root();
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let d = tree.dataset.as_slice()[0].1.distance_to_query(query, &tree.metric)?;
         hits.push((0, d));
         candidates.push((0, d_max(root.radius(), d), root.cardinality(), root.radius()));
 
@@ -60,7 +62,7 @@ where
                         // Not a singleton, so compute distances to all non-center items and add them to hits
                         let distances = leaf
                             .subtree_indices()
-                            .zip(tree.items[leaf.subtree_indices()].iter())
+                            .zip(tree.dataset.as_slice()[leaf.subtree_indices()].iter())
                             .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
                             .collect::<Result<Vec<_>, _>>()?;
                         hits.extend(distances);
@@ -70,7 +72,7 @@ where
                     if let Ok(child_center_indices) = tree.decompress_child_centers(id) {
                         for (cid, d) in child_center_indices
                             .into_iter()
-                            .map(|cid| tree.items[cid].1.distance_to_query(query, &tree.metric).map(|d| (cid, d)))
+                            .map(|cid| tree.dataset.as_slice()[cid].1.distance_to_query(query, &tree.metric).map(|d| (cid, d)))
                             .collect::<Result<Vec<_>, _>>()?
                         {
                             let (car, radius) = tree.get_cluster(cid).map(|c| (c.cardinality, c.radius))?;
@@ -88,21 +90,23 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for KnnBfs
+impl<Item, D, M, T, A> ParCompressiveSearch<Item, D, M, T, A> for KnnBfs
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        if self.0 > tree.cardinality() {
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.par_decompress_subtree(0)?;
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .par_iter()
                 .enumerate()
                 .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
@@ -113,7 +117,7 @@ where
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
         let root = tree.root();
-        let d = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let d = tree.dataset.as_slice()[0].1.distance_to_query(query, &tree.metric)?;
         hits.push((0, d));
         candidates.push((0, d_max(root.radius(), d), root.cardinality(), root.radius()));
 
@@ -141,7 +145,7 @@ where
                         let distances = leaf
                             .subtree_indices()
                             .into_par_iter()
-                            .zip(tree.items[leaf.subtree_indices()].par_iter())
+                            .zip(tree.dataset.as_slice()[leaf.subtree_indices()].par_iter())
                             .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
                             .collect::<Result<Vec<_>, _>>()?;
                         hits.extend(distances);
@@ -151,7 +155,7 @@ where
                     if let Some(child_center_indices) = tree.par_decompress_child_centers(id)? {
                         for (cid, d) in child_center_indices
                             .into_par_iter()
-                            .map(|cid| tree.items[cid].1.distance_to_query(query, &tree.metric).map(|d| (cid, d)))
+                            .map(|cid| tree.dataset.as_slice()[cid].1.distance_to_query(query, &tree.metric).map(|d| (cid, d)))
                             .collect::<Result<Vec<_>, _>>()?
                         {
                             let (car, radius) = tree.get_cluster(cid).map(|c| (c.cardinality, c.radius))?;

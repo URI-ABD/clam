@@ -4,7 +4,7 @@ use std::cmp::Reverse;
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, utils::SizedHeap};
+use crate::{Dataset, DistanceValue, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, RnnChess, Search, d_max, d_min};
 
@@ -13,28 +13,35 @@ use super::super::{ParSearch, RnnChess, Search, d_max, d_min};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnRrnn(pub usize);
 
-impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnRrnn
+impl<D, M, T, A> Search<D, M, T, A> for KnnRrnn
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {
         format!("KnnRrnn(k={})", self.0)
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();
 
-        if self.0 > tree.cardinality() {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
+            return tree
+                .dataset
+                .as_slice()
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
+                .collect();
         }
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = (tree.metric)(query, &tree.items[0].1);
-        let car = tree.cardinality();
+        let d = (tree.metric)(query, &tree.dataset.as_slice()[0].1);
+        let car = tree.dataset.cardinality();
         candidate_radii.push((1, Reverse(d_min(radius, d))));
         candidate_radii.push((car.half() + 1, Reverse(d)));
         candidate_radii.push((car, Reverse(d_max(radius, d))));
@@ -44,7 +51,7 @@ where
             if let Some((child, d)) = tree.children_of(latest).and_then(|children| {
                 children
                     .into_iter()
-                    .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
+                    .map(|child| (child, (tree.metric)(query, &tree.dataset.as_slice()[child.center_index()].1)))
                     .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
             }) {
                 let car = child.cardinality();
@@ -99,22 +106,24 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnRrnn
+impl<D, M, T, A> ParSearch<D, M, T, A> for KnnRrnn
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();
 
-        if self.0 > tree.cardinality() {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .par_iter()
                 .enumerate()
                 .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
@@ -123,8 +132,8 @@ where
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        let car = tree.cardinality();
+        let d = (tree.metric)(query, &tree.dataset.as_slice()[root.center_index()].1);
+        let car = tree.dataset.cardinality();
         candidate_radii.push((1, Reverse(d_min(radius, d))));
         candidate_radii.push((car.half() + 1, Reverse(d)));
         candidate_radii.push((car, Reverse(d_max(radius, d))));
@@ -134,7 +143,7 @@ where
             if let Some((child, d)) = tree.children_of(latest).and_then(|children| {
                 children
                     .into_par_iter()
-                    .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
+                    .map(|child| (child, (tree.metric)(query, &tree.dataset.as_slice()[child.center_index()].1)))
                     .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
             }) {
                 let car = child.cardinality();

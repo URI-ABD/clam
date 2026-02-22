@@ -1,11 +1,11 @@
 //! Compressive search algorithms.
 
 use crate::{
-    DistanceValue, Tree,
-    cakes::{Cakes, ParSearch, RnnChess, Search},
+    Dataset, DistanceValue, Tree,
+    cakes::{Cakes, RnnChess},
 };
 
-use super::{Codec, MaybeCompressed};
+use super::{Codec, MaybeCompressedItem};
 
 mod approximate;
 mod exact;
@@ -13,45 +13,48 @@ mod exact;
 pub use exact::{leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
 /// Nearest Neighbor Search in compressed space.
-pub trait CompressiveSearch<Id, I, T, A, M>: Search<Id, I, T, A, M>
+pub trait CompressiveSearch<Item, D, M, T, A>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
+    M: Fn(&Item, &Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     /// Same as [`Search::search`] but operates on a compressed tree and will decompress items as needed.
     ///
     /// # Errors
     ///
     /// - If the root center has been compressed.
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String>;
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String>;
 }
 
 /// Parallel version of [`CompressiveSearch`].
-pub trait ParCompressiveSearch<Id, I, T, A, M>: CompressiveSearch<Id, I, T, A, M> + ParSearch<Id, I, T, A, M>
+pub trait ParCompressiveSearch<Item, D, M, T, A>: CompressiveSearch<Item, D, M, T, A>
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
     /// Parallel version of [`CompressiveSearch::compressive_search`].
     ///
     /// # Errors
     ///
     /// See [`CompressiveSearch::compressive_search`] for error conditions.
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String>;
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String>;
 }
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for Cakes<T>
+impl<Item, D, M, T, A> CompressiveSearch<Item, D, M, T, A> for Cakes<T>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    M: Fn(&Item, &Item) -> T,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         match self {
             Self::KnnBfs(alg) => alg.compressive_search(tree, query),
             Self::KnnDfs(alg) => alg.compressive_search(tree, query),
@@ -64,16 +67,17 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for Cakes<T>
+impl<Item, D, M, T, A> ParCompressiveSearch<Item, D, M, T, A> for Cakes<T>
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         match self {
             Self::KnnBfs(alg) => alg.par_compressive_search(tree, query),
             Self::KnnDfs(alg) => alg.par_compressive_search(tree, query),
@@ -87,30 +91,32 @@ where
 }
 
 // Blanket implementations of `Search` for references.
-impl<Id, I, T, A, M, Alg> CompressiveSearch<Id, I, T, A, M> for &Alg
+impl<Item, D, M, T, A, Alg> CompressiveSearch<Item, D, M, T, A> for &Alg
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
+    M: Fn(&Item, &Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
-    Alg: CompressiveSearch<Id, I, T, A, M>,
+    Alg: CompressiveSearch<Item, D, M, T, A>,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         (**self).compressive_search(tree, query)
     }
 }
 
 // Blanket implementations of `ParSearch` for references.
-impl<Id, I, T, A, M, Alg> ParCompressiveSearch<Id, I, T, A, M> for &Alg
+impl<Item, D, M, T, A, Alg> ParCompressiveSearch<Item, D, M, T, A> for &Alg
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: ParCompressiveSearch<Id, I, T, A, M>,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
+    Alg: ParCompressiveSearch<Item, D, M, T, A>,
 {
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         (**self).par_compressive_search(tree, query)
     }
 }

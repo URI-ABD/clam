@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use abd_clam::{Cluster, DistanceValue, Tree};
+use abd_clam::{Cluster, Dataset, DistanceValue, Tree};
 use ndarray::prelude::*;
 use ndarray_npy::{NpzWriter, WritableElement};
 use rayon::prelude::*;
@@ -42,12 +42,13 @@ pub fn polar_distances<P: AsRef<Path>>(tree: ShellTree, out_dir: P) -> Result<()
 }
 
 /// Save distances from polar points to all other points in each `Cluster`.
-fn save_cluster_distances<Id, I, T, A, M, P>(tree: Tree<Id, I, T, A, M>, out_dir: P) -> Result<(), String>
+fn save_cluster_distances<D, M, T, A, P>(tree: Tree<D, M, T, A>, out_dir: P) -> Result<(), String>
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + serde::Serialize + WritableElement + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
     P: AsRef<Path>,
 {
     let mut writer = {
@@ -56,7 +57,7 @@ where
         NpzWriter::new_compressed(file)
     };
 
-    let (items, cluster_map, metric) = tree.into_parts();
+    let (dataset, metric, cluster_map) = tree.into_parts();
     let mut clusters = Vec::with_capacity(cluster_map.len());
 
     for mut cluster in cluster_map.values().map(Cluster::without_annotation) {
@@ -76,7 +77,7 @@ where
             };
 
             // The left pole is the point farthest from the center.
-            let center_distances = get_distances_in_range(cluster.center_index(), js.clone(), &items, &metric);
+            let center_distances = get_distances_in_range(cluster.center_index(), js.clone(), &dataset, &metric);
             let arg_left = {
                 let (arg_max, _) = center_distances
                     .iter()
@@ -88,7 +89,7 @@ where
             ftlog::info!("  Left pole index: {arg_left}");
 
             // The right pole is the point farthest from the left pole.
-            let left_distances = get_distances_in_range(arg_left, js.clone(), &items, &metric);
+            let left_distances = get_distances_in_range(arg_left, js.clone(), &dataset, &metric);
             let (arg_right, polar_distance) = {
                 let (arg_max, &polar_distance) = left_distances
                     .iter()
@@ -104,7 +105,7 @@ where
 
             // Save distances from both poles to all points in the cluster.
             let left_distances = Array1::from_vec(left_distances);
-            let right_distances = Array1::from_vec(get_distances_in_range(arg_right, js, &items, &metric));
+            let right_distances = Array1::from_vec(get_distances_in_range(arg_right, js, &dataset, &metric));
             writer
                 .add_array(format!("{}_l", cluster.center_index()), &left_distances)
                 .map_err(|e| format!("Failed to write left distances: {e}"))?;
@@ -125,13 +126,14 @@ where
 }
 
 /// Computes distances from the indexed point to other points within the given range.
-fn get_distances_in_range<Id, I, T, M>(i: usize, js: core::ops::Range<usize>, items: &[(Id, I)], metric: &M) -> Vec<T>
+fn get_distances_in_range<D, M, T>(i: usize, js: core::ops::Range<usize>, dataset: &D, metric: &M) -> Vec<T>
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    let i = &items[i].1;
-    items[js].par_iter().map(|(_, j)| metric(i, j)).collect()
+    let i = &dataset.as_slice()[i].1;
+    dataset.as_slice()[js].par_iter().map(|(_, j)| metric(i, j)).collect()
 }

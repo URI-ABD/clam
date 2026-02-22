@@ -5,7 +5,7 @@
 use std::usize;
 
 use abd_clam::{
-    DistanceValue, PartitionStrategy, Tree,
+    Dataset, DistanceValue, PartitionStrategy, Tree,
     cakes::{self, ParSearch, approximate, search_quality_stats},
     partition_strategy::{BranchingFactor, SpanReductionFactor},
 };
@@ -18,19 +18,20 @@ mod utils;
 
 use utils::ann_benchmarks::{AnnDataset, base_dir};
 
-fn bench_for_args<Id, I, T, A, M>(
+fn bench_for_args<D, M, T, A>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    tree: &Tree<Id, I, T, A, M>,
-    queries: &[I],
+    tree: &Tree<D, M, T, A>,
+    queries: &[D::Item],
     multiplier: usize,
     ks: &[usize],
     rs: &[T],
 ) where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
     for &k in ks {
         let true_hits = cakes::KnnLinear(k).par_batch_search(tree, queries);
@@ -59,20 +60,21 @@ fn bench_for_args<Id, I, T, A, M>(
     }
 }
 
-fn bench_one_alg<Id, I, T, A, M, Alg>(
+fn bench_one_alg<D, M, T, A, Alg>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    tree: &Tree<Id, I, T, A, M>,
+    tree: &Tree<D, M, T, A>,
     alg: &Alg,
-    queries: &[I],
+    queries: &[D::Item],
     true_hits: &[Vec<(usize, T)>],
     multiplier: usize,
 ) where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: ParSearch<Id, I, T, A, M>,
+    Alg: ParSearch<D, M, T, A>,
 {
     let id = BenchmarkId::new(alg.name(), multiplier);
     group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
@@ -86,10 +88,13 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     let mean_leaf_cardinality = all_leaves.iter().map(|c| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
     let singleton_fraction = all_leaves.iter().filter(|c| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
 
-    println!("Tree stats for dataset with cardinality {} after multiplier {multiplier}:", tree.cardinality());
+    println!(
+        "Tree stats for dataset with cardinality {} after multiplier {multiplier}:",
+        tree.dataset().cardinality()
+    );
     println!(
         "    Number of clusters: {size_of_tree}, Ratio: {:.8}",
-        size_of_tree as f64 / tree.cardinality() as f64
+        size_of_tree as f64 / tree.dataset().cardinality() as f64
     );
     println!("    Max depth: {max_depth}");
     println!("    Leaf fraction of clusters: {leaf_fraction:.8}, mean leaf cardinality: {mean_leaf_cardinality:.8}");
@@ -189,7 +194,8 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
             // Set the augmentation error to 0.1% of the radius of the root ball for the next augmentation
             augmentation_error = tree.root().radius() / 1000.0;
-            items = tree.take_items().into_iter().map(|(_, p)| p).collect();
+            let (id_items, _, _) = tree.into_parts();
+            items = id_items.into_iter().map(|(_, p)| p).collect();
 
             group.finish();
         }

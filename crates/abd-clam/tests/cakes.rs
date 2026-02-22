@@ -26,6 +26,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = data
         .into_iter()
         .map(|v| v.into_iter().map(|x| (x * 1000.0).trunc() / 1000.0).collect::<Vec<f32>>())
+        .enumerate()
         .collect::<Vec<_>>();
 
     println!("Starting test with {} items of dimension {}", car, dim);
@@ -80,6 +81,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
 #[test_case(100_000, 100; "100_000x100")]
 fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
+    let data = data.into_iter().enumerate().collect::<Vec<_>>();
     let query = vec![0.0; dim];
 
     let tree = Tree::par_new_minimal(data.clone(), metric)?;

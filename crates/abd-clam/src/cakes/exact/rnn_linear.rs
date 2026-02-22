@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree};
+use crate::{Dataset, DistanceValue, Tree};
 
 use super::super::{ParSearch, Search};
 
@@ -11,17 +11,19 @@ use super::super::{ParSearch, Search};
 /// The field is the radius of the query ball to search within.
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
-impl<Id, I, T, A, M> Search<Id, I, T, A, M> for RnnLinear<T>
+impl<D, M, T, A> Search<D, M, T, A> for RnnLinear<T>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {
         format!("RnnLinear(radius={})", self.0)
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        tree.items
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
+        tree.dataset
+            .as_slice()
             .iter()
             .enumerate()
             .filter_map(|(i, (_, item))| {
@@ -32,16 +34,18 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for RnnLinear<T>
+impl<D, M, T, A> ParSearch<D, M, T, A> for RnnLinear<T>
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        tree.items
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
+        tree.dataset
+            .as_slice()
             .par_iter()
             .enumerate()
             .filter_map(|(i, (_, item))| {

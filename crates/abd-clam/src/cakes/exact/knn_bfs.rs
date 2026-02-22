@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue, Tree, utils::SizedHeap};
+use crate::{Cluster, Dataset, DistanceValue, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, Search, d_max};
 
@@ -11,24 +11,35 @@ use super::super::{ParSearch, Search, d_max};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnBfs(pub usize);
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBfs {
+impl<D, M, T, A> Search<D, M, T, A> for KnnBfs
+where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
+    T: DistanceValue,
+{
     fn name(&self) -> String {
         format!("KnnBfs(k={})", self.0)
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();
 
-        if self.0 > tree.cardinality() {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
+            return tree
+                .dataset
+                .as_slice()
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
+                .collect();
         }
 
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = (tree.metric)(query, &tree.items[0].1);
+        let d = (tree.metric)(query, &tree.dataset.as_slice()[0].1);
         hits.push((0, d));
         candidates.push((root, d_max(radius, d)));
 
@@ -52,7 +63,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                         // Not a singleton, so compute distances to all non-center items and add them to hits
                         let distances = cluster
                             .subtree_indices()
-                            .zip(tree.items[cluster.subtree_indices()].iter())
+                            .zip(tree.dataset.as_slice()[cluster.subtree_indices()].iter())
                             .map(|(i, (_, item))| (i, (tree.metric)(query, item)));
                         hits.extend(distances);
                     }
@@ -61,7 +72,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                     if let Some(children) = tree.children_of(cluster) {
                         for (child, d) in children
                             .into_iter()
-                            .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
+                            .map(|child| (child, (tree.metric)(query, &tree.dataset.as_slice()[child.center_index()].1)))
                         {
                             let radius = child.radius();
                             hits.push((child.center_index(), d));
@@ -78,22 +89,24 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnBfs
+impl<D, M, T, A> ParSearch<D, M, T, A> for KnnBfs
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();
 
-        if self.0 > tree.cardinality() {
+        if self.0 > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .par_iter()
                 .enumerate()
                 .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
@@ -103,7 +116,7 @@ where
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = (tree.metric)(query, &tree.items[0].1);
+        let d = (tree.metric)(query, &tree.dataset.as_slice()[0].1);
         hits.push((0, d));
         candidates.push((root, d_max(radius, d)));
 
@@ -128,7 +141,7 @@ where
                         let distances = cluster
                             .subtree_indices()
                             .into_par_iter()
-                            .zip(tree.items[cluster.subtree_indices()].par_iter())
+                            .zip(tree.dataset.as_slice()[cluster.subtree_indices()].par_iter())
                             .map(|(i, (_, item))| (i, (tree.metric)(query, item)))
                             .collect::<Vec<_>>();
                         hits.extend(distances);
@@ -138,7 +151,7 @@ where
                     if let Some(children) = tree.children_of(cluster) {
                         for (child, d) in children
                             .into_par_iter()
-                            .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
+                            .map(|child| (child, (tree.metric)(query, &tree.dataset.as_slice()[child.center_index()].1)))
                             .collect::<Vec<_>>()
                         {
                             let radius = child.radius();

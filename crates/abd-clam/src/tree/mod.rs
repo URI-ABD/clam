@@ -2,17 +2,17 @@
 
 use std::collections::HashMap;
 
-use rayon::prelude::*;
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::DistanceValue;
 
 mod cluster;
+mod dataset;
 mod partition;
 
 pub use cluster::Cluster;
+pub use dataset::Dataset;
 pub use partition::strategy::{self as partition_strategy, PartitionStrategy};
 
 // TODO(Najib): Add methods to annotate clusters after tree creation.
@@ -23,20 +23,19 @@ pub use partition::strategy::{self as partition_strategy, PartitionStrategy};
 ///
 /// # Type Parameters
 ///
-/// - `Id`: The type of the identifier for each item in the tree.
-/// - `I`: The type of the items stored in the tree.
+/// - `D`: The type of the dataset used in the tree.
+/// - `M`: The type of the metric function used to compute distances between items from the dataset.
 /// - `T`: The type of the distance values used in the tree.
 /// - `A`: The type of any annotations that can be added to clusters.
-/// - `M`: The type of the metric function used to compute distances between items.
 #[must_use]
 #[derive(Clone, Debug)]
-pub struct Tree<Id, I, T, A, M> {
-    /// The items stored in the tree, each paired with its identifier.
-    pub(crate) items: Vec<(Id, I)>,
-    /// All clusters in the tree. This is a mapping from `cluster.center_index` to `cluster`.
-    pub(crate) cluster_map: HashMap<usize, Cluster<T, A>>,
+pub struct Tree<D, M, T, A> {
+    /// The dataset used in the tree.
+    pub(crate) dataset: D,
     /// The metric used to compute distances between items.
     pub(crate) metric: M,
+    /// All clusters in the tree. This is a mapping from `cluster.center_index` to `cluster`.
+    pub(crate) cluster_map: HashMap<usize, Cluster<T, A>>,
 }
 
 /// Minimal constructors for `Tree`.
@@ -44,23 +43,23 @@ pub struct Tree<Id, I, T, A, M> {
 /// - The identifier type is set to `usize` and will be the index of the item in the original vector.
 /// - The annotation type is set to `()`, meaning that no annotations are stored in the tree.
 /// - The default [`PartitionStrategy`](PartitionStrategy) is used to build a binary tree.
-impl<I, T, M> Tree<usize, I, T, (), M>
+impl<D, T, M> Tree<D, M, T, ()>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
     /// # Errors
     ///
     /// See [`Self::new`].
-    pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str> {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
+    pub fn new_minimal(dataset: D, metric: M) -> Result<Self, &'static str> {
+        if dataset.is_empty() {
+            return Err("Cannot create a Tree with an empty dataset.");
         }
 
-        let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::new(items, metric, &PartitionStrategy::default(), &|_| ())
+        Self::new(dataset, metric, &PartitionStrategy::default(), &|_| ())
     }
 
     /// Parallel version of [`Self::new_minimal`].
@@ -68,47 +67,42 @@ where
     /// # Errors
     ///
     /// See [`Self::new_minimal`].
-    pub fn par_new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
+    pub fn par_new_minimal(dataset: D, metric: M) -> Result<Self, &'static str>
     where
-        I: Send + Sync,
-        T: Send + Sync,
+        D: Send + Sync,
+        D::Id: Send + Sync,
+        D::Item: Send + Sync,
         M: Send + Sync,
+        T: Send + Sync,
     {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
+        if dataset.is_empty() {
+            return Err("Cannot create a Tree with an empty dataset.");
         }
 
-        let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| ())
+        Self::par_new(dataset, metric, &PartitionStrategy::default(), &|_| ())
     }
 }
 
 /// Various getter methods for `Tree`.
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
+impl<D, M, T, A> Tree<D, M, T, A> {
     /// Provides ownership of the members of the `Tree`.
-    #[expect(clippy::type_complexity)]
-    pub fn into_parts(self) -> (Vec<(Id, I)>, HashMap<usize, Cluster<T, A>>, M) {
-        (self.items, self.cluster_map, self.metric)
+    pub fn into_parts(self) -> (D, M, HashMap<usize, Cluster<T, A>>) {
+        (self.dataset, self.metric, self.cluster_map)
     }
 
     /// Creates a `Tree` from its members.
-    pub(crate) const fn from_parts(items: Vec<(Id, I)>, cluster_map: HashMap<usize, Cluster<T, A>>, metric: M) -> Self {
-        Self { items, cluster_map, metric }
+    pub(crate) const fn from_parts(dataset: D, metric: M, cluster_map: HashMap<usize, Cluster<T, A>>) -> Self {
+        Self { dataset, metric, cluster_map }
     }
 
-    /// Returns a reference to all items in the tree.
-    pub fn items(&self) -> &[(Id, I)] {
-        &self.items
+    /// Returns a reference to the dataset used in the tree.
+    pub const fn dataset(&self) -> &D {
+        &self.dataset
     }
 
-    /// Consumes the tree and returns all items stored in it.
-    pub fn take_items(self) -> Vec<(Id, I)> {
-        self.items
-    }
-
-    /// Returns the number of items stored in the tree.
-    pub const fn cardinality(&self) -> usize {
-        self.items.len()
+    /// Returns a reference to the metric used in the tree.
+    pub const fn metric(&self) -> &M {
+        &self.metric
     }
 
     /// Returns a reference to the hash map of all clusters in the tree.
@@ -155,11 +149,6 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         clusters
     }
 
-    /// Returns a reference to the metric used in the tree.
-    pub const fn metric(&self) -> &M {
-        &self.metric
-    }
-
     /// Returns a reference to the root cluster of the tree.
     pub fn root(&self) -> &Cluster<T, A> {
         self.cluster_map
@@ -176,73 +165,62 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
 }
 
 /// Various setters for `Tree`.
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
+impl<D, M, T, A> Tree<D, M, T, A> {
     /// Changes the metric used in the tree to the provided one.
-    pub fn with_metric<NewM>(self, metric: NewM) -> Tree<Id, I, T, A, NewM> {
+    pub fn with_metric<NewM>(self, metric: NewM) -> Tree<D, NewM, T, A> {
         Tree {
-            items: self.items,
-            cluster_map: self.cluster_map,
+            dataset: self.dataset,
             metric,
+            cluster_map: self.cluster_map,
         }
     }
 
     /// Applies the given closure to every item and identifier.
-    pub fn apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
+    pub fn apply_to_dataset<F, NewD>(self, f: &F) -> Tree<NewD, M, T, A>
     where
-        F: Fn(Id, I) -> (NewId, NewI),
+        F: Fn(D) -> NewD,
     {
-        let (items, cluster_map, metric) = self.into_parts();
-        let items = items.into_iter().map(|(id, item)| f(id, item)).collect();
-        Tree { items, cluster_map, metric }
-    }
-
-    /// Parallel version of [`Self::apply_to_items`]
-    pub fn par_apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
-    where
-        Id: Send + Sync,
-        I: Send + Sync,
-        F: Fn(Id, I) -> (NewId, NewI) + Send + Sync,
-        NewId: Send + Sync,
-        NewI: Send + Sync,
-    {
-        let (items, cluster_map, metric) = self.into_parts();
-        let items = items.into_par_iter().map(|(id, item)| f(id, item)).collect();
-        Tree { items, cluster_map, metric }
+        Tree {
+            dataset: f(self.dataset),
+            metric: self.metric,
+            cluster_map: self.cluster_map,
+        }
     }
 }
 
 /// Constructors for `Tree`.
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+impl<D, M, T, A> Tree<D, M, T, A>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
     /// # Arguments
     ///
-    /// * `items` - A vector of tuples, each containing an identifier and an item.
+    /// * `dataset` - A collection of items and their identifiers.
     /// * `metric` - A function that computes the distance between two items.
     /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
     /// * `annotator` - A function that annotates clusters as they are created.
     ///
     /// # Errors
     ///
-    /// If `items` is empty.
-    pub fn new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
+    /// If `dataset` is empty.
+    pub fn new<P, Ann>(mut dataset: D, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool,
         Ann: Fn(&Cluster<T, A>) -> A,
     {
-        if items.is_empty() {
+        if dataset.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
-        ftlog::info!("Creating tree with {} items", items.len());
+        ftlog::info!("Creating tree with {} items", dataset.cardinality());
 
         let mut cluster_map = HashMap::new();
 
         // The `frontier` holds clusters that were just created but whose children have not yet been created.
-        let mut frontier = vec![Cluster::new(&mut items, &metric, strategy)];
+        let mut frontier = vec![Cluster::new(dataset.as_mut_slice(), &metric, strategy)];
         ftlog::info!("Created root cluster with cardinality {}", frontier[0].0.cardinality);
 
         while let Some((mut cluster, splits)) = frontier.pop() {
@@ -274,39 +252,40 @@ where
             cluster_map.insert(cluster.center_index, cluster);
         }
 
-        ftlog::info!("Finished creating tree with {} items", items.len());
-        Ok(Self { items, cluster_map, metric })
+        ftlog::info!("Finished creating tree with {} items", dataset.cardinality());
+        Ok(Self { dataset, metric, cluster_map })
     }
 }
 
 /// Parallelized constructors for `Tree`.
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+impl<D, M, T, A> Tree<D, M, T, A>
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
     /// Parallel version of [`Self::new`].
     ///
     /// # Errors
     ///
-    /// If `items` is empty.
-    pub fn par_new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
+    /// If `dataset` is empty.
+    pub fn par_new<P, Ann>(mut dataset: D, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
         Ann: Fn(&Cluster<T, A>) -> A + Send + Sync,
     {
-        if items.is_empty() {
+        if dataset.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
-        ftlog::info!("Creating tree with {} items in parallel", items.len());
+        ftlog::info!("Creating tree with {} items in parallel", dataset.cardinality());
 
         let mut cluster_map = HashMap::new();
 
         // The `frontier` holds clusters that were just created but whose children have not yet been created.
-        let mut frontier = vec![Cluster::par_new(&mut items, &metric, strategy)];
+        let mut frontier = vec![Cluster::par_new(dataset.as_mut_slice(), &metric, strategy)];
         ftlog::info!("Created root cluster with cardinality {}", frontier[0].0.cardinality);
 
         while let Some((mut cluster, splits)) = frontier.pop() {
@@ -338,12 +317,12 @@ where
             cluster_map.insert(cluster.center_index, cluster);
         }
 
-        ftlog::info!("Finished creating tree with {} items", items.len());
-        Ok(Self { items, cluster_map, metric })
+        ftlog::info!("Finished creating tree with {} items", dataset.cardinality());
+        Ok(Self { dataset, metric, cluster_map })
     }
 }
 
-impl<Id, I, T, A, B, M> Tree<Id, I, T, (A, B), M> {
+impl<D, M, T, A, B> Tree<D, M, T, (A, B)> {
     /// De-compounds the annotations of the clusters in the tree and returns a new tree with the de-compounded annotations along with the other annotations.
     ///
     /// See [`Cluster::compound_annotation`] and [`Cluster::decompound_annotation`] for more details on how annotations are compounded and de-compounded.
@@ -354,9 +333,8 @@ impl<Id, I, T, A, B, M> Tree<Id, I, T, (A, B), M> {
     ///
     /// - A new `Tree` with the same items, the same metric, but with the annotations of the clusters de-compounded.
     /// - A `HashMap` mapping each cluster's center index to the de-compounded part of its annotation.
-    #[expect(clippy::type_complexity)]
-    pub fn decompound_annotations(self) -> (Tree<Id, I, T, A, M>, HashMap<usize, B>) {
-        let (items, cluster_map, metric) = self.into_parts();
+    pub fn decompound_annotations(self) -> (Tree<D, M, T, A>, HashMap<usize, B>) {
+        let (dataset, metric, cluster_map) = self.into_parts();
 
         let (cluster_map, annotations_map) = cluster_map
             .into_iter()
@@ -366,7 +344,7 @@ impl<Id, I, T, A, B, M> Tree<Id, I, T, (A, B), M> {
             })
             .unzip();
 
-        (Tree { items, cluster_map, metric }, annotations_map)
+        (Tree { dataset, metric, cluster_map }, annotations_map)
     }
 }
 
@@ -376,10 +354,9 @@ impl<Id, I, T, A, B, M> Tree<Id, I, T, (A, B), M> {
 /// typically a closure or function pointer, which cannot be serialized or deserialized. After deserialization, the metric must be provided using the
 /// [`Tree::with_metric`] method.
 #[cfg(feature = "serde")]
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+impl<D, T, A, M> Tree<D, M, T, A>
 where
-    Id: serde::Serialize + serde::de::DeserializeOwned,
-    I: serde::Serialize + serde::de::DeserializeOwned,
+    D: serde::Serialize + serde::de::DeserializeOwned,
     T: serde::Serialize + serde::de::DeserializeOwned,
     A: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -389,7 +366,7 @@ where
     ///
     /// If serialization fails.
     pub fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        (&self.items, &self.cluster_map).serialize(serializer)
+        (&self.dataset, &self.cluster_map).serialize(serializer)
     }
 
     /// Deserializes a `Tree` using Serde.
@@ -397,9 +374,9 @@ where
     /// # Errors
     ///
     /// If deserialization fails.
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
-        let (items, cluster_map) = <(_, _)>::deserialize(deserializer)?;
-        Ok(Self { items, cluster_map, metric })
+    pub fn deserialize<'de, De: serde::Deserializer<'de>>(deserializer: De, metric: M) -> Result<Self, De::Error> {
+        let (dataset, cluster_map) = <(_, _)>::deserialize(deserializer)?;
+        Ok(Self { dataset, metric, cluster_map })
     }
 }
 
@@ -407,15 +384,14 @@ where
 ///
 /// This does not serialize the metric. After deserialization, the metric must be provided using the [`Tree::with_metric`] method.
 #[cfg(feature = "serde")]
-impl<Id, I, T, A, M> databuf::Encode for Tree<Id, I, T, A, M>
+impl<D, M, T, A> databuf::Encode for Tree<D, M, T, A>
 where
-    Id: databuf::Encode,
-    I: databuf::Encode,
+    D: Dataset + databuf::Encode,
     T: databuf::Encode,
     A: databuf::Encode,
 {
     fn encode<const CONFIG: u16>(&self, buffer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
-        self.items.encode::<CONFIG>(buffer)?;
+        self.dataset.encode::<CONFIG>(buffer)?;
         self.cluster_map.encode::<CONFIG>(buffer)
     }
 }
@@ -424,17 +400,16 @@ where
 ///
 /// This sets a dummy metric during deserialization. After deserialization, the metric must be provided using the [`Tree::with_metric`] method.
 #[cfg(feature = "serde")]
-impl<'de, Id, I, T, A> databuf::Decode<'de> for Tree<Id, I, T, A, Box<dyn Fn(&I, &I) -> T>>
+impl<'de, D, T, A> databuf::Decode<'de> for Tree<D, Box<dyn Fn(&D::Item, &D::Item) -> T>, T, A>
 where
-    Id: databuf::Decode<'de>,
-    I: databuf::Decode<'de>,
+    D: Dataset + databuf::Decode<'de>,
     T: databuf::Decode<'de> + DistanceValue,
     A: databuf::Decode<'de>,
 {
     fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
-        let items = databuf::Decode::decode::<CONFIG>(buffer)?;
+        let dataset = databuf::Decode::decode::<CONFIG>(buffer)?;
         let cluster_map = databuf::Decode::decode::<CONFIG>(buffer)?;
-        let metric = Box::new(|_: &I, _: &I| T::zero()); // Placeholder; actual metric must be provided externally
-        Ok(Self { items, cluster_map, metric })
+        let metric = Box::new(|_: &D::Item, _: &D::Item| T::zero()); // Placeholder; actual metric must be provided externally
+        Ok(Self { dataset, metric, cluster_map })
     }
 }

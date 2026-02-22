@@ -3,22 +3,23 @@
 use rayon::prelude::*;
 
 use crate::{
-    DistanceValue, Tree,
+    Dataset, DistanceValue, Tree,
     cakes::RnnChess,
-    pancakes::{Codec, MaybeCompressed},
+    pancakes::{Codec, MaybeCompressedItem},
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for RnnChess<T>
+impl<Item, D, M, T, A> CompressiveSearch<Item, D, M, T, A> for RnnChess<T>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    M: Fn(&Item, &Item) -> T,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         let root_radius = tree.root().radius();
-        let d_root = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let d_root = tree.dataset.as_slice()[0].1.distance_to_query(query, &tree.metric)?;
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root_radius {
             return Ok(Vec::new()); // No overlap
@@ -43,7 +44,7 @@ where
                 tree.decompress_subtree(id)?;
                 let indices = tree.get_cluster(id)?.subtree_indices();
                 let distances = indices
-                    .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
+                    .map(|i| tree.dataset.as_slice()[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
                     .collect::<Result<Vec<_>, _>>()?;
                 hits.extend(distances);
             } else if let Ok(child_centers) = tree.decompress_child_centers(id) {
@@ -51,9 +52,12 @@ where
                 let distances = child_centers
                     .iter()
                     .map(|&cid| {
-                        tree.get_cluster(cid)
-                            .map(|c| (cid, c.radius))
-                            .and_then(|(cid, radius)| tree.items[cid].1.distance_to_query(query, &tree.metric).map(|d_child| (cid, d_child, radius)))
+                        tree.get_cluster(cid).map(|c| (cid, c.radius)).and_then(|(cid, radius)| {
+                            tree.dataset.as_slice()[cid]
+                                .1
+                                .distance_to_query(query, &tree.metric)
+                                .map(|d_child| (cid, d_child, radius))
+                        })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 for &(cid, d_child, radius) in &distances {
@@ -66,7 +70,7 @@ where
                 // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
                 tree.decompress_subtree(id)?;
                 let distances = tree.get_cluster(id)?.subtree_indices().filter_map(|i| {
-                    tree.items[i]
+                    tree.dataset.as_slice()[i]
                         .1
                         .distance_to_query(query, &tree.metric)
                         .ok()
@@ -80,18 +84,19 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for RnnChess<T>
+impl<Item, D, M, T, A> ParCompressiveSearch<Item, D, M, T, A> for RnnChess<T>
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         let root_radius = tree.root().radius();
-        let d_root = tree.items[0].1.distance_to_query(query, &tree.metric)?;
+        let d_root = tree.dataset.as_slice()[0].1.distance_to_query(query, &tree.metric)?;
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root_radius {
             return Ok(Vec::new()); // No overlap
@@ -117,7 +122,7 @@ where
                 let indices = tree.get_cluster(id)?.subtree_indices();
                 let distances = indices
                     .into_par_iter()
-                    .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
+                    .map(|i| tree.dataset.as_slice()[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
                     .collect::<Result<Vec<_>, _>>()?;
                 hits.extend(distances);
             } else if let Some(child_centers) = tree.par_decompress_child_centers(id)? {
@@ -125,9 +130,12 @@ where
                 let distances = child_centers
                     .par_iter()
                     .map(|&cid| {
-                        tree.get_cluster(cid)
-                            .map(|c| (cid, c.radius))
-                            .and_then(|(cid, radius)| tree.items[cid].1.distance_to_query(query, &tree.metric).map(|d_child| (cid, d_child, radius)))
+                        tree.get_cluster(cid).map(|c| (cid, c.radius)).and_then(|(cid, radius)| {
+                            tree.dataset.as_slice()[cid]
+                                .1
+                                .distance_to_query(query, &tree.metric)
+                                .map(|d_child| (cid, d_child, radius))
+                        })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 for &(cid, d_child, radius) in &distances {
@@ -144,7 +152,7 @@ where
                     .subtree_indices()
                     .into_par_iter()
                     .filter_map(|i| {
-                        tree.items[i]
+                        tree.dataset.as_slice()[i]
                             .1
                             .distance_to_query(query, &tree.metric)
                             .ok()

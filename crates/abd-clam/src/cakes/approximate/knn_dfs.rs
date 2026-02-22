@@ -4,7 +4,7 @@ use core::cmp::Reverse;
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue, Tree, utils::SizedHeap};
+use crate::{Cluster, Dataset, DistanceValue, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, Search, d_max, d_min, leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
@@ -59,24 +59,35 @@ impl core::fmt::Display for KnnDfs {
     }
 }
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
+impl<D, M, T, A> Search<D, M, T, A> for KnnDfs
+where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
+    T: DistanceValue,
+{
     fn name(&self) -> String {
         format!("{self}")
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();
 
-        if self.k > tree.cardinality() {
+        if self.k > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
+            return tree
+                .dataset
+                .as_slice()
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
+                .collect();
         }
         // let tol = 0.01; // Tolerance for hit improvement.
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
-        let d = (tree.metric)(query, &tree.items[0].1);
+        let d = (tree.metric)(query, &tree.dataset.as_slice()[0].1);
         hits.push((0, d));
         candidates.push((root, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
@@ -106,22 +117,24 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnDfs
+impl<D, M, T, A> ParSearch<D, M, T, A> for KnnDfs
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();
 
-        if self.k > tree.cardinality() {
+        if self.k > tree.dataset.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             return tree
-                .items
+                .dataset
+                .as_slice()
                 .par_iter()
                 .enumerate()
                 .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
@@ -131,7 +144,7 @@ where
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
-        let d = (tree.metric)(query, &tree.items[0].1);
+        let d = (tree.metric)(query, &tree.dataset.as_slice()[0].1);
         hits.push((0, d));
         candidates.push((root, Reverse((d_min(radius, d), d_max(radius, d), d))));
 

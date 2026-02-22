@@ -5,9 +5,9 @@ use core::fmt::Debug;
 use rand::prelude::*;
 
 use abd_clam::{
-    DistanceValue, Tree,
+    Dataset, DistanceValue, Tree,
     cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear},
-    pancakes::{Codec, CompressiveSearch, MaybeCompressed},
+    pancakes::{Codec, CompressiveSearch, MaybeCompressedItem},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -85,14 +85,16 @@ fn hamming<const N: usize>(a: &TestItem<N>, b: &TestItem<N>) -> usize {
     a.arr.iter().zip(b.arr.iter()).filter(|(a, b)| a != b).count()
 }
 
-fn compare_trees<Id, I, T, A, M>(tree: &Tree<Id, I, T, A, M>, compressed_tree: &Tree<Id, MaybeCompressed<I>, T, A, M>, ratio: f64) -> Result<(), String>
+fn compare_trees<Item, D, CD, M, T, A>(tree: &Tree<D, M, T, A>, compressed_tree: &Tree<CD, M, T, A>, ratio: f64) -> Result<(), String>
 where
-    Id: Eq + Debug,
-    I: Codec + Eq + Debug,
+    Item: Codec + Eq + Debug,
+    D: Dataset<Item = Item>,
+    D::Id: Eq + Debug,
+    CD: Dataset<Item = MaybeCompressedItem<Item>, Id = D::Id>,
 {
-    let items_size = tree.items().iter().map(|(_, item)| item.original_size()).sum::<usize>();
+    let items_size = tree.dataset().as_slice().iter().map(|(_, item)| item.original_size()).sum::<usize>();
     let n_clusters = tree.cluster_map().len();
-    let compressed_size = compressed_tree.items().iter().map(|(_, item)| item.size()).sum::<usize>();
+    let compressed_size = compressed_tree.dataset().as_slice().iter().map(|(_, item)| item.size()).sum::<usize>();
     let n_clusters_compressed = compressed_tree.cluster_map().len();
 
     assert!(
@@ -123,13 +125,14 @@ fn compression() -> Result<(), String> {
     let mut rng = rand::rng();
     let chars = ['a', 'c', 't', 'g'];
     let items = (0..1_000).map(|_| gen_test_item::<_, 8>(&mut rng, &chars)).collect::<Result<Vec<_>, _>>()?;
+    let items = items.into_iter().enumerate().collect::<Vec<_>>();
 
     let tree = Tree::new_minimal(items, hamming)?;
-    let compressed_tree = tree.clone().compress_all(3);
+    let compressed_tree = tree.clone().compress_all::<Vec<_>>(3);
     compare_trees(&tree, &compressed_tree, 0.75)?;
 
-    let decompressed_tree = compressed_tree.decompress_all();
-    assert_eq!(tree.items(), decompressed_tree.items(), "Decompressed items should match original items.");
+    let decompressed_tree = compressed_tree.decompress_all::<Vec<_>>();
+    assert_eq!(tree.dataset(), decompressed_tree.dataset(), "Decompressed items should match original items.");
 
     Ok(())
 }
@@ -139,13 +142,14 @@ fn par_compression() -> Result<(), String> {
     let mut rng = rand::rng();
     let chars = ['a', 'c', 't', 'g'];
     let items = (0..100_000).map(|_| gen_test_item::<_, 10>(&mut rng, &chars)).collect::<Result<Vec<_>, _>>()?;
+    let items = items.into_iter().enumerate().collect::<Vec<_>>();
 
     let tree = Tree::par_new_minimal(items, hamming)?;
-    let compressed_tree = tree.clone().par_compress_all(3);
+    let compressed_tree = tree.clone().par_compress_all::<Vec<_>>(3);
     compare_trees(&tree, &compressed_tree, 0.5)?;
 
-    let decompressed_tree = compressed_tree.par_decompress_all();
-    assert_eq!(tree.items(), decompressed_tree.items(), "Decompressed items should match original items.");
+    let decompressed_tree = compressed_tree.par_decompress_all::<Vec<_>>();
+    assert_eq!(tree.dataset(), decompressed_tree.dataset(), "Decompressed items should match original items.");
 
     Ok(())
 }
@@ -155,9 +159,10 @@ fn search() -> Result<(), String> {
     let mut rng = rand::rng();
     let chars = ['a', 'c', 't', 'g'];
     let data = (0..1_000).map(|_| gen_test_item::<_, 8>(&mut rng, &chars)).collect::<Result<Vec<_>, _>>()?;
+    let data = data.into_iter().enumerate().collect::<Vec<_>>();
     let query = gen_test_item::<_, 8>(&mut rng, &chars)?;
 
-    let mut tree = Tree::new_minimal(data, hamming)?.compress_all(3);
+    let mut tree = Tree::new_minimal(data, hamming)?.compress_all::<Vec<_>>(3);
 
     for radius in [1, 2, 4] {
         let linear_alg = RnnLinear(radius);
@@ -179,10 +184,10 @@ fn search() -> Result<(), String> {
         let linear_hits = sort_nondescending(linear_hits);
         assert_eq!(
             linear_hits.len(),
-            k.min(tree.items().len()),
+            k.min(tree.dataset().len()),
             "Not enough linear hits {} for k={}",
             linear_hits.len(),
-            k.min(tree.items().len())
+            k.min(tree.dataset().len())
         );
         tree.compress_root();
 

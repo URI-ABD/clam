@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, utils::SizedHeap};
+use crate::{Dataset, DistanceValue, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, Search};
 
@@ -11,41 +11,40 @@ use super::super::{ParSearch, Search};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnLinear(pub usize);
 
-impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnLinear
+impl<D, M, T, A> Search<D, M, T, A> for KnnLinear
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {
         format!("KnnLinear(k={})", self.0)
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let distances = tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
+        let distances = tree.dataset.as_slice().iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(distances);
         heap.take_items().collect()
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnLinear
+impl<D, M, T, A> ParSearch<D, M, T, A> for KnnLinear
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
     T: DistanceValue + Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        A: Send + Sync,
-        M: Send + Sync,
-    {
-        let distances = tree.items.par_iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
+        let distances = tree
+            .dataset
+            .as_slice()
+            .par_iter()
+            .enumerate()
+            .map(|(i, (_, item))| (i, (tree.metric)(query, item)));
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(distances.collect::<Vec<_>>());
         heap.take_items().collect()

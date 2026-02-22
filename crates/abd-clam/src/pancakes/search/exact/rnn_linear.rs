@@ -3,23 +3,25 @@
 use rayon::prelude::*;
 
 use crate::{
-    DistanceValue, Tree,
+    Dataset, DistanceValue, Tree,
     cakes::RnnLinear,
-    pancakes::{Codec, MaybeCompressed},
+    pancakes::{Codec, MaybeCompressedItem},
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for RnnLinear<T>
+impl<Item, D, M, T, A> CompressiveSearch<Item, D, M, T, A> for RnnLinear<T>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    M: Fn(&Item, &Item) -> T,
 {
-    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         tree.decompress_subtree(0)?;
         let distances = tree
-            .items
+            .dataset
+            .as_slice()
             .iter()
             .enumerate()
             .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))
@@ -28,19 +30,21 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for RnnLinear<T>
+impl<Item, D, M, T, A> ParCompressiveSearch<Item, D, M, T, A> for RnnLinear<T>
 where
-    Id: Send + Sync,
-    I: Codec + Send + Sync,
-    I::Compressed: Send + Sync,
+    Item: Codec + Send + Sync,
+    Item::Compressed: Send + Sync,
+    D: Dataset<Item = MaybeCompressedItem<Item>> + Send + Sync,
+    D::Id: Send + Sync,
+    M: Fn(&Item, &Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search(&self, tree: &mut Tree<D, M, T, A>, query: &Item) -> Result<Vec<(usize, T)>, String> {
         tree.par_decompress_subtree(0)?;
         let distances = tree
-            .items
+            .dataset
+            .as_slice()
             .par_iter()
             .enumerate()
             .map(|(i, (_, item))| item.distance_to_query(query, &tree.metric).map(|d| (i, d)))

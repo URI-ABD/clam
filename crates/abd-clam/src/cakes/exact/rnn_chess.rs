@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree};
+use crate::{Dataset, DistanceValue, Tree};
 
 use super::super::{ParSearch, Search};
 
@@ -11,18 +11,19 @@ use super::super::{ParSearch, Search};
 /// The field is the radius of the query ball to search within.
 pub struct RnnChess<T: DistanceValue>(pub T);
 
-impl<Id, I, T, A, M> Search<Id, I, T, A, M> for RnnChess<T>
+impl<D, M, T, A> Search<D, M, T, A> for RnnChess<T>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {
         format!("RnnChess(radius={})", self.0)
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
-        let d_root = (tree.metric)(query, &tree.items[0].1); // root center index is always 0
+        let d_root = (tree.metric)(query, &tree.dataset.as_slice()[0].1); // root center index is always 0
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root.radius() {
             return Vec::new(); // No overlap
@@ -44,19 +45,19 @@ where
 
             if d + cluster.radius() <= self.0 {
                 // Fully subsumed cluster, so we can add all items in this subtree
-                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
+                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.dataset.as_slice()[cluster.subtree_indices()]) {
                     hits.push((i, (tree.metric)(query, item)));
                 }
             } else if let Some(children) = tree.children_of(cluster) {
                 // Parent cluster is partially overlapping, so we need to check children for overlap and add them to the frontier
                 let overlapping_children = children.into_iter().filter_map(|child| {
-                    let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
+                    let d_child = (tree.metric)(query, &tree.dataset.as_slice()[child.center_index()].1);
                     if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
                 });
                 frontier.extend(overlapping_children);
             } else {
                 // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
-                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
+                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.dataset.as_slice()[cluster.subtree_indices()]) {
                     let dist = (tree.metric)(query, item);
                     if dist <= self.0 {
                         hits.push((i, dist));
@@ -69,17 +70,18 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for RnnChess<T>
+impl<D, M, T, A> ParSearch<D, M, T, A> for RnnChess<T>
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         let root = tree.root();
-        let d_root = (tree.metric)(query, &tree.items[0].1); // root center index is always 0
+        let d_root = (tree.metric)(query, &tree.dataset.as_slice()[0].1); // root center index is always 0
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root.radius() {
             return Vec::new(); // No overlap
@@ -104,7 +106,7 @@ where
                 for (i, (_, item)) in cluster
                     .subtree_indices()
                     .into_par_iter()
-                    .zip(&tree.items[cluster.subtree_indices()])
+                    .zip(&tree.dataset.as_slice()[cluster.subtree_indices()])
                     .collect::<Vec<_>>()
                 {
                     hits.push((i, (tree.metric)(query, item)));
@@ -114,7 +116,7 @@ where
                 let overlapping_children = children
                     .into_par_iter()
                     .filter_map(|child| {
-                        let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
+                        let d_child = (tree.metric)(query, &tree.dataset.as_slice()[child.center_index()].1);
                         if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
                     })
                     .collect::<Vec<_>>();
@@ -124,7 +126,7 @@ where
                 for (i, (_, item)) in cluster
                     .subtree_indices()
                     .into_par_iter()
-                    .zip(&tree.items[cluster.subtree_indices()])
+                    .zip(&tree.dataset.as_slice()[cluster.subtree_indices()])
                     .collect::<Vec<_>>()
                 {
                     let dist = (tree.metric)(query, item);

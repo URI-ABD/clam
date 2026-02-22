@@ -21,7 +21,7 @@ fn new() -> Result<(), String> {
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(tree.items()[root.center_index()].1, vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(tree.dataset().as_slice()[root.center_index()].1, vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
@@ -80,7 +80,7 @@ fn par_new() -> Result<(), String> {
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(tree.items()[root.center_index()].1, vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(tree.dataset().as_slice()[root.center_index()].1, vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     // Now partition the root
@@ -145,6 +145,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
                     .map(|f| (f * 1000.0).trunc() / 1000.0) // Truncate to 3 decimal places to help debugging
                     .collect::<Vec<_>>()
             })
+            .enumerate()
             .collect::<Vec<_>>();
         let tree = Tree::new_minimal(data, metric)?;
         let n_clusters = tree.n_clusters();
@@ -181,6 +182,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
+        let data = data.into_iter().enumerate().collect::<Vec<_>>();
         let tree = Tree::par_new_minimal(data, metric)?;
         let n_clusters = tree.n_clusters();
 

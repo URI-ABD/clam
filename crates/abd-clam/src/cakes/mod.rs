@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree};
+use crate::{Dataset, DistanceValue, Tree};
 
 pub mod approximate;
 mod exact;
@@ -46,10 +46,11 @@ impl<T: DistanceValue> Cakes<T> {
 }
 
 /// A Nearest Neighbor Search algorithm.
-pub trait Search<Id, I, T, A, M>
+pub trait Search<D, M, T, A>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     /// Returns a name for the search algorithm.
     ///
@@ -57,55 +58,57 @@ where
     fn name(&self) -> String;
 
     /// Searches for nearest neighbors of `query` in the given `tree` and returns a vector of `(index, distance)` pairs into the `items` of the `tree`.
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)>;
 
     /// Batched version of [`Search::search`].
-    fn batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+    fn batch_search(&self, tree: &Tree<D, M, T, A>, queries: &[D::Item]) -> Vec<Vec<(usize, T)>> {
         queries.iter().map(|query| self.search(tree, query)).collect()
     }
 }
 
 /// Parallel version of [`Search`].
-pub trait ParSearch<Id, I, T, A, M>: Search<Id, I, T, A, M> + Send + Sync
+pub trait ParSearch<D, M, T, A>: Search<D, M, T, A> + Send + Sync
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
     /// Parallel version of [`Search::search`].
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)>;
 
     /// Parallel version of [`Search::batch_search`].
-    fn par_batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+    fn par_batch_search(&self, tree: &Tree<D, M, T, A>, queries: &[D::Item]) -> Vec<Vec<(usize, T)>> {
         queries.par_iter().map(|query| self.search(tree, query)).collect()
     }
 
     /// Parallel batched version of [`Search::batch_search`].
-    fn par_batch_par_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+    fn par_batch_par_search(&self, tree: &Tree<D, M, T, A>, queries: &[D::Item]) -> Vec<Vec<(usize, T)>> {
         queries.par_iter().map(|query| self.par_search(tree, query)).collect()
     }
 }
 
-impl<Id, I, T, A, M> Search<Id, I, T, A, M> for Cakes<T>
+impl<D, M, T, A> Search<D, M, T, A> for Cakes<T>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {
         match self {
-            Self::KnnBfs(alg) => <KnnBfs as Search<Id, I, T, A, M>>::name(alg),
-            Self::KnnDfs(alg) => <KnnDfs as Search<Id, I, T, A, M>>::name(alg),
-            Self::KnnLinear(alg) => <KnnLinear as Search<Id, I, T, A, M>>::name(alg),
-            Self::KnnRrnn(alg) => <KnnRrnn as Search<Id, I, T, A, M>>::name(alg),
-            Self::RnnChess(alg) => <RnnChess<T> as Search<Id, I, T, A, M>>::name(alg),
-            Self::RnnLinear(alg) => <RnnLinear<T> as Search<Id, I, T, A, M>>::name(alg),
-            Self::ApproxKnnDfs(alg) => <approximate::KnnDfs as Search<Id, I, T, A, M>>::name(alg),
+            Self::KnnBfs(alg) => <KnnBfs as Search<D, M, T, A>>::name(alg),
+            Self::KnnDfs(alg) => <KnnDfs as Search<D, M, T, A>>::name(alg),
+            Self::KnnLinear(alg) => <KnnLinear as Search<D, M, T, A>>::name(alg),
+            Self::KnnRrnn(alg) => <KnnRrnn as Search<D, M, T, A>>::name(alg),
+            Self::RnnChess(alg) => <RnnChess<T> as Search<D, M, T, A>>::name(alg),
+            Self::RnnLinear(alg) => <RnnLinear<T> as Search<D, M, T, A>>::name(alg),
+            Self::ApproxKnnDfs(alg) => <approximate::KnnDfs as Search<D, M, T, A>>::name(alg),
         }
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         match self {
             Self::KnnBfs(alg) => alg.search(tree, query),
             Self::KnnDfs(alg) => alg.search(tree, query),
@@ -118,15 +121,16 @@ where
     }
 }
 
-impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for Cakes<T>
+impl<D, M, T, A> ParSearch<D, M, T, A> for Cakes<T>
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         match self {
             Self::KnnBfs(alg) => alg.par_search(tree, query),
             Self::KnnDfs(alg) => alg.par_search(tree, query),
@@ -140,32 +144,34 @@ where
 }
 
 // Blanket implementations of `Search` for references.
-impl<Id, I, T, A, M, Alg> Search<Id, I, T, A, M> for &Alg
+impl<D, M, T, A, Alg> Search<D, M, T, A> for &Alg
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue,
-    M: Fn(&I, &I) -> T,
-    Alg: Search<Id, I, T, A, M>,
+    Alg: Search<D, M, T, A>,
 {
     fn name(&self) -> String {
         (**self).name()
     }
 
-    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         (**self).search(tree, query)
     }
 }
 
 // Blanket implementations of `ParSearch` for references.
-impl<Id, I, T, A, M, Alg> ParSearch<Id, I, T, A, M> for &Alg
+impl<D, M, T, A, Alg> ParSearch<D, M, T, A> for &Alg
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::Id: Send + Sync,
+    D::Item: Send + Sync,
+    M: Fn(&D::Item, &D::Item) -> T + Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: ParSearch<Id, I, T, A, M>,
+    Alg: ParSearch<D, M, T, A>,
 {
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &Tree<D, M, T, A>, query: &D::Item) -> Vec<(usize, T)> {
         (**self).par_search(tree, query)
     }
 }

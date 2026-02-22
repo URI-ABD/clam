@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use abd_clam::{DistanceValue, PartitionStrategy, Tree, cakes::Search, partition_strategy::MaxSplit};
+use abd_clam::{Dataset, DistanceValue, PartitionStrategy, Tree, cakes::Search, partition_strategy::MaxSplit};
 use databuf::{Decode, Encode, config::DEFAULT as DATABUF_DEFAULT};
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
 
 macro_rules! tree_type {
     ($id:ty, $i:ty, $t:ty) => {
-        Tree<$id, $i, $t, (), fn(&$i, &$i) -> $t>
+        Tree<Vec<($id, $i)>, fn(&$i, &$i) -> $t, $t, ()>
     };
 }
 
@@ -33,8 +33,8 @@ pub enum VectorTree {
 
 #[expect(clippy::type_complexity)]
 pub enum ShellTree {
-    Lcs(Tree<String, MusalsSequence, u32, (), fn(&MusalsSequence, &MusalsSequence) -> u32>),
-    Levenshtein(Tree<String, MusalsSequence, u32, (), Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>>),
+    Lcs(Tree<Vec<(String, MusalsSequence)>, fn(&MusalsSequence, &MusalsSequence) -> u32, u32, ()>),
+    Levenshtein(Tree<Vec<(String, MusalsSequence)>, Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>, u32, ()>),
     Euclidean(VectorTree),
     Cosine(VectorTree),
 }
@@ -337,10 +337,11 @@ impl std::fmt::Display for ShellTree {
     }
 }
 
-fn search<Id, I, T, A, M, P>(tree: &Tree<Id, I, T, A, M>, queries: &[I], algs: &[ShellCakes], out_path: P) -> Result<(), String>
+fn search<D, M, T, A, P>(tree: &Tree<D, M, T, A>, queries: &[D::Item], algs: &[ShellCakes], out_path: P) -> Result<(), String>
 where
+    D: Dataset,
+    M: Fn(&D::Item, &D::Item) -> T,
     T: DistanceValue + 'static,
-    M: Fn(&I, &I) -> T,
     P: AsRef<Path> + core::fmt::Debug,
     <T as core::str::FromStr>::Err: std::fmt::Display,
 {

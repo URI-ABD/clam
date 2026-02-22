@@ -22,7 +22,7 @@
 mod tree;
 mod utils;
 
-pub use tree::{Cluster, PartitionStrategy, Tree, partition_strategy};
+pub use tree::{Cluster, Dataset, PartitionStrategy, Tree, partition_strategy};
 pub use utils::DistanceValue;
 
 pub mod cakes;

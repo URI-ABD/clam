@@ -46,14 +46,14 @@ pub trait Codec {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
-pub enum MaybeCompressed<I: Codec> {
+pub enum MaybeCompressedItem<I: Codec> {
     /// The original item.
     Original(I),
     /// The compressed representation of the item.
     Compressed(I::Compressed),
 }
 
-impl<I: Codec> MaybeCompressed<I> {
+impl<I: Codec> MaybeCompressedItem<I> {
     /// Returns the original item if the item is stored in its original form, and None otherwise.
     pub(crate) fn take_original(self) -> Option<I> {
         match self {
@@ -109,7 +109,7 @@ impl<I: Codec> MaybeCompressed<I> {
 
 /// Implementation of [`databuf::Encode`] for [`MaybeCompressed`], gated by the `serde` feature.
 #[cfg(feature = "serde")]
-impl<I> databuf::Encode for MaybeCompressed<I>
+impl<I> databuf::Encode for MaybeCompressedItem<I>
 where
     I: Codec + databuf::Encode,
     I::Compressed: databuf::Encode,
@@ -130,7 +130,7 @@ where
 
 /// Implementation of [`databuf::Decode`] for [`MaybeCompressed`], gated by the `serde` feature.
 #[cfg(feature = "serde")]
-impl<'de, I> databuf::Decode<'de> for MaybeCompressed<I>
+impl<'de, I> databuf::Decode<'de> for MaybeCompressedItem<I>
 where
     I: Codec + databuf::Decode<'de>,
     I::Compressed: databuf::Decode<'de>,

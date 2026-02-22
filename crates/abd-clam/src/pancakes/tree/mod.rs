@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
-use crate::{Cluster, DistanceValue, Tree};
+use crate::{Cluster, Dataset, DistanceValue, Tree};
 
-use super::{Codec, MaybeCompressed};
+use super::{Codec, MaybeCompressedItem};
 
 mod par_tree;
 
@@ -36,9 +36,10 @@ impl CompressionCost {
     }
 }
 
-impl<Id, I, T, A, M> Tree<Id, I, T, (A, CompressionCost), M>
+impl<D, M, T, A> Tree<D, M, T, (A, CompressionCost)>
 where
-    I: Codec,
+    D: Dataset,
+    D::Item: Codec,
 {
     /// Computes the cost of recursive compression for all parent clusters in the tree and sets the recursive cost in the annotation of the clusters.
     fn annotate_recursive_compression_costs(&mut self) {
@@ -115,13 +116,15 @@ where
     }
 }
 
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+impl<D, M, T, A> Tree<D, M, T, A>
 where
-    I: Codec,
+    D: Dataset,
+    D::Item: Codec,
 {
     /// Compresses the tree.
-    pub fn compress_all(self, min_depth: usize) -> Tree<Id, MaybeCompressed<I>, T, A, M>
+    pub fn compress_all<NewD>(self, min_depth: usize) -> Tree<NewD, M, T, A>
     where
+        NewD: Dataset<Item = MaybeCompressedItem<D::Item>, Id = D::Id>,
         T: DistanceValue,
     {
         // Annotate the clusters with their unitary and recursive compression costs and trim the tree down to the first unitary cluster along each branch.
@@ -129,8 +132,11 @@ where
         tree.annotate_recursive_compression_costs();
         tree.trim_to_unitary_clusters(min_depth);
 
+        let (dataset, metric, cluster_map) = tree.into_parts();
+        let dataset = dataset.map::<NewD, _>(|(id, item)| (id, MaybeCompressedItem::Original(item)));
+
         // Compress the items in the tree.
-        let mut tree = tree.apply_to_items(&|id, item| (id, MaybeCompressed::Original(item)));
+        let mut tree = Tree::from_parts(dataset, metric, cluster_map);
         tree.compress_root();
 
         // Remove the cost annotations from the clusters, since they are no longer needed.
@@ -144,42 +150,51 @@ where
     /// - `reference`: index of the reference item.
     /// - `targets`: indices of the target items to compress.
     fn compression_cost(&self, reference: usize, targets: &[usize]) -> usize {
-        let reference = &self.items[reference].1;
-        targets.iter().map(|&i| I::compressed_size(&reference.compress(&self.items[i].1))).sum()
+        let reference = &self.dataset.as_slice()[reference].1;
+        targets
+            .iter()
+            .map(|&i| D::Item::compressed_size(&reference.compress(&self.dataset.as_slice()[i].1)))
+            .sum()
     }
 
     /// Annotates all clusters in the tree with unitary compression costs.
-    fn annotate_unitary_compression_costs(self) -> Tree<Id, I, T, (A, CompressionCost), M>
+    fn annotate_unitary_compression_costs(self) -> Tree<D, M, T, (A, CompressionCost)>
     where
         T: Clone,
     {
-        let (items, cluster_map, metric) = self.into_parts();
+        let (dataset, metric, cluster_map) = self.into_parts();
         let annotator = |c: Cluster<T, A>| {
-            let center = &items[c.center_index].1;
-            let unitary_cost = items[c.subtree_indices()]
+            let center = &dataset.as_slice()[c.center_index].1;
+            let unitary_cost = dataset.as_slice()[c.subtree_indices()]
                 .iter()
-                .map(|(_, item)| I::compressed_size(&center.compress(item)))
+                .map(|(_, item)| D::Item::compressed_size(&center.compress(item)))
                 .sum();
             c.compound_annotation(CompressionCost::new(unitary_cost))
         };
         let cluster_map = cluster_map.into_iter().map(|(id, cluster)| (id, annotator(cluster))).collect();
-        Tree::from_parts(items, cluster_map, metric)
+        Tree::from_parts(dataset, metric, cluster_map)
     }
 }
 
-impl<Id, I, T, A, M> Tree<Id, MaybeCompressed<I>, T, A, M>
+impl<Item, D, M, T, A> Tree<D, M, T, A>
 where
-    I: Codec,
+    Item: Codec,
+    D: Dataset<Item = MaybeCompressedItem<Item>>,
 {
     /// Returns the tree with decompressed items.
-    pub fn decompress_all(mut self) -> Tree<Id, I, T, A, M> {
+    pub fn decompress_all<NewD>(mut self) -> Tree<NewD, M, T, A>
+    where
+        NewD: Dataset<Item = Item, Id = D::Id>,
+    {
         self.decompress_root();
-        self.apply_to_items(&|id, item| {
+        let (dataset, metric, cluster_map) = self.into_parts();
+        let dataset = dataset.map(|(id, item)| {
             let item = item
                 .take_original()
                 .unwrap_or_else(|| unreachable!("All items should be in their original form by the time the frontier is empty"));
             (id, item)
-        })
+        });
+        Tree::from_parts(dataset, metric, cluster_map)
     }
 
     /// Compresses the tree from the root.
@@ -238,7 +253,7 @@ where
 
             // Update the compressed items in the tree.
             for (i, compressed) in compressed_items {
-                self.items[i].1 = MaybeCompressed::Compressed(compressed);
+                self.dataset.as_mut_slice()[i].1 = MaybeCompressedItem::Compressed(compressed);
             }
 
             // Update the frontier to the parents of the clusters in the current frontier.
@@ -254,7 +269,7 @@ where
                 self.compressed_items(id, &targets)?
             };
             for (i, compressed) in compressed_items.into_iter().flatten() {
-                self.items[i].1 = MaybeCompressed::Compressed(compressed);
+                self.dataset.as_mut_slice()[i].1 = MaybeCompressedItem::Compressed(compressed);
             }
         }
 
@@ -284,7 +299,7 @@ where
             };
             let dec_items = self.decompressed_items(id, &targets)?;
             for (i, item) in dec_items.into_iter().flatten() {
-                self.items[i].1 = MaybeCompressed::Original(item);
+                self.dataset.as_mut_slice()[i].1 = MaybeCompressedItem::Original(item);
             }
         }
 
@@ -310,7 +325,7 @@ where
         if let Some(targets) = self.get_cluster(id)?.child_center_indices().map(<[_]>::to_vec) {
             let items = self.decompressed_items(id, &targets)?;
             for (i, item) in items.into_iter().flatten() {
-                self.items[i].1 = MaybeCompressed::Original(item);
+                self.dataset.as_mut_slice()[i].1 = MaybeCompressedItem::Original(item);
             }
             Ok(targets)
         } else {
@@ -334,14 +349,14 @@ where
     ///
     /// - If the indexed center is compressed.
     #[expect(clippy::type_complexity)]
-    pub(crate) fn compressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<(usize, I::Compressed)>>, String> {
-        let center = self.items[center]
+    pub(crate) fn compressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<(usize, Item::Compressed)>>, String> {
+        let center = self.dataset.as_slice()[center]
             .1
             .original()
             .ok_or_else(|| format!("Center item at index {center} is compressed"))?;
         Ok(targets
             .iter()
-            .map(|&i| self.items[i].1.original().map(|item| (i, center.compress(item))))
+            .map(|&i| self.dataset.as_slice()[i].1.original().map(|item| (i, center.compress(item))))
             .collect())
     }
 
@@ -360,14 +375,14 @@ where
     /// # Errors
     ///
     /// - If the indexed center is compressed.
-    pub(crate) fn decompressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<(usize, I)>>, String> {
-        let center = self.items[center]
+    pub(crate) fn decompressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<(usize, Item)>>, String> {
+        let center = self.dataset.as_slice()[center]
             .1
             .original()
             .ok_or_else(|| format!("Center item at index {center} was compressed"))?;
         Ok(targets
             .iter()
-            .map(|&i| self.items[i].1.compressed().map(|compressed| (i, center.decompress(compressed))))
+            .map(|&i| self.dataset.as_slice()[i].1.compressed().map(|compressed| (i, center.decompress(compressed))))
             .collect())
     }
 }

@@ -57,7 +57,7 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
     Ok(array.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<usize, Vec<f32>, f32, (), M>, queries: &[Vec<f32>], k: usize) {
+fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<Vec<(usize, Vec<f32>)>, M, f32, ()>, queries: &[Vec<f32>], k: usize) {
     profi::prof!();
 
     // For each of the search algorithms, we change the metric to count distance computations separately.
@@ -99,6 +99,7 @@ fn main() -> Result<(), String> {
     let k = 10;
 
     let [items, queries] = read_data("fashion-mnist")?;
+    let items = items.into_iter().enumerate().collect::<Vec<_>>();
 
     // Build tree with `build_metric` to count the number of distance computations in building the tree.
     let tree = Tree::par_new_minimal(items, build_metric)?;
