@@ -17,7 +17,7 @@ where
     M: Fn(&I, &I) -> T,
 {
     fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        tree.decompress_subtree(0)?;
+        tree.decompress_subtree(0);
         let distances = tree
             .items
             .iter()
@@ -38,7 +38,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        tree.par_decompress_subtree(0)?;
+        tree.par_decompress_subtree(0);
         let distances = tree
             .items
             .par_iter()

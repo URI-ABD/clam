@@ -22,7 +22,7 @@ where
     fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.decompress_subtree(0)?;
+            tree.decompress_subtree(0);
             return tree
                 .items
                 .iter()
@@ -69,7 +69,7 @@ where
     fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.decompress_subtree(0)?;
+            tree.decompress_subtree(0);
             return tree
                 .items
                 .par_iter()
@@ -172,7 +172,7 @@ where
 {
     profi::prof!("KnnDfs::leaf_into_hits");
 
-    tree.decompress_subtree(leaf_id)?;
+    tree.decompress_subtree(leaf_id);
     let leaf = tree.get_cluster(leaf_id)?;
 
     if leaf.is_singleton() {
@@ -261,7 +261,7 @@ where
 {
     profi::prof!("KnnDfs::leaf_into_hits");
 
-    tree.par_decompress_subtree(leaf_id)?;
+    tree.par_decompress_subtree(leaf_id);
     let leaf = tree.get_cluster(leaf_id)?;
 
     if leaf.is_singleton() {

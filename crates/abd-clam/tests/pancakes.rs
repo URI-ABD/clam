@@ -7,7 +7,7 @@ use rand::prelude::*;
 use abd_clam::{
     DistanceValue, Tree,
     cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear},
-    pancakes::{Codec, CompressiveSearch, MaybeCompressed},
+    pancakes::{Codec, CompressiveSearch, MaybeCompressed, ParCompressiveSearch},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -89,7 +89,27 @@ fn compare_trees<Id, I, T, A, M>(tree: &Tree<Id, I, T, A, M>, compressed_tree: &
 where
     Id: Eq + Debug,
     I: Codec + Eq + Debug,
+    T: Debug,
+    A: Debug,
 {
+    assert_eq!(tree.cardinality(), compressed_tree.cardinality(), "Trees should have the same cardinality.");
+
+    let mut uncompressed = Vec::new();
+    for (i, (_, item)) in compressed_tree.items().iter().enumerate().skip(1) {
+        if item.compressed().is_none() {
+            let mut id = i;
+            while !compressed_tree.cluster_map().contains_key(&id) {
+                id -= 1;
+            }
+            let c = compressed_tree.get_cluster(id)?;
+            uncompressed.push((i, c));
+        }
+    }
+    for &(i, c) in &uncompressed {
+        println!("Uncompressed item {i}: Cluster {c:?}");
+    }
+    assert!(uncompressed.is_empty(), "There should be no uncompressed items other that the root.");
+
     let items_size = tree.items().iter().map(|(_, item)| item.original_size()).sum::<usize>();
     let n_clusters = tree.cluster_map().len();
     let compressed_size = compressed_tree.items().iter().map(|(_, item)| item.size()).sum::<usize>();
@@ -120,7 +140,7 @@ where
 
 #[test]
 fn compression() -> Result<(), String> {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(42);
     let chars = ['a', 'c', 't', 'g'];
     let items = (0..1_000).map(|_| gen_test_item::<_, 8>(&mut rng, &chars)).collect::<Result<Vec<_>, _>>()?;
 
@@ -136,7 +156,7 @@ fn compression() -> Result<(), String> {
 
 #[test]
 fn par_compression() -> Result<(), String> {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(42);
     let chars = ['a', 'c', 't', 'g'];
     let items = (0..100_000).map(|_| gen_test_item::<_, 10>(&mut rng, &chars)).collect::<Result<Vec<_>, _>>()?;
 
@@ -173,6 +193,19 @@ fn search() -> Result<(), String> {
         check_hits(&linear_hits, &chess_hits, format!("RnnChess({radius})"))?;
     }
 
+    for radius in [1, 2, 4] {
+        let linear_alg = RnnLinear(radius);
+        let linear_hits = linear_alg.compressive_search(&mut tree, &query)?;
+        let linear_hits = sort_nondescending(linear_hits);
+
+        let chess_alg = RnnChess(radius);
+        let chess_hits = chess_alg.compressive_search(&mut tree, &query)?;
+        let chess_hits = sort_nondescending(chess_hits);
+
+        check_hits(&linear_hits, &chess_hits, format!("RnnChess({radius})"))?;
+    }
+    tree.compress_root();
+
     for k in [1, 10, 20] {
         let linear_alg = KnnLinear(k);
         let linear_hits = linear_alg.compressive_search(&mut tree, &query)?;
@@ -204,6 +237,135 @@ fn search() -> Result<(), String> {
         tree.compress_root();
         check_hits(&linear_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
     }
+
+    for k in [1, 10, 20] {
+        let linear_alg = KnnLinear(k);
+        let linear_hits = linear_alg.compressive_search(&mut tree, &query)?;
+        let linear_hits = sort_nondescending(linear_hits);
+        assert_eq!(
+            linear_hits.len(),
+            k.min(tree.items().len()),
+            "Not enough linear hits {} for k={}",
+            linear_hits.len(),
+            k.min(tree.items().len())
+        );
+
+        let dfs_alg = KnnDfs(k);
+        let dfs_hits = dfs_alg.compressive_search(&mut tree, &query)?;
+        let dfs_hits = sort_nondescending(dfs_hits);
+        check_hits(&linear_hits, &dfs_hits, format!("KnnDfs({k})"))?;
+
+        let bfs_alg = KnnBfs(k);
+        let bfs_hits = bfs_alg.compressive_search(&mut tree, &query)?;
+        let bfs_hits = sort_nondescending(bfs_hits);
+        check_hits(&linear_hits, &bfs_hits, format!("KnnBfs({k})"))?;
+
+        let rrnn_alg = KnnRrnn(k);
+        let rrnn_hits = rrnn_alg.compressive_search(&mut tree, &query)?;
+        let rrnn_hits = sort_nondescending(rrnn_hits);
+        check_hits(&linear_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
+    }
+    tree.compress_root();
+
+    Ok(())
+}
+
+#[test]
+fn par_search() -> Result<(), String> {
+    let mut rng = rand::rng();
+    let chars = ['a', 'c', 't', 'g'];
+    let data = (0..20_000).map(|_| gen_test_item::<_, 9>(&mut rng, &chars)).collect::<Result<Vec<_>, _>>()?;
+    let query = gen_test_item::<_, 9>(&mut rng, &chars)?;
+
+    let mut tree = Tree::new_minimal(data, hamming)?.par_compress_all(3);
+
+    for radius in [1, 2, 4] {
+        let linear_alg = RnnLinear(radius);
+        let linear_hits = linear_alg.par_compressive_search(&mut tree, &query)?;
+        let linear_hits = sort_nondescending(linear_hits);
+        tree.par_compress_root();
+
+        let chess_alg = RnnChess(radius);
+        let chess_hits = chess_alg.par_compressive_search(&mut tree, &query)?;
+        let chess_hits = sort_nondescending(chess_hits);
+        tree.par_compress_root();
+
+        check_hits(&linear_hits, &chess_hits, format!("RnnChess({radius})"))?;
+    }
+
+    for radius in [1, 2, 4] {
+        let linear_alg = RnnLinear(radius);
+        let linear_hits = linear_alg.par_compressive_search(&mut tree, &query)?;
+        let linear_hits = sort_nondescending(linear_hits);
+
+        let chess_alg = RnnChess(radius);
+        let chess_hits = chess_alg.par_compressive_search(&mut tree, &query)?;
+        let chess_hits = sort_nondescending(chess_hits);
+
+        check_hits(&linear_hits, &chess_hits, format!("RnnChess({radius})"))?;
+    }
+    tree.par_compress_root();
+
+    for k in [1, 10, 20] {
+        let linear_alg = KnnLinear(k);
+        let linear_hits = linear_alg.par_compressive_search(&mut tree, &query)?;
+        let linear_hits = sort_nondescending(linear_hits);
+        assert_eq!(
+            linear_hits.len(),
+            k.min(tree.items().len()),
+            "Not enough linear hits {} for k={}",
+            linear_hits.len(),
+            k.min(tree.items().len())
+        );
+        tree.par_compress_root();
+
+        let dfs_alg = KnnDfs(k);
+        let dfs_hits = dfs_alg.par_compressive_search(&mut tree, &query)?;
+        let dfs_hits = sort_nondescending(dfs_hits);
+        tree.par_compress_root();
+        check_hits(&linear_hits, &dfs_hits, format!("KnnDfs({k})"))?;
+
+        let bfs_alg = KnnBfs(k);
+        let bfs_hits = bfs_alg.par_compressive_search(&mut tree, &query)?;
+        let bfs_hits = sort_nondescending(bfs_hits);
+        tree.par_compress_root();
+        check_hits(&linear_hits, &bfs_hits, format!("KnnBfs({k})"))?;
+
+        let rrnn_alg = KnnRrnn(k);
+        let rrnn_hits = rrnn_alg.par_compressive_search(&mut tree, &query)?;
+        let rrnn_hits = sort_nondescending(rrnn_hits);
+        tree.par_compress_root();
+        check_hits(&linear_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
+    }
+
+    for k in [1, 10, 20] {
+        let linear_alg = KnnLinear(k);
+        let linear_hits = linear_alg.par_compressive_search(&mut tree, &query)?;
+        let linear_hits = sort_nondescending(linear_hits);
+        assert_eq!(
+            linear_hits.len(),
+            k.min(tree.items().len()),
+            "Not enough linear hits {} for k={}",
+            linear_hits.len(),
+            k.min(tree.items().len())
+        );
+
+        let dfs_alg = KnnDfs(k);
+        let dfs_hits = dfs_alg.par_compressive_search(&mut tree, &query)?;
+        let dfs_hits = sort_nondescending(dfs_hits);
+        check_hits(&linear_hits, &dfs_hits, format!("KnnDfs({k})"))?;
+
+        let bfs_alg = KnnBfs(k);
+        let bfs_hits = bfs_alg.par_compressive_search(&mut tree, &query)?;
+        let bfs_hits = sort_nondescending(bfs_hits);
+        check_hits(&linear_hits, &bfs_hits, format!("KnnBfs({k})"))?;
+
+        let rrnn_alg = KnnRrnn(k);
+        let rrnn_hits = rrnn_alg.par_compressive_search(&mut tree, &query)?;
+        let rrnn_hits = sort_nondescending(rrnn_hits);
+        check_hits(&linear_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
+    }
+    tree.par_compress_root();
 
     Ok(())
 }

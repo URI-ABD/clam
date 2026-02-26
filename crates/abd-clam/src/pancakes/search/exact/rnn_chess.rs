@@ -40,7 +40,7 @@ where
 
             if d + radius <= self.0 {
                 // Fully subsumed cluster, so we will decompress the subtree and add all items in this subtree to the hits
-                tree.decompress_subtree(id)?;
+                tree.decompress_subtree(id);
                 let indices = tree.get_cluster(id)?.subtree_indices();
                 let distances = indices
                     .map(|i| tree.items[i].1.distance_to_query(query, &tree.metric).map(|d| (i, d)))
@@ -64,7 +64,7 @@ where
                 }
             } else {
                 // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
-                tree.decompress_subtree(id)?;
+                tree.decompress_subtree(id);
                 let distances = tree.get_cluster(id)?.subtree_indices().filter_map(|i| {
                     tree.items[i]
                         .1
@@ -113,7 +113,7 @@ where
 
             if d + radius <= self.0 {
                 // Fully subsumed cluster, so we will decompress the subtree and add all items in this subtree to the hits
-                tree.par_decompress_subtree(id)?;
+                tree.par_decompress_subtree(id);
                 let indices = tree.get_cluster(id)?.subtree_indices();
                 let distances = indices
                     .into_par_iter()
@@ -138,7 +138,7 @@ where
                 }
             } else {
                 // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
-                tree.par_decompress_subtree(id)?;
+                tree.par_decompress_subtree(id);
                 let distances = tree
                     .get_cluster(id)?
                     .subtree_indices()

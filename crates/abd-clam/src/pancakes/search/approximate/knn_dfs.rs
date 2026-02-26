@@ -22,7 +22,7 @@ where
     fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.k > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.decompress_subtree(0)?;
+            tree.decompress_subtree(0);
             return tree
                 .items
                 .iter()
@@ -77,7 +77,7 @@ where
     fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.k > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            tree.par_decompress_subtree(0)?;
+            tree.par_decompress_subtree(0);
             return tree
                 .items
                 .par_iter()
