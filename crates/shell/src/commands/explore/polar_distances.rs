@@ -100,7 +100,7 @@ where
             ftlog::info!("  Right pole index: {arg_right}");
 
             // Annotate the cluster with the span and polar distance.
-            cluster.set_annotation((s, polar_distance));
+            cluster.update_annotation((s, polar_distance));
 
             // Save distances from both poles to all points in the cluster.
             let left_distances = Array1::from_vec(left_distances);

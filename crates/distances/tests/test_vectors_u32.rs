@@ -41,7 +41,7 @@ fn l4(x: &[u32], y: &[u32]) -> f32 {
 }
 
 fn l_inf(x: &[u32], y: &[u32]) -> u32 {
-    x.iter().zip(y.iter()).map(|(x, &y)| x.abs_diff(y)).max().unwrap()
+    x.iter().zip(y.iter()).map(|(x, &y)| x.abs_diff(y)).max().unwrap_or_default()
 }
 
 fn dot(x: &[u32], y: &[u32]) -> u32 {
@@ -56,8 +56,8 @@ fn lp_u32() {
 
     let data = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rand::rngs::StdRng::seed_from_u64(seed));
 
-    for x in data.iter() {
-        for y in data.iter() {
+    for x in &data {
+        for y in &data {
             let e_l1 = l1(x, y);
             let a_l1 = manhattan(x, y);
             assert_eq!(e_l1, a_l1, "Manhattan: expected: {e_l1}, actual: {a_l1}");

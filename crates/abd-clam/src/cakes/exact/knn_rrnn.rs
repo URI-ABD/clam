@@ -4,7 +4,7 @@ use std::cmp::Reverse;
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, utils::SizedHeap};
+use crate::{DistanceValue, NamedAlgorithm, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, RnnChess, Search, d_max, d_min};
 
@@ -13,15 +13,17 @@ use super::super::{ParSearch, RnnChess, Search, d_max, d_min};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnRrnn(pub usize);
 
+impl NamedAlgorithm for KnnRrnn {
+    fn name(&self) -> String {
+        format!("KnnRrnn(k={})", self.0)
+    }
+}
+
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnRrnn
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("KnnRrnn(k={})", self.0)
-    }
-
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();

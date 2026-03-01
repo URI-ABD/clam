@@ -68,12 +68,9 @@ impl MaxSplit {
         splits.push(((l_items, l_distances), (nl, 1)));
         splits.push(((r_items, r_distances), (nr, 1 + nl)));
 
-        while splits.peek().is_some_and(|(_, (s, _))| *s > max_split_size) {
+        while splits.peek().is_some_and(|((items, _), (s, _))| items.len() > 1 && *s > max_split_size) {
             // Pop the largest split
             let ((items, distances), (_, ci)) = splits.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
-            if items.len() < 2 {
-                break;
-            }
 
             // Split it again
             let BipolarSplit {
@@ -122,12 +119,9 @@ impl MaxSplit {
         splits.push(((l_items, l_distances), (nl, 1)));
         splits.push(((r_items, r_distances), (nr, 1 + nl)));
 
-        while splits.peek().is_some_and(|(_, (s, _))| *s > max_split_size) {
+        while splits.peek().is_some_and(|((items, _), (s, _))| items.len() > 1 && *s > max_split_size) {
             // Pop the largest split
             let ((items, distances), (_, ci)) = splits.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
-            if items.len() < 2 {
-                break;
-            }
 
             // Split it again
             let BipolarSplit {

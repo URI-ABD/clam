@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree};
+use crate::{DistanceValue, NamedAlgorithm, Tree};
 
 use super::super::{ParSearch, Search};
 
@@ -11,15 +11,20 @@ use super::super::{ParSearch, Search};
 /// The field is the radius of the query ball to search within.
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
+impl<T> NamedAlgorithm for RnnLinear<T>
+where
+    T: DistanceValue,
+{
+    fn name(&self) -> String {
+        format!("RnnLinear(radius={})", self.0)
+    }
+}
+
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for RnnLinear<T>
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("RnnLinear(radius={})", self.0)
-    }
-
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         tree.items
             .iter()

@@ -4,7 +4,7 @@ use core::cmp::Reverse;
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue, Tree, utils::SizedHeap};
+use crate::{Cluster, DistanceValue, NamedAlgorithm, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, Search, d_max, d_min, leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
@@ -59,11 +59,13 @@ impl core::fmt::Display for KnnDfs {
     }
 }
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
+impl NamedAlgorithm for KnnDfs {
     fn name(&self) -> String {
         format!("{self}")
     }
+}
 
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();

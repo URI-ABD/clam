@@ -235,37 +235,32 @@ mod tests {
         assert_eq!(
             original.cardinality(),
             aligned.cardinality(),
-            "Number of sequences should match in {} mode.",
-            mode
+            "Number of sequences should match in {mode} mode."
         );
 
         let max_len = original.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
         let aligned_max_len = aligned.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
         assert!(
             aligned_max_len >= max_len,
-            "Aligned sequences should be at least as long as the longest original sequence in {} mode.",
-            mode
+            "Aligned sequences should be at least as long as the longest original sequence in {mode} mode."
         );
         assert!(
             aligned_max_len <= max_len * 2,
-            "Aligned sequences should be at most twice as long as the longest original sequence in {} mode.",
-            mode
+            "Aligned sequences should be at most twice as long as the longest original sequence in {mode} mode."
         );
 
         let o_sequences = original.items.iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
         let a_sequences = aligned.items.iter().map(|(_, seq)| seq.without_gaps()).collect::<Vec<_>>();
 
-        assert_eq!(o_sequences.len(), a_sequences.len(), "Number of sequences should match in {} mode.", mode);
-        assert_eq!(o_sequences, a_sequences, "Sequences should match after alignment in {} mode.", mode);
+        assert_eq!(o_sequences.len(), a_sequences.len(), "Number of sequences should match in {mode} mode.");
+        assert_eq!(o_sequences, a_sequences, "Sequences should match after alignment in {mode} mode.");
 
         for (i, ((o_id, o_seq), (a_id, a_seq))) in original.items.iter().zip(aligned.items.iter()).enumerate() {
-            assert_eq!(o_id, a_id, "Sequence IDs at index {} do not match after alignment in {} mode.", i, mode);
+            assert_eq!(o_id, a_id, "Sequence IDs at index {i} do not match after alignment in {mode} mode.");
             assert_eq!(
                 o_seq,
                 &a_seq.without_gaps(),
-                "Sequence at index {} does not match after removing gaps in {} mode.",
-                i,
-                mode
+                "Sequence at index {i} does not match after removing gaps in {mode} mode."
             );
         }
     }

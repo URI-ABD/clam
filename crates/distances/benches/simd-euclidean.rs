@@ -1,8 +1,8 @@
-#![allow(missing_docs)]
+#![expect(missing_docs, clippy::missing_docs_in_private_items, clippy::cast_lossless)]
 
 use std::hint::black_box;
 
-use criterion::*;
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::prelude::*;
 use symagen::random_data;
 

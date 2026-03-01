@@ -1,8 +1,14 @@
-#![allow(missing_docs)]
+#![expect(
+    missing_docs,
+    clippy::missing_docs_in_private_items,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_lossless
+)]
 
 use std::hint::black_box;
 
-use criterion::{measurement, *};
+use criterion::{AxisScale, BenchmarkGroup, BenchmarkId, Criterion, PlotConfiguration, criterion_group, criterion_main, measurement::WallTime};
 use rand::prelude::*;
 use symagen::random_data;
 
@@ -12,7 +18,7 @@ use distances::{
     vectors::{euclidean, l3_norm, l4_norm, manhattan, minkowski},
 };
 
-fn bench_one<T: Number, U: Float>(group: &mut BenchmarkGroup<'_, measurement::WallTime>, p: i32, x: &[T], y: &[T], metric: impl Fn(&[T], &[T]) -> U) {
+fn bench_one<T: Number, U: Float>(group: &mut BenchmarkGroup<'_, WallTime>, p: i32, x: &[T], y: &[T], metric: impl Fn(&[T], &[T]) -> U) {
     let dimensionality = x.len();
 
     let id = BenchmarkId::new(format!("L{p}_concrete"), dimensionality);

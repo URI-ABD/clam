@@ -2,8 +2,6 @@
 
 use std::collections::HashMap;
 
-use rayon::prelude::*;
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -15,23 +13,21 @@ mod partition;
 pub use cluster::Cluster;
 pub use partition::strategy::{self as partition_strategy, PartitionStrategy};
 
-// TODO(Najib): Add methods to annotate clusters after tree creation.
-
 /// The `Tree` struct is the main data structure used in CLAM.
 ///
 /// If contains the root `Cluster`, the items stored in it, and the metric used to compute distances between items.
 ///
 /// # Type Parameters
 ///
-/// - `Id`: The type of the identifier for each item in the tree.
-/// - `I`: The type of the items stored in the tree.
+/// - `Id`: The type of the metadata associated with each item in the dataset.
+/// - `I`: The type of the items in the dataset.
 /// - `T`: The type of the distance values used in the tree.
 /// - `A`: The type of any annotations that can be added to clusters.
-/// - `M`: The type of the metric function used to compute distances between items.
+/// - `M`: The type of the metric function used to compute distances between items from the dataset.
 #[must_use]
 #[derive(Clone, Debug)]
 pub struct Tree<Id, I, T, A, M> {
-    /// The items stored in the tree, each paired with its identifier.
+    /// The items and their metadata used in the tree.
     pub(crate) items: Vec<(Id, I)>,
     /// All clusters in the tree. This is a mapping from `cluster.center_index` to `cluster`.
     pub(crate) cluster_map: HashMap<usize, Cluster<T, A>>,
@@ -39,27 +35,20 @@ pub struct Tree<Id, I, T, A, M> {
     pub(crate) metric: M,
 }
 
-/// Minimal constructors for `Tree`.
-///
-/// - The identifier type is set to `usize` and will be the index of the item in the original vector.
-/// - The annotation type is set to `()`, meaning that no annotations are stored in the tree.
-/// - The default [`PartitionStrategy`](PartitionStrategy) is used to build a binary tree.
 impl<I, T, M> Tree<usize, I, T, (), M>
 where
-    T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    T: DistanceValue,
 {
-    /// Creates a new `Tree` from the given items and metric.
+    /// Creates a new `Tree` from the given dataset and metric using the default partition strategy.
+    ///
+    /// This is a convenience method for using the original index of the items as their identifiers and for not using any annotations.
     ///
     /// # Errors
     ///
     /// See [`Self::new`].
     pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str> {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-
-        let items = items.into_iter().enumerate().collect::<Vec<_>>();
+        let items = items.into_iter().enumerate().collect();
         Self::new(items, metric, &PartitionStrategy::default(), &|_| ())
     }
 
@@ -74,16 +63,11 @@ where
         T: Send + Sync,
         M: Send + Sync,
     {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-
-        let items = items.into_iter().enumerate().collect::<Vec<_>>();
+        let items = items.into_iter().enumerate().collect();
         Self::par_new(items, metric, &PartitionStrategy::default(), &|_| ())
     }
 }
 
-/// Various getter methods for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Provides ownership of the members of the `Tree`.
     #[expect(clippy::type_complexity)]
@@ -96,24 +80,24 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         Self { items, cluster_map, metric }
     }
 
-    /// Returns a reference to all items in the tree.
-    pub fn items(&self) -> &[(Id, I)] {
+    /// Returns a reference to the dataset used in the tree.
+    pub const fn items(&self) -> &Vec<(Id, I)> {
         &self.items
     }
 
-    /// Consumes the tree and returns all items stored in it.
-    pub fn take_items(self) -> Vec<(Id, I)> {
-        self.items
-    }
-
-    /// Returns the number of items stored in the tree.
-    pub const fn cardinality(&self) -> usize {
-        self.items.len()
+    /// Returns a reference to the metric used in the tree.
+    pub const fn metric(&self) -> &M {
+        &self.metric
     }
 
     /// Returns a reference to the hash map of all clusters in the tree.
     pub const fn cluster_map(&self) -> &HashMap<usize, Cluster<T, A>> {
         &self.cluster_map
+    }
+
+    /// Returns the number of items in the tree.
+    pub const fn cardinality(&self) -> usize {
+        self.items.len()
     }
 
     /// Returns a reference to a cluster in the tree given its center index, if it exists.
@@ -143,21 +127,11 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         self.cluster_map.len()
     }
 
-    /// Returns all clusters in the tree.
-    pub fn all_clusters(&self) -> Vec<&Cluster<T, A>> {
-        self.cluster_map.values().collect()
-    }
-
     /// Returns all clusters in the tree in sorted order of their center indices, i.e. in pre-order traversal over the tree.
     pub fn sorted_clusters(&self) -> Vec<&Cluster<T, A>> {
         let mut clusters = self.cluster_map.values().collect::<Vec<_>>();
-        clusters.sort_by_key(|c| c.center_index());
+        clusters.sort_by_key(|c| c.center_index);
         clusters
-    }
-
-    /// Returns a reference to the metric used in the tree.
-    pub const fn metric(&self) -> &M {
-        &self.metric
     }
 
     /// Returns a reference to the root cluster of the tree.
@@ -171,7 +145,7 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     pub fn children_of(&self, cluster: &Cluster<T, A>) -> Option<Vec<&Cluster<T, A>>> {
         cluster
             .child_center_indices()
-            .map(|center_indices| center_indices.iter().filter_map(|&ci| self.cluster_map.get(&ci)).collect())
+            .map(|center_indices| center_indices.iter().filter_map(|ci| self.cluster_map.get(ci)).collect())
     }
 }
 
@@ -185,46 +159,22 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
             metric,
         }
     }
-
-    /// Applies the given closure to every item and identifier.
-    pub fn apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
-    where
-        F: Fn(Id, I) -> (NewId, NewI),
-    {
-        let (items, cluster_map, metric) = self.into_parts();
-        let items = items.into_iter().map(|(id, item)| f(id, item)).collect();
-        Tree { items, cluster_map, metric }
-    }
-
-    /// Parallel version of [`Self::apply_to_items`]
-    pub fn par_apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
-    where
-        Id: Send + Sync,
-        I: Send + Sync,
-        F: Fn(Id, I) -> (NewId, NewI) + Send + Sync,
-        NewId: Send + Sync,
-        NewI: Send + Sync,
-    {
-        let (items, cluster_map, metric) = self.into_parts();
-        let items = items.into_par_iter().map(|(id, item)| f(id, item)).collect();
-        Tree { items, cluster_map, metric }
-    }
 }
 
 /// Constructors for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
-    T: DistanceValue,
     M: Fn(&I, &I) -> T,
+    T: DistanceValue,
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
     /// # Arguments
     ///
-    /// * `items` - A vector of tuples, each containing an identifier and an item.
+    /// * `items` - A vec of items and their identifiers.
     /// * `metric` - A function that computes the distance between two items.
     /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
-    /// * `annotator` - A function that annotates clusters as they are created.
+    /// * `annotator` - A function that annotates clusters as they are created but before deciding whether they will be partitioned.
     ///
     /// # Errors
     ///
@@ -242,35 +192,30 @@ where
         let mut cluster_map = HashMap::new();
 
         // The `frontier` holds clusters that were just created but whose children have not yet been created.
-        let mut frontier = vec![Cluster::new(&mut items, &metric, strategy)];
-        ftlog::info!("Created root cluster with cardinality {}", frontier[0].0.cardinality);
-
-        while let Some((mut cluster, splits)) = frontier.pop() {
+        let mut frontier = vec![Cluster::new(0, 0, None, &mut items, &metric, annotator, strategy)];
+        while let Some((cluster, splits)) = frontier.pop() {
             // For each split, create the child cluster and get the splits for its children and add them to the frontier.
-            frontier.extend(splits.into_iter().map(|(offset, child_items)| {
-                // Create child cluster and get items for its children.
-                let (mut child, mut child_splits) = Cluster::new(child_items, &metric, strategy);
-
-                ftlog::info!(
-                    "Created a child cluster with cardinality {}, parent center index {}",
-                    child.cardinality,
-                    cluster.center_index
-                );
-
-                // Increment relevant indices
-                child.depth = cluster.depth + 1;
-                child.increment_indices(offset);
-                for (ci, _) in &mut child_splits {
-                    *ci += offset;
-                }
-
-                // Set parent center index for child cluster.
-                child.parent_center_index = Some(cluster.center_index);
-                (child, child_splits)
+            frontier.extend(splits.into_iter().map(|(child_center_index, child_items)| {
+                Cluster::new(
+                    cluster.depth + 1,
+                    child_center_index,
+                    Some(cluster.center_index),
+                    child_items,
+                    &metric,
+                    annotator,
+                    strategy,
+                )
             }));
 
-            // Annotate cluster and insert into map.
-            cluster.annotation = annotator(&cluster);
+            ftlog::info!(
+                "Finished processing cluster with center index {}, depth {}, cardinality {} and child center indices {:?}",
+                cluster.center_index,
+                cluster.depth,
+                cluster.cardinality,
+                cluster.child_center_indices()
+            );
+
+            // Insert cluster into map.
             cluster_map.insert(cluster.center_index, cluster);
         }
 
@@ -306,35 +251,30 @@ where
         let mut cluster_map = HashMap::new();
 
         // The `frontier` holds clusters that were just created but whose children have not yet been created.
-        let mut frontier = vec![Cluster::par_new(&mut items, &metric, strategy)];
-        ftlog::info!("Created root cluster with cardinality {}", frontier[0].0.cardinality);
-
-        while let Some((mut cluster, splits)) = frontier.pop() {
+        let mut frontier = vec![Cluster::par_new(0, 0, None, &mut items, &metric, annotator, strategy)];
+        while let Some((cluster, splits)) = frontier.pop() {
             // For each split, create the child cluster and get the splits for its children and add them to the frontier.
-            frontier.extend(splits.into_iter().map(|(offset, child_items)| {
-                // Create child cluster and get items for its children.
-                let (mut child, mut child_splits) = Cluster::par_new(child_items, &metric, strategy);
-
-                ftlog::info!(
-                    "Created a child cluster with cardinality {}, parent center index {}",
-                    child.cardinality,
-                    cluster.center_index
-                );
-
-                // Increment relevant indices
-                child.depth = cluster.depth + 1;
-                child.increment_indices(offset);
-                for (ci, _) in &mut child_splits {
-                    *ci += offset;
-                }
-
-                // Set parent center index for child cluster.
-                child.parent_center_index = Some(cluster.center_index);
-                (child, child_splits)
+            frontier.extend(splits.into_iter().map(|(child_center_index, child_items)| {
+                Cluster::par_new(
+                    cluster.depth + 1,
+                    child_center_index,
+                    Some(cluster.center_index),
+                    child_items,
+                    &metric,
+                    annotator,
+                    strategy,
+                )
             }));
 
-            // Annotate cluster and insert into map.
-            cluster.annotation = annotator(&cluster);
+            ftlog::info!(
+                "Finished processing cluster with center index {}, depth {}, cardinality {} and child center indices {:?}",
+                cluster.center_index,
+                cluster.depth,
+                cluster.cardinality,
+                cluster.child_center_indices()
+            );
+
+            // Insert cluster into map.
             cluster_map.insert(cluster.center_index, cluster);
         }
 
@@ -397,7 +337,7 @@ where
     /// # Errors
     ///
     /// If deserialization fails.
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
+    pub fn deserialize<'de, De: serde::Deserializer<'de>>(deserializer: De, metric: M) -> Result<Self, De::Error> {
         let (items, cluster_map) = <(_, _)>::deserialize(deserializer)?;
         Ok(Self { items, cluster_map, metric })
     }

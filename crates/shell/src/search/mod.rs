@@ -134,6 +134,8 @@ where
 mod tests {
     use std::collections::HashMap;
 
+    use abd_clam::NamedAlgorithm;
+
     use super::ShellCakes;
 
     #[test]
@@ -182,7 +184,7 @@ mod tests {
         // Test that the wrapper implements the SearchAlgorithm trait correctly
         assert!(alg.is_ok());
         let alg = alg.unwrap();
-        assert_eq!(alg.name(), "KnnLinear(k=5)");
+        assert_eq!(alg.name(), "Cakes::KnnLinear(k=5)");
     }
 
     #[test]
@@ -192,6 +194,6 @@ mod tests {
 
         assert!(alg.is_ok());
         let alg = alg.unwrap();
-        assert_eq!(alg.name(), "RnnLinear(r=2.5)");
+        assert_eq!(alg.name(), "Cakes::RnnLinear(r=2.5)");
     }
 }

@@ -32,8 +32,8 @@ fn random_batch() {
     let batch_size = 100;
     let batch = create_batch::<u16>(seed_string, penalties, 10, 15, &alphabet, batch_size, len_delta);
     let mut strings: HashMap<String, usize> = HashMap::new();
-    for n in batch.iter() {
-        strings.entry(n.to_string()).and_modify(|count| *count += 1).or_insert(1);
+    for n in &batch {
+        strings.entry(n.clone()).and_modify(|count| *count += 1).or_insert(1);
     }
 
     assert!(strings.len() >= 98, "Batch is not diverse enough. Only {} unique strings", strings.len());

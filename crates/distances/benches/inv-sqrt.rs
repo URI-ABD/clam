@@ -1,8 +1,8 @@
-#![allow(missing_docs)]
+#![expect(missing_docs, clippy::missing_docs_in_private_items, clippy::semicolon_if_nothing_returned)]
 
 use std::hint::black_box;
 
-use criterion::*;
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use rand::prelude::*;
 use symagen::random_data;
 
@@ -20,7 +20,7 @@ fn gen_f64s() -> Vec<Vec<f64>> {
 
 fn inv_sqrt_f32(c: &mut Criterion) {
     let floats = gen_f32s();
-    let floats = floats.first().unwrap();
+    let floats = &floats[0];
 
     let mut group = c.benchmark_group("InvSqrtF32");
     group.throughput(Throughput::Elements(floats.len() as u64));
@@ -35,7 +35,7 @@ fn inv_sqrt_f32(c: &mut Criterion) {
 
 fn inv_sqrt_f64(c: &mut Criterion) {
     let floats = gen_f64s();
-    let floats = floats.first().unwrap();
+    let floats = &floats[0];
 
     let mut group = c.benchmark_group("InvSqrtF64");
     group.throughput(Throughput::Elements(floats.len() as u64));

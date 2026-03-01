@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![expect(missing_docs, clippy::cast_precision_loss, clippy::similar_names)]
 
 use rand::RngExt;
 
@@ -82,7 +82,7 @@ fn sets_test() {
         if union == 0 {
             real_distance = 0.0;
         } else {
-            real_distance = 1_f32 - (2_f32 * ((intersection as f32) / (size as f32)));
+            real_distance = 2_f32.mul_add(-((intersection as f32) / (size as f32)), 1_f32);
         }
         assert!((distance - real_distance).abs() < f32::EPSILON);
 

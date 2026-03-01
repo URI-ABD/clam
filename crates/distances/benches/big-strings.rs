@@ -1,17 +1,15 @@
-#![allow(missing_docs)]
+#![expect(missing_docs, clippy::missing_docs_in_private_items, clippy::unwrap_used, clippy::cast_possible_truncation)]
 
 use std::hint::black_box;
 
-use criterion::*;
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::prelude::*;
 use stringzilla::szs::{DeviceScope, LevenshteinDistances};
 
 use distances::strings::levenshtein;
 
 fn big_levenshtein(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Levenshtein");
-
-    /// Use the StringZilla implementation of the Levenshtein distance.
+    /// Use the `StringZilla` implementation of the Levenshtein distance.
     fn sz_lev_builder() -> impl Fn(&str, &str) -> u16 {
         let device = DeviceScope::default().unwrap();
         let szla_engine = LevenshteinDistances::new(&device, 0, 1, 1, 1).unwrap();
@@ -19,6 +17,7 @@ fn big_levenshtein(c: &mut Criterion) {
     }
     let sz_lev = sz_lev_builder();
 
+    let mut group = c.benchmark_group("Levenshtein");
     for d in 2..=4 {
         let len = 10_usize.pow(d);
         let mut rng = StdRng::seed_from_u64(42);

@@ -1,5 +1,7 @@
 //! Example for running CAKES search.
 
+#![expect(clippy::missing_docs_in_private_items)]
+
 use std::path::Path;
 
 use abd_clam::{
@@ -9,6 +11,7 @@ use abd_clam::{
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
+#[expect(clippy::ptr_arg)]
 fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     distances::simd::euclidean_f32(a, b)
 }
@@ -46,8 +49,8 @@ fn read_data(name: &str) -> Result<[Vec<Vec<f32>>; 2], String> {
         .ok_or_else(|| "Failed to get parent directory.".to_string())?
         .join("data/ann_data");
 
-    let data = read_array(base.join(format!("{}-train.npy", name)))?;
-    let queries = read_array(base.join(format!("{}-test.npy", name)))?;
+    let data = read_array(base.join(format!("{name}-train.npy")))?;
+    let queries = read_array(base.join(format!("{name}-test.npy")))?;
 
     Ok([data, queries])
 }
@@ -57,7 +60,7 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
     Ok(array.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<usize, Vec<f32>, f32, (), M>, queries: &[Vec<f32>], k: usize) {
+fn search_tree<M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<usize, Vec<f32>, f32, (), M>, queries: &[Vec<f32>], k: usize) {
     profi::prof!();
 
     // For each of the search algorithms, we change the metric to count distance computations separately.
@@ -73,7 +76,11 @@ fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<
 
     let oracles = dfs_results
         .iter()
-        .map(|res| res.iter().max_by_key(|&&(_, d)| OrderedFloat(d)).map(|&(_, radius)| RnnChess(radius)).unwrap())
+        .map(|res| {
+            res.iter()
+                .max_by_key(|&&(_, d)| OrderedFloat(d))
+                .map_or_else(|| RnnChess(tree.root().radius() / 10.0), |&(_, radius)| RnnChess(radius))
+        })
         .collect::<Vec<_>>();
 
     let tree = tree.with_metric(oracle_metric);

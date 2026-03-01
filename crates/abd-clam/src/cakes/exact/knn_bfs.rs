@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue, Tree, utils::SizedHeap};
+use crate::{Cluster, DistanceValue, NamedAlgorithm, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, Search, d_max};
 
@@ -11,11 +11,13 @@ use super::super::{ParSearch, Search, d_max};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnBfs(pub usize);
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBfs {
+impl NamedAlgorithm for KnnBfs {
     fn name(&self) -> String {
         format!("KnnBfs(k={})", self.0)
     }
+}
 
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBfs {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
         let radius = root.radius();

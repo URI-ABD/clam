@@ -49,7 +49,7 @@ pub fn build_msa<P: AsRef<Path>>(
 
     if save_fasta {
         let items = match msa_tree {
-            ShellTree::Levenshtein(tree) => tree.take_items(),
+            ShellTree::Levenshtein(tree) => tree.into_parts().0,
             _ => unreachable!(),
         };
         let data = ShellData::String(items);

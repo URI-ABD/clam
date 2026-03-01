@@ -21,8 +21,13 @@ impl<T, A> Cluster<T, A> {
     ///
     /// # Arguments
     ///
+    /// - `depth` - The depth of the cluster in the tree.
+    /// - `center_index` - The index of the center item in the full list of `items` in the tree.
+    /// - `parent_center_index` - The index of the parent cluster's center item, or `None` if this is the root cluster.
     /// - `items` - The local slice of items belonging to the cluster.
     /// - `metric` - The distance function to use.
+    /// - `annotator` - A function that takes a `Cluster` and returns its annotation. This is called just before deciding whether to partition the cluster any
+    ///   further, so the annotation can be used in the partitioning strategy.
     /// - `strategy` - The partitioning strategy to use.
     ///
     /// # Side Effects
@@ -48,34 +53,46 @@ impl<T, A> Cluster<T, A> {
     /// - sets the `depth`, `center_index` and `parent_center_index` to 0. These are updated later in `Tree::new`.
     /// - sets the `child_center_indices` with respect to the local slice of `items` for the cluster. These are updated with an offset to be with respect to the
     ///   full list of `items` in the tree later in `Tree::new`.
-    pub(crate) fn new<'a, Id, I, M, P>(items: &'a mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>) -> (Self, Splits<'a, Id, I>)
+    pub(crate) fn new<'a, Id, I, M, Ann, P>(
+        depth: usize,
+        center_index: usize,
+        parent_center_index: Option<usize>,
+        items: &'a mut [(Id, I)],
+        metric: &M,
+        annotator: &Ann,
+        strategy: &PartitionStrategy<P>,
+    ) -> (Self, Splits<'a, Id, I>)
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
+        Ann: Fn(&Self) -> A,
         P: Fn(&Self) -> bool,
     {
         ftlog::debug!("Creating a new cluster with cardinality {}", items.len());
 
         // Create a `Cluster` with some dummy values, which will be updated as needed.
         let mut cluster = Self {
-            depth: 0, // Will be updated in `Tree::new`.
-            center_index: 0, // Will be updated after finding the geometric median if there are enough items, and again in `Tree::new`.
+            depth,
+            center_index,
             cardinality: items.len(),
             radius: T::zero(), // Will be updated after finding the radius if there are enough items.
             lfd: 1.0, // Will be updated after finding the radius and LFD if there are enough items.
             children: None, // Will be updated if the `strategy` decides to partition this cluster further.
             #[expect(unsafe_code)]
-            // SAFETY: This is a private function and the annotation is later set in `Tree::new` before being used.
+            // SAFETY: The annotation is set just before deciding whether to partition the cluster further, so it is guaranteed to be set before potentially
+            // being used in the partitioning strategy.
             annotation: unsafe { core::mem::zeroed() },
-            parent_center_index: None, // Will be updated in `Tree::new`.
+            parent_center_index,
         };
 
         if cluster.cardinality == 1 {
-            // For a singleton cluster, the radius is 0 and LFD is 1 by definition, so no changes are needed to the dummy values.
+            // For a singleton cluster, the radius is 0 and LFD is 1 by definition.
+            cluster.annotation = annotator(&cluster);
             return (cluster, Vec::new());
         } else if cluster.cardinality == 2 {
             // For a cluster with two items, the radius is the distance between the two items and LFD is 1 by definition.
             cluster.radius = metric(&items[0].1, &items[1].1);
+            cluster.annotation = annotator(&cluster);
             return (cluster, Vec::new());
         }
 
@@ -91,9 +108,10 @@ impl<T, A> Cluster<T, A> {
             .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
             .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i, d));
 
-        // Update the cluster's radius and LFD.
+        // Update the cluster's radius, LFD and annotation.
         cluster.radius = radius;
         cluster.lfd = lfd_estimate(&radial_distances, radius);
+        cluster.annotation = annotator(&cluster);
 
         // Check if we should partition this cluster further based on the provided strategy. If not, return the cluster with no splits.
         if !strategy.should_partition(&cluster) {
@@ -101,7 +119,12 @@ impl<T, A> Cluster<T, A> {
         }
 
         // Split the `items` slice into contiguous sub-slices for child clusters.
-        let (span, splits) = strategy.split(&mut items[1..], metric, radius_index);
+        let (span, mut splits) = strategy.split(&mut items[1..], metric, radius_index);
+        for (ci, _) in &mut splits {
+            // Increment the center indices of the child clusters by the center index to update it from being relative to the local slice of `items` for the
+            // cluster to being relative to the full list of `items` in the tree.
+            *ci += center_index;
+        }
 
         // The `child_center_indices` are the indices of the centers of the child clusters relative to the original `items` slice. These will need to be updated
         // with an offset to be with respect to the full list of `items` in the tree later in `Tree::new`.

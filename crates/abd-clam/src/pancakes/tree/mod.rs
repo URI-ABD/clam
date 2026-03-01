@@ -54,24 +54,24 @@ where
             // The next frontier contains the parents of the current frontier clusters.
             let next_frontier = frontier
                 .iter()
-                .filter_map(|&id| self.get_cluster(id).ok().and_then(|c| c.parent_center_index))
+                .filter_map(|id| self.cluster_map.get(id).and_then(|c| c.parent_center_index))
                 .collect::<HashSet<_>>();
 
             // Update the recursive cost of the clusters in the current frontier.
             for id in frontier {
                 if let Some(cost) = self
-                    .get_cluster(id)
-                    .ok()
+                    .cluster_map
+                    .get(&id)
                     .and_then(|c| c.child_center_indices().map(<[_]>::to_vec))
                     .map(|child_center_indices| {
                         let centers_cost = self.compression_cost(id, &child_center_indices);
                         let child_costs = child_center_indices
                             .into_iter()
-                            .filter_map(|cid| self.get_cluster(cid).ok().map(|c| c.annotation.1.smaller_cost()))
+                            .filter_map(|cid| self.cluster_map.get(&cid).map(|c| c.annotation.1.smaller_cost()))
                             .sum::<usize>();
                         centers_cost + child_costs
                     })
-                    && let Some(c) = self.get_cluster_mut(id).ok()
+                    && let Some(c) = self.cluster_map.get_mut(&id)
                 {
                     c.annotation.1.recursive_cost = Some(cost);
                 }
@@ -95,7 +95,7 @@ where
             frontier = frontier
                 .into_iter()
                 .filter_map(|id| {
-                    self.get_cluster_mut(id).ok().and_then(|c| {
+                    self.cluster_map.get_mut(&id).and_then(|c| {
                         if c.depth < min_depth || c.annotation.1.is_recursive() {
                             // This cluster is either too shallow or recursively compressed, so we need to keep traversing down the tree.
                             c.child_center_indices().map(<[_]>::to_vec)
@@ -129,8 +129,12 @@ where
         tree.annotate_recursive_compression_costs();
         tree.trim_to_unitary_clusters(min_depth);
 
+        // Convert the type of the items in the tree to `MaybeCompressed`.
+        let (items, cluster_map, metric) = tree.into_parts();
+        let items = items.into_iter().map(|(id, item)| (id, MaybeCompressed::Original(item))).collect();
+
         // Compress the items in the tree.
-        let mut tree = tree.apply_to_items(&|id, item| (id, MaybeCompressed::Original(item)));
+        let mut tree = Tree::from_parts(items, cluster_map, metric);
         tree.compress_root();
 
         // Remove the cost annotations from the clusters, since they are no longer needed.
@@ -175,55 +179,30 @@ where
     /// Returns the tree with decompressed items.
     pub fn decompress_all(mut self) -> Tree<Id, I, T, A, M> {
         self.decompress_root();
-        self.apply_to_items(&|id, item| {
-            let item = item
-                .take_original()
-                .unwrap_or_else(|| unreachable!("All items should be in their original form by the time the frontier is empty"));
-            (id, item)
-        })
+        let (items, cluster_map, metric) = self.into_parts();
+        let items = items
+            .into_iter()
+            .map(|(id, item)| {
+                let item = item
+                    .take_original()
+                    .unwrap_or_else(|| unreachable!("All items should be in their original form by the time the frontier is empty"));
+                (id, item)
+            })
+            .collect();
+        Tree::from_parts(items, cluster_map, metric)
     }
 
     /// Compresses the tree from the root.
     pub fn compress_root(&mut self) {
-        self.compress_subtree(0)
-            .unwrap_or_else(|err| unreachable!("The center of the root cluster is never compressed. Got error: {err}"));
-    }
+        let (mut frontier, parents) = self.cluster_map.iter().map(|(&id, c)| (id, c)).partition::<Vec<_>, _>(|(_, c)| c.is_leaf());
 
-    /// Decompresses the tree from the root.
-    pub fn decompress_root(&mut self) {
-        self.decompress_subtree(0);
-    }
-
-    /// Given the index of a cluster center, compresses the subtree of that cluster.
-    ///
-    /// # Arguments
-    ///
-    /// - `id`: index of the cluster center, which must be decompressed.
-    ///
-    /// # Errors
-    ///
-    /// - If the `id` is not the center of any cluster.
-    /// - If the cluster center is compressed.
-    pub(crate) fn compress_subtree(&mut self, id: usize) -> Result<(), String> {
-        let (mut frontier, parents_in_waiting): (Vec<_>, Vec<_>) = self
-            .get_cluster(id)?
-            .items_indices()
-            .filter_map(|i| self.cluster_map.get(&i).map(|c| (i, c)))
-            .partition(|(_, c)| c.is_leaf());
-
-        let mut parents_in_waiting = parents_in_waiting
+        let mut parents_in_waiting = parents
             .into_iter()
             .map(|(i, c)| (i, (c.child_center_indices().map_or(0, <[_]>::len), c)))
             .collect::<HashMap<_, _>>();
 
-        while !parents_in_waiting.is_empty() {
+        while !frontier.is_empty() {
             for (id, c) in frontier {
-                if let Some(pid) = c.parent_center_index
-                    && let Some((count, _)) = parents_in_waiting.get_mut(&pid)
-                {
-                    *count -= 1;
-                }
-
                 // Get the targets to compress in terms of the center.
                 let targets = c.child_center_indices().map_or_else(
                     || c.subtree_indices().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
@@ -233,27 +212,24 @@ where
                 for (i, compressed) in self.compressed_items(id, &targets) {
                     self.items[i].1 = MaybeCompressed::Compressed(compressed);
                 }
+                // Update the count of remaining children for the parent cluster.
+                if let Some(pid) = c.parent_center_index
+                    && let Some((count, _)) = parents_in_waiting.get_mut(&pid)
+                {
+                    *count -= 1;
+                }
             }
 
-            // Update the frontier to the parents of the clusters in the current frontier.
+            // Update the frontier to the parents whose children have all been processed.
             let full_parents: HashMap<_, _>;
             (full_parents, parents_in_waiting) = parents_in_waiting.into_iter().partition(|&(_, (count, _))| count == 0);
             frontier = full_parents.into_iter().map(|(id, (_, cluster))| (id, cluster)).collect();
         }
+    }
 
-        // Compress the last cluster in the frontier, which is the root of the subtree we are compressing.
-        if let Some((id, c)) = frontier.pop() {
-            let targets = c.child_center_indices().map_or_else(
-                || c.subtree_indices().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.
-                <[_]>::to_vec,                    // If the cluster is a parent, we only compress the child centers.
-            );
-
-            for (i, compressed) in self.compressed_items(id, &targets) {
-                self.items[i].1 = MaybeCompressed::Compressed(compressed);
-            }
-        }
-
-        Ok(())
+    /// Decompresses the tree from the root.
+    pub fn decompress_root(&mut self) {
+        self.decompress_subtree(0);
     }
 
     /// Given the index of a cluster center, decompresses the subtree of that cluster.
@@ -261,15 +237,10 @@ where
     /// # Arguments
     ///
     /// - `id`: index of the cluster center, which must be decompressed.
-    ///
-    /// # Errors
-    ///
-    /// - If the `id` is not the center of any cluster.
-    /// - If the cluster center is compressed.
     pub(crate) fn decompress_subtree(&mut self, id: usize) {
         let mut frontier = vec![id];
         while let Some(id) = frontier.pop()
-            && let Ok(cluster) = self.get_cluster(id)
+            && let Some(cluster) = self.cluster_map.get(&id)
         {
             let targets = cluster.child_center_indices().map_or_else(
                 || cluster.subtree_indices().collect(), // If the cluster is a leaf, we compress all the non-center items in the cluster.

@@ -43,7 +43,7 @@ fn sqrt_f64() {
 fn cbrt_f32() {
     let floats = gen_f32s();
 
-    for &f in floats[0].iter() {
+    for &f in &floats[0] {
         let expected = f.cbrt();
         let actual = <f32 as Float>::cbrt(f);
 
@@ -55,7 +55,7 @@ fn cbrt_f32() {
 fn cbrt_f64() {
     let floats = gen_f64s();
 
-    for &f in floats[0].iter() {
+    for &f in &floats[0] {
         let expected = f.cbrt();
         let actual = <f64 as Float>::cbrt(f);
 

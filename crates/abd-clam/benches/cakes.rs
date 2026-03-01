@@ -1,13 +1,11 @@
 //! Benchmarks for CAKES
 
-#![expect(missing_docs, unused)]
-
-use std::usize;
+#![expect(clippy::missing_docs_in_private_items, clippy::cast_precision_loss)]
 
 use abd_clam::{
     DistanceValue, PartitionStrategy, Tree,
     cakes::{self, ParSearch, approximate, search_quality_stats},
-    partition_strategy::{BranchingFactor, SpanReductionFactor},
+    partition_strategy::{BranchingFactor, MaxSplit, SpanReductionFactor},
 };
 use rand::prelude::*;
 
@@ -75,7 +73,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     Alg: ParSearch<Id, I, T, A, M>,
 {
     let id = BenchmarkId::new(alg.name(), multiplier);
-    group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
+    group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(tree, queries)));
 
     let all_clusters = tree.cluster_map().values().collect::<Vec<_>>();
     let size_of_tree = all_clusters.len();
@@ -95,7 +93,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     println!("    Leaf fraction of clusters: {leaf_fraction:.8}, mean leaf cardinality: {mean_leaf_cardinality:.8}");
     println!("    Singleton fraction of leaves: {singleton_fraction:.8}");
 
-    let pred_hits = alg.par_batch_search(&tree, queries);
+    let pred_hits = alg.par_batch_search(tree, queries);
     let recall_stats = search_quality_stats(true_hits, &pred_hits);
     println!("Search quality of {}:", alg.name());
     for (stat_name, stat_value) in recall_stats {
@@ -104,6 +102,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
 }
 
 /// Run benchmarks for a given dataset, doubling the dataset size each iteration until `max_items` is reached.
+#[expect(clippy::too_many_arguments)]
 fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
     c: &mut Criterion,
     rng: &mut R,
@@ -115,10 +114,10 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
     branching_factors: &[usize],
     ks: &[usize],
     rs: &[f32],
-) {
-    let mut items = dataset.read_train(base, if shuffle { Some(rng) } else { None }).unwrap();
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut items = dataset.read_train(base, if shuffle { Some(rng) } else { None })?;
     let metric = dataset.metric();
-    let queries = dataset.read_test(base, if shuffle { Some(rng) } else { None }).unwrap();
+    let queries = dataset.read_test(base, if shuffle { Some(rng) } else { None })?;
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 
     // We will change this error value at the end of each iteration
@@ -144,30 +143,32 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
                 .collect();
         }
 
-        // TODO(Najib): Add more strategies back in once we have a better sense of which ones are promising.
-        // let strategies = {
-        //     let mut strategies: Vec<PartitionStrategy<_>> = vec![];
+        let strategies = {
+            let mut strategies: Vec<PartitionStrategy<_>> = vec![];
 
-        //     for &bf in branching_factors {
-        //         strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(bf)));
-        //     }
-        //     for &bf in branching_factors {
-        //         if bf > 2 {
-        //             strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(bf)));
-        //         }
-        //     }
-        //     strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic));
+            for &bf in branching_factors {
+                strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(bf)));
+            }
+            for &bf in branching_factors {
+                if bf > 2 {
+                    strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(bf)));
+                }
+            }
+            strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic));
 
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Two));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::E));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Pi));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Phi));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Two));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::E));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Pi));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Phi));
 
-        //     strategies
-        // };
+            strategies.push(PartitionStrategy::default().with_max_split(MaxSplit::NineTenths));
+            strategies.push(PartitionStrategy::default().with_max_split(MaxSplit::ThreeQuarters));
 
-        let strategies = vec![PartitionStrategy::default()]; // For now, only use the default strategy for benchmarks
+            strategies
+        };
+
+        // let strategies = vec![PartitionStrategy::default()]; // For now, only use the default strategy for benchmarks
 
         for strategy in &strategies {
             let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
@@ -181,7 +182,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
             println!("Building Tree");
             let tree_start = std::time::Instant::now();
-            let tree = Tree::par_new(id_items, metric, strategy, &|_| ()).unwrap();
+            let tree = Tree::par_new(id_items, metric, strategy, &|_| ())?;
             let tree_time = tree_start.elapsed();
             println!("Built Tree in {:.6}", tree_time.as_secs_f32());
 
@@ -189,11 +190,13 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
             // Set the augmentation error to 0.1% of the radius of the root ball for the next augmentation
             augmentation_error = tree.root().radius() / 1000.0;
-            items = tree.take_items().into_iter().map(|(_, p)| p).collect();
+            items = tree.into_parts().0.into_iter().map(|(_, p)| p).collect();
 
             group.finish();
         }
     }
+
+    Ok(())
 }
 
 fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, n_queries: usize) {
@@ -204,7 +207,8 @@ fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
     group.plot_config(plot_config);
 }
 
-pub fn criterion_benchmark(c: &mut Criterion) {
+#[expect(clippy::unwrap_used)]
+fn criterion_benchmark(c: &mut Criterion) {
     let datasets = [
         // For the paper
         AnnDataset::FashionMnist,
@@ -226,9 +230,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
     let max_items = 100_000;
     let max_queries = 100;
-    let branching_factors = [2];
+    let branching_factors = [2, 4, 8];
     let ks = [10, 100];
-    let rs = [0.1, 1.0, 10.0, 100.0, 1000.0];
+    let rs = [100.0, 1000.0, 2000.0];
 
     let base = base_dir().unwrap();
     for dataset in &datasets {
@@ -236,7 +240,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             continue; // Targeting dataset for hyperparameter tuning
         }
         // For the paper, only use the first 3 datasets
-        run_group(c, &mut rng, dataset, &base, max_items, max_queries, shuffle, &branching_factors, &ks, &rs);
+        run_group(c, &mut rng, dataset, &base, max_items, max_queries, shuffle, &branching_factors, &ks, &rs).unwrap();
     }
 }
 

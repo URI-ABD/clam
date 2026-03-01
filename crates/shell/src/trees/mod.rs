@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use abd_clam::{DistanceValue, PartitionStrategy, Tree, cakes::Search, partition_strategy::MaxSplit};
+use abd_clam::{DistanceValue, NamedAlgorithm, PartitionStrategy, Tree, cakes::Search, partition_strategy::MaxSplit};
 use databuf::{Decode, Encode, config::DEFAULT as DATABUF_DEFAULT};
 
 use crate::{

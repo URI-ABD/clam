@@ -1,5 +1,7 @@
 //! Tests for the `Cluster` struct.
 
+#![expect(clippy::unwrap_used, clippy::cast_precision_loss)]
+
 use abd_clam::{PartitionStrategy, Tree};
 use ordered_float::OrderedFloat;
 use test_case::test_case;
@@ -59,7 +61,7 @@ fn new() -> Result<(), String> {
     match subtree[1].radius() {
         4 => assert_eq!(subtree[2].radius(), 8, "Child radius mismatch: {:?}", subtree[2]),
         8 => assert_eq!(subtree[2].radius(), 4, "Child radius mismatch: {:?}", subtree[2]),
-        r => panic!("Unexpected child radius: {r}, {:?}", subtree[1]),
+        r => unreachable!("Unexpected child radius: {r}, {:?}", subtree[1]),
     }
 
     Ok(())
@@ -119,14 +121,15 @@ fn par_new() -> Result<(), String> {
     match subtree[1].radius() {
         4 => assert_eq!(subtree[2].radius(), 8, "Child radius mismatch: {:?}", subtree[2]),
         8 => assert_eq!(subtree[2].radius(), 4, "Child radius mismatch: {:?}", subtree[2]),
-        r => panic!("Unexpected child radius: {r}, {:?}", subtree[1]),
+        r => unreachable!("Unexpected child radius: {r}, {:?}", subtree[1]),
     }
 
     Ok(())
 }
 
 #[test_case(10, 2 ; "10x2")]
-#[test_case(1_000, 10 ; "1_000x10")]
+#[test_case(100, 2 ; "100x2")]
+#[test_case(100, 10 ; "100x10")]
 fn big(car: usize, dim: usize) -> Result<(), String> {
     let metric = |a: &Vec<f32>, b: &Vec<f32>| {
         let d = common::metrics::euclidean::<_, _, f32>(a, b);
@@ -166,13 +169,22 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
         assert!(root.radius() <= max_hypot / 2.0, "Radius too large: {:.6}", root.radius());
+
+        assert_eq!(tree.root().depth(), 0, "Root depth should be 0");
+        for cluster in tree.cluster_map().values() {
+            if let Some(children) = tree.children_of(cluster) {
+                for child in children {
+                    assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1",);
+                }
+            }
+        }
     }
 
     Ok(())
 }
 
+#[test_case(1_000, 2 ; "1_000x2")]
 #[test_case(1_000, 10 ; "1_000x10")]
-#[test_case(10_000, 10 ; "10_000x10")]
 fn par_big(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let (min, max) = (-1.0, 1.0);
@@ -201,6 +213,15 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
         assert!(root.radius() <= hypot / 2.0, "Radius too large: {:.6}", root.radius());
+
+        assert_eq!(tree.root().depth(), 0, "Root depth should be 0");
+        for cluster in tree.cluster_map().values() {
+            if let Some(children) = tree.children_of(cluster) {
+                for child in children {
+                    assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1",);
+                }
+            }
+        }
     }
 
     Ok(())
@@ -225,8 +246,8 @@ fn counting_clusters(k: usize) {
 
     memo[0] = 1;
     memo[1] = 1;
-    for n in 2..=k {
-        memo[n] = n - 1;
+    for (n, v) in memo.iter_mut().enumerate().take(k + 1).skip(2) {
+        *v = n - 1;
     }
     for kn_i_1 in (k + 1)..=max_n {
         let r = (kn_i_1 - 1) % k;

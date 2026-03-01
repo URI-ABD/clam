@@ -1,8 +1,8 @@
-#![allow(missing_docs)]
+#![expect(missing_docs, clippy::missing_docs_in_private_items, clippy::semicolon_if_nothing_returned)]
 
 use std::hint::black_box;
 
-use criterion::*;
+use criterion::{AxisScale, BenchmarkId, Criterion, PlotConfiguration, SamplingMode, Throughput, criterion_group, criterion_main};
 use rand::prelude::*;
 
 use distances::strings::needleman_wunsch;

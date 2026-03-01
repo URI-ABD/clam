@@ -1,5 +1,7 @@
 //! Data generation utilities for testing.
 
+#![expect(clippy::cast_precision_loss)]
+
 pub fn pathological_line() -> Vec<f64> {
     let min_delta = 1e-12;
     let mut delta = min_delta;

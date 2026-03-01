@@ -18,6 +18,22 @@ pub const PHI_F64: f64 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f64;
 #[allow(clippy::excessive_precision)]
 pub const PHI_F32: f32 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f32;
 
+/// A trait for algorithms that have a name. Most algorithms in this crate implement this trait.
+pub trait NamedAlgorithm {
+    /// Returns the name of the algorithm.
+    fn name(&self) -> String;
+}
+
+/// A blanket implementation of `NamedAlgorithm` for references to types that implement `NamedAlgorithm`.
+impl<Alg> NamedAlgorithm for &Alg
+where
+    Alg: NamedAlgorithm,
+{
+    fn name(&self) -> String {
+        (*self).name()
+    }
+}
+
 /// Estimates the Local Fractal Dimension (LFD) using the distances of items from a center, and the maximum value among those distances.
 ///
 /// This uses the formula `log2(N / n)`, where `N` is `distances.len() + 1` (the total number of items including the center), and `n` is the number of distances
@@ -43,17 +59,19 @@ where
     }
 }
 
-/// Computes the pairwise distances between items using the given metric function.
-fn pairwise_distances<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> Vec<Vec<T>> {
-    let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
-    for (r, (_, i)) in items.iter().enumerate() {
-        for (c, (_, j)) in items.iter().enumerate().take(r) {
-            let d = metric(i, j);
-            matrix[r][c] = d;
-            matrix[c][r] = d;
-        }
-    }
-    matrix
+/// Returns the index of the geometric median of the given items.
+///
+/// The geometric median is the item that minimizes the sum of distances to all other items in the slice.
+///
+/// The user must ensure that the items slice is not empty.
+pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {
+    // Find the index of the item with the minimum total distance to all other items.
+    pairwise_distances(items, metric)
+        .into_iter()
+        .map(|row| row.into_iter().sum::<T>())
+        .enumerate()
+        .min_by_key(|&(i, v)| MinItem(i, v))
+        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
 }
 
 /// Parallel version of [`geometric_median`].
@@ -71,19 +89,17 @@ pub fn par_geometric_median<Id: Send + Sync, I: Send + Sync, T: DistanceValue + 
         .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
 }
 
-/// Returns the index of the geometric median of the given items.
-///
-/// The geometric median is the item that minimizes the sum of distances to all other items in the slice.
-///
-/// The user must ensure that the items slice is not empty.
-pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {
-    // Find the index of the item with the minimum total distance to all other items.
-    pairwise_distances(items, metric)
-        .into_iter()
-        .map(|row| row.into_iter().sum::<T>())
-        .enumerate()
-        .min_by_key(|&(i, v)| MinItem(i, v))
-        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+/// Computes the pairwise distances between items using the given metric function.
+fn pairwise_distances<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> Vec<Vec<T>> {
+    let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
+    for (r, (_, i)) in items.iter().enumerate() {
+        for (c, (_, j)) in items.iter().enumerate().take(r) {
+            let d = metric(i, j);
+            matrix[r][c] = d;
+            matrix[c][r] = d;
+        }
+    }
+    matrix
 }
 
 /// Parallel version of [`pairwise_distances`].

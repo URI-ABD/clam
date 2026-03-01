@@ -68,6 +68,7 @@ fn test_apply_edits() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn test_alignment() {
     let seq_1_10 = "CAGAATATTA";
     let seq_2_10 = "TTGCTTTGAT";
@@ -206,7 +207,7 @@ fn test_alignment_no_sub() {
                 assert!(inserts[0].0 == x && inserts[0].1 == c);
                 inserts.remove(0);
             }
-            _ => assert_eq!(0, 1),
+            Edit::Sub(..) => assert_eq!(0, 1),
         }
     }
     assert_eq!(deletes.len(), 0);
@@ -237,7 +238,7 @@ fn test_alignment_no_sub() {
                 assert!(inserts[0].0 == x && inserts[0].1 == c);
                 inserts.remove(0);
             }
-            _ => assert_eq!(0, 1),
+            Edit::Sub(..) => assert_eq!(0, 1),
         }
     }
 
@@ -267,7 +268,7 @@ fn test_alignment_no_sub() {
                 assert!(inserts[0].0 == x && inserts[0].1 == c);
                 inserts.remove(0);
             }
-            _ => assert_eq!(0, 1),
+            Edit::Sub(..) => assert_eq!(0, 1),
         }
     }
 }

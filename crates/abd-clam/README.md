@@ -1,4 +1,4 @@
-# CLAM: Clustering, Learning and Approximation with Manifolds (v0.32.0)
+# CLAM: Clustering, Learning and Approximation with Manifolds (v0.34.0)
 
 The Rust implementation of CLAM.
 
@@ -7,7 +7,7 @@ This means that the API is not yet stable and breaking changes may occur frequen
 
 ## Usage
 
-CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.32.0`.
+CLAM is a library crate so you can add it to your crate using `cargo add abd_clam@0.34.0`.
 
 ## Features
 
@@ -15,15 +15,16 @@ This crate provides the following features:
 
 - `serde`: Enables serialization and deserialization using `serde` and `databuf`.
 - `musals`: Enables multiple sequence alignment using the `musals` module.
-- `all`: Enables `serde` and `musals` features.
+- `pancakes`: Enables compression and compressive search using the `pancakes` module.
+- `all`: Enables `serde`, `musals`, and `pancakes` features.
 - `profile`: Enables profiling using the `profi` crate.
 
 ### `Cakes`: Nearest Neighbor Search
 
 ```rust
 use abd_clam::{
-    cakes::{self, SearchAlgorithm},
-    Ball, Cluster, Partition,
+    DistanceValue, NamedAlgorithm, Tree,
+    cakes::{self, ParSearch, Search},
 };
 use rand::prelude::*;
 
@@ -32,44 +33,41 @@ let seed = 42;
 let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 let (cardinality, dimensionality) = (1_000, 10);
 let (min_val, max_val) = (-1.0, 1.0);
-let data: Vec<Vec<f32>> =
-    symagen::random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rng);
+let data: Vec<Vec<f32>> = symagen::random_data::random_tabular(
+    cardinality, dimensionality, min_val, max_val, &mut rng,
+);
 
 // We use the `Euclidean` metric for this example.
 fn metric(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
     x.iter().zip(y.iter()).map(|(&a, &b)| a - b).map(|v| v * v).sum::<f32>().sqrt()
 }
 
-// We define the criteria for building the tree to partition the `Cluster`s
-// until each contains a single point.
-let criteria = |c: &Ball<_>| c.cardinality() > 1;
+// We will create a tree from the dataset using the default partition strategy.
+let tree = Tree::new_minimal(data, metric).unwrap_or_else(|err| unreachable!("Data was non-empty. Error: {err}"));
+// The tree can also be built in parallel using `par_new_minimal` instead of `new_minimal`.
+let tree = Tree::par_new_minimal(data, metric).unwrap_or_else(|err| unreachable!("Data was non-empty. Error: {err}"));
 
-// Now we create a tree.
-let root = Ball::new_tree(&data, &metric, &criteria);
-
-// We will use the origin as our query.
+// We will use the origin as our query for this example.
 let query = vec![0_f32; dimensionality];
 
-// We can now perform Ranged Nearest Neighbors search on the tree.
-let radius = 0.05;
-let alg = cakes::RnnClustered(radius);
-let rnn_results: Vec<(usize, f32)> = alg.search(&data, &metric, &root, &query);
+// We support a variety of algorithms for nearest neighbor search on the tree.
+let algorithms = vec![
+    cakes::Cakes(cakes::RnnLinear(0.1)), // Ranged search with radius 0.1 using a linear scan.
+    cakes::Cakes(cakes::RnnChess(0.1)), // Ranged search with radius 0.1 using the CHESS algorithm.
+    cakes::Cakes(cakes::KnnLinear(10)), // KNN search for 10 neighbors using a linear scan.
+    cakes::Cakes(cakes::KnnRrnn(10)), // KNN search for 10 neighbors using the Repeated RNN algorithm.
+    cakes::Cakes(cakes::KnnBfs(10)), // KNN search for 10 neighbors using the Breadth-First Sieve algorithm.
+    cakes::Cakes(cakes::KnnDfs(10)), // KNN search for 10 neighbors using the Depth-First Sieve algorithm.
+];
 
-// KNN search is also supported.
-let k = 10;
+for alg in &algorithms {
+    // The `search` method returns a vector of `(index, distance)` pairs for the neighbors found.
+    // The indices from `results` can be used to retrieve the neighbors from the tree via `tree.items()[index]`.
+    let results: Vec<(usize, f32)> = alg.search(&tree, &query);
 
-// The `KnnRepeatedRnn` algorithm starts RNN search with a small radius and
-// increases it until it finds `k` neighbors.
-let alg = cakes::KnnRepeatedRnn(k, 2.0);
-let knn_results: Vec<(usize, f32)> = alg.search(&data, &metric, &root, &query);
-
-// The `KnnBreadthFirst` algorithm searches the tree in a breadth-first manner.
-let alg = cakes::KnnBreadthFirst(k);
-let knn_results: Vec<(usize, f32)> = alg.search(&data, &metric, &root, &query);
-
-// The `KnnDepthFirst` algorithm searches the tree in a depth-first manner.
-let alg = cakes::KnnDepthFirst(k);
-let knn_results: Vec<(usize, f32)> = alg.search(&data, &metric, &root, &query);
+    // The algorithms also have parallel versions that can be used with `par_search` instead of `search`.
+    let par_results = alg.par_search(&tree, &query);
+}
 ```
 
 ### `PanCakes`: Compression and Compressive Search

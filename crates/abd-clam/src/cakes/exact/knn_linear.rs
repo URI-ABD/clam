@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, utils::SizedHeap};
+use crate::{DistanceValue, NamedAlgorithm, Tree, utils::SizedHeap};
 
 use super::super::{ParSearch, Search};
 
@@ -11,15 +11,17 @@ use super::super::{ParSearch, Search};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnLinear(pub usize);
 
+impl NamedAlgorithm for KnnLinear {
+    fn name(&self) -> String {
+        format!("KnnLinear(k={})", self.0)
+    }
+}
+
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnLinear
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("KnnLinear(k={})", self.0)
-    }
-
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let distances = tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
         let mut heap = SizedHeap::new(Some(self.0));

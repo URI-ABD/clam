@@ -438,7 +438,7 @@ mod tests {
         fn test_generic<S: Sequence>(seq1: &S, seq2: &S, cost_matrix: &CostMatrix<i8>) {
             let dp_table = seq1.nw_table(seq2, cost_matrix);
             let [gaps1, gaps2] = seq1.gap_indices(seq2, &dp_table);
-            assert_eq!(gaps1, vec![]);
+            assert!(gaps1.is_empty());
             assert_eq!(gaps2, vec![1]);
 
             let gapped1 = seq1.insert_gaps(&gaps1);
@@ -449,7 +449,7 @@ mod tests {
 
             assert_eq!(gapped1.len(), gapped2.len());
             for (&c1, &c2) in gapped1.iter().zip(gapped2.iter()) {
-                assert!((c1 == c2 && c1 != b'-') || c1 == b'-' || c2 == b'-');
+                assert!(c1 == c2 || c1 == b'-' || c2 == b'-');
             }
         }
 
@@ -478,7 +478,7 @@ mod tests {
 
             assert_eq!(gapped1.len(), gapped2.len());
             for (&c1, &c2) in gapped1.iter().zip(gapped2.iter()) {
-                assert!((c1 == c2 && c1 != b'-') || c1 == b'-' || c2 == b'-');
+                assert!(c1 == c2 || c1 == b'-' || c2 == b'-');
             }
             Ok(())
         }

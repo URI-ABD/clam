@@ -1,6 +1,6 @@
 //! How a `Cluster` is partitioned into child clusters.
 
-use crate::{Cluster, DistanceValue};
+use crate::{Cluster, DistanceValue, NamedAlgorithm};
 
 mod bipolar_split;
 mod branching_factor;
@@ -61,12 +61,18 @@ impl<P> std::fmt::Display for PartitionStrategy<P> {
     }
 }
 
+impl<P> NamedAlgorithm for PartitionStrategy<P> {
+    fn name(&self) -> String {
+        self.to_string()
+    }
+}
+
 impl<T, A> Default for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn default() -> Self {
         Self {
             predicate: |b: &Cluster<T, A>| b.cardinality > 2,
             max_split: MaxSplit::default(),
-            branching_factor: BranchingFactor::Fixed(2),
+            branching_factor: BranchingFactor::default(),
             span_reduction: SpanReductionFactor::default(),
         }
     }
@@ -79,6 +85,16 @@ impl<T, A> PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
             predicate: |_| false,
             max_split: MaxSplit::default(),
             branching_factor: BranchingFactor::default(),
+            span_reduction: SpanReductionFactor::default(),
+        }
+    }
+
+    /// Creates a new `PartitionStrategy` that always partitions any cluster with more than one non-center item into exactly two child clusters.
+    pub fn binary() -> Self {
+        Self {
+            predicate: |b: &Cluster<T, A>| b.cardinality > 2,
+            max_split: MaxSplit::default(),
+            branching_factor: BranchingFactor::Fixed(2),
             span_reduction: SpanReductionFactor::default(),
         }
     }

@@ -4,16 +4,6 @@ use super::Cluster;
 
 /// Setters for `Cluster` properties.
 impl<T, A> Cluster<T, A> {
-    /// Increments the index of the center item and the indices of all child centers by the given offset.
-    pub(crate) fn increment_indices(&mut self, offset: usize) {
-        self.center_index += offset;
-        if let Some((child_center_indices, _)) = &mut self.children {
-            for ci in child_center_indices.iter_mut() {
-                *ci += offset;
-            }
-        }
-    }
-
     /// Compounds the annotation of this cluster with the additional annotation.
     pub fn compound_annotation<B>(self, additional_annotation: B) -> Cluster<T, (A, B)> {
         Cluster {
@@ -28,9 +18,46 @@ impl<T, A> Cluster<T, A> {
         }
     }
 
-    /// Sets the annotation of this cluster, replacing any existing annotation.
-    pub fn set_annotation(&mut self, annotation: A) {
-        self.annotation = annotation;
+    /// Updates the annotation of this cluster, returning the old annotation.
+    pub const fn update_annotation(&mut self, annotation: A) -> A {
+        core::mem::replace(&mut self.annotation, annotation)
+    }
+
+    /// Updates the annotation of this cluster using the provided function, returning the old annotation.
+    ///
+    /// The provided function is called before the annotation is updated, so it can use the current annotation if needed.
+    pub fn update_annotation_with<F>(&mut self, f: F) -> A
+    where
+        F: FnOnce(&Self) -> A,
+    {
+        self.update_annotation(f(self))
+    }
+
+    /// Changes the type of the annotation of this cluster, returning the old annotation.
+    pub fn change_annotation<B>(self, annotation: B) -> (Cluster<T, B>, A) {
+        let old_annotation = self.annotation;
+        let cluster = Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius,
+            lfd: self.lfd,
+            children: self.children,
+            annotation,
+            parent_center_index: self.parent_center_index,
+        };
+        (cluster, old_annotation)
+    }
+
+    /// Changes the type of the annotation of this cluster using the provided function, returning the old annotation.
+    ///
+    /// The provided function is called before the annotation is updated, so it can use the current annotation if needed.
+    pub fn change_annotation_with<F, B>(self, f: F) -> (Cluster<T, B>, A)
+    where
+        F: FnOnce(&Self) -> B,
+    {
+        let new_annotation = f(&self);
+        self.change_annotation(new_annotation)
     }
 }
 

@@ -2,14 +2,16 @@
 //!
 //! Their data can be found [here](https://github.com/erikbern/ann-benchmarks).
 
+#![expect(clippy::missing_docs_in_private_items)]
+
 use std::path::{Path, PathBuf};
 
 use rand::prelude::*;
 
 use super::metrics;
 
+/// Supported datasets from ANN-Benchmarks. Each dataset has a predefined metric and file naming convention.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum AnnDataset {
     // Euclidean
     FashionMnist,
@@ -25,7 +27,7 @@ pub enum AnnDataset {
 }
 
 impl AnnDataset {
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::FashionMnist => "fmnist-784",
             Self::Mnist => "mnist-784",
@@ -46,7 +48,7 @@ impl AnnDataset {
         }
     }
 
-    fn file_name_prefix(&self) -> &'static str {
+    const fn file_name_prefix(&self) -> &'static str {
         match self {
             Self::FashionMnist => "fashion-mnist",
             Self::Mnist => "mnist",
@@ -107,7 +109,7 @@ pub fn base_dir() -> Result<PathBuf, String> {
         .map(|p| p.join("../../../data/ann_data"))
         .map_err(|e| format!("Failed to get workspace directory: {e}"))?;
 
-    let base = std::env::var("ANN_BENCHMARKS_DIR").map(PathBuf::from).unwrap_or_else(|_| workspace_dir);
+    let base = std::env::var("ANN_BENCHMARKS_DIR").map_or_else(|_| workspace_dir, PathBuf::from);
 
     base.canonicalize()
         .map_err(|e| format!("Failed to canonicalize base directory: {e} ({base:?})"))

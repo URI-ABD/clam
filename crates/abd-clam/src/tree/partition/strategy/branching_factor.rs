@@ -16,6 +16,9 @@ pub enum BranchingFactor {
     Fixed(usize),
     /// A cluster with `n` non-center items will have `ceil(log n)` children.
     Logarithmic,
+    /// The branching factor will be between 2 and the given `n`, and is selected to minimize the expected size of the subtree relative to the cardinality of
+    /// the cluster. If `n < 2`, it is treated as 2.
+    ///
     /// We use some heuristics from our analysis of the expected ratio of the size of the subtree to the cardinality of the cluster, to select a branching
     /// factor that minimizes the expected size of the subtree. This branching factor is recomputed for each cluster based on the number of non-center items in
     /// that cluster.
@@ -87,12 +90,9 @@ impl BranchingFactor {
         splits.push(((l_items, l_distances), (nl, 1)));
         splits.push(((r_items, r_distances), (nr, 1 + nl)));
 
-        while !splits.is_full() {
+        while !splits.is_full() && splits.peek().is_some_and(|((items, _), _)| items.len() > 1) {
             // Pop the largest split
             let ((items, distances), (_, ci)) = splits.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
-            if items.len() < 2 {
-                break;
-            }
 
             // Split it again
             let BipolarSplit {
@@ -143,12 +143,9 @@ impl BranchingFactor {
         splits.push(((l_items, l_distances), (nl, 1)));
         splits.push(((r_items, r_distances), (nr, 1 + nl)));
 
-        while !splits.is_full() {
+        while !splits.is_full() && splits.peek().is_some_and(|((items, _), _)| items.len() > 1) {
             // Pop the largest split
             let ((items, distances), (_, ci)) = splits.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
-            if items.len() < 2 {
-                break;
-            }
 
             // Split it again
             let BipolarSplit {

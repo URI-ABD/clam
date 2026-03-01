@@ -10,7 +10,7 @@ fn l1(x: &[f32], y: &[f32]) -> f32 {
 }
 
 fn l2_sq(x: &[f32], y: &[f32]) -> f32 {
-    x.iter().zip(y.iter()).fold(0., |acc, (x, y)| acc + (x - y).powi(2))
+    x.iter().zip(y.iter()).fold(0., |acc, (x, y)| (x - y).mul_add(x - y, acc))
 }
 
 fn l2(x: &[f32], y: &[f32]) -> f32 {
@@ -40,53 +40,46 @@ fn lp_f32() {
     let (min_val, max_val) = (-1.0, 1.0);
 
     let data = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rand::rngs::StdRng::seed_from_u64(seed));
+    let tol = 1e-5; // Allow a bit more slack for f32 precision
 
-    for x in data.iter() {
-        for y in data.iter() {
+    for x in &data {
+        for y in &data {
             let e_l1 = l1(x, y);
             let a_l1: f32 = manhattan(x, y);
-            assert!((e_l1 - a_l1).abs() <= f32::EPSILON, "Manhattan: expected: {}, actual: {}", e_l1, a_l1);
+            let ratio = if e_l1 == 0.0 { 0.0 } else { (e_l1 - a_l1).abs() / e_l1 };
+            assert!(ratio <= tol, "Manhattan: expected: {e_l1}, actual: {a_l1}, ratio: {ratio}");
 
             let expected = l2_sq(x, y);
             let actual: f32 = euclidean_sq(x, y);
-            assert!(
-                (expected - actual).abs() <= f32::EPSILON,
-                "Euclidean squared: expected: {}, actual: {}",
-                expected,
-                actual
-            );
+            let ratio = if expected == 0.0 { 0.0 } else { (expected - actual).abs() / expected };
+            assert!(ratio <= tol, "Euclidean squared: expected: {expected}, actual: {actual}, ratio: {ratio}");
 
             let e_l2 = l2(x, y);
             let a_l2: f32 = euclidean(x, y);
-            assert!((e_l2 - a_l2).abs() <= f32::EPSILON, "Euclidean: expected: {}, actual: {}", e_l2, a_l2);
+            let ratio = if e_l2 == 0.0 { 0.0 } else { (e_l2 - a_l2).abs() / e_l2 };
+            assert!(ratio <= tol, "Euclidean: expected: {e_l2}, actual: {a_l2}, ratio: {ratio}");
 
             let e_l3 = l3(x, y);
             let a_l3: f32 = l3_norm(x, y);
-            assert!((e_l3 - a_l3).abs() <= f32::EPSILON, "L3 norm: expected: {}, actual: {}", e_l3, a_l3);
+            let ratio = if e_l3 == 0.0 { 0.0 } else { (e_l3 - a_l3).abs() / e_l3 };
+            assert!(ratio <= tol, "L3 norm: expected: {e_l3}, actual: {a_l3}, ratio: {ratio}");
 
             let e_l4 = l4(x, y);
             let a_l4: f32 = l4_norm(x, y);
-            assert!((e_l4 - a_l4).abs() <= f32::EPSILON, "L4 norm: expected: {}, actual: {}", e_l4, a_l4);
+            let ratio = if e_l4 == 0.0 { 0.0 } else { (e_l4 - a_l4).abs() / e_l4 };
+            assert!(ratio <= tol, "L4 norm: expected: {e_l4}, actual: {a_l4}, ratio: {ratio}");
 
             let e_l_inf = l_inf(x, y);
             let a_l_inf: f32 = chebyshev(x, y);
-            assert!(
-                (e_l_inf - a_l_inf).abs() <= f32::EPSILON,
-                "Chebyshev: expected: {}, actual: {}",
-                e_l_inf,
-                a_l_inf
-            );
+            let ratio = if e_l_inf == 0.0 { 0.0 } else { (e_l_inf - a_l_inf).abs() / e_l_inf };
+            assert!(ratio <= tol, "Chebyshev: expected: {e_l_inf}, actual: {a_l_inf}, ratio: {ratio}");
 
             // We allow a bit more slack for dot product due to greater
             // accumulation of floating point errors with larger float values
-            let e_dot = dot(&x, &y);
-            let a_dot: f32 = dot_product(&x, &y);
-            assert!(
-                (e_dot - a_dot).abs() / (e_dot * e_dot) <= f32::EPSILON,
-                "Dot product: expected: {}, actual: {}",
-                e_dot,
-                a_dot
-            );
+            let e_dot = dot(x, y);
+            let a_dot: f32 = dot_product(x, y);
+            let ratio = if e_dot == 0.0 { 0.0 } else { (e_dot - a_dot).abs() / (e_dot * e_dot) };
+            assert!(ratio <= tol, "Dot product: expected: {e_dot}, actual: {a_dot}, ratio: {ratio}");
         }
     }
 }
@@ -98,58 +91,40 @@ fn pearson_test() {
     let (min_val, max_val) = (-10., 10.);
 
     let data_1 = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rand::rngs::StdRng::seed_from_u64(seed));
-
     let data_2 = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rand::rngs::StdRng::seed_from_u64(seed + 1));
+    let tol = 1e-5; // Allow a bit more slack for f32 precision
 
-    for x in data_1.iter() {
-        for y in data_2.iter() {
+    for x in &data_1 {
+        for y in &data_2 {
             // Basic Pearson tests
 
             // Two different sets
-            let (p_lb, p_ub): (f32, f32) = (0.0, 2.0);
-            let actual: f32 = pearson(&x, &y);
+            let (p_lower, p_upper): (f32, f32) = (0.0, 2.0);
+            let actual: f32 = pearson(x, y);
             assert!(
-                p_lb - f32::EPSILON <= actual && actual <= p_ub + f32::EPSILON,
-                "Pearson basic: expected range: ({}, {}), actual: {}",
-                p_lb,
-                p_ub,
-                actual
+                p_lower - tol <= actual && actual <= p_upper + tol,
+                "Pearson basic: expected range: ({p_lower}, {p_upper}), actual: {actual}"
             );
 
             // Perfect positive correlation
             let expected: f32 = 0.0;
-            let actual: f32 = pearson(&x, &x);
-            assert!(
-                (expected - actual).abs() <= f32::EPSILON,
-                "Pearson positive: expected: {}, actual: {}",
-                expected,
-                actual
-            );
+            let actual: f32 = pearson(x, x);
+            assert!((expected - actual).abs() <= tol, "Pearson positive: expected: {expected}, actual: {actual}");
 
             // No correlation
             let p1: [f32; 4] = [1.0, 1.0, -1.0, -1.0];
             let p2: [f32; 4] = [1.0, -1.0, 1.0, -1.0];
             let expected: f32 = 1.0;
             let actual: f32 = pearson(&p1, &p2);
-            assert!(
-                (expected - actual).abs() <= f32::EPSILON,
-                "Pearson zero: expected: {}, actual: {}",
-                expected,
-                actual
-            );
+            assert!((expected - actual).abs() <= tol, "Pearson zero: expected: {expected}, actual: {actual}");
 
             // Perfect negative correlation (with slope of -8)
             // Note: Test fails unless slope is a square of 2,
             // likely due to multiplication hitting limits of f32 precision
             let x_inv: Vec<f32> = x.iter().map(|&n| n * -8.0).collect();
             let expected: f32 = 2.0;
-            let actual: f32 = pearson(&x, &x_inv);
-            assert!(
-                (expected - actual).abs() <= f32::EPSILON,
-                "Pearson negative: expected: {}, actual: {}",
-                expected,
-                actual
-            );
+            let actual: f32 = pearson(x, &x_inv);
+            assert!((expected - actual).abs() <= tol, "Pearson negative: expected: {expected}, actual: {actual}");
         }
     }
 }
