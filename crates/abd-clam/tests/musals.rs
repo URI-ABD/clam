@@ -3,7 +3,7 @@
 #![expect(clippy::cast_possible_truncation)]
 
 use abd_clam::{
-    DistanceValue, Tree,
+    DistanceValue, Tree, common_metrics,
     musals::{AlignedSequence, CostMatrix, MusalsTree},
 };
 use rand::prelude::*;
@@ -53,8 +53,8 @@ where
 
 #[test]
 fn msa_small() -> Result<(), String> {
-    let metric_unaligned = |a: &String, b: &String| common::metrics::lev_unaligned(a.as_str(), b.as_str()) as u8;
-    let metric_aligned = |a: &AlignedSequence, b: &AlignedSequence| common::metrics::lev_aligned(a, b) as u8;
+    let metric_unaligned = |a: &String, b: &String| common_metrics::levenshtein_strings(a, b) as u8;
+    let metric_aligned = |a: &AlignedSequence, b: &AlignedSequence| common_metrics::levenshtein_aligned(a, b) as u8;
     let cost_matrix = CostMatrix::<u8>::default();
     let sequences = vec!["ACTGA", "CTGAA", "TGAAC", "GAACT", "AACTG"];
 
@@ -74,8 +74,8 @@ fn msa_small() -> Result<(), String> {
 #[test_case(50)]
 #[test_case(100)]
 fn msa_medium(car: usize) -> Result<(), String> {
-    let metric_unaligned = |a: &String, b: &String| common::metrics::lev_unaligned(a.as_str(), b.as_str()) as u16;
-    let metric_aligned = |a: &AlignedSequence, b: &AlignedSequence| common::metrics::lev_aligned(a, b) as u16;
+    let metric_unaligned = |a: &String, b: &String| common_metrics::levenshtein_strings(a, b) as u16;
+    let metric_aligned = |a: &AlignedSequence, b: &AlignedSequence| common_metrics::levenshtein_aligned(a, b) as u16;
     let cost_matrix = CostMatrix::<u16>::default();
 
     let (min_len, max_len) = (8, 12);

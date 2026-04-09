@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use abd_clam::musals::MeasurableAlignmentQuality;
+use abd_clam::{common_metrics, musals::MeasurableAlignmentQuality};
 use clap::Subcommand;
 
 use crate::{
@@ -95,7 +95,7 @@ impl Action {
 
                 ftlog::info!("Aligning tree using Musals...");
                 let cost_matrix = cost_matrix.to_musals_cost_matrix();
-                let metric = crate::tree::levenshtein::distance_aligned;
+                let metric = common_metrics::levenshtein_aligned;
                 let tree = ShellTree::Levenshtein(LevenshteinTree::Aligned(tree.par_align(cost_matrix, metric)));
 
                 ftlog::info!("Writing aligned tree to {out_path:?}...");

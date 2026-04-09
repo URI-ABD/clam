@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use abd_clam::{
     Cakes, PartitionStrategy, Tree,
     cakes::{MeasurableSearchQuality, Search},
+    common_metrics,
     musals::{AlignedSequence, MusalsTree},
 };
 
@@ -15,43 +16,10 @@ use crate::{
 
 use super::ShellTree;
 
-/// Compute the Levenshtein edit distance between two strings.
-pub fn distance_unaligned<S>(x: &S, y: &S) -> usize
-where
-    S: AsRef<str>,
-{
-    distance(x.as_ref().chars(), y.as_ref().chars())
-}
-
-/// Compute the Levenshtein edit distance between two aligned sequences.
-pub fn distance_aligned(x: &AlignedSequence, y: &AlignedSequence) -> usize {
-    distance(x.iter(), y.iter())
-}
-
-/// Compute the Levenshtein edit distance between two sequences.
-fn distance<S1: Iterator<Item = char>, S2: Iterator<Item = char>>(x: S1, y: S2) -> usize {
-    let y = y.collect::<Vec<_>>();
-
-    // calculate edit distance
-    let mut cur = (0..=y.len()).collect::<Vec<_>>();
-    for (i, char_x) in x.enumerate().map(|(i, c)| (i + 1, c)) {
-        // get first column for this row
-        let mut pre = cur[0];
-        cur[0] = i;
-        for (j, &char_y) in y.iter().enumerate() {
-            let tmp = cur[j + 1];
-            cur[j + 1] = core::cmp::min(
-                tmp + 1, // deletion
-                core::cmp::min(
-                    cur[j] + 1,                          // insertion
-                    pre + usize::from(char_x != char_y), // match or substitution
-                ),
-            );
-            pre = tmp;
-        }
-    }
-
-    cur[y.len()]
+/// A wrapper because the compiler cannot infer some lifetimes.
+#[expect(clippy::ptr_arg)]
+fn distance_strings(a: &String, b: &String) -> usize {
+    common_metrics::levenshtein_chars(a.chars(), b.chars())
 }
 
 /// Trees for Sequence data under Levenshtein distance.
@@ -60,7 +28,7 @@ fn distance<S1: Iterator<Item = char>, S2: Iterator<Item = char>>(x: S1, y: S2) 
 #[expect(clippy::type_complexity)]
 pub enum LevenshteinTree {
     /// Sequences are represented as `String`s and the distance values are `usize`s.
-    String(super::TreeType<String, String, usize>),
+    String(Tree<String, String, usize, (), fn(&String, &String) -> usize>),
     /// Sequences are represented as [`AlignedSequence`]s and the distance values are `usize`s.
     Aligned(MusalsTree<String, usize, (), fn(&AlignedSequence, &AlignedSequence) -> usize>),
 }
@@ -93,11 +61,11 @@ impl<'de> databuf::Decode<'de> for LevenshteinTree {
         match &variant {
             b"Str" => {
                 let tree = Tree::decode::<CONFIG>(buffer)?;
-                Ok(Self::String(tree.with_metric(distance_unaligned)))
+                Ok(Self::String(tree.with_metric(distance_strings)))
             }
             b"Aln" => {
                 let tree: MusalsTree<String, usize, (), ()> = MusalsTree::decode::<CONFIG>(buffer)?;
-                Ok(Self::Aligned(tree.with_metric(distance_aligned)))
+                Ok(Self::Aligned(tree.with_metric(common_metrics::levenshtein_aligned)))
             }
             _ => Err(format!("Invalid variant for LevenshteinTree: {variant:?}. Expected one of: Str, Aln").into()),
         }
@@ -135,7 +103,7 @@ impl LevenshteinTree {
 
         match data_type {
             ShellDataType::String => {
-                let metric: fn(&_, &_) -> usize = distance_unaligned;
+                let metric: fn(&_, &_) -> usize = distance_strings;
                 let tree = Tree::par_new(data, metric, &|_| (), &|c| c.cardinality() > 2, strategy)?;
                 Ok(Self::String(tree))
             }

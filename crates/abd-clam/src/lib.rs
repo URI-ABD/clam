@@ -25,7 +25,7 @@
 
 #[macro_use]
 pub mod utils;
-pub use utils::{DistanceValue, FloatDistanceValue, NamedAlgorithm};
+pub use utils::{DistanceValue, FloatDistanceValue, NamedAlgorithm, common_metrics};
 
 pub mod tree;
 pub use tree::{Cluster, PartitionStrategy, Tree};

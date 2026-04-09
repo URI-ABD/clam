@@ -3,6 +3,7 @@
 use rand::prelude::*;
 use rayon::prelude::*;
 
+pub mod common_metrics;
 mod distance_value;
 #[macro_use]
 mod named_algorithm;

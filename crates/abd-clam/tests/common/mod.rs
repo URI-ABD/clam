@@ -3,4 +3,3 @@
 #![allow(dead_code, unused)]
 
 pub mod data_gen;
-pub mod metrics;

@@ -1,7 +1,7 @@
 //! Tests for building trees with various partition strategies.
 
 use abd_clam::{
-    NamedAlgorithm, PartitionStrategy, Tree,
+    NamedAlgorithm, PartitionStrategy, Tree, common_metrics,
     tree::partition_strategy::{BranchingFactor, MaxFraction, SpanReductionFactor},
 };
 use test_case::test_case;
@@ -23,8 +23,8 @@ fn strategy_suite(car: usize, dim: usize) -> Result<(), Box<dyn std::error::Erro
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
 
     let metrics: Vec<MetricFnF32> = vec![
-        Box::new(|a: &Vec<f32>, b: &Vec<f32>| common::metrics::euclidean(a, b)),
-        Box::new(|a: &Vec<f32>, b: &Vec<f32>| common::metrics::manhattan(a, b)),
+        Box::new(|a: &Vec<f32>, b: &Vec<f32>| common_metrics::euclidean(a, b)),
+        Box::new(|a: &Vec<f32>, b: &Vec<f32>| common_metrics::manhattan(a, b)),
     ];
 
     for strategy in &strategies {

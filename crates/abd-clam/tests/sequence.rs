@@ -2,7 +2,10 @@
 
 #![expect(clippy::cast_possible_truncation)]
 
-use abd_clam::musals::{AlignedSequence, CostMatrix, Edit, Edits};
+use abd_clam::{
+    common_metrics,
+    musals::{AlignedSequence, CostMatrix, Edit, Edits},
+};
 
 mod common;
 
@@ -113,7 +116,7 @@ fn distance() {
     let seq1 = "NAJIBEATSPEPPERS";
     let seq2 = "NAJIBPEPPERSEATS";
 
-    let lev_distance = common::metrics::lev_unaligned(seq1, seq2) as u8;
+    let lev_distance = common_metrics::levenshtein_strings(seq1, seq2) as u8;
 
     let seq1 = AlignedSequence::from(seq1);
     let seq2 = AlignedSequence::from(seq2);

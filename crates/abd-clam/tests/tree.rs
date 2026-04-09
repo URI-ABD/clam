@@ -2,7 +2,7 @@
 
 #![expect(clippy::unwrap_used, clippy::cast_precision_loss)]
 
-use abd_clam::{PartitionStrategy, Tree};
+use abd_clam::{PartitionStrategy, Tree, common_metrics};
 use test_case::test_case;
 
 mod common;
@@ -13,7 +13,7 @@ fn new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
     let items = items.into_iter().enumerate().collect::<Vec<_>>(); // Convert to Vec<(usize, Vec<i32>)> to use index as metadata
     let cardinality = items.len();
-    let metric = common::metrics::manhattan;
+    let metric = common_metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
     let tree = Tree::new(items.clone(), metric, &|_| (), &|_| false, &PartitionStrategy::default())?;
@@ -90,7 +90,7 @@ fn par_new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
     let items = items.into_iter().enumerate().collect::<Vec<_>>(); // Convert to Vec<(usize, Vec<i32>)> to use index as metadata
     let cardinality = items.len();
-    let metric = common::metrics::manhattan;
+    let metric = common_metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
     let tree = Tree::par_new(items.clone(), metric, &|_| (), &|_| false, &PartitionStrategy::default())?;
@@ -168,7 +168,7 @@ fn par_new() -> Result<(), String> {
 #[test_case(100, 10 ; "100x10")]
 fn big(car: usize, dim: usize) -> Result<(), String> {
     let metric = |a: &Vec<f32>, b: &Vec<f32>| {
-        let d = common::metrics::euclidean::<_, _, f32>(a, b);
+        let d = common_metrics::euclidean(a, b);
         (d * 1000.0).trunc() / 1000.0 // Truncate to 3 decimal places to help debugging
     };
     let (min, max) = (-1.0, 1.0);
@@ -220,7 +220,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
 #[test_case(1_000, 2 ; "1_000x2")]
 #[test_case(1_000, 10 ; "1_000x10")]
 fn par_big(car: usize, dim: usize) -> Result<(), String> {
-    let metric = common::metrics::euclidean::<_, _, f32>;
+    let metric = common_metrics::euclidean;
     let (min, max) = (-1.0, 1.0);
     let max_hypot = ((4 * dim) as f32).sqrt();
     let max_radius = 1.1 * max_hypot / 2.0; // Allow some slack for the radius due to the randomness of the data, and approximate geometric medians.

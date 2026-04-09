@@ -3,8 +3,9 @@
 use std::collections::HashSet;
 
 use abd_clam::{
-    Cakes, FloatDistanceValue, PartitionStrategy, Tree,
+    Cakes, PartitionStrategy, Tree,
     cakes::{MeasurableSearchQuality, Search},
+    common_metrics,
 };
 
 use crate::{
@@ -13,26 +14,6 @@ use crate::{
 };
 
 use super::{ShellTree, TreeType};
-
-/// Compute the cosine distance between two vectors.
-pub fn distance<I, T>(a: &I, b: &I) -> T
-where
-    I: AsRef<[T]>,
-    T: FloatDistanceValue,
-{
-    let [xx, yy, xy] = a
-        .as_ref()
-        .iter()
-        .zip(b.as_ref())
-        .fold([T::zero(); 3], |[xx, yy, xy], (&a, &b)| [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]);
-
-    if xx < T::epsilon() || yy < T::epsilon() || xy < T::epsilon() {
-        T::one()
-    } else {
-        let d = T::one() - xy / (xx * yy).sqrt();
-        if d < T::epsilon() { T::zero() } else { d }
-    }
-}
 
 /// Trees for Vector data under Cosine distance.
 #[derive(Debug, Clone)]
@@ -72,11 +53,11 @@ impl<'de> databuf::Decode<'de> for CosineTree {
         match &variant {
             b"F64" => {
                 let tree = Tree::decode::<CONFIG>(buffer)?;
-                Ok(Self::F64(tree.with_metric(distance)))
+                Ok(Self::F64(tree.with_metric(common_metrics::cosine)))
             }
             b"F32" => {
                 let tree = Tree::decode::<CONFIG>(buffer)?;
-                Ok(Self::F32(tree.with_metric(distance)))
+                Ok(Self::F32(tree.with_metric(common_metrics::cosine)))
             }
             _ => Err(format!("Invalid variant for CosineTree: {variant:?}. Expected one of: F64, F32").into()),
         }
@@ -114,7 +95,7 @@ impl CosineTree {
                 let data = read_npy::<_, f64>(data_path)?;
                 let data = data.into_iter().enumerate().collect(); // Convert to (index, vector) pairs.
                 let data = shuffle_and_truncate(data, rng, num_samples);
-                let metric: fn(&_, &_) -> f64 = distance;
+                let metric: fn(&_, &_) -> f64 = common_metrics::cosine;
                 let tree = Tree::par_new(data, metric, &|_| (), &|c| c.cardinality() > 2, strategy)?;
                 Ok(Self::F64(tree))
             }
@@ -122,7 +103,7 @@ impl CosineTree {
                 let data = read_npy::<_, f32>(data_path)?;
                 let data = data.into_iter().enumerate().collect(); // Convert to (index, vector) pairs.
                 let data = shuffle_and_truncate(data, rng, num_samples);
-                let metric: fn(&_, &_) -> f32 = distance;
+                let metric: fn(&_, &_) -> f32 = common_metrics::cosine;
                 let tree = Tree::par_new(data, metric, &|_| (), &|c| c.cardinality() > 2, strategy)?;
                 Ok(Self::F32(tree))
             }

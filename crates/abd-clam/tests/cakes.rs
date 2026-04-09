@@ -3,13 +3,14 @@
 use abd_clam::{
     DistanceValue, NamedAlgorithm, Tree,
     cakes::{self, Search},
+    common_metrics,
 };
 use test_case::test_case;
 
 mod common;
 
 fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
-    let d = common::metrics::euclidean::<_, _, f32>(a, b);
+    let d = common_metrics::euclidean(a, b);
     // Truncate to 3 decimal places for easier debugging
     (d * 1000.0).trunc() / 1000.0
 }
