@@ -21,7 +21,7 @@ license.workspace = true
 # Publishing lock.
 # When you're ready to start publishing, set publish to true
 # and update the release github action.
-publish = true
+publish = false
 
 [lints]
 workspace = true
