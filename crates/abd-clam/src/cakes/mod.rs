@@ -159,32 +159,6 @@ impl<T: DistanceValue> core::fmt::Display for Cakes<T> {
     }
 }
 
-impl<T> NamedAlgorithm for Cakes<T>
-where
-    T: DistanceValue,
-{
-    fn name(&self) -> &'static str {
-        match self {
-            Self::KnnBfs(alg) => alg.name(),
-            Self::KnnDfs(alg) => alg.name(),
-            Self::KnnLinear(alg) => alg.name(),
-            Self::KnnRrnn(alg) => alg.name(),
-            Self::KnnSieve(alg) => alg.name(),
-            Self::RnnChess(alg) => alg.name(),
-            Self::RnnLinear(alg) => alg.name(),
-            Self::ApproxKnnBfs(alg) => alg.name(),
-            Self::ApproxKnnDfs(alg) => alg.name(),
-            Self::ApproxKnnSieve(alg) => alg.name(),
-        }
-    }
-
-    fn regex_pattern<'a>() -> &'a lazy_regex::Regex {
-        lazy_regex::regex!(
-            r"^(knn-bfs|knn-dfs|knn-linear|knn-rrnn|knn-sieve|rnn-chess|rnn-linear|approx-knn-bfs|approx-knn-dfs|approx-knn-sieve)(?:::[a-z]+=\d+(?:\.\d+)?(?:,[a-z]+=\d+(?:\.\d+)?)*)?$"
-        )
-    }
-}
-
 impl<T: DistanceValue> core::str::FromStr for Cakes<T> {
     type Err = String;
 
@@ -208,6 +182,32 @@ impl<T: DistanceValue> core::str::FromStr for Cakes<T> {
                     None => Err(format!("Invalid format for Cakes: {s}")),
                 }
             },
+        )
+    }
+}
+
+impl<T> NamedAlgorithm for Cakes<T>
+where
+    T: DistanceValue,
+{
+    fn name(&self) -> &'static str {
+        match self {
+            Self::KnnBfs(alg) => alg.name(),
+            Self::KnnDfs(alg) => alg.name(),
+            Self::KnnLinear(alg) => alg.name(),
+            Self::KnnRrnn(alg) => alg.name(),
+            Self::KnnSieve(alg) => alg.name(),
+            Self::RnnChess(alg) => alg.name(),
+            Self::RnnLinear(alg) => alg.name(),
+            Self::ApproxKnnBfs(alg) => alg.name(),
+            Self::ApproxKnnDfs(alg) => alg.name(),
+            Self::ApproxKnnSieve(alg) => alg.name(),
+        }
+    }
+
+    fn regex_pattern<'a>() -> &'a lazy_regex::Regex {
+        lazy_regex::regex!(
+            r"^(knn-bfs|knn-dfs|knn-linear|knn-rrnn|knn-sieve|rnn-chess|rnn-linear|approx-knn-bfs|approx-knn-dfs|approx-knn-sieve)(?:::[a-z]+=\d+(?:\.\d+)?(?:,[a-z]+=\d+(?:\.\d+)?)*)?$"
         )
     }
 }

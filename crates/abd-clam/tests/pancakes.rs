@@ -392,9 +392,9 @@ fn sort_nondescending(mut items: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
 }
 
 fn check_hits<T: DistanceValue, Alg: NamedAlgorithm>(expected: &[(usize, T)], actual: &[(usize, T)], alg: &Alg) {
-    assert_eq!(expected.len(), actual.len(), "{alg}: Hit count mismatch: \nexp {expected:?}, \ngot {actual:?}",);
+    assert_eq!(expected.len(), actual.len(), "{alg}: Hit count mismatch: \nexp {expected:?}, \ngot {actual:?}");
 
     for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
-        assert_eq!(e, a, "{alg}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}",);
+        assert_eq!(e, a, "{alg}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}");
     }
 }

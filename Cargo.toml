@@ -64,6 +64,7 @@ ndarray = "0.16"
 ndarray-npy = "0.9"
 tqdm = "0.8.0"
 deepsize = "0.2.0"
+smartcore = "0.4"
 
 # Dev dependencies.
 test-case = "3.2.1"

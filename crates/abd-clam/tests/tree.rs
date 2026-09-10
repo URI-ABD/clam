@@ -208,7 +208,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         for cluster in tree.iter_clusters() {
             if let Some(children) = tree.children_of(cluster) {
                 for child in children {
-                    assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1",);
+                    assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1");
                 }
             }
         }
@@ -250,7 +250,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         for cluster in tree.iter_clusters() {
             if let Some(children) = tree.children_of(cluster) {
                 for child in children {
-                    assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1",);
+                    assert_eq!(child.depth(), cluster.depth() + 1, "Child depth should be parent depth + 1");
                 }
             }
         }
