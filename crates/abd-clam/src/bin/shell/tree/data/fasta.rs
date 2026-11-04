@@ -15,7 +15,7 @@ pub fn read<P: AsRef<std::path::Path>>(path: &P, remove_gaps: bool) -> Result<Ve
         let record = result.map_err(|e| e.to_string())?;
         let id = record.id().to_string();
         let seq = if remove_gaps {
-            let gaps = [b'-', b'.']; // Common gap characters
+            let gaps = *b"-."; // Common gap characters
             record.seq().iter().copied().filter(|b| !gaps.contains(b)).collect()
         } else {
             record.seq().to_vec()
@@ -27,7 +27,6 @@ pub fn read<P: AsRef<std::path::Path>>(path: &P, remove_gaps: bool) -> Result<Ve
 }
 
 /// Writes an iterator of `AlignedSequence`s from Musals to a FASTA file at the given path.
-#[expect(unused)]
 pub fn write<P: AsRef<std::path::Path>>(path: &P, data: impl Iterator<Item = (String, String)>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut writer = fasta::Writer::to_file(path).map_err(|e| e.to_string())?;
 

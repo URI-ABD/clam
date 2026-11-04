@@ -90,7 +90,7 @@ fn gaps() {
     let cost_matrix = CostMatrix::<u8>::default();
 
     let [left, right] = seq1.compute_gap_indices(&seq2, &cost_matrix);
-    assert!(left.is_empty());
+    assert_eq!(left, [] as [usize; 0]);
     assert_eq!(right, vec![1]);
 
     let gapped_seq1 = seq1.with_gaps(&left);
@@ -103,7 +103,7 @@ fn gaps() {
     let seq2 = AlignedSequence::from("ATAGT");
     let [left, right] = seq1.compute_gap_indices(&seq2, &cost_matrix);
     assert_eq!(left, vec![1]);
-    assert!(right.is_empty());
+    assert_eq!(right, [] as [usize; 0]);
     let gapped_seq1 = seq1.with_gaps(&left);
     let gapped_seq2 = seq2.with_gaps(&right);
     assert_eq!(gapped_seq1.len(), gapped_seq2.len());
