@@ -15,7 +15,7 @@ pub fn read<P: AsRef<std::path::Path>>(path: &P, remove_gaps: bool) -> Result<Ve
         let record = result.map_err(|e| e.to_string())?;
         let id = record.id().to_string();
         let seq = if remove_gaps {
-            let gaps = [b'-', b'.']; // Common gap characters
+            let gaps = *b"-."; // Common gap characters
             record.seq().iter().copied().filter(|b| !gaps.contains(b)).collect()
         } else {
             record.seq().to_vec()
