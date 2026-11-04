@@ -19,6 +19,9 @@ pub enum Action {
         /// The cost matrix to use for the alignment. If not provided, will use the `Simple` cost matrix.
         #[arg(short('c'), long)]
         cost_matrix: Option<ShellCostMatrix>,
+        /// Whether to write the aligned MSA to a fasta file in addition to the default output.
+        #[arg(short('f'), long)]
+        write_fasta: bool,
     },
     /// Evaluate the quality of an MSA using the given quality metrics.
     Evaluate {
@@ -73,7 +76,7 @@ impl Action {
         rng: &mut R,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match self {
-            Self::Align { cost_matrix } => {
+            Self::Align { cost_matrix, write_fasta } => {
                 let cost_matrix = cost_matrix.unwrap_or_default();
                 ftlog::info!("Using cost matrix: {cost_matrix}");
                 let cost_matrix_name = format!("{cost_matrix}");
@@ -97,6 +100,24 @@ impl Action {
                 let cost_matrix = cost_matrix.to_musals_cost_matrix();
                 let metric = common_metrics::levenshtein_aligned;
                 let tree = ShellTree::Levenshtein(LevenshteinTree::Aligned(tree.par_align(cost_matrix, metric)));
+
+                if *write_fasta {
+                    // Strip all extensions from the fasta path and then add the `fasta` extension
+                    let mut fasta_path = out_dir.join(format!("aligned-{cost_matrix_name}-{tree_name}"));
+                    while fasta_path.extension().is_some() {
+                        fasta_path = fasta_path.with_extension("");
+                    }
+                    fasta_path = fasta_path.with_extension("fasta");
+
+                    ftlog::info!("Writing aligned sequences to FASTA file: {fasta_path:?}");
+                    match &tree {
+                        ShellTree::Levenshtein(LevenshteinTree::Aligned(aligned_tree)) => {
+                            let seq_iter = aligned_tree.iter_items().map(|(id, seq, _)| (id.clone(), seq.to_string()));
+                            crate::tree::data::fasta::write(&fasta_path, seq_iter)?;
+                        }
+                        _ => unreachable!("We just aligned the tree, so this branch should be unreachable."),
+                    }
+                }
 
                 ftlog::info!("Writing aligned tree to {out_path:?}...");
                 tree.write(&out_path)
